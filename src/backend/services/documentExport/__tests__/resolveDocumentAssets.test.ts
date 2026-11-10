@@ -60,6 +60,20 @@ test('zero image dimensions still produce a retryable placeholder', async () => 
   expect(cache.size).toBe(0);
 });
 
+test('the same managed image at different transcript positions is read once and cached by source', async () => {
+  const read = jest.fn(async () => png());
+  const cache = new Map();
+  const sources = new Map([
+    ['answer:first', { kind: 'managed-file' as const, fileEntryId: 'image' }],
+    ['answer:again', { kind: 'managed-file' as const, fileEntryId: 'image' }],
+  ]);
+  const result = await resolveDocumentAssets(sources, cache, read, new AbortController().signal);
+  expect(result.images.size).toBe(2);
+  expect(read).toHaveBeenCalledTimes(1);
+  await resolveDocumentAssets(sources, cache, read, new AbortController().signal);
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
 test.each([null, String(5 * 1024 * 1024)])(
   'remote streams read beyond the former byte cap (content-length: %s)',
   async (contentLength) => {

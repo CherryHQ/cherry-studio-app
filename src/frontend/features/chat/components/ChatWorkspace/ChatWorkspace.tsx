@@ -13,7 +13,7 @@ import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/c
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
-import type { ChatShareTranslations } from '../../share/chatShareHandoff';
+import { useChatShareSelectionActions } from '../../share/chatShareSelection';
 import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
@@ -57,7 +57,6 @@ type ChatWorkspaceProps = {
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
-  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   sessionId?: string;
   /** Translation is available only for locally owned Agent messages. */
   isTranslationEnabled?: boolean;
@@ -71,7 +70,6 @@ export function ChatWorkspace({
   onQuoteTakeover,
   snapshot: live,
   messages: mergedMessages,
-  onShare,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -90,6 +88,7 @@ export function ChatWorkspace({
   isTranslationEnabled = false,
   renderUsage,
 }: ChatWorkspaceProps) {
+  const { beginSelection } = useChatShareSelectionActions();
   const {
     dataKey,
     error,
@@ -286,12 +285,13 @@ export function ChatWorkspace({
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-          onShare={onShare}
+          onShare={beginSelection}
           sessionId={sessionId}
           snapshot={live}
           messages={mergedMessages}
         >
           <ChatMessageRowProvider
+            breakAfterMessageId={forkBoundary?.id}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
           >

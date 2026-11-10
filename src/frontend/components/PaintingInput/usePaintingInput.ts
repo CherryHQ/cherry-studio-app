@@ -19,6 +19,7 @@ import {
   isImageParamDraftValid,
   prepareImageParamValues,
   reconcileImageParamDraft,
+  updateImageParamDraft,
 } from '@/shared/utils/imageGenerationParams';
 import {
   createPaintingGenerationStrategy,
@@ -126,7 +127,7 @@ export function usePaintingInput({
       if (model)
         session.setParameterDraft(parameterKey, {
           modelId: model.id,
-          values: { ...paramValues, [key]: value },
+          values: updateImageParamDraft(paramValues, key, value, resolvedMode),
         });
     },
     removeAttachment: (id: string) => {

@@ -4,6 +4,17 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import { ChatScreen } from '../ChatScreen';
 
+const mockShareApi = { get: jest.fn() };
+jest.mock('@/frontend/data', () => ({ useApiClient: () => mockShareApi }));
+jest.mock('../share/ChatShareSelectionProvider', () => ({
+  ChatShareSelectionProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('../share/ChatShareControls', () => ({
+  ChatShareComposerGuard: ({ children }: { children: React.ReactNode }) => children,
+  ChatShareSelectionControls: () => null,
+}));
+jest.mock('../runtime/agentMessageProjection', () => ({ resolveMessageModel: () => undefined }));
+
 let chatControlsInput: { agentId?: string; composerKey: number; sessionId?: string } | undefined;
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;

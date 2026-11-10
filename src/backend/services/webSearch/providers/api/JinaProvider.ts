@@ -28,7 +28,7 @@ export class JinaProvider extends RemoteWebSearchProvider {
     options?.signal?.throwIfAborted();
     const configuredHost = resolveProviderApiHost(this.provider, capability).replace(/\/+$/, '');
     const country = Object.hasOwn(JINA_MIRROR_HOSTS, configuredHost)
-      ? await application.get('RegionService').getCountry()
+      ? ((await application.get('RegionService').getCountry()) ?? 'CN')
       : undefined;
     options?.signal?.throwIfAborted();
     const [apiHost, alternateHost] = getJinaHostCandidates(

@@ -1,7 +1,7 @@
 import { webSearchOutputSchema } from '@cherrystudio/universal/ai/builtinTools';
+import dayjs from 'dayjs';
 
 import type { TranscriptMessage } from '@/frontend/appShell/conversation';
-import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
 import { omitGeneratedImageReferencesFromMarkdown } from '@/frontend/utils/omitGeneratedImageReferences';
 import { AgentToolResultSchema, type AgentMessageView } from '@/shared/contracts/agent';
 import {
@@ -16,18 +16,15 @@ import type { AppLanguage } from '@/shared/utils/languages';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { ChatShareTranslations } from './chatShareHandoff';
+import type { ChatShareTranslations } from './chatShareTarget';
 
 export type ChatExportOptions = {
   title: string;
-  includeProcess: boolean;
   translations?: ChatShareTranslations;
   labels: {
     user: string;
     assistant: string;
-    process(seconds: number): string;
     sources(count: number): string;
-    reasoning: string;
     file: string;
     status: string;
     translation(language: AppLanguage): string;
@@ -57,7 +54,6 @@ export function toChatExportDocument(
   const sections = messages.map((message) => {
     const sources = collectSources(message.parts);
     const blocks: ExportBlock[] = [];
-    const process: ExportBlock[] = [];
     const attachments: ExportBlock[] = [];
     const imageIds = new Set(
       message.parts.flatMap((part) =>
@@ -93,38 +89,8 @@ export function toChatExportDocument(
                 source: replaceChatCitations(part.text, sources),
               };
         if (message.role === 'user' || index === resultIndex) blocks.push(block);
-        else if (options.includeProcess) process.push(block);
-      } else if (part.type === 'reasoning' && options.includeProcess && part.text.trim()) {
-        process.push({
-          kind: 'details',
-          summary: options.labels.reasoning,
-          presentation: 'reasoning',
-          blocks: [{ kind: 'markdown', source: part.text }],
-        });
-      } else if (
-        (part.type === 'dynamic-tool' || part.type === 'tool-summary') &&
-        options.includeProcess
-      ) {
-        // Only the readable tool name is shared. Inputs, credentials and raw result envelopes stay private.
-        process.push({
-          kind: 'details',
-          summary: part.type === 'tool-summary' ? part.displayName : part.title,
-          blocks: [],
-        });
       }
     });
-    if (process.length) {
-      const seconds = Math.max(
-        1,
-        Math.round((getMessageProcessDurationMs(message.stats) ?? 0) / 1000),
-      );
-      blocks.unshift({
-        kind: 'details',
-        summary: options.labels.process(seconds),
-        presentation: 'process',
-        blocks: process,
-      });
-    }
     blocks.push(...attachments);
     if (sources.size)
       blocks.push({
@@ -166,7 +132,19 @@ export function toChatExportDocument(
       blocks,
     };
   });
-  return { title: options.title, sections, assets };
+  const createdAt = messages.find((message) => message.createdAt)?.createdAt;
+  return {
+    title: options.title,
+    header: {
+      title: options.labels.assistant,
+      avatar: CHERRY_AGENT_AVATAR,
+      ...(createdAt && dayjs(createdAt).isValid()
+        ? { date: dayjs(createdAt).format('YYYY/MM/DD') }
+        : {}),
+    },
+    sections,
+    assets,
+  };
 }
 
 /** Match the article's final-answer boundary using persisted Agent parts, without UI projections. */

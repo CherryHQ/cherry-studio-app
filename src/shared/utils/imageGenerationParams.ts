@@ -57,21 +57,35 @@ export function parseImageRatio(value: unknown): { width: number; height: number
 
 export function getImageParamFields(
   resolvedMode: ResolvedImageGenerationMode | undefined,
+  values: ImageParamDraft = {},
 ): ImageParamField[] {
   if (!resolvedMode) {
     return [];
   }
 
-  return Object.entries(resolvedMode.definition.supports).flatMap(([key, spec]) =>
-    spec ? [{ key: key as CanonicalParamKey, spec }] : [],
-  );
+  return Object.entries(resolvedMode.definition.supports).flatMap(([key, spec]) => {
+    if (!spec) return [];
+    if (values.outputFormat === 'gif' && spec.type === 'enum') {
+      if (key === 'size' && spec.options.includes('auto')) {
+        // Still-image dimensions can exceed the default nine-frame GIF pixel budget.
+        spec = { ...spec, options: ['auto'], default: 'auto' };
+      } else if (key === 'background') {
+        spec = {
+          ...spec,
+          options: spec.options.filter((option) => option !== 'transparent'),
+          default: spec.default === 'transparent' ? undefined : spec.default,
+        };
+      }
+    }
+    return [{ key: key as CanonicalParamKey, spec }];
+  });
 }
 
 export function reconcileImageParamDraft(
   current: ImageParamDraft,
   resolvedMode: ResolvedImageGenerationMode | undefined,
 ): ImageParamDraft {
-  const fields = getImageParamFields(resolvedMode);
+  const fields = getImageParamFields(resolvedMode, current);
   const next: ImageParamDraft = {};
   const customSizePairs = new Map<
     string,
@@ -129,6 +143,29 @@ export function reconcileImageParamDraft(
   return next;
 }
 
+/** Apply format-dependent defaults at selection time, preserving unrelated invalid edits. */
+export function updateImageParamDraft(
+  current: ImageParamDraft,
+  key: string,
+  value: unknown,
+  resolvedMode: ResolvedImageGenerationMode | undefined,
+): ImageParamDraft {
+  const next = { ...current, [key]: value };
+  if (key === 'outputFormat' && value === 'gif') {
+    for (const field of getImageParamFields(resolvedMode, next)) {
+      if (
+        (field.key === 'size' || field.key === 'background') &&
+        !isSupportedValue(next[field.key], field.spec, false)
+      ) {
+        const defaultValue = defaultValueFor(field.spec);
+        if (defaultValue === undefined) delete next[field.key];
+        else next[field.key] = defaultValue;
+      }
+    }
+  }
+  return next;
+}
+
 export function prepareImageParamValues(
   draft: ImageParamDraft,
   support: ImageGenerationSupport | undefined,
@@ -140,7 +177,7 @@ export function prepareImageParamValues(
 
   const parsed = buildParamsSchema(support, resolvedMode.mode).parse(draft);
   const values: Record<string, unknown> = {};
-  const fields = getImageParamFields(resolvedMode);
+  const fields = getImageParamFields(resolvedMode, draft);
   const supportedKeys = new Set(fields.map((field) => field.key));
 
   for (const key of supportedKeys) {
@@ -177,7 +214,7 @@ export function isImageParamDraftValid(
   draft: ImageParamDraft,
   resolvedMode: ResolvedImageGenerationMode | undefined,
 ): boolean {
-  const fields = getImageParamFields(resolvedMode);
+  const fields = getImageParamFields(resolvedMode, draft);
   const supports = new Map(fields.map((field) => [field.key as string, field.spec]));
   for (const [key, value] of Object.entries(draft)) {
     const spec = supports.get(key);
@@ -198,7 +235,7 @@ export function isImageParamDraftValid(
     );
     if (!isSupportedValue(value, spec, hasCustomSize)) return false;
   }
-  for (const field of getImageParamFields(resolvedMode)) {
+  for (const field of fields) {
     if (field.spec.type !== 'size') {
       continue;
     }
@@ -231,7 +268,7 @@ export function prepareImageParamRequest(
   values: ParamValues,
   resolvedMode: ResolvedImageGenerationMode | undefined,
 ): ParamValues | undefined {
-  const fields = getImageParamFields(resolvedMode);
+  const fields = getImageParamFields(resolvedMode, values);
   const requestKeys = new Set(
     fields.filter((field) => field.spec.type !== 'size').map((field) => field.key as string),
   );

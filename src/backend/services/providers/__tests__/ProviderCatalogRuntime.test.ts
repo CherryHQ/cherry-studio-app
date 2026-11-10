@@ -10,9 +10,15 @@ import { ProviderCatalogRuntime } from '../ProviderCatalogRuntime';
 
 let database: ReturnType<typeof createServiceTestDatabase>;
 let catalog: ProviderCatalogRuntime;
-let country: jest.Mock<Promise<string>, []>;
+let country: jest.Mock<Promise<string | null>, []>;
+let mockDeviceRegion: string | null = 'CN';
+
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageTag: 'zh-CN', regionCode: mockDeviceRegion }],
+}));
 
 beforeEach(async () => {
+  mockDeviceRegion = 'CN';
   database = createServiceTestDatabase();
   country = jest.fn(async () => 'CN');
   await installTestHost({ DbService: database.dbService, RegionService: { getCountry: country } }, [
@@ -25,12 +31,44 @@ afterEach(async () => {
   database.sqlite.close();
 });
 
-test.each(['CN', 'US'])('installs only the first recommended set allowed in %s', async (value) => {
-  country.mockResolvedValue(value);
-  await catalog.ensureReady();
-  const providers = await database.database.select().from(userProviderTable);
-  expect(providers.some((provider) => provider.providerId === 'deepseek')).toBe(true);
-  expect(providers.some((provider) => provider.providerId === 'openai')).toBe(value === 'US');
+test.each([
+  { ipCountry: 'CN', deviceRegion: 'US', international: false },
+  { ipCountry: 'US', deviceRegion: 'CN', international: true },
+  { ipCountry: null, deviceRegion: 'CN', international: false },
+  { ipCountry: null, deviceRegion: 'US', international: true },
+  { ipCountry: null, deviceRegion: null, international: false },
+])(
+  'seeds recommendations for IP $ipCountry and device region $deviceRegion',
+  async ({ ipCountry, deviceRegion, international }) => {
+    country.mockResolvedValue(ipCountry);
+    mockDeviceRegion = deviceRegion;
+    await catalog.ensureReady();
+    const providers = await database.database.select().from(userProviderTable);
+    expect(providers.some((provider) => provider.providerId === 'deepseek')).toBe(true);
+    for (const id of ['openai', 'anthropic', 'gemini']) {
+      expect(providers.some((provider) => provider.providerId === id)).toBe(international);
+    }
+  },
+);
+
+test('shutdown releases catalog admission while region detection is pending', async () => {
+  let requested!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  country.mockImplementation(
+    () =>
+      new Promise(() => {
+        requested();
+      }),
+  );
+  const initialization = catalog.ensureReady();
+  const rejected = expect(initialization).rejects.toThrow();
+  await started;
+  await catalog._doStop();
+  await rejected;
+  expect(catalog.hasPendingStorageWork()).toBe(false);
+  expect(await database.database.select().from(userProviderTable)).toEqual([]);
 });
 
 test('a later cold start in China preserves international providers, credentials and disabled choices', async () => {

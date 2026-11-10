@@ -4,8 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
 import { ConversationReadError } from '@/frontend/appShell/conversation';
-import { useDocumentExport } from '@/frontend/appShell/documentExport';
-import { conversationHref } from '@/frontend/appShell/navigation/chat';
+import { useDocumentExport } from '@/frontend/appShell/sharing';
 import { DocumentExportError } from '@/shared/contracts/documentExport';
 import { APP_LANGUAGES } from '@/shared/utils/languages';
 
@@ -13,7 +12,7 @@ import type { ChatShareTarget } from './chatShareTarget';
 import { ChatExportError, prepareChatExport } from './prepareChatExport';
 import { toChatExportDocument, type ChatExportOptions } from './toChatExportDocument';
 
-export function useShareChat(target: ChatShareTarget) {
+export function useShareChat(target: ChatShareTarget | undefined) {
   const { open } = useDocumentExport();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -35,7 +34,7 @@ export function useShareChat(target: ChatShareTarget) {
 
   const shareChat = useCallback(
     (messageIds: readonly string[]) => {
-      if (busy.current) return;
+      if (busy.current || !target) return;
       busy.current = true;
       const controller = new AbortController();
       loading.current = controller;
@@ -47,14 +46,11 @@ export function useShareChat(target: ChatShareTarget) {
           const { messages } = data;
           const options: ChatExportOptions = {
             title: data.title?.trim() || t('chat.share.documentTitle'),
-            includeProcess: true,
             translations: target.ref.source.kind === 'local' ? target.translations : undefined,
             labels: {
               user: t('chat.share.user'),
               assistant: data.assistantName || t('chat.share.assistant'),
-              process: (seconds) => t('chat.process.duration', { seconds }),
               sources: (count) => t('chat.sources.count', { count }),
-              reasoning: t('chat.reasoningStatus.thought'),
               file: t('chat.share.file'),
               status: t('chat.share.status'),
               translation: (language) =>
@@ -72,25 +68,11 @@ export function useShareChat(target: ChatShareTarget) {
             },
           };
           const document = toChatExportDocument(messages, options);
-          const hasProcess = document.sections.some((section) =>
-            section.blocks.some((block) => block.kind === 'details'),
-          );
-          // The exporter owns both immutable snapshots from here; chat only supplies their label.
           loading.current = undefined;
           const outcome = await open({
             input: { kind: 'document', document },
             initialFormat: 'image',
             allowedFormats: ['image', 'html', 'markdown'],
-            option: hasProcess
-              ? {
-                  label: t('chat.share.includeProcess'),
-                  uncheckedInput: {
-                    kind: 'document',
-                    document: toChatExportDocument(messages, { ...options, includeProcess: false }),
-                  },
-                }
-              : undefined,
-            returnTo: conversationHref(target.ref),
           });
           if (outcome === 'busy' && mounted.current)
             toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });

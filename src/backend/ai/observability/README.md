@@ -66,12 +66,17 @@ snapshot with more evidence. A 4xx status without a product reason is `unknown`;
 keeps the status. Final `ai.turn_state` failures retain `error.product_reason` from the product
 failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper, and available
 source name/origin/status. Only the closed reason is copied, never the message or response body.
+`gen_ai.response.finish_reason` retains Pi's normalized outcome;
+`gen_ai.response.raw_finish_reason` on `pi.generate_content` retains a known provider enum such as
+`SAFETY` or `MALFORMED_FUNCTION_CALL`. The producer and archive exporter use the same closed
+allowlist. These diagnostic fields do not override the shared error classifier or Pi's automatic
+retry decision.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
 `stream_disconnected`; both fall back to network failures. More specific message evidence can
-identify a timeout, TLS failure, or interrupted stream. Adapters without a custom fetch (Google)
-do not receive these codes. Terminal model failures record Pi's retry classification of the
+identify a timeout, TLS failure, or interrupted stream. Gemini and host-authenticated Vertex use
+the same injected transport as the other supported adapters. Terminal model failures record Pi's retry classification of the
 error as `error.retryable`, qualified by `error.retry_scope: automatic`; whether a retry happened
 also depends on the retry budget and context
 overflow handling. Cancellation remains a cancelled outcome. Correlate existing retry attempt logs
