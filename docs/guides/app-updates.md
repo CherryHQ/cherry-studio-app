@@ -56,7 +56,8 @@ distribution configuration; matching runtime versions additionally enforce nativ
 
 The shared package-update infrastructure uses the cached IP country to select GitCode APK upgrades
 in CN or GitHub APK upgrades elsewhere, and uses that country for App Store lookup. Failed country
-detection defaults to CN. Store update channels remain tied to the installed distribution.
+detection leaves the region unknown; package-update clients retain their CN request/source fallback.
+IP lookup runs independently of data-collection consent. Store update channels remain tied to the installed distribution.
 Its APK strategy compares the installed
 version from `expo-application`, rather than an OTA manifest's version, and packaged builds enable
 APK downloads only on the native channel `production-apk`, which an OTA cannot change. A development client
@@ -79,12 +80,15 @@ eas channel:create production-domestic-stores
 eas channel:create production-ios
 ```
 
-Keep `PROFILE`, `APK_UPDATES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
+Keep `PROFILE`, `APK_UPDATES_ENABLED`, `DOMESTIC_STORES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
 `EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments; remote variables can otherwise
 override publication configuration. Build profiles in `eas.json` own `PROFILE` and
 `ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` additionally controls native APK installation permission: the APK build
 profile enables it and Play/domestic store profiles disable it. It remains an opt-in development
-switch at build and Metro time. `EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
+switch at build and Metro time. `DOMESTIC_STORES_ENABLED` is enabled only by the domestic Android
+profile and is forwarded unchanged by the OTA target resolver. Native SDK selection must not use
+the worker-only `EAS_BUILD_PROFILE`, which is absent during build submission and OTA fingerprinting.
+`EXPO_PUBLIC_STORYBOOK_ENABLED` is a local development switch. Packaged apps route update
 actions using the embedded native channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by

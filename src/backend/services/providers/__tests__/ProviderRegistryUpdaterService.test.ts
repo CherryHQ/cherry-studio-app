@@ -13,7 +13,7 @@ import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterServic
 import { providerRegistryUpdates } from '../providerRegistryUpdates';
 
 const mockRequest = jest.fn();
-const mockGetCountry = jest.fn(async () => 'US');
+const mockGetCountry = jest.fn<Promise<string | null>, []>(async () => 'US');
 jest.mock('@/backend/core/application/Application', () => ({
   application: { get: () => ({ getCountry: mockGetCountry }) },
 }));
@@ -58,12 +58,15 @@ function snapshot(revision: number, minimum = REGISTRY_DESKTOP_COMPATIBILITY_VER
   return { files, manifest, slot: 'a' as const };
 }
 function serve(snapshotToServe: ReturnType<typeof snapshot>) {
-  mockRequest.mockImplementation(async (_source: string, { path }: { path: string }) => ({
-    data:
-      path === '/manifest.json'
-        ? JSON.stringify(snapshotToServe.manifest)
-        : snapshotToServe.files[path.slice(1) as keyof typeof snapshotToServe.files],
-  }));
+  mockRequest.mockImplementation(async (_source: string, { path }: { path: string }) => {
+    const name = decodeURIComponent(path).split('/').at(-1);
+    return {
+      data:
+        name === 'manifest.json'
+          ? JSON.stringify(snapshotToServe.manifest)
+          : snapshotToServe.files[name as keyof typeof snapshotToServe.files],
+    };
+  });
 }
 
 let updater: Updater;
@@ -81,14 +84,27 @@ afterEach(async () => {
 });
 
 it.each([
-  ['CN', 'raw.gitcode.com'],
+  ['CN', 'api.gitcode.com'],
   ['US', 'raw.githubusercontent.com'],
+  [null, 'api.gitcode.com'],
 ])('selects the registry mirror from the shared IP country %s', async (country, host) => {
   mockGetCountry.mockResolvedValue(country);
   serve(snapshot(1));
   await updater.ensureReady();
   expect(providerRegistryService.isReady()).toBe(true);
   expect(new URL(mockRequest.mock.calls[0]![0]).hostname).toBe(host);
+});
+
+it('downloads every GitCode v4 file through the raw API with the registry branch', async () => {
+  mockGetCountry.mockResolvedValue('CN');
+  serve(snapshot(1));
+  await updater.ensureReady();
+  for (const path of ['/v4%2Fmanifest.json', '/v4%2Fmodels.json', '/v4%2Fprovider-models.json']) {
+    expect(mockRequest).toHaveBeenCalledWith(
+      'https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw',
+      expect.objectContaining({ path, query: { ref: 'x-files/provider-registry' } }),
+    );
+  }
 });
 
 it('automatically downloads on first launch and shares it with concurrent model selection', async () => {
@@ -207,7 +223,7 @@ it('downloads v4 when the producer version predates its minimum reader', async (
   const remote = snapshot(1);
   remote.manifest.sourceAppVersion = '2.1.10';
   serve(remote);
-  await updater.ensureReady();
+  await updater.applyUpdate();
   expect(providerRegistryService.isReady()).toBe(true);
   expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
     expect.anything(),
@@ -271,7 +287,7 @@ it('rejects unsupported first downloads without reporting an empty catalog as cu
   unsupported.manifest.minAppVersion = '9.0.0';
   unsupported.manifest.sourceAppVersion = '9.0.0';
   serve(unsupported);
-  await expect(updater.ensureReady()).rejects.toThrow();
+  await expect(updater.ensureReady()).rejects.toThrow('No provider registry source is available');
   expect(providerRegistryService.isReady()).toBe(false);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
@@ -294,4 +310,23 @@ it('aborts an in-flight download on stop and never activates it afterwards', asy
   await ready;
   expect(providerRegistryService.isReady()).toBe(false);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
+});
+
+it('stops while region detection is still pending', async () => {
+  let requested!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  mockGetCountry.mockImplementationOnce(
+    () =>
+      new Promise(() => {
+        requested();
+      }),
+  );
+  const update = updater.applyUpdate().catch(() => undefined);
+  await started;
+  await updater.stop();
+  await update;
+  expect(mockRequest).not.toHaveBeenCalled();
+  expect(providerRegistryService.isReady()).toBe(false);
 });

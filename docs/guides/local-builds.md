@@ -149,6 +149,11 @@ See the [update infrastructure](../../src/backend/services/appUpdate/README.md).
 set it to `false`, excluding `REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
 as a store artifact. The native installer independently checks the embedded channel.
 
+`DOMESTIC_STORES_ENABLED` controls whether native generation includes the domestic update SDKs.
+It defaults to `false`; production profiles inherit an explicit `false`, and only the domestic
+Android profile sets `true`. Keep this flag in `eas.json` so build submission, native generation
+and OTA fingerprinting use the same value instead of relying on the worker-only `EAS_BUILD_PROFILE`.
+
 For an explicitly authorized development session, supply `APK_UPDATES_ENABLED=true` during both
 the Android native build and Metro startup. Changing only Metro cannot add an installation
 permission. The development package ID/signature must still match the update being installed;

@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 
+import type { ConfigContext } from 'expo/config';
+
+import configureApp from '../../app.config';
+import appConfig from '../../app.json';
 import {
   assertPublishedRuntime,
   assertReceivingBuilds,
@@ -7,6 +11,8 @@ import {
   resolveTarget,
   updateArgs,
 } from '../publishUpdate';
+
+jest.mock('tsx/cjs', () => ({}));
 
 const eas = JSON.parse(readFileSync('eas.json', 'utf8'));
 
@@ -18,7 +24,12 @@ test.each([
     'production',
     'android',
     true,
-    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/', APK_UPDATES_ENABLED: 'true' },
+    {
+      PROFILE: 'production',
+      SENTRY_URL: 'https://sentry.io/',
+      APK_UPDATES_ENABLED: 'true',
+      DOMESTIC_STORES_ENABLED: 'false',
+    },
   ],
   [
     'google-play',
@@ -31,6 +42,7 @@ test.each([
       SENTRY_URL: 'https://sentry.io/',
       ANDROID_COMPRESS_NATIVE_LIBS: 'false',
       APK_UPDATES_ENABLED: 'false',
+      DOMESTIC_STORES_ENABLED: 'false',
     },
   ],
   [
@@ -39,7 +51,11 @@ test.each([
     'production',
     'ios',
     true,
-    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/' },
+    {
+      PROFILE: 'production',
+      SENTRY_URL: 'https://sentry.io/',
+      DOMESTIC_STORES_ENABLED: 'false',
+    },
   ],
   [
     'domestic-stores',
@@ -47,7 +63,12 @@ test.each([
     'production',
     'android',
     true,
-    { PROFILE: 'production', SENTRY_URL: 'https://sentry.io/', APK_UPDATES_ENABLED: 'false' },
+    {
+      PROFILE: 'production',
+      SENTRY_URL: 'https://sentry.io/',
+      APK_UPDATES_ENABLED: 'false',
+      DOMESTIC_STORES_ENABLED: 'true',
+    },
   ],
 ])(
   '%s publishes with its build profile channel and env',
@@ -68,6 +89,41 @@ test.each([
     ]);
   },
 );
+
+test.each([
+  ['preview', 'preview'],
+  ['apk', 'production'],
+  ['google-play', 'production-google-play'],
+  ['domestic-stores', 'production-domestic-stores'],
+  ['ios', 'production'],
+])('%s keeps native update configuration identical for build and OTA', (name, buildProfile) => {
+  const originalEnv = process.env;
+  const environment = { ...originalEnv };
+  for (const key of [
+    'EAS_BUILD_PROFILE',
+    'APK_UPDATES_ENABLED',
+    'DOMESTIC_STORES_ENABLED',
+    'EXPO_PUBLIC_STORYBOOK_ENABLED',
+  ]) {
+    delete environment[key];
+  }
+  try {
+    process.env = { ...environment, ...resolveTarget(eas, name).env };
+    const context = { config: appConfig.expo } as unknown as ConfigContext;
+    // Build submission and OTA both evaluate without the worker-only profile variable.
+    const local = configureApp(context);
+    process.env.EAS_BUILD_PROFILE = buildProfile;
+    const worker = configureApp(context);
+
+    expect(worker.plugins).toEqual(local.plugins);
+    expect(local.plugins).toContainEqual([
+      './scripts/withAppUpdates.js',
+      { apkUpdatesEnabled: name === 'apk', domesticStoresEnabled: name === 'domestic-stores' },
+    ]);
+  } finally {
+    process.env = originalEnv;
+  }
+});
 
 test('pins the same EAS CLI as the release workflows', () => {
   for (const workflow of ['android-release', 'google-play-release', 'ios-release'])

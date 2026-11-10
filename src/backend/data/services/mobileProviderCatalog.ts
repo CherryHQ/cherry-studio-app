@@ -156,6 +156,7 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
     },
   },
   'kimi-coding': {
+    availableInEditions: ['cn', 'global'],
     authMethods: ['oauth'],
     defaultChatEndpoint: 'openai-chat-completions',
     description: 'Kimi Code - AI model provider',

@@ -255,8 +255,12 @@ configuration and API-version settings influence the generated provider settings
 
 ## Remote Registry Boundary
 
-Mobile downloads Desktop-published `models.json` and `provider-models.json` from schema v4 on first
-use and when upgrading an older saved schema. Later refreshes follow explicit model-list access.
+Mobile starts from a complete compatible saved snapshot. Without one, model workflows wait for
+the first download of `models.json` and `provider-models.json` and offer retry after failure.
+The model files are not bundled; downloaded metadata passes Mobile capability filtering before use.
+Desktop-published schema v4 updates run in the background when no current saved snapshot exists;
+later refreshes follow explicit model-list access. GitCode's file API uses the registry branch in
+the `ref` query; GitHub is the other source. Compatible saved snapshots remain usable offline.
 The remote manifest must match v4 and the Desktop 2.1.11 semantic baseline supported by Mobile's
 consumed fields. This compatibility number is independent of the Mobile application version.
 Older saved schemas remain readable offline; startup attempts to replace them with v4. The producer
