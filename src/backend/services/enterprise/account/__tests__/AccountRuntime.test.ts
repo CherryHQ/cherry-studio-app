@@ -3,6 +3,7 @@ import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
 import {
+  AccountError,
   type AccountSessionContext,
   AccountSessionContextSchema,
 } from '@/shared/contracts/account';
@@ -358,6 +359,62 @@ describe('AccountRuntime', () => {
     expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
     await expect(runtime.getProductToken()).resolves.toBe('product-token');
   });
+
+  it.each([401, 403])(
+    'ignores a late %s from the previous login but still rejects the current enterprise session',
+    async (status) => {
+      const { runtime } = setup(signedIn('enterprise'), enterpriseProfile);
+      await runtime.verify();
+      const previous = runtime.createEnterpriseSession();
+      const token = await previous.getProductToken();
+      await previous.refuseProductToken(token);
+      await expect(runtime.signIn()).resolves.toBe(true);
+      const current = runtime.createEnterpriseSession();
+      // The login boundary must hold even when the server returns the same token string.
+      await expect(current.getProductToken()).resolves.toBe(token);
+
+      if (status === 401) await previous.refuseProductToken(token);
+      else previous.reportRejected();
+
+      await expect(previous.getProductToken()).rejects.toMatchObject({ code: 'rejected' });
+      expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
+      await expect(runtime.admit()).resolves.toBeUndefined();
+
+      if (status === 401) await current.refuseProductToken(token);
+      else current.reportRejected();
+      expect(runtime.getState()).toMatchObject({ isSignedIn: false, needsSignIn: true });
+    },
+  );
+
+  it.each(['token', 'rejection'] as const)(
+    'discards a late product-token %s after the same identity signs in again',
+    async (outcome) => {
+      const { runtime, options } = setup(signedIn('enterprise'), enterpriseProfile);
+      await runtime.verify();
+      let finish!: (token: string) => void;
+      let fail!: (error: Error) => void;
+      let entered!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      options.portal.getProductToken.mockImplementationOnce(() => {
+        entered();
+        return new Promise((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        });
+      });
+      const pending = runtime.getProductToken();
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'rejected' });
+      await started;
+      await runtime.signIn();
+      if (outcome === 'token') finish('old-token');
+      else fail(new HttpError('Refused', { kind: 'http', status: 401 }));
+      await rejection;
+      expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
+      await expect(runtime.getProductToken()).resolves.toBe('product-token');
+    },
+  );
 
   it.each([401, 403])(
     'keeps the same organization blocked after admission returns %s',
@@ -766,6 +823,31 @@ describe('AccountRuntime', () => {
       isSignedIn: true,
       needsSignIn: false,
     });
+    await expect(runtime.getProductToken()).resolves.toBe('private-token');
+  });
+
+  it('does not let pending private verification reject a successfully reauthenticated session', async () => {
+    const { runtime, options } = setup({ _tag: 'signedOut' }, privateProfile);
+    const api = options.createApi(privateProfile.address!, runtime.createEnterpriseSession());
+    let fail!: (error: Error) => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    api.getUser.mockImplementationOnce(() => {
+      entered();
+      return new Promise((_, reject) => {
+        fail = reject;
+      });
+    });
+    options.createApi.mockReturnValueOnce(api);
+    options.profiles.resolve.mockReturnValue(privateProfile);
+    const verifying = runtime.verify();
+    await started;
+    await runtime.signIn({ address: privateProfile.address!, username: 'Ada', password: 'new' });
+    fail(new AccountError('rejected'));
+    await verifying;
+    expect(runtime.getState()).toMatchObject({ isSignedIn: true, needsSignIn: false });
     await expect(runtime.getProductToken()).resolves.toBe('private-token');
   });
 

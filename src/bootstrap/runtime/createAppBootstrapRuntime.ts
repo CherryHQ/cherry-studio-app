@@ -168,11 +168,7 @@ export function createAppBootstrapRuntime(
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const account = installationAccount();
   const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
-  enterpriseSync.configure({
-    getProductToken: account.getProductToken,
-    refuseProductToken: account.refuseProductToken,
-    reportRejected: account.reportRejected,
-  });
+  enterpriseSync.configure(account.createEnterpriseSession);
   configureEnterpriseSessionAdmission(account.admit);
   // A refused session stops spending the organization's credentials at once. Interrupted turns
   // reopen with the Agent Host and fail admission until the user signs in again.
