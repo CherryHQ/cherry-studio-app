@@ -19,8 +19,7 @@ export type MessagePartStatusProps = {
 
 export type MessagePartReasoningProps = {
   children: ReactNode;
-  /** Runs before a reader-initiated inline disclosure toggle. */
-  onDisclosureToggle?: () => void;
+  detailTitle?: string;
   state: 'complete' | 'running';
   statusText: string;
   testID?: string;
@@ -28,7 +27,7 @@ export type MessagePartReasoningProps = {
 
 export type MessagePartProcessProps = {
   children: ReactNode;
-  /** Preserve a reader's open tool group when the live process first settles. */
+  /** Initial disclosure state; subsequent renders preserve the reader's choice. */
   defaultExpanded?: boolean;
   /** Runs before a reader-initiated inline disclosure toggle. */
   onDisclosureToggle?: () => void;

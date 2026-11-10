@@ -142,6 +142,8 @@ export function HtmlCaptureSurface({ request }: { request: HtmlCaptureRequest })
         }
         originWhitelist={['*']}
         scrollEnabled={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
         setSupportMultipleWindows={false}
         sharedCookiesEnabled={false}
         source={htmlSource}

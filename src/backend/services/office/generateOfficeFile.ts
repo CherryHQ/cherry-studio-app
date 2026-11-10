@@ -34,24 +34,31 @@ export async function generateOfficeFile(input: {
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
+  onStage?: (
+    stage: 'prepare_script' | 'sandbox_queue' | 'sandbox_execution' | 'decode_result',
+  ) => void;
 }): Promise<number> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
+    input.onStage?.('prepare_script');
     const entries = Object.entries(input.images);
     const images: Record<string, OfficeImageInput> = Object.fromEntries(
       entries.map(([id, image], index) => [id, { index, mediaType: image.mediaType }]),
     );
     const code = createOfficeCode(input.request, images);
+    input.onStage?.('sandbox_queue');
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
       files: { inputs: entries.map(([, image]) => image.uri), output: input.output },
       signal: input.signal,
       onSettled: input.onSettled,
+      onStarted: () => input.onStage?.('sandbox_execution'),
       limits: officeLimits(entries.reduce((total, [, image]) => total + image.size, 0)),
     });
     input.signal.throwIfAborted();
+    input.onStage?.('decode_result');
     if (outcome.status === 'error') {
       throw new OfficeGenerationError(
         `Office generation failed (${outcome.kind}): ${outcome.message.slice(0, 500)}`,

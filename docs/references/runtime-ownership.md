@@ -258,8 +258,18 @@ user-owned verification policy.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
+- `RegionService` owns the IPinfo Lite egress-country lookup, ten-minute success cache
+  and explicit unknown-country result; detection is independent of data-collection consent, and
+  the host aborts and joins it. `ProviderCatalogRuntime` owns
+  post-ready provider seeding. Discovery and initial recommendations share `getProviderCatalogEdition`: all distributions
+  use detected CN/overseas countries to select domestic/global entries, falling back to the device
+  region when detection is unavailable. Only a missing device region retains the
+  domestic default. Domestic-store builds also permit a detected overseas VPN exit.
+  Provider list queries join that initialization; existing seeded installations do not wait for country detection. Backup admission
+  includes pending seeding.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
-  approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
+  approved-cache activation, shared first downloads and request cancellation; the host stops it.
+  Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
 - `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops

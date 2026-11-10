@@ -5,6 +5,15 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 
 ## Current Contract
 
+- Selecting answer text inserts an atomic inline quote at the native editor's caret. The excerpt
+  uses paired quotation marks, retains short selections in full, and shortens long selections.
+  Multiple quotes can be interleaved with ordinary comments. Tapping one opens a compact anchored
+  text popover with its complete snapshot. Deleting a quote removes that occurrence from the next
+  submission; undo can restore it. Submitted messages keep their inline positions, and taking back
+  a queued message reconstructs the editor links. Legacy single-quote messages remain readable.
+  The native input-link event requires the updated development client; gesture behavior still
+  needs user-owned device acceptance.
+
 - An Agent selection owns an isolated Draft composer. Its first send uses `startSession`, which
   admits the message before atomically creating the Session and first message pair; observation and
   navigation begin only after that succeeds.

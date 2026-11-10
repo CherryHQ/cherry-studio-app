@@ -1,5 +1,6 @@
 import {
   assertBackupPath,
+  BACKUP_FORMAT_VERSION,
   BACKUP_LIMITS,
   type BackupManifest,
   validateManifest,
@@ -22,6 +23,13 @@ function manifest(): BackupManifest {
 
 test('accepts the portable mobile snapshot contract without platform-specific absolute paths', () => {
   expect(validateManifest(manifest())).toEqual(manifest());
+});
+
+test('admits both legacy portable backups and the explicit inline-quote format', () => {
+  expect(
+    validateManifest({ ...manifest(), formatVersion: BACKUP_FORMAT_VERSION }).formatVersion,
+  ).toBe(3);
+  expect(validateManifest(manifest()).formatVersion).toBe(1);
 });
 
 test.each([
@@ -63,7 +71,7 @@ test('rejects another product or a future format instead of attempting replaceme
   expect(() => validateManifest({ ...manifest(), product: 'cherry-desktop' })).toThrow(
     'incompatible',
   );
-  expect(() => validateManifest({ ...manifest(), formatVersion: 3 })).toThrow('incompatible');
+  expect(() => validateManifest({ ...manifest(), formatVersion: 4 })).toThrow('incompatible');
 });
 
 test('rejects experimental paired backups and never accepts a Pi cache as user backup data', () => {

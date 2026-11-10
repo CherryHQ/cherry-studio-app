@@ -1,10 +1,12 @@
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
+import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 const LOG_MESSAGES = new Set([
   'Startup stage',
+  'Office stage',
   'Service promoted to startup gate',
   'Initial content did not report readiness before the startup timeout',
   'Skill storage reconciliation failed',
@@ -106,6 +108,7 @@ const TRACE_FIELDS = new Set([
   'gen_ai.provider.id',
   'gen_ai.provider.api',
   'gen_ai.response.finish_reason',
+  'gen_ai.response.raw_finish_reason',
   'mcp.server.id',
   'mcp.connection.generation',
   'mcp.connection.temporary',
@@ -123,6 +126,7 @@ const TRACE_FIELDS = new Set([
 ]);
 
 function metadataValue(key: string, value: unknown): string | number | boolean | undefined {
+  if (key === 'gen_ai.response.raw_finish_reason') return readKnownAiFinishReason(value);
   if (TRACE_NUMBER_FIELDS.has(key))
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
   if (key === 'error.product_reason') {
@@ -180,6 +184,7 @@ function projectRepetition(value: unknown, timestamp: string) {
 export function projectDiagnosticLog(record: Record<string, unknown>) {
   const isLifecycle =
     (record.module === 'Startup' && record.message === 'Startup stage') ||
+    (record.module === 'Office' && record.message === 'Office stage') ||
     (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction');
   if (
     record.level !== 'warn' &&

@@ -32,6 +32,7 @@ import {
   readMessageTranslations,
   type MessageTranslations,
 } from '@/shared/data/types/messageTranslation';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -345,7 +346,9 @@ export class AgentSessionMessageService {
     }
     return items.map((item) => {
       const siblings = item.parentId === undefined ? undefined : children.get(item.parentId);
-      return siblings && siblings.length > 1 ? { ...item, siblings } : item;
+      return projectAgentMessageDisplay(
+        siblings && siblings.length > 1 ? { ...item, siblings } : item,
+      );
     });
   }
 

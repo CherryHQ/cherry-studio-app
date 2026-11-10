@@ -68,7 +68,10 @@ type PiDurableToolOptions = {
 const codemodeRulesSection = section(
   'cherry-codemode',
   () =>
-    "Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>. To give a tool a file's content, read it in the script with read_file offset and max_characters, join value.text until value.complete, and pass that string; never retype file content into tool arguments.",
+    `Use native store/load for intermediate scripts, research data and confirmed file receipts. This is disposable conversation cache, never the file library or a backup. A script's store writes commit only when the ENTIRE script succeeds: save each chunk in a separate short successful call before running fallible work. For example, first store("office.script", "first chunk"); in a later call store("office.script", load("office.script") + "next chunk"). Missing keys after a cache reset require recreating only missing material; interrupted model text is never a saved chunk.
+Keep data and source under separate keys. Read and change their local values instead of printing or retyping the full contents; pass load("office.script") directly as code to tools.run_office_script, or pass locally parsed cached JSON to tools.create_workbook. Execute only after all intended chunks are saved. A saved value is not proof its script ran successfully.
+After creating a requested deliverable, store its returned value.fileEntryId and END that script successfully. Inspect or edit that file in a separate script; checking failure must not restart successful creation. A missing receipt is not evidence of successful or failed side effects: inspect existing tool receipts before retrying an uncertain operation. Keep all intermediates in store; use library tools only for requested deliverables.
+Overflow paths store:<key> are read with load(key); print only the needed slice or summary. Managed-file:<id> is a deliverable; read it with read_file file_entry_id <id>, joining value.text until value.complete inside Code Mode. Never retype saved content into model arguments.`,
   { tag: false },
 );
 
@@ -215,7 +218,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       defineTool({
         name: tool.providerName,
         description: tool.description,
-        parameters: z.record(z.string(), RuntimeJsonValueSchema).parse(tool.inputSchema),
+        parameters: toolParameters(tool),
         structuredOutputSchema: {
           type: 'object',
           properties: {
@@ -323,6 +326,18 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             return { block: 'The user denied this tool call.' };
         },
         async afterTool(call, result, api, context) {
+          // The supported hook covers schema and parse failures before they reach scripts or
+          // the next model request. Pi retains ownership of validation and its recovery rules.
+          if (result.diagnostics?.some((item) => item.code === 'invalid_arguments')) {
+            return {
+              ...result,
+              diagnostics: result.diagnostics.map((item) =>
+                item.code === 'invalid_arguments'
+                  ? { ...item, message: boundedValidationMessage(item.message) }
+                  : item,
+              ),
+            };
+          }
           if (call.name !== CODEMODE_TOOL_NAME || !codemode) return;
           // Harness failures may never have executed the script. Confirmed artifacts have their
           // own transcript receipts, so preserve the original diagnostics and failure details.
@@ -370,6 +385,22 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       }),
     ],
   });
+}
+
+function boundedValidationMessage(message: string): string {
+  // Upstream appends the complete input after this separator. Do not retain it in feedback.
+  const diagnostic = message.split('\n\nReceived arguments:', 1)[0];
+  const lines = diagnostic.split('\n');
+  const issues = lines.filter((line) => line.startsWith('  - '));
+  return (
+    issues.length > 5
+      ? [
+          ...lines.filter((line) => !line.startsWith('  - ')),
+          ...issues.slice(0, 5),
+          `${issues.length - 5} more validation errors omitted.`,
+        ].join('\n')
+      : diagnostic
+  ).slice(0, 2000);
 }
 
 function requireSignal(context: Context): AbortSignal {
@@ -428,6 +459,16 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
       : {}),
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };
+}
+
+function toolParameters(tool: RuntimeTool) {
+  const parameters = z.record(z.string(), RuntimeJsonValueSchema).parse(tool.inputSchema);
+  // Some compatible endpoints require properties even for a parameterless MCP tool.
+  return parameters.type === 'object' &&
+    parameters.$ref === undefined &&
+    !Object.hasOwn(parameters, 'properties')
+    ? { ...parameters, properties: {} }
+    : parameters;
 }
 
 function sameCapability(left: RuntimeTool, right: RuntimeTool): boolean {

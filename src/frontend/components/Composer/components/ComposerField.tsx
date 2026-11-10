@@ -24,7 +24,16 @@ import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
  */
 type ComposerFieldProps = Pick<
   ComposerInputProps,
-  'layout' | 'onBlur' | 'onFocus' | 'onLayout' | 'placeholder' | 'style' | 'testID'
+  | 'layout'
+  | 'onBlur'
+  | 'onFocus'
+  | 'onLayout'
+  | 'onLinkPress'
+  | 'onReturnSubmit'
+  | 'placeholder'
+  | 'style'
+  | 'submitOnReturn'
+  | 'testID'
 > & { attachmentMode?: 'images' | 'text-only' };
 
 export function ComposerField({
@@ -32,8 +41,11 @@ export function ComposerField({
   onBlur,
   onFocus,
   onLayout,
+  onLinkPress,
+  onReturnSubmit,
   placeholder,
   style,
+  submitOnReturn,
   testID,
   attachmentMode = 'images',
 }: ComposerFieldProps) {
@@ -53,9 +65,8 @@ export function ComposerField({
     [addAttachments, attachmentMode],
   );
 
-  // Plugin, Skill, SSH and Office selection mentions are the links this field creates — nothing here
-  // creates any other kind, and auto-detection is off — so the base `link`
-  // style is set alongside the variant rather than left to the library's blue.
+  // Mentions are the only links this field creates, and auto-detection is off, so the base
+  // `link` style is set alongside the variants rather than left to the library's blue.
   const markdownStyle = useMemo(() => {
     const mentionStyle = { color: linkColor, underline: false };
 
@@ -68,6 +79,7 @@ export function ComposerField({
         '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
         '^selection://': { ...mentionStyle, icon: pluginInlineIcons['file-text'], iconTint: true },
         '^ssh://': mentionStyle,
+        '^quote://': mentionStyle,
       },
     };
   }, [linkColor, theme]);
@@ -90,15 +102,19 @@ export function ComposerField({
 
   return (
     <Composer.Input
+      insertNewlineLabel={t('chat.input.action.insertNewline')}
       layout={layout}
       markdownStyle={markdownStyle}
       onBlur={onBlur}
       onFocus={handleFocus}
       onLayout={handleLayout}
+      onLinkPress={onLinkPress}
       onPaste={handlePaste}
+      onReturnSubmit={onReturnSubmit}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}
       style={style}
+      submitOnReturn={submitOnReturn}
       testID={testID}
     />
   );

@@ -35,10 +35,14 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
+  const { useRef } = jest.requireActual('react');
   return {
     __esModule: true,
     default: { View },
+    createAnimatedComponent: (component: unknown) => component,
     useAnimatedStyle: (factory: () => object) => factory(),
+    useEvent: (handler: unknown) => handler,
+    useSharedValue: (value: unknown) => useRef({ value }).current,
   };
 });
 
@@ -127,6 +131,19 @@ describe('BottomSheet', () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses the provider host so native menu controls retain their presenting page controller', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open size="large" title="Share">
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    // A window-level native overlay detaches controls from their view controller on iOS.
+    expect(mockBottomSheetProps.nativeOverlay).toBe(false);
   });
 
   test('does not report a controlled close as a user dismissal', () => {
@@ -399,6 +416,30 @@ describe('BottomSheet', () => {
 
     act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(2));
     expect(mockBottomSheetProps.index).toBe(2);
+  });
+
+  test('keeps the footer inside the initial visible height of an expandable sheet', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text>Share</Text>}
+          onClose={jest.fn()}
+          open
+          sizes={['large', 'full']}
+          testID="share-sheet"
+          title="Share"
+        >
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const card = renderer?.root
+      .findAllByProps({ testID: 'share-sheet' })
+      .find((node) => typeof node.type === 'string');
+    const detents = mockBottomSheetProps.detents as number[];
+    expect(StyleSheet.flatten(card?.props.style).height).toBe(detents[1]);
+    expect(detents[1]).toBeLessThan(detents[2]);
   });
 
   test('uses a caller-provided fixed height on a bounded sheet with only top corners rounded', () => {

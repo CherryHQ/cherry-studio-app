@@ -11,6 +11,8 @@ import m0009 from '../../../../migrations/sqlite-drizzle/0009_painting_boards.sq
 import m0010 from '../../../../migrations/sqlite-drizzle/0010_fearless_jubilee.sql';
 import m0011 from '../../../../migrations/sqlite-drizzle/0011_file_library.sql';
 import m0012 from '../../../../migrations/sqlite-drizzle/0012_message_tree.sql';
+import m0013 from '../../../../migrations/sqlite-drizzle/0013_agent_session_branches.sql';
+import m0014 from '../../../../migrations/sqlite-drizzle/0014_desktop_connection_alias.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -34,5 +36,7 @@ export const migrations = {
     m0010,
     m0011,
     m0012,
+    m0013,
+    m0014,
   },
 };

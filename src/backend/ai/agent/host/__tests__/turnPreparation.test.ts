@@ -14,8 +14,8 @@ import { FakeRuntime, type RuntimeModel, type RuntimeTool } from '../../runtime'
 import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
+  StoredSkillActivation,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';

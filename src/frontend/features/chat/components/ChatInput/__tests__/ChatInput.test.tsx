@@ -5,6 +5,7 @@ import type { ComposerSendPayload } from '@/frontend/components/Composer';
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import type { QuoteFields } from '@/shared/contracts/agent';
 
+import { createQuoteMention, readQuoteMentions } from '../../../quotes/quoteMentions';
 import { ChatInput } from '../ChatInput';
 
 let mockImageMode = false;
@@ -20,7 +21,6 @@ const mockModelItem = { modelId: 'p::m', model: { id: 'p::m' } };
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => mockQuoteActions,
 }));
-jest.mock('../../../quotes/MessageQuotePreview', () => ({ DraftMessageQuotePreview: () => null }));
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
@@ -139,13 +139,22 @@ test('text send captures one attempt, sends the primary quote, and clears only a
   await mount();
   let pending!: Promise<unknown>;
   act(() => {
-    pending = renderer.root
-      .findByType('TextComposer' as never)
-      .props.onSend({ text: 'My request', attachments: [] } satisfies ComposerSendPayload);
+    pending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: `${createQuoteMention(fields.quotes![0])} My request`,
+      attachments: [],
+    } satisfies ComposerSendPayload);
   });
   expect(mockCapture).toHaveBeenCalledTimes(1);
   expect(mockSend.mock.calls[0][0].parts).toEqual([
-    { type: 'text', text: 'My request', ...fields },
+    {
+      type: 'text',
+      text: '“Original snapshot” My request',
+      ...fields,
+      quotes: readQuoteMentions(
+        `${createQuoteMention(fields.quotes![0])} My request`,
+        fields.quotes,
+      ).quotes,
+    },
   ]);
   expect(mockFinish).not.toHaveBeenCalled();
   mockFields = {};

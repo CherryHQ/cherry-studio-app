@@ -11,7 +11,8 @@ page.
 - [`conversation/`](./conversation/README.md) owns the shared conversation read model and catalog
   sources used by the drawer, Agent picker and chat. Its `remote/` boundary owns desktop Session
   observation and history; local chat observation belongs to `features/chat/runtime`.
-- `sidebar/` owns the drawer's navigation surface.
+- `sidebar/` owns the drawer's navigation surface and the shared grouped destination list.
+- `systemEntry/` retains incoming shares while the destination page chooses an Agent or conversation.
 - `pane/` owns the file pane beside chat in wide windows.
 - `search/` owns the cross-page request session that opens the transient search page.
 - [`ssh/`](./ssh/README.md) presents authentication questions directly to the user, outside Agent

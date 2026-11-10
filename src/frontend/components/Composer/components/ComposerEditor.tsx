@@ -1,4 +1,4 @@
-import { Composer } from '@cherrystudio/ui/components';
+import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { StyleProp, TextStyle } from 'react-native';
@@ -13,14 +13,20 @@ export function ComposerEditor({
   children,
   compactAccessory,
   fieldStyle,
+  onLinkPress,
+  onReturnSubmit,
   placeholder,
+  submitOnReturn,
   testID,
 }: PropsWithChildren<{
   active: boolean;
   attachmentMode?: 'images' | 'text-only';
   compactAccessory?: ReactNode;
   fieldStyle?: StyleProp<TextStyle>;
+  onLinkPress?: ComposerInputProps['onLinkPress'];
+  onReturnSubmit?: (markdown: string) => void;
   placeholder?: string;
+  submitOnReturn?: boolean;
   testID: string;
 }>) {
   const { t } = useTranslation();
@@ -35,8 +41,11 @@ export function ComposerEditor({
       field={
         <ComposerField
           attachmentMode={attachmentMode}
+          onLinkPress={onLinkPress}
+          onReturnSubmit={onReturnSubmit}
           placeholder={placeholder}
           style={fieldStyle}
+          submitOnReturn={submitOnReturn}
           testID={`${testID}-input`}
         />
       }

@@ -60,6 +60,8 @@ export type JsSandboxRun = {
   signal: AbortSignal;
   /** Fires after native cleanup, including when the caller already received cancellation. */
   onSettled?: () => void;
+  /** Execution has acquired its slot; distinguishes queue time from native compute. */
+  onStarted?: () => void;
 };
 
 export type JsSandbox = {
@@ -150,7 +152,7 @@ export function createJsSandbox(
           },
         }
       : {}),
-    async run({ code, limits, files, signal, onSettled }) {
+    async run({ code, limits, files, signal, onSettled, onStarted }) {
       if (files && !runFiles) throw new Error('This client cannot give the sandbox file access.');
       let onAbort: (() => void) | undefined;
       let hasStarted = false;
@@ -158,6 +160,7 @@ export function createJsSandbox(
       try {
         releaseSlot = await computeSlots.acquire(signal);
         signal.throwIfAborted();
+        onStarted?.();
         const runId = createRunId();
         // Settle on abort without waiting; the native side holds a cancel that
         // lands before its thread registers the run.

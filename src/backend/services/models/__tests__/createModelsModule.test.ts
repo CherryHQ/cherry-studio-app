@@ -14,15 +14,16 @@ const provider = {
 } as Provider;
 
 function model(modelId: string, overrides: Partial<Model> = {}): Model {
+  const providerId = overrides.providerId ?? 'openai';
   return {
     capabilities: [],
-    id: createUniqueModelId('openai', modelId),
+    id: createUniqueModelId(providerId, modelId),
     isDeprecated: false,
     isEnabled: true,
     isHidden: false,
     modelId,
     name: modelId,
-    providerId: 'openai',
+    providerId,
     supportsStreaming: true,
     ...overrides,
   };
@@ -107,6 +108,58 @@ describe('createModelsModule', () => {
       preview: { added: [remote], missing: [] },
       status: 'changes',
     });
+  });
+
+  it.each([
+    ['an older catalog', 'mimo-v2-6-pro', false],
+    ['a corrected catalog', 'mimo-v2.6-pro', false],
+    ['both saved identities', 'mimo-v2.6-pro', true],
+  ] as const)('keeps a saved MiMo model matched with %s', async (_case, remoteId, hasNewCopy) => {
+    const saved = model('mimo-v2-6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const corrected = model('mimo-v2.6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const remote = model(remoteId, {
+      apiModelId: remoteId,
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.get).mockResolvedValue({ ...provider, id: 'mimo' });
+    jest
+      .mocked(dependencies.models.list)
+      .mockResolvedValue(hasNewCopy ? [saved, corrected] : [saved]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([remote]);
+
+    await expect(backend.pull('mimo')).resolves.toEqual({ status: 'up-to-date' });
+    expect(dependencies.models.reconcile).not.toHaveBeenCalled();
+  });
+
+  it('keeps real additions and removals alongside a matched legacy MiMo model', async () => {
+    const saved = model('mimo-v2-6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const missing = model('retired', { presetModelId: 'retired', providerId: 'mimo' });
+    const corrected = model('mimo-v2.6-pro', { providerId: 'mimo' });
+    const added = model('new-model', { providerId: 'mimo' });
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.get).mockResolvedValue({ ...provider, id: 'mimo' });
+    jest.mocked(dependencies.models.list).mockResolvedValue([saved, missing]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([corrected, added]);
+
+    await expect(backend.pull('mimo')).resolves.toEqual({
+      status: 'changes',
+      preview: { added: [added], missing: [missing] },
+    });
+    expect(dependencies.models.reconcile).not.toHaveBeenCalled();
   });
 
   it('keeps unsupported local and remote models out of the pull preview', async () => {

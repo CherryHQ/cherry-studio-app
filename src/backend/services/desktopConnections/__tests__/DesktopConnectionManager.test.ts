@@ -40,6 +40,7 @@ const grants: RemoteAuthorization['grants'] = [
 const original: DesktopConnectionRow = {
   id: 'desktop-1',
   name: 'Desktop',
+  alias: null,
   deviceId: 'device-1',
   desktopIdentity: 'peer1',
   learnedEndpoints: [],
@@ -814,6 +815,62 @@ describe('DesktopConnectionManager ownership', () => {
     expect(manager.getPersistentConnections()).toEqual([]);
     expect(row.grants).toEqual(grants);
     expect(row.status).toBe('paired');
+  });
+
+  it('refreshes notification names without interrupting the channel or changing its token', async () => {
+    manager.enablePersistentConnections();
+    row.name = 'desktop.local';
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    const token = manager.getPersistentConnections()[0].token;
+    const changed = jest.fn();
+    const unsubscribe = manager.subscribeConnections(changed);
+    try {
+      row = { ...row, alias: 'Work.mac' };
+      await manager.refreshName(row.id);
+      expect(manager.getPersistentConnections()).toEqual([
+        { id: row.id, name: 'Work.mac', status: 'connected', token },
+      ]);
+      expect(changed).toHaveBeenCalledTimes(1);
+      row = { ...row, alias: null };
+      await manager.refreshName(row.id);
+      expect(manager.getPersistentConnections()).toEqual([
+        { id: row.id, name: 'desktop', status: 'connected', token },
+      ]);
+      expect(lease.getSnapshot()).toEqual({ status: 'ready' });
+      expect(lease.signal.aborted).toBe(false);
+      expect(channel.close).not.toHaveBeenCalled();
+      expect(connect).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+      lease.release();
+    }
+  });
+
+  it('preserves a renamed notification when a concurrent authorization write completes', async () => {
+    manager.enablePersistentConnections();
+    connect.mockResolvedValueOnce(session() as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    const write = deferred<void>();
+    const updateStatus = store.updateStatus.getMockImplementation()!;
+    store.updateStatus.mockImplementationOnce(async (...args) => {
+      await write.promise;
+      return updateStatus(...args);
+    });
+    const revoking = manager.revoke(row.id, 'configuration', 'config-1');
+    try {
+      await jest.advanceTimersByTimeAsync(0);
+      row = { ...row, alias: 'Work.mac' };
+      await manager.refreshName(row.id);
+    } finally {
+      write.resolve(undefined);
+      await revoking;
+      lease.release();
+    }
+    expect(manager.getPersistentConnections()[0].name).toBe('Work.mac');
   });
 
   it('manual disconnect suppresses retained consumers, discovery and foreground retries until explicit reconnect', async () => {

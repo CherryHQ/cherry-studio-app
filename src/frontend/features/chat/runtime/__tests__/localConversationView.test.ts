@@ -362,6 +362,8 @@ test('message actions follow the busy state and reuse projections while it is un
   expect(f.projector.message(answer, f.state)).toBe(idle);
   expect(idle.actions.retry?.availability).toEqual({ state: 'enabled' });
   expect(idle.actions.remove?.availability).toEqual({ state: 'enabled' });
+  await idle.actions.remove!.execute(undefined);
+  expect(f.client.deleteTurn).toHaveBeenCalledWith('session', answer.turnId, answer.id);
   expect(await idle.actions.fork!.execute({ title: 'Copy' })).toEqual({
     state: 'applied',
     value: { source: { kind: 'local' }, sessionId: 'fork' },
@@ -410,6 +412,94 @@ test('history keeps its rows while live state streams and refreshes them when bu
   expect(idle).not.toBe(streaming);
   expect(idle[0].actions.retry?.availability).toEqual({ state: 'enabled' });
   expect(f.projector.history([...history], f.state)).toEqual(idle);
+});
+
+test.each(['error', 'interrupted', 'cancelled'] as const)(
+  'a %s answer and its card show pending during retry preparation without changing stored content',
+  (status) => {
+    const answer: AgentMessageView = {
+      ...message('answer'),
+      parentId: 'question',
+      status,
+      parts: [
+        ...message('answer').parts,
+        {
+          id: 'original-failure',
+          type: 'data-error',
+          data: { code: 'EXECUTION_FAILED', message: 'Original failure', retryable: true },
+        },
+      ],
+      siblings: [
+        { id: 'answer', modelId: null, status, siblingsGroupId: 0 },
+        { id: 'other-answer', modelId: null, status: 'success', siblingsGroupId: 0 },
+      ],
+    };
+    const rows = [answer];
+    const f = fixture();
+    const [original] = f.projector.history(rows, f.state);
+
+    f.set({ isSubmitting: true, pendingRetryMessageId: answer.id });
+    const [pending] = f.projector.history(rows, f.state);
+    expect(pending.state).toBe('pending');
+    expect(pending.display).toMatchObject({
+      id: answer.id,
+      status: 'pending',
+      data: { parts: [] },
+      branch: {
+        siblings: [
+          { id: answer.id, status: 'pending' },
+          { id: 'other-answer', status: 'success' },
+        ],
+      },
+    });
+    expect(pending.actions.retry).toBeUndefined();
+    expect(pending.actions.answerWith).toBeUndefined();
+    expect(answer.status).toBe(status);
+    expect(answer.parts).toMatchObject([
+      ...message('answer').parts,
+      { type: 'data-error', data: { message: 'Original failure' } },
+    ]);
+    expect(answer.siblings?.map((sibling) => sibling.status)).toEqual([status, 'success']);
+
+    // An observed reservation may remove the overlay before admission finishes.
+    f.set({ pendingRetryMessageId: undefined });
+    const [restored] = f.projector.history(rows, f.state);
+    expect(restored.state).toBe(status);
+    expect(restored.display.branch).toEqual(original.display.branch);
+    expect(restored.display.data.parts).toEqual(original.display.data.parts);
+    expect(restored.actions.retry?.availability.state).toBe('disabled');
+    f.set({ isSubmitting: false });
+    expect(f.projector.history(rows, f.state)[0].actions.retry?.availability.state).toBe('enabled');
+  },
+);
+
+test('regeneration and explicit model selection keep the original answer visible during admission', () => {
+  const f = fixture({ isSubmitting: true, pendingRetryMessageId: 'success' });
+  expect(f.projector.message(message('success'), f.state).state).toBe('success');
+  f.set({ pendingRetryMessageId: undefined });
+  const failed = { ...message('failed'), status: 'error' as const };
+  const projected = f.projector.message(failed, f.state);
+  expect(projected.state).toBe('error');
+  expect(projected.display.data.parts).toEqual(
+    expect.arrayContaining([expect.objectContaining({ type: 'text', text: 'failed' })]),
+  );
+  expect(projected.actions.answerWith?.availability.state).toBe('disabled');
+});
+
+test('retry admission reports busy preparation while preserving the last settled execution', () => {
+  const f = fixture({
+    isSubmitting: true,
+    activeTurn: { id: 'previous', status: 'failed' } as AgentSessionChatState['activeTurn'],
+  });
+  const admitting = f.projector.snapshot(f.state, undefined);
+  expect(admitting.isSubmitting).toBe(true);
+  expect(admitting.executions).toMatchObject([{ id: 'previous', state: 'failed' }]);
+  f.set({ activeTurn: { id: 'retry', status: 'running' } as AgentSessionChatState['activeTurn'] });
+  expect(f.projector.snapshot(f.state, undefined).executions).toMatchObject([
+    { id: 'retry', state: 'running' },
+  ]);
+  f.set({ isSubmitting: false });
+  expect(f.projector.snapshot(f.state, undefined).isSubmitting).toBe(false);
 });
 
 test('cancellation targets the observed turn and the snapshot reports freshness from the client', async () => {

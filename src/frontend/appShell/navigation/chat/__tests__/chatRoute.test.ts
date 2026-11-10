@@ -32,7 +32,7 @@ describe('shared chat route contract', () => {
     });
   });
 
-  test('carries a composer handoff on a draft and drops it on a Session', () => {
+  test('carries a composer handoff on a draft and a Session', () => {
     const target = { agentId: 'agent-1', kind: 'draft' as const, composerHandoff: 'share-1' };
     expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
     expect(chatRouteParams({ kind: 'session', sessionId: 'session-1' })).toHaveProperty(
@@ -41,8 +41,12 @@ describe('shared chat route contract', () => {
     );
     expect(parseChatRoute({ composerHandoff: 'share-1', sessionId: 'session-1' })).toEqual({
       status: 'ready',
-      target: { kind: 'session', sessionId: 'session-1' },
+      target: { kind: 'session', sessionId: 'session-1', composerHandoff: 'share-1' },
     });
+    expect(
+      chatRouteParams({ kind: 'session', sessionId: 'session-1', composerHandoff: 'share-1' })
+        .composerHandoff,
+    ).toBe('share-1');
   });
 
   test('serializes complete chat identity for return navigation', () => {

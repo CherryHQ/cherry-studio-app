@@ -12,7 +12,7 @@ dependencies the same way, so no separate build hook is needed.
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
-| `production` / `production-google-play` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
+| `production` / `production-google-play` / `production-domestic-stores` | Enabled per service registry; Sentry additionally requires a DSN and current user consent | Enabled for Sentry; requires an upload token |
 
 The shared [reporting registry](../../src/frontend/appShell/observability/reportingServices.json)
 owns per-service build flags. Sentry uses immutable native metadata and rejects debug binaries.
@@ -23,8 +23,8 @@ metrics. Changing native reporting policy requires a new installation package. S
 ## Prerequisites
 
 - Install the repository dependencies with Node.js 24 and `pnpm@12.2.1`.
-- Install EAS CLI (`pnpm add --global eas-cli`) and authenticate with `eas login`, or provide
-  `EXPO_TOKEN` in the process environment.
+- `pnpm install` installs the pinned EAS CLI (24.4.2) and local build plugin (24.3.0).
+  Authenticate with `pnpm exec eas login`, or provide `EXPO_TOKEN` in the process environment.
 - Install the native build tools for the selected platform: Xcode, CocoaPods, and fastlane for
   iOS; the Android SDK and NDK for Android.
 
@@ -37,6 +37,14 @@ do not use Expo's cloud build workers. See the
 [Expo local build guide](https://docs.expo.dev/build-reference/local-builds/) for platform requirements
 and limitations.
 
+The wrapper starts the installed CLI with the current Node executable and supplies the installed
+local plugin's executable path. It does not depend on a global `eas`, a personal npm cache path,
+or a nested `npx` download. Invoke `pnpm build:local` directly; wrapping it in `npm exec --package`
+can leak npm's package-selection settings into child tools. An explicit
+`EAS_LOCAL_BUILD_PLUGIN_PATH` remains available for intentional upstream-plugin development.
+Keep both pinned packages compatible: EAS CLI 24.4.2 uses `@expo/eas-build-job` 24.3.0, which
+determines the local plugin version. Release workflows and `eas.json` require the same CLI version.
+
 ## App Variants
 
 `app.json` holds the production defaults. `app.config.ts` selects the app identity using `PROFILE`,
@@ -47,12 +55,17 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 | --- | --- | --- | --- |
 | `development` | Cherry Studio Dev | `.dev` | `cherrystudio-dev` |
 | `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
-| `production` / `production-google-play` | Cherry Studio | none | `cherrystudio` |
+| `production` / `production-google-play` / `production-domestic-stores` | Cherry Studio | none | `cherrystudio` |
 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
 AAB without adding an app identity or runtime environment, and explicitly disables APK update
 checks. The existing `production` profile creates public Android APKs with GitCode update checks
 and iOS IPAs with this feature disabled. Public APKs are published to GitHub and mirrored to GitCode.
+
+`production-domestic-stores` also inherits the production identity and signing credentials, but
+produces an APK on `production-domestic-stores` with APK installation disabled. Submit the same
+store APK separately to HONOR, Xiaomi, OPPO, and vivo. See
+[Domestic Android Store Updates](./domestic-store-updates.md); do not substitute the public APK.
 
 The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
 `com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
@@ -119,9 +132,10 @@ an OTA update cannot change the policy in an existing installation.
 ## APK Update Distribution
 
 Preview and production packages also include the EAS Update client for compatible code and asset
-changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`, and
-iOS production uses `production-ios`; preview uses `preview`. Existing installations need one new
-native package first. Development and Storybook do not automatically fetch OTA updates. See
+changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`,
+domestic stores use `production-domestic-stores`, and iOS production uses `production-ios`;
+preview uses `preview`. Existing installations need one new native package first. Development and
+Storybook do not automatically fetch OTA updates. See
 [Application Updates](./app-updates.md) for publication and runtime compatibility.
 
 The native update channel selects the shared package-update strategy: `production-apk` checks
@@ -131,9 +145,14 @@ disabled. Notifications and About share one state; native updates require an exp
 See the [update infrastructure](../../src/backend/services/appUpdate/README.md).
 
 `APK_UPDATES_ENABLED` is the existing build-time switch for APK installation capability. The Android
-`production` profile sets it to `true`; `production-google-play` sets it to `false`, excluding
-`REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
+`production` profile sets it to `true`; `production-google-play` and `production-domestic-stores`
+set it to `false`, excluding `REQUEST_INSTALL_PACKAGES`. Do not override it in shared EAS environments or upload the public APK
 as a store artifact. The native installer independently checks the embedded channel.
+
+`DOMESTIC_STORES_ENABLED` controls whether native generation includes the domestic update SDKs.
+It defaults to `false`; production profiles inherit an explicit `false`, and only the domestic
+Android profile sets `true`. Keep this flag in `eas.json` so build submission, native generation
+and OTA fingerprinting use the same value instead of relying on the worker-only `EAS_BUILD_PROFILE`.
 
 For an explicitly authorized development session, supply `APK_UPDATES_ENABLED=true` during both
 the Android native build and Metro startup. Changing only Metro cannot add an installation
@@ -164,6 +183,11 @@ SENTRY_AUTH_TOKEN=
 - `SENTRY_AUTH_TOKEN` is a build-only credential used to upload source maps and debug symbols.
   Use a token with the source-map upload permissions for the configured Sentry project. Do not
   prefix it with `EXPO_PUBLIC_` or add it to app config.
+- The production profile supplies `SENTRY_URL=https://sentry.io/` through `eas.json`, alongside
+  the environment-sourced token. Sentry CLI 3.8.x deliberately discards a file-sourced URL when
+  the selected token comes from a different source. Direct upload commands outside EAS must export
+  `SENTRY_URL` with `SENTRY_AUTH_TOKEN` too. Keep the URL consistent with the Sentry plugin in
+  `app.json`; the token stays outside source control.
 
 The wrapper uses Node's env-file loader before starting EAS. Existing shell environment variables
 take precedence over `.env.local`, which takes precedence over `.env`. Missing files are allowed;
@@ -215,6 +239,13 @@ When a Google Play release build is explicitly requested, use its separate AAB p
 pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab
 ```
 
+When a domestic store release build is explicitly requested, use its separate APK profile and
+archive it apart from the public APK, for example under `<version>/domestic-stores/build-<number>/`:
+
+```bash
+pnpm build:local --platform android --profile production-domestic-stores --output /absolute/path/to/cherry-studio-0.1.0-android.apk
+```
+
 Google Play requires an AAB for a new app; renaming an APK does not convert its format. See
 [Cloud Releases](./cloud-releases.md) for the independent GitHub APK, Google Play AAB build,
 and iOS upload workflows and their signing requirements. Google Play AABs are uploaded manually
@@ -248,9 +279,9 @@ update checks follow its native `production-apk` channel, not an environment var
 `<workdir>/build/android`, force the upload tasks to run with task-specific `--rerun` options:
 
 ```bash
-eas env:exec production --non-interactive \
+pnpm exec eas env:exec production --non-interactive \
   "env PROFILE=production NODE_ENV=production EAS_BUILD=true EAS_BUILD_WORKINGDIR=/absolute/path/to/workdir/build \
-  SENTRY_ALLOW_FAILURE=false SENTRY_DISABLE_AUTO_UPLOAD=false SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=false \
+  SENTRY_URL=https://sentry.io/ SENTRY_ALLOW_FAILURE=false SENTRY_DISABLE_AUTO_UPLOAD=false SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=false \
   ./gradlew :app:uploadSentryProguardMappingsRelease --rerun \
   :app:sentryUploadSourceBundleRelease --rerun \
   :app:uploadSentryNativeSymbolsForRelease --rerun \
@@ -285,6 +316,15 @@ plugin uploads each build's `mapping.txt`, JVM source bundle (including local Ex
 available native debug symbols/sources. Its embedded debug identifiers associate reports with
 that build's artifacts; JavaScript source maps continue through the existing Sentry Metro/Gradle
 integration. Keep the SDK's native release/dist values instead of overriding them in JavaScript.
+The same configuration plugin applies Sentry immediately after `com.android.application` in the
+generated app module; Sentry's Expo plugin otherwise prepends it before the application exists.
+Do not edit generated Gradle files to maintain this ordering.
+
+Native source context retains Sentry CLI's default 1 MiB per-file limit. Oversized generated
+Tree-sitter parsers, QuickJS amalgamation, and simdutf sources are intentionally omitted; native
+symbols, R8 mappings, JVM/local-module sources, and JavaScript source maps remain enabled.
+See [Android Build Maintenance](./android-build-maintenance.md) for the coverage decision,
+dependency patch migration, remaining warnings, and required acceptance evidence.
 
 The APK profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads.
 Android extracts those libraries during installation, so a smaller APK does not mean less installed storage
@@ -333,7 +373,7 @@ is resolved.
 
 ### Android Edge-To-Edge Compatibility
 
-The Screens 4.30.0 patch raises its Material dependency to
+The Screens 4.30.1 patch raises its Material dependency to
 [1.14.0](https://github.com/material-components/material-components-android/releases/tag/1.14.0).
 That release routes `BottomSheetDialog`, `SheetDialog`, and `EdgeToEdgeUtils` through helpers which
 only read/write legacy system-bar colors below Android 15. Its minimum SDK 23 and AGP 8.11.1 baseline
@@ -356,7 +396,7 @@ enabled; use comparable build settings when attributing changes to the dependenc
 
 ## Expo 58 Dependency Baseline
 
-The project uses Expo 58.0.19 and React Native 0.88.0 with Hermes V1 260318099.0.4. SDK 58 builds
+The project uses Expo 58.0.22 and React Native 0.88.1 with Hermes V1 260318099.0.5. SDK 58 builds
 against the iOS 27 SDK and its iOS template adopts the UIKit scene lifecycle, so
 `expo-build-properties` no longer needs `enableSceneSupport`. See the
 [Expo SDK 58 release notes](https://expo.dev/changelog/sdk-58). Existing development clients must
@@ -387,14 +427,14 @@ JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspa
 
 ### Expo Modules Core Swift Compiler Compatibility Patch
 
-`expo-modules-core@58.0.26` casts a failure value to `any Error` while consuming a result whose
-success value is noncopyable. Xcode 27.2 / Swift 6.4.2 crashes during SIL generation for that
-pattern in `AsyncFunctionDefinition.swift`. The patch backports
-[Expo #52631](https://github.com/expo/expo/pull/52631), removing the redundant cast while preserving
-Promise resolution and rejection. Remove it when the installed Expo Modules Core includes that fix.
+Expo Modules Core 58.0.29 includes [Expo #52631](https://github.com/expo/expo/pull/52631), removing
+the redundant `any Error` cast while consuming a result whose success value is noncopyable.
+Xcode 27.2 / Swift 6.4.2 crashes during SIL generation for the previous pattern in
+`AsyncFunctionDefinition.swift`. The equivalent local Swift hunk has been retired; the separate
+Android private-storage patch remains.
 
-`scripts/__tests__/expoModulesCoreSwiftCompatibility.test.ts` guards patch registration, the hash,
-and Expo's installed native source in PR CI. A new iOS build with the affected toolchain is required
+`scripts/__tests__/expoModulesCoreSwiftCompatibility.test.ts` still guards Expo's installed native
+source in PR CI. A new iOS build with the affected toolchain is required
 to verify compilation; source guards alone do not establish compiler or runtime compatibility.
 
 ### iOS 17 Nitro Exception Compatibility Patch
@@ -422,7 +462,7 @@ including text-input measurement. A concurrent JS-thread measurement may wait fo
 delivery while creating `NSTextStorage`. Holding the measurement-cache mutex across that native
 work can block the main thread and create a circular wait if delivery needs it.
 
-React Native 0.88.0's iOS text and line measurement caches use
+React Native 0.88.1's patched iOS text and line measurement caches use
 `SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
 text notifications cannot hold the measurement cache lock while waiting for another thread
 ([#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182)). Lookup, insertion, LRU
@@ -455,14 +495,14 @@ clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactC
 
 ### iOS Build 26 Crash Patches
 
-- Screens 4.30.0 iterates over a copy of the header subviews. Synchronous shadow-state updates
+- Screens 4.30.1's patch iterates over a copy of the header subviews. Synchronous shadow-state updates
   can mount or unmount children during this loop, invalidating an enumeration of the live array.
 - React Native 0.88.0 no longer needs a patch for pending render/command callbacks reaching a torn-down
   scheduler delegate. 0.86.3 needed the `enableSchedulerDelegateInvalidation` flag from
   [React Native #56680](https://github.com/facebook/react-native/pull/56680); 0.88 removed that flag
   and instead clears pending rendering updates in `RuntimeScheduler_Modern::handleTaskError` before
   the host's fatal handler drops the delegate, covered by its `SchedulerDelegateInvalidationTest`.
-- Widgets 58.0.23 reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
+- Widgets 58.0.26's patch reads `isActivityFullscreen` only on iOS 18 and newer, returning `false` on older
   systems. Build 26's five iOS 17.6.1 widget samples all return to binary offset `0x24bf98` after
   calling this missing weak-linked WidgetKit getter. Although the SDK declares it available earlier,
   [Apple's developer forum](https://developer.apple.com/forums/thread/763594) also reports the missing

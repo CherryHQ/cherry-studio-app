@@ -5,6 +5,16 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
+flat previous/current/next cards and page dots, with native horizontal fling recognition and
+accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;
+vertical movement yields to the sheet, and cancelled flings never change the index. Callers own
+items, index, translated labels, content, selection, conversion, file access and delivery. Background
+slots must disable irrelevant interactions. The default `fill` layout lets a single item occupy
+its whole frame without pagination space; `compact` keeps the bounded media geometry for one item.
+Collections use 290-point cards when available, without rotation or overlapping stack layers.
+
+
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
 rows with labeled up/down buttons, disables moves at the first and last positions, and returns
 a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
@@ -128,6 +138,8 @@ label and type metadata.
 
 Audio cards use a neutral waveform icon. Compact audio attachments show their extension below
 the filename; opening and transcription state remain caller-owned.
+The `icon` variant accepts `iconSize` for the glyph, independently of the tile's `size`;
+omitting it keeps the existing 24-point glyph.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
@@ -261,11 +273,18 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
-`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`defaultExpanded` supplies the initial disclosure state without overriding later manual toggles, and
 `statusText`/`statusTone` keep exceptions visible while the process is folded.
 `MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
 `expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
 unmounts; new calls and completion never override the reader's choice.
+
+`MessagePart.Reasoning` opens the existing detail sheet at its default large height;
+it never expands content inline. `detailTitle` supplies a stable reader title. Content mounts only
+while open. The chat adapter owns one message-level reader above process folding, so committing a
+streamed part or completing a reply cannot close a reader already open.
+For inline reasoning, the chat adapter instead composes `MessagePart.ToolGroup` with
+`MessagePart.TextBody variant="preview"`; tapping the preview opens that message-owned reader.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
@@ -294,6 +313,9 @@ are not recycled between blocks. Native scroll and selection recognizers own can
 nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
 section's explicit copy action always uses the original value, including text outside the viewport
 and original line endings. Gesture cancellation still requires acceptance on both platforms.
+`variant="preview"` always uses the fixed-height viewport and disables partial selection for a
+caller-owned tappable preview; wrap it in `BackgroundPressArea` so native scroll cancellation still
+owns the tap decision. Other readers keep block selection and natural short-text height by default.
 
 `splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
 reader. It normalizes line endings for display and continues very long lines without splitting
@@ -400,9 +422,12 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
 behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
 its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
-`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+`inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
-compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
+to 14/20 labels, 20-point icons and a minimum 48-point touch target in both dimensions, growing for
+larger text. Other platforms retain `lg` sizing. This adaptation stays inside Button; feature code
+does not branch by platform. The `icon` prop renders an icon before
 the label and automatically switches to the matching icon-only padding when no label is provided.
 Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
 composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
@@ -412,6 +437,26 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+
+`Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
+and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
+platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+`variant="floating"` provides a 42-point capsule at default text size, with iOS-owned glass where
+available and the same token-backed capsule fallback elsewhere. Items can combine icons and labels.
+
+`DateRangePicker` is a controlled calendar for selecting a start and end day on one surface.
+It adapts `react-native-ui-datepicker` with Cherry typography, theme tokens, range highlighting,
+month/year navigation, and the caller's resolved `locale`, including both Chinese scripts.
+Its `value` and `onValueChange` use `DateRangeValue` (`startDate`/`endDate`, both optional `Date`s);
+the end stays absent while a new range is being selected. `minimumDate` and `maximumDate` constrain
+selection. The caller owns surrounding insets, presets, incomplete-selection copy, confirmation,
+and conversion to application-specific day boundaries. Tapping a completed range starts a new one;
+tapping its pending start again selects that single day.
+Public `Date` values represent local calendar days. The adapter exchanges date-only values with
+the vendor in UTC and reconstructs local dates on selection, avoiding the vendor's timezone
+conversion shifting a pressed day. The vendor's UTC-based today decoration is not used; the
+calendar uses Monday-first weeks, matching the app's usage calendar.
+It adds no native module or platform-specific component API.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
@@ -620,6 +665,11 @@ continues to target the native field.
 It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
 taps, system back, and viewport changes dismiss it without changing the underlying layout.
 
+`AnchoredInfoPopover` accepts a caller-owned `InfoPopoverAnchor` in window coordinates instead of
+wrapping a trigger. Native editor links and inline transcript text use it when they measure their
+own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
+Its keyboard-preserving overlay shares the existing menu surface and bounded text reader.
+
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
@@ -803,6 +853,18 @@ they are written and `Composer.Send` pins itself right, so adding one never move
 callers never need grouping views. `Composer.Action` is the button shell every tool should use: it
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
+
+`Composer.Input` accepts `submitOnReturn` and `onReturnSubmit`. When both are set, the soft
+keyboard shows Send and a native submit event supplies the current Markdown without inserting a
+newline or blurring the field. The caller connects that snapshot to its normal guarded submission
+path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
+path; they never infer submission from text changes. With the preference off, Return keeps its
+ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
+It inserts at the caret or after selected text without replacing that text or submitting.
+The native menu retains the system editing actions and works without a nonempty selection.
+The native contract is maintained in the enriched-input dependency patch and needs an updated
+development client on both platforms.
 
 `Composer.Dock` applies horizontal and safe-area insets and follows the keyboard. It floats above
 screen content by default. Use `layoutMode="flow"` when the parent should reserve its space through

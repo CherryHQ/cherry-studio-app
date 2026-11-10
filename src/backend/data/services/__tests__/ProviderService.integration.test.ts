@@ -12,7 +12,11 @@ describe('ProviderService integration', () => {
     testDatabase = createServiceTestDatabase();
     const cacheService = new CacheService(createInMemoryBackendCacheStorage());
     await cacheService._doInit();
-    await installTestHost({ CacheService: cacheService, DbService: testDatabase.dbService });
+    await installTestHost({
+      CacheService: cacheService,
+      DbService: testDatabase.dbService,
+      ProviderCatalogRuntime: { ensureReady: async () => {} },
+    });
     service = new ProviderService();
   });
 

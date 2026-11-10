@@ -1,6 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -25,7 +25,8 @@ import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/compone
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { editReplyHref } from '../../../editReply/editReplyRoute';
-import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
+import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
+import type { ChatShareTranslations } from '../../../share/chatShareTarget';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 
@@ -54,7 +55,7 @@ type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
-  deleteMessageTurn?: (input: { turnId: string }) => void;
+  deleteMessageTurn?: (input: { turnId: string; messageId: string }) => void;
   /**
    * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
    * the choice was applied.
@@ -93,7 +94,7 @@ export function AssistantMessageActionsProvider({
   const translationStore = useMessageTranslationStore();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
-  const sharing = useRef(false);
+  const isSelecting = useIsChatShareSelecting();
   // The answer whose question the model picker adds an answer to.
   const [answeringMessageId, setAnsweringMessageId] = useState<string>();
   useEffect(() => {
@@ -102,11 +103,6 @@ export function AssistantMessageActionsProvider({
       mounted.current = false;
     };
   }, []);
-  useFocusEffect(
-    useCallback(() => {
-      sharing.current = false;
-    }, []),
-  );
   // Keyed by content so streamed transcript updates keep the rows' state context stable.
   const retryableKey = messages
     .flatMap((message) => (message.actions.retry ? [message.key] : []))
@@ -123,13 +119,16 @@ export function AssistantMessageActionsProvider({
     () => new Set(editableKey ? editableKey.split('\n') : []),
     [editableKey],
   );
-  const isBusy = snapshot.executions.some(
-    (execution) =>
-      execution.state === 'running' ||
-      execution.state === 'awaiting-approval' ||
-      execution.state === 'awaiting-input' ||
-      execution.state === 'finalizing',
-  );
+  const isBusy =
+    isSelecting ||
+    Boolean(snapshot.isSubmitting) ||
+    snapshot.executions.some(
+      (execution) =>
+        execution.state === 'running' ||
+        execution.state === 'awaiting-approval' ||
+        execution.state === 'awaiting-input' ||
+        execution.state === 'finalizing',
+    );
   // Rows receive these handlers through context. The transcript and snapshot
   // change on every streamed update, so the handlers read them when invoked;
   // only whether an action exists or is enabled reaches rows as rendered state.
@@ -196,8 +195,7 @@ export function AssistantMessageActionsProvider({
   const share = useCallback(
     ({ messageId }: { messageId: string }) => {
       const { onShare: openShare } = latest.current;
-      if (!openShare || sharing.current) return;
-      sharing.current = true;
+      if (!openShare) return;
       Keyboard.dismiss();
       openShare(messageId, translationStore?.getExpandedTranslations());
     },
@@ -245,10 +243,11 @@ export function AssistantMessageActionsProvider({
     [run],
   );
   const remove = useCallback(
-    ({ turnId }: { turnId: string }) => {
+    ({ turnId, messageId }: { turnId: string; messageId: string }) => {
       const current = latest.current;
       const message = current.messages.find(
-        (message) => message.display.turnId === turnId && message.actions.remove,
+        (message) =>
+          message.key === messageId && message.display.turnId === turnId && message.actions.remove,
       );
       if (!message || current.isBusy) return;
       current.alert.confirm({
@@ -298,7 +297,7 @@ export function AssistantMessageActionsProvider({
     : undefined;
   return (
     <ChatMessageActionsProvider
-      isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+      isAssistantToolbarEnabled={isAssistantToolbarEnabled && !isSelecting}
       onShare={share}
       onEdit={editableMessageIds.size ? edit : undefined}
       editableMessageIds={editableMessageIds}

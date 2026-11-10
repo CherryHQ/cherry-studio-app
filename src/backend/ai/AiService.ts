@@ -200,6 +200,9 @@ export class AiService extends BaseService {
         getAuthConfig: async (providerId) =>
           (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
         getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
+        getModelEndpointTypes: (modelId) =>
+          registryModels.find((model) => (model.apiModelId ?? model.modelId) === modelId)
+            ?.endpointTypes,
         getVertexAccessToken: (input, signal) =>
           this.services.vertexAuth.getAccessToken({ ...input, providerId: provider.id }, signal),
       },

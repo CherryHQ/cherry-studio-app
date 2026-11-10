@@ -41,9 +41,17 @@ describe('ChatMessageRowContext', () => {
       <RowProbe id="pending" />
     </>
   );
-  const render = (messages: readonly ConversationMessage[], timestamps: ReadonlySet<string>) => {
+  const render = (
+    messages: readonly ConversationMessage[],
+    timestamps: ReadonlySet<string>,
+    breakAfterMessageId?: string,
+  ) => {
     const element = (
-      <ChatMessageRowProvider messages={messages} timestampMessageIds={timestamps}>
+      <ChatMessageRowProvider
+        messages={messages}
+        timestampMessageIds={timestamps}
+        breakAfterMessageId={breakAfterMessageId}
+      >
         {probes}
       </ChatMessageRowProvider>
     );
@@ -101,5 +109,16 @@ describe('ChatMessageRowContext', () => {
     render([message('a')], new Set(['pending']));
     expect(latest('pending')?.showsTimestamp).toBe(true);
     expect(seen.get('a')).toHaveLength(1);
+  });
+
+  test('a fork-origin divider breaks selection adjacency on both sides', () => {
+    const messages = [message('a'), message('b')];
+    render(messages, new Set());
+    expect(latest('a')?.nextMessageId).toBe('b');
+    expect(latest('b')?.previousMessageId).toBe('a');
+
+    render(messages, new Set(), 'a');
+    expect(latest('a')?.nextMessageId).toBeUndefined();
+    expect(latest('b')?.previousMessageId).toBeUndefined();
   });
 });

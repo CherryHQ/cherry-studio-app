@@ -17,6 +17,8 @@ import {
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
   AgentProtocolError,
+  AgentReadReasoningInputSchema,
+  AgentReasoningDetailSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentRespondQuestionSchema,
@@ -46,6 +48,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
@@ -163,7 +166,10 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly statuses = new Map<string, AgentSessionStatus>();
   private readonly statusListeners = new Map<string, Set<() => void>>();
+  private readonly allStatusListeners = new Set<() => void>();
   private readonly deleting = new Set<string>();
+  /** Null awaits the fork's first input; an id identifies its leading answer for naming. */
+  private readonly forksToName = new Map<string, string | null>();
   private readonly pendingWrites = new Set<Promise<unknown>>();
   private readonly settlements = new Map<string, Promise<void>>();
   private readonly controller = new AbortController();
@@ -497,6 +503,15 @@ export class DurableAgentHost implements AgentProtocol {
   getSessionStatus(sessionId: string) {
     return this.statuses.get(sessionId) ?? null;
   }
+  getSessionStatusIds() {
+    return [...this.statuses.keys()];
+  }
+  subscribeSessionStatuses(listener: () => void) {
+    this.allStatusListeners.add(listener);
+    return () => {
+      this.allStatusListeners.delete(listener);
+    };
+  }
   subscribeSessionStatus(sessionId: string, listener: () => void) {
     const listeners = this.statusListeners.get(sessionId) ?? new Set();
     this.statusListeners.set(sessionId, listeners);
@@ -548,12 +563,11 @@ export class DurableAgentHost implements AgentProtocol {
       const current = await this.syncSession(parsed.sessionId);
       const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
       if (quote?.type === 'text' && quote.quotes) {
-        const source = await this.store.getMessage(
-          parsed.sessionId,
-          quote.quotes[0].sourceMessageId,
-        );
-        if (source?.role !== 'assistant')
-          fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+        for (const sourceMessageId of new Set(quote.quotes.map((item) => item.sourceMessageId))) {
+          const source = await this.store.getMessage(parsed.sessionId, sourceMessageId);
+          if (source?.role !== 'assistant')
+            fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+        }
       }
       const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);
@@ -725,6 +739,17 @@ export class DurableAgentHost implements AgentProtocol {
             ...(initial.workspaceFolderId ? { workspaceFolderId: initial.workspaceFolderId } : {}),
           })
         : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    const renameFork = !reserve && !initial && this.forksToName.get(sessionId) === null;
+    if (renameFork) {
+      this.forksToName.set(sessionId, reserved.assistantMessage.id);
+      const naming = this.naming.maybeRenameFromFirstUserMessage(
+        sessionId,
+        primary.plan.inputParts,
+        true,
+      );
+      this.renameFrom(naming);
+      await naming.catch(() => null);
+    }
     const { turnId } = reserved;
     const assistants = [reserved.assistantMessage, ...reserved.additionalAssistantMessages];
     // The reservation selected the new answer. Observers learn the branch before its rows arrive.
@@ -785,7 +810,7 @@ export class DurableAgentHost implements AgentProtocol {
       await this.reconcileUnsettled(sessionId);
       throw error;
     }
-    if (!primary.plan.hasMessages)
+    if (!primary.plan.hasMessages && !renameFork)
       this.renameFrom(
         this.naming.maybeRenameFromFirstUserMessage(sessionId, primary.plan.inputParts),
       );
@@ -932,6 +957,7 @@ export class DurableAgentHost implements AgentProtocol {
       fail('MESSAGE_NOT_FOUND', 'The fork point no longer exists.');
     if (result.status === 'fork-point-unsettled')
       fail('SESSION_BUSY', 'The fork point is still running.');
+    this.forksToName.set(result.session.id, null);
     return result.session;
   }
 
@@ -1159,13 +1185,14 @@ export class DurableAgentHost implements AgentProtocol {
       await this.detachConversation(parsed.sessionId).catch((error: unknown) =>
         logger.warn('Deferred obsolete working-copy cleanup', error as Error),
       );
-      if (this.getSessionStatus(parsed.sessionId)?.turnId === parsed.turnId)
+      if (result.branchDeleted || this.getSessionStatus(parsed.sessionId)?.turnId === parsed.turnId)
         this.setStatus(parsed.sessionId, null);
-      this.publish(parsed.sessionId, {
-        type: 'turn.deleted',
-        turnId: parsed.turnId,
-        messageIds: result.deletedMessageIds,
-      });
+      this.publish(
+        parsed.sessionId,
+        result.branchDeleted
+          ? { type: 'messages.deleted', messageIds: result.deletedMessageIds }
+          : { type: 'turn.deleted', turnId: parsed.turnId, messageIds: result.deletedMessageIds },
+      );
       // Deleting the selected branch moves the Session's active node.
       const session = await this.store.getSession(parsed.sessionId);
       if (session) this.publish(parsed.sessionId, { type: 'session.updated', session });
@@ -1179,6 +1206,7 @@ export class DurableAgentHost implements AgentProtocol {
     await this.requireSession(parsed.sessionId);
     const session = await this.store.renameSession(parsed.sessionId, parsed.name);
     if (!session) fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+    this.forksToName.delete(session.id);
     this.publish(session.id, { type: 'session.updated', session });
     this.background.updateSessionTitle(session.id, session.name);
     return session;
@@ -1202,6 +1230,7 @@ export class DurableAgentHost implements AgentProtocol {
       await this.conversations.drainUsage();
       if (!(await this.store.deleteSession(sessionId)))
         fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+      this.forksToName.delete(sessionId);
       // Missing Cherry ownership is a durable invalidation: no startup path recreates this session.
       await this.detachConversation(sessionId).catch((error: unknown) =>
         logger.warn('Deferred deleted working-copy cleanup', error as Error),
@@ -1318,6 +1347,37 @@ export class DurableAgentHost implements AgentProtocol {
     state.questions.respond(parsed.toolCallId, parsed.answer);
   }
 
+  async readReasoning(input: Parameters<AgentProtocol['readReasoning']>[0]) {
+    const parsed = AgentReadReasoningInputSchema.parse(input);
+    await this.requireSession(parsed.sessionId);
+    const live = this.liveStates(parsed.sessionId).find(
+      (state) => state.active?.assistantMessageId === parsed.messageId,
+    );
+    // Active list snapshots carry status only. Read the authoritative runtime explicitly.
+    const runtimeMessage = live
+      ? await this.conversations.message(live.lane, parsed.messageId, { fullReasoning: true })
+      : undefined;
+    const message = runtimeMessage
+      ? projectDurableHostTurn(runtimeMessage.turn).assistant
+      : await this.store.getMessage(parsed.sessionId, parsed.messageId, {
+          tolerateInvalidParts: true,
+        });
+    if (!message || message.role !== 'assistant')
+      fail('MESSAGE_NOT_FOUND', 'The reasoning message no longer exists.');
+    const index = message.parts.findIndex((part) => part.id === parsed.partId);
+    const first = message.parts[index];
+    if (first?.type !== 'reasoning')
+      fail('MESSAGE_NOT_FOUND', 'The reasoning phase no longer exists.');
+    let text = first.text;
+    let state = first.state;
+    for (const part of message.parts.slice(index + 1)) {
+      if (part.type !== 'reasoning') break;
+      if (part.text.trim()) text = text ? `${text}\n\n${part.text}` : part.text;
+      state = part.state;
+    }
+    return AgentReasoningDetailSchema.parse({ text, state });
+  }
+
   async observeSession(
     sessionId: string,
     listener: (event: AgentEvent) => void,
@@ -1342,7 +1402,7 @@ export class DurableAgentHost implements AgentProtocol {
       streamingMessage: view?.assistant ?? null,
       additionalMessages: running
         .slice(1)
-        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
+        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? []),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
@@ -1377,7 +1437,7 @@ export class DurableAgentHost implements AgentProtocol {
         };
         messages.delete(snapshot.streamingMessage.id);
       }
-      snapshot.additionalMessages = [...messages.values()];
+      snapshot.additionalMessages = [...messages.values()].map(projectAgentMessageDisplay);
       return { snapshot, unsubscribe };
     } catch (error) {
       unsubscribe();
@@ -2025,14 +2085,15 @@ export class DurableAgentHost implements AgentProtocol {
       const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
       this.prepared.delete(executionKey(lane, turn.identity.requestId));
       this.approvalWaits.delete(executionKey(lane, turn.identity.requestId));
-      // Only the first question's leading answer names the Session.
+      // Only the first question's leading answer, or a fork's first new answer, names the Session.
+      const isForkFirstAnswer = this.forksToName.get(sessionId) === turn.assistantMessageId;
       if (
         turn.status === 'completed' &&
-        lane.slot === 0 &&
         prepared &&
-        !prepared.plan.hasMessages &&
+        (isForkFirstAnswer || (lane.slot === 0 && !prepared.plan.hasMessages)) &&
         view.assistant
-      )
+      ) {
+        if (isForkFirstAnswer) this.forksToName.delete(sessionId);
         this.renameFrom(
           this.naming.maybeRenameFromConversationSummary({
             sessionId,
@@ -2040,6 +2101,7 @@ export class DurableAgentHost implements AgentProtocol {
             assistantParts: view.assistant.parts,
           }),
         );
+      }
       this.ports.durableStorage?.notifyTranscript(sessionId);
     }
   }
@@ -2108,6 +2170,7 @@ export class DurableAgentHost implements AgentProtocol {
           (part.type === 'text' || part.type === 'reasoning') &&
           old.type === part.type &&
           part.state === old.state &&
+          (part.type !== 'reasoning' || old.type !== 'reasoning' || part.hasText === old.hasText) &&
           part.text.startsWith(old.text)
         ) {
           const text = part.text.slice(old.text.length);
@@ -2214,7 +2277,10 @@ export class DurableAgentHost implements AgentProtocol {
       this.recordTurnState({ sessionId, turnId: status.turnId }, status.status);
     if (status) this.statuses.set(sessionId, Object.freeze(status));
     else this.statuses.delete(sessionId);
-    for (const listener of this.statusListeners.get(sessionId) ?? [])
+    for (const listener of [
+      ...(this.statusListeners.get(sessionId) ?? []),
+      ...this.allStatusListeners,
+    ])
       try {
         listener();
       } catch (error) {
@@ -2341,6 +2407,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
+    if (view.assistant) view.assistant = projectAgentMessageDisplay(view.assistant);
     const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
     let parentId = view.user.parentId;
     while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);

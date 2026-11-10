@@ -25,7 +25,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cherrystudio/file-preview": "0.2.3",
+    "@cherrystudio/file-preview": "0.2.5",
     "@types/node": "^25.7.0",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.2.3",

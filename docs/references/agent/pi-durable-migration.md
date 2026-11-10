@@ -317,6 +317,8 @@ restore the messages and history, not loaded tool instructions or Skill sections
 "Branch to a new chat" copies the selected branch into a new Cherry Session with new message/turn
 identities. Checkpoints are cleared because their old turn anchors are not valid in the copy. The
 new session creates an independent Pi conversation on its first submission.
+The Host remembers newly created forks in memory and triggers the existing title policy on their
+first admitted user message. This does not override a manual rename or persist workflow state.
 
 Regenerating any settled answer reserves a sibling answer to the same question in the same Session
 and submits the original input on its own working copy. Retrying a failed leaf answer retains its message
@@ -330,6 +332,8 @@ Deleting a settled turn removes both Cherry rows, clears checkpoints that may in
 increments `runtimeRevision` in the same transaction. Retry increments this revision too. A stale
 copy is rejected after a crash even if retirement failed. A missing Cherry session never reappears.
 Deletion does not undo tool side effects or erase the independent usage ledger.
+For a question with alternative answers, the message-scoped delete removes only the chosen answer
+subtree and selects a surviving continuation. The shared question and sibling answers remain.
 
 `retireDoc` detaches application bindings; the unreachable upstream entries stay in the Pi file.
 Deletion removes Cherry data immediately, while retired Pi bytes remain inside the app sandbox. The
@@ -447,23 +451,72 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 | `harness.js`: `openTasks` orphaned-inbox scan and ownership guards | No upstream replacement. The explicitly chosen clear/rebuild scope does not preserve old orphaned queues; the idle-inbox repair fixture is replaced by normal admitted-run recovery | Same runtime suite retains existing-run and task-owned conversation exclusions. This is a scope retirement, not a claim of backward-compatible orphan repair |
 
 The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.5.0.patch) contains
-Segmenter fallback and Han search terms, exact-name tool search, and managed Code Mode output.
+Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output
+hook with its final store-commit budget guard.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing
 ([#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219)) remains described in
 [Clearing The Working File](#clearing-the-working-file).
 
+### Private Working Materials
+
+Intermediate scripts, research data and confirmed file receipts use upstream Code Mode `store/load`
+(`CodemodeStoreDoc`), with its existing conversation history and fork semantics. They stay in the
+disposable runtime cache, never the file library or backups. A requested deliverable continues to
+use managed artifacts; original conversation records retain their normal history policy.
+
+Store writes commit only when the entire script succeeds. Preparation therefore uses separate,
+short successful calls: save the first source/data chunk, append or locally replace the next chunk,
+then execute using `load(key)` without printing or re-emitting the source. After creation, store its
+returned `value.fileEntryId` and finish that call successfully before inspecting or editing the
+existing file in a separate call. A later inspection failure cannot roll back an earlier successful
+call's cache writes. Interrupted model text and failed preparation calls are not checkpoints.
+Missing cache values after rebuild/clearing must be recreated; missing receipts do not establish an
+uncertain side effect's outcome. This is an instructed workflow using existing tools, not a new
+cache-file API or automatic scheduler.
+
+Text console overflow also goes into `CodemodeStoreDoc` through the existing host output callback,
+under a task-specific key. The returned `store:<key>` is read with `load(key)`; output exceeding the
+native 256 Ki-character JSON value limit or the host's 768 Ki-character total cache budget is not
+saved, reserving 256 Ki characters for scripts and receipts. Admission counts both current values
+and the successful script's pending writes. The final script transaction checks the merged store
+against the native 1 Mi-character total limit, including writes another task committed in between.
+If that budget is exhausted, none of the script's cache writes apply and its stored outcome reports
+the failure; completed tool calls are not undone and their receipts must be checked before retrying.
+Existing keys are retained; the model receives an error rather than a dangling reference.
+Values stay as raw JSON values in the document; the sandbox serializes them before `load()` reads
+them. Saving overflow commits
+independently of the parent script's outcome. Explicit image outputs keep the existing managed-artifact
+path. Execution inputs are not automatically duplicated and historical tool arguments are not
+rewritten for model requests.
+New calls reuse short references; historical context compaction remains upstream-owned.
+
+The supported `afterTool` hook bounds invalid-argument diagnostics before settlement: at most five
+issues / 2,000 characters, without the full `Received arguments` echo. Nested tool progress retains
+the existing 1,000-character argument preview for detail readers. Upstream validation and Code Mode
+may still serialize arguments internally; this change does not patch those paths or claim to
+eliminate their allocation cost.
+
+[piCodemodeSandbox.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeSandbox.test.ts)
+covers staged source reuse and the separate creation/checking bridge contract;
+[piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts)
+covers native-store overflow persistence, pending writes and final-commit quota races, unchanged
+inputs and bounded direct/nested validation.
+These regressions and device performance checks have not been run. The earlier 46-second inspection
+delay remains unattributed.
+
 ### Other Behavioral And Platform Adaptations
 
 | Package/hunk group | Classification and invariant | Existing regression source / retirement evidence |
 | --- | --- | --- |
 | Pi Durable Unicode search and exact names | Product behavior: Chinese names and adjacent Han pairs remain discoverable without exposing deferred tools prematurely; exact deferred names in a `tool_search` query load before ranked matches, even when their count exceeds `limit` | [piToolSearch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piToolSearch.test.ts); upstream must satisfy Chinese and Latin cases and select exact names regardless of BM25 rank |
-| Pi Durable `writeOutput` hook | Host boundary: Code Mode output becomes a managed artifact rather than an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts), [piCodemodeOutput.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piCodemodeOutput.test.ts); require an upstream host-output API with cancellation/artifact ownership preserved |
+| Pi Durable `writeOutput` and store-commit budget | Host boundary: textual console overflow stays in the private working cache, with pending writes counted at admission and the merged store bounded atomically at script settlement; explicit image outputs use managed artifacts. Neither path exposes an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts); require an upstream host-output API with atomic store quotas and cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
+| Pi AI Google signatures over Chat Completions | Protocol compatibility: capture streamed `extra_content.google.thought_signature` in the existing durable tool-call field and replay it only for the same provider, model and API; legacy encrypted reasoning remains in `reasoning_details` | [piApiAdapters.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piApiAdapters.test.ts); retire when upstream preserves Google tool signatures through streamed response parsing and replay, with cross-model isolation unchanged. Regression sources are added but unrun |
 | Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation. Behavior and performance checks remain unrun |
 | Pi AI native OAuth; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
-| Pi AI Vertex bearer token and Google GenAI Web auth/fetch injection | Platform compatibility: pi-durable resolves host-owned service-account tokens for each invocation; the Web SDK uses the injected stream transport without API-key placeholders, global fetch replacement or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts); retained until upstream provides equivalent explicit Web auth and instance fetch, followed by native acceptance. Google GenAI is separately pinned by [its 2.21.0 patch](../../../patches/@google__genai@2.21.0.patch) |
+| Pi AI Gemini fetch and Vertex bearer authentication | Platform compatibility: Gemini and host-authenticated Vertex use instance-scoped `httpOptions.fetch`, preserving native body-failure facts and cancellation without global fetch replacement. Vertex resolves service-account tokens per invocation without API-key placeholders or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts). Google GenAI is pinned to 2.23.0: its native `httpOptions.fetch` replaces the 2.21.0 transport patch; [the remaining Web patch](../../../patches/@google__genai@2.23.0.patch) only injects host authentication. Retire the Pi fetch wiring and Web auth hunks when upstream exposes equivalent behavior, followed by native acceptance |
 | Anthropic Vertex native Google auth browser map | Platform compatibility: the official SDK receives host-owned `authClient` credentials; Metro redirects its `google-auth-library` import to a guard that requires injection. Node retains its ordinary auth path. Pi's public `stream()` client injection and the SDK's Vertex request shaping are unchanged | [piVertexAnthropic.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexAnthropic.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and local [metroResolution.test.ts](../../../scripts/__tests__/metroResolution.test.ts); the [0.22.0 patch](../../../patches/@anthropic-ai__vertex-sdk@0.22.0.patch) can retire when the official SDK offers a native-safe injected-auth entry, followed by native acceptance. This SDK version shares Pi's pinned Anthropic SDK 0.129.0 |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 

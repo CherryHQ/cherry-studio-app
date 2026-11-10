@@ -29,6 +29,7 @@ export type ChatTarget =
   | {
       kind: 'session';
       sessionId: string;
+      composerHandoff?: string;
       selectionHandoff?: string;
       messageId?: string;
       /** Distinguishes repeated selections of the same search result. */
@@ -55,7 +56,7 @@ export function chatRouteParams(target: ChatTarget) {
   return target.kind === 'session'
     ? {
         agentId: undefined,
-        composerHandoff: undefined,
+        composerHandoff: target.composerHandoff,
         selectionHandoff: target.selectionHandoff,
         workspaceDraftId: undefined,
         sshDraftId: undefined,
@@ -121,6 +122,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
       target: {
         kind: 'session',
         sessionId,
+        ...(composerHandoff ? { composerHandoff } : {}),
         ...(selectionHandoff ? { selectionHandoff } : {}),
         ...(messageId ? { messageId, messageRequestId } : {}),
       },

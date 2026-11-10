@@ -92,3 +92,13 @@ reference-image contract; they are not masks.
 
 The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries, the board
 list, starting generations, and job observation shared with it live in `src/frontend/data/paintings`.
+
+## Sharing
+
+Focus More offers the current image and, when applicable, its complete generation's image group.
+Overview More shares all completed output images from the board. Select images opens a separate
+source-owned grid; its selection never changes canvas focus or references. The gallery offers single-board
+sharing and batch selection. Shared files follow gallery, generation and group order with stable
+deduplication. The board adapter reads full receipts, not its limited recent-generation cover.
+Input references and graph connections are excluded. The common share panel previews the frozen
+image group as a card stack and does not edit it.

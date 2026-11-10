@@ -61,15 +61,25 @@ export function selectedBranchMessages(
   return dropped.size ? next : messages;
 }
 
-/** Each question's answers as last read, carried over from the previous reading. */
+/** Each question's answers as last read, including a lone answer before another is added. */
 export function readQuestionAnswers(
   history: readonly AgentMessageView[],
   previous: ReadonlyMap<string, readonly AgentMessageSibling[]> = new Map(),
 ): ReadonlyMap<string, readonly AgentMessageSibling[]> {
   const byQuestion = new Map(previous);
   for (const message of history)
-    if (message.role === 'assistant' && message.parentId && message.siblings)
-      byQuestion.set(message.parentId, message.siblings);
+    if (message.role === 'assistant' && message.parentId)
+      byQuestion.set(
+        message.parentId,
+        message.siblings ?? [
+          {
+            id: message.id,
+            modelId: message.modelId,
+            status: message.status,
+            siblingsGroupId: message.siblingsGroupId ?? 0,
+          },
+        ],
+      );
   return byQuestion;
 }
 
