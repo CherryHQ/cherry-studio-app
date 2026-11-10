@@ -1117,52 +1117,21 @@ export class DurableAgentHost implements AgentProtocol {
       const edited = await this.store.getMessage(session.id, parsed.messageId);
       if (!edited || edited.role !== 'user' || !edited.turnId)
         fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
-      // The edited row's turn holds the question and every answer it already
-      // has; its newest answer carries the inference choices an edit reuses
-      // when the composer did not snapshot its own.
-      const original = await this.store
-        .listTurnMessages(session.id, edited.turnId)
-        .then((turn) => turn.findLast((row) => row.role === 'assistant'));
-      if (original?.status === 'pending' || original?.status === 'streaming')
-        fail('SESSION_BUSY', 'The edited question is still being answered.');
-      const snapshot =
-        original?.inferenceSnapshot?.status === 'supported'
-          ? original.inferenceSnapshot.snapshot
-          : undefined;
-      // A file deleted from the library must not make the question uneditable:
-      // keep the attachments that still resolve and drop the rest.
-      const fileEntryIds = edited.parts.flatMap((part) =>
-        part.type === 'file' ? [part.fileEntryId] : [],
-      );
-      let availableFiles: ReadonlyMap<string, unknown> | undefined;
-      if (fileEntryIds.length > 0) {
-        try {
-          availableFiles = await this.ports.files.resolveAvailable(fileEntryIds);
-        } catch {
-          // Keep every part and let preparation report the unavailable attachment.
-        }
-      }
-      // The composer's current send choices define the new answer; an older
-      // client sends none and the original answer's inference choices apply.
+      const parts = editedUserInput(edited.parts, parsed.text);
+      // Question editing is a normal new submission from an explicit parent.
+      // Omitted composer overrides use the Agent's current defaults, never a
+      // historical answer's inference snapshot.
       const edit: AgentSubmitMessageInput = {
         sessionId: session.id,
         userMessageId: uuidv7(),
         assistantMessageId: uuidv7(),
-        parts: editedUserInput(edited.parts, parsed.text, availableFiles),
-        ...(parsed.modelId
-          ? { modelId: parsed.modelId }
-          : original?.modelId
-            ? { modelId: original.modelId }
-            : {}),
+        parts,
+        ...(parsed.modelId ? { modelId: parsed.modelId } : {}),
         ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
         ...(parsed.reasoningEffort !== undefined
           ? { reasoningEffort: parsed.reasoningEffort }
-          : submittedEffort(snapshot?.reasoningEffort)),
-        ...(parsed.imageGeneration
-          ? { imageGeneration: parsed.imageGeneration }
-          : snapshot?.imageGeneration
-            ? { imageGeneration: snapshot.imageGeneration }
-            : {}),
+          : {}),
+        ...(parsed.imageGeneration ? { imageGeneration: parsed.imageGeneration } : {}),
         ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined
           ? {
               ...(parsed.skillIds ? { skillIds: parsed.skillIds } : {}),
@@ -2766,17 +2735,13 @@ type InlineReferenceEntry =
 
 /**
  * The replacement input of an edited question: its text collapses into one text
- * part and the original file parts that are still available stay. Inline
+ * part and the original file parts stay attached. Inline
  * references survive when their mention still occurs in the edited text,
- * remapped by finding each label's first occurrence after the previous
- * reference's end, so rewritten offsets remain ordered and non-overlapping;
+ * matched independently against the new text, then ordered by new offset.
+ * Reused ranges are excluded so mentions cannot overlap;
  * mentions the user removed are dropped.
  */
-function editedUserInput(
-  parts: AgentMessageView['parts'],
-  text: string,
-  availableFiles?: ReadonlyMap<string, unknown>,
-): AgentInputPart[] {
+function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentInputPart[] {
   const texts = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
   const pluginEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
     (part.pluginReferences ?? []).map(
@@ -2797,10 +2762,18 @@ function editedUserInput(
     (left, right) => left.reference.offset - right.reference.offset,
   );
   const kept: InlineReferenceEntry[] = [];
-  let end = 0;
+  const ranges: { start: number; end: number }[] = [];
   for (const entry of ordered) {
-    const offset = text.indexOf(entry.reference.label, end);
+    const label = entry.reference.label;
+    if (!label.length) continue;
+    let offset = text.indexOf(label);
+    while (
+      offset >= 0 &&
+      ranges.some((range) => offset < range.end && offset + label.length > range.start)
+    )
+      offset = text.indexOf(label, offset + 1);
     if (offset < 0) continue;
+    ranges.push({ start: offset, end: offset + label.length });
     switch (entry.kind) {
       case 'plugin':
         kept.push({ kind: 'plugin', reference: { ...entry.reference, offset } });
@@ -2812,8 +2785,8 @@ function editedUserInput(
         kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
         break;
     }
-    end = offset + entry.reference.label.length;
   }
+  kept.sort((left, right) => left.reference.offset - right.reference.offset);
   const pluginReferences = kept.flatMap((entry) =>
     entry.kind === 'plugin' ? [entry.reference] : [],
   );
@@ -2832,7 +2805,7 @@ function editedUserInput(
       ...(selectionReferences.length ? { selectionReferences } : {}),
     }),
     ...parts.flatMap((part) =>
-      part.type === 'file' && (!availableFiles || availableFiles.has(part.fileEntryId))
+      part.type === 'file'
         ? [
             AgentInputPartSchema.parse({
               type: part.type,
