@@ -7,12 +7,15 @@ import {
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
+  getImageParamFields,
   imageParamsAspectRatio,
   parseImageRatio,
   isImageParamDraftValid,
+  prepareImageParamRequest,
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
+  updateImageParamDraft,
 } from '@/shared/utils/imageGenerationParams';
 import { resolvePaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
@@ -223,6 +226,87 @@ describe('image generation parameter drafts', () => {
       'Invalid custom image size',
     );
     expect(prepareImageParamValues({ seed: 4 }, undefined, undefined)).toEqual({});
+  });
+});
+
+describe('GIF parameter constraints', () => {
+  const gifSupport = {
+    modes: {
+      generate: {
+        supports: {
+          outputFormat: { type: 'enum', options: ['png', 'jpeg', 'webp', 'gif'] },
+          size: {
+            type: 'enum',
+            options: ['auto', '1024x1024', '1536x1024', '1024x1536'],
+            default: '1024x1024',
+          },
+          background: { type: 'enum', options: ['auto', 'transparent', 'opaque'] },
+          numImages: { type: 'range', min: 1, max: 10, default: 1 },
+        },
+      },
+    },
+  } satisfies ImageGenerationSupport;
+  const mode = resolveImageGenerationMode(gifSupport, 'generate');
+
+  it('uses automatic size and clears transparent background when selecting GIF', () => {
+    const draft = reconcileImageParamDraft({ background: 'transparent' }, mode);
+    expect(draft.size).toBe('1024x1024');
+    const next = updateImageParamDraft(draft, 'outputFormat', 'gif', mode);
+
+    expect(next).toEqual({ outputFormat: 'gif', size: 'auto', numImages: 1 });
+    expect(isImageParamDraftValid(next, mode)).toBe(true);
+    expect(prepareImageParamValues(next, gifSupport, mode)).toEqual(next);
+    expect(draft).toMatchObject({ background: 'transparent', size: '1024x1024' });
+  });
+
+  it('preserves unrelated invalid edits and still-image defaults', () => {
+    expect(
+      updateImageParamDraft(
+        { size: '1024x1024', background: 'opaque', numImages: 100 },
+        'outputFormat',
+        'gif',
+        mode,
+      ),
+    ).toEqual({ outputFormat: 'gif', size: 'auto', background: 'opaque', numImages: 100 });
+    expect(
+      updateImageParamDraft(
+        { size: '1024x1024', background: 'transparent' },
+        'outputFormat',
+        'png',
+        mode,
+      ),
+    ).toEqual({ outputFormat: 'png', size: '1024x1024', background: 'transparent' });
+    expect(reconcileImageParamDraft({}, mode).size).toBe('1024x1024');
+  });
+
+  it('offers only GIF-compatible dimensions and backgrounds without mutating the catalog', () => {
+    const fields = getImageParamFields(mode, { outputFormat: 'gif' });
+    expect(fields.find(({ key }) => key === 'size')?.spec).toMatchObject({
+      options: ['auto'],
+      default: 'auto',
+    });
+    expect(fields.find(({ key }) => key === 'background')?.spec).toMatchObject({
+      options: ['auto', 'opaque'],
+    });
+    expect(gifSupport.modes.generate.supports.size.options).toContain('1024x1024');
+    expect(gifSupport.modes.generate.supports.background.options).toContain('transparent');
+  });
+
+  it.each([
+    { outputFormat: 'gif', size: '1024x1024' },
+    { outputFormat: 'gif', size: 'auto', background: 'transparent' },
+  ])('rejects incompatible explicit GIF parameters at validation: %j', (draft) => {
+    expect(isImageParamDraftValid(draft, mode)).toBe(false);
+    expect(prepareImageParamRequest(draft, mode)).toBeUndefined();
+  });
+
+  it('admits omitted and automatic GIF controls for server defaults', () => {
+    expect(prepareImageParamRequest({ outputFormat: 'gif' }, mode)).toEqual({
+      outputFormat: 'gif',
+    });
+    expect(
+      prepareImageParamRequest({ outputFormat: 'gif', size: 'auto', background: 'opaque' }, mode),
+    ).toEqual({ outputFormat: 'gif', size: 'auto', background: 'opaque' });
   });
 });
 

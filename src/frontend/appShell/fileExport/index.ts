@@ -1,6 +1,5 @@
 export { prepareFileExport, prepareImageExport } from './prepareImageExport';
 export { useExportWatermark } from './useExportWatermark';
 export { useExportWatermarkStyle } from './useExportWatermarkStyle';
-export { shareFile, shareFiles, FileSharingError } from './shareFile';
-export { useShareFile } from './useShareFile';
-export { useSaveImageToPhotos } from './useSaveImageToPhotos';
+export { shareFile, shareFiles, prepareSharedFile, FileSharingError } from './shareFile';
+export { useSaveImageToPhotos, useSaveImagesToPhotos } from './useSaveImageToPhotos';

@@ -4,7 +4,7 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 `BackupRuntime` owns operations, cancellation, progress and candidate lifetime. It is exposed as
 `Backend.backup`; the settings screen only chooses files, renders progress and requests confirmation.
 
-## Portable format v1
+## Portable format v3
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
@@ -12,7 +12,9 @@ A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
-This is a mobile format. Desktop physical backups are rejected. Compatibility requires an exact
+New exports use format v3 so older readers reject inline-quote data before replacing their storage.
+The reader still accepts portable v1 backups; experimental paired-database v2 remains rejected.
+The ZIP layout is unchanged. This is a mobile format. Desktop physical backups are rejected. Compatibility requires an exact
 prefix of bundled SQLite migrations; different migration lineage and future formats are rejected.
 Export and import rebuild their private database copy from that prefix, then copy known tables and
 columns by name. Missing nullable/defaulted columns use the standard schema's defaults. Unknown

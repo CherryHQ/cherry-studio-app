@@ -4,12 +4,14 @@ import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
+  type PositionChangeEventData,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   Keyboard,
+  type NativeSyntheticEvent,
   Pressable,
   type StyleProp,
   StyleSheet,
@@ -19,7 +21,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  createAnimatedComponent,
+  useAnimatedStyle,
+  useEvent,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -59,7 +66,8 @@ type BottomSheetBaseProps = {
   onClose: () => void;
   open: boolean;
   testID?: string;
-  title: string;
+  /** Omit for a preview-led sheet with only the drag handle above its content. */
+  title?: string;
   /** Title-only sheets may center their heading without reserving action slots. */
   titleAlign?: 'start' | 'center';
   /**
@@ -121,13 +129,27 @@ export function BottomSheet(props: BottomSheetProps) {
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const { height, size, sizes } = props;
-  const { cardHeight, detents } = useMemo(
+  const { cardHeight, minCardHeight, detents } = useMemo(
     () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
     [availableCardHeight, dismissible, height, size, sizes],
   );
+  const isResizable = !avoidKeyboard && detents.length > 2;
+  const position = useSharedValue(0);
+  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
+    (event) => {
+      'worklet';
+      position.value = event.position;
+    },
+    ['onPositionChange'],
+  );
+  const visibleCardStyle = useAnimatedStyle(() => ({
+    // Closing slides the smallest card out; expanding keeps its footer in view.
+    height: Math.max(minCardHeight, Math.min(cardHeight, position.value)),
+  }));
   const hasFooter = footer != null;
+  const hasHeader = title != null || Boolean(backAction || closeAction || headerAction);
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
-  const isDraggable = dismissible || (!avoidKeyboard && detents.length > 2);
+  const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
@@ -194,12 +216,16 @@ export function BottomSheet(props: BottomSheetProps) {
 
   return (
     <ModalBottomSheet
+      // UIKit menus need the presenting controller retained by the provider's view hierarchy.
+      nativeOverlay={false}
       // A keyboard-avoiding card animates its own height, which the content detent follows.
       animateContentHeight={!avoidKeyboard}
       detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}
+      onPositionChange={isResizable ? handlePositionChange : undefined}
+      wrapNativeView={createAnimatedComponent}
       scrimColor={scrimColor}
     >
       <SheetLayout
@@ -222,7 +248,7 @@ export function BottomSheet(props: BottomSheetProps) {
           onPress={requestClose}
           style={StyleSheet.absoluteFill}
         />
-        <View
+        <Animated.View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
           className="overflow-hidden border-continuous bg-background dark:border dark:border-border dark:bg-popover"
@@ -233,64 +259,71 @@ export function BottomSheet(props: BottomSheetProps) {
             avoidKeyboard
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
+            isResizable ? visibleCardStyle : undefined,
           ]}
           testID={testID}
         >
           <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
-          <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
+          <View
+            accessibilityElementsHidden
+            className={cn('items-center pt-3', !hasHeader && 'pb-1.5')}
+            pointerEvents="none"
+          >
             <View
               className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
               testID={isDraggable ? 'bottom-sheet-handle' : undefined}
             />
           </View>
           {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
-          <View className="min-h-14 flex-row items-start px-5 py-1.5">
-            {backAction ? (
-              <Pressable
-                accessibilityLabel={backAction.accessibilityLabel}
-                accessibilityRole="button"
-                className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
-                hitSlop={4}
-                onPress={backAction.onPress}
-              >
-                <ArrowLeftIcon className="size-6 text-foreground" />
-              </Pressable>
-            ) : closeAction ? (
-              <View className="min-w-11 flex-1 items-start">
+          {hasHeader ? (
+            <View className="min-h-14 flex-row items-start px-5 py-1.5">
+              {backAction ? (
                 <Pressable
-                  accessibilityLabel={closeAction.accessibilityLabel}
+                  accessibilityLabel={backAction.accessibilityLabel}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !dismissible }}
-                  className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
-                  disabled={!dismissible}
-                  onPress={requestClose}
+                  className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
+                  hitSlop={4}
+                  onPress={backAction.onPress}
                 >
-                  <XIcon className="size-6 text-foreground" />
+                  <ArrowLeftIcon className="size-6 text-foreground" />
                 </Pressable>
-              </View>
-            ) : null}
-            <Text
-              accessibilityRole="header"
-              className={cn(
-                'min-w-0 font-semibold text-foreground',
-                // Both variants fill the 44-point first line that the header controls centre on.
-                titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                isCloseActionVisible ? 'shrink px-2' : 'flex-1',
-                (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
-                  'text-center',
-              )}
-              numberOfLines={titleVariant === 'prompt' ? undefined : 2}
-            >
-              {title}
-            </Text>
-            {isCloseActionVisible ? (
-              <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
-                {headerAction}
-              </View>
-            ) : headerAction ? (
-              <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
-            ) : null}
-          </View>
+              ) : closeAction ? (
+                <View className="min-w-11 flex-1 items-start">
+                  <Pressable
+                    accessibilityLabel={closeAction.accessibilityLabel}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !dismissible }}
+                    className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
+                    disabled={!dismissible}
+                    onPress={requestClose}
+                  >
+                    <XIcon className="size-6 text-foreground" />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Text
+                accessibilityRole="header"
+                className={cn(
+                  'min-w-0 font-semibold text-foreground',
+                  // Both variants fill the 44-point first line that the header controls centre on.
+                  titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
+                  isCloseActionVisible ? 'shrink px-2' : 'flex-1',
+                  (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
+                    'text-center',
+                )}
+                numberOfLines={titleVariant === 'prompt' ? undefined : 2}
+              >
+                {title}
+              </Text>
+              {isCloseActionVisible ? (
+                <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+                  {headerAction}
+                </View>
+              ) : headerAction ? (
+                <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
+              ) : null}
+            </View>
+          ) : null}
           <View
             className="min-h-0 flex-1"
             style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
@@ -306,7 +339,7 @@ export function BottomSheet(props: BottomSheetProps) {
             </View>
           ) : null}
           {avoidKeyboard ? <KeyboardSpacer bottomInset={bottomInset} /> : null}
-        </View>
+        </Animated.View>
       </SheetLayout>
     </ModalBottomSheet>
   );
@@ -390,7 +423,7 @@ function resolveSheetHeights(
   const closedDetent = dismissible ? 0 : programmatic(0);
   const detents: Detent[] = [closedDetent, ...cardHeights];
 
-  return { cardHeight, detents };
+  return { cardHeight, minCardHeight: cardHeights[0] ?? 0, detents };
 }
 
 const styles = StyleSheet.create({

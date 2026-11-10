@@ -1,11 +1,9 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
-import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
-import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import {
+  Button,
   ContentState,
   ImageEditor,
-  ImagePreviewToolbar,
+  type MenuItem,
   useToast,
 } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -16,23 +14,28 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { useSaveImageToPhotos } from '@/frontend/appShell/fileExport';
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
 
+import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useFileImageEdit } from '../hooks/useFileImageEdit';
 import { readPngDimensions } from '../utils/readPngDimensions';
+import { FileViewerFooter } from './FileViewerFooter';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileImageViewer({
   file: initialFile,
   imageEditRequestId,
+  sourceChat,
 }: {
   file: ResolvedFile;
   imageEditRequestId?: string;
+  sourceChat?: ChatTarget;
 }) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
@@ -41,8 +44,8 @@ export function FileImageViewer({
   // A pane is not a stack screen: it has no screen options to set, and sits below the status bar.
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
-  const { isSharing, share } = useShareFile(file);
-  const saveToPhotos = useSaveImageToPhotos({ uri: file.uri, provenance: file.entry.provenance });
+  const saveToPhotos = useSaveImageToPhotos({ uri: file.uri });
+  const addToChat = useAddFileToChat(file, sourceChat);
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);
@@ -65,31 +68,22 @@ export function FileImageViewer({
   });
   const dimensions = dimensionsQuery.data;
 
-  const toolbar = (
-    <ImagePreviewToolbar>
-      <ImagePreviewToolbar.Action
-        disabled={isSharing}
-        icon={<ShareIcon className="size-5 text-foreground" />}
-        label={t('fileViewer.share')}
-        onPress={() => void share()}
-      />
-      {editing.canEdit && (isDocument || stillImageUri === file.uri) ? (
-        <ImagePreviewToolbar.Action
-          icon={<PencilIcon className="size-5 text-foreground" />}
-          label={t('common.edit')}
-          onPress={() => {
-            setIsZoomed(false);
-            editing.start();
-          }}
-        />
-      ) : null}
-      <ImagePreviewToolbar.Action
-        icon={<DownloadIcon className="size-5 text-foreground" />}
-        label={t('common.save')}
-        onPress={() => void saveToPhotos()}
-      />
-    </ImagePreviewToolbar>
-  );
+  const items: MenuItem[] = [];
+  if (editing.canEdit && (isDocument || stillImageUri === file.uri)) {
+    items.push({
+      id: 'edit',
+      label: t('common.edit'),
+      onPress: () => {
+        setIsZoomed(false);
+        editing.start();
+      },
+    });
+  }
+  items.push({
+    id: 'save',
+    label: t('sharing.saveToPhotos'),
+    onPress: () => void saveToPhotos(),
+  });
 
   if (editing.isEditing) {
     return (
@@ -154,9 +148,13 @@ export function FileImageViewer({
       {isInPane ? null : (
         <Stack.Screen options={{ gestureEnabled: !isZoomed, headerShown: true }} />
       )}
-      <FileViewerHeader file={file} />
+      <FileViewerHeader file={file} items={items} />
       <View
-        className="flex-1 bg-background px-safe pb-safe"
+        className={
+          addToChat.returnsToSourceChat
+            ? 'flex-1 bg-background px-safe'
+            : 'flex-1 bg-background px-safe pb-safe'
+        }
         onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
       >
         <View className="flex-1">
@@ -199,8 +197,14 @@ export function FileImageViewer({
             </View>
           )}
         </View>
-        {toolbar}
       </View>
+      {addToChat.returnsToSourceChat ? (
+        <FileViewerFooter>
+          <Button disabled={addToChat.isResolving} onPress={addToChat.add}>
+            {t('fileViewer.addToChat')}
+          </Button>
+        </FileViewerFooter>
+      ) : null}
     </>
   );
 }

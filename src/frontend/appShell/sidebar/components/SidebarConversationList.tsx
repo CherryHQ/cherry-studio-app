@@ -12,7 +12,7 @@ import {
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { cn } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -655,15 +655,13 @@ function SidebarSessionSelectionRegistration({
 }) {
   const source = useConversationSource();
   const { registerList } = useSidebarSelection();
-  useEffect(
-    () =>
-      registerList(
-        `${source.scope}:${listKey ?? agentRef ?? ''}`,
-        source,
-        sessions.slice(0, limit),
-      ),
-    [agentRef, listKey, limit, registerList, sessions, source],
-  );
+  const key = `${source.scope}:${listKey ?? agentRef ?? ''}`;
+  const unregister = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    unregister.current = registerList(key, source, sessions.slice(0, limit));
+  }, [key, limit, registerList, sessions, source]);
+  // Content updates retain selected survivors; only the registration owner unregisters its list.
+  useEffect(() => () => unregister.current?.(), [key, registerList]);
   return null;
 }
 

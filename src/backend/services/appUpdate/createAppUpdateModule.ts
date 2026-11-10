@@ -1,14 +1,21 @@
+import { loggerService } from '@logger';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
-import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
+import type {
+  AppUpdateModule,
+  AppUpdateResult,
+  DomesticAppStore,
+} from '@/shared/contracts/appUpdate';
 
 import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { assertApkRelease, checkApkRelease } from './apkRelease';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
+import { checkNativeDomesticStoreRelease } from './nativeDomesticStoreRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
@@ -23,11 +30,21 @@ export function createAppUpdateModule(dependencies: {
     __DEV__ && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true,
   );
   const download = createApkDownload();
-  let stopped = false;
+  const lifetime = new AbortController();
+  let store: DomesticAppStore | null = null;
+  if (channel === 'domestic-stores') {
+    try {
+      store = getNativeAppUpdate()?.getDomesticStore() ?? null;
+    } catch (error) {
+      loggerService
+        .withContext('AppUpdate')
+        .warn('Domestic store resolution is unavailable', error as Error);
+    }
+  }
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
   function requireApk() {
-    if (stopped || channel !== 'apk')
+    if (lifetime.signal.aborted || channel !== 'apk')
       throw new Error('APK updates are disabled for this distribution');
     const native = getNativeAppUpdate();
     if (!native?.isApkInstallationEnabled())
@@ -40,7 +57,8 @@ export function createAppUpdateModule(dependencies: {
     isEnabled: channel !== null,
     async check(signal): Promise<AppUpdateResult> {
       signal?.throwIfAborted();
-      if (stopped || !channel) return { status: 'unavailable', reason: 'unsupported' };
+      if (lifetime.signal.aborted || !channel)
+        return { status: 'unavailable', reason: 'unsupported' };
       const currentVersion = Application.nativeApplicationVersion?.trim();
       if (!currentVersion) return { status: 'unavailable', reason: 'unknownVersion' };
       parseReleaseVersion(currentVersion);
@@ -50,7 +68,7 @@ export function createAppUpdateModule(dependencies: {
         }
         const country = await dependencies.getCountry();
         signal?.throwIfAborted();
-        if (stopped) return { status: 'unavailable', reason: 'unsupported' };
+        if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
         const result = await checkApkRelease(
           currentVersion,
           country === 'CN' ? 'gitcode' : 'github',
@@ -61,6 +79,44 @@ export function createAppUpdateModule(dependencies: {
         return result;
       }
       if (!Application.applicationId) return { status: 'unavailable', reason: 'unknownVersion' };
+      if (channel === 'domestic-stores') {
+        if (!store) return { status: 'unavailable', reason: 'nativeUnavailable' };
+        const linked = linkAbortSignals(signal ? [lifetime.signal, signal] : [lifetime.signal]);
+        try {
+          let result: AppUpdateResult;
+          if (store === 'oppo') {
+            const release = await checkApkRelease(currentVersion, 'gitcode', linked.signal);
+            result =
+              release.status === 'available'
+                ? {
+                    status: 'available',
+                    channel,
+                    store,
+                    id: `domestic-stores:${store}:${release.id}`,
+                    currentVersion,
+                    latestVersion: release.latestVersion,
+                    notes: release.notes,
+                    notesSource: 'gitcode',
+                  }
+                : release;
+          } else {
+            const currentBuild = Number(Application.nativeBuildVersion);
+            if (!Number.isSafeInteger(currentBuild) || currentBuild <= 0)
+              return { status: 'unavailable', reason: 'unknownVersion' };
+            result = await checkNativeDomesticStoreRelease(
+              store,
+              Application.applicationId,
+              currentVersion,
+              currentBuild,
+              linked.signal,
+            );
+          }
+          linked.signal.throwIfAborted();
+          return result;
+        } finally {
+          linked.dispose();
+        }
+      }
       if (channel === 'google-play') {
         const native = getNativeAppUpdate();
         if (!native) return { status: 'unavailable', reason: 'nativeUnavailable' };
@@ -86,12 +142,20 @@ export function createAppUpdateModule(dependencies: {
       }
       const country = await dependencies.getCountry();
       signal?.throwIfAborted();
-      if (stopped) return { status: 'unavailable', reason: 'unsupported' };
+      if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
       return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
     },
     async openStore(release) {
-      if (stopped || release.channel === 'apk' || release.channel !== channel) {
+      if (lifetime.signal.aborted || release.channel === 'apk' || release.channel !== channel) {
         throw new Error('Invalid store update action');
+      }
+      if (release.channel === 'domestic-stores') {
+        const native = getNativeAppUpdate();
+        if (!native || release.store !== store) {
+          throw new Error('The requested domestic store is unavailable');
+        }
+        await native.openDomesticStore(release.store);
+        return;
       }
       if (channel === 'google-play') {
         if (
@@ -147,7 +211,7 @@ export function createAppUpdateModule(dependencies: {
       return dependencies.requestInstallPermission();
     },
     async dispose() {
-      stopped = true;
+      lifetime.abort();
       await download.dispose();
       await installation?.catch(() => {});
     },

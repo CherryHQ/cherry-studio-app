@@ -207,6 +207,21 @@ it('checks availability before generating or persisting a file', async () => {
   expect(mockShare).not.toHaveBeenCalled();
 });
 
+it('delivers finalized temporary output without applying another watermark', async () => {
+  await shareFile(
+    { uri: 'file:///temporary/page.png', filename: 'Conversation-001.png', mediaType: 'image/png' },
+    { watermark },
+  );
+  expect(mockPrepareExport).not.toHaveBeenCalled();
+  expect(mockCopy).toHaveBeenCalledTimes(1);
+  expect(mockShare).toHaveBeenCalledWith(
+    expect.stringMatching(
+      /\/FileExports\/generated-[0-9a-f]{64}\/temporary\/Conversation-001\.png$/,
+    ),
+    { dialogTitle: 'Conversation-001.png', mimeType: 'image/png' },
+  );
+});
+
 it.each(['prepare', 'copy'])(
   'cancellation during %s releases prepared bytes without opening the sheet',
   async (stage) => {

@@ -13,7 +13,8 @@ it already exists.
 | Need | Owner |
 | --- | --- |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
-| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; shared IPinfo Lite lookup, ten-minute success cache and CN failure fallback |
+| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; IPinfo Lite lookup independent of data-collection consent, ten-minute success cache and explicit unknown-country result |
+| Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress country, then device region, retaining the domestic default only when both are unavailable |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
 | Verified remote file downloads | `downloadFile` in `src/backend/services/download`; native streaming, progress, cancellation and SHA-256 for APK updates and offline models |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |
@@ -77,6 +78,9 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | --- | --- |
 | Model selection and chat capability filtering | `ModelPickerDrawer` in `src/frontend/components/ModelPicker`; use its existing `chat` variant for the filter menu and capability badges |
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
+| Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
+| Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
+| Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |

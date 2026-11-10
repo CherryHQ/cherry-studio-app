@@ -247,6 +247,63 @@ describe('Pi durable model bridge', () => {
 
 describe('Pi durable request diagnostics', () => {
   test.each([
+    { raw: 'SAFETY', stopReason: 'error', category: 'content_filter' },
+    { raw: 'MALFORMED_FUNCTION_CALL', stopReason: 'error', category: 'unknown' },
+    { raw: 'UNEXPECTED_TOOL_CALL', stopReason: 'error', category: 'unknown' },
+    { raw: 'TOO_MANY_TOOL_CALLS', stopReason: 'error', category: 'unknown' },
+    { raw: 'OTHER', stopReason: 'error', category: 'unknown' },
+    { raw: undefined, stopReason: 'error', category: 'unknown' },
+    { raw: 'private_finish_reason', stopReason: 'error', category: 'unknown' },
+    { raw: 'completed', stopReason: 'stop', category: undefined },
+    { raw: 'failed', stopReason: 'error', category: 'unknown' },
+    { raw: 'cancelled', stopReason: 'error', category: 'unknown' },
+    { raw: 'in_progress', stopReason: 'stop', category: undefined },
+    { raw: 'queued', stopReason: 'stop', category: undefined },
+    { raw: 'incomplete', stopReason: 'error', category: 'unknown' },
+    { raw: 'incomplete.max_output_tokens', stopReason: 'length', category: undefined },
+    { raw: 'incomplete.content_filter', stopReason: 'error', category: 'unknown' },
+    { raw: 'incomplete.private_finish_reason', stopReason: 'error', category: 'unknown' },
+  ] as const)(
+    'records raw finish reason $raw beside $stopReason',
+    async ({ raw, stopReason, category }) => {
+      const { traces, records } = createTraceRecorder();
+      const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+      const message: AssistantMessage = {
+        ...emptyAssistantMessage(wire),
+        stopReason,
+        rawStopReason: raw,
+        errorMessage: 'private provider response',
+      };
+      const source = new AssistantMessageEventStream();
+      source.push(
+        stopReason === 'error'
+          ? { type: 'error', reason: stopReason, error: message }
+          : { type: 'done', reason: stopReason, message },
+      );
+      bridge.streamFn.mockReturnValueOnce(source);
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+
+      expect(result.rawStopReason).toBe(raw);
+      expect(records.at(-1)?.attributes).toMatchObject({
+        'gen_ai.response.finish_reason': stopReason,
+      });
+      expect(records.at(-1)?.attributes['error.category']).toBe(category);
+      if (stopReason === 'error')
+        expect(records.at(-1)?.attributes).toMatchObject({
+          'error.retryable': false,
+          'error.retry_scope': 'automatic',
+        });
+      expect(records.at(-1)?.attributes['gen_ai.response.raw_finish_reason']).toBe(
+        raw?.includes('private') ? undefined : raw,
+      );
+      expect(JSON.stringify(records)).not.toContain('private');
+    },
+  );
+
+  test.each([
     { code: 'stream_disconnected', retryable: true, category: 'network' },
     { code: 'no_response', retryable: true, category: 'network' },
     { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },

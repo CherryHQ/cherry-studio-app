@@ -1,7 +1,9 @@
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useIsPreview } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
@@ -45,7 +47,9 @@ export function MainHeaderView({
   onAgentPress,
   onNewChat,
   actions,
+  selection,
 }: MainHeaderViewProps) {
+  const { t } = useTranslation();
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
   useReportChatHeaderHeight();
@@ -57,12 +61,31 @@ export function MainHeaderView({
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: selection ? t('common.selection.count', { count: selection.selectedCount }) : '',
+          headerTitleAlign: 'center',
+        }}
+      />
       <Stack.Toolbar placement="left">
-        {/* A column given to the file pane or sized to a fold has no sidebar button. */}
-        {leadingAction ? renderHeaderToolbarItem(leadingAction, actionSurface) : null}
-        <Stack.Toolbar.Spacer hidden={!leadingAction || !agent} width={4} />
-        {agent ? (
+        {selection
+          ? renderHeaderToolbarItem(
+              {
+                key: 'exit-selection',
+                type: 'icon',
+                accessibilityLabel: t('common.cancel'),
+                icon: ArrowLeftIcon,
+                nativeIcon: require('@/assets/header-toolbar/arrow-left.png'),
+                onPress: selection.onExit,
+              },
+              actionSurface,
+            )
+          : leadingAction
+            ? renderHeaderToolbarItem(leadingAction, actionSurface)
+            : null}
+        <Stack.Toolbar.Spacer hidden={Boolean(selection) || !leadingAction || !agent} width={4} />
+        {!selection && agent ? (
           <Stack.Toolbar.View>
             <View className={actionSurface.surfaceClassName}>
               <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
@@ -71,7 +94,9 @@ export function MainHeaderView({
         ) : null}
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        {rightActions.map((action) => renderHeaderToolbarItem(action, actionSurface))}
+        {selection
+          ? null
+          : rightActions.map((action) => renderHeaderToolbarItem(action, actionSurface))}
       </Stack.Toolbar>
     </>
   );

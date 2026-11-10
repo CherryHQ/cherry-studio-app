@@ -9,6 +9,7 @@ export function resolveAppUpdateChannel(
     if (nativeChannel === 'production-apk' || (nativeChannel === null && developmentApk))
       return 'apk';
     if (nativeChannel === 'production-google-play') return 'google-play';
+    if (nativeChannel === 'production-domestic-stores') return 'domestic-stores';
   }
   if (platform === 'ios' && nativeChannel === 'production-ios') return 'app-store';
   return null;
