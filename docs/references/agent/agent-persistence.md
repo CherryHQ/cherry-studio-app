@@ -324,12 +324,16 @@ ledger totals remain intact. Preparation must finish before this operation; a re
 does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
 recorded prefix. Retry never creates a Session or inserts another user message.
 
-Editing adds `reserveEditSubmission`: one transaction re-reads the edited user row and refuses a
-missing or non-user row, or one whose answers have not settled, then inserts the sibling question
-under that row's parent with a pending answer below it and selects the answer. The edited row and
-its answers are untouched, and the question/answer pair shares a fresh turn id. The new branch runs
-on its own working copy, so this reservation does not invalidate existing copies or advance
-`runtimeRevision`.
+Editing a user question uses the normal `reserveSubmission` transaction with an explicit
+`parentMessageId` equal to the edited question's parent (`null` for a root question). The Host
+checks that the edited row is a user message and rejects busy Sessions before preparing the new
+submission. Shared reservation inserts the new sibling question and its pending answer or answers,
+then selects the new branch. The original question and descendants are untouched. The normal
+lane planner preserves native continuation or forks at the chosen parent, with its rebuild fallback;
+editing does not create another Session or advance `runtimeRevision`.
+
+This differs from `editMessage`, which edits assistant reply prose in place and has its own
+conflict check. Neither operation uses a dedicated edit-reservation method.
 
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:

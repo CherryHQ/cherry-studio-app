@@ -2,7 +2,10 @@ import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create } from 'react-test-renderer';
 
 import { ComposerTestProvider } from '@/frontend/components/Composer/components/__tests__/_composerTestProvider';
-import { useComposerState } from '@/frontend/components/Composer/context/ComposerProvider';
+import {
+  useComposerActions,
+  useComposerState,
+} from '@/frontend/components/Composer/context/ComposerProvider';
 import {
   createReadyAttachmentDraft,
   type ComposerAttachmentReady,
@@ -40,16 +43,24 @@ const attachment = createReadyAttachmentDraft(
 ) as ComposerAttachmentReady;
 
 type ProbeHandle = ReturnType<typeof useChatEditDraft> &
-  ReturnType<typeof useChatEditing> & { draft: string; attachmentCount: number };
+  ReturnType<typeof useChatEditing> &
+  ReturnType<typeof useComposerActions> & { draft: string; attachmentCount: number };
 
 function Probe({ ref }: { ref: Ref<ProbeHandle> }) {
   const editDraft = useChatEditDraft();
   const editing = useChatEditing();
+  const composerActions = useComposerActions();
   const { attachments, draft } = useComposerState();
   useImperativeHandle(
     ref,
-    () => ({ ...editDraft, ...editing, attachmentCount: attachments.length, draft }),
-    [editDraft, editing, attachments.length, draft],
+    () => ({
+      ...editDraft,
+      ...editing,
+      ...composerActions,
+      attachmentCount: attachments.length,
+      draft,
+    }),
+    [editDraft, editing, composerActions, attachments.length, draft],
   );
   return null;
 }
@@ -100,14 +111,41 @@ describe('useChatEditDraft', () => {
     act(() => renderer.unmount());
   });
 
-  test('committing clears the stash so a later edit starts from the live draft', () => {
+  test('successful admission restores the interrupted draft and attachments', () => {
     const { probeRef, renderer } = render('Interrupted draft');
     act(() => probeRef.current?.beginEdit(target));
+    act(() => probeRef.current?.setDraft(''));
     act(() => probeRef.current?.commitEdit());
     expect(probeRef.current?.editing).toBeNull();
-    // The submitted edit leaves the composer holding the edited text.
+    expect(probeRef.current?.draft).toBe('Interrupted draft');
+    expect(probeRef.current?.attachmentCount).toBe(1);
+    act(() => probeRef.current?.beginEdit(target));
     expect(probeRef.current?.draft).toBe('Original question');
+    expect(probeRef.current?.attachmentCount).toBe(0);
+    act(() => probeRef.current?.cancelEdit());
+    expect(probeRef.current?.draft).toBe('Interrupted draft');
+    expect(probeRef.current?.attachmentCount).toBe(1);
 
+    act(() => renderer.unmount());
+  });
+
+  test('successful admission preserves text and attachments added while awaiting it', () => {
+    const { probeRef, renderer } = render('Interrupted draft');
+    act(() => probeRef.current?.beginEdit(target));
+    act(() => {
+      probeRef.current?.setDraft('New text typed during admission');
+      probeRef.current?.addAttachments([
+        {
+          ...attachment,
+          id: 'new-attachment',
+          fileEntryId: '00000000-0000-7000-8000-000000000002',
+        },
+      ]);
+    });
+    act(() => probeRef.current?.commitEdit());
+    expect(probeRef.current?.draft).toBe('Interrupted draft\nNew text typed during admission');
+    expect(probeRef.current?.attachmentCount).toBe(2);
+    expect(probeRef.current?.editing).toBeNull();
     act(() => renderer.unmount());
   });
 

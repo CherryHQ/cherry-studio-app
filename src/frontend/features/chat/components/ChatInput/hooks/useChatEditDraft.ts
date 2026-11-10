@@ -11,12 +11,12 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
 /**
  * Owns the composer's edit-session draft: beginning an edit stashes the
  * interrupted draft and its attachments and loads the original question;
- * cancelling restores both exactly once, and a submitted edit clears the
- * stash so a later edit starts from the live composer state.
+ * cancelling or accepting an edit restores both exactly once. A failed
+ * submission keeps the edit and its stash intact.
  */
 export function useChatEditDraft() {
   const { attachments, draft } = useComposerState();
-  const { addAttachments, clearAttachments, setDraft } = useComposerActions();
+  const { addAttachments, clearAttachments, setAttachments, setDraft } = useComposerActions();
   const { editing, endEdit } = useChatEditing();
   const stash = useRef<
     { draft: string; attachments: readonly ComposerAttachmentDraft[] } | undefined
@@ -39,16 +39,23 @@ export function useChatEditDraft() {
   const cancelEdit = useCallback(() => {
     if (stash.current !== undefined) {
       setDraft(stash.current.draft);
-      if (stash.current.attachments.length > 0) addAttachments([...stash.current.attachments]);
+      setAttachments([...stash.current.attachments]);
+      stash.current = undefined;
+    }
+    endEdit();
+  }, [endEdit, setAttachments, setDraft]);
+
+  // ComposerSurface clears the submitted edit before awaiting its admission.
+  // Restoring here is safe only after that admission has succeeded.
+  const commitEdit = useCallback(() => {
+    if (stash.current !== undefined) {
+      const saved = stash.current;
+      setDraft((current) => [saved.draft, current].filter(Boolean).join('\n'));
+      addAttachments([...saved.attachments]);
       stash.current = undefined;
     }
     endEdit();
   }, [addAttachments, endEdit, setDraft]);
-
-  const commitEdit = useCallback(() => {
-    stash.current = undefined;
-    endEdit();
-  }, [endEdit]);
 
   return { cancelEdit, commitEdit, editing };
 }
