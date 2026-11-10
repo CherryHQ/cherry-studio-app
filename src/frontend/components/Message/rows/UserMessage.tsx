@@ -19,12 +19,14 @@ type UserMessageProps = {
   message: MessageListItem;
   /** The message this one replies to, under the bubble. */
   quote?: ReactNode;
+  variant?: 'default' | 'selection';
 };
 
 export const UserMessage = memo(function UserMessage({
   attachments,
   message,
   quote,
+  variant = 'default',
 }: UserMessageProps) {
   const { t } = useTranslation();
   const { attachments: fileParts, bodyMessage } = useMemo(
@@ -36,7 +38,9 @@ export const UserMessage = memo(function UserMessage({
 
   return (
     <View className="w-full items-end">
-      <View className="w-[88%] items-end gap-2">
+      <View
+        className={variant === 'selection' ? 'w-[86%] items-end gap-2' : 'w-[88%] items-end gap-2'}
+      >
         {attachments || fileParts.length > 0 ? (
           <View className="w-full items-end gap-1">
             <UserMessageAttachments>

@@ -66,7 +66,8 @@ type BottomSheetBaseProps = {
   onClose: () => void;
   open: boolean;
   testID?: string;
-  title: string;
+  /** Omit for a preview-led sheet with only the drag handle above its content. */
+  title?: string;
   /** Title-only sheets may center their heading without reserving action slots. */
   titleAlign?: 'start' | 'center';
   /**
@@ -146,6 +147,7 @@ export function BottomSheet(props: BottomSheetProps) {
     height: Math.max(minCardHeight, Math.min(cardHeight, position.value)),
   }));
   const hasFooter = footer != null;
+  const hasHeader = title != null || Boolean(backAction || closeAction || headerAction);
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
   const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
@@ -262,60 +264,66 @@ export function BottomSheet(props: BottomSheetProps) {
           testID={testID}
         >
           <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
-          <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
+          <View
+            accessibilityElementsHidden
+            className={cn('items-center pt-3', !hasHeader && 'pb-1.5')}
+            pointerEvents="none"
+          >
             <View
               className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
               testID={isDraggable ? 'bottom-sheet-handle' : undefined}
             />
           </View>
           {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
-          <View className="min-h-14 flex-row items-start px-5 py-1.5">
-            {backAction ? (
-              <Pressable
-                accessibilityLabel={backAction.accessibilityLabel}
-                accessibilityRole="button"
-                className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
-                hitSlop={4}
-                onPress={backAction.onPress}
-              >
-                <ArrowLeftIcon className="size-6 text-foreground" />
-              </Pressable>
-            ) : closeAction ? (
-              <View className="min-w-11 flex-1 items-start">
+          {hasHeader ? (
+            <View className="min-h-14 flex-row items-start px-5 py-1.5">
+              {backAction ? (
                 <Pressable
-                  accessibilityLabel={closeAction.accessibilityLabel}
+                  accessibilityLabel={backAction.accessibilityLabel}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !dismissible }}
-                  className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
-                  disabled={!dismissible}
-                  onPress={requestClose}
+                  className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
+                  hitSlop={4}
+                  onPress={backAction.onPress}
                 >
-                  <XIcon className="size-6 text-foreground" />
+                  <ArrowLeftIcon className="size-6 text-foreground" />
                 </Pressable>
-              </View>
-            ) : null}
-            <Text
-              accessibilityRole="header"
-              className={cn(
-                'min-w-0 font-semibold text-foreground',
-                // Both variants fill the 44-point first line that the header controls centre on.
-                titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                isCloseActionVisible ? 'shrink px-2' : 'flex-1',
-                (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
-                  'text-center',
-              )}
-              numberOfLines={titleVariant === 'prompt' ? undefined : 2}
-            >
-              {title}
-            </Text>
-            {isCloseActionVisible ? (
-              <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
-                {headerAction}
-              </View>
-            ) : headerAction ? (
-              <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
-            ) : null}
-          </View>
+              ) : closeAction ? (
+                <View className="min-w-11 flex-1 items-start">
+                  <Pressable
+                    accessibilityLabel={closeAction.accessibilityLabel}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !dismissible }}
+                    className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
+                    disabled={!dismissible}
+                    onPress={requestClose}
+                  >
+                    <XIcon className="size-6 text-foreground" />
+                  </Pressable>
+                </View>
+              ) : null}
+              <Text
+                accessibilityRole="header"
+                className={cn(
+                  'min-w-0 font-semibold text-foreground',
+                  // Both variants fill the 44-point first line that the header controls centre on.
+                  titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
+                  isCloseActionVisible ? 'shrink px-2' : 'flex-1',
+                  (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
+                    'text-center',
+                )}
+                numberOfLines={titleVariant === 'prompt' ? undefined : 2}
+              >
+                {title}
+              </Text>
+              {isCloseActionVisible ? (
+                <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+                  {headerAction}
+                </View>
+              ) : headerAction ? (
+                <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
+              ) : null}
+            </View>
+          ) : null}
           <View
             className="min-h-0 flex-1"
             style={hasFooter ? undefined : { paddingBottom: insets.bottom }}

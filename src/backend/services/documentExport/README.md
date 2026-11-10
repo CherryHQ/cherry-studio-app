@@ -25,15 +25,14 @@ session-owned, while committed file-library entries outlive it. No saved image i
 
 Valid still PNG/JPEG sources retain their original bytes without application byte/pixel/count caps.
 HTML and images show no picture filenames or captions; unavailable images show a generic placeholder.
-Message images use one bounded share card selected by `prepareImageCard` before asset reads.
-One answer has a 1500-logical-pixel body budget; multiple answers share 3600. Questions do not
-switch a single answer to the larger budget. Retained paragraphs, complete list items/table rows
-and safely closed code prefixes stay in source order. A single quiet ellipsis below the body
-marks omitted content, with a translated accessible label. Full HTML/Markdown retain the snapshot.
-After fonts and images settle, the shared preview/capture script measures the body against a
-130% height ceiling and applies a 56px fade only when clipped. It never deletes DOM tail content;
-the marker and complete footer stay outside the clip. Generic document images retain full
-pagination. Source image decoding still depends on device capacity.
+Message images retain the frozen source for actual layout measurement. After fonts and images
+settle, one shared preview/capture script limits the whole card to 3600 logical points, including
+the author row, insets and optional brand/QR footer. It keeps whole blocks, clamps a boundary
+paragraph/list item by lines, retains complete code lines or table rows, and puts the ellipsis at
+the last retained line/cell. Indivisible images, formulas and headings that do not fit are removed;
+trailing orphan headings are removed too. There is no separate answer-count budget, overflow
+allowance or body fade. Complete HTML/Markdown retain the original snapshot. Generic document images
+retain full pagination. Source image decoding still depends on device capacity.
 
 See [Document Export](../../../../docs/references/document-export.md) for the capture protocol,
 source validation, file lifetime and outstanding device acceptance.
@@ -46,7 +45,7 @@ owns its limits, cancellation and rendering constraints.
 Chat HTML and images share message-list layout; Markdown keeps portable title/role headings.
 `contentPresentation.ts` owns readable file types and default copy; `renderHtmlStyles.ts` owns
 HTML/image/Markdown-preview styling. Block code uses a fixed 192-point panel with a language label
-and a scrollable opening viewport in HTML and Markdown previews. Image code instead wraps and
+and a scrollable opening viewport in rendered HTML previews. Image code instead wraps and
 continues between lines across generic document pages; message cards retain complete code-line prefixes.
 Sources use one compact count row with
 a single inline Globe icon and a source-localized summary, without a card list. Inline citations use quiet gray

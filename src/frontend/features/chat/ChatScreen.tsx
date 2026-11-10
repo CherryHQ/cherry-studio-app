@@ -35,6 +35,7 @@ import { useApiClient } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
+import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
@@ -192,6 +193,27 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       sessionId
         ? {
             ref: { source: { kind: 'local' }, sessionId },
+            readSelectableIds: async (signal) => {
+              const ids: string[] = [];
+              let cursor: string | undefined;
+              do {
+                const page = await api.get(`/agent-sessions/${sessionId}/messages`, {
+                  query: { cursor, limit: DOCUMENT_EXPORT_MAX_SECTIONS + 1 },
+                  signal,
+                });
+                ids.push(
+                  ...page.items
+                    .filter(
+                      (message) =>
+                        message.role !== 'system' &&
+                        !['pending', 'streaming'].includes(message.status),
+                    )
+                    .map((message) => message.id),
+                );
+                cursor = page.nextCursor;
+              } while (cursor && ids.length <= DOCUMENT_EXPORT_MAX_SECTIONS);
+              return ids.toReversed();
+            },
             prepareSelection: async (ids, signal) => {
               const snapshot = await api.get(`/agent-sessions/${sessionId}/messages/selection`, {
                 query: { ids: [...ids] },
@@ -240,7 +262,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   }
 
   return (
-    <ChatShareSelectionProvider target={shareTarget}>
+    <ChatShareSelectionProvider target={shareTarget} messages={messages}>
       <ComposerSessionProvider
         workspaceSessionId={sessionId}
         workspaceFolderId={!sessionId ? workspace.folderId : undefined}

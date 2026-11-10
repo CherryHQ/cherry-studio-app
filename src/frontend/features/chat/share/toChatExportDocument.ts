@@ -1,4 +1,5 @@
 import { webSearchOutputSchema } from '@cherrystudio/universal/ai/builtinTools';
+import dayjs from 'dayjs';
 
 import type { TranscriptMessage } from '@/frontend/appShell/conversation';
 import { omitGeneratedImageReferencesFromMarkdown } from '@/frontend/utils/omitGeneratedImageReferences';
@@ -131,7 +132,19 @@ export function toChatExportDocument(
       blocks,
     };
   });
-  return { title: options.title, sections, assets };
+  const createdAt = messages.find((message) => message.createdAt)?.createdAt;
+  return {
+    title: options.title,
+    header: {
+      title: options.labels.assistant,
+      avatar: CHERRY_AGENT_AVATAR,
+      ...(createdAt && dayjs(createdAt).isValid()
+        ? { date: dayjs(createdAt).format('YYYY/MM/DD') }
+        : {}),
+    },
+    sections,
+    assets,
+  };
 }
 
 /** Match the article's final-answer boundary using persisted Agent parts, without UI projections. */

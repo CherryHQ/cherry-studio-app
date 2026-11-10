@@ -2,11 +2,6 @@ import { DocumentExportError } from '@/shared/contracts/documentExport';
 
 export const IMAGE_CAPTURE_SCALE = 3;
 
-/** Tall share cards use fewer pixels while retaining a readable 720px text column. */
-export function imageCardCaptureScale(height: number) {
-  return height > 2000 ? 2 : IMAGE_CAPTURE_SCALE;
-}
-
 export type ImageCapturePlan = {
   width: number;
   height: number;

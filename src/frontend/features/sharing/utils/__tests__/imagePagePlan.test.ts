@@ -104,10 +104,11 @@ test('an object taller than a page fails instead of silently dropping or cutting
   ).toThrow();
 });
 
-test('single-image output preserves the complete height independently of capture tiles', () => {
-  expect(imagePagePlan(measurement({ height: 150_000 }), 'single')).toEqual([
-    { top: 0, height: 150_000 },
+test('single-image output accepts the whole-card limit and rejects an unbounded measurement', () => {
+  expect(imagePagePlan(measurement({ height: 3600 }), 'single')).toEqual([
+    { top: 0, height: 3600 },
   ]);
+  expect(() => imagePagePlan(measurement({ height: 3601 }), 'single')).toThrow();
 });
 
 test.each([NaN, Infinity, 0, -1])('rejects malformed measurement height %s', (height) => {

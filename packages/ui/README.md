@@ -5,16 +5,14 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
-`CardStack` is a controlled preview deck for a small ordered collection. It renders an upright
-current card with up to two translated/rotated cards behind it and accessible previous/next actions.
-Callers supply items, the current index, item content and localized labels; the stack owns no
-selection, conversion, file access or delivery. Fixed depth slots retain the foreground browser's
-identity across pages. Native fling recognition owns swipe thresholds and cancellation; vertical
-movement yields to the sheet, and cancelled flings do not change the index. Content must supply
-appropriate image sizes and disable irrelevant interactions in background slots.
-Optional `layout="fill"` lets a single item fill the available frame without reserving pagination
-space. The caller owns the surrounding gutters. Collections retain the compact deck and controls;
-the default `stack` layout keeps the same compact frame for single and multiple items.
+`CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
+flat previous/current/next cards and page dots, with native horizontal fling recognition and
+accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;
+vertical movement yields to the sheet, and cancelled flings never change the index. Callers own
+items, index, translated labels, content, selection, conversion, file access and delivery. Background
+slots must disable irrelevant interactions. The default `fill` layout lets a single item occupy
+its whole frame without pagination space; `compact` keeps the bounded media geometry for one item.
+Collections use 290-point cards when available, without rotation or overlapping stack layers.
 
 
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
@@ -424,9 +422,12 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
 behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
 its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
-`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+`inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
-compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
+to 14/20 labels, 20-point icons and a minimum 48-point touch target in both dimensions, growing for
+larger text. Other platforms retain `lg` sizing. This adaptation stays inside Button; feature code
+does not branch by platform. The `icon` prop renders an icon before
 the label and automatically switches to the matching icon-only padding when no label is provided.
 Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
 composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
@@ -440,6 +441,8 @@ from its immediate parent. `Section.Item` and its semantic row variants use `den
 `Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
 and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
 platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+`variant="floating"` provides a 42-point capsule at default text size, with iOS-owned glass where
+available and the same token-backed capsule fallback elsewhere. Items can combine icons and labels.
 
 `DateRangePicker` is a controlled calendar for selecting a start and end day on one surface.
 It adapts `react-native-ui-datepicker` with Cherry typography, theme tokens, range highlighting,

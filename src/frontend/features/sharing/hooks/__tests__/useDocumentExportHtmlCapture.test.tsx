@@ -14,7 +14,7 @@ jest.mock('@/frontend/components/HtmlCapture', () => ({
 jest.mock('../../utils/stitchCapturedPngPages', () => ({
   stitchCapturedPngPages: async (capture: (onPage: () => Promise<void>) => Promise<void>) => {
     await capture(async () => {});
-    return { uri: 'file:///stitched.png', width: 720, height: 4800, release: mockImageRelease };
+    return { uri: 'file:///stitched.png', width: 1080, height: 7200, release: mockImageRelease };
   },
 }));
 
@@ -86,8 +86,8 @@ test('waits for layout and captures every tile inside the available native viewp
   });
   expect(request.onPage).toHaveBeenCalledWith({
     uri: 'file:///stitched.png',
-    width: 720,
-    height: 4800,
+    width: 1080,
+    height: 7200,
     index: 0,
     total: 1,
   });

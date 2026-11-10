@@ -1,12 +1,11 @@
-import { imageCardCaptureScale, imageCapturePlan, imageCaptureTiles } from '../imageCapturePlan';
+import { imageCapturePlan, imageCaptureTiles } from '../imageCapturePlan';
 
-test('long share cards lower density for the complete output and every tile without seams', () => {
-  expect(imageCardCaptureScale(2000)).toBe(3);
-  const scale = imageCardCaptureScale(3900);
+test('long share cards retain fixed 3x density for the complete output and every tile without seams', () => {
+  const scale = 3;
   const viewport = { width: 320, height: 480 };
-  const tiles = imageCaptureTiles(360, 3900, viewport, 3, scale);
-  const output = imageCapturePlan(360, 3900, scale);
-  expect(output).toMatchObject({ width: 720, height: 7800, scale: 2 });
+  const tiles = imageCaptureTiles(360, 3600, viewport, 3, scale);
+  const output = imageCapturePlan(360, 3600, scale);
+  expect(output).toMatchObject({ width: 1080, height: 10800, scale: 3 });
   expect(
     tiles.reduce(
       (sum, tile) =>

@@ -1,5 +1,6 @@
 import {
   DocumentExportError,
+  DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
   HTML_CONVERSION_MAX_PAGES,
   type ExportImageLayout,
 } from '@/shared/contracts/documentExport';
@@ -39,7 +40,11 @@ export function imagePagePlan(
     )
   )
     throw new DocumentExportError('capture-failed');
-  if (layout === 'single') return [{ top: 0, height }];
+  if (layout === 'single') {
+    if (height > DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT)
+      throw new DocumentExportError('image-size-limit');
+    return [{ top: 0, height }];
+  }
 
   const ranges: [number, number][] = [];
   for (const [top, bottom] of [...ink].sort((a, b) => a[0] - b[0])) {

@@ -127,16 +127,20 @@ test('image preview prepares readable HTML without capturing or saving, then gen
   expect(session.save).not.toHaveBeenCalled();
 });
 
-test('Markdown preview renders the exact prepared text with embedded images', async () => {
+test('Markdown preview exposes exact prepared source and filename without reparsing it as HTML', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
   const prepared = { ...markdownArtifact, text: 'Content\n![Photo](data:image/png;base64,AA==)' };
   session.render.mockResolvedValue(prepared);
-  session.previewMarkdown = (text) => `<main>${text}</main>`;
+  session.previewMarkdown = jest.fn(() => {
+    throw new Error('Raw Markdown must not be reparsed');
+  });
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="markdown" />);
   });
-  expect(ref.current!.html).toContain('data:image/png;base64,AA==');
+  expect(ref.current!.text).toBe(prepared.text);
+  expect(ref.current!.filename).toBe('preview.md');
+  expect(ref.current!.html).toBe('');
   await expect(ref.current!.getArtifact(new AbortController().signal)).resolves.toBe(prepared);
 });
 
@@ -167,9 +171,9 @@ test.each(['image', 'html', 'markdown'] as const)(
     const watermark: ExportWatermark = {
       kind: 'cherry',
       signature: {
-        background: 'white',
-        foreground: 'black',
-        brandColor: 'red',
+        background: '#ffffff',
+        foreground: '#000000',
+        brandColor: '#ff0000',
         logoDataUrl: 'data:image/png;base64,AA==',
         brandName: 'Cherry Studio',
         downloadLabel: 'Scan',

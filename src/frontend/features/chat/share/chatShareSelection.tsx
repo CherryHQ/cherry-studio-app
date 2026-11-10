@@ -1,14 +1,25 @@
-import { createContext, use, useCallback, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  type PropsWithChildren,
+  use,
+  useCallback,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import type { ChatShareTranslations } from './chatShareTarget';
 
 type ChatShareSelectionState = {
   isSharing: boolean;
   isEditing: boolean;
+  isSelectingAll: boolean;
+  allSelected: boolean;
 };
 
 type ChatShareSelectionActions = {
   toggleMessage: (messageId: string) => void;
+  selectMessages(messageIds: readonly string[], selected: boolean): void;
+  toggleAll(): void;
   confirmSelection: () => void;
   beginSelection(messageId: string, translations?: ChatShareTranslations): void;
   cancelSelection(): void;
@@ -23,8 +34,34 @@ export const ChatShareSelectionActionsContext = createContext<ChatShareSelection
 );
 export const ChatShareSelectionStoreContext = createContext<ChatShareSelectionStore | null>(null);
 
+const EMPTY_STORE = createChatShareSelectionStore();
+
+/** The screen scope includes the transcript and its sibling header, with one canonical mode. */
+export function ChatShareSelectionScope({ children }: PropsWithChildren) {
+  const [store] = useState(createChatShareSelectionStore);
+  return <ChatShareSelectionStoreContext value={store}>{children}</ChatShareSelectionStoreContext>;
+}
+
 export function useIsChatShareSelecting() {
-  return use(ChatShareSelectionStateContext)?.isEditing ?? false;
+  const store = use(ChatShareSelectionStoreContext) ?? EMPTY_STORE;
+  return useSyncExternalStore(store.subscribe, store.getIsEditing, store.getIsEditing);
+}
+
+export function useChatShareHeaderSelection() {
+  const store = use(ChatShareSelectionStoreContext) ?? EMPTY_STORE;
+  const isEditing = useIsChatShareSelecting();
+  const selectedCount = useSelectionSnapshot(store, selectSelectedCount);
+  return isEditing ? { selectedCount, onExit: store.cancelSelection } : undefined;
+}
+
+export function useChatShareFooterHeight() {
+  const store = use(ChatShareSelectionStoreContext) ?? EMPTY_STORE;
+  const height = useSyncExternalStore(
+    store.subscribe,
+    store.getFooterHeight,
+    store.getFooterHeight,
+  );
+  return { height, onHeightChange: store.setFooterHeight };
 }
 
 export function useChatShareSelectionState() {
@@ -43,8 +80,11 @@ export function useChatShareSelectionCount() {
   return useSelectionSnapshot(useSelectionStore(), selectSelectedCount);
 }
 
-export function useIsChatMessageSelected(messageId: string) {
-  const select = useCallback((ids: SelectedMessageIds) => ids.has(messageId), [messageId]);
+export function useIsChatMessageSelected(messageId: string | undefined) {
+  const select = useCallback(
+    (ids: SelectedMessageIds) => Boolean(messageId && ids.has(messageId)),
+    [messageId],
+  );
   return useSelectionSnapshot(useSelectionStore(), select);
 }
 
@@ -71,7 +111,28 @@ function selectSelectedCount(ids: SelectedMessageIds) {
 export function createChatShareSelectionStore(initialMessageId?: string) {
   let selectedIds: SelectedMessageIds = new Set(initialMessageId ? [initialMessageId] : []);
   const listeners = new Set<() => void>();
+  let isEditing = Boolean(initialMessageId);
+  let footerHeight = 0;
+  const publish = () => listeners.forEach((listener) => listener());
   return {
+    getFooterHeight: () => footerHeight,
+    setFooterHeight: (height: number) => {
+      if (height !== footerHeight) {
+        footerHeight = height;
+        publish();
+      }
+    },
+    getIsEditing: () => isEditing,
+    beginSelection: () => {
+      isEditing = true;
+      publish();
+    },
+    cancelSelection: () => {
+      if (isEditing) {
+        isEditing = false;
+        publish();
+      }
+    },
     getSnapshot: () => selectedIds,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -82,7 +143,7 @@ export function createChatShareSelectionStore(initialMessageId?: string) {
     setSelectedIds: (next: SelectedMessageIds) => {
       if (next === selectedIds) return;
       selectedIds = next;
-      listeners.forEach((listener) => listener());
+      publish();
     },
   };
 }

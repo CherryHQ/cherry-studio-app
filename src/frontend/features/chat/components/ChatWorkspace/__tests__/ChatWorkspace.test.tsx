@@ -13,13 +13,17 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('react-native-reanimated', () => ({
+  useDerivedValue: (read: () => unknown) => ({ get: read }),
+}));
+
 jest.mock('../../../share/chatShareSelection', () => ({
   useChatShareSelectionActions: () => ({ beginSelection: jest.fn() }),
   useIsChatShareSelecting: () => false,
+  useChatShareFooterHeight: () => ({ height: 0 }),
 }));
 jest.mock('../../../share/ChatShareControls', () => ({
-  ChatShareMessageSelection: () => null,
-  ChatShareSelectionSpacer: () => null,
+  ChatShareSelectionRow: ({ children }: { children: ReactNode }) => children,
 }));
 
 const mockPendingSendDisplayed = jest.fn();

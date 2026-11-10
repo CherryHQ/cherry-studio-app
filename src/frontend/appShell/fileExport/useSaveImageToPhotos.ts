@@ -2,6 +2,7 @@ import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppState } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { canRequestDevicePermission, canUseDevicePermission } from '@/shared/contracts';
@@ -33,6 +34,23 @@ export function useSaveImagesToPhotos() {
       const controller = new AbortController();
       saving.current = controller;
       try {
+        // A system permission promise can settle before the foreground event arrives.
+        if (AppState.currentState !== 'active') {
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => {
+              subscription.remove();
+              reject(controller.signal.reason);
+            };
+            const subscription = AppState.addEventListener('change', (state) => {
+              if (state !== 'active') return;
+              subscription.remove();
+              controller.signal.removeEventListener('abort', abort);
+              resolve();
+            });
+            controller.signal.addEventListener('abort', abort, { once: true });
+          });
+        }
+        controller.signal.throwIfAborted();
         const images = await read(controller.signal);
         for (const image of images) {
           controller.signal.throwIfAborted();

@@ -1,27 +1,26 @@
-import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { type ReactNode, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
-
-import { Button } from '../button';
 
 export type CardStackProps<T> = {
   items: readonly T[];
   index: number;
   onIndexChange(index: number): void;
-  /** Fill the available frame for one item; collections retain the compact deck. */
-  layout?: 'stack' | 'fill';
+  layout?: 'fill' | 'compact';
   renderItem(item: T, frame: { width: number; height: number; isFront: boolean }): ReactNode;
   labels: { previous: string; next: string; page(index: number, count: number): string };
 };
 
-/** A small, controlled preview deck. Selection, conversion and delivery stay with the caller. */
+const CARD_GAP = 12;
+const CARD_WIDTH = 290;
+const CARD_ASPECT_RATIO = 290 / 388;
+
+/** Upright previews. Fixed slots retain the foreground browser while the selected page changes. */
 export function CardStack<T>({
   items,
   index,
   onIndexChange,
-  layout = 'stack',
+  layout = 'fill',
   renderItem,
   labels,
 }: CardStackProps<T>) {
@@ -31,9 +30,14 @@ export function CardStack<T>({
   const isFilled = layout === 'fill' && count === 1;
   const width = Math.max(
     1,
-    isFilled ? bounds.width : Math.min(280, bounds.width - 72, (bounds.height - 56) * 0.77),
+    isFilled
+      ? bounds.width
+      : Math.min(CARD_WIDTH, bounds.width - 64, bounds.height * CARD_ASPECT_RATIO),
   );
-  const height = isFilled ? Math.max(1, bounds.height) : width / 0.77;
+  const height = isFilled ? Math.max(1, bounds.height) : width / CARD_ASPECT_RATIO;
+  const changeIndex = (next: number) => {
+    if (count) onIndexChange(((next % count) + count) % count);
+  };
   const gesture = useMemo(
     () =>
       Gesture.Exclusive(
@@ -54,75 +58,85 @@ export function CardStack<T>({
       ),
     [activeIndex, count, onIndexChange],
   );
+  const firstDot = Math.max(0, Math.min(activeIndex - 3, count - 7));
+  const dotPages = Array.from({ length: Math.min(7, count) }, (_, offset) => firstDot + offset);
   return (
-    <View className="min-h-0 flex-1">
+    <View className="min-h-0 flex-1 gap-4">
       <GestureDetector gesture={gesture}>
         <View
-          className="min-h-0 flex-1 items-center justify-center"
-          onLayout={({ nativeEvent: { layout } }) => {
+          className="min-h-0 flex-1 overflow-hidden"
+          onLayout={({ nativeEvent: { layout } }) =>
             setBounds((current) =>
               current.width === layout.width && current.height === layout.height
                 ? current
                 : { width: layout.width, height: layout.height },
-            );
-          }}
+            )
+          }
         >
-          {bounds.width > 0 && count
-            ? [2, 1, 0]
-                .filter((offset) => offset < count)
-                .map((offset) => {
-                  const item = items[(activeIndex + offset) % count];
-                  const isFront = offset === 0;
-                  return (
+          {bounds.width > 0 && count > 0
+            ? (count > 1 ? [-1, 0, 1] : [0]).map((offset) => {
+                const isFront = offset === 0;
+                return (
+                  <View
+                    key={offset}
+                    accessibilityElementsHidden={!isFront}
+                    importantForAccessibility={isFront ? 'auto' : 'no-hide-descendants'}
+                    pointerEvents={isFront ? 'auto' : 'none'}
+                    className="absolute overflow-hidden rounded-3xl bg-card dark:bg-background"
+                    style={{
+                      width,
+                      height,
+                      left:
+                        (bounds.width - width) / 2 +
+                        offset * (width + CARD_GAP) +
+                        (offset < 0 ? -26 : 0),
+                      opacity: isFront ? 1 : 0.9,
+                      top: (bounds.height - height) / 2,
+                    }}
+                  >
+                    {renderItem(items[(activeIndex + offset + count) % count], {
+                      width,
+                      height,
+                      isFront,
+                    })}
                     <View
-                      key={offset}
-                      accessibilityElementsHidden={!isFront}
-                      importantForAccessibility={isFront ? 'auto' : 'no-hide-descendants'}
-                      pointerEvents={isFront ? 'auto' : 'none'}
-                      className="absolute overflow-hidden rounded-2xl border border-border-subtle bg-card shadow-md shadow-constant-black/15"
-                      style={{
-                        width,
-                        height,
-                        zIndex: 3 - offset,
-                        transform: [
-                          { translateX: offset === 2 ? -11 : offset === 1 ? 12 : 0 },
-                          { translateY: offset === 2 ? -3 : 0 },
-                          { rotate: offset === 2 ? '-7deg' : offset === 1 ? '6deg' : '0deg' },
-                        ],
-                      }}
-                    >
-                      {renderItem(item, { width, height, isFront })}
-                    </View>
-                  );
-                })
+                      className="absolute inset-0 rounded-3xl dark:border dark:border-border"
+                      pointerEvents="none"
+                    />
+                  </View>
+                );
+              })
             : null}
         </View>
       </GestureDetector>
       {count > 1 ? (
-        <View className="h-11 flex-row items-center justify-center gap-2">
-          <Button
-            accessibilityLabel={labels.previous}
-            icon={<ChevronLeftIcon size={16} />}
-            onPress={() => onIndexChange((activeIndex + count - 1) % count)}
-            size="sm"
-            variant="ghost"
-          />
-          <Text
-            accessibilityLabel={labels.page(activeIndex + 1, count)}
-            className="min-w-12 text-center font-mono text-muted-foreground text-xs"
-          >
-            {activeIndex + 1} / {count}
-          </Text>
-          <Button
-            accessibilityLabel={labels.next}
-            icon={<ChevronRightIcon size={16} />}
-            onPress={() => onIndexChange((activeIndex + 1) % count)}
-            size="sm"
-            variant="ghost"
-          />
+        <View
+          accessibilityActions={[
+            { name: 'decrement', label: labels.previous },
+            { name: 'increment', label: labels.next },
+          ]}
+          accessibilityLabel={labels.page(activeIndex + 1, count)}
+          accessibilityRole="adjustable"
+          accessibilityValue={{ min: 1, max: count, now: activeIndex + 1 }}
+          onAccessibilityAction={({ nativeEvent }) =>
+            changeIndex(activeIndex + (nativeEvent.actionName === 'increment' ? 1 : -1))
+          }
+          className="h-1.5 flex-row items-center justify-center gap-1.5"
+        >
+          {dotPages.map((page) => (
+            <Pressable
+              key={page}
+              accessible={false}
+              hitSlop={8}
+              onPress={() => changeIndex(page)}
+              className={
+                page === activeIndex
+                  ? 'h-1.5 w-[18px] rounded-full bg-foreground'
+                  : 'size-1.5 rounded-full bg-border-strong'
+              }
+            />
+          ))}
         </View>
-      ) : !isFilled ? (
-        <View className="h-11" />
       ) : null}
     </View>
   );

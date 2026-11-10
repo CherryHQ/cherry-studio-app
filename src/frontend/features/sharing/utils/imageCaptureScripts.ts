@@ -1,6 +1,7 @@
 import type { ExportImageLayout } from '@/shared/contracts/documentExport';
 
 import type { ImageCapturePlan } from './imageCapturePlan';
+import { IMAGE_CARD_LAYOUT_SCRIPT } from './imageCardLayoutScript';
 import { IMAGE_PAGE_HEIGHT, IMAGE_PAGE_TOP_INSET, type ImagePageSlice } from './imagePagePlan';
 
 export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
@@ -24,17 +25,10 @@ export function imageMeasurementScript(id: number, layout: ExportImageLayout) {
         source.textContent=element.getAttribute('data-export-formula');element.replaceWith(source);
       }
     });
-    var card=main.querySelector('[data-share-card-max-height]');
-    var notice=main.querySelector('.share-excerpt');
-    var isExcerpt=notice&&!notice.hidden;
+    ${layout === 'single' ? IMAGE_CARD_LAYOUT_SCRIPT : ''}
     var previous=-1,stable=0,height=0;
     for(var frame=0;frame<120;frame++){
       await new Promise(requestAnimationFrame);
-      if(card){
-        var isClipped=card.scrollHeight>card.clientHeight+1;
-        card.classList.toggle('is-clipped',isClipped);
-        if(notice)notice.hidden=!(isExcerpt||isClipped);
-      }
       height=Math.ceil(main.getBoundingClientRect().height);
       stable=height===previous?stable+1:0;previous=height;
       if(stable>=3)break;
@@ -86,6 +80,8 @@ export function imagePageReadinessScript(
   left = 0,
 ) {
   return `(async function(){try{
+    // Keep text layout independent of narrow edge tiles and Android font boosting.
+    document.querySelector('meta[name="viewport"]').content='width=${width},initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no';
     document.documentElement.style.cssText='overflow:hidden;height:100%';
     document.body.style.cssText='overflow:hidden;height:100%;margin:0';
     var main=document.querySelector('main');
@@ -105,7 +101,15 @@ export function imagePageReadinessScript(
     clip.style.top=isPaged?'${IMAGE_PAGE_TOP_INSET}px':'0';
     main.style.width='${width}px';main.style.maxWidth='none';main.style.margin='0';
     main.style.position='absolute';main.style.left='-${left}px';main.style.top='-${slice.top}px';
-    for(var frame=0;frame<3;frame++)await new Promise(requestAnimationFrame);
+    window.scrollTo(0,0);
+    // Android can acknowledge the native layout before Chromium adopts the new viewport.
+    for(var frame=0,stable=0;frame<120;frame++){
+      await new Promise(requestAnimationFrame);
+      var viewport=window.visualViewport;
+      stable=Math.abs(viewport.width-${plan.width / density})<=2&&Math.abs(viewport.height-${plan.height / density})<=2?stable+1:0;
+      if(stable>=3)break;
+    }
+    if(stable<3)throw new Error('Capture viewport mismatch');
     window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},phase:'ready',index:${index}}));
   }catch(error){window.ReactNativeWebView.postMessage(JSON.stringify({id:${id},error:true}));}})();true;`;
 }

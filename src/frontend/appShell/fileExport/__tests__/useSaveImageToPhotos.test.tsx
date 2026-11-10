@@ -1,4 +1,5 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useSaveImagesToPhotos } from '../useSaveImageToPhotos';
@@ -38,6 +39,11 @@ function Probe({ ref }: { ref: Ref<SaveImages> }) {
   return null;
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  AppState.currentState = 'active';
+});
+
 test('saves each original image to Photos even when sharing watermark is enabled', async () => {
   const ref = createRef<SaveImages>();
   let renderer!: ReactTestRenderer;
@@ -57,5 +63,67 @@ test('saves each original image to Photos even when sharing watermark is enabled
     ]);
   } finally {
     act(() => renderer.unmount());
+  }
+});
+
+test('waits for the foreground event before generating images after permission resolves', async () => {
+  const ref = createRef<SaveImages>();
+  const read = jest.fn(async () => [{ uri: 'file:///new.png' }]);
+  const remove = jest.fn();
+  let activate!: (state: AppStateStatus) => void;
+  const subscribe = jest
+    .spyOn(AppState, 'addEventListener')
+    .mockImplementation((_event, listener) => {
+      activate = listener as typeof activate;
+      return { remove };
+    });
+  let renderer!: ReactTestRenderer;
+  let saving!: Promise<void>;
+  act(() => {
+    renderer = create(<Probe ref={ref} />);
+  });
+  try {
+    AppState.currentState = 'inactive';
+    await act(async () => {
+      saving = ref.current!(read);
+    });
+    expect(read).not.toHaveBeenCalled();
+    expect(mockCreateAsset).not.toHaveBeenCalled();
+    await act(async () => {
+      AppState.currentState = 'active';
+      activate('active');
+      await saving;
+    });
+    expect(mockCreateAsset).toHaveBeenCalledWith('file:///new.png');
+    expect(remove).toHaveBeenCalledTimes(1);
+  } finally {
+    act(() => renderer.unmount());
+    subscribe.mockRestore();
+  }
+});
+
+test('unmount cancels a save waiting for the foreground and never generates late images', async () => {
+  const ref = createRef<SaveImages>();
+  const read = jest.fn(async () => [{ uri: 'file:///late.png' }]);
+  const remove = jest.fn();
+  const subscribe = jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove });
+  let renderer!: ReactTestRenderer;
+  let saving!: Promise<void>;
+  act(() => {
+    renderer = create(<Probe ref={ref} />);
+  });
+  try {
+    AppState.currentState = 'inactive';
+    await act(async () => {
+      saving = ref.current!(read);
+    });
+    act(() => renderer.unmount());
+    await saving;
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(read).not.toHaveBeenCalled();
+    expect(mockCreateAsset).not.toHaveBeenCalled();
+  } finally {
+    AppState.currentState = 'active';
+    subscribe.mockRestore();
   }
 });

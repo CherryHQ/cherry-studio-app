@@ -21,10 +21,12 @@ export function MainHeader({
   blurTarget,
   hidden,
   actions,
+  selection,
 }: {
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   actions?: readonly HeaderToolbarAction[];
+  selection?: { selectedCount: number; onExit(): void };
 }) {
   const { agent, openNewSession } = useMainHeaderAgent();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -35,6 +37,7 @@ export function MainHeader({
         blurTarget={blurTarget}
         hidden={hidden}
         actions={actions}
+        selection={selection}
         onNewChat={openNewSession}
         onAgentPress={() => {
           Keyboard.dismiss();

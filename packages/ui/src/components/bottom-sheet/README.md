@@ -24,10 +24,11 @@ content. Picker content measures its own available region instead of using the w
 </BottomSheet>
 ```
 
-The API is intentionally small: `open`, `onClose`, `title`, `children`, exactly one of `size`,
+The API is intentionally small: `open`, `onClose`, `children`, optional `title`, exactly one of `size`,
 `height`, or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
 `headerAction` for one compact control beside the title. The title is a heading truncated after two lines;
-when it is a question or request the user must read in full, pass `titleVariant="prompt"` for a
+omitting the title and header actions removes the title row, leaving a 22-point handle region
+for preview-led panels. When the title is a question or request the user must read in full, pass `titleVariant="prompt"` for a
 body-sized title that is never truncated. An optional `footer` stays fixed below the
 flexible body and owns its divider, horizontal action inset, and bottom safe-area spacing; callers
 provide only the footer control. `size` accepts `compact`, `medium`, or `large`, resolving to 40%,

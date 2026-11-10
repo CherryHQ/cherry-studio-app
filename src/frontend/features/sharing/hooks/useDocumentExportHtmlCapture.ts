@@ -5,7 +5,7 @@ import { useHtmlCapture } from '@/frontend/components/HtmlCapture';
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
 
 import {
-  imageCardCaptureScale,
+  IMAGE_CAPTURE_SCALE,
   imageCapturePlan,
   imageCaptureTiles,
   type ImageCaptureTile,
@@ -50,7 +50,7 @@ export function useDocumentExportHtmlCapture() {
       input.signal.addEventListener('abort', abort, { once: true });
       pending.current.set(controller, undefined);
       let tiles: ImageCaptureTile[] = [];
-      let scale = 3;
+      const scale = IMAGE_CAPTURE_SCALE;
       const capturePages = (onPage: Parameters<typeof captureHtml>[0]['onPage']) =>
         captureHtml({
           signal: controller.signal,
@@ -71,7 +71,6 @@ export function useDocumentExportHtmlCapture() {
                 const captureViewport = viewport.current;
                 if (!captureViewport) throw new DocumentExportError('capture-failed');
                 pending.current.set(controller, captureViewport);
-                scale = imageCardCaptureScale(pages[0].height);
                 tiles = imageCaptureTiles(
                   input.width,
                   pages[0].height,

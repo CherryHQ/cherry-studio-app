@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -15,8 +15,8 @@ import {
 export function DocumentPagePreview({
   html,
   page,
-  width,
-  height,
+  width: frameWidth,
+  height: frameHeight,
   isImage,
   layout,
   onPages,
@@ -31,7 +31,10 @@ export function DocumentPagePreview({
   onPages(pages: readonly ImagePageSlice[]): void;
   onError(error?: unknown): void;
 }) {
-  const web = useRef<WebView>(null);
+  const web = useRef<WebView<object>>(null);
+  const [bounds, setBounds] = useState<{ width: number; height: number }>();
+  const width = bounds?.width ?? frameWidth;
+  const height = bounds?.height ?? frameHeight;
   const source = useMemo(() => ({ html }), [html]);
   const topInset = layout === 'single' ? 0 : IMAGE_PAGE_TOP_INSET;
   const pageHeight = page.height + topInset;
@@ -45,7 +48,16 @@ export function DocumentPagePreview({
     if (isPagedImage) web.current?.injectJavaScript(position);
   }, [isPagedImage, position]);
   return (
-    <View className="flex-1 overflow-hidden bg-card">
+    <View
+      className="flex-1 overflow-hidden bg-card"
+      onLayout={({ nativeEvent: { layout } }) =>
+        setBounds((current) =>
+          current?.width === layout.width && current.height === layout.height
+            ? current
+            : { width: layout.width, height: layout.height },
+        )
+      }
+    >
       <View
         style={{
           position: 'absolute',
@@ -58,7 +70,7 @@ export function DocumentPagePreview({
         }}
         pointerEvents={isPagedImage ? 'none' : 'auto'}
       >
-        <WebView
+        <WebView<object>
           ref={web}
           source={source}
           originWhitelist={['*']}

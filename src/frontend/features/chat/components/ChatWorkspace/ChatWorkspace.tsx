@@ -291,6 +291,7 @@ export function ChatWorkspace({
           messages={mergedMessages}
         >
           <ChatMessageRowProvider
+            breakAfterMessageId={forkBoundary?.id}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
           >

@@ -1,6 +1,7 @@
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUniwind } from 'uniwind';
 
 import { useExportWatermark } from '@/frontend/appShell/fileExport';
 import { usePreference } from '@/frontend/data';
@@ -16,6 +17,7 @@ export function useExportPresentation(
   isMessageCard: boolean,
 ) {
   const { t } = useTranslation();
+  const { theme } = useUniwind();
   const label = t('documentExport.document');
   const excerptLabel = t('sharing.imageExcerpt');
   const [fontStep] = usePreference('ui.font_size_step');
@@ -28,7 +30,8 @@ export function useExportPresentation(
     isImage && isMessageCard ? 'card' : 'white',
   );
   const [
-    background,
+    card,
+    pageBackground,
     foreground,
     muted,
     tertiary,
@@ -42,6 +45,7 @@ export function useExportPresentation(
     inlineCodeForeground,
   ] = useThemeColor([
     'card',
+    'background',
     'foreground',
     'muted-foreground',
     'foreground-tertiary',
@@ -54,6 +58,7 @@ export function useExportPresentation(
     'inline-code',
     'inline-code-foreground',
   ]);
+  const background = isMessageCard && theme === 'dark' ? pageBackground : card;
   return useMemo<ExportPresentation>(
     () => ({
       width: isImage ? IMAGE_LAYOUT_WIDTH : 720,

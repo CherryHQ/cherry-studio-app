@@ -47,6 +47,7 @@ import {
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useBackendModule } from '@/frontend/data';
+import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
@@ -118,9 +119,11 @@ const HeaderContext = createContext<{
 function RemoteHeader({
   blurTarget,
   hidden,
+  selection,
 }: {
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
+  selection?: { selectedCount: number; onExit(): void };
 }) {
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
@@ -131,6 +134,7 @@ function RemoteHeader({
         agent={header.agent}
         blurTarget={blurTarget}
         hidden={hidden}
+        selection={selection}
         onNewChat={() => header.startNewChat(header.agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
@@ -199,6 +203,29 @@ function RemoteChatSession() {
         ? {
             ref: session.ref,
             prepareSelection: (ids, signal) => session.history.prepareSelection(ids, signal),
+            readSelectableIds: async (signal) => {
+              const window = await session.history.openLatest(signal);
+              try {
+                const ids: string[] = [];
+                let page = window.initial;
+                while (true) {
+                  ids.unshift(
+                    ...page.items
+                      .filter(
+                        (message) =>
+                          message.completeness === 'complete' &&
+                          message.display.role !== 'system' &&
+                          !['pending', 'streaming'].includes(message.state),
+                      )
+                      .map((message) => message.key),
+                  );
+                  if (!page.older || ids.length > DOCUMENT_EXPORT_MAX_SECTIONS) return ids;
+                  page = await window.read(page.older, signal);
+                }
+              } finally {
+                window.dispose();
+              }
+            },
           }
         : undefined,
     [session],
@@ -219,7 +246,7 @@ function RemoteChatSession() {
     // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
-        <ChatShareSelectionProvider target={shareTarget}>
+        <ChatShareSelectionProvider target={shareTarget} messages={messages}>
           <ComposerSessionProvider
             key={`${source.scope}:${identity}`}
             initialDraft={() => readRemoteDraft(draftKey)}

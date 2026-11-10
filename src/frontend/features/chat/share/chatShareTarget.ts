@@ -12,5 +12,7 @@ export type ChatShareTranslations = Readonly<
 export type ChatShareTarget = {
   ref: ConversationRef;
   translations?: ChatShareTranslations;
+  /** Current conversation path, including history outside the mounted transcript window. */
+  readSelectableIds(signal: AbortSignal): Promise<readonly string[]>;
   prepareSelection(messageIds: readonly string[], signal: AbortSignal): Promise<TranscriptSnapshot>;
 };

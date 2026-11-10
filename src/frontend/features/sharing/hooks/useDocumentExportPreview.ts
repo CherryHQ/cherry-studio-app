@@ -31,11 +31,8 @@ export function useDocumentExportPreview(
   const tail = useRef<Promise<unknown>>(Promise.resolve());
   const text = session.markdown + renderMarkdownSignature(presentation.watermark);
   const immediateHtml = useMemo(
-    () =>
-      format === 'image'
-        ? session.previewDocument(presentation)
-        : session.previewMarkdown(text, presentation),
-    [format, presentation, session, text],
+    () => (format !== 'markdown' ? session.previewDocument(presentation) : ''),
+    [format, presentation, session],
   );
   useEffect(() => {
     const controller = new AbortController();
@@ -56,12 +53,7 @@ export function useDocumentExportPreview(
               format,
               presentation,
               artifact,
-              html:
-                artifact.format === 'html'
-                  ? artifact.html
-                  : artifact.format === 'markdown'
-                    ? session.previewMarkdown(artifact.text, presentation)
-                    : undefined,
+              html: artifact.format === 'html' ? artifact.html : undefined,
             });
         } catch (error) {
           if (!controller.signal.aborted) setResult({ session, format, presentation, error });
@@ -104,6 +96,11 @@ export function useDocumentExportPreview(
     [capture, format, presentation, session],
   );
   return {
+    text: current?.artifact?.format === 'markdown' ? current.artifact.text : text,
+    filename:
+      current?.artifact && current.artifact.format !== 'image'
+        ? current.artifact.file.filename
+        : undefined,
     html: current?.html ?? immediateHtml,
     isPreparing: !current,
     error: current?.error,

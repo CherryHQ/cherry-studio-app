@@ -75,8 +75,9 @@ without re-encoding, and a failed copy never opens a partial share sheet.
 busy state and localized feedback. The low-level functions here only perform delivery.
 `useSaveImageToPhotos` and `useSaveImagesToPhotos` own add-only permission guidance and copy the
 supplied image bytes directly into Photos. They accept no watermark option and do not read the
-sharing setting. Document and HTML callers prepare separate unwatermarked artifacts before local
-saving; a watermarked share preview is never reused for that save. System opening reuses
+sharing setting. After a system permission prompt, saving waits for the foreground event before
+generating images; unmount cancels that wait. Document and HTML callers prepare separate unwatermarked
+artifacts before local saving; a watermarked share preview is never reused for that save. System opening reuses
 `prepareFileExport`.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the

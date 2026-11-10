@@ -1,45 +1,43 @@
 # Sharing Page
 
 `/share` presents the shared CherryUI BottomSheet for documents, original files, image groups and
-HTML conversion. The title is Share, supported formats live in a compact menu, and the fixed footer
-contains Share plus an applicable Save action. Watermark selection belongs only to the global
-settings; the panel uses the resolved request style and its header menu contains formats only.
-The panel does not change selection or show a second selection workflow.
-Sharing-related context menus, More menus, and format menus use a single flat list without section
-separators, including their file-library, file-viewer, and painting entry points.
-The native transparent modal route owns a local `BottomSheetProvider`. Its sheet stays inside that
-route's controller hierarchy, allowing native format menus to present and keeping sheet controls
-above the route's touch surface.
+HTML conversion. The preview-led sheet has no title row. A floating icon-and-label Tabs control
+switches applicable formats over the preview; images alone have no format control. The fixed
+footer pairs a tonal, labeled Save action with the primary Share action, using Button's `footer`
+size for Android's compact labels and minimum 48-point touch targets. Watermark selection stays
+in global settings, and the source still owns the selection.
+
+The native transparent modal route owns local Alert and BottomSheet providers, so permission
+guidance and the sheet present from that route's controller hierarchy. The design's 393×852 reference uses a 748-point document panel
+and a 552-point file/media panel, clamped by BottomSheet to the window's available safe area.
 
 ## Preview
 
-CherryUI `CardStack` holds three fixed preview slots with slight rotation and translation behind
-the upright current card. Native horizontal flings and accessible previous/next buttons change the
-current item. Vertical interaction belongs to BottomSheet. Original images use their real content;
-other files use the file library's shared type icons and colors on a neutral tile. Native gesture
-acceptance remains pending.
-HTML, Markdown and single-card message images use `CardStack`'s `fill` layout, occupying the space
-between the header and action footer with 16-point side and 8-point vertical gutters. There is no
-empty pagination row for these single previews. Generic paginated images and file decks retain
-their compact stacked layout.
+CherryUI `CardStack` presents upright, flat neighboring cards with page dots. Native horizontal
+fling recognition and accessible page adjustments change the current item; vertical movement yields
+to the sheet. Fixed slots preserve the foreground document browser across page changes, and only
+the current document page mounts a browser. Large collections window the visible dots while their
+accessible label retains the complete page count. The default `fill` layout lets a single item use
+its available frame without a pagination row. Media uses unchanged images with contain fitting;
+other files reuse the file library's type icons and filename on the same preview surface.
 
-Documents show lightweight readable content immediately, then prepare asset-bearing HTML. PNGs
-are generated only on Share or Save. The current WebView stays mounted across page changes;
-background paper slots do not mount additional document browsers. Message images are one bounded
-share card, 360 logical pixels wide. Source selection keeps complete paragraphs/list items/table
-rows and code-line prefixes where possible, with a 1500-logical-pixel body budget for one answer
-or 3600 for several answers. A quiet left-aligned ellipsis marks an excerpt; its translated label
-is accessible without adding a visible instruction banner. The 130% overflow ceiling uses a 56px
-body-only fade rather than deleting nodes. The marker and complete footer remain outside the clip.
-The preview scrolls at readable card width. `imageFrame.layout` selects single-image capture.
-Share preview and capture use identical content, typography and the inset, theme-aware footer
-with the official app icon and QR code. HTML/Markdown retain the full snapshot;
-local saves render the same content without the sharing watermark.
-Output density is 3x through 2000 logical pixels and 2x above that. Viewport-sized tiles are joined
-into one PNG; a single tile reuses the captured bytes without another bitmap/encode pass.
-Generic document images retain full pagination: at most 480 content pixels plus 16 top spacing,
-3x density and 64 pages. Oversized indivisible content or page limits fail explicitly. HTML retains
-its full scrollable code and Markdown retains authored fences.
+Documents show lightweight content before asset-bearing HTML is ready. PNGs are captured only on
+Share or Save. The preview card has 16-point side and 10-point top insets. HTML shows filename,
+message count and byte size above the rendered webpage; Markdown shows the same file identity
+above the actual raw text, without a second HTML parse. Long labels can scroll in the floating
+format control; its glass material is owned by the iOS Tabs adapter, with a complete shared fallback.
+
+Message images are 360 logical points wide and always use 3x output. Their complete author/content/
+footer layout is limited to 3600 points (1080×10800 output pixels). After fonts and images settle,
+preview and capture run the same block-aware truncation: paragraphs and list items clamp by lines,
+code keeps complete lines, tables keep complete rows, and indivisible content is dropped. A quiet
+ellipsis ends retained content; no orphan heading, extra overflow budget or body fade remains.
+The inset footer uses theme-appropriate official artwork and a complete QR. HTML/Markdown keep the
+full snapshot. Local saves use the same rendering rules without a sharing watermark.
+
+Viewport-sized captures are joined into one PNG. A single tile reuses its bytes without another
+bitmap/encode pass. Generic document images retain full pagination: at most 480 content points plus
+16 top spacing per page, 3x density and 64 pages. Indivisible objects or page limits fail explicitly.
 
 Format changes cancel obsolete work and wait for its physical completion. Failure keeps the chosen
 format with a retry; it never silently changes image output to HTML or Markdown. Theme and watermark
@@ -49,9 +47,9 @@ source-keyed assets; cache retention is bounded.
 ## Files and HTML
 
 Original files share as independent files in frozen source order. File-library requests show no
-conversion menu or watermark switch, including all-HTML selections; original bitmap sharing still
+format control or watermark switch, including all-HTML selections; original bitmap sharing still
 follows the global watermark setting. Other all-HTML requests with conversion enabled offer
-Original, Image and PPT. Authored HTML keeps its
+Original, Image and PPT in the same floating Tabs control. Authored HTML keeps its
 existing desktop capture strategy. PPT previews
 reuse the captured page images and delivery sends PPTX files. Conversions remain temporary and are
 reused within the request. Only explicit Save persists them. A failed member prevents partial

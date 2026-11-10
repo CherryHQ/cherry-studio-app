@@ -21,7 +21,7 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportWatermark } from '@/shared/contracts/fileExport';
 
 import { useHtmlConversion } from '../hooks/useHtmlConversion';
-import { ShareFormatMenu, type ShareFormat } from './ShareFormatMenu';
+import { ShareFormatTabs, type ShareFormat } from './ShareFormatTabs';
 import { ShareSheet } from './ShareSheet';
 
 type Request = Extract<NonNullable<ReturnType<typeof getShareRequest>>, { kind: 'files' }>;
@@ -190,6 +190,7 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
   }, []);
   return (
     <ShareSheet
+      height={552}
       isPending={isPending || isConverting}
       canShare={!current?.error}
       onClose={() => {
@@ -203,9 +204,9 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
           ? 'sharing.saveToPhotos'
           : 'sharing.saveToLibrary',
       )}
-      headerAction={
+      formatControls={
         canConvert ? (
-          <ShareFormatMenu
+          <ShareFormatTabs
             formats={['original', 'image', 'pptx']}
             format={format}
             disabled={isPending}
@@ -228,7 +229,7 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
         >
           {surface}
         </ScrollView>
-        <View className="min-h-0 flex-1 bg-background px-4 pb-2 dark:bg-popover">
+        <View className="min-h-0 flex-1 pt-3.5 pb-2">
           {current?.error ? (
             <View className="flex-1 justify-center p-6">
               <ContentState.Error

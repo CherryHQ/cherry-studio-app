@@ -1,4 +1,4 @@
-import { BottomSheet, BottomSheetProvider, ContentState } from '@cherrystudio/ui/components';
+import { Alert, BottomSheet, BottomSheetProvider, ContentState } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,12 +15,16 @@ import { DocumentShareSheet } from './components/DocumentShareSheet';
 import { FileShareSheet } from './components/FileShareSheet';
 
 export function ShareScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ requestId?: string | string[] }>();
   const id = getSingleRouteParam(params.requestId);
   return (
-    <BottomSheetProvider>
-      <ShareRoute key={id} requestId={id} />
-    </BottomSheetProvider>
+    // Native permission guidance must present from this modal route's controller.
+    <Alert.Provider labels={{ cancel: t('common.cancel'), ok: t('common.ok') }}>
+      <BottomSheetProvider>
+        <ShareRoute key={id} requestId={id} />
+      </BottomSheetProvider>
+    </Alert.Provider>
   );
 }
 

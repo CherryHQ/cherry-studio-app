@@ -4,6 +4,8 @@ import type { ResolvedFile } from './file';
 import type { ExportFile, ExportWatermark } from './fileExport';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
+/** Whole message image, including its author row, insets and optional brand footer. */
+export const DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT = 3600;
 
 /** Resolved product copy travels with the snapshot, including portable text fallbacks. */
 export type ExportContentLabels = {
@@ -37,6 +39,8 @@ export type ExportBlock =
 
 export type ExportDocument = {
   title?: string;
+  /** Source-owned author and already-formatted date for a message image's first row. */
+  header?: { title: string; avatar?: string; date?: string };
   labels?: ExportContentLabels;
   sections: readonly {
     id: string;

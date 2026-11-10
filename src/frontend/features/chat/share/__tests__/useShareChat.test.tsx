@@ -16,6 +16,7 @@ const mockPrepare = jest.fn<Promise<TranscriptSnapshot>, [readonly string[], Abo
 const target: ChatShareTarget = {
   ref: { source: { kind: 'local' }, sessionId: 'session' },
   prepareSelection: mockPrepare,
+  readSelectableIds: async () => [],
 };
 
 jest.mock('@/frontend/appShell/sharing', () => ({

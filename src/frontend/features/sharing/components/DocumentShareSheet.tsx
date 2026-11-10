@@ -17,8 +17,9 @@ import { useDocumentExportHtmlCapture } from '../hooks/useDocumentExportHtmlCapt
 import { useDocumentExportPreview } from '../hooks/useDocumentExportPreview';
 import { useExportPresentation } from '../hooks/useExportPresentation';
 import { IMAGE_PAGE_HEIGHT, type ImagePageSlice } from '../utils/imagePagePlan';
+import { DocumentFilePreview } from './DocumentFilePreview';
 import { DocumentPagePreview } from './DocumentPagePreview';
-import { ShareFormatMenu } from './ShareFormatMenu';
+import { ShareFormatTabs } from './ShareFormatTabs';
 import { ShareSheet } from './ShareSheet';
 
 type Request = Extract<NonNullable<ReturnType<typeof getShareRequest>>, { kind: 'document' }>;
@@ -162,8 +163,8 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
       onShare={() => perform('share')}
       onSave={format === 'image' ? saveImages : () => perform('save')}
       saveLabel={t(format === 'image' ? 'sharing.saveToPhotos' : 'sharing.saveToLibrary')}
-      headerAction={
-        <ShareFormatMenu
+      formatControls={
+        <ShareFormatTabs
           disabled={isPending}
           formats={request.allowedFormats}
           format={format}
@@ -185,7 +186,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
         >
           {surface}
         </ScrollView>
-        <View className="min-h-0 flex-1 bg-background px-4 py-2 dark:bg-popover">
+        <View className="min-h-0 flex-1 px-4 pt-2.5">
           {preview.issues.length ? (
             <Text
               accessibilityLiveRegion="polite"
@@ -209,7 +210,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
             </View>
           ) : (
             <CardStack
-              layout={format === 'image' && !isMessageCard ? 'stack' : 'fill'}
+              layout="fill"
               items={pages}
               index={index}
               onIndexChange={setIndex}
@@ -218,8 +219,9 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
                 next: t('sharing.next'),
                 page: (page, total) => t('documentExport.page', { page, total }),
               }}
-              renderItem={(page, frame) =>
-                frame.isFront ? (
+              renderItem={(page, frame) => {
+                if (!frame.isFront) return <View className="flex-1 bg-card" />;
+                const content = (
                   <DocumentPagePreview
                     html={preview.html}
                     page={page}
@@ -230,10 +232,25 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
                     onPages={onPages}
                     onError={onPreviewError}
                   />
+                );
+                return format === 'image' ? (
+                  content
                 ) : (
-                  <View className="flex-1 bg-card" />
-                )
-              }
+                  <DocumentFilePreview
+                    filename={
+                      preview.filename ??
+                      `${request.session.document.title ?? t('documentExport.document')}.${format === 'markdown' ? 'md' : 'html'}`
+                    }
+                    messageCount={
+                      isMessageCard ? request.session.document.sections.length : undefined
+                    }
+                    source={format === 'markdown' ? preview.text : preview.html}
+                    format={format}
+                  >
+                    {content}
+                  </DocumentFilePreview>
+                );
+              }}
             />
           )}
         </View>

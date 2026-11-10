@@ -12,7 +12,7 @@ establish native fidelity or measured performance; acceptance remains user-owned
 | `backend/services/documentExport` | Validation, resources, rendering, temporary files and explicit persistence |
 | `DocumentExportRuntime` | Foreground admission and cleanup of sessions and HTML artifacts |
 | `frontend/appShell/sharing` | Frozen requests, one `/share` panel, operation retention and disposal |
-| `frontend/features/sharing` | BottomSheet, card previews, format menu and capture strategy |
+| `frontend/features/sharing` | BottomSheet, card previews, floating format tabs and capture strategy |
 | `frontend/appShell/fileExport` | Watermarks, stable delivery copies, system sharing and Photos permissions |
 | `frontend/features/chat/share` | Original-list selection, selected-ID reads and final-only projection |
 | `frontend/features/library` | Single/batch entry points and explicitly saved export entries |
@@ -46,24 +46,25 @@ preview does not require PNG generation. The foreground WebView keeps its identi
 background card slots do not mount additional browsers. The same semantic page plan positions the
 preview and capture slices.
 
-Message image sharing produces one bounded card, 360 logical pixels wide.
-`imageFrame.layout: 'single'` selects its presentation and capture. Before asset reads, the renderer
-selects an ordered prefix using a 1500-logical-pixel body budget for one answer or 3600 for several
-answers. Questions alone do not expand that budget. Paragraphs, complete list items/table rows and
-code-line boundaries are preferred, with sentence/word fallback for an oversized paragraph.
-A single small left-aligned ellipsis below the body marks an excerpt; its localized accessible
-label is separate from the visible glyph. Complete HTML and Markdown still use the full snapshot.
-After fonts and images settle, actual overflow beyond a 130% body-height ceiling gets a 56px fade.
-The measurement script toggles clipping and marker visibility without deleting body nodes. Marker
-and footer remain outside the clipped region. The preview scrolls at readable card width, and
-preview/capture share the same content and overflow treatment.
+Message image sharing produces one bounded card, 360 logical points wide. Its source-owned
+header identifies the author and already-formatted date before the selected messages.
+`imageFrame.layout: 'single'` selects its presentation and capture. After fonts and pictures settle,
+the shared preview/capture script measures the actual whole image against a 3600-point ceiling,
+including the author row, insets and optional footer. It clamps a boundary paragraph/list item by
+lines, keeps complete code lines or table rows, and puts an ellipsis at the retained line/cell.
+Indivisible headings, pictures and diagrams that cannot fit are dropped; orphan headings are
+removed. There is no separate single-answer budget, overflow allowance or clipped-body fade.
+Only the temporary image DOM is shortened; HTML/Markdown keep the frozen original snapshot.
+The preview scrolls at readable card width. The panel shows HTML as a rendered webpage and
+Markdown as raw text, each with a filename, message count and byte-size row.
+
 Users choose watermark only in global settings. The sharing panel uses the resolved request style
 and contains no watermark control.
 When sharing watermark is enabled, the message-card footer follows the content surface and text
 colors, with an inset separator, official theme-appropriate app icon, short scan copy and download
 QR. Whitespace separates it from the body. Local saved output omits that watermark footer.
 
-Cards through 2000 logical pixels use 3x output density; taller cards use 2x. The capture owner keeps
+All message cards use fixed 3x density (1080px wide, at most 10800px tall). The capture owner keeps
 native snapshots within the available viewport, then joins tiles into one PNG. A single tile retains
 its PNG bytes directly, without another decode/encode pass. Generic document images retain full
 pagination, with at most 480 content pixels plus 16 top spacing per page, 3x density and 64 pages.
@@ -72,7 +73,7 @@ Complete HTML keeps scrollable code, and Markdown retains authored fences and ta
 
 HTML uses a responsive column capped at 720 points. Export typography and watermark style are
 frozen at opening; theme changes refresh previews until an active delivery holds its presentation. Generated
-cards use the semantic card surface. The shared Cherry footer remains together at the end of the
+cards use the light card surface and dark background surface. The shared Cherry footer remains together at the end of the
 document, not on every page. PNGs do not contain page-number footers.
 
 Source-owned citations remain compact source counts and portable links. Ordinary attachments are

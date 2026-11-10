@@ -18,7 +18,10 @@ history, message rows and parts, viewport following, and scroll restoration.
   identity is available.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, dataset
   identity, bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered
-  state that is not carried by message items.
+  state that is not carried by message items. Optional `rowInsets` belongs to the list frame and
+  explicitly invalidates mounted rows when a selection layout changes their gutters or spacing.
+  `MessageListHandle` exposes begin/end direct interaction and bounded `scrollBy` so a feature's
+  edge drag reuses the list's follow state, reading anchors and scroll limits.
   `bottomAccessoryHeight` reserves a floating composer's space through the keyboard adapter's
   content inset; it also positions the return button and participates in visible-bottom checks.
   The viewport remains fixed while the composer grows. Focus grows the composer while the keyboard
@@ -39,7 +42,8 @@ history, message rows and parts, viewport following, and scroll restoration.
   gesture exclusion above the bubble. Local cards draw a scanned PDF's recognition progress, and
   a line under them lists what the model did not receive (unrecognized pages, truncation) from the
   attachment reports. A pending reply's `inputFileEntryIds` lets it name that wait.
-  Its `quote` slot renders under the bubble in the same right-aligned column.
+  Its `quote` slot renders under the bubble in the same right-aligned column. The explicit
+  `selection` variant uses the narrower design-specified bubble column without changing normal rows.
 - `MessageSelectionActionProvider` adds one feature action beside Copy in the native menu of
   selected Markdown in a message body; the action receives the message id and the selected plain
   text. Text outside a message body (translations, previews, user plain text) offers none.

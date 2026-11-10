@@ -1,6 +1,7 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import {
@@ -14,6 +15,12 @@ import { ChatShareSelectionProvider } from '../ChatShareSelectionProvider';
 const target = {
   ref: { source: { kind: 'local' as const }, sessionId: 'session' },
   prepareSelection: jest.fn(),
+  readSelectableIds: jest.fn(async () => [
+    'unloaded-question',
+    'unloaded-answer',
+    'question',
+    'answer',
+  ]),
 };
 const mockShareChat = jest.fn();
 const mockCancelShare = jest.fn();
@@ -40,7 +47,7 @@ jest.mock('expo-router', () => ({
   },
 }));
 jest.mock('@/frontend/components/Selection', () => ({
-  toggleSelection: jest.requireActual('@/frontend/components/Selection/selection').toggleSelection,
+  areAllSelected: jest.requireActual('@/frontend/components/Selection/selection').areAllSelected,
 }));
 
 type Selection = ReturnType<typeof useChatShareSelectionActions> & { selectedCount: number };
@@ -148,4 +155,73 @@ test('a recycled row subscribes to its current message identity', () => {
     });
     expect(mockMessageRender).toHaveBeenLastCalledWith(messageId, messageId === 'answer', false);
   }
+});
+
+test('select all includes history outside mounted rows', async () => {
+  await act(async () => selection.current!.toggleAll());
+  expect(selection.current!.selectedCount).toBe(4);
+  act(() => selection.current!.confirmSelection());
+  expect(mockShareChat).toHaveBeenCalledWith([
+    'unloaded-question',
+    'unloaded-answer',
+    'question',
+    'answer',
+  ]);
+});
+
+test('an oversized complete history reports the limit without replacing the previous selection', async () => {
+  target.readSelectableIds.mockResolvedValueOnce(
+    Array.from({ length: DOCUMENT_EXPORT_MAX_SECTIONS + 1 }, (_, index) => `message-${index}`),
+  );
+  await act(async () => selection.current!.toggleAll());
+  expect(selection.current!.selectedCount).toBe(1);
+  expect(mockToastShow).toHaveBeenCalledWith(
+    expect.objectContaining({ label: 'chat.share.selectionLimit', variant: 'danger' }),
+  );
+});
+
+test('cancelling a pending select-all read never applies a late result', async () => {
+  let resolve!: (ids: string[]) => void;
+  target.readSelectableIds.mockImplementationOnce(
+    () =>
+      new Promise<string[]>((ready) => {
+        resolve = ready;
+      }),
+  );
+  act(() => selection.current!.toggleAll());
+  act(() => selection.current!.cancelSelection());
+  act(() => selection.current!.confirmSelection());
+  await act(async () => {
+    resolve(['late-question', 'late-answer']);
+  });
+  expect(selection.current!.selectedCount).toBe(1);
+  expect(mockShareChat).not.toHaveBeenCalled();
+});
+
+test('selecting a question includes its displayed answer; deselecting it leaves the answer selected', () => {
+  const row = (id: string, role: 'user' | 'assistant'): ConversationMessage => ({
+    key: id,
+    state: 'success',
+    completeness: 'complete',
+    display: { id, role, status: 'success', data: {} },
+    actions: {},
+  });
+  act(() =>
+    renderer.update(
+      <ChatShareSelectionProvider
+        target={target}
+        initialMessageId="answer"
+        messages={[row('question', 'user'), row('shown-answer', 'assistant')]}
+      >
+        <SelectionProbe ref={selection} />
+      </ChatShareSelectionProvider>,
+    ),
+  );
+  act(() => selection.current!.toggleMessage('answer'));
+  act(() => selection.current!.toggleMessage('question'));
+  expect(selection.current!.selectedCount).toBe(2);
+  act(() => selection.current!.toggleMessage('question'));
+  expect(selection.current!.selectedCount).toBe(1);
+  act(() => selection.current!.confirmSelection());
+  expect(mockShareChat).toHaveBeenCalledWith(['shown-answer']);
 });
