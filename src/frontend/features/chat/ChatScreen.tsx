@@ -60,6 +60,7 @@ import { ChatQuoteProvider } from './quotes/ChatQuoteProvider';
 import { useChatQuoteNavigation } from './quotes/useChatQuoteNavigation';
 import {
   latestConversationImageResult,
+  selectContextUsageSource,
   useAgentChatControls,
   useAgentChatDraftHandoff,
   useLocalConversation,
@@ -370,6 +371,14 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       <ChatInput
                         agentId={resolvedAgentId}
                         controls={controls}
+                        contextUsage={selectContextUsageSource({
+                          sessionId,
+                          messages,
+                          isCurrentWindow:
+                            !messageWindow.hasNewerMessages &&
+                            !messageWindow.isLoadingInitial &&
+                            !messageWindow.error,
+                        })}
                         dismissKeyboardOnSend
                         imageResult={
                           messageWindow.hasNewerMessages

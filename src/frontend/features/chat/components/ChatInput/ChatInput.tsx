@@ -43,7 +43,11 @@ import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/mo
 import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
 import { attachMessageQuote } from '../../quotes/messageQuoteInput';
 import { readQuoteMentions } from '../../quotes/quoteMentions';
-import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
+import {
+  type ContextUsageSource,
+  type useAgentChatControls,
+  useAgentChatImageResult,
+} from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
@@ -63,6 +67,7 @@ import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
+import { deriveContextUsage } from './utils/contextUsage';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
@@ -73,6 +78,7 @@ type ChatInputPicker = 'plugin' | 'prompt' | 'skill' | 'ssh';
 
 type ChatInputProps = {
   agentId?: string;
+  contextUsage?: ContextUsageSource;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
   imageResult?: ConversationImageResult;
@@ -88,6 +94,7 @@ const restingInputHeight = 32;
 
 export function ChatInput({
   agentId,
+  contextUsage,
   controls,
   dismissKeyboardOnSend,
   imageResult,
@@ -222,6 +229,7 @@ export function ChatInput({
         ) : (
           <TextChatInput
             mode={mode}
+            contextUsage={contextUsage}
             agentId={agentId}
             sessionId={sessionId}
             sshDraftId={sshDraftId}
@@ -248,6 +256,7 @@ export function ChatInput({
 function TextChatInput({
   mode,
   agentId,
+  contextUsage,
   sessionId,
   sshDraftId,
   agentModelAnswersInParallel,
@@ -290,6 +299,16 @@ function TextChatInput({
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
+  const compatibleUsage =
+    !isParallel &&
+    selectedModelItem &&
+    contextUsage &&
+    !isImageGenerationModel(selectedModelItem.model) &&
+    selectedModelItem.modelId === contextUsage.modelId &&
+    selectedModelItem.model.providerId === contextUsage.providerId &&
+    selectedModelItem.model.modelId === contextUsage.providerModelId
+      ? deriveContextUsage(selectedModelItem.model.contextWindow, contextUsage.stats)
+      : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   // One picker at a time; each closes only itself, so a late close never hides the next one.
   const [openPicker, setOpenPicker] = useState<ChatInputPicker | null>(null);
@@ -524,6 +543,9 @@ function TextChatInput({
                         </View>
                       </ChatInputAccessories>
                       <ChatInputSurface
+                        contextUsage={compatibleUsage}
+                        contextUsageSessionId={sessionId}
+                        contextUsageMessageId={contextUsage?.messageId}
                         onLinkPress={quoteActions?.previewQuote}
                         streaming={isBusy}
                         placeholder={

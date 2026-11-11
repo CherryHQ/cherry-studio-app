@@ -24,7 +24,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   });
   const retired = snapshot.freshness.state === 'retired';
   const input = useConversationResourceValue(interaction?.input, retired);
-  const isOpen = Boolean(interaction) && !retired;
+  const isOpen = Boolean(interaction) && snapshot.freshness.state === 'current';
   const canRespond =
     isOpen && interaction?.respond?.availability.state === 'enabled' && input.isSuccess;
   const respond = async ({
@@ -50,6 +50,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
               {
                 approvalId: interaction.id,
                 displayName: interaction.title,
+                toolName: interaction.toolName,
                 sshCommand: interaction.sshCommand,
                 canGrantSshDiagnostics: interaction.canGrantSshDiagnostics,
                 input: input.data?.kind === 'json' ? input.data.value : undefined,

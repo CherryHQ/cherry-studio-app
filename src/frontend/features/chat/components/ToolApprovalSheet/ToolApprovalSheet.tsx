@@ -3,7 +3,10 @@ import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
+import { getBuiltInToolTitleKey } from '@/shared/data/types/builtInToolTitles';
+import { CreateSkillInputSchema } from '@/shared/data/types/skill';
 
 const ignoreClose = () => undefined;
 
@@ -11,6 +14,7 @@ export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
   displayName: string;
+  toolName?: string;
   sshCommand?: boolean;
   canGrantSshDiagnostics?: boolean;
 };
@@ -66,6 +70,15 @@ export function ToolApprovalSheet({
 
   const isCurrent = isOpen && approvals[0]?.approvalId === approval.approvalId;
   const canDecide = isCurrent && canRespond && !response.isSubmitting;
+  const titleKey = getBuiltInToolTitleKey(approval.toolName ?? '');
+  const isSkillApproval =
+    approval.toolName === 'create_skill' || approval.toolName === 'install_skill';
+  const approveLabel =
+    approval.toolName === 'create_skill'
+      ? t('skills.create.name')
+      : approval.toolName === 'install_skill'
+        ? t('skills.candidate.install')
+        : t('chat.tool.approval.continue');
   const submit = async (approved: boolean) => {
     const { approvalId } = approval;
     if (!canDecide || (approved && !canApprove) || submitting.current.has(approvalId)) {
@@ -97,6 +110,8 @@ export function ToolApprovalSheet({
           canRespond={canDecide}
           canApprove={canApprove}
           isSubmitting={response.isSubmitting}
+          approveLabel={approveLabel}
+          denyLabel={t(isSkillApproval ? 'common.cancel' : 'chat.tool.approval.deny')}
           onRespond={(approved) => void submit(approved)}
         />
       }
@@ -109,8 +124,8 @@ export function ToolApprovalSheet({
         ) : undefined
       }
       open={isOpen}
-      size="medium"
-      title={approval.displayName}
+      size={approval.toolName === 'create_skill' ? 'large' : 'medium'}
+      title={titleKey ? t(titleKey) : approval.displayName}
     >
       <ScrollView
         key={approval.approvalId}
@@ -119,11 +134,7 @@ export function ToolApprovalSheet({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {approval.sshCommand ? (
-          <SshCommandApproval input={approval.input} />
-        ) : (
-          <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />
-        )}
+        <ToolApprovalContent approval={approval} />
         {approval.canGrantSshDiagnostics ? (
           <Section
             footer={t(response.allowSshDiagnostics ? 'ssh.grant.onApproval' : 'ssh.grant.ask')}
@@ -144,24 +155,94 @@ export function ToolApprovalSheet({
   );
 }
 
+function ToolApprovalContent({ approval }: { approval: PendingToolApproval }) {
+  const { t } = useTranslation();
+  if (approval.sshCommand) return <SshCommandApproval input={approval.input} />;
+  if (approval.toolName === 'create_skill') {
+    const skill = CreateSkillInputSchema.safeParse(approval.input);
+    if (skill.success)
+      return (
+        <>
+          <Text className="text-sm text-muted-foreground">
+            {t('skills.approval.createDescription')}
+          </Text>
+          <View className="gap-1">
+            <Text className="font-medium text-base text-foreground" selectable>
+              {skill.data.name}
+            </Text>
+            <Text className="text-sm text-muted-foreground" selectable>
+              {skill.data.description}
+            </Text>
+            {skill.data.compatibility ? (
+              <Text className="text-sm text-muted-foreground" selectable>
+                {skill.data.compatibility}
+              </Text>
+            ) : null}
+          </View>
+          <MarkdownText markdown={skill.data.instructions} />
+          <ToolApprovalArguments value={approval.input} />
+        </>
+      );
+  }
+  if (
+    approval.toolName === 'install_skill' &&
+    typeof approval.input === 'object' &&
+    approval.input !== null &&
+    'url' in approval.input &&
+    typeof approval.input.url === 'string'
+  )
+    return (
+      <>
+        <Text className="text-base text-foreground">{t('skills.approval.installDescription')}</Text>
+        <Text className="text-sm text-muted-foreground" selectable>
+          {approval.input.url}
+        </Text>
+        <ToolApprovalArguments value={approval.input} />
+      </>
+    );
+  return <MessageDetailValue title={t('chat.tool.arguments')} value={approval.input} />;
+}
+
+function ToolApprovalArguments({ value }: { value: unknown }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <View className="gap-2">
+      <Button
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((value) => !value)}
+        size="sm"
+        variant="ghost"
+      >
+        <Button.Label>
+          {t(expanded ? 'skills.approval.hideDetails' : 'skills.approval.showDetails')}
+        </Button.Label>
+      </Button>
+      {expanded ? <MessageDetailValue title={t('chat.tool.arguments')} value={value} /> : null}
+    </View>
+  );
+}
+
 function ToolApprovalSheetActions({
   canRespond,
   canApprove,
   isSubmitting,
+  approveLabel,
+  denyLabel,
   onRespond,
 }: {
   canRespond: boolean;
   canApprove: boolean;
   isSubmitting: boolean;
+  approveLabel: string;
+  denyLabel: string;
   onRespond: (approved: boolean) => void;
 }) {
-  const { t } = useTranslation();
-
   return (
     <View className="flex-row gap-3">
       <View className="flex-1">
         <Button disabled={!canRespond} onPress={() => onRespond(false)} variant="secondary">
-          <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
+          <Button.Label>{denyLabel}</Button.Label>
         </Button>
       </View>
       <View className="flex-1">
@@ -171,7 +252,7 @@ function ToolApprovalSheetActions({
           onPress={() => onRespond(true)}
           variant="default"
         >
-          <Button.Label>{t('chat.tool.approval.continue')}</Button.Label>
+          <Button.Label>{approveLabel}</Button.Label>
         </Button>
       </View>
     </View>

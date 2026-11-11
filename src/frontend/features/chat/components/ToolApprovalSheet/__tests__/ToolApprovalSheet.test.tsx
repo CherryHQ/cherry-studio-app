@@ -24,6 +24,11 @@ jest.mock('@/frontend/components/MessageDetail', () => {
   };
 });
 
+jest.mock('@/frontend/components/MarkdownText', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+  return { MarkdownText: ({ markdown }: { markdown: string }) => <MockText>{markdown}</MockText> };
+});
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
@@ -205,6 +210,44 @@ describe('ToolApprovalSheet', () => {
     render();
 
     expect(renderer.root.findByType(ScrollView).props.showsVerticalScrollIndicator).toBe(false);
+  });
+
+  test('presents skill creation as readable content with raw arguments behind an explicit action', async () => {
+    const input = {
+      name: 'meeting-notes',
+      description: 'Organize meeting notes',
+      instructions: '## Steps\n\nSummarize the decisions.',
+    };
+    const { onRespond } = render({
+      approvals: [makeApproval({ toolName: 'create_skill', displayName: 'Create Skill', input })],
+    });
+    expect(renderedTexts()).toEqual(
+      expect.arrayContaining([
+        'skills.create.name',
+        'meeting-notes',
+        input.description,
+        input.instructions,
+        'skills.approval.createDescription',
+      ]),
+    );
+    expect(renderedTexts()).not.toContain('Create Skill');
+    expect(renderedTexts()).not.toContain(JSON.stringify(input));
+    await press('skills.approval.showDetails');
+    expect(renderedTexts()).toContain(JSON.stringify(input));
+    await press('skills.create.name');
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: true });
+  });
+
+  test('explains skill installation and lets cancellation deny that exact call', async () => {
+    const input = { url: 'https://skills.cherryin.ai/example' };
+    const { onRespond } = render({
+      approvals: [makeApproval({ toolName: 'install_skill', displayName: 'Install Skill', input })],
+    });
+    expect(renderedTexts()).toContain('skills.approval.installDescription');
+    expect(renderedTexts()).toContain(input.url);
+    expect(renderedTexts()).not.toContain(JSON.stringify(input));
+    await press('common.cancel');
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: false });
   });
 
   test('denies the call the sheet is showing', async () => {

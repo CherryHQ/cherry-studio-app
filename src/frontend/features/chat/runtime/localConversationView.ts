@@ -238,6 +238,8 @@ export function createLocalConversationProjector(input: {
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          toolName:
+            approval.toolRef.source === 'builtin' ? approval.toolRef.capabilityId : undefined,
           state: 'pending',
           sshCommand,
           canGrantSshDiagnostics,
