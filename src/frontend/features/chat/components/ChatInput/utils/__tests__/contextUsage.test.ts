@@ -11,7 +11,7 @@ describe('context usage', () => {
       ratio: 0.796,
       severity: 'primary',
     });
-    expect(formatContextUsagePercent(0.796, 'en-US')).toBe('79%');
+    expect(formatContextUsagePercent(0.796, 'en-US')).toBe('80%');
     expect(deriveContextUsage(1000, { contextTokens: 800 })?.severity).toBe('warning');
     expect(deriveContextUsage(1000, { contextTokens: 950 })?.severity).toBe('error');
     expect(deriveContextUsage(1000, { contextTokens: 1100 })).toMatchObject({
@@ -24,6 +24,11 @@ describe('context usage', () => {
     expect(deriveContextUsage(Infinity)).toBeUndefined();
     expect(deriveContextUsage(100, { contextTokens: 0 })?.used).toBeUndefined();
     expect(deriveContextUsage(100, { contextTokens: NaN })?.used).toBeUndefined();
+  });
+  it('limits percentages to whole numbers without truncating floating-point errors', () => {
+    expect(formatContextUsagePercent(58_000 / 200_000, 'en-US')).toBe('29%');
+    expect(formatContextUsagePercent(116_000 / 200_000, 'en-US')).toBe('58%');
+    expect(formatContextUsagePercent(0.123456789, 'en-US')).toBe('12%');
   });
   it('keeps capacities in thousands with language-aware decimals', () => {
     expect(formatContextCapacity(200_000, 'en-US')).toBe('200');

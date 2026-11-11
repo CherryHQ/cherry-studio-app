@@ -34,6 +34,6 @@ export function formatContextCapacity(capacity: number, language: string): strin
 
 export function formatContextUsagePercent(ratio: number, language: string): string {
   return new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(
-    Math.floor(ratio * 100) / 100,
+    ratio,
   );
 }
