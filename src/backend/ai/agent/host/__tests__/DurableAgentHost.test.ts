@@ -1697,7 +1697,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   );
 
   test('foreground recovery publishes a completion missed during suspension', async () => {
-    let interrupt!: (reason: Error) => Promise<void>;
+    let interrupt!: (reason: Error) => void | Promise<void>;
     const state = fixture({
       executionLease: (onInterrupt) => {
         interrupt = onInterrupt;

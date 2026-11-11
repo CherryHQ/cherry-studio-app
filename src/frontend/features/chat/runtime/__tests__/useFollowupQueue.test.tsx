@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -39,7 +40,10 @@ function Harness({
   sessionId?: string;
   busy?: boolean;
 }) {
-  controller = useFollowupQueue({ sessionId, client, isBusy: busy, isReady: true });
+  const queue = useFollowupQueue({ sessionId, client, isBusy: busy, isReady: true });
+  useEffect(() => {
+    controller = queue;
+  }, [queue]);
   return null;
 }
 

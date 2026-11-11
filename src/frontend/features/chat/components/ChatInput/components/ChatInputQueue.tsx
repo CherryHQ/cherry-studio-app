@@ -150,6 +150,7 @@ export function ChatInputQueue({ queue }: { queue: FollowupQueueController }) {
       <BottomSheet
         open={sorting && focused && queue.items.length > 0}
         onClose={() => setSorting(false)}
+        size="medium"
         title={t('chat.queue.reorder')}
         closeAction={{ accessibilityLabel: t('common.close') }}
       >
