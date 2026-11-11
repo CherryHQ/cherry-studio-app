@@ -4,7 +4,7 @@
   "agent.actions.delete": "Delete agent",
   "agent.actions.retry": "Retry",
   "agent.create.title": "New agent",
-  "agent.default.name": "Cherry Agent",
+  "agent.default.name": "Cherie",
   "agent.delete.message": "After deleting \"{{name}}\", its sessions stay readable but can no longer run.",
   "agent.delete.title": "Delete agent?",
   "agent.edit.title": "Edit agent",
