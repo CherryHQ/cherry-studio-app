@@ -285,7 +285,7 @@ function queueController(): FollowupQueueController {
     isPaused: false,
     pendingId: null,
     consumedCompletionId: null,
-    stoppedTurnId: null,
+    stoppedGroupId: null,
     hasFailedSend: false,
     canSend: true,
     send: mockQueueSend,

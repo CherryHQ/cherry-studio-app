@@ -299,6 +299,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       ],
       metadata: {
         userParts: reserved.userMessage.parts as never,
+        answerMessageIds: [reserved.assistantMessage.id],
         referencedFileEntryIds: [],
         hasHistoryBeforeActiveTurn: false,
         inferenceSnapshot,
@@ -1307,6 +1308,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ).rejects.toThrow('watch failed');
       expect(state.conversations.submit).not.toHaveBeenCalled();
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
+      expect(state.host.getSessionStatus(state.sessionId)?.status).toBe('interrupted');
     } finally {
       await state.host.close();
     }
@@ -1641,6 +1643,89 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test.each(['completed', 'failed'] as const)(
+    'a terminal-only %s regeneration replaces the previous admission group',
+    async (status) => {
+      const state = fixture();
+      const original = await state.reserve('running');
+      await state.host.initialize();
+      try {
+        state.emit({ ...original, status: 'completed' });
+        await state.host.quiesce();
+        const previousGroupId = state.host.getSessionStatus(state.sessionId)?.answerGroupId;
+        jest.spyOn(state.conversations, 'submit').mockImplementation(async (lane, input) => {
+          const turn: RuntimeDurableTurn = {
+            ...original,
+            identity: { ...lane, turnId: input.turnId, requestId: input.requestId },
+            userMessageId: input.userMessageId,
+            assistantMessageId: input.assistantMessageId,
+            createdAt: input.createdAt,
+            updatedAt: input.createdAt,
+            metadata: input.metadata,
+            status,
+          };
+          // The observer can coalesce the running frame and deliver only this terminal record.
+          state.emit(turn);
+          return turn;
+        });
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        await state.host.quiesce();
+        const current = state.host.getSessionStatus(state.sessionId);
+        expect(current?.answerGroupId).not.toBe(previousGroupId);
+        expect(current?.completion).toEqual({
+          id: current?.answerGroupId,
+          turnId: original.identity.turnId,
+          succeeded: status === 'completed',
+        });
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['failed', 'cancelled'] as const)(
+    'a successful new answer excludes a historical %s alternative from its completion',
+    async (previousStatus) => {
+      const state = fixture();
+      const original = await state.reserve(previousStatus);
+      await state.host.initialize();
+      try {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+          modelId: createUniqueModelId('provider', 'second-model'),
+        });
+        const answer = [...state.copies.values()]
+          .flatMap((copy) => copy.turns)
+          .find((turn) => turn.assistantMessageId !== original.assistantMessageId)!;
+        expect(answer.identity.turnId).toBe(original.identity.turnId);
+        expect(answer.metadata.answerMessageIds).toEqual([answer.assistantMessageId]);
+        state.emit({ ...answer, status: 'completed', answerBoundary: 'pi:2' });
+        await state.host.quiesce();
+        const current = state.host.getSessionStatus(state.sessionId);
+        expect(current?.completion).toEqual({
+          id: `${answer.identity.turnId}:${answer.assistantMessageId}`,
+          turnId: answer.identity.turnId,
+          succeeded: true,
+        });
+        expect(current?.answerGroupId).toBe(current?.completion?.id);
+        expect(
+          (await state.store.getMessage(state.sessionId, original.assistantMessageId))?.status,
+        ).toBe(previousStatus === 'failed' ? 'error' : 'cancelled');
+
+        // A delayed result from the old alternative cannot replace the new group's outcome.
+        state.emit(original);
+        await state.host.quiesce();
+        expect(state.host.getSessionStatus(state.sessionId)).toEqual(current);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
   test.each(['completed', 'cancelled'] as const)(
     'completion waits for every parallel answer and reports the whole outcome (%s)',
     async (lastStatus) => {
@@ -1696,7 +1781,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     },
   );
 
-  test('foreground recovery publishes a completion missed during suspension', async () => {
+  test('foreground recovery preserves the current group and excludes failed historical alternatives', async () => {
     let interrupt!: (reason: Error) => void | Promise<void>;
     const state = fixture({
       executionLease: (onInterrupt) => {
@@ -1705,15 +1790,24 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       },
     });
     state.conversations.watchWork = async () => ({ active: true, unsubscribe: async () => {} });
-    const turn = await state.reserve('running');
+    const original = await state.reserve('failed');
     await state.host.initialize();
     try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+        modelId: createUniqueModelId('provider', 'second-model'),
+      });
+      const turn = [...state.copies.values()]
+        .flatMap((copy) => copy.turns)
+        .find((candidate) => candidate.assistantMessageId !== original.assistantMessageId)!;
       await interrupt(new Error('Background window expired'));
-      state.copies.get(state.sessionId)!.turns = [
+      state.copies.get(laneKey(turn.identity))!.turns = [
         { ...turn, status: 'completed', answerBoundary: 'pi:2' },
       ];
       await state.host.resumeSuspended();
       expect(state.host.getSessionStatus(state.sessionId)?.completion).toMatchObject({
+        id: `${turn.identity.turnId}:${turn.assistantMessageId}`,
         turnId: turn.identity.turnId,
         succeeded: true,
       });

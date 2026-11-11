@@ -466,14 +466,15 @@ export class AgentSessionChatClient {
     if (messageId) {
       const message = entry.liveMessages.get(messageId);
       if (message) {
-        if (message.turnId) stopFollowupAdvance(sessionId, message.turnId);
+        if (message.turnId)
+          stopFollowupAdvance(sessionId, this.getSessionStatus(sessionId)?.answerGroupId);
         if (!message.turnId || isTerminalMessage(message)) return;
         await this.protocol.cancelTurn({ sessionId, turnId: message.turnId, messageId });
         return;
       }
       if (turn?.assistantMessageId !== messageId) return;
     }
-    if (turn) stopFollowupAdvance(sessionId, turn.id);
+    if (turn) stopFollowupAdvance(sessionId, this.getSessionStatus(sessionId)?.answerGroupId);
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
       await this.protocol.cancelTurn({
         sessionId,

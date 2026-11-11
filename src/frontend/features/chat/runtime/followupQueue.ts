@@ -24,7 +24,7 @@ export type FollowupQueueState = Readonly<{
   isPaused: boolean;
   pendingId: string | null;
   consumedCompletionId: string | null;
-  stoppedTurnId: string | null;
+  stoppedGroupId: string | null;
   hasFailedSend: boolean;
 }>;
 
@@ -33,7 +33,7 @@ const EMPTY_QUEUE: FollowupQueueState = Object.freeze({
   isPaused: false,
   pendingId: null,
   consumedCompletionId: null,
-  stoppedTurnId: null,
+  stoppedGroupId: null,
   hasFailedSend: false,
 });
 
@@ -67,9 +67,9 @@ export function setFollowupQueuePaused(sessionId: string, isPaused: boolean) {
   writeQueue(sessionId, { ...state, isPaused, hasFailedSend: false });
 }
 
-export function stopFollowupAdvance(sessionId: string, turnId: string) {
+export function stopFollowupAdvance(sessionId: string, groupId: string | undefined) {
   const state = readFollowupQueue(sessionId);
-  if (state.items.length) writeQueue(sessionId, { ...state, stoppedTurnId: turnId });
+  if (groupId && state.items.length) writeQueue(sessionId, { ...state, stoppedGroupId: groupId });
 }
 
 export function removeFollowup(sessionId: string, id: string): FollowupQueueItem | undefined {

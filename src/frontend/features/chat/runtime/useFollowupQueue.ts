@@ -33,6 +33,7 @@ export function useFollowupQueue({
   const focused = useIsFocused();
   const status = useAgentSessionStatus(sessionId ?? 'draft');
   const completion = status?.completion;
+  const answerGroupId = status?.answerGroupId;
   const queue = useSyncExternalStore(
     useCallback(
       (listener: () => void) =>
@@ -68,22 +69,27 @@ export function useFollowupQueue({
 
   useEffect(() => {
     if (!sessionId || !focused || !isReady || isBusy || AppState.currentState !== 'active') return;
-    if (queue.isPaused || queue.pendingId || !completion?.succeeded) return;
-    if (completion.id === queue.consumedCompletionId || completion.turnId === queue.stoppedTurnId)
+    if (
+      queue.isPaused ||
+      queue.pendingId ||
+      !completion?.succeeded ||
+      completion.id !== answerGroupId
+    )
+      return;
+    if (completion.id === queue.consumedCompletionId || completion.id === queue.stoppedGroupId)
       return;
     const head = queue.items[0];
     if (head) void send(head.id);
-  }, [sessionId, focused, isReady, isBusy, queue, completion, send]);
+  }, [sessionId, focused, isReady, isBusy, queue, completion, answerGroupId, send]);
 
   return {
     ...queue,
     canSend: focused && isReady && !isBusy && !queue.pendingId,
     enqueue: (item: FollowupQueueItem) => {
       const status = client.getSessionStatus(item.request.sessionId);
-      const active = client.getState(item.request.sessionId).activeTurn;
       enqueueFollowup(
         item,
-        status?.completion?.turnId === active?.id ? null : (status?.completion?.id ?? null),
+        status?.completion?.id === status?.answerGroupId ? null : (status?.completion?.id ?? null),
       );
     },
     send,

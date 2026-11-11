@@ -10,6 +10,7 @@ import { AgentProtocolError } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { AgentSessionChatClient, isAgentSessionBusy } from '../AgentSessionChatClient';
+import { clearFollowupQueue, enqueueFollowup, readFollowupQueue } from '../followupQueue';
 
 function deferred<TValue>() {
   let resolve!: (value: TValue) => void;
@@ -867,6 +868,54 @@ describe('AgentSessionChatClient', () => {
       }
     },
   );
+
+  test('stopping a live answer binds the queue stop to its admission group', async () => {
+    const activeTurn: AgentTurnView = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      status: 'running',
+      assistantMessageId: 'assistant-1',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: { ...snapshot(), activeTurn, streamingMessage: assistantMessage() },
+      unsubscribe() {},
+    }));
+    protocol.getSessionStatus.mockReturnValue({
+      turnId: 'turn-1',
+      status: 'running',
+      answerGroupId: 'turn-1:assistant-1',
+    });
+    clearFollowupQueue('session-1');
+    enqueueFollowup(
+      {
+        id: 'queued',
+        request: {
+          sessionId: 'session-1',
+          userMessageId: 'queued-user',
+          assistantMessageId: 'queued-answer',
+          parts: [{ type: 'text', text: 'Next' }],
+        },
+        draft: { text: 'Next', attachments: [], quote: {} },
+      },
+      null,
+    );
+    const client = new AgentSessionChatClient(protocol);
+    try {
+      await client.observe('session-1');
+      await client.cancelTurn('session-1', 'assistant-1');
+      expect(readFollowupQueue('session-1')).toMatchObject({
+        stoppedGroupId: 'turn-1:assistant-1',
+        isPaused: false,
+        items: [expect.objectContaining({ id: 'queued' })],
+      });
+    } finally {
+      client.dispose();
+      clearFollowupQueue('session-1');
+    }
+  });
 
   test('stops a submission the Host is still admitting and releases the composer', async () => {
     const protocol = protocolWithObservation(async () => ({

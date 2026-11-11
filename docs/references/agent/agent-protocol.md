@@ -673,11 +673,16 @@ client to reconcile observation. Withdrawal cleans up only its own reservation, 
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
 retains its existing semantics.
 
-The process-local `AgentSessionStatus.completion` retains the last fully persisted answer group's
-stable identity, turn ID and success flag. It is published only after every reserved assistant
-message is terminal; success requires every answer to succeed. Frontend queues consume that fact
-once, independently of read receipts, live row disposal and route observation. Draft queue state
-and consumed completion cursors are memory-only; accepted messages keep normal transcript storage.
+The process-local `AgentSessionStatus.answerGroupId` identifies the current admission's reserved
+answers. Regeneration and answering with another model create a new group even when they reuse the
+question's turn ID. `completion` retains the last fully persisted group's stable identity, turn ID
+and success flag. Its membership comes from the input's execution metadata, excluding historical
+alternatives; it is published only after every member is terminal, and every member must succeed.
+Released inputs without group metadata remain readable but do not authorize automatic sending.
+Frontend queues consume a completion once and only while its identity matches `answerGroupId`,
+independently of read receipts, live row disposal and route observation. Stop intent names the
+current group, so it cannot suppress a later regeneration. Draft queue state and consumed completion
+cursors are memory-only; accepted messages keep normal transcript storage.
 
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.

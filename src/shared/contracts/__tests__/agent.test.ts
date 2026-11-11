@@ -165,11 +165,15 @@ describe('Agent Session status contract', () => {
     const status = {
       turnId: 'next-turn',
       status: 'running',
+      answerGroupId: 'current-answer-group',
       completion: { id: 'completed-answer-group', turnId: 'previous-turn', succeeded: false },
     };
     const parsed = AgentSessionStatusSchema.parse(roundTrip(status));
     expect(parsed).toEqual(status);
     expect(Object.isFrozen(parsed.completion)).toBe(true);
+    expect(AgentSessionStatusSchema.safeParse({ ...status, answerGroupId: '' }).success).toBe(
+      false,
+    );
     expect(
       AgentSessionStatusSchema.safeParse({
         ...status,

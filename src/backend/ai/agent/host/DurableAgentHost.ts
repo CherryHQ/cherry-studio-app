@@ -80,6 +80,8 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTyp
 import { createImageRequestTool } from './agentImageGeneration';
 import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import {
+  durableAnswerGroup,
+  durableAnswerGroupId,
   durableRuntimeTiming,
   DurableTurnMetadataSchema,
   projectDurableHostTurn,
@@ -769,11 +771,15 @@ export class DurableAgentHost implements AgentProtocol {
     }
     const { turnId } = reserved;
     const assistants = [reserved.assistantMessage, ...reserved.additionalAssistantMessages];
+    const answerMessageIds = assistants.map((answer) => answer.id);
+    const answerGroupId = durableAnswerGroupId(turnId, answerMessageIds);
     // The reservation selected the new answer. Observers learn the branch before its rows arrive.
     const selected = await this.store.getSession(sessionId);
     if (selected) this.publish(sessionId, { type: 'session.updated', session: selected });
     // Cherry owns the identities before the engine can execute. Recovery reconciles each answer.
     try {
+      // A short native run may emit only its terminal record, so claim its group before admission.
+      this.setStatus(sessionId, { turnId, status: 'running', answerGroupId });
       for (const [index, target] of targets.entries()) {
         const { plan } = target;
         const assistant = assistants[index];
@@ -817,6 +823,7 @@ export class DurableAgentHost implements AgentProtocol {
             referencedFileEntryIds: [...plan.resources.inputFiles.keys()],
             hasHistoryBeforeActiveTurn: plan.hasMessages,
             parentMessageId: reserved.userMessage.parentId ?? null,
+            answerMessageIds,
             ...(targets.length > 1 ? { readOnlyTools: true } : {}),
           },
         });
@@ -825,6 +832,14 @@ export class DurableAgentHost implements AgentProtocol {
     } catch (error) {
       // Admission can fail after its native commit. Re-read before marking a reservation interrupted.
       await this.reconcileUnsettled(sessionId);
+      const current = this.getSessionStatus(sessionId);
+      if (
+        current?.answerGroupId === answerGroupId &&
+        current.status === 'running' &&
+        current.completion?.id !== answerGroupId &&
+        !this.liveStates(sessionId).some((state) => state.active)
+      )
+        this.setStatus(sessionId, { ...current, status: 'interrupted' });
       throw error;
     }
     if (!primary.plan.hasMessages && !renameFork)
@@ -1915,24 +1930,27 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async publishCompletion(turn: RuntimeDurableTurn) {
     const { sessionId, turnId } = turn.identity;
-    if (turn.inputBoundary === null || this.getSessionStatus(sessionId)?.turnId !== turnId) return;
+    const group = durableAnswerGroup(turn);
+    if (
+      turn.inputBoundary === null ||
+      !group ||
+      this.getSessionStatus(sessionId)?.answerGroupId !== group.id
+    )
+      return;
     const answers = (await this.store.listTurnMessages(sessionId, turnId)).filter(
-      (message) => message.role === 'assistant',
+      (message) => message.role === 'assistant' && group.messageIds.includes(message.id),
     );
     const current = this.getSessionStatus(sessionId);
     if (
-      current?.turnId !== turnId ||
-      !answers.length ||
+      current?.answerGroupId !== group.id ||
+      answers.length !== group.messageIds.length ||
       answers.some((answer) => ['pending', 'streaming'].includes(answer.status))
     )
       return;
     this.setStatus(sessionId, {
       ...current,
       completion: Object.freeze({
-        id: `${turnId}:${answers
-          .map((answer) => answer.id)
-          .sort()
-          .join(':')}`,
+        id: group.id,
         turnId,
         succeeded: answers.every((answer) => answer.status === 'success'),
       }),
@@ -2066,6 +2084,8 @@ export class DurableAgentHost implements AgentProtocol {
     const view = projectDurableHostTurn(turn);
     const projected = state ? this.turnStatus(view.turn, state) : view.turn;
     const terminal = turn.status !== 'running';
+    const groupId = durableAnswerGroup(turn)?.id;
+    const currentGroupId = this.getSessionStatus(sessionId)?.answerGroupId;
     // Another answer of the same Session still runs: it keeps the Session busy.
     const sibling = terminal
       ? this.liveStates(sessionId).find((candidate) => candidate !== state && candidate.active)
@@ -2074,10 +2094,10 @@ export class DurableAgentHost implements AgentProtocol {
     // Cherry settlement can finish after Pi has already started the next queued input.
     else if (
       !terminal ||
-      !state?.active ||
-      state.active.identity.requestId === turn.identity.requestId
+      ((!currentGroupId || currentGroupId === groupId) &&
+        (!state?.active || state.active.identity.requestId === turn.identity.requestId))
     )
-      this.publishTurn(sessionId, state, projected, !terminal);
+      this.publishTurn(sessionId, state, projected, groupId, !terminal);
     if (!terminal) {
       if (state?.background && state.backgroundRequestId !== turn.identity.requestId) {
         state.background.retire();
@@ -2254,6 +2274,7 @@ export class DurableAgentHost implements AgentProtocol {
       sessionId,
       state,
       this.turnStatus(projectDurableHostTurn(state.active).turn, state),
+      durableAnswerGroup(state.active)?.id,
     );
   }
   /**
@@ -2265,6 +2286,7 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     state: LiveSession | undefined,
     turn: AgentTurnView,
+    answerGroupId: string | undefined,
     changedOnly = false,
   ) {
     const previous = state?.turn;
@@ -2277,7 +2299,7 @@ export class DurableAgentHost implements AgentProtocol {
       return;
     if (state) state.turn = turn.endedAt === null ? turn : null;
     this.publish(sessionId, { type: 'turn.updated', turn });
-    this.setStatus(sessionId, { turnId: turn.id, status: turn.status });
+    this.setStatus(sessionId, { turnId: turn.id, status: turn.status, answerGroupId });
   }
 
   private async waitForOwner(lane: RuntimeLane, requestId: string, signal: AbortSignal) {
@@ -2315,6 +2337,7 @@ export class DurableAgentHost implements AgentProtocol {
     if (
       previous?.turnId === status?.turnId &&
       previous?.status === status?.status &&
+      previous?.answerGroupId === status?.answerGroupId &&
       previous?.completion?.id === status?.completion?.id &&
       previous?.completion?.succeeded === status?.completion?.succeeded
     )

@@ -20,6 +20,7 @@ export function useAgentSessionStatus(sessionId: string) {
 
   return {
     status: snapshot?.status,
+    answerGroupId: snapshot?.answerGroupId,
     completion: snapshot?.completion,
     isUnread: completedTurnId !== null && completedTurnId !== lastSeenTurnId,
     markSeen,

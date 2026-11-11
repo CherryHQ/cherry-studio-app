@@ -50,14 +50,14 @@ test('stopping an answer leaves both queue membership and pause choice intact', 
   expect(readFollowupQueue('queue-test')).toMatchObject({
     items,
     isPaused: false,
-    stoppedTurnId: 'A',
+    stoppedGroupId: 'A',
   });
   setFollowupQueuePaused('queue-test', true);
   stopFollowupAdvance('queue-test', 'D');
   expect(readFollowupQueue('queue-test')).toMatchObject({
     items,
     isPaused: true,
-    stoppedTurnId: 'D',
+    stoppedGroupId: 'D',
   });
 });
 

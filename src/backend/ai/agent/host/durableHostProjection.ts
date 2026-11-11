@@ -6,6 +6,7 @@ import {
   AgentUserPartsSchema,
   AgentMessageViewSchema,
   AgentTurnViewSchema,
+  MAX_PARALLEL_ANSWERS,
   readAgentInferenceSnapshot,
   type AgentMessageView,
   type AgentTurnView,
@@ -28,7 +29,28 @@ export const DurableTurnMetadataSchema = z.object({
   readOnlyTools: z.boolean().optional(),
   /** The question's parent in the message tree, so live rows can be placed on a branch. */
   parentMessageId: z.string().nullable().optional(),
+  /** Answers reserved by this admission, excluding earlier alternatives to the same question. */
+  answerMessageIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(MAX_PARALLEL_ANSWERS)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .optional(),
 });
+
+/** Released inputs without group metadata remain readable, but cannot prove group completion. */
+export function durableAnswerGroup(turn: RuntimeDurableTurn) {
+  const messageIds = DurableTurnMetadataSchema.parse(turn.metadata).answerMessageIds;
+  if (!messageIds) return;
+  return {
+    id: durableAnswerGroupId(turn.identity.turnId, messageIds),
+    messageIds,
+  };
+}
+
+export function durableAnswerGroupId(turnId: string, messageIds: readonly string[]) {
+  return `${turnId}:${messageIds.toSorted().join(':')}`;
+}
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */
 export function durableRuntimeTiming(turn: RuntimeDurableTurn): MessageRuntimeTiming | undefined {

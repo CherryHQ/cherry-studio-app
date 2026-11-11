@@ -149,9 +149,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   it has no transcript reservation or native submission until dispatched. Route and Session
   switches retain the queue, while process exit clears it. No SQLite or MMKV queue data is written.
 - A fully persisted successful answer group advances one FIFO item. Completion identities prevent
-  duplicate dispatch after refresh or remount; every model must finish successfully. Stop, failure,
+  duplicate dispatch after refresh or remount; every model in the current admission must finish
+  successfully. Historical answer alternatives do not participate, and a retained completion from
+  a previous admission cannot advance a regenerating question's queue. Stop, failure,
   interruption and pending admission do not advance it. Stop leaves both queued drafts and their
-  independent pause choice intact. A later successful send can advance an unpaused queue.
+  independent pause choice intact. A later successful send or regeneration can advance an unpaused
+  queue; stopping an earlier group does not suppress the new group.
 - Queue controls offer pause/resume, direct sending while idle, preview, local take-back/edit,
   removal and ordering. Existing draft replacement requires confirmation. Pending admission locks
   its item; acceptance removes it, whereas failure keeps it and pauses automatic sending.

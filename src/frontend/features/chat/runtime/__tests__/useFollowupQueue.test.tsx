@@ -14,6 +14,7 @@ import {
 import { useFollowupQueue } from '../useFollowupQueue';
 
 let mockCompletion: AgentSessionStatus['completion'];
+let mockAnswerGroupId: string | undefined;
 let mockFocused = true;
 let mockActiveTurnId: string | null = null;
 const mockSubmit = jest.fn();
@@ -23,13 +24,13 @@ const client = {
     queuedInputs: [],
     liveMessages: [],
   }),
-  getSessionStatus: () => ({ completion: mockCompletion }),
+  getSessionStatus: () => ({ answerGroupId: mockAnswerGroupId, completion: mockCompletion }),
   submitMessage: mockSubmit,
 } as unknown as AgentSessionChatClient;
 
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/frontend/hooks/agent/useAgentSessionStatus', () => ({
-  useAgentSessionStatus: () => ({ completion: mockCompletion }),
+  useAgentSessionStatus: () => ({ answerGroupId: mockAnswerGroupId, completion: mockCompletion }),
 }));
 
 let controller: ReturnType<typeof useFollowupQueue>;
@@ -68,6 +69,7 @@ beforeEach(() => {
   clearFollowupQueue('hook-queue');
   clearFollowupQueue('hook-other');
   mockCompletion = undefined;
+  mockAnswerGroupId = undefined;
   mockFocused = true;
   mockActiveTurnId = null;
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
@@ -79,6 +81,7 @@ test('a success sends one FIFO draft, and remounting cannot consume that complet
   enqueue('B');
   enqueue('C');
   mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
+  mockAnswerGroupId = 'A-done';
   await act(async () => {
     tree = create(<Harness />);
   });
@@ -90,6 +93,7 @@ test('a success sends one FIFO draft, and remounting cannot consume that complet
   });
   expect(mockSubmit).toHaveBeenCalledTimes(1);
   mockCompletion = { id: 'B-done', turnId: 'B', succeeded: true };
+  mockAnswerGroupId = 'B-done';
   await act(async () => tree.update(<Harness />));
   expect(mockSubmit.mock.calls.map(([request]) => request.parts[0].text)).toEqual(['B', 'C']);
 });
@@ -98,8 +102,9 @@ test.each([false, true])(
   'a stopped or unsuccessful turn cannot advance the queue (success: %s)',
   async (succeeded) => {
     enqueue('B');
-    stopFollowupAdvance('hook-queue', 'A');
+    stopFollowupAdvance('hook-queue', 'A-done');
     mockCompletion = { id: 'A-done', turnId: 'A', succeeded };
+    mockAnswerGroupId = 'A-done';
     await act(async () => {
       tree = create(<Harness />);
     });
@@ -116,6 +121,7 @@ test.each([false, true])(
 test('busy and unfocused views retain drafts until the observed successful completion is eligible', async () => {
   enqueue('B');
   mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
+  mockAnswerGroupId = 'A-done';
   await act(async () => {
     tree = create(<Harness busy />);
   });
@@ -132,6 +138,7 @@ test('failed admission retains the item and resume retries without a new complet
   enqueue('B');
   mockSubmit.mockRejectedValueOnce(new Error('not admitted'));
   mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
+  mockAnswerGroupId = 'A-done';
   await act(async () => {
     tree = create(<Harness />);
   });
@@ -144,6 +151,7 @@ test('failed admission retains the item and resume retries without a new complet
 
 test('an earlier success cannot drain a draft queued behind a different running turn', async () => {
   mockCompletion = { id: 'previous-done', turnId: 'previous', succeeded: true };
+  mockAnswerGroupId = 'A-failed';
   mockActiveTurnId = 'A';
   act(() => {
     tree = create(<Harness busy />);
@@ -167,8 +175,73 @@ test('an earlier success cannot drain a draft queued behind a different running 
   await act(async () => tree.update(<Harness />));
   expect(mockSubmit).not.toHaveBeenCalled();
   mockCompletion = { id: 'D-done', turnId: 'D', succeeded: true };
+  mockAnswerGroupId = 'D-done';
   await act(async () => tree.update(<Harness />));
   expect(mockSubmit).toHaveBeenCalledTimes(1);
+});
+
+test.each([false, true])(
+  'a sibling regeneration cannot reuse the previous success before its own completion (%s)',
+  async (succeeded) => {
+    mockCompletion = { id: 'original-done', turnId: 'shared-turn', succeeded: true };
+    mockAnswerGroupId = 'regeneration-done';
+    mockActiveTurnId = 'shared-turn';
+    act(() => {
+      tree = create(<Harness busy />);
+    });
+    act(() =>
+      controller.enqueue({
+        id: 'B',
+        request: {
+          sessionId: 'hook-queue',
+          userMessageId: 'B-user',
+          assistantMessageId: 'B-answer',
+          parts: [{ type: 'text', text: 'B' }],
+        },
+        draft: { text: 'B', attachments: [], quote: {} },
+      }),
+    );
+    expect(controller.consumedCompletionId).toBe('original-done');
+
+    // Terminal chat events may arrive before the Host publishes this group's outcome.
+    mockActiveTurnId = null;
+    await act(async () => tree.update(<Harness />));
+    expect(mockSubmit).not.toHaveBeenCalled();
+    expect(controller.items.map((item) => item.id)).toEqual(['B']);
+
+    mockCompletion = { id: 'regeneration-done', turnId: 'shared-turn', succeeded };
+    await act(async () => tree.update(<Harness />));
+    expect(mockSubmit).toHaveBeenCalledTimes(succeeded ? 1 : 0);
+    expect(controller.items.map((item) => item.id)).toEqual(succeeded ? [] : ['B']);
+  },
+);
+
+test('stopping one group does not suppress a later successful regeneration of the same question', async () => {
+  enqueue('B');
+  stopFollowupAdvance('hook-queue', 'original-done');
+  mockCompletion = { id: 'original-done', turnId: 'shared-turn', succeeded: true };
+  mockAnswerGroupId = 'original-done';
+  await act(async () => {
+    tree = create(<Harness />);
+  });
+  expect(mockSubmit).not.toHaveBeenCalled();
+  expect(controller.isPaused).toBe(false);
+
+  mockAnswerGroupId = 'regeneration-done';
+  mockCompletion = { id: 'regeneration-done', turnId: 'shared-turn', succeeded: true };
+  await act(async () => tree.update(<Harness />));
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+  expect(controller.items).toEqual([]);
+});
+
+test('an unknown current answer group cannot authorize automatic sending', async () => {
+  enqueue('B');
+  mockCompletion = { id: 'previous-done', turnId: 'previous', succeeded: true };
+  await act(async () => {
+    tree = create(<Harness />);
+  });
+  expect(mockSubmit).not.toHaveBeenCalled();
+  expect(controller.items.map((item) => item.id)).toEqual(['B']);
 });
 
 test('cancelling pending admission keeps the draft and pause choice without immediately resending', async () => {
@@ -177,6 +250,7 @@ test('cancelling pending admission keeps the draft and pause choice without imme
     new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: true }),
   );
   mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
+  mockAnswerGroupId = 'A-done';
   await act(async () => {
     tree = create(<Harness />);
   });
@@ -186,6 +260,7 @@ test('cancelling pending admission keeps the draft and pause choice without imme
   await act(async () => tree.update(<Harness />));
   expect(mockSubmit).toHaveBeenCalledTimes(1);
   mockCompletion = { id: 'D-done', turnId: 'D', succeeded: true };
+  mockAnswerGroupId = 'D-done';
   await act(async () => tree.update(<Harness />));
   expect(mockSubmit).toHaveBeenCalledTimes(2);
   expect(controller.items).toEqual([]);
@@ -193,6 +268,7 @@ test('cancelling pending admission keeps the draft and pause choice without imme
 
 test('a fresh completion preceding the terminal chat snapshot is not discarded at enqueue', async () => {
   mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
+  mockAnswerGroupId = 'A-done';
   mockActiveTurnId = 'A';
   act(() => {
     tree = create(<Harness busy />);

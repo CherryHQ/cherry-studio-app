@@ -247,6 +247,8 @@ export const AgentSessionStatusSchema = z
   .strictObject({
     turnId: AgentTurnViewSchema.shape.id,
     status: AgentTurnViewSchema.shape.status,
+    /** Current admission's identity; regenerations can share a turn but never an answer group. */
+    answerGroupId: z.string().min(1).optional(),
     /** One fully persisted answer group; independent of the selected live answer. */
     completion: z
       .strictObject({

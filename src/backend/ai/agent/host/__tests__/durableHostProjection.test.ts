@@ -1,5 +1,9 @@
 import type { RuntimeDurableTurn } from '../../runtime';
-import { DurableTurnMetadataSchema, projectDurableHostTurn } from '../durableHostProjection';
+import {
+  durableAnswerGroup,
+  DurableTurnMetadataSchema,
+  projectDurableHostTurn,
+} from '../durableHostProjection';
 
 function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
   return {
@@ -34,6 +38,35 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
     ...overrides,
   };
 }
+
+describe('durable answer groups', () => {
+  test('answer group identity survives serialization and sibling order without including old alternatives', () => {
+    const first = turn({});
+    const metadata = JSON.parse(
+      JSON.stringify({ ...first.metadata, answerMessageIds: ['second', 'first'] }),
+    );
+    expect(durableAnswerGroup({ ...first, metadata })).toEqual({
+      id: 'turn:first:second',
+      messageIds: ['second', 'first'],
+    });
+    expect(
+      durableAnswerGroup({
+        ...first,
+        metadata: { ...metadata, answerMessageIds: ['first', 'second'] },
+      })?.id,
+    ).toBe('turn:first:second');
+    for (const answerMessageIds of [[], ['first', 'first'], ['']])
+      expect(DurableTurnMetadataSchema.safeParse({ ...metadata, answerMessageIds }).success).toBe(
+        false,
+      );
+  });
+
+  test('released metadata remains readable without guessing an automatic-send completion group', () => {
+    const previous = turn({});
+    expect(projectDurableHostTurn(previous).assistant?.status).toBe('success');
+    expect(durableAnswerGroup(previous)).toBeUndefined();
+  });
+});
 
 describe('durable message timing', () => {
   test('pre-workspace metadata remains unbound instead of inheriting a later Session binding', () => {
