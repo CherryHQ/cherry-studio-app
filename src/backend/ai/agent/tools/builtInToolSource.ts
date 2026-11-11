@@ -68,7 +68,7 @@ import {
   type PaintingToolDependencies,
   resolveConfiguredPaintingModel,
 } from './painting';
-import { createReadFileTool } from './readFileTool';
+import { createReadFileContentReader, createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
@@ -274,6 +274,7 @@ function createCatalog(
   transcriptionReady: boolean,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
+  const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
     ...createAgentManagementTools(deps.agents, agentId),
@@ -293,6 +294,7 @@ function createCatalog(
       documentParserMode,
       fileAccess,
       acceptsImages,
+      readContent,
     ),
     createWriteFileTool(fileContent, fileAccess),
     ...(transcriptionReady && deps.voice
@@ -304,6 +306,7 @@ function createCatalog(
       documentParserMode,
       workspaceName,
       acceptsImages,
+      readContent,
     ),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     // Office jobs read and write their files natively, which older clients cannot do.
