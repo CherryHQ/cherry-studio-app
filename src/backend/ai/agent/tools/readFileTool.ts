@@ -116,6 +116,22 @@ const MODEL_FACING_READ_ERRORS: Partial<Record<FileAttachmentIssue['code'], stri
   'image-ocr-unsupported': `On-device OCR does not support the current app language. ${NEEDS_VISION}`,
 };
 
+/** Each deferred reader must describe its media rules without loading another tool. */
+export function buildFileReadInstructions(
+  documentParserMode: DocumentParserMode,
+  acceptsImages: boolean,
+): string {
+  return `This turn uses the ${documentParserMode} document parser. ${
+    documentParserMode === 'anydoc'
+      ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
+      : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
+  } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. Use either start_line/limit or offset/max_characters; never combine the two groups. sourceTruncated means the extractor reached its own limit. ${
+    acceptsImages
+      ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use this tool directly, outside Code Mode, to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
+      : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
+  }`;
+}
+
 export function createReadFileTool(
   files: ReadFileFiles,
   scope: TurnFileScope,
@@ -166,15 +182,8 @@ export function createReadFileTool(
     ref: { source: 'builtin', capabilityId: READ_FILE_TOOL_NAME },
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
-    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. This turn uses the ${documentParserMode} document parser. ${
-      documentParserMode === 'anydoc'
-        ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
-        : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. Use either start_line/limit or offset/max_characters; never combine the two groups. sourceTruncated means the extractor reached its own limit. ${
-      acceptsImages
-        ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
-        : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
-    }`,
+    deferred: true,
+    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. ${buildFileReadInstructions(documentParserMode, acceptsImages)}`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
