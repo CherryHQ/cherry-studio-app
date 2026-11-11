@@ -90,21 +90,7 @@ index 9ef1da0d2b59fd84ee03aae503c308cf73f6d641..181ff0060b96eba2467ba5bc470b36bd
          const env = this.api.env;
          let directory;
          return async (name, data) => {
-diff --git a/dist/harness/generation.js b/dist/harness/generation.js
-index ac42dfe741b20726ab8eb3d8139b1296d664210d..ccd11e8c1edb8523d8c250f62be6f811fc5e4856 100644
---- a/dist/harness/generation.js
-+++ b/dist/harness/generation.js
-@@ -793,7 +793,7 @@ async function endAnsweredCutOff(runtime, task, answer, context) {
- function takesContinuation(continuation, boundary) {
-     const items = boundary.inbox.items;
-     return (continuation !== undefined &&
--        !items.some((item) => item.mode === "steer" || item.mode === "followUp") &&
-+        !items.some((item) => !item.held && (item.mode === "steer" || item.mode === "followUp")) &&
-         !hasQueuedReset(items));
- }
- /**
 diff --git a/dist/harness/harness.js b/dist/harness/harness.js
-index e286f00f872ebec79367a594938040c6a37a879f..bc5e3de0ecb3d0e60da8ef9fde8345a5e253bd8f 100644
 --- a/dist/harness/harness.js
 +++ b/dist/harness/harness.js
 @@ -70,7 +70,7 @@ class ConversationImpl {
@@ -125,33 +111,7 @@ index e286f00f872ebec79367a594938040c6a37a879f..bc5e3de0ecb3d0e60da8ef9fde8345a5
          },
          waitForIdle: bound((callContext) => tasks.waitForIdle(id, callContext)),
      };
-diff --git a/dist/harness/inbox.d.ts b/dist/harness/inbox.d.ts
-index 1197339369188857a1ad62b528cea65e3833f27e..370f1177aef0e6e5041f50eb2ddd49b599b07adb 100644
---- a/dist/harness/inbox.d.ts
-+++ b/dist/harness/inbox.d.ts
-@@ -5,6 +5,7 @@ import type { InputEntry, QueueMode, Settings, UserInput } from "./types.ts";
- export type InboxItem = {
-     id: SubmissionId;
-     mode: "steer" | "followUp";
-+    held?: boolean;
-     content: JsonRepresentation<UserInput>;
-     entry?: JsonRepresentation<InputEntry>;
- }
-diff --git a/dist/harness/inbox.js b/dist/harness/inbox.js
-index 5ff8c1703808c5ffd703164e6c339150e1f1e131..cf69cb8ae850be024b92515de1c91fad11b8a7be 100644
---- a/dist/harness/inbox.js
-+++ b/dist/harness/inbox.js
-@@ -38,7 +38,7 @@ export async function applyBoundary(tx, boundary, at, now) {
-     const reset = hasQueuedReset(items);
-     const final = at === "final" || reset;
-     const pick = (mode, queueMode) => {
--        const indexes = items.flatMap((item, index) => (item.mode === mode ? [index] : []));
-+        const indexes = items.flatMap((item, index) => (item.mode === mode && !item.held ? [index] : []));
-         return queueMode === "all" ? indexes : indexes.slice(0, 1);
-     };
-     const writes = items.flatMap((item, index) => (item.mode === "write" ? [index] : []));
 diff --git a/dist/harness/scheduler.d.ts b/dist/harness/scheduler.d.ts
-index f6189edb71ac0557060b623625fc4be4bec5e904..26de03b21b9aba67b72d630aa67a5d8b5cf528c8 100644
 --- a/dist/harness/scheduler.d.ts
 +++ b/dist/harness/scheduler.d.ts
 @@ -4,7 +4,7 @@ import type { ExecutionEnv } from "../env/index.ts";
@@ -168,24 +128,22 @@ index f6189edb71ac0557060b623625fc4be4bec5e904..26de03b21b9aba67b72d630aa67a5d8b
       * crosses background boundaries, and the wait also covers every task it reached.
       */
 -    abortConversation(conversationId: ConversationId, background: boolean, context: Context): Promise<void>;
-+    abortConversation(conversationId: ConversationId, background: boolean, context: Context, options?: { keepQueuedInputs?: boolean; expectedInput?: SubmissionId }): Promise<void>;
++    abortConversation(conversationId: ConversationId, background: boolean, context: Context, options?: { expectedInput?: SubmissionId }): Promise<void>;
      /**
       * The ownership memberships a commit's task and conversation changes write (group commit §4.2), at its admission on
       * the line: for each task created or made terminal, every node from its parent up to and including the nearest live
 diff --git a/dist/harness/scheduler.js b/dist/harness/scheduler.js
-index 365ea3ab42dd4406ab11a03d6702b238dfd0776b..c7a7022ee37b31c92ed41a8543f5036c73c905f3 100644
 --- a/dist/harness/scheduler.js
 +++ b/dist/harness/scheduler.js
-@@ -6,6 +6,8 @@ import { errorMessage, ReadOnlySession } from "../errors.js";
+@@ -6,6 +6,7 @@ import { errorMessage, ReadOnlySession } from "../errors.js";
  import { ALL_KEYS, conversationKey, INTENT_KEY, ownedKey, ROOTS_KEY, taskKey } from "../session/keys.js";
  import { agentHooks, DEFAULT_RESTART_LIMIT } from "./agent.js";
  import { advanceRange, rangeEntry, readContextFrom } from "./context.js";
-+import { InboxDoc } from "./inbox.js";
 +import { LiveDoc } from "./live.js";
  import { DURABLE_TELEMETRY_SCHEMA } from "./telemetry.js";
  import { closedError, conversationEntries, optionalExtension, scanAll, Waiters } from "./util.js";
  const SCAN_PAGE_SIZE = 256;
-@@ -446,10 +448,18 @@ export class TaskScheduler {
+@@ -446,10 +447,17 @@ export class TaskScheduler {
       * ordinary traversal from the conversation reaches; resolves once the scope is idle. With `background`, traversal
       * crosses background boundaries, and the wait also covers every task it reached.
       */
@@ -201,22 +159,15 @@ index 365ea3ab42dd4406ab11a03d6702b238dfd0776b..c7a7022ee37b31c92ed41a8543f5036c
 +                    record.status !== "placed" || !live.run?.inputs.includes(record.id))
 +                    return undefined;
 +            }
-+            const inbox = options?.keepQueuedInputs ? await tx.doc(InboxDoc, conversationId) : undefined;
              const scope = { conversation: conversationId };
              const reached = [];
              const walk = this.#walkDown(conversationNode(conversationId), { crossBackground: background });
-@@ -461,11 +471,16 @@ export class TaskScheduler {
+@@ -461,11 +469,12 @@ export class TaskScheduler {
                      tx.setTask(withAbortMark(live));
              }
              for (const id of queued) {
--                if (this.#inScope({ conversation: id }, scope, background) === true)
--                    await this.#withdrawInputs(tx, id);
-+                if (this.#inScope({ conversation: id }, scope, background) === true) {
-+                    if (id === conversationId && inbox) {
-+                        for (const item of inbox.items)
-+                            if (item.mode !== "write") item.held = true;
-+                    } else await this.#withdrawInputs(tx, id);
-+                }
+                 if (this.#inScope({ conversation: id }, scope, background) === true)
+                     await this.#withdrawInputs(tx, id);
              }
              return reached;
          }, context);
@@ -225,15 +176,12 @@ index 365ea3ab42dd4406ab11a03d6702b238dfd0776b..c7a7022ee37b31c92ed41a8543f5036c
              for (const id of reached)
                  await this.waitForTask(id, context);
 diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
-index eb64e474162b158a43563e6c68d8ffea8c18b74a..f346fa1445d717f81b2dc3d526569cb812c16ae5 100644
 --- a/dist/harness/types.d.ts
 +++ b/dist/harness/types.d.ts
-@@ -98,6 +98,10 @@ export type ConversationAbortOptions = {
+@@ -98,6 +98,8 @@ export type ConversationAbortOptions = {
       * conversation is ordinarily idle. Background work created afterwards is neither marked nor awaited.
       */
      readonly background?: boolean;
-+    /** Hold queued user inputs of the target root until explicitly withdrawn; child inputs are still withdrawn. Held inputs are excluded from all boundaries. */
-+    readonly keepQueuedInputs?: boolean;
 +    /** Abort only if this input is placed in the target conversation's current live run. */
 +    readonly expectedInput?: SubmissionId;
  };

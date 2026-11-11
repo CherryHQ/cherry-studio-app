@@ -144,11 +144,19 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
-  row shows the original text/attachment summary and can withdraw that one waiting input. The
-  queue comes from the Session observation snapshot and `queue.updated` events, so route changes
-  and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
-  Queue removal never falls back to stopping an active turn when placement wins the race.
-  Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
-  deletes their unexecuted message pair without invalidating the current model context. Steering
-  remains outside this composer.
+- Ordinary sends during generation enter a frontend memory queue above the composer. Each item
+  captures the complete editable draft, attachment/quote references and selected send parameters;
+  it has no transcript reservation or native submission until dispatched. Route and Session
+  switches retain the queue, while process exit clears it. No SQLite or MMKV queue data is written.
+- A fully persisted successful answer group advances one FIFO item. Completion identities prevent
+  duplicate dispatch after refresh or remount; every model must finish successfully. Stop, failure,
+  interruption and pending admission do not advance it. Stop leaves both queued drafts and their
+  independent pause choice intact. A later successful send can advance an unpaused queue.
+- Queue controls offer pause/resume, direct sending while idle, preview, local take-back/edit,
+  removal and ordering. Existing draft replacement requires confirmation. Pending admission locks
+  its item; acceptance removes it, whereas failure keeps it and pauses automatic sending.
+  Stopping preparation keeps that draft and consumes its automatic-send trigger without pausing.
+- Only the focused foreground chat dispatches queued drafts. Returning refreshes authoritative
+  execution state before processing a retained completion. Branch selection pauses a waiting queue.
+  The Host rejects ordinary submissions while busy rather than creating a native follow-up;
+  stable submission identities make a repeated admission return the original message pair.

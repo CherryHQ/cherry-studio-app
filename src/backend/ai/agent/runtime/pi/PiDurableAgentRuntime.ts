@@ -519,7 +519,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       : assembled.prompt;
     const submission = await runtime.submit(
       key,
-      { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'followUp' },
+      { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'reject' },
       piSubmissionMetadata(input, tools),
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );

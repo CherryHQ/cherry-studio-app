@@ -553,8 +553,32 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
-  submitMessage(input: AgentSubmitMessageInput) {
-    return this.submitNative(AgentSubmitMessageInputSchema.parse(input));
+  async submitMessage(input: AgentSubmitMessageInput) {
+    const parsed = AgentSubmitMessageInputSchema.parse(input);
+    const accepted = await this.acceptedSubmission(parsed);
+    if (accepted) return accepted;
+    try {
+      return await this.submitNative(parsed);
+    } catch (error) {
+      // A late preparation error must not leave an admitted input in the draft queue.
+      const admitted = await this.acceptedSubmission(parsed);
+      if (admitted) return admitted;
+      throw error;
+    }
+  }
+
+  private async acceptedSubmission(input: AgentSubmitMessageInput) {
+    const answer = await this.store.getMessage(input.sessionId, input.assistantMessageId);
+    if (!answer) return;
+    const question = await this.store.getMessage(input.sessionId, input.userMessageId);
+    if (
+      answer.role !== 'assistant' ||
+      !answer.turnId ||
+      question?.role !== 'user' ||
+      question.turnId !== answer.turnId
+    )
+      fail('CAPABILITY_UNSUPPORTED', 'The submission identities belong to another request.');
+    return { turnId: answer.turnId, userMessageId: question.id, assistantMessageId: answer.id };
   }
 
   private submitNative(parsed: AgentSubmitMessageInput) {
@@ -572,16 +596,9 @@ export class DurableAgentHost implements AgentProtocol {
       const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);
       const busy = this.busyLanes(parsed.sessionId);
-      if (busy.length && answers.length > 1)
-        fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
+      if (busy.length)
+        fail('SESSION_BUSY', 'Wait for the current answers before submitting another message.');
       const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
-      // Only a follow-up to the busy lane's newest answer can wait in its queue.
-      const [first] = choices;
-      if (
-        busy.length &&
-        (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
-      )
-        fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
       const scope = { through: parent, readOnlyTools: answers.length > 1 };
       const targets = await eachAnswer(
         answers,
@@ -1735,6 +1752,7 @@ export class DurableAgentHost implements AgentProtocol {
           await this.persistTurn(turn, signal);
           signal?.throwIfAborted();
           if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
+          await this.publishCompletion(turn);
         }
         continue;
       }
@@ -1874,6 +1892,7 @@ export class DurableAgentHost implements AgentProtocol {
       .then(async () => {
         await this.persistTurn(turn);
         this.presentSettled(turn);
+        await this.publishCompletion(turn);
       })
       .catch((error: unknown) => {
         logger.warn(
@@ -1891,6 +1910,32 @@ export class DurableAgentHost implements AgentProtocol {
     void operation.finally(() => {
       this.pendingWrites.delete(operation);
       if (this.settlements.get(sessionId) === operation) this.settlements.delete(sessionId);
+    });
+  }
+
+  private async publishCompletion(turn: RuntimeDurableTurn) {
+    const { sessionId, turnId } = turn.identity;
+    if (turn.inputBoundary === null || this.getSessionStatus(sessionId)?.turnId !== turnId) return;
+    const answers = (await this.store.listTurnMessages(sessionId, turnId)).filter(
+      (message) => message.role === 'assistant',
+    );
+    const current = this.getSessionStatus(sessionId);
+    if (
+      current?.turnId !== turnId ||
+      !answers.length ||
+      answers.some((answer) => ['pending', 'streaming'].includes(answer.status))
+    )
+      return;
+    this.setStatus(sessionId, {
+      ...current,
+      completion: Object.freeze({
+        id: `${turnId}:${answers
+          .map((answer) => answer.id)
+          .sort()
+          .join(':')}`,
+        turnId,
+        succeeded: answers.every((answer) => answer.status === 'success'),
+      }),
     });
   }
 
@@ -2265,7 +2310,15 @@ export class DurableAgentHost implements AgentProtocol {
   }
   private setStatus(sessionId: string, status: AgentSessionStatus | null) {
     const previous = this.statuses.get(sessionId);
-    if (previous?.turnId === status?.turnId && previous?.status === status?.status) return;
+    if (status && !status.completion && previous?.completion)
+      status = { ...status, completion: previous.completion };
+    if (
+      previous?.turnId === status?.turnId &&
+      previous?.status === status?.status &&
+      previous?.completion?.id === status?.completion?.id &&
+      previous?.completion?.succeeded === status?.completion?.succeeded
+    )
+      return;
     // Terminal outcomes are recorded by persistence, independently of the current UI status.
     if (
       status &&

@@ -183,8 +183,11 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       steps.push('usage');
     },
     stopTurn: jest.fn(async (lane, requestId) => {
-      for (const turn of copies.get(laneKey(lane))?.turns ?? [])
-        if (turn.identity.requestId === requestId) emit({ ...turn, status: 'cancelled' });
+      const turns = copies.get(laneKey(lane))?.turns ?? [];
+      if (!turns.some((turn) => turn.identity.requestId === requestId && turn.status === 'running'))
+        return;
+      for (const turn of turns)
+        if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });
     }),
     abort: jest.fn(async (lane) => {
       for (const turn of copies.get(laneKey(lane))?.turns ?? [])
@@ -705,86 +708,6 @@ describe('durable tool diagnostics', () => {
     }
   });
 
-  test.each([false, true])(
-    'stopping active answer preserves queued reservations (messageId: %s)',
-    async (withMessageId) => {
-      const f = fixture();
-      const active = await f.reserve('running');
-      const queued: RuntimeDurableTurn[] = [];
-      for (const text of ['B', 'C']) {
-        const reserved = await f.store.reserveSubmission({
-          sessionId: f.sessionId,
-          userMessageId: uuid(),
-          assistantMessageId: uuid(),
-          userParts: [{ id: text, type: 'text', text, state: 'done' }],
-          modelId: inferenceSnapshot.model.uniqueModelId,
-          inferenceSnapshot,
-        });
-        queued.push({
-          ...active,
-          identity: { ...active.identity, turnId: reserved.turnId, requestId: reserved.turnId },
-          userMessageId: reserved.userMessage.id,
-          assistantMessageId: reserved.assistantMessage.id,
-          inputBoundary: null,
-          answerBoundary: null,
-          status: 'queued',
-          parts: [],
-          metadata: { ...active.metadata, userParts: reserved.userMessage.parts as never },
-        });
-      }
-      f.copies.get(f.sessionId)!.turns = [active, ...queued];
-      const events: AgentEvent[] = [];
-      const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
-      await f.host.initialize();
-      try {
-        const initial = await f.host.observeSession(f.sessionId, () => {});
-        const before = initial.snapshot.queuedInputs;
-        initial.unsubscribe();
-        expect(before.map((item) => item.userMessage.parts)).toEqual(
-          queued.map((turn) => turn.metadata.userParts),
-        );
-        await f.host.cancelTurn({
-          sessionId: f.sessionId,
-          turnId: active.identity.turnId,
-          ...(withMessageId ? { messageId: active.assistantMessageId } : {}),
-        });
-        const refreshed = await f.host.observeSession(f.sessionId, () => {});
-        expect(refreshed.snapshot.queuedInputs).toEqual(before);
-        refreshed.unsubscribe();
-        expect(await f.store.getMessage(f.sessionId, active.assistantMessageId)).toMatchObject({
-          status: 'cancelled',
-          parts: expect.arrayContaining([expect.objectContaining({ text: 'Answer' })]),
-        });
-        for (const turn of queued) {
-          expect(await f.store.getMessage(f.sessionId, turn.userMessageId)).not.toBeNull();
-          expect(await f.store.getMessage(f.sessionId, turn.assistantMessageId)).toMatchObject({
-            status: 'pending',
-          });
-        }
-        expect(
-          f.copies
-            .get(f.sessionId)!
-            .turns.filter((turn) => turn.status === 'queued')
-            .map((turn) => turn.identity.turnId),
-        ).toEqual(queued.map((turn) => turn.identity.turnId));
-        expect(events).toContainEqual({ type: 'queue.updated', inputs: before });
-        expect(
-          events
-            .filter((event) => event.type === 'queue.updated')
-            .every(
-              (event) =>
-                event.type === 'queue.updated' &&
-                JSON.stringify(event.inputs) === JSON.stringify(before),
-            ),
-        ).toBe(true);
-        expect(events.filter((event) => event.type === 'turn.deleted')).toEqual([]);
-      } finally {
-        observation.unsubscribe();
-        await f.host.close();
-      }
-    },
-  );
-
   test('a withdrawn input hands the questions queued below it to its own parent', async () => {
     const f = fixture();
     const running = await f.reserve('running');
@@ -880,66 +803,49 @@ describe('durable tool diagnostics', () => {
     }
   });
 
-  test('withdrawing an input leaves a concurrent reservation pending until native admission', async () => {
+  test('a busy native conversation rejects ordinary input without reserving message rows', async () => {
     const f = fixture();
     const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
     f.copies.get(f.sessionId)!.turns = [queued];
-    jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
-      ...configuration,
-      instructions: buildAgentSystemPrompt({
-        agentInstructions: '',
-        appLanguage: 'zh-CN',
-        tools: [],
-      }),
-    });
     await f.host.initialize();
-    let reachedAdmission!: () => void;
-    const admissionStarted = new Promise<void>((resolve) => {
-      reachedAdmission = resolve;
-    });
-    let resumeAdmission!: () => void;
-    const admissionReleased = new Promise<void>((resolve) => {
-      resumeAdmission = resolve;
-    });
-    const submit = jest.mocked(f.conversations.submit).getMockImplementation()!;
-    jest.spyOn(f.conversations, 'submit').mockImplementation(async (sessionId, input) => {
-      reachedAdmission();
-      await admissionReleased;
-      return submit(sessionId, input);
-    });
-    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
-      f.emit({ ...queued, status: 'cancelled' });
-      return 'aborted';
-    });
-    const assistantMessageId = uuid();
-    const submitting = f.host.submitMessage({
-      sessionId: f.sessionId,
-      userMessageId: uuid(),
-      assistantMessageId,
-      parts: [{ type: 'text', text: 'A concurrent follow-up' }],
-    });
     try {
-      await admissionStarted;
+      const before = await f.store.listMessages(f.sessionId);
       await expect(
-        f.host.cancelQueuedInput({
+        f.host.submitMessage({
           sessionId: f.sessionId,
-          turnId: queued.identity.turnId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Wait in the application queue' }],
         }),
-      ).resolves.toBe('withdrawn');
-      const rows = await f.store.listMessages(f.sessionId);
-      expect(rows).toHaveLength(2);
-      expect(rows.find((row) => row.id === assistantMessageId)).toMatchObject({
-        status: 'pending',
-        parts: [],
-      });
-      expect(f.conversations.abort).not.toHaveBeenCalled();
+      ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(await f.store.listMessages(f.sessionId)).toEqual(before);
+      expect(f.conversations.submit).not.toHaveBeenCalled();
     } finally {
-      resumeAdmission();
-      try {
-        await submitting;
-      } finally {
-        await f.host.close();
-      }
+      await f.host.close();
+    }
+  });
+
+  test('retrying an accepted submission returns its existing identity without another native input', async () => {
+    const f = fixture();
+    const turn = await f.reserve('completed');
+    await f.host.initialize();
+    try {
+      await expect(
+        f.host.submitMessage({
+          sessionId: f.sessionId,
+          userMessageId: turn.userMessageId,
+          assistantMessageId: turn.assistantMessageId,
+          parts: [{ type: 'text', text: 'Original question' }],
+        }),
+      ).resolves.toEqual({
+        turnId: turn.identity.turnId,
+        userMessageId: turn.userMessageId,
+        assistantMessageId: turn.assistantMessageId,
+      });
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+      expect(await f.store.listMessages(f.sessionId)).toHaveLength(2);
+    } finally {
+      await f.host.close();
     }
   });
 
@@ -1552,7 +1458,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       });
       release();
       await state.host.close();
-      expect(state.host.getSessionStatus(state.sessionId)).toEqual({
+      expect(state.host.getSessionStatus(state.sessionId)).toMatchObject({
         turnId: reserved.turnId,
         status: 'running',
       });
@@ -1730,6 +1636,87 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(
         answer!.assistantMessageId,
       );
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(['completed', 'cancelled'] as const)(
+    'completion waits for every parallel answer and reports the whole outcome (%s)',
+    async (lastStatus) => {
+      const state = fixture();
+      await state.host.initialize();
+      let unsubscribe = () => {};
+      try {
+        await state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          additionalReplies: [
+            {
+              modelId: createUniqueModelId('provider', 'second-model'),
+              assistantMessageId: uuid(),
+            },
+          ],
+          parts: [{ type: 'text', text: 'Compare' }],
+        });
+        const turns = [...state.copies.values()].flatMap((copy) => copy.turns);
+        expect(turns).toHaveLength(2);
+        let firstFinalized!: () => void;
+        const firstWritten = new Promise<void>((resolve) => {
+          firstFinalized = resolve;
+        });
+        const observation = await state.host.observeSession(state.sessionId, (event) => {
+          if (
+            event.type === 'message.finalized' &&
+            event.message.id === turns[0]!.assistantMessageId
+          )
+            firstFinalized();
+        });
+        unsubscribe = observation.unsubscribe;
+        state.emit({ ...turns[0]!, status: 'completed', answerBoundary: 'pi:2' });
+        await firstWritten;
+        expect(state.host.getSessionStatus(state.sessionId)?.completion).toBeUndefined();
+        state.emit({ ...turns[1]!, status: lastStatus, answerBoundary: 'pi:2' });
+        await state.host.quiesce();
+        const completion = state.host.getSessionStatus(state.sessionId)?.completion;
+        expect(completion).toMatchObject({
+          turnId: turns[0]!.identity.turnId,
+          succeeded: lastStatus === 'completed',
+        });
+        state.emit({ ...turns[0]!, status: 'completed', answerBoundary: 'pi:2' });
+        await state.host.quiesce();
+        expect(state.host.getSessionStatus(state.sessionId)?.completion).toEqual(completion);
+      } finally {
+        unsubscribe();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('foreground recovery publishes a completion missed during suspension', async () => {
+    let interrupt!: (reason: Error) => Promise<void>;
+    const state = fixture({
+      executionLease: (onInterrupt) => {
+        interrupt = onInterrupt;
+        return { release() {} };
+      },
+    });
+    state.conversations.watchWork = async () => ({ active: true, unsubscribe: async () => {} });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      await interrupt(new Error('Background window expired'));
+      state.copies.get(state.sessionId)!.turns = [
+        { ...turn, status: 'completed', answerBoundary: 'pi:2' },
+      ];
+      await state.host.resumeSuspended();
+      expect(state.host.getSessionStatus(state.sessionId)?.completion).toMatchObject({
+        turnId: turn.identity.turnId,
+        succeeded: true,
+      });
     } finally {
       await state.host.close();
     }
@@ -2626,7 +2613,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         assistantMessageId: uuid(),
         parts: [{ type: 'text', text: 'Continue after rebuilding' }],
       });
-      expect(state.host.getSessionStatus(state.sessionId)).toEqual({
+      expect(state.host.getSessionStatus(state.sessionId)).toMatchObject({
         turnId: submitted.turnId,
         status: 'running',
       });
@@ -2994,7 +2981,7 @@ describe('quoted requests through durable execution', () => {
       }
     },
   );
-  test('new and queued admission preserve original metadata and reject foreign sources before reservation', async () => {
+  test('successive admissions preserve original metadata and reject foreign sources before reservation', async () => {
     const state = fixture();
     const source = await state.reserve('completed');
     const configure = jest.spyOn(state.conversations, 'configure');
@@ -3016,6 +3003,9 @@ describe('quoted requests through durable execution', () => {
           assistantMessageId: uuid(),
           parts: [{ type: 'text', text: `Follow-up ${index}`, ...quoted }],
         });
+        const turn = state.copies.get(state.sessionId)!.turns.at(-1)!;
+        state.emit({ ...turn, status: 'completed', answerBoundary: `pi:${index + 2}` });
+        await state.host.quiesce();
       }
       const requests = jest.mocked(state.conversations.submit).mock.calls.map((call) => call[1]);
       expect(requests).toHaveLength(2);

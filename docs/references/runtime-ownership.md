@@ -103,7 +103,9 @@ The service registry creates one `MobileAgentHost` per `ApplicationHost` generat
 exposes its `AgentProtocol` interface through `Backend.agent`. The Host is app-owned, not
 route-owned. It owns admission, per-input execution capabilities, normalized Agent events, approvals, terminal
 projection into Cherry history, and process-start reconciliation. Pi owns the durable model/tool loop
-and queued submissions; the Host reconstructs capabilities before scheduling resumes.
+and already-admitted native inputs; the Host reconstructs capabilities before scheduling resumes.
+Ordinary waiting chat drafts belong to `features/chat/runtime/followupQueue` in the frontend memory
+cache. They survive route changes, not process restart, and enter the Host only when dispatched.
 
 The app-shell `ConversationProvider` owns the local catalog and retained remote sources shared by
 the sidebar and Agent picker. Local chat observation belongs to the feature `ChatProvider`, which

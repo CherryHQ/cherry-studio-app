@@ -149,7 +149,7 @@ describe('Pi durable execution integration', () => {
     },
   );
 
-  test('stopping a streamed partial holds B and C through withdrawal and resend', async () => {
+  test('stopping preserves partial output and withdraws native queued inputs', async () => {
     const requests: TranscriptContext[] = [];
     let signal: AbortSignal | undefined;
     let started!: () => void;
@@ -263,9 +263,8 @@ describe('Pi durable execution integration', () => {
       expect(JSON.stringify((await runtime.history('stop', 256)).entries)).toContain(
         'Partial answer',
       );
-      expect((await runtime.inputRecord('stop', 'B'))?.status).toBe('queued');
-      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('queued');
-      expect(await runtime.withdrawInput('stop', 'B')).toBe('aborted');
+      expect((await runtime.inputRecord('stop', 'B'))?.status).toBe('unanswered');
+      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('unanswered');
       const resent = await runtime.submit(
         'stop',
         { type: 'input', requestId: 'B-new', content: 'B' },
@@ -278,7 +277,7 @@ describe('Pi durable execution integration', () => {
           .filter((message) => message.role === 'user')
           .map((message) => message.content),
       ).toEqual(['A', 'B']);
-      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('queued');
+      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('unanswered');
       await watch.stop();
     } finally {
       await runtime.close();

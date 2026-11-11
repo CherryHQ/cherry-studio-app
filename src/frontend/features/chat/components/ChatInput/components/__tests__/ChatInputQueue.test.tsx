@@ -12,12 +12,17 @@ import type { ComposerAttachmentReady } from '@/frontend/components/Composer/uti
 import type { AgentQueuedInput, QuoteFields } from '@/shared/contracts/agent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
+import { followupDraftFromInput } from '../../../../runtime/followupQueue';
+import type { FollowupQueueController } from '../../../../runtime/useFollowupQueue';
 import { ChatInputComposer, ChatInputSurface } from '../../ChatInputSurface';
 import { toAgentInputParts } from '../../utils/agentInputParts';
 import { ChatInputQueue } from '../ChatInputQueue';
 
 const mockToast = jest.fn();
-const mockCancel = jest.fn();
+const mockRemove = jest.fn();
+const mockQueueSend = jest.fn(async () => true);
+const mockPauseQueue = jest.fn();
+const mockReorder = jest.fn();
 const mockSubmit = jest.fn();
 const mockStop = jest.fn();
 const mockOpenFile = jest.fn();
@@ -53,10 +58,6 @@ let mockQuoteFields: QuoteFields = {};
 jest.mock('../../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => ({ restoreQuote: mockRestoreQuote }),
   useChatQuoteState: () => ({ fields: mockQuoteFields, isBusy: false }),
-}));
-jest.mock('../../../../runtime', () => ({
-  useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
-  useAgentQueuedInputs: () => mockInputs,
 }));
 jest.mock('@/frontend/components/Composer', () => {
   const React = jest.requireActual<typeof import('react')>('react');
@@ -127,8 +128,17 @@ jest.mock('@cherrystudio/ui/components', () => {
       EditorSecondary: host('EditorSecondary'),
     }),
     FilePreview: host('FilePreview'),
-    BottomSheet: ({ children, footer, ...props }: { children?: ReactNode; footer?: ReactNode }) =>
-      React.createElement('Sheet', props, children, footer),
+    ReorderList: host('ReorderList'),
+    BottomSheet: ({
+      children,
+      footer,
+      open,
+      ...props
+    }: {
+      children?: ReactNode;
+      footer?: ReactNode;
+      open?: boolean;
+    }) => (open ? React.createElement('Sheet', props, children, footer) : null),
     useToast: () => ({ toast: { show: mockToast } }),
     useComposerExpansion: () => null,
   };
@@ -237,7 +247,7 @@ function Harness({
   return (
     <ComposerTestProvider initialDraft={initialDraft} initialAttachments={initialAttachments}>
       <Probe />
-      <ChatInputQueue sessionId="session-1" />
+      <ChatInputQueue queue={queueController()} />
       <ChatInputComposer
         streaming
         onStop={mockStop}
@@ -259,6 +269,35 @@ function Harness({
       </ChatInputComposer>
     </ComposerTestProvider>
   );
+}
+function queueController(): FollowupQueueController {
+  const items = mockInputs.map((input) => {
+    const request = {
+      sessionId: 'session-1',
+      userMessageId: input.userMessage.id,
+      assistantMessageId: input.assistantMessageId,
+      parts: input.userMessage.parts as never,
+    };
+    return { id: input.turnId, request, draft: followupDraftFromInput(request) };
+  });
+  return {
+    items,
+    isPaused: false,
+    pendingId: null,
+    consumedCompletionId: null,
+    stoppedTurnId: null,
+    hasFailedSend: false,
+    canSend: true,
+    send: mockQueueSend,
+    enqueue: jest.fn(),
+    setPaused: mockPauseQueue,
+    reorder: mockReorder,
+    remove: (id) => {
+      const item = items.find((entry) => entry.id === id);
+      mockRemove(id);
+      return item;
+    },
+  };
 }
 function render(initialDraft = '', initialAttachments: ComposerAttachmentReady[] = []) {
   act(() => {
@@ -297,7 +336,7 @@ beforeEach(() => {
   mockQuoteFields = {};
   mockEnterToSend = true;
   mockInputs = [input(), input('turn-2')];
-  mockCancel.mockImplementation(async (_sessionId: string, turnId: string) => {
+  mockRemove.mockImplementation((turnId: string) => {
     mockInputs = mockInputs.filter((queued) => queued.turnId !== turnId);
     return 'withdrawn';
   });
@@ -323,7 +362,7 @@ it('opens all full text without changing count, positions or queue, and closing 
   act(() => tree.root.findByType('Sheet' as never).props.onClose());
   expect(queueCount()).toBe('2');
   expect(JSON.stringify(mockInputs)).toBe(before);
-  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockRemove).not.toHaveBeenCalled();
   expect(mockSubmit).not.toHaveBeenCalled();
 });
 
@@ -336,7 +375,7 @@ it('opens a supported attachment through the existing FileEntryPreview path with
   );
   expect(mockOpenFile).toHaveBeenCalledWith(mockFile);
   expect(JSON.stringify(mockInputs)).toBe(before);
-  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockRemove).not.toHaveBeenCalled();
   expect(mockSubmit).not.toHaveBeenCalled();
 });
 
@@ -346,7 +385,7 @@ it.each(['chat-input-queue-remove-turn-1', 'queue-detail-remove'])(
     render();
     if (testID === 'queue-detail-remove') open();
     await press(testID);
-    expect(mockCancel).toHaveBeenCalledWith('session-1', 'turn-1');
+    expect(mockRemove).toHaveBeenCalledWith('turn-1');
     expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-2']);
     refresh();
     expect(queueCount()).toBe('1');
@@ -355,31 +394,13 @@ it.each(['chat-input-queue-remove-turn-1', 'queue-detail-remove'])(
   },
 );
 
-it('restores text and ready attachment references only after confirmed withdrawal', async () => {
+it('takes an unsent draft back locally with its complete text and ready attachment references', async () => {
   render();
   open();
-  let finish!: (value: string) => void;
-  mockCancel.mockReturnValue(
-    new Promise((resolve) => {
-      finish = resolve;
-    }),
-  );
   await press('queue-take-back');
-  expect(composer.draft).toBe('');
-  expect(composer.attachments).toEqual([]);
-  await act(async () => {
-    mockInputs = mockInputs.slice(1);
-    finish('withdrawn');
-  });
-  expect(mockCancel).toHaveBeenCalledTimes(1);
   expect(composer.draft).toBe(restoredText);
   expect(composer.attachments).toEqual([
-    expect.objectContaining({
-      id: 'file-1',
-      fileEntryId: mockFile.entry.id,
-      status: 'ready',
-      kind: 'image',
-    }),
+    expect.objectContaining({ fileEntryId: mockFile.entry.id, status: 'ready', kind: 'image' }),
   ]);
   expect(mockInputs.map((queued) => queued.turnId)).toEqual(['turn-2']);
   expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
@@ -408,7 +429,7 @@ it.each(['text', 'attachments', 'both'])(
         else alert().props.actions[choice].onPress();
       });
       expect(JSON.stringify({ composer, inputs: mockInputs })).toBe(before);
-      expect(mockCancel).not.toHaveBeenCalled();
+      expect(mockRemove).not.toHaveBeenCalled();
     }
   },
 );
@@ -417,70 +438,13 @@ it('resolves replacement before withdrawing and replaces both text and attachmen
   render('existing', [existingAttachment]);
   open();
   await press('queue-take-back');
-  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockRemove).not.toHaveBeenCalled();
   await act(async () => alert().props.actions[0].onPress());
-  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(mockRemove).toHaveBeenCalledTimes(1);
   expect(composer.draft).toBe(restoredText);
-  expect(composer.attachments.map((attachment) => attachment.id)).toEqual(['file-1']);
-});
-
-it.each([
-  ['already-started', 'This message has already started.'],
-  ['not-found', 'This message is no longer in the queue.'],
-])(
-  'preserves the composer for %s and explains the result without success',
-  async (result, label) => {
-    render('existing', [existingAttachment]);
-    open();
-    const before = JSON.stringify(composer);
-    mockCancel.mockResolvedValue(result);
-    await press('queue-take-back');
-    await act(async () => alert().props.actions[0].onPress());
-    expect(JSON.stringify(composer)).toBe(before);
-    expect(mockToast).toHaveBeenCalledWith({ label });
-    expect(mockToast.mock.calls.some(([feedback]) => feedback.variant === 'success')).toBe(false);
-    expect(mockStop).not.toHaveBeenCalled();
-  },
-);
-
-it('preserves the composer and explains a rejected withdrawal', async () => {
-  render('existing', [existingAttachment]);
-  open();
-  const before = JSON.stringify(composer);
-  mockCancel.mockRejectedValue(new Error('private diagnostic'));
-  await press('queue-take-back');
-  await act(async () => alert().props.actions[0].onPress());
-  expect(JSON.stringify(composer)).toBe(before);
-  expect(mockToast).toHaveBeenCalledWith({
-    label: "Couldn't take back the queued message. Your draft is unchanged.",
-    variant: 'danger',
-  });
-});
-
-it('allows one in-flight cancellation for repeated take-back and Remove taps', async () => {
-  render();
-  open();
-  let finish!: (value: string) => void;
-  mockCancel.mockReturnValue(
-    new Promise((resolve) => {
-      finish = resolve;
-    }),
-  );
-  const takeBack = tree.root.findByProps({ testID: 'queue-take-back' }).props.onPress;
-  const remove = tree.root.findByProps({ testID: 'chat-input-queue-remove-turn-1' }).props.onPress;
-  act(() => {
-    takeBack();
-    takeBack();
-    remove();
-  });
-  expect(mockCancel).toHaveBeenCalledTimes(1);
-  expect(tree.root.findByProps({ testID: 'queue-take-back' }).props.disabled).toBe(true);
-  await act(async () => finish('withdrawn'));
-  act(() => {
-    takeBack();
-    remove();
-  });
-  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(composer.attachments.map((attachment) => attachment.fileEntryId)).toEqual([
+    mockFile.entry.id,
+  ]);
 });
 
 it('resends through the normal composer send path and appends after waiting messages', async () => {
@@ -583,34 +547,7 @@ it('closes the detail sheet when the existing preview opens beside chat', () => 
   );
   expect(tree.root.findAllByType('Sheet' as never)).toHaveLength(0);
   expect(JSON.stringify(mockInputs)).toBe(before);
-  expect(mockCancel).not.toHaveBeenCalled();
-});
-
-it('preserves newer composer content during withdrawal and can restore later without another cancel', async () => {
-  render();
-  open();
-  let finish!: (value: string) => void;
-  mockCancel.mockReturnValue(
-    new Promise((resolve) => {
-      finish = resolve;
-    }),
-  );
-  await press('queue-take-back');
-  act(() => actions.setDraft('Newer draft'));
-  await act(async () => {
-    mockInputs = mockInputs.slice(1);
-    finish('withdrawn');
-  });
-  expect(composer.draft).toBe('Newer draft');
-  expect(mockToast).toHaveBeenCalledWith({
-    label: expect.stringContaining('your draft changed'),
-    variant: 'danger',
-  });
-  await press('queue-take-back');
-  expect(alert().props.isOpen).toBe(true);
-  await act(async () => alert().props.actions[0].onPress());
-  expect(composer.draft).toBe(restoredText);
-  expect(mockCancel).toHaveBeenCalledTimes(1);
+  expect(mockRemove).not.toHaveBeenCalled();
 });
 
 it('numbers rows in sending order and joins attachments and the quote in one quiet line', () => {
@@ -693,6 +630,20 @@ it('asks before replacing a quote the composer already holds', async () => {
   await press('queue-take-back');
   expect(alert().props.isOpen).toBe(true);
   act(() => alert().props.onOpenChange(false));
-  expect(mockCancel).not.toHaveBeenCalled();
+  expect(mockRemove).not.toHaveBeenCalled();
   expect(mockRestoreQuote).not.toHaveBeenCalled();
+});
+
+it('offers direct sending, independent queue pause and ordering without editing the draft', async () => {
+  render('Keep this draft');
+  await press('queue-send-turn-1');
+  expect(mockQueueSend).toHaveBeenCalledWith('turn-1');
+  await press('queue-toggle-pause');
+  expect(mockPauseQueue).toHaveBeenCalledWith(true);
+  await press('queue-reorder');
+  const list = tree.root.findByType('ReorderList' as never);
+  const reversed = list.props.items.toReversed();
+  act(() => list.props.onReorder(reversed));
+  expect(mockReorder).toHaveBeenCalledWith(reversed);
+  expect(composer.draft).toBe('Keep this draft');
 });

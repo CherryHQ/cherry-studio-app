@@ -10,6 +10,7 @@ import {
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
 } from '../ChatProvider';
+import { clearFollowupQueue } from '../followupQueue';
 import { localImageResult } from '../localImageResult';
 
 const mockCancelTurn = jest.fn(async () => undefined);
@@ -43,8 +44,13 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  useIsFocused: () => true,
   usePathname: () => '/',
   useRouter: () => ({ replace: mockReplace, setParams: mockSetParams }),
+}));
+
+jest.mock('@/frontend/hooks/agent/useAgentSessionStatus', () => ({
+  useAgentSessionStatus: () => ({}),
 }));
 
 jest.mock('@/frontend/data', () => ({
@@ -78,6 +84,7 @@ jest.mock('../AgentSessionChatClient', () => ({
     startSession: mockStartSession,
     submitMessage: mockSubmitMessage,
     getState: () => mockChatState,
+    getSessionStatus: () => null,
     subscribe: mockSubscribe,
     toolInputPreviews: {},
   })),
@@ -124,6 +131,7 @@ describe('ChatProvider Draft handoff', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    clearFollowupQueue('session-1');
     jest.clearAllMocks();
     chatControls = undefined;
     draftHandoff = undefined;
@@ -172,6 +180,34 @@ describe('ChatProvider Draft handoff', () => {
       for (const listener of mockChatListeners) listener();
     });
     expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+  });
+
+  it('queues an editable draft without reserving a native input while retaining stop', async () => {
+    mockChatState.activeTurn = {
+      id: 'active-turn',
+      sessionId: 'session-1',
+      assistantMessageId: 'active-answer',
+      status: 'running',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    const draft = { text: 'Raw inline [reference](skill://example)', attachments: [], quote: {} };
+    await act(async () =>
+      currentControls().sendMessage({ parts: [{ type: 'text', text: 'Prepared input' }], draft }),
+    );
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().followupQueue.items).toHaveLength(1);
+    expect(currentControls().followupQueue.items[0]).toMatchObject({
+      draft,
+      request: { parts: [{ type: 'text', text: 'Prepared input' }] },
+    });
+    expect(currentControls().isBusy).toBe(true);
     expect(currentControls().canSend).toBeUndefined();
   });
 
@@ -261,13 +297,13 @@ describe('ChatProvider Draft handoff', () => {
       renderer!.update(<Harness sessionId="session-1" />);
     });
     expect(currentControls().isBusy).toBe(false);
-    expect(currentControls().canSend).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
     // The most recent turn event may describe A completing while B still runs.
     mockChatState.activeTurn = { ...mockChatState.activeTurn!, status: 'completed' };
     act(() => {
       renderer!.update(<Harness sessionId="session-1" />);
     });
-    expect(currentControls().canSend).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
     mockCancelTurn.mockClear();
     await act(async () => {
       await cancel();
@@ -419,35 +455,6 @@ describe('ChatProvider Draft handoff', () => {
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
-
-  it('leaves a follow-up behind a running answer to the queue instead of the transcript', async () => {
-    const admission = deferred<void>();
-    mockSubmitMessage.mockImplementation(() => admission.promise);
-    mockChatState.activeTurn = {
-      id: 'active-turn',
-      sessionId: 'session-1',
-      assistantMessageId: 'active-answer',
-      status: 'running',
-      startedAt: '2026-08-25T00:00:00.000Z',
-      endedAt: null,
-      error: null,
-    };
-    act(() => {
-      renderer = create(<Harness sessionId="session-1" />);
-    });
-    let sending!: Promise<void>;
-    act(() => {
-      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
-    });
-    expect(currentControls().pendingSend).toBeUndefined();
-    expect(currentControls().isBusy).toBe(true);
-    expect(currentControls().canSend).toBe(false);
-    await act(async () => {
-      admission.resolve();
-      await sending;
-    });
-    expect(currentControls().pendingSend).toBeUndefined();
-  });
 
   it.each(['before', 'after'] as const)(
     'retires a queued placeholder when the queue arrives %s admission, including after withdrawal',

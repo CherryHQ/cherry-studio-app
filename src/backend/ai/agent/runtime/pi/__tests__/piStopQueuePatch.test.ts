@@ -12,7 +12,7 @@ import {
   UserEntry,
 } from '@earendil-works/pi-durable';
 
-test('registered pi-durable patch delivers the held-input contract', () => {
+test('registered pi-durable patch delivers the current-request stop guard', () => {
   const workspace = readFileSync('pnpm-workspace.yaml', 'utf8');
   const patchPath = 'patches/@earendil-works__pi-durable@1.5.0.patch';
   const patch = readFileSync(patchPath, 'utf8');
@@ -21,12 +21,12 @@ test('registered pi-durable patch delivers the held-input contract', () => {
   );
   expect(workspace).toContain(patchPath);
   expect(installed.version).toBe('1.5.0');
-  expect(patch).toContain('keepQueuedInputs');
+  expect(patch).not.toContain('keepQueuedInputs');
   expect(patch).toContain('expectedInput');
-  expect(patch).toContain('item.held');
+  expect(patch).not.toContain('item.held');
 });
 
-test('real Harness keeps queued input when aborting the live input', async () => {
+test('real Harness withdraws native queued input when aborting the live input', async () => {
   const h = await Harness.open(
     new MemoryStorage(),
     {
@@ -67,9 +67,9 @@ test('real Harness keeps queued input when aborting the live input', async () =>
       inbox.items.push({ id: b.id, mode: 'followUp', content: 'B' });
       return { a: a.id, b: b.id };
     }, context);
-    await c.abort(context, { background: true, keepQueuedInputs: true, expectedInput: a });
+    await c.abort(context, { background: true, expectedInput: a });
     const record = await (await h.submission(b, context))!.status(context);
-    expect(record.status).toBe('queued');
+    expect(record.status).toBe('unanswered');
     expect(record.entry).toBeUndefined();
   } finally {
     await h.close(context);
@@ -136,7 +136,6 @@ test.each(['settled', 'other conversation', 'outside live run'] as const)(
       }, context);
       await c.abort(context, {
         background: true,
-        keepQueuedInputs: true,
         expectedInput: ids.invalid,
       });
       expect(await (await h.submission(ids.waiting, context))!.status(context)).toMatchObject({

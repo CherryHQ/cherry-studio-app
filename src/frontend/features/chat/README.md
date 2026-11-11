@@ -60,7 +60,11 @@ message list keeps its geometry and selection does not subscribe into the chat r
   handoff while Session detail loads.
 
 `useAgentChatControls` runs once in the content leaf, keyed by the existing composer identity.
-Its send action allocates Session/message IDs and synchronously displays the text, files, and
+While execution is busy, its send action captures an unsent draft in `followupQueue` through the
+frontend cache's memory tier. `useFollowupQueue` coordinates one dispatch per successful answer
+group; pause, edit, removal and ordering belong to this feature, not Pi's inbox. Cached drafts
+outlive route mounts but not the app process. Queue presence alone does not make execution busy.
+For an actual submission, the send action allocates Session/message IDs and displays the text, files, and
 assistant waiting row before awaiting preparation. The same IDs pass through the normal send
 function into persistence and events. `ChatWorkspace` merges the pending rows with formal messages
 by ID and releases the pending send once both rows are available. The list uses the preallocated

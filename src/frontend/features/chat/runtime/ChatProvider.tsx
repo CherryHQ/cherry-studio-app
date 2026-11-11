@@ -21,7 +21,6 @@ import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
   type AgentMessageView,
   AgentProtocolError,
-  type AgentQueuedInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -34,10 +33,13 @@ import { latestAgentImageResult, latestConversationImageResult } from './agentIm
 import { createPendingChatMessages } from './agentMessageProjection';
 import {
   AgentSessionChatClient,
+  isAgentSessionBusy,
   isAgentSessionExecuting,
   type AgentSessionChatState,
 } from './AgentSessionChatClient';
+import { type FollowupDraft, followupDraftFromInput } from './followupQueue';
 import { localImageResult } from './localImageResult';
+import { useFollowupQueue } from './useFollowupQueue';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
@@ -273,8 +275,14 @@ export function useAgentChatControls(input: {
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
-  const isSessionExecuting = useAgentSessionSelection(client, sessionId, isAgentSessionExecuting);
+  const isSessionBusy = useAgentSessionSelection(client, sessionId, isAgentSessionBusy);
   const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
+  const followupQueue = useFollowupQueue({
+    sessionId,
+    client,
+    isBusy: isSessionBusy,
+    isReady: observationStatus === 'ready',
+  });
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
@@ -335,6 +343,7 @@ export function useAgentChatControls(input: {
   const send = useCallback(
     async ({
       additionalModelIds,
+      draft,
       ...message
     }: Omit<
       AgentSubmitMessageInput,
@@ -342,6 +351,7 @@ export function useAgentChatControls(input: {
     > & {
       /** Further models answering the same question in parallel. */
       additionalModelIds?: readonly UniqueModelId[];
+      draft?: FollowupDraft;
     }) => {
       const isCurrent = () => mountedComposerKeyRef.current === composerKey;
       const request = {
@@ -358,6 +368,15 @@ export function useAgentChatControls(input: {
             }
           : {}),
       };
+      const current = sessionId ? client.getState(sessionId) : undefined;
+      if (current && !current.isSubmitting && isAgentSessionBusy(current)) {
+        followupQueue.enqueue({
+          id: request.userMessageId,
+          request,
+          draft: draft ?? followupDraftFromInput(request),
+        });
+        return;
+      }
       const pending: PendingChatSend = {
         sessionId: request.sessionId,
         isNewSession: !sessionId,
@@ -369,8 +388,7 @@ export function useAgentChatControls(input: {
         userMessageId: request.userMessageId,
         isSubmitting: true,
         selectedMessageId: state?.snapshot?.session.activeNodeId,
-        // A follow-up behind a running answer waits in the queue, which displays it.
-        ...(state && selectRunningAnswerId(state) ? {} : { send: pending }),
+        send: pending,
       });
       try {
         await sendMessage({
@@ -400,7 +418,7 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId],
+    [agentId, client, composerKey, followupQueue, sendMessage, sessionId, workspaceFolderId],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {
@@ -418,12 +436,10 @@ export function useAgentChatControls(input: {
     cancel,
     completePendingSend,
     pendingSend,
+    followupQueue,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
-      isAdmitting ||
-      isSubmitting ||
-      (isSessionExecuting && !isComposerBusy) ||
-      (pendingSend && sessionId && observationStatus !== 'ready')
+      isAdmitting || isSubmitting || (pendingSend && sessionId && observationStatus !== 'ready')
         ? false
         : undefined,
     isApprovalPending:
@@ -479,15 +495,6 @@ function selectRunningAnswerId(state: AgentSessionChatState): string | undefined
   return undefined;
 }
 
-/** Queue subscribers do not rerender for streamed message content. */
-export function useAgentQueuedInputs(sessionId: string | undefined): readonly AgentQueuedInput[] {
-  const { client } = useAgentChatContext();
-  return useAgentSessionSelection(client, sessionId, selectQueuedInputs);
-}
-
-function selectQueuedInputs(state: AgentSessionChatState) {
-  return state.queuedInputs;
-}
 function selectIsAdmitting(state: AgentSessionChatState) {
   return Boolean(state.isSubmitting);
 }

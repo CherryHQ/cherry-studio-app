@@ -160,6 +160,29 @@ describe('Agent Session status contract', () => {
     );
     expect(AgentSessionStatusSchema.safeParse({ ...input, turnId: '' }).success).toBe(false);
   });
+
+  test('round-trips aggregate completion evidence without accepting execution content', () => {
+    const status = {
+      turnId: 'next-turn',
+      status: 'running',
+      completion: { id: 'completed-answer-group', turnId: 'previous-turn', succeeded: false },
+    };
+    const parsed = AgentSessionStatusSchema.parse(roundTrip(status));
+    expect(parsed).toEqual(status);
+    expect(Object.isFrozen(parsed.completion)).toBe(true);
+    expect(
+      AgentSessionStatusSchema.safeParse({
+        ...status,
+        completion: { ...status.completion, succeeded: 'yes' },
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentSessionStatusSchema.safeParse({
+        ...status,
+        completion: { ...status.completion, parts: [] },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('Agent tool and managed-file contracts', () => {

@@ -1,3 +1,4 @@
+import { cacheService } from '@/frontend/data/CacheService';
 import type { AgentProtocol, AgentSessionStatus } from '@/shared/contracts/agent';
 
 import type {
@@ -76,7 +77,11 @@ export function createLocalConversationPreview(input: {
     },
     remove: {
       availability: { state: 'enabled' },
-      execute: () => execute(() => agent.deleteSession({ sessionId })),
+      execute: () =>
+        execute(async () => {
+          await agent.deleteSession({ sessionId });
+          cacheService.deleteCasual(`chat.followup_queue.${sessionId}`);
+        }),
     },
   };
 }

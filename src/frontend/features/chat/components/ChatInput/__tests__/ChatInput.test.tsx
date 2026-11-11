@@ -136,6 +136,11 @@ test('text send captures one attempt, sends the primary quote, and clears only a
     } satisfies ComposerSendPayload);
   });
   expect(mockCapture).toHaveBeenCalledTimes(1);
+  expect(mockSend.mock.calls[0][0].draft).toEqual({
+    text: `${createQuoteMention(fields.quotes![0])} My request`,
+    attachments: [],
+    quote: fields,
+  });
   expect(mockSend.mock.calls[0][0].parts).toEqual([
     {
       type: 'text',

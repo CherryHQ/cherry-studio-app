@@ -724,7 +724,6 @@ export class PiDurableRuntime {
     if (!record || record.status !== 'placed') return;
     await conversation.abort(context, {
       background: true,
-      keepQueuedInputs: true,
       expectedInput: record.id,
     });
   }

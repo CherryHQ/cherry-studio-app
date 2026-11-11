@@ -193,7 +193,7 @@ export function ChatInput({
   return (
     <PaintingInputProvider result={latestImageResult}>
       <View className="gap-2">
-        <ChatInputQueue sessionId={sessionId} />
+        <ChatInputQueue queue={controls.followupQueue} />
         {mode === 'standard' &&
         !replyModels &&
         selectedModelItem &&
@@ -366,6 +366,7 @@ function TextChatInput({
           parts.push({ type: 'text', text: toMcpAppContextText(context) });
         const modelId = replyModels?.[0] ?? selectedModelId;
         const result = await sendMessage({
+          draft: { text, attachments, quote: attempt?.fields ?? {} },
           parts,
           ...(skillAction ? { skillAction } : {}),
           ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),

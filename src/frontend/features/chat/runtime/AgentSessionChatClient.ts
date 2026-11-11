@@ -17,6 +17,7 @@ import type {
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 
+import { setFollowupQueuePaused, stopFollowupAdvance } from './followupQueue';
 import { ToolInputPreviewStore } from './ToolInputPreviewStore';
 
 export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
@@ -167,6 +168,10 @@ export class AgentSessionChatClient {
     return this.getEntry(sessionId).state;
   }
 
+  getSessionStatus(sessionId: string) {
+    return this.protocol.getSessionStatus(sessionId);
+  }
+
   subscribe(sessionId: string, listener: () => void): () => void {
     const entry = this.getEntry(sessionId);
     entry.listeners.add(listener);
@@ -314,6 +319,7 @@ export class AgentSessionChatClient {
 
   /** Shows the branch containing `messageId`; work on other branches keeps running. */
   async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView> {
+    setFollowupQueuePaused(sessionId, true);
     const session = await this.protocol.selectMessage({ sessionId, messageId });
     this.options.onSessionChanged?.(sessionId);
     this.options.onTranscriptChanged?.(sessionId);
@@ -331,7 +337,7 @@ export class AgentSessionChatClient {
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    const submission = this.beginSubmission(entry, { allowQueue: true });
+    const submission = this.beginSubmission(entry);
     try {
       await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
@@ -383,14 +389,9 @@ export class AgentSessionChatClient {
 
   private beginSubmission(
     entry: SessionEntry,
-    options: { allowQueue?: boolean; pendingRetryMessageId?: string } = {},
+    options: { pendingRetryMessageId?: string } = {},
   ): NonNullable<SessionEntry['submission']> {
-    if (
-      entry.state.isSubmitting ||
-      (!options.allowQueue &&
-        entry.state.activeTurn &&
-        !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
-    ) {
+    if (isAgentSessionBusy(entry.state)) {
       throw new AgentProtocolError({
         code: 'SESSION_BUSY',
         message: 'The session is busy.',
@@ -465,12 +466,14 @@ export class AgentSessionChatClient {
     if (messageId) {
       const message = entry.liveMessages.get(messageId);
       if (message) {
+        if (message.turnId) stopFollowupAdvance(sessionId, message.turnId);
         if (!message.turnId || isTerminalMessage(message)) return;
         await this.protocol.cancelTurn({ sessionId, turnId: message.turnId, messageId });
         return;
       }
       if (turn?.assistantMessageId !== messageId) return;
     }
+    if (turn) stopFollowupAdvance(sessionId, turn.id);
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
       await this.protocol.cancelTurn({
         sessionId,

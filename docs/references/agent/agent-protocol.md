@@ -662,15 +662,22 @@ snapshot. The snapshot contains only live state that must be composed over persi
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
 
-`queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
-membership. These inputs appear above the composer and do not create transcript rows in the live
-projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
+`queuedInputs` represents already-admitted native inputs in submission order; `queue.updated`
+replaces that membership. Ordinary waiting chat drafts are separate frontend memory state and never
+enter this inbox. The Host rejects a busy ordinary submission before reserving message rows.
+Local history requests `settledOnly`, excluding unsettled message pairs before paging
 and render-window selection; observation supplies each active turn's question and all its answers,
 including completed siblings, until the turn settles. `cancelQueuedInput`
 atomically withdraws only waiting work: `already-started` preserves the active run and asks the
 client to reconcile observation. Withdrawal cleans up only its own reservation, so another input
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
 retains its existing semantics.
+
+The process-local `AgentSessionStatus.completion` retains the last fully persisted answer group's
+stable identity, turn ID and success flag. It is published only after every reserved assistant
+message is terminal; success requires every answer to succeed. Frontend queues consume that fact
+once, independently of read receipts, live row disposal and route observation. Draft queue state
+and consumed completion cursors are memory-only; accepted messages keep normal transcript storage.
 
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.

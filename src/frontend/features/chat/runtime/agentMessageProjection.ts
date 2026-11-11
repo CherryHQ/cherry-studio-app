@@ -398,6 +398,18 @@ export function toAgentMessageListItem(
   return item;
 }
 
+/** Shared input parts for the draft preview and immediate submission display. */
+export function createPendingInputParts(
+  input: AgentSubmitMessageInput['parts'],
+): AgentMessagePart[] {
+  return input.map(
+    (part, index): AgentMessagePart =>
+      part.type === 'file'
+        ? { ...part, id: `input-${index}`, purpose: 'input-attachment' }
+        : { ...part, id: `input-${index}`, state: 'done' },
+  );
+}
+
 /** Immediate display of a send, using the same row IDs that persistence will receive. */
 export function createPendingChatMessages(
   input: Pick<
@@ -409,12 +421,7 @@ export function createPendingChatMessages(
   const inputFileEntryIds = input.parts.flatMap((part) =>
     part.type === 'file' ? [part.fileEntryId] : [],
   );
-  const parts = input.parts.map(
-    (part, index): AgentMessagePart =>
-      part.type === 'file'
-        ? { ...part, id: `input-${index}`, purpose: 'input-attachment' }
-        : { ...part, id: `input-${index}`, state: 'done' },
-  );
+  const parts = createPendingInputParts(input.parts);
   return [
     {
       createdAt,

@@ -8,26 +8,32 @@ import {
   useOpenFileEntry,
   useResolvedFile,
 } from '@/frontend/components/FileEntryPreview';
-import type { AgentQueuedInput } from '@/shared/contracts/agent';
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
+import { createPendingInputParts } from '../../../runtime/agentMessageProjection';
+import type { FollowupQueueItem } from '../../../runtime/followupQueue';
 
 export function QueuedInputPreview({
   input,
   pending,
+  canSend,
+  onSend,
   onClose,
   onRemove,
   onTakeBack,
 }: {
-  input: AgentQueuedInput;
+  input: FollowupQueueItem;
   pending: boolean;
+  canSend: boolean;
+  onSend: () => void;
   onClose: () => void;
   onRemove: () => void;
   onTakeBack: () => void;
 }) {
   const { t } = useTranslation();
   const focused = useIsFocused();
+  const parts = createPendingInputParts(input.request.parts);
   return (
     <BottomSheet
       open={focused}
@@ -37,6 +43,9 @@ export function QueuedInputPreview({
       closeAction={{ accessibilityLabel: t('common.close') }}
       footer={
         <View className="gap-2">
+          <Button disabled={pending || !canSend} onPress={onSend} testID="queue-detail-send">
+            {t('chat.queue.send')}
+          </Button>
           <Button
             accessibilityLabel={t('chat.queue.takeBack')}
             disabled={pending}
@@ -59,7 +68,7 @@ export function QueuedInputPreview({
       }
     >
       <ScrollView contentContainerClassName="gap-4 p-5" keyboardShouldPersistTaps="handled">
-        {input.userMessage.parts.map((part) =>
+        {parts.map((part) =>
           part.type === 'text' ? (
             <View key={part.id} className="gap-2">
               {part.text ? (

@@ -247,6 +247,15 @@ export const AgentSessionStatusSchema = z
   .strictObject({
     turnId: AgentTurnViewSchema.shape.id,
     status: AgentTurnViewSchema.shape.status,
+    /** One fully persisted answer group; independent of the selected live answer. */
+    completion: z
+      .strictObject({
+        id: z.string().min(1),
+        turnId: z.string().min(1),
+        succeeded: z.boolean(),
+      })
+      .readonly()
+      .optional(),
   })
   .readonly();
 export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;

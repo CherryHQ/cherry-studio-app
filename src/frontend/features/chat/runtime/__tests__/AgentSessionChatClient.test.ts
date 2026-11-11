@@ -257,7 +257,7 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
-  test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
+  test('keeps ordinary waiting drafts outside native admission while a turn streams', async () => {
     const activeTurn = {
       id: 'turn-1',
       sessionId: 'session-1',
@@ -275,19 +275,21 @@ describe('AgentSessionChatClient', () => {
     const unsubscribe = client.subscribe('session-1', () => undefined);
     await client.observe('session-1');
     const before = client.getState('session-1');
-    await client.submitMessage({
-      sessionId: 'session-1',
-      userMessageId: 'queued-user',
-      assistantMessageId: 'queued-answer',
-      parts: [{ type: 'text', text: 'Follow up' }],
-    });
+    await expect(
+      client.submitMessage({
+        sessionId: 'session-1',
+        userMessageId: 'queued-user',
+        assistantMessageId: 'queued-answer',
+        parts: [{ type: 'text', text: 'Follow up' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
     expect(client.getState('session-1').activeTurn).toEqual(activeTurn);
     expect(client.getState('session-1').liveMessages).toEqual(before.liveMessages);
     expect(isAgentSessionBusy(client.getState('session-1'))).toBe(true);
     await expect(
       client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
-    expect(protocol.submitMessage).toHaveBeenCalledTimes(1);
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
     unsubscribe();
     client.dispose();
   });

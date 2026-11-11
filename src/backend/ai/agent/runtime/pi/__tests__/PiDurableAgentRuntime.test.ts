@@ -725,7 +725,7 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('starts the next queued input after a terminal provider failure without resubmission', async () => {
+  test('rejects busy input and runs it only when explicitly resubmitted after a terminal failure', async () => {
     const state = fixture();
     const resolveModel = state.dependencies.resolveModel;
     const firstStream = new AssistantMessageEventStream();
@@ -766,8 +766,15 @@ describe('Persistent Agent facade', () => {
     await runtime.initialize(state.database, state.ports);
     await runtime.ensureConversation(seed);
     runtime.resume();
+    const failed = deferred<void>();
     const completed = deferred<void>();
     const observed = await runtime.observe(seed.lane, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'first' &&
+        event.turn.status === 'failed'
+      )
+        failed.resolve();
       if (
         event.type === 'turn.updated' &&
         event.turn.identity.requestId === 'second' &&
@@ -781,16 +788,20 @@ describe('Persistent Agent facade', () => {
         input: [{ type: 'text', text: quoted('first') }],
       });
       await started.promise;
-      await runtime.submit(seed.lane, {
+      const second = {
         ...input('second'),
-        input: [{ type: 'text', text: quoted('second') }],
-      });
+        input: [{ type: 'text' as const, text: quoted('second') }],
+      };
+      await expect(runtime.submit(seed.lane, second)).rejects.toThrow();
       firstStream.push(
         providerErrorEvent(emptyAssistantMessage(wire), {
           message: 'Invalid request',
           retryable: false,
         }),
       );
+      await failed.promise;
+      expect(calls).toBe(1);
+      await runtime.submit(seed.lane, second);
       await completed.promise;
       const history = await runtime.history(seed.lane, { limit: 10 });
       expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
