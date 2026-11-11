@@ -51,16 +51,19 @@ type AssistantMessageActionsState = {
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
   isDeleteDisabled: boolean;
   /** Editing is refused while the Session has unfinished work or is re-synchronizing. */
-  isEditDisabled: boolean;
+  isEditAnswerDisabled: boolean;
+  isEditQuestionDisabled: boolean;
   isRetryDisabled: boolean;
   /** Answers that can be regenerated, retried, or answered again with another model. */
   retryableMessageIds: ReadonlySet<string>;
-  /** Sent questions the reader can send again with edited text. */
-  editableMessageIds: ReadonlySet<string>;
+  /** Successful answers that can be edited in place. */
+  editableAnswerIds: ReadonlySet<string>;
+  /** Sent questions the reader can branch and send again with edited text. */
+  editableQuestionIds: ReadonlySet<string>;
 };
 
 type AssistantMessageActions = {
-  editAssistantMessage?: (input: { messageId: string }) => void;
+  editAnswer?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
@@ -74,8 +77,8 @@ type AssistantMessageActions = {
   selectBranch?: (input: { messageId: string; targetId: string }) => Promise<boolean>;
   /** Chooses a model that adds one more answer to this answer's question. */
   answerWithModel?: (input: { messageId: string }) => void;
-  /** Opens the editing sheet of a previously sent question. */
-  editUserMessage?: (input: { messageId: string }) => void;
+  /** Opens the composer to branch and resubmit a previously sent question. */
+  editQuestion?: (input: { messageId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -124,12 +127,19 @@ export function AssistantMessageActionsProvider({
     () => new Set(retryableKey ? retryableKey.split('\n') : []),
     [retryableKey],
   );
-  const editableKey = messages
-    .flatMap((message) => (message.actions.edit || message.actions.editUser ? [message.key] : []))
+  const editableAnswerKey = messages
+    .flatMap((message) => (message.actions.editAnswer ? [message.key] : []))
     .join('\n');
-  const editableMessageIds = useMemo(
-    () => new Set(editableKey ? editableKey.split('\n') : []),
-    [editableKey],
+  const editableQuestionKey = messages
+    .flatMap((message) => (message.actions.editQuestion ? [message.key] : []))
+    .join('\n');
+  const editableAnswerIds = useMemo(
+    () => new Set(editableAnswerKey ? editableAnswerKey.split('\n') : []),
+    [editableAnswerKey],
+  );
+  const editableQuestionIds = useMemo(
+    () => new Set(editableQuestionKey ? editableQuestionKey.split('\n') : []),
+    [editableQuestionKey],
   );
   const isBusy =
     isSelecting ||
@@ -217,7 +227,11 @@ export function AssistantMessageActionsProvider({
     ({ messageId }: { messageId: string }) => {
       const current = latest.current;
       const message = current.messages.find((message) => message.key === messageId);
-      if (!sessionId || current.isBusy || message?.actions.edit?.availability.state !== 'enabled')
+      if (
+        !sessionId ||
+        current.isBusy ||
+        message?.actions.editAnswer?.availability.state !== 'enabled'
+      )
         return;
       Keyboard.dismiss();
       router.push(editReplyHref({ sessionId, messageId }));
@@ -310,11 +324,11 @@ export function AssistantMessageActionsProvider({
   // The composer owns the editing session: its draft becomes the question and
   // its current send settings define the new answer.
   const { beginEdit } = useChatEditing();
-  const editUserMessage = useCallback(
+  const editQuestion = useCallback(
     ({ messageId }: { messageId: string }) => {
       if (latest.current.isBusy) return;
       const message = latest.current.messages.find((message) => message.key === messageId);
-      if (message?.actions.editUser?.availability.state === 'enabled')
+      if (message?.actions.editQuestion?.availability.state === 'enabled')
         beginEdit({
           messageId,
           initialText: editInitialText(message),
@@ -328,14 +342,23 @@ export function AssistantMessageActionsProvider({
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled && !isSelecting}
       onShare={share}
-      onEdit={editableMessageIds.size ? edit : undefined}
-      editableMessageIds={editableMessageIds}
-      isEditDisabled={
+      onEditAnswer={editableAnswerIds.size ? edit : undefined}
+      editableAnswerIds={editableAnswerIds}
+      editableQuestionIds={editableQuestionIds}
+      isEditAnswerDisabled={
         isBusy ||
         messages.some(
           (message) =>
-            (message.actions.edit ?? message.actions.editUser) &&
-            (message.actions.edit ?? message.actions.editUser)?.availability.state !== 'enabled',
+            message.actions.editAnswer &&
+            message.actions.editAnswer.availability.state !== 'enabled',
+        )
+      }
+      isEditQuestionDisabled={
+        isBusy ||
+        messages.some(
+          (message) =>
+            message.actions.editQuestion &&
+            message.actions.editQuestion.availability.state !== 'enabled',
         )
       }
       onFork={messages.some((message) => message.actions.fork) ? fork : undefined}
@@ -345,7 +368,7 @@ export function AssistantMessageActionsProvider({
       onAnswerWithModel={
         messages.some((message) => message.actions.answerWith) ? answerWithModel : undefined
       }
-      onEditUserMessage={editableMessageIds.size ? editUserMessage : undefined}
+      onEditQuestion={editableQuestionIds.size ? editQuestion : undefined}
       isDeleteDisabled={isBusy}
       isRetryDisabled={isBusy}
       retryableMessageIds={retryableMessageIds}
@@ -371,33 +394,37 @@ export function ChatMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   onShare: shareAssistantMessage,
-  onEdit: editAssistantMessage,
+  onEditAnswer: editAnswer,
   onFork: forkFromAssistantMessage,
   onDelete: deleteMessageTurn,
   onRetry: retryAssistantMessage,
   onSelectBranch: selectBranch,
   onAnswerWithModel: answerWithModel,
-  onEditUserMessage: editUserMessage,
+  onEditQuestion: editQuestion,
   isDeleteDisabled = true,
   isRetryDisabled = true,
   retryableMessageIds = EMPTY_MESSAGE_IDS,
-  editableMessageIds = EMPTY_MESSAGE_IDS,
-  isEditDisabled = true,
+  editableAnswerIds = EMPTY_MESSAGE_IDS,
+  editableQuestionIds = EMPTY_MESSAGE_IDS,
+  isEditAnswerDisabled = true,
+  isEditQuestionDisabled = true,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   onShare: AssistantMessageActions['shareAssistantMessage'];
-  onEdit?: AssistantMessageActions['editAssistantMessage'];
+  onEditAnswer?: AssistantMessageActions['editAnswer'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
   onDelete?: AssistantMessageActions['deleteMessageTurn'];
   onRetry?: AssistantMessageActions['retryAssistantMessage'];
   onSelectBranch?: AssistantMessageActions['selectBranch'];
   onAnswerWithModel?: AssistantMessageActions['answerWithModel'];
-  onEditUserMessage?: AssistantMessageActions['editUserMessage'];
+  onEditQuestion?: AssistantMessageActions['editQuestion'];
   isDeleteDisabled?: boolean;
-  isEditDisabled?: boolean;
+  isEditAnswerDisabled?: boolean;
+  isEditQuestionDisabled?: boolean;
   isRetryDisabled?: boolean;
   retryableMessageIds?: ReadonlySet<string>;
-  editableMessageIds?: ReadonlySet<string>;
+  editableAnswerIds?: ReadonlySet<string>;
+  editableQuestionIds?: ReadonlySet<string>;
 }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -445,19 +472,23 @@ export function ChatMessageActionsProvider({
   const stateValue = useMemo(
     () => ({
       copiedMessageId,
-      editableMessageIds,
+      editableAnswerIds,
+      editableQuestionIds,
       isAssistantToolbarEnabled,
       isDeleteDisabled,
-      isEditDisabled,
+      isEditAnswerDisabled,
+      isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
     }),
     [
       copiedMessageId,
-      editableMessageIds,
+      editableAnswerIds,
+      editableQuestionIds,
       isAssistantToolbarEnabled,
       isDeleteDisabled,
-      isEditDisabled,
+      isEditAnswerDisabled,
+      isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
     ],
@@ -465,10 +496,10 @@ export function ChatMessageActionsProvider({
   const actionsValue = useMemo(
     () => ({
       answerWithModel,
-      editAssistantMessage,
+      editAnswer,
       copyAssistantMessage,
       deleteMessageTurn,
-      editUserMessage,
+      editQuestion,
       forkFromAssistantMessage,
       retryAssistantMessage,
       selectBranch,
@@ -476,10 +507,10 @@ export function ChatMessageActionsProvider({
     }),
     [
       answerWithModel,
-      editAssistantMessage,
+      editAnswer,
       copyAssistantMessage,
       deleteMessageTurn,
-      editUserMessage,
+      editQuestion,
       forkFromAssistantMessage,
       retryAssistantMessage,
       selectBranch,

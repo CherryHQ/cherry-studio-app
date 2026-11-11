@@ -41,13 +41,13 @@ jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
-    editUserMessage: mockEditMessage,
+    editQuestion: mockEditMessage,
     shareAssistantMessage: mockShareMessage,
     ...(mockCanSelectBranch ? { selectBranch: mockSelectBranch } : {}),
   }),
   useAssistantMessageActionsState: () => ({
-    editableMessageIds: mockEditableMessageIds,
-    isEditDisabled: mockIsEditDisabled,
+    editableQuestionIds: mockEditableMessageIds,
+    isEditQuestionDisabled: mockIsEditDisabled,
   }),
 }));
 

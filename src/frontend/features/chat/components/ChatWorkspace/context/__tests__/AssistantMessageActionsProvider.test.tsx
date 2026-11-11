@@ -18,6 +18,8 @@ import {
 
 let mockRetryOutcome: OperationOutcome<void>;
 let mockEditOutcome: OperationOutcome<void>;
+let mockQuestionEnabled = true;
+let mockAnswerEnabled = true;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockEditMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
@@ -131,8 +133,10 @@ function ProviderHarness({
             },
           },
           actions: {
-            editUser: {
-              availability: { state: 'enabled' },
+            editQuestion: {
+              availability: mockQuestionEnabled
+                ? { state: 'enabled' }
+                : { state: 'disabled', reason: 'busy' },
               execute: async ({ text }) => {
                 await mockEditMessage({ messageId: 'user-1', text });
                 return mockEditOutcome;
@@ -152,6 +156,11 @@ function ProviderHarness({
             data: {},
           },
           actions: {
+            editAnswer: {
+              availability: mockAnswerEnabled
+                ? { state: 'enabled' }
+                : { state: 'disabled', reason: 'busy' },
+            },
             retry: { availability: { state: 'enabled' }, execute: async () => mockRetryOutcome },
             remove: {
               availability: { state: 'enabled' },
@@ -188,6 +197,8 @@ describe('AssistantMessageActionsProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
+    mockQuestionEnabled = true;
+    mockAnswerEnabled = true;
     mockRetryOutcome = { state: 'applied', value: undefined };
     mockEditOutcome = { state: 'applied', value: undefined };
     probeRef = createRef<ContextProbeHandle>();
@@ -203,6 +214,20 @@ describe('AssistantMessageActionsProvider', () => {
       renderer = create(<ProviderHarness probeRef={probeRef} />);
     });
   }
+
+  it('keeps question and answer editability separate', () => {
+    mockQuestionEnabled = false;
+    renderProvider();
+    expect([...probeRef.current!.state.editableQuestionIds]).toEqual(['user-1']);
+    expect([...probeRef.current!.state.editableAnswerIds]).toEqual(['assistant-1']);
+    expect(probeRef.current!.state.isEditQuestionDisabled).toBe(true);
+    expect(probeRef.current!.state.isEditAnswerDisabled).toBe(false);
+    mockQuestionEnabled = true;
+    mockAnswerEnabled = false;
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} />));
+    expect(probeRef.current!.state.isEditQuestionDisabled).toBe(false);
+    expect(probeRef.current!.state.isEditAnswerDisabled).toBe(true);
+  });
 
   function startCopy(messageId: string, text: string) {
     act(() => probeRef.current?.actions.copyAssistantMessage({ messageId, text }));
@@ -311,7 +336,7 @@ describe('AssistantMessageActionsProvider', () => {
 
   test('starts composer edit mode with the question text', () => {
     renderProvider();
-    act(() => probeRef.current?.actions.editUserMessage!({ messageId: 'user-1' }));
+    act(() => probeRef.current?.actions.editQuestion!({ messageId: 'user-1' }));
 
     // The composer owns the editing session from here: it submits through the
     // chat controls and restores the typed edit when admission is rejected.

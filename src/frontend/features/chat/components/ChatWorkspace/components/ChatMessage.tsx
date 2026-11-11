@@ -341,9 +341,9 @@ function ChatMessageContextMenu({
 }) {
   const { t } = useTranslation();
   const isSelecting = useIsChatShareSelecting();
-  const { copyAssistantMessage, editUserMessage, shareAssistantMessage } =
+  const { copyAssistantMessage, editQuestion, shareAssistantMessage } =
     useAssistantMessageActions();
-  const { editableMessageIds, isEditDisabled } = useAssistantMessageActionsState();
+  const { editableQuestionIds, isEditQuestionDisabled } = useAssistantMessageActionsState();
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
@@ -360,14 +360,14 @@ function ChatMessageContextMenu({
             label: t('common.copy'),
             onPress: () => copyAssistantMessage({ messageId: message.id, text }),
           },
-          ...((message.role === 'user' && editUserMessage && editableMessageIds.has(message.id)
+          ...((message.role === 'user' && editQuestion && editableQuestionIds.has(message.id)
             ? [
                 {
                   // Editing needs the question's text and an idle Session.
-                  disabled: !text || isEditDisabled,
+                  disabled: !text || isEditQuestionDisabled,
                   id: 'edit',
-                  label: t('chat.messageActions.edit'),
-                  onPress: () => editUserMessage({ messageId: message.id }),
+                  label: t('chat.messageActions.editQuestionAction'),
+                  onPress: () => editQuestion({ messageId: message.id }),
                 },
               ]
             : []) satisfies readonly MenuItem[]),

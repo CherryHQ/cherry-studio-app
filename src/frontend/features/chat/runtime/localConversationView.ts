@@ -136,7 +136,7 @@ export function createLocalConversationProjector(input: {
           ...(message.role === 'assistant' &&
           message.status === 'success' &&
           editableReplyParts(message.parts).length > 0
-            ? { edit: { availability: availability(state, true) } }
+            ? { editAnswer: { availability: availability(state, true) } }
             : {}),
           // Answers switch in place; switching only changes what is shown, so it never waits.
           ...(message.siblings
@@ -155,7 +155,7 @@ export function createLocalConversationProjector(input: {
             : {}),
           ...(canModify && message.role === 'user'
             ? {
-                editUser: action<{ text: string }, void>(state, true, ({ text }) =>
+                editQuestion: action<{ text: string }, void>(state, true, ({ text }) =>
                   client.editUserMessage({ sessionId, messageId: message.id, text }),
                 ),
               }
