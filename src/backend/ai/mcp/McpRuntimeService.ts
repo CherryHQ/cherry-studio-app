@@ -33,6 +33,7 @@ import type {
 } from '@/shared/contracts';
 import {
   McpAuthorizationError,
+  McpLegacyFallbackError,
   type McpOAuthStartInput,
   type McpContentPreview,
   type McpPromptEntry,
@@ -128,6 +129,7 @@ type ServerToolCatalog = {
 };
 
 type ServerRuntimeState = {
+  shouldUseLegacyProtocol: boolean;
   /** Tool calls in flight on the pooled client; a server question pauses all of them. */
   calls: Set<McpInvocationProgress>;
   /** Server questions awaiting the user, withdrawn once no call remains to receive the answer. */
@@ -224,7 +226,10 @@ function createMcpClient(
   pluginAuthorizations: PluginAuthorizationManager,
   foreground: boolean,
   authorization: McpOAuthRuntime,
-  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onCatalogChanged'>,
+  pooled?: Pick<
+    Parameters<typeof createRemoteMcpClient>[0],
+    'elicit' | 'onCatalogChanged' | 'shouldUseLegacyProtocol' | 'onLegacyPreferenceChanged'
+  >,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
@@ -899,6 +904,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     const state: ServerRuntimeState = {
+      shouldUseLegacyProtocol: false,
       calls: new Set(),
       questions: new Set(),
       abort: new AbortController(),
@@ -948,7 +954,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.runtimeError =
       error instanceof McpTimeoutError
         ? 'MCP request timed out.'
-        : error instanceof McpRuntimeToolError
+        : error instanceof McpRuntimeToolError || error instanceof McpLegacyFallbackError
           ? error.message
           : 'MCP connection failed.';
   }
@@ -985,6 +991,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
         {
           elicit: (params, requestSignal) =>
             this.askForServer(server, state, params, requestSignal),
+          shouldUseLegacyProtocol: state.shouldUseLegacyProtocol,
+          onLegacyPreferenceChanged: (shouldUseLegacyProtocol) => {
+            if (this.isCurrentState(state, generation) && !setupSignal.aborted)
+              state.shouldUseLegacyProtocol = shouldUseLegacyProtocol;
+          },
           onCatalogChanged: () => {
             if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
           },

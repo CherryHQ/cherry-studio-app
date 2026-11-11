@@ -58,6 +58,7 @@ it already exists.
 | Status-only reasoning display data | `projectAgentMessageDisplay` in `src/shared/utils/agentMessageDisplay.ts`; list reasoning carries no text, while tool inputs, outputs and execution/recovery records remain complete |
 | On-demand reasoning reads | `AgentProtocol.readReasoning`; the host reads the current Pi watch frame or saved transcript, isolating unrelated invalid saved parts with the existing display reader; expanded previews use `MessagePart.TextBody`, and tapping the viewport opens the message-owned full-text sheet |
 | Private Agent working materials | Upstream `CodemodeStoreDoc` via Code Mode `store/load`; successful preparation calls precede execution/checking, never library files or backups |
+| Managed-file and library reader media/pagination instructions | `buildFileReadInstructions` in `src/backend/ai/agent/tools/readFileTool.ts`; each deferred reader includes the complete rules for its parser and model image support |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |

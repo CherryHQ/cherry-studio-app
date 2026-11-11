@@ -254,16 +254,18 @@ without changing the original bytes outside the edited passages.
 The existing `UserQuestionSheet` displays the actual before/after text, reasons, and a notice that
 the one local Skill changes for all Agents using it. The tool itself requests this choice through
 the Host question port, including in automatic tool approval mode. It does not rely on the model
-remembering to ask. Only the explicit adaptation option with no unresolved custom input permits
-saving. Refusal, skipping, free-text-only answers and cancellation leave files unchanged. The tool
-rechecks current Agent access and package integrity after the answer; an internal content-hash
-comparison in the write transaction rejects concurrent changes instead of overwriting them.
+remembering to ask. The fixed footer offers save-and-continue and keep-unchanged actions directly;
+there are no radio options, free-text field or extra submit step. Only pressing the explicit save
+action permits saving. Refusal, skipping, free-text-only answers and cancellation leave files
+unchanged. The tool rechecks current Agent access and package integrity after the answer; an internal
+content-hash comparison in the write transaction rejects concurrent changes instead of overwriting them.
 
 Saving publishes a fully validated package and switches the one current installation atomically,
 preserving bindings. It does not create user-managed versions or per-Agent variants. The accepted
 scope and the same per-Skill Runtime instruction section are replaced before continuing the original
-task. A saved receipt with the actual changes stays inline outside the completed process disclosure,
-even if the model supplies no explanatory prose. A post-save refresh failure reports that saving
+task. A saved receipt shows the Skill name, outcome and change reasons inline outside the completed
+process disclosure, even if the model supplies no explanatory prose. The exact before/after text
+remains available in its detail reader. A post-save refresh failure reports inline that saving
 succeeded and requests a new message instead of claiming current-turn execution support.
 
 Tool availability and bounded text changes do not prove semantic equivalence. The model must

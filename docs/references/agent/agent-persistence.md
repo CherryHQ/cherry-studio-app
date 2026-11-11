@@ -269,7 +269,7 @@ recency; no `orderKey`).
 | `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No virtual root: the first question has no parent |
 | `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and the latest positive measured request input in `contextTokens`, which need not be the final request or a post-compaction size |
 | `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |

@@ -93,6 +93,7 @@ export function createWriteFileTool(
     ref: { source: 'builtin', capabilityId: WRITE_FILE_TOOL_NAME },
     providerName: WRITE_FILE_TOOL_NAME,
     displayName: 'Write file',
+    deferred: true,
     description:
       'Save UTF-8 text at a relative workspace path, or at the library root without a workspace. For an existing path supply base_file_entry_id and base_revision from the last read. A same-turn draft is rewritten; otherwise the path advances to a new version. Re-read after a conflict.',
     inputSchema: toRuntimeInputSchema(writeFileInputSchema),

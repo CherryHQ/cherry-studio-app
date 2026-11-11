@@ -6,6 +6,7 @@ export function getAnchoredPanelLayout({
   height,
   insets,
   panelHeight,
+  preferredPlacement = 'below',
   preferredMaxHeight,
   preferredWidth,
   width,
@@ -14,6 +15,7 @@ export function getAnchoredPanelLayout({
   height: number;
   insets: { top: number; bottom: number; left: number; right: number };
   panelHeight: number;
+  preferredPlacement?: 'above' | 'below';
   preferredMaxHeight: number;
   preferredWidth: number;
   width: number;
@@ -24,7 +26,10 @@ export function getAnchoredPanelLayout({
   const panelWidth = Math.max(0, Math.min(preferredWidth, width - insets.left - insets.right - 32));
   const visibleHeight = Math.min(panelHeight, maxHeight);
   const spaceBelow = bottomEdge - anchor.pageY - anchor.height - 8;
-  const opensAbove = spaceBelow < visibleHeight && anchor.pageY - topInset - 8 > spaceBelow;
+  const spaceAbove = anchor.pageY - topInset - 8;
+  const opensAbove =
+    (preferredPlacement === 'above' && spaceAbove >= visibleHeight) ||
+    (spaceBelow < visibleHeight && spaceAbove > spaceBelow);
   const top = Math.max(
     topInset,
     Math.min(

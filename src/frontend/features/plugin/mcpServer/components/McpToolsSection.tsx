@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { McpLegacyFallbackError } from '@/shared/contracts/mcp';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { useMcpServerTools } from '../hooks/useMcpServerTools';
@@ -50,7 +51,11 @@ export function McpToolsSection({
           // The reason is the whole point here — an expired token and a typo'd URL are the same
           // generic failure without it.
           description={
-            toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)
+            toolsQuery.error instanceof McpLegacyFallbackError
+              ? t('settings.mcp.tools.legacyFallbackFailed')
+              : toolsQuery.error instanceof Error
+                ? toolsQuery.error.message
+                : String(toolsQuery.error)
           }
           layout="leading"
           primaryAction={{
