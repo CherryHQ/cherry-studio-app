@@ -1859,6 +1859,7 @@
   "settings.mcp.toast.saveFailed": "Nu s-a putut salva serverul",
   "settings.mcp.tools.empty": "Acest server nu expune niciun instrument.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} din {{total}} activate",
+  "settings.mcp.tools.legacyFallbackFailed": "Negocierea protocolului MCP și încercarea de conectare prin protocolul vechi au eșuat.",
   "settings.mcp.tools.loadFailed": "Nu s-au putut încărca instrumentele.",
   "settings.mcp.tools.loading": "Se încarcă instrumentele...",
   "settings.mcp.tools.retry": "Reîncercați",

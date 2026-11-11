@@ -1825,6 +1825,7 @@
   "settings.mcp.toast.saveFailed": "Không lưu được máy chủ",
   "settings.mcp.tools.empty": "Máy chủ này không có công cụ nào.",
   "settings.mcp.tools.enabledSummary": "Đã bật {{enabled}}/{{total}}",
+  "settings.mcp.tools.legacyFallbackFailed": "Cả quá trình thương lượng giao thức MCP và lần thử kết nối kiểu cũ đều thất bại.",
   "settings.mcp.tools.loadFailed": "Không tải được công cụ.",
   "settings.mcp.tools.loading": "Đang tải công cụ...",
   "settings.mcp.tools.retry": "Thử lại",

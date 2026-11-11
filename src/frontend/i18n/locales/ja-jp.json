@@ -1825,6 +1825,7 @@
   "settings.mcp.toast.saveFailed": "サーバーの保存に失敗しました",
   "settings.mcp.tools.empty": "このサーバーはツールを公開しません。",
   "settings.mcp.tools.enabledSummary": "{{enabled}}/{{total}} 件有効",
+  "settings.mcp.tools.legacyFallbackFailed": "MCPプロトコルのネゴシエーションと従来方式での接続の両方に失敗しました。",
   "settings.mcp.tools.loadFailed": "ツールのロードに失敗しました。",
   "settings.mcp.tools.loading": "ツールをロード中...",
   "settings.mcp.tools.retry": "再試行",
