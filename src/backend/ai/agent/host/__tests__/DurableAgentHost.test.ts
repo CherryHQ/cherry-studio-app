@@ -182,13 +182,6 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     drainUsage: async () => {
       steps.push('usage');
     },
-    stopTurn: jest.fn(async (lane, requestId) => {
-      const turns = copies.get(laneKey(lane))?.turns ?? [];
-      if (!turns.some((turn) => turn.identity.requestId === requestId && turn.status === 'running'))
-        return;
-      for (const turn of turns)
-        if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });
-    }),
     abort: jest.fn(async (lane) => {
       for (const turn of copies.get(laneKey(lane))?.turns ?? [])
         if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });

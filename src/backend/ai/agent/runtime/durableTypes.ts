@@ -313,7 +313,6 @@ export interface DurableAgentRuntime {
     requestId: string,
     options?: { currentContext?: boolean },
   ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
-  stopTurn(lane: RuntimeLane, requestId: string): Promise<void>;
   abort(lane: RuntimeLane): Promise<void>;
   /** Abort and retire the application binding through public APIs. File reclamation is separate. */
   discardConversation(lane: RuntimeLane): Promise<void>;

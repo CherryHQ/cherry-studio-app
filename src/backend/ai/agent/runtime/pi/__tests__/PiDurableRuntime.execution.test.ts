@@ -10,7 +10,6 @@ import { PiDurableRuntime } from '../PiDurableRuntime';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { PiModelProbeRuntime } from '../PiModelProbeRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
-import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
 class ReopenableMemoryStorage extends MemoryStorage {
   override async close(): Promise<void> {}
@@ -31,128 +30,6 @@ const wire: Model<Api> = {
 };
 
 describe('Pi durable execution integration', () => {
-  test('stopping preserves streamed partial output and permits a new submission', async () => {
-    const requests: TranscriptContext[] = [];
-    let signal: AbortSignal | undefined;
-    let started!: () => void;
-    const firstStarted = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    let runtime!: PiDurableRuntime;
-    const bridge = createPiDurableModels(
-      {
-        preflightModel: async () => ({
-          contextWindow: 32768,
-          maxInputTokens: 28672,
-          maxOutputTokens: 4096,
-          inputModalities: ['text'],
-          supportsTools: false,
-        }),
-        resolveModel: async () => ({
-          model: wire,
-          defaultThinkingLevel: 'off',
-          redactionValues: [],
-          supportsTools: false,
-          usageContext: {
-            providerId: reference.providerId,
-            providerName: null,
-            modelId: reference.modelId,
-            modelName: null,
-            pricingSnapshot: null,
-            trustProviderReportedCost: false,
-            reportedCostCurrency: null,
-            credentialReceipt: { attribution: 'unknown' },
-          },
-          streamFn: withPiStreamIdleTimeout((_model, context, options) => {
-            requests.push(context);
-            const stream = new AssistantMessageEventStream();
-            if (requests.length === 1) {
-              signal = options?.signal;
-              const partial = {
-                ...emptyAssistantMessage(wire),
-                content: [{ type: 'text' as const, text: 'Partial answer' }],
-              };
-              stream.push({
-                type: 'text_delta',
-                contentIndex: 0,
-                delta: 'Partial answer',
-                partial,
-              });
-              started();
-            } else {
-              stream.push({
-                type: 'done',
-                reason: 'stop',
-                message: {
-                  ...emptyAssistantMessage(wire),
-                  stopReason: 'stop',
-                  content: [{ type: 'text', text: 'Resent answer' }],
-                },
-              });
-            }
-            return stream;
-          }),
-        }),
-      },
-      (affinity) => runtime.requestOptions(affinity),
-    );
-    await bridge.registerModel(reference);
-    runtime = await PiDurableRuntime.open(new MemoryStorage(), {
-      models: bridge.models,
-      registry: createRegistry(),
-      settings: {
-        followUpMode: 'one-at-a-time',
-        compaction: { enabled: false },
-        retry: { enabled: false },
-      },
-    });
-    try {
-      await runtime.ensureConversation({
-        sessionId: 'stop',
-        revision: 0,
-        options: { maxOutputTokens: 512 },
-        agent: {
-          model: { provider: reference.providerId, modelId: reference.modelId },
-          instructions: 'Answer.',
-        },
-      });
-      const watch = await runtime.watch('stop');
-      let partialSeen!: () => void;
-      const partialObserved = new Promise<void>((resolve) => {
-        partialSeen = resolve;
-      });
-      watch.start(async (call) => {
-        if (call.kind === 'value' && JSON.stringify(call.value).includes('Partial answer'))
-          partialSeen();
-      });
-      const a = await runtime.submit('stop', { type: 'input', requestId: 'A', content: 'A' }, {});
-      await firstStarted;
-      await partialObserved;
-      await runtime.stopTurn('stop', 'A');
-      await a.wait(BACKGROUND_CONTEXT);
-      expect(signal?.aborted).toBe(true);
-      expect(requests).toHaveLength(1);
-      expect(JSON.stringify((await runtime.history('stop', 256)).entries)).toContain(
-        'Partial answer',
-      );
-      const resent = await runtime.submit(
-        'stop',
-        { type: 'input', requestId: 'B-new', content: 'B' },
-        {},
-      );
-      expect((await resent.wait(BACKGROUND_CONTEXT)).status).toBe('done');
-      expect(requests).toHaveLength(2);
-      expect(
-        requests[1]?.messages
-          .filter((message) => message.role === 'user')
-          .map((message) => message.content),
-      ).toEqual(['A', 'B']);
-      await watch.stop();
-    } finally {
-      await runtime.close();
-    }
-  });
-
   test('model probes deliver the answer and complete without storing a production conversation', async () => {
     const requests: TranscriptContext[] = [];
     const identities: unknown[] = [];

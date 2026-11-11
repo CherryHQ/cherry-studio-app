@@ -714,20 +714,6 @@ export class PiDurableRuntime {
     return () => observation.detach();
   }
 
-  async stopTurn(sessionId: string, requestId: string, context: Context = BACKGROUND_CONTEXT) {
-    const conversation = await this.conversation(sessionId, context);
-    if (!conversation) return;
-    const record = await this.harness.commit(
-      (tx) => tx.submissionByRequest(conversation.id, requestId),
-      context,
-    );
-    if (!record || record.status !== 'placed') return;
-    await conversation.abort(context, {
-      background: true,
-      expectedInput: record.id,
-    });
-  }
-
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });
