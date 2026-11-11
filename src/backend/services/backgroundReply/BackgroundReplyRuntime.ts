@@ -18,6 +18,7 @@ import type {
 import type {
   KeepAliveLease,
   KeepAliveSource,
+  KeepAliveTask,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundActivityActions,
@@ -67,6 +68,8 @@ type TurnRecord = {
   key: string;
   latestMessage?: BackgroundReplyMessage;
   onInterrupt?: (reason: Error) => void | Promise<void>;
+  processingLease?: KeepAliveLease;
+  processingUnits: number;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -150,14 +153,15 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
   }
 
   private cancelSessions(): void {
-    for (const lease of this.preparationLeases) lease.release();
-    this.preparationLeases.clear();
     for (const record of this.turns.values()) {
       this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
       this.clearUpdateTimer(record);
+      this.releaseProcessing(record);
       record.session?.cancel();
       record.session = undefined;
     }
+    for (const lease of this.preparationLeases) lease.release();
+    this.preparationLeases.clear();
   }
 
   acquirePreparation = (
@@ -165,23 +169,56 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     onInterrupt: (reason: Error) => void,
   ): KeepAliveLease => {
     if (!this.isReady || this.disposed) return { release() {} };
-    const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
-    this.preparationLeases.add(lease);
     const prepared = this.prepareTurn(sessionId);
+    const record = this.turns.get(sessionId);
+    const task = record && !record.processingLease ? this.toProcessingTask(record) : undefined;
+    const lease = this.keepAlive.acquire(
+      'chat.preparation',
+      (reason) => {
+        onInterrupt(reason);
+        const current = this.turns.get(sessionId);
+        if (current?.processingLease === lease) return current.onInterrupt?.(reason);
+      },
+      task,
+    );
+    if (record && task && lease.update) record.processingLease = lease;
+    this.preparationLeases.add(lease);
+    if (prepared) {
+      // Request execution before a notification-permission prompt can make iOS inactive.
+      this.beginReplyDestination(prepared);
+      this.ensureSession(prepared);
+    }
     return {
       release: () => {
-        if (this.preparationLeases.delete(lease)) lease.release();
+        if (!this.preparationLeases.delete(lease)) return;
+        const current = this.turns.get(sessionId);
         // A turn that started owns the record now. Nothing took it over means
         // preparation ended without one, so its surface has nothing to say.
-        if (prepared && this.turns.get(sessionId) === prepared) this.clearTurn(sessionId);
+        if (prepared && current === prepared) {
+          if (current.processingLease !== lease) lease.release();
+          this.clearTurn(sessionId);
+        } else if (current?.processingLease !== lease) lease.release();
+        else if (replyAttentionKey(current.content)) this.releaseProcessing(current);
       },
     };
   };
 
+  resumeProcessing = (sessionId: string): void => {
+    const record = this.turns.get(sessionId);
+    if (!record || record.processingLease || this.disposed || !record.onInterrupt) return;
+    record.processingUnits = 1;
+    const lease = this.keepAlive.acquire(
+      'chat.continuation',
+      record.onInterrupt,
+      this.toProcessingTask(record),
+    );
+    if (lease.update) record.processingLease = lease;
+    else lease.release();
+  };
+
   /**
-   * Opens the Session's surface for the preparation stage. A surface can only
-   * be created while the user can still see the app, and preparation is the
-   * part of a submission they are most likely to walk away from.
+   * Prepares the Session's record. The caller acquires execution before opening
+   * its surface or requesting notification permission while the app is active.
    */
   private prepareTurn(sessionId: string): TurnRecord | undefined {
     if (this.turns.has(sessionId)) return undefined;
@@ -193,11 +230,10 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       deepLinkUrl: sessionTaskUrl(sessionId),
       generation: ++this.generation,
       key: sessionId,
+      processingUnits: 0,
       startedAtEpochMs: Date.now(),
     };
     this.turns.set(sessionId, record);
-    this.beginReplyDestination(record);
-    this.ensureSession(record);
     return record;
   }
 
@@ -219,10 +255,14 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       generation,
       key: normalized.key,
       onInterrupt: input.onInterrupt,
+      processingLease: existing?.processingLease,
+      processingUnits: 1,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
+    if (existing) existing.processingLease = undefined;
     this.turns.set(record.key, record);
+    record.processingLease?.update?.(this.toProcessingTask(record));
     this.beginReplyDestination(record);
     this.ensureSession(record);
 
@@ -274,6 +314,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           this.turns.delete(record.key);
           this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
           this.clearUpdateTimer(record);
+          this.releaseProcessing(record);
           // Cancellation leaves no settled card behind.
           record.session?.cancel();
           record.session = undefined;
@@ -295,6 +336,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       const record = this.turns.get(key);
       if (!record || record.conversationTitle === title.trim()) return;
       record.conversationTitle = title.trim();
+      record.processingLease?.update?.(this.toProcessingTask(record));
       record.session?.update(this.toActivityProps(record), {
         keepAlive: true,
         urgent: true,
@@ -313,6 +355,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
 
     this.turns.delete(key);
     this.clearUpdateTimer(record);
+    this.releaseProcessing(record);
     record.session?.cancel();
     record.session = undefined;
   }
@@ -338,6 +381,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
 
     record.latestMessage = message;
     if (!this.isReady) return;
+    if (record.processingUnits < 2 && hasReplyText(message)) record.processingUnits = 2;
 
     if (options?.deferPreview) {
       if (record.content.phase === 'thinking' && !hasReplyText(message)) {
@@ -365,6 +409,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
         ])
       : undefined;
     record.interaction = interaction;
+    if (interaction) this.releaseProcessing(record);
     if (key === record.interactionKey) return;
     record.interactionKey = key;
     record.actions = interaction
@@ -407,6 +452,9 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     const attention = replyAttentionKey(content);
     const urgent = record.content.phase !== content.phase || previousAttention !== attention;
     record.content = content;
+    // Waiting for a person is not continued processing. A foreground response can request again.
+    if (attention) this.releaseProcessing(record);
+    else record.processingLease?.update?.(this.toProcessingTask(record));
     record.session?.update(this.toActivityProps(record), {
       keepAlive: true,
       urgent,
@@ -512,8 +560,28 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
         if (this.turns.get(key) === record) this.turns.delete(key);
       });
     } finally {
+      this.releaseProcessing(record, outcome === 'completed' ? 'completed' : undefined);
       deliveryLease?.release();
     }
+  }
+
+  private toProcessingTask(record: TurnRecord): KeepAliveTask {
+    return {
+      title: record.conversationTitle || record.actorName,
+      subtitle: record.content.detail,
+      // Actual milestones: preparation, admitted execution, reply text, committed delivery.
+      completedUnitCount: record.processingUnits,
+      totalUnitCount: 3,
+    };
+  }
+
+  private releaseProcessing(record: TurnRecord, outcome?: 'completed'): void {
+    const lease = record.processingLease;
+    record.processingLease = undefined;
+    if (!lease) return;
+    this.preparationLeases.delete(lease);
+    if (outcome) lease.release(outcome);
+    else lease.release();
   }
 
   /** A new reply on a destination retires its previous completion notice; the

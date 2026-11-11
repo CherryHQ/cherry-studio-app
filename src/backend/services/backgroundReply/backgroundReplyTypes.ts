@@ -80,6 +80,8 @@ export type BackgroundReplyLifecycle = {
    * a user who leaves the app before the turn exists still gets one.
    */
   acquirePreparation: (sessionId: string, onInterrupt: (reason: Error) => void) => KeepAliveLease;
+  /** A foreground answer/approval is a new user action; observation and restoration are not. */
+  resumeProcessing: (sessionId: string) => void;
   clearSession: (sessionId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string, connectionId?: string) => void;

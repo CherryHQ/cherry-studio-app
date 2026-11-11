@@ -263,6 +263,7 @@ function backgroundFixture() {
     replies: {
       startTurn,
       acquirePreparation: jest.fn(),
+      resumeProcessing: jest.fn(),
       clearSession: jest.fn(),
       updateSessionTitle: jest.fn(),
     },

@@ -1,17 +1,30 @@
+import { randomUUID as mockRandomUUID } from 'node:crypto';
+
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { IosBackgroundExecutionSource } from '../IosBackgroundExecutionSource';
+import type { KeepAliveTask } from '../KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '../KeepAliveInterruptionError';
 
 const mockBegin = jest.fn<Promise<boolean>, [string]>();
 const mockEnd = jest.fn<Promise<void>, [string]>();
 const mockBeginAudio = jest.fn<Promise<boolean>, [string]>();
 const mockEndAudio = jest.fn<Promise<void>, [string]>();
+const mockBeginContinued = jest.fn<Promise<boolean>, [string, KeepAliveTask]>();
+const mockUpdateContinued = jest.fn<Promise<void>, [string, KeepAliveTask]>();
+const mockEndContinued = jest.fn<Promise<void>, [string, boolean]>();
 const mockRemove = jest.fn();
 let mockExpire: (event: { id: string }) => void;
 let mockAudioState: (event: { id: string; active: boolean }) => void;
+let mockContinuedState: (event: {
+  id: string;
+  state: 'active' | 'unavailable' | 'expired';
+}) => void;
 let consent: boolean | null;
 let changeConsent: () => void;
 const preference = { readCached: jest.fn(), subscribeChange: jest.fn() };
+
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 jest.mock('../../../../../modules/system-integration', () => ({
   getSystemIntegration: () => ({
@@ -19,9 +32,17 @@ jest.mock('../../../../../modules/system-integration', () => ({
     endBackgroundExecution: mockEnd,
     beginBackgroundAudioExecution: mockBeginAudio,
     endBackgroundAudioExecution: mockEndAudio,
-    addListener: (event: string, listener: typeof mockExpire | typeof mockAudioState) => {
+    beginContinuedProcessingTask: mockBeginContinued,
+    updateContinuedProcessingTask: mockUpdateContinued,
+    endContinuedProcessingTask: mockEndContinued,
+    addListener: (
+      event: string,
+      listener: typeof mockExpire | typeof mockAudioState | typeof mockContinuedState,
+    ) => {
       if (event === 'onBackgroundExecutionExpired') mockExpire = listener as typeof mockExpire;
-      else mockAudioState = listener as typeof mockAudioState;
+      else if (event === 'onBackgroundAudioStateChanged')
+        mockAudioState = listener as typeof mockAudioState;
+      else mockContinuedState = listener as typeof mockContinuedState;
       return { remove: mockRemove };
     },
   }),
@@ -40,6 +61,9 @@ describe('IosBackgroundExecutionSource', () => {
     mockEnd.mockResolvedValue(undefined);
     mockBeginAudio.mockResolvedValue(true);
     mockEndAudio.mockResolvedValue(undefined);
+    mockBeginContinued.mockResolvedValue(false);
+    mockUpdateContinued.mockResolvedValue(undefined);
+    mockEndContinued.mockResolvedValue(undefined);
     consent = null;
     preference.readCached.mockImplementation(() => consent);
     preference.subscribeChange.mockImplementation(() => (listener: () => void) => {
@@ -73,7 +97,7 @@ describe('IosBackgroundExecutionSource', () => {
     expect(mockEnd).toHaveBeenCalledWith(id);
     expect(source.getStatus()).toBe('idle');
     await source._doStop();
-    expect(mockRemove).toHaveBeenCalledTimes(2);
+    expect(mockRemove).toHaveBeenCalledTimes(3);
   });
 
   test('expiration interrupts each held consumer once and cannot renew while backgrounded', async () => {
@@ -265,6 +289,151 @@ describe('IosBackgroundExecutionSource', () => {
     mockExpire({ id: mockBegin.mock.calls[0][0] });
     await flushOperations();
     expect(interrupt).not.toHaveBeenCalled();
+    await source._doStop();
+  });
+
+  const task: KeepAliveTask = {
+    title: 'Conversation',
+    subtitle: 'Preparing',
+    completedUnitCount: 0,
+    totalUnitCount: 3,
+  };
+
+  test('prefers native continued processing and never starts silence while it is pending or active', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const interrupt = jest.fn();
+    const lease = source.acquire('chat', interrupt, task);
+    await flushOperations();
+    const id = mockBeginContinued.mock.calls[0][0];
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    mockContinuedState({ id, state: 'active' });
+    changeState('background');
+    mockExpire({ id: mockBegin.mock.calls[0][0] });
+    await flushOperations();
+    expect(interrupt).not.toHaveBeenCalled();
+    const progress = { ...task, subtitle: 'Responding', completedUnitCount: 2 };
+    lease.update?.(progress);
+    await flushOperations();
+    expect(mockUpdateContinued).toHaveBeenLastCalledWith(id, progress);
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    lease.release('completed');
+    await flushOperations();
+    expect(mockEndContinued).toHaveBeenCalledWith(id, true);
+    mockContinuedState({ id, state: 'expired' });
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(source.getStatus()).toBe('idle');
+    await source._doStop();
+  });
+
+  test.each(['denied', 'unavailable'] as const)(
+    'uses consented audio only after continued processing is %s, without automatic resubmission',
+    async (failure) => {
+      consent = true;
+      mockBeginContinued.mockResolvedValue(failure !== 'denied');
+      const source = new IosBackgroundExecutionSource(preference);
+      await source._doInit();
+      source.acquire('chat', jest.fn(), task);
+      await flushOperations();
+      const id = mockBeginContinued.mock.calls[0][0];
+      if (failure === 'unavailable') {
+        expect(mockBeginAudio).not.toHaveBeenCalled();
+        mockContinuedState({ id, state: 'unavailable' });
+        await flushOperations();
+      }
+      expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+      mockContinuedState({ id, state: 'active' });
+      changeState('background');
+      changeState('active');
+      await flushOperations();
+      expect(mockBeginContinued).toHaveBeenCalledTimes(1);
+      await source._doStop();
+    },
+  );
+
+  test('native revocation interrupts once even in foreground and never falls back for that task', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const interrupt = jest.fn();
+    const lease = source.acquire('chat', interrupt, task);
+    await flushOperations();
+    const id = mockBeginContinued.mock.calls[0][0];
+    mockContinuedState({ id, state: 'active' });
+    mockContinuedState({ id, state: 'expired' });
+    mockContinuedState({ id, state: 'expired' });
+    await flushOperations();
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(interrupt.mock.calls[0][0]).toBeInstanceOf(KeepAliveInterruptionError);
+    mockContinuedState({ id, state: 'active' });
+    changeState('background');
+    changeState('active');
+    lease.update?.({ ...task, completedUnitCount: 1 });
+    await flushOperations();
+    expect(mockBeginContinued).toHaveBeenCalledTimes(1);
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    lease.release();
+    await flushOperations();
+    expect(mockEndContinued).toHaveBeenCalledWith(id, false);
+    await source._doStop();
+  });
+
+  test('does not let generic demand start audio before a revoked task finishes cancelling', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const taskLease = source.acquire('chat', jest.fn(), task);
+    source.acquire('other');
+    await flushOperations();
+    const id = mockBeginContinued.mock.calls[0][0];
+    mockContinuedState({ id, state: 'active' });
+    mockContinuedState({ id, state: 'expired' });
+    await flushOperations();
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    taskLease.release();
+    await flushOperations();
+    expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+    await source._doStop();
+  });
+
+  test('revoking one task leaves another admitted task protected', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const first = jest.fn();
+    const second = jest.fn();
+    source.acquire('first', first, task);
+    source.acquire('second', second, task);
+    await flushOperations();
+    const firstId = mockBeginContinued.mock.calls[0][0];
+    const secondId = mockBeginContinued.mock.calls[1][0];
+    mockContinuedState({ id: firstId, state: 'active' });
+    mockContinuedState({ id: secondId, state: 'active' });
+    changeState('background');
+    mockExpire({ id: mockBegin.mock.calls[0][0] });
+    mockContinuedState({ id: firstId, state: 'expired' });
+    await flushOperations();
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    await source._doStop();
+  });
+
+  test('does not turn background demand or foreground return into a user task request', async () => {
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    changeState('background');
+    source.acquire('restored', jest.fn(), task);
+    await flushOperations();
+    changeState('active');
+    await flushOperations();
+    expect(mockBeginContinued).not.toHaveBeenCalled();
     await source._doStop();
   });
 });

@@ -6,6 +6,7 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
@@ -1333,6 +1334,7 @@ export class DurableAgentHost implements AgentProtocol {
     );
     const pending = state?.approvals.get(parsed.approvalId);
     if (!pending) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+    this.background.resumeProcessing(parsed.sessionId);
     pending.resolve(parsed.decision);
   }
 
@@ -1345,6 +1347,7 @@ export class DurableAgentHost implements AgentProtocol {
     );
     if (!state) fail('QUESTION_NOT_FOUND', 'The question is no longer pending.');
     state.questions.respond(parsed.toolCallId, parsed.answer);
+    this.background.resumeProcessing(parsed.sessionId);
   }
 
   async readReasoning(input: Parameters<AgentProtocol['readReasoning']>[0]) {
@@ -2063,7 +2066,11 @@ export class DurableAgentHost implements AgentProtocol {
               sessionTitle: session?.name ?? '',
               agentId: agent.id,
               agentName: agent.name,
-              onInterrupt: () => this.suspend(),
+              onInterrupt: (reason) =>
+                reason instanceof KeepAliveInterruptionError &&
+                reason.reason === 'continued-processing-expired'
+                  ? this.cancelBackgroundSession(sessionId, reason)
+                  : this.suspend(reason),
             });
             state.backgroundRequestId = turn.identity.requestId;
             state.backgroundCompleted = false;
@@ -2375,6 +2382,14 @@ export class DurableAgentHost implements AgentProtocol {
       });
     this.admissions.set(sessionId, { controller, promise });
     return promise;
+  }
+
+  /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
+  private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
+    this.admissions.get(sessionId)?.controller.abort(reason);
+    await Promise.all(
+      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
+    );
   }
 
   private recordQueue(

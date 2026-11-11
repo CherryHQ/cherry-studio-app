@@ -49,6 +49,7 @@ import {
 import type {
   KeepAliveLease,
   KeepAliveSource,
+  KeepAliveTask,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
@@ -92,7 +93,7 @@ const DELAYED_TIMER_READ_RETRY_MS = 1_000;
 /**
  * `user-continued` states the product promise ("keeps running while you do
  * something else"); a keep-alive lease around `execute` is the mechanism
- * requesting a finite iOS UIKit window or Android's dataSync foreground
+ * requesting official iOS continued processing with finite/audio fallback, or Android's dataSync foreground
  * service. The execution class does not bypass OS background-start restrictions.
  */
 const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
@@ -196,6 +197,8 @@ export class JobRuntime extends BaseService {
 
   private readonly abortControllers = new Map<string, AbortController>();
   private readonly activeKeepAliveLeases = new Map<string, KeepAliveLease>();
+  /** Process-local user intent; restored rows and automatic retries cannot inherit it. */
+  private readonly continuedTasks = new Map<string, KeepAliveTask>();
   private readonly inFlightExecuted = new Map<string, Promise<void>>();
   private readonly finishedResolvers = new Map<string, FinishedResolver>();
   private readonly timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
@@ -288,6 +291,7 @@ export class JobRuntime extends BaseService {
       }
       const created = await this.jobService.createTx(tx, insertRow);
       this.startupLocalIds?.add(created.id);
+      this.recordContinuedTask(created);
       return created;
     });
     const handle = this.handleFor(snapshot);
@@ -317,6 +321,7 @@ export class JobRuntime extends BaseService {
     }
     const snapshot = await this.jobService.createTx(tx, insertRow);
     this.startupLocalIds?.add(snapshot.id);
+    this.recordContinuedTask(snapshot);
     this.pendingTxVerifications.add(snapshot.id);
     const handle = this.handleFor(snapshot);
     // The pump's claim transaction queues behind the caller's transaction in
@@ -466,6 +471,25 @@ export class JobRuntime extends BaseService {
     // outcomes across teardown.
     this.finishedResolvers.clear();
     this.pendingTxVerifications.clear();
+    this.continuedTasks.clear();
+  }
+
+  private recordContinuedTask(snapshot: JobSnapshot): void {
+    const handler = this.handlers.get(snapshot.type);
+    if (
+      this.disposed ||
+      snapshot.status !== 'pending' ||
+      snapshot.parentId !== null ||
+      handler?.executionClass !== 'user-continued'
+    )
+      return;
+    const labels = handler.continuedProcessing?.(snapshot.input);
+    if (labels)
+      this.continuedTasks.set(snapshot.id, {
+        ...labels,
+        completedUnitCount: 0,
+        totalUnitCount: 100,
+      });
   }
 
   // -------------------------------------------------------------------------
@@ -702,7 +726,10 @@ export class JobRuntime extends BaseService {
     this.pendingTxVerifications.clear();
     for (const id of ids) {
       const row = await this.jobService.getRowByIdTx(tx, id);
-      if (!row) this.finishedResolvers.delete(id);
+      if (!row) {
+        this.finishedResolvers.delete(id);
+        this.continuedTasks.delete(id);
+      }
     }
   }
 
@@ -877,22 +904,31 @@ export class JobRuntime extends BaseService {
     if (handler.executionClass !== 'user-continued' || !this.keepAlive) return undefined;
 
     this.releaseKeepAliveLease(row.id);
-    const sourceLease = this.keepAlive.acquire(`job.${row.type}`, async (reason) => {
+    const task = this.continuedTasks.get(row.id);
+    this.continuedTasks.delete(row.id);
+    const interrupt = async (reason: Error) => {
       // Stop execution before the cancellation-intent write yields. A task
       // denied background time must not start its request while that write waits.
       this.abortControllers.get(row.id)?.abort(reason);
       await this.cancel(row.id, reason.message);
-    });
+    };
+    const sourceLease = task
+      ? this.keepAlive.acquire(`job.${row.type}`, interrupt, task)
+      : this.keepAlive.acquire(`job.${row.type}`, interrupt);
     let released = false;
     const lease: KeepAliveLease = {
-      release: () => {
+      release: (outcome) => {
         if (released) return;
         released = true;
         if (this.activeKeepAliveLeases.get(row.id) === lease) {
           this.activeKeepAliveLeases.delete(row.id);
         }
-        sourceLease.release();
+        if (outcome) sourceLease.release(outcome);
+        else sourceLease.release();
       },
+      ...(sourceLease.update
+        ? { update: (next: KeepAliveTask) => sourceLease.update?.(next) }
+        : {}),
     };
     this.activeKeepAliveLeases.set(row.id, lease);
     return lease;
@@ -902,14 +938,18 @@ export class JobRuntime extends BaseService {
     this.activeKeepAliveLeases.get(jobId)?.release();
   }
 
-  private async releaseKeepAliveAfterPump(lease: KeepAliveLease | undefined): Promise<void> {
+  private async releaseKeepAliveAfterPump(
+    lease: KeepAliveLease | undefined,
+    outcome?: 'completed',
+  ): Promise<void> {
     if (!lease) return;
     try {
       // Claim queued successors before releasing execution protection:
       // Android cannot restart the service once the app is backgrounded.
       await this.pump({ reason: 'enqueue' });
     } finally {
-      lease.release();
+      if (outcome) lease.release(outcome);
+      else lease.release();
     }
   }
 
@@ -954,7 +994,9 @@ export class JobRuntime extends BaseService {
   private spawnExecute(row: JobRow, handler: JobHandler, binding: PreparedExecution): void {
     const { controller } = binding;
 
+    const continuedTask = this.continuedTasks.get(row.id);
     const keepAliveLease = this.acquireKeepAliveLease(row, handler);
+    let completed = false;
 
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
       const handle = setTimeout(() => {
@@ -986,6 +1028,11 @@ export class JobRuntime extends BaseService {
       },
       reportProgress: (progress, detail) => {
         this.onProgress(row.id, { detail, progress });
+        if (continuedTask && !controller.signal.aborted && Number.isFinite(progress))
+          keepAliveLease?.update?.({
+            ...continuedTask,
+            completedUnitCount: Math.max(0, Math.min(99, progress)),
+          });
       },
       signal: controller.signal,
     };
@@ -1000,7 +1047,7 @@ export class JobRuntime extends BaseService {
           throw controller.signal.reason ?? new Error('Job cancelled');
         }
         this.clearTimeoutHandle(row.id);
-        await this.finalizeJob(row.id, 'completed', output, null, ['running']);
+        completed = await this.finalizeJob(row.id, 'completed', output, null, ['running']);
       } catch (err) {
         this.clearTimeoutHandle(row.id);
         // Classification is state-based (abort flag + sentinel reason), never
@@ -1043,7 +1090,7 @@ export class JobRuntime extends BaseService {
         // Unregister this settled attempt before claiming an immediate retry
         // of the same row; retain only its lease through the queue handoff.
         binding.release();
-        await this.releaseKeepAliveAfterPump(keepAliveLease);
+        await this.releaseKeepAliveAfterPump(keepAliveLease, completed ? 'completed' : undefined);
       }
     })();
 
@@ -1072,7 +1119,7 @@ export class JobRuntime extends BaseService {
   /**
    * Side-effect order is load-bearing: terminal write and snapshot in one
    * transaction → resolve `finished` + kick the pump → await onSettled with
-   * errors swallowed.
+   * errors swallowed. True confirms persisted completion for native task success.
    */
   private async finalizeJob(
     jobId: string,
@@ -1080,7 +1127,7 @@ export class JobRuntime extends BaseService {
     output: unknown | undefined,
     error: JobError | null,
     expectedStatuses: readonly JobStatus[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     let terminalResult: Awaited<ReturnType<JobService['setTerminalTx']>> | undefined;
     let txFailed: Error | undefined;
     try {
@@ -1100,6 +1147,7 @@ export class JobRuntime extends BaseService {
       // Weak fence held: another path finalized (or retried) this row first.
       // Late callbacks release awaiters at most; they never overwrite state.
       if (persisted && isTerminalStatus(persisted.status)) {
+        this.continuedTasks.delete(jobId);
         this.resolveFinished(jobId, persisted);
       } else {
         logger.warn('finalizeJob fenced: row is not in an expected state', {
@@ -1108,7 +1156,7 @@ export class JobRuntime extends BaseService {
         });
       }
       this.schedulePump();
-      return;
+      return persisted?.status === 'completed';
     }
 
     const snapshot =
@@ -1118,6 +1166,7 @@ export class JobRuntime extends BaseService {
         txFailed ?? new Error('terminal update returned no snapshot'),
       );
     this.resolveFinished(jobId, snapshot);
+    this.continuedTasks.delete(jobId);
     this.schedulePump();
 
     const handler = this.handlers.get(snapshot.type);
@@ -1138,6 +1187,7 @@ export class JobRuntime extends BaseService {
         logger.warn('handler.onSettled threw — ignoring', settledError as Error);
       }
     }
+    return !!persisted && !txFailed && snapshot.status === 'completed';
   }
 
   private async scheduleRetry(

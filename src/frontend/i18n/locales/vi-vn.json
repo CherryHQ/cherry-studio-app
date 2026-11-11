@@ -243,7 +243,7 @@
   "backgroundRun.description": "Các cuộc hội thoại chưa kết thúc tiếp tục yêu cầu bảo vệ quá trình thực thi, kể cả khi chờ bạn nhập.",
   "backgroundRun.disabled": "Tắt",
   "backgroundRun.enabled": "Bật",
-  "backgroundRun.ios.audioGuide": "Tiếp tục tác vụ bằng âm thanh nền, có thể tốn pin hơn.",
+  "backgroundRun.ios.audioGuide": "Nếu hệ thống không hỗ trợ thực thi nền, tiếp tục tác vụ bằng âm thanh nền. Điều này có thể tốn pin hơn.",
   "backgroundRun.ios.enable": "Bật",
   "backgroundRun.ios.guide": "iOS giới hạn việc chạy nền. Tắt Chế độ nguồn điện thấp và cho phép thông báo cùng Hoạt động trực tiếp. Buộc đóng ứng dụng sẽ làm gián đoạn cuộc trò chuyện cục bộ.",
   "backgroundRun.ios.limited": "iOS vẫn có thể tạm dừng thực thi trong nền sau khi bạn điều chỉnh các cài đặt này.",

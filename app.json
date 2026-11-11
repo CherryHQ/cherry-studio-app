@@ -114,7 +114,7 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": ["audio", "processing"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },

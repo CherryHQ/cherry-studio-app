@@ -1,5 +1,7 @@
 import { v7 as uuid } from 'uuid';
 
+import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import type {
   AgentEvent,
   AgentInferenceSnapshotV1,
@@ -251,9 +253,10 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   };
   const background = {
     acquirePreparation: () => ({ release() {} }),
+    resumeProcessing: jest.fn(),
     clearSession() {},
     updateSessionTitle() {},
-    startTurn: jest.fn(() => reply),
+    startTurn: jest.fn((_input: BackgroundReplyTurnInput) => reply),
   };
   const host = new DurableAgentHost(store, ports, background, conversations);
   const reserve = async (
@@ -2060,6 +2063,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         turn: { assistantMessageId: running[1]!.assistantMessageId, isRetrying: true },
       });
       observation.unsubscribe();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('continued processing revocation cancels the Session without suspending or reopening the whole engine', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const before = [...state.steps];
+      await state.background.startTurn.mock.calls[0]![0].onInterrupt?.(
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      expect(runningTurns(state)).toHaveLength(0);
+      await state.host.resumeSuspended();
+      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
+        before.filter((step) => step === 'close' || step === 'open'),
+      );
     } finally {
       await state.host.close();
     }

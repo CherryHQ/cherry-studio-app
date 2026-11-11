@@ -2,6 +2,10 @@ import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 
@@ -45,7 +49,9 @@ describe('BackgroundReplyRuntime', () => {
   const mockStartSession = jest.fn(createMockSession);
   const mockDismissTask = jest.fn();
   const preparationRelease = jest.fn();
-  const acquire = jest.fn(() => ({ release: preparationRelease }));
+  const acquire = jest.fn<KeepAliveLease, Parameters<KeepAliveSource['acquire']>>(() => ({
+    release: preparationRelease,
+  }));
 
   beforeEach(() => {
     mockSessions.length = 0;
@@ -61,8 +67,18 @@ describe('BackgroundReplyRuntime', () => {
     const runtime = await createRuntime();
     const interrupt = jest.fn();
     const lease = runtime.acquirePreparation('session-1', interrupt);
-    expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
+    expect(acquire).toHaveBeenCalledWith(
+      'chat.preparation',
+      expect.any(Function),
+      expect.objectContaining({ completedUnitCount: 0, totalUnitCount: 3 }),
+    );
+    const reason = new Error('Execution expired');
+    await acquire.mock.calls[0]![1]?.(reason);
+    expect(interrupt).toHaveBeenCalledWith(reason);
     expect(mockStartSession).toHaveBeenCalledTimes(1);
+    expect(acquire.mock.invocationCallOrder[0]).toBeLessThan(
+      mockStartSession.mock.invocationCallOrder[0]!,
+    );
     lease.release();
     expect(preparationRelease).toHaveBeenCalledTimes(1);
     await runtime._doStop();
@@ -96,6 +112,68 @@ describe('BackgroundReplyRuntime', () => {
     turn.finish('completed');
     await flushOperations();
     expect(session!.finish).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
+  });
+
+  test('hands continued processing from preparation to reply and retains it through final delivery', async () => {
+    const release = jest.fn();
+    const update = jest.fn();
+    acquire.mockReturnValueOnce({ release, update });
+    const runtime = await createRuntime();
+    const preparation = runtime.acquirePreparation('session-1', jest.fn());
+    const onInterrupt = jest.fn();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+      onInterrupt,
+    });
+    preparation.release();
+    expect(release).not.toHaveBeenCalled();
+    expect(update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: 'First session', completedUnitCount: 1 }),
+    );
+    turn.update({ parts: [textPart('A real reply')] });
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ completedUnitCount: 2 }));
+    const delivered = createDeferred();
+    turn.finish('completed', { waitFor: delivered.promise });
+    await flushOperations();
+    expect(release).not.toHaveBeenCalled();
+    delivered.resolve();
+    await flushOperations();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledWith('completed');
+    await runtime._doStop();
+  });
+
+  test('ends continued processing while awaiting a person and requests again only on an explicit response', async () => {
+    const release = jest.fn();
+    const resumedRelease = jest.fn();
+    acquire.mockReturnValueOnce({ release, update: jest.fn() });
+    const runtime = await createRuntime();
+    const preparation = runtime.acquirePreparation('session-1', jest.fn());
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+      onInterrupt: jest.fn(),
+    });
+    preparation.release();
+    turn.awaitApproval();
+    expect(release).toHaveBeenCalledTimes(1);
+    turn.update({ parts: [textPart('More content')] });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    acquire.mockReturnValueOnce({ release: resumedRelease, update: jest.fn() });
+    runtime.resumeProcessing('session-1');
+    expect(acquire).toHaveBeenLastCalledWith(
+      'chat.continuation',
+      expect.any(Function),
+      expect.objectContaining({ completedUnitCount: 1 }),
+    );
+    turn.retire();
+    expect(resumedRelease).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
 

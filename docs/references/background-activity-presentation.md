@@ -174,26 +174,39 @@ the card. This does not change stored task content.
 The frontend consumes the coordinator's public execution status rather than inferring protection
 from a visible card. Android reports active only after native foreground-service proof. Denied
 admission is limited; revocation is interrupted. iOS always reports limited: the system can revoke
-execution even when native admission succeeds. Its default protection is a finite UIKit background
-task. The existing first-use background guidance offers a short audio disclosure and Enable action.
+execution even when native admission succeeds. It retains finite UIKit time for admission and fallback.
+The existing first-use background guidance offers a short audio disclosure and Enable action.
 Only explicit confirmation stores `app.background_audio.consent: true`; showing or cancelling it
 leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
 target device's decision. No settings row or switch is added.
 
-Consenting unfinished work shares a task-owned silent audio loop alongside the finite window.
+Explicit foreground user work first requests iOS 26+ `BGContinuedProcessingTask`. The native
+launch callback, not submission success, confirms protection. iOS 27 uses asynchronous submission;
+iOS 26 retains its original API. Each request has a unique native identifier and real progress.
+Chat hands one request from preparation through reply delivery, reports preparation/admission/text
+milestones, and releases it while waiting for a question or approval. A foreground response may
+request another; observation and restoration never do. Painting's immediate local enqueue carries
+process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
+do not inherit that intent. System-UI cancellation or expiration stops the owning conversation/job
+without silently restarting it through audio; ordinary finite-window loss still suspends the Agent
+Harness for later foreground recovery.
+
+If continued processing is unavailable, consenting unfinished work shares a task-owned silent audio
+loop alongside the finite window.
+Pending or running official tasks suppress silent playback. Admission failure or a five-second
+missing-launch deadline enables fallback; a stale launch cannot adopt a released request.
 Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
 expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
 finite allowance; when neither mechanism protects background work, each held consumer is interrupted
 once and audio cannot restart that work in the same background stay. The last lease release and
-service shutdown end both mechanisms. Foreground return allows a fresh window. Late native events
+service shutdown release all native mechanisms. Foreground return allows a fresh window. Late native events
 cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
 unfinished work. This does not promise a fixed duration or automatic replay.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.
 
-iOS 26 continued-processing tasks are not integrated in this change. Their progress, expiration,
-and system-owned presentation remain a separate native integration. Neither current platform
-mechanism promises survival of force-stop or process death.
+Continued processing displays system-owned progress and cancellation controls, independent of the
+app's optional task cards. No mechanism promises survival of force-stop or process death.
 
 ## Acceptance
 

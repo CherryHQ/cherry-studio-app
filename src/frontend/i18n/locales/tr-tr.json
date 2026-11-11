@@ -243,7 +243,7 @@
   "backgroundRun.description": "Tamamlanmamış konuşmalar, girdinizi beklerken de yürütme koruması istemeye devam eder.",
   "backgroundRun.disabled": "Kapalı",
   "backgroundRun.enabled": "Açık",
-  "backgroundRun.ios.audioGuide": "Görevleri arka plan sesiyle sürdürün. Bu, pil tüketimini artırabilir.",
+  "backgroundRun.ios.audioGuide": "Sistemin arka planda çalıştırma özelliği kullanılamıyorsa görevleri arka plan sesiyle sürdürün. Bu, pil tüketimini artırabilir.",
   "backgroundRun.ios.enable": "Etkinleştir",
   "backgroundRun.ios.guide": "iOS arka planda yürütmeyi sınırlar. Düşük Güç Modu’nu kapatın ve bildirimlerle Canlı Etkinliklere izin verin. Uygulamayı zorla kapatmak yerel konuşmaları keser.",
   "backgroundRun.ios.limited": "Bu ayarları düzenledikten sonra da iOS arka plandaki yürütmeyi duraklatabilir.",

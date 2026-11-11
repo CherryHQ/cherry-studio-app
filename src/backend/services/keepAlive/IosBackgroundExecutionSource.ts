@@ -1,4 +1,5 @@
 import { AppState, Platform, type AppStateStatus } from 'react-native';
+import { v7 as uuidv7 } from 'uuid';
 
 import {
   AppStatePolicy,
@@ -16,17 +17,27 @@ import {
   getSystemIntegration,
   type SystemIntegrationNativeModule,
 } from '../../../../modules/system-integration';
-import type { KeepAliveLease, KeepAliveSource } from './KeepAliveCoordinator';
+import type { KeepAliveLease, KeepAliveSource, KeepAliveTask } from './KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from './KeepAliveInterruptionError';
 
 type Holder = {
   onInterrupt?: (reason: Error) => void | Promise<void>;
   isInterrupted: boolean;
 };
 
+type ContinuedTask = {
+  holder: Holder;
+  task: KeepAliveTask;
+  state: 'starting' | 'active' | 'unavailable' | 'expired';
+  submitted: boolean;
+  sent?: KeepAliveTask;
+  success: boolean;
+};
+
 const logger = loggerService.withContext('IosBackgroundExecution');
 let nextTaskId = 0;
 
-/** One task-owned audio session after consent, with a finite UIKit fallback. */
+/** Foreground user tasks prefer continued processing; consented audio is fallback only. */
 @Injectable('IosBackgroundExecutionSource')
 @ServicePhase(Phase.PostReady)
 @DependsOn(['PreferenceService'])
@@ -35,6 +46,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   private disposed = false;
   private blocked = false;
   private readonly holders = new Set<Holder>();
+  private readonly continuedTasks = new Map<string, ContinuedTask>();
   private readonly listeners = new Set<() => void>();
   private native: SystemIntegrationNativeModule | null = null;
   private taskId?: string;
@@ -79,6 +91,29 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
       });
       this.registerDisposable(() => subscription.remove());
     }
+    if (this.native?.beginContinuedProcessingTask) {
+      const subscription = this.native.addListener('onContinuedProcessingStateChanged', (event) => {
+        const continued = this.continuedTasks.get(event.id);
+        if (
+          this.disposed ||
+          !continued ||
+          !this.holders.has(continued.holder) ||
+          continued.state === 'unavailable' ||
+          continued.state === 'expired'
+        )
+          return;
+        continued.state = event.state;
+        if (event.state === 'expired')
+          this.interruptHolder(
+            continued.holder,
+            new KeepAliveInterruptionError('continued-processing-expired'),
+          );
+        // A failed request can use fallback. A revoked running task cannot.
+        this.publishStatus();
+        this.enqueueReconcile();
+      });
+      this.registerDisposable(() => subscription.remove());
+    }
     this.registerDisposable(
       this.preference.subscribeChange('app.background_audio.consent')(() => {
         if (!this.disposed) this.enqueueReconcile();
@@ -89,7 +124,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
 
   getStatus = (): BackgroundExecutionStatus => {
     if (this.holders.size === 0) return 'idle';
-    if (this.blocked && !this.audioActive && AppState.currentState !== 'active') {
+    if (this.isUnprotected()) {
       return 'interrupted';
     }
     return this.starting ? 'starting' : 'limited';
@@ -102,23 +137,42 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     };
   };
 
-  acquire(_tag: string, onInterrupt?: Holder['onInterrupt']): KeepAliveLease {
+  acquire(_tag: string, onInterrupt?: Holder['onInterrupt'], task?: KeepAliveTask): KeepAliveLease {
     if (this.disposed) return { release: () => {} };
     const holder: Holder = { onInterrupt, isInterrupted: false };
     this.holders.add(holder);
+    // Foreground return or restored demand must never manufacture another user action.
+    const continued =
+      task && AppState.currentState === 'active' && this.native?.beginContinuedProcessingTask
+        ? { holder, task, state: 'starting' as const, submitted: false, success: false }
+        : undefined;
+    if (continued) this.continuedTasks.set(`cherry-continued-${uuidv7()}`, continued);
     this.publishStatus();
-    if (this.blocked && !this.audioActive && AppState.currentState !== 'active') {
+    if (this.isUnprotected()) {
       // Let the caller install its cancellation ownership before notifying it.
       void Promise.resolve().then(() => {
-        if (this.blocked && !this.audioActive && AppState.currentState !== 'active')
-          this.interruptHolder(holder);
+        if (this.isUnprotected()) this.interruptHolder(holder);
       });
     }
     this.enqueueReconcile();
     return {
-      release: () => {
+      release: (outcome) => {
         if (!this.holders.delete(holder)) return;
+        if (continued) continued.success = outcome === 'completed';
         this.publishStatus();
+        this.enqueueReconcile();
+      },
+      update: (next) => {
+        if (!continued || holder.isInterrupted || !this.holders.has(holder)) return;
+        const previous = continued.task;
+        if (
+          previous.title === next.title &&
+          previous.subtitle === next.subtitle &&
+          previous.completedUnitCount === next.completedUnitCount &&
+          previous.totalUnitCount === next.totalUnitCount
+        )
+          return;
+        continued.task = next;
         this.enqueueReconcile();
       },
     };
@@ -156,6 +210,31 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   }
 
   private async reconcile(): Promise<void> {
+    for (const [id, continued] of this.continuedTasks) {
+      if (this.disposed || !this.holders.has(continued.holder)) {
+        this.continuedTasks.delete(id);
+        await this.native?.endContinuedProcessingTask?.(id, continued.success);
+      } else if (continued.holder.isInterrupted) {
+        if (continued.state !== 'expired') {
+          continued.state = 'expired';
+          await this.native?.endContinuedProcessingTask?.(id, false);
+        }
+      } else if (!continued.submitted) {
+        continued.submitted = true;
+        continued.sent = continued.task;
+        try {
+          const submitted = await this.native?.beginContinuedProcessingTask?.(id, continued.task);
+          // A launch/expiry event may already describe the newer state.
+          if (!submitted && continued.state === 'starting') continued.state = 'unavailable';
+        } catch (error) {
+          if (continued.state === 'starting') continued.state = 'unavailable';
+          logger.warn('Continued processing unavailable; using fallback', { error });
+        }
+      } else if (continued.state === 'active' && continued.sent !== continued.task) {
+        continued.sent = continued.task;
+        await this.native?.updateContinuedProcessingTask?.(id, continued.task);
+      }
+    }
     if (this.disposed || this.holders.size === 0) {
       const id = this.taskId;
       this.taskId = undefined;
@@ -166,7 +245,13 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
       }
       return;
     }
-    const audioAllowed = this.preference.readCached('app.background_audio.consent') === true;
+    const audioAllowed =
+      this.preference.readCached('app.background_audio.consent') === true &&
+      [...this.holders].some((holder) => !holder.isInterrupted) &&
+      ![...this.continuedTasks.values()].some(
+        // Revoked work retains this fence until its owner has settled cancellation and released.
+        (continued) => continued.state !== 'unavailable',
+      );
     if (!audioAllowed || this.audioBlocked) await this.endAudio();
     else if (
       this.native?.beginBackgroundAudioExecution &&
@@ -219,7 +304,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   }
 
   private interruptIfUnprotected(): void {
-    if (!this.blocked || this.audioActive || AppState.currentState === 'active') return;
+    if (!this.isUnprotected()) return;
     // An exhausted finite window and lost audio cannot restart work in this background stay.
     if (!this.audioBlocked) {
       this.audioBlocked = true;
@@ -228,17 +313,32 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     this.interruptHolders();
   }
 
+  private isUnprotected(): boolean {
+    return (
+      this.blocked &&
+      !this.audioActive &&
+      ![...this.continuedTasks.values()].some(
+        (continued) =>
+          continued.state === 'active' &&
+          this.holders.has(continued.holder) &&
+          !continued.holder.isInterrupted,
+      ) &&
+      AppState.currentState !== 'active'
+    );
+  }
+
   private interruptHolders(): void {
     for (const holder of [...this.holders]) this.interruptHolder(holder);
   }
 
-  private interruptHolder(holder: Holder): void {
+  private interruptHolder(
+    holder: Holder,
+    reason = new Error('iOS background execution time expired'),
+  ): void {
     if (this.disposed || !this.holders.has(holder) || holder.isInterrupted) return;
     holder.isInterrupted = true;
     try {
-      void Promise.resolve(
-        holder.onInterrupt?.(new Error('iOS background execution time expired')),
-      ).catch((error: unknown) =>
+      void Promise.resolve(holder.onInterrupt?.(reason)).catch((error: unknown) =>
         logger.error('Background interruption cleanup failed', error as Error),
       );
     } catch (error) {

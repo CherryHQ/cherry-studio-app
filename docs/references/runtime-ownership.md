@@ -270,8 +270,11 @@ user-owned verification policy.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, shared first downloads and request cancellation; the host stops it.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
-- `IosBackgroundExecutionSource` owns the finite UIKit window and task-scoped native audio after
-  device-local opt-in. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+- `IosBackgroundExecutionSource` prefers task-scoped native continued processing for explicit
+  foreground user work, retains a finite UIKit window, and uses consented audio only as fallback.
+  Chat transfers preparation's request through final delivery; new local painting enqueues carry
+  process-local intent and real handler progress. Native continued-task revocation stops its owning
+  work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
   uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops

@@ -62,7 +62,7 @@ The current execution classes are:
 | Class | Current behavior |
 | --- | --- |
 | `foreground-only` | Dispatched by the in-process pump without a background keep-alive lease |
-| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: finite UIKit time plus task-owned audio after consent on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
+| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: official continued processing for eligible foreground user tasks, finite UIKit time and consented audio fallback on iOS; the `dataSync` foreground service on Android; a no-op elsewhere |
 | `bounded-background` | Defined but not dispatched; no background-task adapter is installed |
 | `system-transfer` | Defined but not dispatched; no system-transfer adapter is installed |
 
@@ -147,16 +147,22 @@ and may be retried explicitly.
 ## Current Boundaries
 
 - The ledger survives process death; an in-memory `JobHandle.finished` promise does not.
-- `user-continued` is best effort. `IosBackgroundExecutionSource` shares finite UIKit time and,
-  after explicit consent, task-owned audio across holders. Loss of both interrupts them without
-  renewing the exhausted window or restarting audio in the same background stay. For
-  painting jobs the interruption aborts/cancels execution; Durable Agent work instead suspends its
-  Harness for later recovery. Android uses the `dataSync` foreground service in
+- `user-continued` is best effort. A handler may declare localized `continuedProcessing` labels.
+  New immediate root enqueues retain that intent only in memory; rollback, cold recovery, delayed
+  work, and automatic retries cannot create another official request. Foreground dispatch requests
+  iOS 26+ continued processing and forwards actual handler progress; committed completion marks
+  success only after queue handoff. The source retains finite UIKit time and, only when official
+  processing is unavailable, consented task-owned audio. Loss of available protection interrupts work
+  without renewing the exhausted window or restarting audio in the same background stay. Painting
+  jobs abort/cancel execution; ordinary finite-window loss suspends the Agent Harness for foreground
+  recovery. Android uses the `dataSync` foreground service in
   [Android Background Generation](./android-background-generation.md). Neither guarantees continuous
   execution, an exact scheduler, or continuation after force quit.
-- No Expo background task, iOS Continued Processing, system-transfer adapter, schedule runtime, or
+- Continued-processing revocation also represents system-UI cancellation. It stops the owning
+  conversation/job without automatic replay or audio fallback for that task.
+- No Expo background task, system-transfer adapter, schedule runtime, or
   server executor is installed.
-- Progress callbacks have no shared consumer; current UI observes ledger state and domain output.
+- Progress callbacks update an admitted native continued task; app UI still observes ledger state and domain output.
 - Terminal rows are garbage-collected after the retention limits in `JobRuntime`; domain receipts
   remain authoritative for product history.
 

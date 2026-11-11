@@ -243,7 +243,7 @@
   "backgroundRun.description": "Conversațiile neterminate continuă să solicite protecția execuției, inclusiv în timp ce așteaptă răspunsul dumneavoastră.",
   "backgroundRun.disabled": "Dezactivat",
   "backgroundRun.enabled": "Activat",
-  "backgroundRun.ios.audioGuide": "Continuă sarcinile folosind audio în fundal. Poate crește consumul bateriei.",
+  "backgroundRun.ios.audioGuide": "Dacă execuția în fundal a sistemului nu este disponibilă, continuă sarcinile folosind audio în fundal. Poate crește consumul bateriei.",
   "backgroundRun.ios.enable": "Activează",
   "backgroundRun.ios.guide": "iOS limitează execuția în fundal. Dezactivați modul Consum redus și permiteți notificările și activitățile live. Închiderea forțată a aplicației întrerupe conversațiile locale.",
   "backgroundRun.ios.limited": "iOS poate suspenda în continuare execuția în fundal după ajustarea acestor setări.",

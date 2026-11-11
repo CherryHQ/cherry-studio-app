@@ -67,7 +67,9 @@ resolves live voice engines from preferences. File transcription has an independ
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
   with the iOS ring switch silenced. Token-owned capture suspends the silent background loop until
   cleanup; speech owns its audio profile while the loop covers utterance gaps. Only the backend iOS execution source can
-  start that loop after consent. The native app includes iOS background audio without enabling
+  start that loop after consent, only as fallback when official continued processing is unavailable.
+  Actual background reading does not require a silent loop while official processing protects tasks.
+  The native app includes iOS background audio without enabling
   Android's media-playback service or background microphone capture.
 - `senseVoiceDictation.ts` owns local recording and cleanup. `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
