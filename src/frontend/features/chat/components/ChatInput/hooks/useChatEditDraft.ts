@@ -30,10 +30,17 @@ export function useChatEditDraft() {
     attachmentsRef.current = attachments;
   }, [attachments, draft]);
 
+  const loadedMessageId = useRef<string | undefined>(undefined);
   const editingMessageId = editing?.messageId;
   useLayoutEffect(() => {
-    if (!editingMessageId || stash.current !== undefined) return;
-    stash.current = { draft: draftRef.current, attachments: attachmentsRef.current };
+    if (!editingMessageId) {
+      loadedMessageId.current = undefined;
+      return;
+    }
+    if (loadedMessageId.current === editingMessageId) return;
+    // Switching questions replaces only the edit buffer, never the interrupted draft.
+    stash.current ??= { draft: draftRef.current, attachments: attachmentsRef.current };
+    loadedMessageId.current = editingMessageId;
     clearAttachments();
     setDraft(editing?.initialText ?? '');
     inputRef.current?.focus();

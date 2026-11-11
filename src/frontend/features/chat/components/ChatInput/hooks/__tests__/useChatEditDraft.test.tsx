@@ -156,6 +156,41 @@ describe('useChatEditDraft', () => {
     act(() => renderer.unmount());
   });
 
+  test.each(['cancel', 'commit'])(
+    'switching questions loads the new text and keeps the original stash on %s',
+    (exit) => {
+      const { probeRef, renderer } = render('Interrupted draft');
+      act(() => probeRef.current?.beginEdit(target));
+      act(() => probeRef.current?.setDraft('Revised first question'));
+      act(() =>
+        probeRef.current?.beginEdit({ messageId: 'user-2', initialText: 'Second question' }),
+      );
+      expect(probeRef.current?.editing?.messageId).toBe('user-2');
+      expect(probeRef.current?.draft).toBe('Second question');
+      expect(probeRef.current?.attachmentCount).toBe(0);
+      expect(mockFocus).toHaveBeenCalledTimes(2);
+      act(() => probeRef.current?.setDraft('Revised second question'));
+      // Re-selecting the same target must not overwrite an in-progress revision.
+      act(() =>
+        probeRef.current?.beginEdit({ messageId: 'user-2', initialText: 'Second question' }),
+      );
+      expect(probeRef.current?.draft).toBe('Revised second question');
+      if (exit === 'commit') {
+        act(() => probeRef.current?.setDraft(''));
+        act(() => probeRef.current?.commitEdit());
+      } else act(() => probeRef.current?.cancelEdit());
+      expect(probeRef.current?.draft).toBe('Interrupted draft');
+      expect(probeRef.current?.attachmentCount).toBe(1);
+      expect(probeRef.current?.editing).toBeNull();
+      // A fresh edit of the same question must load again after the prior session ended.
+      act(() =>
+        probeRef.current?.beginEdit({ messageId: 'user-2', initialText: 'Second question' }),
+      );
+      expect(probeRef.current?.draft).toBe('Second question');
+      act(() => renderer.unmount());
+    },
+  );
+
   test('cancel without an edit session is a no-op', () => {
     const { probeRef, renderer } = render('Interrupted draft');
     act(() => probeRef.current?.cancelEdit());
