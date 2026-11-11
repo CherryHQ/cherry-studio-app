@@ -361,7 +361,8 @@ projection:
   Reservation places the question below the selected leaf and selects its first answer; a
   multi-model question reserves every answer in one new sibling group. Regeneration, including
   answering with another model, reserves a sibling answer to the same question. Editing a settled
-  question reserves a sibling question under its parent plus one answer, and selects that answer;
+  question reserves a sibling question under its parent plus its requested answers, and selects
+  the first answer;
   the edited row and its answers stay in the tree. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`

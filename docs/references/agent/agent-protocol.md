@@ -455,7 +455,17 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
-  editUserMessage(input: { sessionId: string; messageId: string; text: string }): Promise<void>
+  editUserMessage(input: {
+    sessionId: string
+    messageId: string
+    text: string
+    modelId?: UniqueModelId
+    additionalReplies?: { modelId: UniqueModelId; assistantMessageId: string }[]
+    reasoningEffort?: ReasoningEffortOption
+    imageGeneration?: AgentImageGeneration
+    skillIds?: string[]
+    skillAction?: SkillAction
+  }): Promise<void>
   editMessage(input: { sessionId: string; messageId: string; parts: { id: string; expectedText: string; text: string }[] }): Promise<AgentMessageView>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
@@ -853,39 +863,57 @@ cancellable before a turn is reserved.
 
 ## Editing a question
 
-`editUserMessage({ sessionId, messageId, text })` answers a settled user question anew with edited
-text. It never rewrites the question in place.
+`editUserMessage` answers a settled user question anew with edited `text` and the composer's
+current model and send settings. It never rewrites the question in place.
 
-**The edit branches beside the original question.** The Host reserves a new question under the
-edited question's parent, reserves one answer below it, and selects that answer, so the history
-continues from the edited message (see [Branching](#branching)). The original question, its answers,
-and any continuation below them stay in the tree as an unselected branch: an edit cannot discard an
-exchange or a tool effect the user may still want. Because the new question shares the edited
-question's parent, its position is a sibling alternative, not a replacement of the transcript
-below it.
+**The edit branches beside the original question.** The Host validates the stored user row,
+rejects busy Sessions with `assertIdle` and `syncSession(requireIdle)`, and owns one admission
+boundary. It passes the question's parent explicitly into shared submission: `null` selects the
+root for a first-question edit, while an omitted parent on normal sends means the current selected
+leaf. Normal target planning, `chooseLanes(parent)` and `submitTargets` prepare one or several
+answers. The shared `reserveSubmission` transaction inserts the sibling question and its pending
+answer or answers and selects the first answer. No dedicated edit reservation is used.
 
-Only a settled user row can be edited. The Host rejects a missing or non-user message with
-`MESSAGE_NOT_FOUND`, and refuses the operation while the Session has unfinished work with
-`SESSION_BUSY`; the store repeats the settled-answer check inside the reservation transaction. The
-edited question's own turn id is replaced: the new question and its answer share a fresh turn id.
+The original question, its answers and all descendants remain unchanged. Editing does not create
+another Session, invalidate unrelated working copies or advance `runtimeRevision`. Native
+continuation or Pi `fork(at)` uses the shared lane planner with its normal rebuild fallback.
+A missing/non-user question is rejected with `MESSAGE_NOT_FOUND`; unfinished work is rejected with
+`SESSION_BUSY` rather than entering the normal-send queue.
 
-The replacement input is derived from the stored question. All stored text collapses into one text
-part carrying `text`, and file parts stay attached while their managed file still resolves; an
-attachment deleted from the library is dropped instead of blocking the edit. Inline plugin, Skill,
-and selection references survive only when the edited text still contains their mention, remapped to
-their new offsets in order; mentions the user removed are dropped. Skill selections and the Skill
-action recorded on the question are preserved, because they are not part of the editable text. The
-answer reuses the newest answer's model; its reasoning effort and image settings are reused when the
-inference snapshot is supported, the same choices a same-model retry makes. Current credentials,
-instructions, permissions, and attachment availability are revalidated. Preparation failure leaves
-the original transcript unchanged.
+The content payload stays text-based. The Host derives retained input from the stored question,
+remaps each original plugin, Skill and selection reference independently to non-overlapping
+occurrences in the edited text, then sorts by new offset. Removed mentions are dropped, so reordering
+A/B to B/A does not lose B. Stored file parts are carried unchanged through normal submission
+admission. Missing or mismatched managed files reject preparation rather than being silently
+filtered from the edit. Preparation failure leaves the original exchange unchanged.
 
-The client offers Edit from the user message menu, prefilled with the stored text, and requires the
-message to be settled and the Session idle. It shows no optimistic rows: the new question and its
-pending answer arrive through `message.created` and `session.updated`. A rejected admission leaves
-the original exchange unchanged and keeps the editing sheet open with the typed text. The edited
-question shows its sibling versions as a pager under the message, so the original exchange stays
-reachable; choosing a version selects the branch that contains it.
+The composer's `modelId`, `additionalReplies`, reasoning effort, image-generation and applicable
+Skill settings define the new answers. Omitted model/effort/image-generation overrides use current
+Agent defaults, not the original answer's inference snapshot. Stored Skill selections/actions are
+inherited only when neither corresponding composer field is supplied; supplied Skill settings go
+through normal validation. Current credentials, instructions, permissions and attachment availability
+are revalidated by the shared submission path.
+
+The local message actions distinguish `editQuestion` (branch and resubmit) from `editAnswer`
+(in-place reply prose editing). Question editing is not added to remote contracts. Edit remains
+visible but disabled while the Session is busy, awaiting approval or admitting work. It loads and
+focuses the existing composer, with an Editing question row, cancel action and retained-file count.
+Attachment actions are hidden; model, reasoning and multi-model controls stay available. Switching
+to another question reloads that question's text without replacing the original interrupted draft
+stash. Re-selecting the same question preserves its in-progress revision.
+
+Entry stashes the complete prior composer draft and attachments. Cancellation or accepted submission
+restores that stash; failed admission keeps the edited text and editing state. Blank, unchanged and
+busy edits cannot send, including direct invocation. Dismissing the keyboard does not end editing.
+The transcript outlines the edited question and labels its original continuation while keeping
+readable descendant text and controls at full contrast. The continuation label adds layout height.
+
+There are no optimistic question rows: the new question and pending answers arrive through Host
+events. Live projection includes question sibling metadata immediately, consistent with history.
+The right-aligned previous/position/next pager remains available during generation. Selecting an old
+version restores that branch's latest continuation without cancelling the running answer or deleting
+either exchange. Native light/dark, keyboard/focus/scroll and screen-reader acceptance remain to be
+verified on a device; source-derived web fixtures do not establish those results.
 
 ## Branching
 
@@ -924,7 +952,7 @@ question has, and the questions an answer has, are alternatives the client can s
   selects it. Answering with another model (`retryMessage` with `modelId`) does the same with the
   chosen model, adding one more answer to the question.
 - **Editing.** Editing a settled question (`editUserMessage`) reserves a sibling question under the
-  same parent, reserves one answer below it, and selects that answer; the original question and its
+  same parent, reserves its requested answer or answers below it, and selects the first answer; the original question and its
   continuations stay in the tree as an alternative branch. The edited question shows its sibling
   versions in the transcript, so either exchange can be selected.
 - **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
