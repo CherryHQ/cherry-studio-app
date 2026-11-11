@@ -6,7 +6,7 @@ import { workspacePathSegments } from '@/shared/data/types/fileLibrary';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
-import { createReadFileTool, readFileInputSchema } from './readFileTool';
+import { buildFileReadInstructions, createReadFileTool, readFileInputSchema } from './readFileTool';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
@@ -19,6 +19,9 @@ const directorySchema = z.strictObject({
   cursor: z.string().optional(),
 });
 const createFolderSchema = z.strictObject({ path: z.string().min(1).max(4096) });
+const libraryReadSchema = readFileInputSchema
+  .omit({ path: true })
+  .required({ file_entry_id: true });
 const searchOutputSchema = z.toJSONSchema(
   z.strictObject({
     files: z.array(
@@ -46,9 +49,6 @@ export function createFileLibraryTools(
   workspaceName?: string,
   acceptsImages = true,
 ): RuntimeTool[] {
-  const libraryReadSchema = readFileInputSchema
-    .omit({ path: true })
-    .extend({ file_entry_id: z.string() });
   const tools: RuntimeTool[] = [
     {
       ref: { source: 'builtin', capabilityId: 'library_search_files' },
@@ -86,8 +86,7 @@ export function createFileLibraryTools(
       displayName: 'Read library file',
       deferred: true,
       approval: 'auto',
-      description:
-        'Read a file outside the workspace, with the same paging and image rules as read_file. A successful read permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access.',
+      description: `Read a file outside the workspace using file_entry_id from library_search_files. A successful read permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access. ${buildFileReadInstructions(parser, acceptsImages)}`,
       inputSchema: toRuntimeInputSchema(libraryReadSchema),
       async execute(call) {
         const parsed = libraryReadSchema.parse(call.input);

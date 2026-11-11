@@ -281,6 +281,8 @@ It does not grant `read_file` future outside-library access.
 Library search/read and the six management tools are deferred, alongside managed-file and workspace
 tools. The initial Tools On Demand section names them for `tool_search`; a loaded
 `library_search_files` also names the management tools.
+Both file readers carry their own complete parser, pagination and image-delivery instructions,
+composed from the same definition; `library_read_file` does not require loading `read_file` first.
 `library_list_folders` searches active folder names or lists direct children, returning stable ids
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,

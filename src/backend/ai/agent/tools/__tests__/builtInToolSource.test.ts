@@ -2,6 +2,7 @@ import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -108,6 +109,56 @@ describe('createSystemCapabilitySource', () => {
     }
     expect(capabilityIds(tools)).toContain('read_file');
   });
+
+  test.each([
+    ['anydoc', true],
+    ['anydoc', false],
+    ['builtin', true],
+    ['builtin', false],
+  ] as const)(
+    'keeps each deferred reader self-contained for parser %s and image support %s',
+    async (documentParserMode, acceptsImages) => {
+      const tools = await resolve({}, { documentParserMode, acceptsImages });
+      for (const name of ['read_file', 'library_read_file']) {
+        const description = tools.find((tool) => tool.providerName === name)?.description;
+        expect(description).toContain(`This turn uses the ${documentParserMode} document parser`);
+        expect(description).toContain('startLine + lineCount');
+        expect(description).toContain('lineTruncated');
+        expect(description).toContain('offset set to nextOffset');
+        expect(description).toContain('never combine the two groups');
+        expect(description).toContain('sourceTruncated');
+        if (documentParserMode === 'anydoc') {
+          expect(description).toContain('never line parameters');
+          expect(description).toContain('concatenate text windows');
+          expect(description).toContain('Continue with nextOffset until complete');
+          expect(description).toContain('assets are references only');
+        } else {
+          expect(description).toContain('return built-in extracted text');
+          expect(description).toContain('unsupported by this parser');
+        }
+        if (acceptsImages) {
+          expect(description).toContain('omit paging parameters');
+          expect(description).toContain('Code Mode receives image metadata only');
+          expect(description).toContain('use this tool directly, outside Code Mode');
+        } else {
+          expect(description).toContain('OCR text from the first frame');
+          expect(description).toContain('No image pixels are sent');
+          expect(description).not.toContain('omit paging parameters');
+        }
+      }
+      expect(
+        tools.find((tool) => tool.providerName === 'library_read_file')?.inputSchema,
+      ).toMatchObject({
+        required: ['file_entry_id'],
+        properties: {
+          file_entry_id: expect.objectContaining({
+            type: 'string',
+            description: expect.any(String),
+          }),
+        },
+      });
+    },
+  );
 
   test('defers occasional device and Agent management tools while questions stay direct', async () => {
     const tools = await resolve({
@@ -764,16 +815,21 @@ type Scenario = {
 
 async function resolve(
   scenario: Scenario,
-  options: { askUser?: AskUserQuestion; platform?: string } = {},
+  options: {
+    askUser?: AskUserQuestion;
+    platform?: string;
+    documentParserMode?: DocumentParserMode;
+    acceptsImages?: boolean;
+  } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(SERVICES, {
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
-    acceptsImages: true,
+    acceptsImages: options.acceptsImages ?? true,
     askUser: options.askUser ?? noAskUser,
-    documentParserMode: 'builtin',
+    documentParserMode: options.documentParserMode ?? 'builtin',
     model: MODEL,
     resources: TURN_RESOURCES,
     workspaceFolderId: scenario.workspaceFolderId,
