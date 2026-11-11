@@ -1,5 +1,5 @@
 import { AgentProtocolError } from '@/shared/contracts/agent';
-import type { AgentEditUserMessageInput } from '@/shared/contracts/agent';
+import type { AgentEditUserMessageInput, AgentImageGeneration } from '@/shared/contracts/agent';
 import type { AgentMode } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -23,6 +23,7 @@ export function buildEditUserMessageInput({
   selectedModelId,
   reasoningEfforts,
   reasoningSelection,
+  imageGeneration,
 }: {
   sessionId: string | undefined;
   messageId: string;
@@ -33,6 +34,8 @@ export function buildEditUserMessageInput({
   selectedModelId: UniqueModelId | null;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
+  /** Current image settings when the edit is submitted from the painting presentation. */
+  imageGeneration?: AgentImageGeneration;
 }): Omit<AgentEditUserMessageInput, 'additionalReplies'> & {
   additionalModelIds?: readonly UniqueModelId[];
 } {
@@ -70,5 +73,6 @@ export function buildEditUserMessageInput({
           ),
         }
       : {}),
+    ...(imageGeneration ? { imageGeneration } : {}),
   };
 }

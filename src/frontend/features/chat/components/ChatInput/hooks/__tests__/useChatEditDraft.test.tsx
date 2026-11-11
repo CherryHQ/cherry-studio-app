@@ -199,4 +199,29 @@ describe('useChatEditDraft', () => {
 
     act(() => renderer.unmount());
   });
+  test('a cancel during a pending edit send owns the buffer over the stale settle', () => {
+    const { probeRef, renderer } = render('Interrupted draft');
+    act(() => probeRef.current?.beginEdit(target));
+    act(() => probeRef.current?.beginEditSend());
+
+    act(() => probeRef.current?.cancelEdit());
+    expect(probeRef.current?.draft).toBe('Interrupted draft');
+    // The cancelled send no longer owns the buffer: its late failure must not roll back.
+    expect(probeRef.current?.settleEditSend()).toBe(false);
+    expect(probeRef.current?.draft).toBe('Interrupted draft');
+    expect(probeRef.current?.attachmentCount).toBe(1);
+
+    act(() => renderer.unmount());
+  });
+
+  test('an uninterrupted edit send still owns the buffer when it settles', () => {
+    const { probeRef, renderer } = render('Interrupted draft');
+    act(() => probeRef.current?.beginEdit(target));
+    act(() => probeRef.current?.beginEditSend());
+    expect(probeRef.current?.settleEditSend()).toBe(true);
+    // Settling is one-shot: a repeated settle reports no ownership.
+    expect(probeRef.current?.settleEditSend()).toBe(false);
+
+    act(() => renderer.unmount());
+  });
 });

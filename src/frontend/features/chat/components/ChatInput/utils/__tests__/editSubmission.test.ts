@@ -72,4 +72,12 @@ describe('buildEditUserMessageInput', () => {
       }),
     );
   });
+  it('carries current image settings from the painting presentation', () => {
+    const input = buildEditUserMessageInput({
+      ...base,
+      imageGeneration: { mode: 'generate', paramValues: { size: '1024x1024' } },
+    });
+    expect(input.imageGeneration).toEqual({ mode: 'generate', paramValues: { size: '1024x1024' } });
+    expect(input.modelId).toBe('provider/model-a');
+  });
 });

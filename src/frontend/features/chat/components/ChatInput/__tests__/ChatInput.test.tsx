@@ -10,15 +10,19 @@ import { ChatInput } from '../ChatInput';
 let mockEditing: { messageId: string; initialText: string; attachmentCount: number } | null = null;
 let mockDraft = '';
 const mockCommitEdit = jest.fn();
+const mockBeginEditSend = jest.fn();
+const mockSettleEditSend = jest.fn(() => true);
 const mockEditMessage = jest.fn();
 jest.mock('@cherrystudio/ui/components', () => ({
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
 }));
 jest.mock('../hooks/useChatEditDraft', () => ({
   useChatEditDraft: () => ({
+    beginEditSend: mockBeginEditSend,
     editing: mockEditing,
     cancelEdit: jest.fn(),
     commitEdit: mockCommitEdit,
+    settleEditSend: mockSettleEditSend,
   }),
 }));
 

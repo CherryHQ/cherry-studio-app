@@ -14,6 +14,9 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
  * interrupted draft and its attachments and loads the original question;
  * cancelling or accepting an edit restores both exactly once. A failed
  * submission keeps the edit and its stash intact.
+ *
+ * The hook lives in `ChatInput`, above the text/image presentation switch, so
+ * the stash survives the composer changing presentations while editing.
  */
 export function useChatEditDraft() {
   const { attachments, draft } = useComposerState();
@@ -46,7 +49,22 @@ export function useChatEditDraft() {
     inputRef.current?.focus();
   }, [clearAttachments, editing, editingMessageId, inputRef, setDraft]);
 
+  // An in-flight edit submission owns the composer buffer until it settles.
+  // Cancelling hands the buffer back to the restored draft, so a rejection
+  // that arrives afterwards belongs to a dead attempt and must not roll back.
+  const editSendPendingRef = useRef(false);
+  const beginEditSend = useCallback(() => {
+    editSendPendingRef.current = true;
+  }, []);
+  /** True when the settled send still owns the buffer; false when a cancel took it. */
+  const settleEditSend = useCallback(() => {
+    const owned = editSendPendingRef.current;
+    editSendPendingRef.current = false;
+    return owned;
+  }, []);
+
   const cancelEdit = useCallback(() => {
+    editSendPendingRef.current = false;
     if (stash.current !== undefined) {
       setDraft(stash.current.draft);
       setAttachments([...stash.current.attachments]);
@@ -58,6 +76,7 @@ export function useChatEditDraft() {
   // ComposerSurface clears the submitted edit before awaiting its admission.
   // Restoring here is safe only after that admission has succeeded.
   const commitEdit = useCallback(() => {
+    editSendPendingRef.current = false;
     if (stash.current !== undefined) {
       const saved = stash.current;
       setDraft((current) => [saved.draft, current].filter(Boolean).join('\n'));
@@ -67,5 +86,7 @@ export function useChatEditDraft() {
     endEdit();
   }, [addAttachments, endEdit, setDraft]);
 
-  return { cancelEdit, commitEdit, editing };
+  return { beginEditSend, cancelEdit, commitEdit, editing, settleEditSend };
 }
+
+export type ChatEditDraft = ReturnType<typeof useChatEditDraft>;

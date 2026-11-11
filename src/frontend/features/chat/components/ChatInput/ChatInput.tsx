@@ -55,7 +55,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
-import { useChatEditDraft } from './hooks/useChatEditDraft';
+import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -99,6 +99,7 @@ export function ChatInput({
   sessionId,
   selectionHandoff,
 }: ChatInputProps) {
+  const { t } = useTranslation();
   const quoteActions = useChatQuoteActions();
   const imageAttempt = useRef<ReturnType<NonNullable<typeof quoteActions>['capture']> | undefined>(
     undefined,
@@ -123,7 +124,11 @@ export function ChatInput({
     previousAgentId.current = agentId;
     setDraft(removeSkillMentions);
   }, [agentId, setDraft]);
-  const { cancel, canSend, isBusy, sendMessage } = controls;
+  const { cancel, canSend, editMessage, isBusy, sendMessage } = controls;
+  const edit = useChatEditDraft();
+  const { beginEditSend, cancelEdit, commitEdit, editing, settleEditSend } = edit;
+  const canSendEdit =
+    !editing || (!isBusy && draft.trim().length > 0 && draft.trim() !== editing.initialText.trim());
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
   const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
@@ -179,6 +184,39 @@ export function ChatInput({
   );
   const generateImage = useCallback(
     async (input: PaintingInputSubmission) => {
+      // An edit submitted from the painting presentation still branches from
+      // the edited question; the current model and image settings go with it.
+      if (editing) {
+        if (!input.prompt.trim() || input.prompt.trim() === editing.initialText.trim() || isBusy)
+          throw new AgentProtocolError({
+            code: isBusy ? 'SESSION_BUSY' : 'MESSAGE_CONFLICT',
+            message: 'Question edit is unchanged or the Session is busy.',
+            retryable: false,
+          });
+        beginEditSend();
+        try {
+          await editMessage(
+            buildEditUserMessageInput({
+              sessionId,
+              messageId: editing.messageId,
+              text: input.prompt,
+              attachmentCount: input.attachments.length,
+              mode,
+              replyModels: null,
+              selectedModelId: input.modelId,
+              reasoningEfforts,
+              reasoningSelection,
+              imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+            }),
+          );
+        } catch (error) {
+          // A cancel that won the race owns the buffer; its restore stands.
+          if (settleEditSend()) throw error;
+          return undefined;
+        }
+        if (settleEditSend()) commitEdit();
+        return undefined;
+      }
       const attempt = imageAttempt.current;
       try {
         const result = await sendMessage({
@@ -196,7 +234,19 @@ export function ChatInput({
         imageAttempt.current = undefined;
       }
     },
-    [sendMessage],
+    [
+      beginEditSend,
+      commitEdit,
+      editMessage,
+      editing,
+      isBusy,
+      mode,
+      reasoningEfforts,
+      reasoningSelection,
+      sendMessage,
+      sessionId,
+      settleEditSend,
+    ],
   );
   const cancelGeneration = useCallback(() => {
     void cancel();
@@ -206,6 +256,29 @@ export function ChatInput({
     <PaintingInputProvider result={latestImageResult}>
       <View className="gap-2">
         <ChatInputQueue sessionId={sessionId} />
+        {/* The edit banner owns the session above the text/image switch, so
+            it stays visible and cancellable in either presentation. */}
+        {editing ? (
+          <View className="flex-row items-center justify-between px-3 pb-1 pt-2">
+            <Text className="text-xs font-medium text-muted-foreground">
+              {t('chat.input.editing.title')}
+            </Text>
+            {(editing.attachmentCount ?? 0) > 0 ? (
+              <Text className="text-xs text-muted-foreground">
+                {t('chat.input.editing.attachments', {
+                  number: editing.attachmentCount,
+                })}
+              </Text>
+            ) : null}
+            <Button
+              accessibilityLabel={t('common.cancel')}
+              icon={<XIcon className="size-4 text-muted-foreground" />}
+              onPress={cancelEdit}
+              size="xs"
+              variant="ghost"
+            />
+          </View>
+        ) : null}
         {mode === 'standard' &&
         !replyModels &&
         selectedModelItem &&
@@ -213,13 +286,14 @@ export function ChatInput({
         !skillAction ? (
           <PaintingInput
             onLinkPress={quoteActions?.previewQuote}
-            canSend={canSend}
+            canSend={editing ? canSendEdit && canSend : canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
             onGenerate={generateImage}
             preparePrompt={prepareImagePrompt}
             onSubmissionSettled={finishImageAttempt}
+            attachmentsEnabled={!editing}
             status={isBusy ? 'generating' : 'idle'}
           />
         ) : (
@@ -227,6 +301,8 @@ export function ChatInput({
             sessionId={sessionId}
             mode={mode}
             contextUsage={contextUsage}
+            canSendEdit={canSendEdit}
+            edit={edit}
             agentId={agentId}
             skillAction={skillAction}
             controls={controls}
@@ -253,6 +329,8 @@ function TextChatInput({
   mode,
   agentId,
   contextUsage,
+  canSendEdit,
+  edit,
   agentModelAnswersInParallel,
   skillAction,
   controls,
@@ -268,6 +346,9 @@ function TextChatInput({
   setReplyModels,
 }: ChatInputProps & {
   mode: AgentMode;
+  canSendEdit: boolean;
+  /** Edit-session ownership lifted above the text/image presentation switch. */
+  edit: ChatEditDraft;
   skillAction?: SkillAction;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
@@ -286,11 +367,7 @@ function TextChatInput({
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
-  const { cancelEdit, commitEdit, editing } = useChatEditDraft();
-  const { draft: editDraft } = useComposerState();
-  const canSendEdit =
-    !editing ||
-    (!isBusy && editDraft.trim().length > 0 && editDraft.trim() !== editing.initialText.trim());
+  const { beginEditSend, commitEdit, editing, settleEditSend } = edit;
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
@@ -362,20 +439,27 @@ function TextChatInput({
             message: 'Question edit is unchanged or the Session is busy.',
             retryable: false,
           });
-        await editMessage(
-          buildEditUserMessageInput({
-            sessionId,
-            messageId: editing.messageId,
-            text,
-            attachmentCount: attachments.length,
-            mode,
-            replyModels,
-            selectedModelId,
-            reasoningEfforts,
-            reasoningSelection,
-          }),
-        );
-        commitEdit();
+        beginEditSend();
+        try {
+          await editMessage(
+            buildEditUserMessageInput({
+              sessionId,
+              messageId: editing.messageId,
+              text,
+              attachmentCount: attachments.length,
+              mode,
+              replyModels,
+              selectedModelId,
+              reasoningEfforts,
+              reasoningSelection,
+            }),
+          );
+        } catch (error) {
+          // A cancel that won the race owns the buffer; its restore stands.
+          if (settleEditSend()) throw error;
+          return;
+        }
+        if (settleEditSend()) commitEdit();
         return;
       }
       const attempt = quoteActions?.capture(text);
@@ -443,10 +527,12 @@ function TextChatInput({
       }
     },
     [
+      beginEditSend,
       editMessage,
       editing,
       isBusy,
       commitEdit,
+      settleEditSend,
       quoteActions,
       reasoningSelection,
       sessionId,
@@ -501,27 +587,6 @@ function TextChatInput({
               >
                 {(effortGauge) => (
                   <>
-                    {editing ? (
-                      <View className="flex-row items-center justify-between px-3 pb-1 pt-2">
-                        <Text className="text-xs font-medium text-muted-foreground">
-                          {t('chat.input.editing.title')}
-                        </Text>
-                        {(editing.attachmentCount ?? 0) > 0 ? (
-                          <Text className="text-xs text-muted-foreground">
-                            {t('chat.input.editing.attachments', {
-                              number: editing.attachmentCount,
-                            })}
-                          </Text>
-                        ) : null}
-                        <Button
-                          accessibilityLabel={t('common.cancel')}
-                          icon={<XIcon className="size-4 text-muted-foreground" />}
-                          onPress={cancelEdit}
-                          size="xs"
-                          variant="ghost"
-                        />
-                      </View>
-                    ) : null}
                     <ChatInputComposer
                       canSend={
                         selectedModelItem &&

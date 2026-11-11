@@ -43,6 +43,8 @@ import {
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
   type AgentTurnView,
+  type MessageQuote,
+  type QuoteAuthor,
 } from '@/shared/contracts/agent';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
@@ -2731,7 +2733,13 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
 type InlineReferenceEntry =
   | { kind: 'plugin'; reference: PluginTextReference }
   | { kind: 'skill'; reference: SkillTextReference }
-  | { kind: 'selection'; reference: SelectionTextReference };
+  | { kind: 'selection'; reference: SelectionTextReference }
+  | {
+      kind: 'quote';
+      quote: MessageQuote;
+      reference: NonNullable<MessageQuote['reference']>;
+      author?: QuoteAuthor;
+    };
 
 /**
  * The replacement input of an edited question: its text collapses into one text
@@ -2758,7 +2766,23 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       (reference): InlineReferenceEntry => ({ kind: 'selection', reference }),
     ),
   );
-  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries].sort(
+  // A quote's inline label is a truncated excerpt; the stored quote carries
+  // the full selected text, so surviving labels must remap the whole quote.
+  const quoteEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.quotes ?? []).flatMap((quote): InlineReferenceEntry[] =>
+      quote.reference
+        ? [{ kind: 'quote', quote, reference: quote.reference, author: part.quoteAuthor }]
+        : [],
+    ),
+  );
+  // Quotes without an inline reference lead the request as a whole; the edit
+  // buffer never shows them as mentions, so they carry over unchanged.
+  const floatingQuotes = texts.flatMap((part) =>
+    (part.quotes ?? [])
+      .filter((quote) => !quote.reference)
+      .map((quote) => ({ quote, author: part.quoteAuthor })),
+  );
+  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries, ...quoteEntries].sort(
     (left, right) => left.reference.offset - right.reference.offset,
   );
   const kept: InlineReferenceEntry[] = [];
@@ -2784,6 +2808,14 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       case 'selection':
         kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
         break;
+      case 'quote':
+        kept.push({
+          kind: 'quote',
+          quote: entry.quote,
+          reference: { ...entry.reference, offset },
+          author: entry.author,
+        });
+        break;
     }
   }
   kept.sort((left, right) => left.reference.offset - right.reference.offset);
@@ -2796,10 +2828,20 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
   const selectionReferences = kept.flatMap((entry) =>
     entry.kind === 'selection' ? [entry.reference] : [],
   );
+  const quotes = [
+    ...kept.flatMap((entry) =>
+      entry.kind === 'quote' ? [{ ...entry.quote, reference: entry.reference }] : [],
+    ),
+    ...floatingQuotes.map((entry) => entry.quote),
+  ];
+  const quoteAuthor =
+    kept.find((entry) => entry.kind === 'quote')?.author ?? floatingQuotes[0]?.author;
   return [
     AgentInputPartSchema.parse({
       type: 'text',
       text,
+      // Quotes and their author are stored as a pair; never emit one alone.
+      ...(quotes.length && quoteAuthor ? { quotes, quoteAuthor } : {}),
       ...(pluginReferences.length ? { pluginReferences } : {}),
       ...(skillReferences.length ? { skillReferences } : {}),
       ...(selectionReferences.length ? { selectionReferences } : {}),

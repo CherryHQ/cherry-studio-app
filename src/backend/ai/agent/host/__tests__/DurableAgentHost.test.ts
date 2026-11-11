@@ -1720,6 +1720,92 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('editing a question remaps surviving quotes and drops removed ones', async () => {
+    const state = fixture();
+    const quotedAnswerId = uuid();
+    const keptLabel = '\u201cThe complete selected\u2026\u201d';
+    const removedLabel = '\u201cA dropped passage\u2026\u201d';
+    const quoteFields = {
+      quotes: [
+        {
+          id: 'quote-kept',
+          sourceMessageId: quotedAnswerId,
+          text: 'The complete selected passage that outlives its label',
+          reference: { label: keptLabel, offset: 8 },
+        },
+        {
+          id: 'quote-removed',
+          sourceMessageId: quotedAnswerId,
+          text: 'A passage the edit drops entirely',
+          reference: { label: removedLabel, offset: 16 + keptLabel.length },
+        },
+      ],
+      quoteAuthor: { role: 'assistant' as const },
+    };
+    const originalText = `Explain ${keptLabel} versus ${removedLabel} now`;
+    const original = await state.reserve('completed', [
+      { id: 'question', type: 'text', state: 'done', text: originalText, ...quoteFields },
+    ]);
+    await state.host.initialize();
+    try {
+      // The quoted answer: another successful answer to the same question.
+      await state.store.reserveAnswer({
+        sessionId: state.sessionId,
+        userMessageId: original.userMessageId,
+        assistantMessageId: quotedAnswerId,
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      for (const assistantMessageId of [original.assistantMessageId, quotedAnswerId])
+        await state.store.finalizeAssistantMessage({
+          assistantMessageId,
+          status: 'success',
+          parts: [],
+          usage: null,
+          error: null,
+          contextCheckpoint: null,
+          runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+        });
+
+      await state.host.editUserMessage({
+        sessionId: state.sessionId,
+        messageId: original.userMessageId,
+        text: `Explain ${keptLabel} briefly`,
+      });
+
+      const question = (await state.store.listMessages(state.sessionId)).find(
+        (message) => message.role === 'user' && message.id !== original.userMessageId,
+      );
+      // The surviving quote keeps its full snapshot and attribution, remapped
+      // onto its label in the edited text; the removed mention is dropped.
+      expect(question?.parts).toEqual([
+        {
+          id: 'input-0',
+          type: 'text',
+          state: 'done',
+          text: `Explain ${keptLabel} briefly`,
+          quotes: [quoteFields.quotes[0]],
+          quoteAuthor: { role: 'assistant' },
+        },
+      ]);
+      // The runtime request expands the remapped label back into the full quote.
+      const request = jest.mocked(state.conversations.submit).mock.calls.at(-1)![1];
+      expect(request.input).toEqual([
+        {
+          type: 'text',
+          text: expect.stringContaining('> The complete selected passage that outlives its label'),
+        },
+      ]);
+      expect(JSON.stringify(request.input)).not.toContain('A passage the edit drops entirely');
+      // The original question keeps both quotes on its own branch.
+      expect(
+        (await state.store.getMessage(state.sessionId, original.userMessageId))?.parts,
+      ).toEqual([expect.objectContaining({ quotes: quoteFields.quotes })]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('editing uses current explicit multi-model selections', async () => {
     const state = fixture();
     const original = await state.reserve('completed');
