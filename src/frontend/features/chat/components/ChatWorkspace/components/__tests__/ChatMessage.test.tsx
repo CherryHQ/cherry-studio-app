@@ -244,9 +244,16 @@ describe('ChatMessage', () => {
       );
     });
 
-    const dots = renderer!.root.findAllByType('AnswerDot');
-    expect(dots).toHaveLength(2);
-    act(() => dots[0]!.props.onPress());
+    const previous = renderer!.root
+      .findAllByType('Button')
+      .find((button) => button.props.testID === 'question-version-previous')!;
+    const next = renderer!.root
+      .findAllByType('Button')
+      .find((button) => button.props.testID === 'question-version-next')!;
+    expect(previous.props.disabled).toBe(false);
+    expect(next.props.disabled).toBe(true);
+    act(() => previous.props.onPress());
+    expect(mockPreserveReadingPosition).toHaveBeenCalledTimes(1);
     expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'user-1', targetId: 'user-0' });
   });
 

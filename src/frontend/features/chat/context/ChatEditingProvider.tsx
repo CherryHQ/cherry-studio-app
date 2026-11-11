@@ -5,6 +5,8 @@ export type ChatEditingTarget = {
   messageId: string;
   /** The sent text the composer draft starts from, including mention labels. */
   initialText: string;
+  /** Original stored files remain attached to the new question. */
+  attachmentCount?: number;
 };
 
 type ChatEditingContextValue = {

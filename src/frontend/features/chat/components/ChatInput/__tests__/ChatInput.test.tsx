@@ -7,8 +7,19 @@ import type { QuoteFields } from '@/shared/contracts/agent';
 
 import { createQuoteMention, readQuoteMentions } from '../../../quotes/quoteMentions';
 import { ChatInput } from '../ChatInput';
+let mockEditing: { messageId: string; initialText: string; attachmentCount: number } | null = null;
+let mockDraft = '';
+const mockCommitEdit = jest.fn();
+const mockEditMessage = jest.fn();
+jest.mock('@cherrystudio/ui/components', () => ({
+  Button: (props: object) => jest.requireActual('react').createElement('Button', props),
+}));
 jest.mock('../hooks/useChatEditDraft', () => ({
-  useChatEditDraft: () => ({ editing: null, cancelEdit: jest.fn(), commitEdit: jest.fn() }),
+  useChatEditDraft: () => ({
+    editing: mockEditing,
+    cancelEdit: jest.fn(),
+    commitEdit: mockCommitEdit,
+  }),
 }));
 
 let mockImageMode = false;
@@ -18,7 +29,13 @@ const mockCapture = jest.fn(() => ({ fields: mockFields, finish: mockFinish }));
 const mockQuoteActions = { capture: mockCapture };
 const mockSend = jest.fn();
 const mockNoop = jest.fn();
-const mockControls = { sendMessage: mockSend, canSend: true, isBusy: false, cancel: mockNoop };
+const mockControls = {
+  editMessage: mockEditMessage,
+  sendMessage: mockSend,
+  canSend: true,
+  isBusy: false,
+  cancel: mockNoop,
+};
 const mockModelItem = { modelId: 'p::m', model: { id: 'p::m' } };
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
@@ -39,7 +56,7 @@ jest.mock('@/frontend/hooks/plugin', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
-  useComposerState: () => ({ draft: '', attachments: [] }),
+  useComposerState: () => ({ draft: mockDraft, attachments: [] }),
 }));
 jest.mock('@/frontend/components/McpApp', () => ({
   useMcpAppConversation: () => undefined,
@@ -64,7 +81,8 @@ jest.mock('../ChatInputSurface', () => ({
   ChatInputAccessories: ({ children }: { children: ReactNode }) => children,
   ChatInputComposer: (props: object) =>
     jest.requireActual('react').createElement('TextComposer', props),
-  ChatInputSurface: () => null,
+  ChatInputSurface: (props: object) =>
+    jest.requireActual('react').createElement('TextSurface', props),
 }));
 jest.mock('../components/AudioAttachmentNotice', () => ({ AudioAttachmentNotice: () => null }));
 jest.mock('../components/ChatInputEffortOverlay', () => ({
@@ -75,7 +93,8 @@ jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
 jest.mock('../components/ChatInputPluginPopover', () => ({
-  ChatInputPluginPopover: ({ children }: { children: ReactNode }) => children,
+  ChatInputPluginPopover: ({ children, ...props }: { children: ReactNode }) =>
+    jest.requireActual('react').createElement('PluginPopover', props, children),
 }));
 jest.mock('../components/ChatInputPromptPopover', () => ({
   ChatInputPromptPopover: ({ children }: { children: ReactNode }) => children,
@@ -113,6 +132,10 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   jest.clearAllMocks();
   mockImageMode = false;
+  mockEditing = null;
+  mockDraft = '';
+  mockControls.isBusy = false;
+  mockEditMessage.mockResolvedValue(undefined);
   mockFields = fields;
   mockSend.mockResolvedValue(undefined);
 });
@@ -192,4 +215,81 @@ test('image preparation failure releases its attempt without admitting or cleari
   expect(mockFinish.mock.calls).toEqual([[false]]);
   expect(mockFields).toBe(fields);
   expect(mockSend).not.toHaveBeenCalled();
+});
+
+test.each(['Original question', '   '])(
+  'disables unchanged or blank question edits: %s',
+  async (draft) => {
+    mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 2 };
+    mockDraft = draft;
+    await mount();
+    const composer = renderer.root.findByType('TextComposer' as never);
+    expect(composer.props.canSend).toBe(false);
+    await expect(composer.props.onSend({ text: draft, attachments: [] })).rejects.toMatchObject({
+      view: { code: 'MESSAGE_CONFLICT' },
+    });
+    expect(mockEditMessage).not.toHaveBeenCalled();
+    expect(mockCommitEdit).not.toHaveBeenCalled();
+  },
+);
+
+test('editing hides attachment actions but keeps model controls and sends changed text', async () => {
+  mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 2 };
+  mockDraft = 'Changed question';
+  await mount();
+  const surface = renderer.root.findByType('TextSurface' as never);
+  expect(surface.props.leadingAction).toBeNull();
+  expect(surface.props.attachmentMode).toBe('text-only');
+  expect(surface.props.secondaryAction).toBeDefined();
+  const composer = renderer.root.findByType('TextComposer' as never);
+  expect(composer.props.canSend).toBe(true);
+  await act(async () => composer.props.onSend({ text: 'Changed question', attachments: [] }));
+  expect(mockEditMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ messageId: 'question', text: 'Changed question' }),
+  );
+  expect(mockCommitEdit).toHaveBeenCalledTimes(1);
+});
+
+test('busy question edit cannot be sent even when its text changed', async () => {
+  mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 0 };
+  mockDraft = 'Changed question';
+  mockControls.isBusy = true;
+  await mount();
+  const composer = renderer.root.findByType('TextComposer' as never);
+  expect(composer.props.canSend).toBe(false);
+  await expect(
+    composer.props.onSend({ text: 'Changed question', attachments: [] }),
+  ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+  expect(mockEditMessage).not.toHaveBeenCalled();
+});
+
+test('failed edit admission retains editing state and does not restore the interrupted draft yet', async () => {
+  mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 2 };
+  mockDraft = 'Changed question';
+  mockEditMessage.mockRejectedValueOnce(new Error('Admission rejected'));
+  await mount();
+  await expect(
+    renderer.root
+      .findByType('TextComposer' as never)
+      .props.onSend({ text: 'Changed question', attachments: [] }),
+  ).rejects.toThrow('Admission rejected');
+  expect(mockCommitEdit).not.toHaveBeenCalled();
+  expect(mockEditing?.messageId).toBe('question');
+});
+
+test('entering question edit closes the plugin picker and does not reopen it on cancel', async () => {
+  await mount();
+  const surface = renderer.root.findByType('TextSurface' as never);
+  await act(async () => surface.props.leadingAction.props.onPickPlugins());
+  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(true);
+  mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 0 };
+  await act(async () =>
+    renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
+  );
+  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(false);
+  mockEditing = null;
+  await act(async () =>
+    renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
+  );
+  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(false);
 });

@@ -1,6 +1,8 @@
+import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Button } from '@cherrystudio/ui/components';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
+import { Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
@@ -29,6 +31,7 @@ import {
 } from '@/frontend/components/PaintingInput';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -275,6 +278,10 @@ function TextChatInput({
   const { t } = useTranslation();
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
   const { cancelEdit, commitEdit, editing } = useChatEditDraft();
+  const { draft: editDraft } = useComposerState();
+  const canSendEdit =
+    !editing ||
+    (!isBusy && editDraft.trim().length > 0 && editDraft.trim() !== editing.initialText.trim());
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
@@ -301,7 +308,7 @@ function TextChatInput({
   const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
   const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
   const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
-  const isPickerAvailable = mode === 'standard' && !isApprovalPending;
+  const isPickerAvailable = mode === 'standard' && !isApprovalPending && !editing;
   const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
   const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
   const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
@@ -330,6 +337,12 @@ function TextChatInput({
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
       if (editing) {
+        if (!text.trim() || text.trim() === editing.initialText.trim() || isBusy)
+          throw new AgentProtocolError({
+            code: isBusy ? 'SESSION_BUSY' : 'MESSAGE_CONFLICT',
+            message: 'Question edit is unchanged or the Session is busy.',
+            retryable: false,
+          });
         await editMessage(
           buildEditUserMessageInput({
             sessionId,
@@ -413,6 +426,7 @@ function TextChatInput({
     [
       editMessage,
       editing,
+      isBusy,
       commitEdit,
       quoteActions,
       reasoningSelection,
@@ -473,22 +487,29 @@ function TextChatInput({
                         <Text className="text-xs font-medium text-muted-foreground">
                           {t('chat.input.editing.title')}
                         </Text>
-                        <Pressable
-                          accessibilityLabel={t('common.cancel')}
-                          accessibilityRole="button"
-                          onPress={cancelEdit}
-                        >
-                          <Text className="text-xs font-medium text-primary">
-                            {t('common.cancel')}
+                        {(editing.attachmentCount ?? 0) > 0 ? (
+                          <Text className="text-xs text-muted-foreground">
+                            {t('chat.input.editing.attachments', {
+                              number: editing.attachmentCount,
+                            })}
                           </Text>
-                        </Pressable>
+                        ) : null}
+                        <Button
+                          accessibilityLabel={t('common.cancel')}
+                          icon={<XIcon className="size-4 text-muted-foreground" />}
+                          onPress={cancelEdit}
+                          size="xs"
+                          variant="ghost"
+                        />
                       </View>
                     ) : null}
                     <ChatInputComposer
                       canSend={
                         selectedModelItem &&
                         (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
-                          ? canSend
+                          ? canSendEdit
+                            ? canSend
+                            : false
                           : false
                       }
                       dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -513,6 +534,7 @@ function TextChatInput({
                         </View>
                       </ChatInputAccessories>
                       <ChatInputSurface
+                        attachmentMode={editing ? 'text-only' : undefined}
                         onLinkPress={quoteActions?.previewQuote}
                         streaming={isBusy}
                         placeholder={
@@ -527,25 +549,27 @@ function TextChatInput({
                         onStop={() => void cancel()}
                         fieldStyle={isPickerVisible ? compactInputStyle : undefined}
                         leadingAction={
-                          <ChatInputMenu
-                            media={mode === 'minimal' ? 'images' : 'all'}
-                            onPickSkills={
-                              mode === 'standard' && agentId && !isParallel
-                                ? () => setOpenPicker('skill')
-                                : undefined
-                            }
-                            onPickPlugins={
-                              mode === 'standard' && !isParallel
-                                ? () => setOpenPicker('plugin')
-                                : undefined
-                            }
-                            onPickPrompts={
-                              mode === 'standard' && prompts.length > 0
-                                ? () => setOpenPicker('prompt')
-                                : undefined
-                            }
-                            triggerRef={pluginMenuRef}
-                          />
+                          editing ? null : (
+                            <ChatInputMenu
+                              media={mode === 'minimal' ? 'images' : 'all'}
+                              onPickSkills={
+                                mode === 'standard' && agentId && !isParallel
+                                  ? () => setOpenPicker('skill')
+                                  : undefined
+                              }
+                              onPickPlugins={
+                                mode === 'standard' && !isParallel
+                                  ? () => setOpenPicker('plugin')
+                                  : undefined
+                              }
+                              onPickPrompts={
+                                mode === 'standard' && prompts.length > 0
+                                  ? () => setOpenPicker('prompt')
+                                  : undefined
+                              }
+                              triggerRef={pluginMenuRef}
+                            />
+                          )
                         }
                         secondaryAction={
                           <ChatInputModelPill

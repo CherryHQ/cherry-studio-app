@@ -3,6 +3,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import {
   useComposerActions,
   useComposerState,
+  useComposerMeta,
 } from '@/frontend/components/Composer/context/ComposerProvider';
 import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
 
@@ -17,6 +18,7 @@ import { useChatEditing } from '../../../context/ChatEditingProvider';
 export function useChatEditDraft() {
   const { attachments, draft } = useComposerState();
   const { addAttachments, clearAttachments, setAttachments, setDraft } = useComposerActions();
+  const { inputRef } = useComposerMeta();
   const { editing, endEdit } = useChatEditing();
   const stash = useRef<
     { draft: string; attachments: readonly ComposerAttachmentDraft[] } | undefined
@@ -34,7 +36,8 @@ export function useChatEditDraft() {
     stash.current = { draft: draftRef.current, attachments: attachmentsRef.current };
     clearAttachments();
     setDraft(editing?.initialText ?? '');
-  }, [clearAttachments, editing, editingMessageId, setDraft]);
+    inputRef.current?.focus();
+  }, [clearAttachments, editing, editingMessageId, inputRef, setDraft]);
 
   const cancelEdit = useCallback(() => {
     if (stash.current !== undefined) {

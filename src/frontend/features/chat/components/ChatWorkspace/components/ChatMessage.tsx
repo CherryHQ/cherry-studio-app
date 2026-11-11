@@ -1,3 +1,5 @@
+import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   BackgroundPressExclusion,
   Button,
@@ -11,7 +13,12 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
-import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
+import {
+  AssistantMessage,
+  type MessageListItem,
+  UserMessage,
+  useMessageListDisclosureToggle,
+} from '@/frontend/components/Message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
@@ -25,7 +32,6 @@ import {
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { AnswerDots } from './MessageAnswerCards';
 import { MessageAnswerGroup } from './MessageAnswerGroup';
 
 export type AssistantMessagePresentation = Readonly<{
@@ -187,26 +193,57 @@ function AssistantChatMessage({
   );
 }
 
-/** The versions of an edited question; a dot shows one version. */
+/** The versions of an edited question, also available during generation. */
 function UserQuestionBranch({ message }: { message: MessageListItem }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const { selectBranch } = useAssistantMessageActions();
+  const preserveReadingPosition = useMessageListDisclosureToggle();
   const siblings = message.questionBranch?.siblings;
   if (!siblings || siblings.length < 2 || !selectBranch) return null;
   const index = Math.max(0, siblings.indexOf(message.id));
   return (
     <BackgroundPressExclusion>
-      <View className="flex-row justify-end pr-1">
-        <AnswerDots
-          count={siblings.length}
-          index={index}
-          onSelect={(target) => {
-            const targetId = siblings[target];
-            if (targetId) void selectBranch({ messageId: message.id, targetId });
+      <View className="flex-row items-center justify-end pr-1">
+        <Button
+          accessibilityLabel={t('chat.branch.previousQuestion')}
+          disabled={index === 0}
+          icon={<ChevronLeftIcon className="size-4 text-muted-foreground" />}
+          onPress={() => {
+            const targetId = siblings[index - 1];
+            if (targetId) {
+              preserveReadingPosition();
+              void selectBranch({ messageId: message.id, targetId });
+            }
           }}
-          pageLabel={(dot) =>
-            t('chat.branch.questionPage', { index: dot + 1, total: siblings.length })
-          }
+          size="xs"
+          testID="question-version-previous"
+          variant="ghost"
+        />
+        <Text
+          accessibilityLabel={t('chat.branch.questionPage', {
+            index: index + 1,
+            total: siblings.length,
+          })}
+          accessibilityLiveRegion="polite"
+          className="text-xs text-muted-foreground tabular-nums"
+        >
+          {(index + 1).toLocaleString(locale)}/{siblings.length.toLocaleString(locale)}
+        </Text>
+        <Button
+          accessibilityLabel={t('chat.branch.nextQuestion')}
+          disabled={index >= siblings.length - 1}
+          icon={<ChevronRightIcon className="size-4 text-muted-foreground" />}
+          onPress={() => {
+            const targetId = siblings[index + 1];
+            if (targetId) {
+              preserveReadingPosition();
+              void selectBranch({ messageId: message.id, targetId });
+            }
+          }}
+          size="xs"
+          testID="question-version-next"
+          variant="ghost"
         />
       </View>
     </BackgroundPressExclusion>

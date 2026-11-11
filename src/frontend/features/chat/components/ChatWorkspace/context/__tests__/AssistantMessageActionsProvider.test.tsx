@@ -318,6 +318,7 @@ describe('AssistantMessageActionsProvider', () => {
     expect(mockBeginEdit).toHaveBeenCalledWith({
       messageId: 'user-1',
       initialText: 'Question',
+      attachmentCount: 0,
     });
   });
 

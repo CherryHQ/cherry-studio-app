@@ -315,7 +315,12 @@ export function AssistantMessageActionsProvider({
       if (latest.current.isBusy) return;
       const message = latest.current.messages.find((message) => message.key === messageId);
       if (message?.actions.editUser?.availability.state === 'enabled')
-        beginEdit({ messageId, initialText: editInitialText(message) });
+        beginEdit({
+          messageId,
+          initialText: editInitialText(message),
+          attachmentCount: (message.display.data.parts ?? []).filter((part) => part.type === 'file')
+            .length,
+        });
     },
     [beginEdit],
   );

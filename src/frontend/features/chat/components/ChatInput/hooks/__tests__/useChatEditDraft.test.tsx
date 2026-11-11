@@ -4,6 +4,7 @@ import { act, create } from 'react-test-renderer';
 import { ComposerTestProvider } from '@/frontend/components/Composer/components/__tests__/_composerTestProvider';
 import {
   useComposerActions,
+  useComposerMeta,
   useComposerState,
 } from '@/frontend/components/Composer/context/ComposerProvider';
 import {
@@ -26,6 +27,8 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+const mockFocus = jest.fn();
+
 const attachment = createReadyAttachmentDraft(
   {
     entry: FileEntrySchema.parse({
@@ -47,6 +50,8 @@ type ProbeHandle = ReturnType<typeof useChatEditDraft> &
   ReturnType<typeof useComposerActions> & { draft: string; attachmentCount: number };
 
 function Probe({ ref }: { ref: Ref<ProbeHandle> }) {
+  const { inputRef } = useComposerMeta();
+  inputRef.current = { focus: mockFocus } as never;
   const editDraft = useChatEditDraft();
   const editing = useChatEditing();
   const composerActions = useComposerActions();
@@ -83,6 +88,7 @@ function render(initialDraft: string) {
 const target: ChatEditingTarget = { messageId: 'user-1', initialText: 'Original question' };
 
 describe('useChatEditDraft', () => {
+  beforeEach(() => mockFocus.mockClear());
   test('beginning an edit stashes the draft and attachments and loads the question', () => {
     const { probeRef, renderer } = render('Interrupted draft');
     expect(probeRef.current?.draft).toBe('Interrupted draft');
@@ -90,6 +96,7 @@ describe('useChatEditDraft', () => {
     act(() => probeRef.current?.beginEdit(target));
     expect(probeRef.current?.draft).toBe('Original question');
     expect(probeRef.current?.attachmentCount).toBe(0);
+    expect(mockFocus).toHaveBeenCalledTimes(1);
 
     act(() => renderer.unmount());
   });
