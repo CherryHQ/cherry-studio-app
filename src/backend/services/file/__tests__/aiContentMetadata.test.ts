@@ -1,13 +1,15 @@
 import { File } from 'expo-file-system';
 
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema, inheritAiContent } from '@/shared/data/types/aiContent';
 import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
 import {
   completeFileAiContent,
+  createGeneratedAiContent,
   readFileAiContent,
   readSourceAiContent,
 } from '../aiContentMetadata';
+import { imageMetadata } from '../imageMetadata';
 
 const mockFiles = new Map<string, Uint8Array>();
 let mockId = 0;
@@ -81,45 +83,62 @@ jest.mock('expo-file-system', () => {
 });
 
 const uri = 'file:///pending/report.md';
-const previousProducer = process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
+const label = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'UpstreamExample',
+  ProduceID: 'upstream-1',
+  ReservedCode1: '',
+  ContentPropagator: 'RelayExample',
+  PropagateID: 'relay-1',
+  ReservedCode2: '',
+});
 beforeEach(() => {
   mockFiles.clear();
   mockId = 0;
-  process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER = 'ProviderExample';
-});
-afterAll(() => {
-  if (previousProducer === undefined) delete process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
-  else process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER = previousProducer;
 });
 
-test('finishes AI writes before returning facts, and each AI edit receives a new production ID', async () => {
+test.each([
+  ['text/markdown', '\uFEFFBody\n'],
+  ['text/html', '<!DOCTYPE html><html><head></head><body>Body</body></html>'],
+  ['application/json', '{"data":1}\n'],
+])(
+  'unknown upstream identity never blocks %s generation or invents a service identity',
+  async (mediaType, text) => {
+    const file = new File(uri);
+    file.writeSync(text);
+    const original = mockFiles.get(uri)!.slice();
+    const facts = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
+    expect(facts).toEqual({ version: 1, source: 'generated', label: null });
+    expect(mockFiles.get(uri)).toEqual(original);
+    expect([...mockFiles.keys()]).toEqual([uri]);
+  },
+);
+
+test('a new AI edit clears old production identity without changing its historical source', async () => {
+  const originalUri = 'file:///managed/original.md';
+  const original = new File(originalUri);
+  original.writeSync(writeAiContentText('\uFEFFBody\n', 'text/markdown', label));
+  const previous = await readFileAiContent({ uri: originalUri, mediaType: 'text/markdown' });
   const file = new File(uri);
-  file.writeSync('\uFEFFBody\n');
-  const generated = await completeFileAiContent({
-    uri,
-    mediaType: 'text/markdown',
-    aiOperation: 'generate',
-  });
-  expect(generated?.source).toBe('generated');
-  expect(readAiContentText(await file.text(), 'text/markdown')).toEqual(generated?.label);
-  expect(mockFiles.get(uri)!.slice(0, 3)).toEqual(new Uint8Array([0xef, 0xbb, 0xbf]));
+  await original.copy(file);
   file.writeSync((await file.text()).replace('Body', 'Edited'));
-  const edited = await completeFileAiContent({
+  const facts = await completeFileAiContent({
     uri,
     mediaType: 'text/markdown',
-    aiContent: generated,
+    aiContent: previous,
     aiOperation: 'edit',
   });
-  expect(edited?.label?.ProduceID).not.toBe(generated?.label?.ProduceID);
-  expect(readAiContentText(await file.text(), 'text/markdown')).toEqual(edited?.label);
-  expect((await file.text()).endsWith('Edited\n')).toBe(true);
-  expect([...mockFiles.keys()]).toEqual([uri]);
+  expect(facts).toEqual({ version: 1, source: 'generated', label: null });
+  expect(await file.text()).toBe('\uFEFFEdited\n');
+  expect(readAiContentText(await file.text(), 'text/markdown')).toBeNull();
+  expect(readAiContentText(await original.text(), 'text/markdown')).toEqual(label);
+  expect((await original.text()).endsWith('Body\n')).toBe(true);
+  expect([...mockFiles.keys()]).toEqual([originalUri, uri]);
 });
 
-test('copies and mechanical transformations retain production identity without needing local provider config', async () => {
-  delete process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
-  const upstream = createAiContent('UpstreamExample', 'upstream-1');
-  new File(uri).writeSync(writeAiContentText('Original\n', 'text/markdown', upstream.label!));
+test('copies and mechanical transformations retain independently supplied producer and propagator fields', async () => {
+  const upstream = inheritAiContent(label);
+  new File(uri).writeSync(writeAiContentText('Original\n', 'text/markdown', label));
   const facts = await readFileAiContent({ uri, mediaType: 'text/markdown' });
   expect(await readSourceAiContent({ uri, mediaType: 'text/markdown', aiContent: null })).toEqual(
     facts,
@@ -127,7 +146,7 @@ test('copies and mechanical transformations retain production identity without n
   const original = mockFiles.get(uri)!.slice();
   await expect(
     completeFileAiContent({ uri, mediaType: 'text/markdown', aiContent: facts }),
-  ).resolves.toEqual(facts);
+  ).resolves.toEqual(upstream);
   expect(mockFiles.get(uri)).toEqual(original);
   const htmlUri = 'file:///pending/copy.html';
   new File(htmlUri).writeSync('<!DOCTYPE html><html><head></head><body>Original</body></html>');
@@ -136,25 +155,87 @@ test('copies and mechanical transformations retain production identity without n
     mediaType: 'text/html',
     aiContent: facts,
   });
-  expect(derived?.label).toEqual(upstream.label);
-  expect(readAiContentText(await new File(htmlUri).text(), 'text/html')).toEqual(upstream.label);
+  expect(derived?.label).toEqual(label);
+  expect(readAiContentText(await new File(htmlUri).text(), 'text/html')).toEqual(label);
 });
 
-test('missing provider cannot produce a supported labeled artifact; raw formats retain exact bytes and origin facts', async () => {
-  delete process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
-  new File(uri).writeSync('Body');
-  const original = mockFiles.get(uri)!.slice();
+test.each([null, '1', '2', '3'] as const)(
+  'original model-image responses preserve upstream confidence and bytes (Label=%s)',
+  async (confidence) => {
+    const raw = new Uint8Array(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const upstreamLabel = confidence ? { ...label, Label: confidence } : null;
+    const bytes = upstreamLabel
+      ? new Uint8Array(
+          Buffer.concat(
+            imageMetadata(
+              { size: raw.length, read: (offset, length) => raw.slice(offset, offset + length) },
+              'image/png',
+              upstreamLabel,
+            ).parts.map((part) =>
+              part instanceof Uint8Array ? part : raw.slice(part.offset, part.offset + part.length),
+            ),
+          ),
+        )
+      : raw;
+    const imageUri = 'file:///pending/image.png';
+    mockFiles.set(imageUri, bytes);
+    const facts = await completeFileAiContent({
+      uri: imageUri,
+      mediaType: 'image/png',
+      aiOperation: 'generate',
+    });
+    expect(facts).toEqual(
+      upstreamLabel ? inheritAiContent(upstreamLabel) : createGeneratedAiContent(),
+    );
+    expect(mockFiles.get(imageUri)).toEqual(bytes);
+    expect([...mockFiles.keys()]).toEqual([imageUri]);
+  },
+);
+
+test.each(['generate', 'edit'] as const)(
+  'a new %s image with frozen source facts clears a superseded declaration',
+  async (aiOperation) => {
+    const raw = new Uint8Array(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const source = {
+      size: raw.length,
+      read: (offset: number, length: number) => raw.slice(offset, offset + length),
+    };
+    const bytes = Buffer.concat(
+      imageMetadata(source, 'image/png', label).parts.map((part) =>
+        part instanceof Uint8Array ? part : raw.slice(part.offset, part.offset + part.length),
+      ),
+    );
+    const imageUri = 'file:///pending/image.png';
+    mockFiles.set(imageUri, new Uint8Array(bytes));
+    const facts = await completeFileAiContent({
+      uri: imageUri,
+      mediaType: 'image/png',
+      aiOperation,
+      aiContent: createGeneratedAiContent(),
+    });
+    expect(facts).toEqual(createGeneratedAiContent());
+    expect(await readFileAiContent({ uri: imageUri, mediaType: 'image/png' })).toBeNull();
+    expect([...mockFiles.keys()]).toEqual([imageUri]);
+  },
+);
+
+test('unknown-origin facts remain unknown after conversion instead of receiving a local producer', async () => {
+  new File(uri).writeSync('<main>Converted</main>');
+  const facts = createGeneratedAiContent();
   await expect(
-    completeFileAiContent({ uri, mediaType: 'text/markdown', aiOperation: 'generate' }),
-  ).rejects.toThrow('producer is not configured');
-  expect(mockFiles.get(uri)).toEqual(original);
-  const rawUri = 'file:///pending/data.json';
-  new File(rawUri).writeSync('{"data":1}\n');
-  await expect(
-    completeFileAiContent({ uri: rawUri, mediaType: 'application/json', aiOperation: 'generate' }),
-  ).resolves.toEqual({ version: 1, source: 'generated', label: null });
-  expect(await new File(rawUri).text()).toBe('{"data":1}\n');
-  expect([...mockFiles.keys()]).toEqual([uri, rawUri]);
+    completeFileAiContent({ uri, mediaType: 'text/html', aiContent: facts }),
+  ).resolves.toEqual(facts);
+  expect(await new File(uri).text()).toBe('<main>Converted</main>');
 });
 
 test('unknown ordinary text is unchanged and a cancelled write never replaces pending content', async () => {

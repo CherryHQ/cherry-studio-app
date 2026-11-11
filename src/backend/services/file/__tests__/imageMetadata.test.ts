@@ -1,18 +1,26 @@
 import { strToU8, zlibSync } from 'fflate';
 
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/aiContent';
 
 import { imageMetadata, type ImageMetadataSource } from '../imageMetadata';
 import { readAiContentXmp, writeAiContentXmp } from '../xmpMetadata';
 
-const label = createAiContent('ProviderExample', 'content-1').label!;
-const edited = createAiContent('ProviderExample', 'content-2').label!;
+const label = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'ProviderExample',
+  ProduceID: 'content-1',
+  ReservedCode1: '',
+  ContentPropagator: 'RelayExample',
+  PropagateID: 'relay-1',
+  ReservedCode2: '',
+});
+const edited = { ...label, ProduceID: 'content-2', PropagateID: 'relay-2' };
 const bytes = (...parts: Uint8Array[]) => new Uint8Array(Buffer.concat(parts));
 const source = (data: Uint8Array): ImageMetadataSource => ({
   size: data.length,
   read: (offset, length) => data.slice(offset, offset + length),
 });
-const rewrite = (data: Uint8Array, mediaType: string, value = label) =>
+const rewrite = (data: Uint8Array, mediaType: string, value: AiContentLabel | null = label) =>
   bytes(
     ...imageMetadata(source(data), mediaType, value).parts.map((part) =>
       part instanceof Uint8Array ? part : data.slice(part.offset, part.offset + part.length),
@@ -73,6 +81,9 @@ test.each([
   const updated = rewrite(stored, mediaType, edited);
   expect(imageMetadata(source(updated), mediaType).label).toEqual(edited);
   expect(Buffer.from(updated).toString()).not.toContain('content-1');
+  const cleared = rewrite(updated, mediaType, null);
+  expect(imageMetadata(source(cleared), mediaType).label).toBeNull();
+  expect(rewrite(cleared, mediaType, null)).toEqual(cleared);
 });
 
 test('keeps every original PNG chunk, including compressed pixels', () => {

@@ -411,7 +411,7 @@ function gif(source: ImageMetadataSource): Inventory {
 export function imageMetadata(
   source: ImageMetadataSource,
   mediaType: string,
-  label?: AiContentLabel,
+  label?: AiContentLabel | null,
 ): { label: AiContentLabel | null; parts: ImageMetadataPart[] } {
   const inventory = (
     { 'image/png': png, 'image/jpeg': jpeg, 'image/webp': webp, 'image/gif': gif } as Record<
@@ -424,10 +424,17 @@ export function imageMetadata(
     ...inventory.xmp.map((block) => readAiContentXmp(block.text)),
     ...inventory.legacy.map((block) => block.label),
   ].filter((value) => value !== null);
-  if (!label && labels.some((value) => JSON.stringify(value) !== JSON.stringify(labels[0])))
+  if (
+    label === undefined &&
+    labels.some((value) => JSON.stringify(value) !== JSON.stringify(labels[0]))
+  )
     throw new Error('Conflicting image AIGC metadata');
-  if (!label) return { label: labels[0] ?? null, parts: [{ offset: 0, length: source.size }] };
-  const replacements = [...inventory.replacements];
+  if (label === undefined || (label === null && !labels.length))
+    return {
+      label: label === null ? null : (labels[0] ?? null),
+      parts: [{ offset: 0, length: source.size }],
+    };
+  const replacements = label === null && !inventory.xmp.length ? [] : [...inventory.replacements];
   inventory.xmp.forEach((block, index) =>
     replacements.push({
       start: block.start,
@@ -441,7 +448,7 @@ export function imageMetadata(
       end: block.end,
       bytes: block.clear ?? new Uint8Array(),
     });
-  if (!inventory.xmp.length)
+  if (label && !inventory.xmp.length)
     replacements.push({
       start: inventory.insert,
       end: inventory.insert,

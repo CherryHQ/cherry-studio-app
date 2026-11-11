@@ -1,12 +1,15 @@
-import {
-  AiContentLabelSchema,
-  AiContentSchema,
-  createAiContent,
-  inheritAiContent,
-} from '../aiContent';
+import { AiContentLabelSchema, AiContentSchema, inheritAiContent } from '../aiContent';
 import { FileEntrySchema } from '../file';
 
-const label = createAiContent('ProviderExample', 'content-1').label!;
+const label = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'ProviderExample',
+  ProduceID: 'content-1',
+  ReservedCode1: '',
+  ContentPropagator: 'RelayExample',
+  PropagateID: 'relay-1',
+  ReservedCode2: '',
+});
 
 test('serializes all seven Annex E fields as strings without private context', () => {
   expect(label).toEqual({
@@ -14,8 +17,8 @@ test('serializes all seven Annex E fields as strings without private context', (
     ContentProducer: 'ProviderExample',
     ProduceID: 'content-1',
     ReservedCode1: '',
-    ContentPropagator: 'ProviderExample',
-    PropagateID: 'content-1',
+    ContentPropagator: 'RelayExample',
+    PropagateID: 'relay-1',
     ReservedCode2: '',
   });
   expect(AiContentSchema.parse(JSON.parse(JSON.stringify(inheritAiContent(label))))).toEqual({
@@ -42,7 +45,6 @@ test('accepts upstream uncertainty but rejects noncanonical fields and character
     { ...label, prompt: 'private' },
   ])
     expect(AiContentLabelSchema.safeParse(invalid).success).toBe(false);
-  expect(() => createAiContent('', 'id')).toThrow();
 });
 
 test('keeps legacy entries unknown and carries AI facts independently of provenance', () => {

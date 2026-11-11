@@ -65,7 +65,10 @@ export function createDocumentExportSession(
       if (!hasAiContent) return file;
       aiContent = createGeneratedAiContent();
     }
-    const facts = await completeFileAiContent({ ...file, aiContent }, signal);
+    const facts = await completeFileAiContent(
+      { ...file, aiContent, aiOperation: aiContent.label ? undefined : 'generate' },
+      signal,
+    );
     return { ...file, aiContent: facts };
   }
   let disposed = false;

@@ -56,10 +56,11 @@ column widths with horizontal scrolling for wide tables. Markdown keeps authored
 content and represents resources explicitly. The chat adapter excludes thinking and process blocks
 from every format.
 
-Selected model-authored text or known AI assets establishes AI origin for the frozen export. One
-production identity is reused across its temporary Markdown/HTML/PNG outputs and retries. Metadata
-is completed before artifact publication; saving carries the same facts into managed storage.
+Selected model-authored text or known AI assets establishes AI origin for the frozen export. The
+existing artifact identity is local to Cherry and remains reusable across retries. AI-origin facts
+without upstream identity do not synthesize an AIGC declaration; saving carries those facts into
+managed storage. Inherited declarations are completed before artifact publication.
 Labeled Markdown input inherits its declaration without displaying the AIGC header. HTML conversion
 restores input AI facts on final PNG/PPTX outputs and preview files after encoding. This adds no
-visible AI notice. Provider configuration and pending native acceptance are described in
+visible AI notice. Upstream identity coverage and pending native acceptance are described in
 [AI Content Metadata](../../../../docs/references/ai-content-labeling-design.md).

@@ -73,8 +73,8 @@ hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
   Sharing tab selects `document-export`; exported images/documents remain in their media-type tabs.
   This value extends the existing text column without a database migration or changes to old rows.
 - `aiContent` stores nullable versioned AI-source facts separately from provenance. Explicit AI
-  producers finish supported file metadata before committing; copies and mechanical transformations
-  inherit production identity. Legacy entries remain unknown. Unsupported formats keep their bytes
+  producers record known origin without inventing service identity. New AI edits clear obsolete
+  declarations; copies and mechanical transformations inherit existing production identity. Legacy entries remain unknown. Unsupported formats keep their bytes
   and internal source facts. See [AI Content Metadata](../ai-content-labeling-design.md).
 - `deletedAt` is the time a user moved the file to trash. Library listing, attachment admission,
   Agent reads/edits, and previews exclude marked rows. Restore clears it. Trash and restore preserve

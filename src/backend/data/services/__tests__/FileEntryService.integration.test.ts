@@ -1,5 +1,5 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { inheritAiContent } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
@@ -70,7 +70,15 @@ describe('FileEntryService integration', () => {
   });
 
   it('persists AI facts independently of provenance and replaces them with a draft revision', async () => {
-    const original = createAiContent('ProviderExample', 'content-1');
+    const original = inheritAiContent({
+      Label: '1',
+      ContentProducer: 'ProviderExample',
+      ProduceID: 'content-1',
+      ReservedCode1: '',
+      ContentPropagator: 'RelayExample',
+      PropagateID: 'relay-1',
+      ReservedCode2: '',
+    });
     const entry = await createImported({
       id: id(7),
       filename: 'report.md',
@@ -79,7 +87,7 @@ describe('FileEntryService integration', () => {
       aiContent: original,
     });
     expect((await service.getById(entry.id)).aiContent).toEqual(original);
-    const edited = createAiContent('ProviderExample', 'content-2');
+    const edited = { version: 1 as const, source: 'generated' as const, label: null };
     const updated = await service.withWriteTx((tx) =>
       service.updateSizeTx(tx, entry.id, 20, edited),
     );

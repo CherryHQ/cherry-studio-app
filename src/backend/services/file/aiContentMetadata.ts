@@ -5,7 +5,6 @@ import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   AiContentSchema,
-  createAiContent,
   inheritAiContent,
   type AiContent,
   type AiContentLabel,
@@ -30,13 +29,9 @@ const OFFICE: Record<string, 'docx' | 'xlsx' | 'pptx'> = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 };
 
-export function createGeneratedAiContent(required = true): AiContent {
-  const producer = process.env.EXPO_PUBLIC_AI_CONTENT_PRODUCER;
-  if (!producer) {
-    if (required) throw new Error('AI content producer is not configured');
-    return { version: 1, source: 'generated', label: null };
-  }
-  return createAiContent(producer, createOrderedUuid());
+export function createGeneratedAiContent(): AiContent {
+  // Local file/artifact IDs belong to Cherry. They are never upstream production IDs.
+  return { version: 1, source: 'generated', label: null };
 }
 
 function imageSource(file: File) {
@@ -127,7 +122,7 @@ export async function completeFileAiContent(
   let existing: AiContent | null = null;
   if (
     supported &&
-    (!input.aiOperation || (input.aiOperation === 'generate' && IMAGES.has(mediaType)))
+    (!input.aiOperation || (input.aiOperation === 'generate' && !content && IMAGES.has(mediaType)))
   ) {
     existing =
       input.aiOperation || content
@@ -135,21 +130,17 @@ export async function completeFileAiContent(
         : await readSourceAiContent({ uri: file.uri, mediaType }, signal);
   }
   if (input.aiOperation) {
-    // Only original model image responses can already identify their upstream producer.
+    // Only original model-image responses may retain an upstream declaration for this output.
     content =
-      input.aiOperation === 'generate' &&
-      IMAGES.has(mediaType) &&
-      existing?.label?.Label === '1' &&
-      Boolean(existing.label.ContentProducer) &&
-      Boolean(existing.label.ProduceID)
+      input.aiOperation === 'generate' && !content && IMAGES.has(mediaType) && existing?.label
         ? existing
-        : createGeneratedAiContent(supported);
+        : createGeneratedAiContent();
   } else content ??= existing;
-  if (!content || !supported) return content;
-  if (!content.label) content = createGeneratedAiContent(true);
+  if (!content || !supported || (!input.aiOperation && !content.label)) return content;
   const label = content.label;
-  if (!label) throw new Error('AI content metadata is unavailable');
-  if (JSON.stringify(existing?.label) === JSON.stringify(label)) return content;
+  if (label && JSON.stringify(existing?.label) === JSON.stringify(label)) return content;
+  // A new AI edit cannot keep an old producer's declaration. Clear it on the pending output
+  // when no declaration for the new content is available; retain the AI-origin fact internally.
   const temporary = new File(
     new Directory(file.parentDirectory.uri),
     createOrderedUuid() + '.metadata',
@@ -198,12 +189,12 @@ export async function completeFileAiContent(
     }
     signal?.throwIfAborted();
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);
-    if (JSON.stringify(extracted?.label) !== JSON.stringify(label))
+    if (JSON.stringify(extracted?.label ?? null) !== JSON.stringify(label))
       throw new Error('AI content metadata did not round-trip');
     await temporary.copy(file, { overwrite: true });
     signal?.throwIfAborted();
     const published = await readFileAiContent({ uri: file.uri, mediaType }, signal);
-    if (JSON.stringify(published?.label) !== JSON.stringify(label))
+    if (JSON.stringify(published?.label ?? null) !== JSON.stringify(label))
       throw new Error('Final file AI metadata did not round-trip');
     return content;
   } finally {

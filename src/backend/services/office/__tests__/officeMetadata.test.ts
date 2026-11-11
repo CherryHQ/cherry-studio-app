@@ -1,15 +1,23 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import type { JsSandbox } from '@/backend/services/jsSandbox';
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 
 import { createOfficeCode } from '../createOfficeCode';
 import { processOfficeMetadata } from '../officeMetadata';
 import type { OfficeRequest } from '../officeSpec';
 import { runOfficeJob, runOfficeJobSync } from './_officeJob';
 
-const label = createAiContent('ProviderExample', 'content-1').label!;
-const edited = createAiContent('ProviderExample', 'content-2').label!;
+const label = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'ProviderExample',
+  ProduceID: 'content-1',
+  ReservedCode1: '',
+  ContentPropagator: 'RelayExample',
+  PropagateID: 'relay-1',
+  ReservedCode2: '',
+});
+const edited = { ...label, ProduceID: 'content-2', PropagateID: 'relay-2' };
 
 function sandboxFor(source: Uint8Array) {
   let output: Uint8Array | undefined;
@@ -110,6 +118,30 @@ test.each(requests)(
     expect(replaced.match(/name="AIGC"/g)).toHaveLength(1);
     expect(replaced).not.toContain('content-1');
     expect(replaced).toContain('content-2');
+    const clearer = sandboxFor(stored);
+    await processOfficeMetadata({
+      uri: 'file:///stored',
+      size: stored.length,
+      format: request.format,
+      output: 'file:///cleared',
+      label: null,
+      sandbox: clearer.sandbox,
+    });
+    const cleared = unzipSync(clearer.output());
+    expect(strFromU8(cleared['docProps/custom.xml'])).toContain('name="Authored"');
+    expect(strFromU8(cleared['docProps/custom.xml'])).not.toContain('name="AIGC"');
+    for (const [path, bytes] of Object.entries(parts))
+      if (path !== 'docProps/custom.xml') expect(cleared[path]).toEqual(bytes);
+    const unlabelled = sandboxFor(input);
+    await processOfficeMetadata({
+      uri: 'file:///input',
+      size: input.length,
+      format: request.format,
+      output: 'file:///copy',
+      label: null,
+      sandbox: unlabelled.sandbox,
+    });
+    expect(unlabelled.output()).toEqual(input);
   },
 );
 

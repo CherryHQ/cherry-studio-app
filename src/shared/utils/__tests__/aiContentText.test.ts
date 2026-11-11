@@ -1,9 +1,32 @@
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 
 import { aiContentMarkdownBody, readAiContentText, writeAiContentText } from '../aiContentText';
 
-const label = createAiContent('ProviderExample', 'content-1').label!;
-const edited = createAiContent('ProviderExample', 'content-2').label!;
+const label = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'ProviderExample',
+  ProduceID: 'content-1',
+  ReservedCode1: '',
+  ContentPropagator: 'RelayExample',
+  PropagateID: 'relay-1',
+  ReservedCode2: '',
+});
+const edited = { ...label, ProduceID: 'content-2', PropagateID: 'relay-2' };
+
+test('clears only superseded AIGC declarations, keeping content and unrelated metadata', () => {
+  const source = '\uFEFF---\ntitle: Report\n---\nBody\r\n';
+  const markdown = writeAiContentText(source, 'text/markdown', label);
+  const cleared = writeAiContentText(markdown, 'text/markdown', null);
+  expect(cleared).toBe(source);
+  expect(readAiContentText(cleared, 'text/markdown')).toBeNull();
+  const html =
+    '<!DOCTYPE html><html><head><meta name="author" content="Original"></head><body>Body</body></html>';
+  expect(writeAiContentText(writeAiContentText(html, 'text/html', label), 'text/html', null)).toBe(
+    html,
+  );
+  expect(writeAiContentText('Plain body\n', 'text/markdown', null)).toBe('Plain body\n');
+  expect(writeAiContentText('<main>Body</main>', 'text/html', null)).toBe('<main>Body</main>');
+});
 
 test('merges Markdown metadata, preserves BOM/body and omits only AIGC from reading', () => {
   const source = '\uFEFF---\r\ntitle: Report\r\n---\r\n# 原文 😀\r\n\r\nBody\r\n';

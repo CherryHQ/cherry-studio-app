@@ -230,8 +230,9 @@ export function createEditFileTool(
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
     const labeledSnippet = (entry: FileEntry) => {
-      const label = entry.aiContent?.label;
-      if (!label || !['text/markdown', 'text/html'].includes(entry.mediaType)) return snippet;
+      if (!entry.aiContent || !['text/markdown', 'text/html'].includes(entry.mediaType))
+        return snippet;
+      const label = entry.aiContent.label;
       const finalText = writeAiContentText(data, entry.mediaType, label).replace(/^\uFEFF/, '');
       let prefix = 0;
       while (

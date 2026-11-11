@@ -21,28 +21,11 @@ export type AiContentLabel = z.infer<typeof AiContentLabelSchema>;
 export const AiContentSchema = z.strictObject({
   version: z.literal(1),
   source: z.enum(['generated', 'inherited']),
-  /** Raw formats may have established AI origin before a metadata carrier/provider is available. */
+  /** AI origin may be known even when the upstream service supplied no usable label. */
   label: AiContentLabelSchema.nullable(),
 });
 export type AiContent = z.infer<typeof AiContentSchema>;
 export type AiContentOperation = 'generate' | 'edit';
-
-export function createAiContent(producer: string, id: string): AiContent {
-  if (!producer || !id) throw new Error('AI content needs a producer and content identifier');
-  return AiContentSchema.parse({
-    version: 1,
-    source: 'generated',
-    label: {
-      Label: '1',
-      ContentProducer: producer,
-      ProduceID: id,
-      ReservedCode1: '',
-      ContentPropagator: producer,
-      PropagateID: id,
-      ReservedCode2: '',
-    },
-  });
-}
 
 export function inheritAiContent(label: AiContentLabel): AiContent {
   return AiContentSchema.parse({ version: 1, source: 'inherited', label });

@@ -62,7 +62,7 @@ They are the source of truth for how the repository works today.
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [File Preview And Viewer](./references/file-preview-and-viewer.md) | File kinds, open policy, in-app viewing and export; native acceptance pending |
 | [Document Export](./references/document-export.md) | Unified sharing, Markdown/HTML and paged images, temporary artifacts, explicit saving, and pending device acceptance |
-| [AI Content Metadata](./references/ai-content-labeling-design.md) | Implicit labels at generation/edit time, source inheritance, format coverage, provider configuration, and pending native acceptance |
+| [AI Content Metadata](./references/ai-content-labeling-design.md) | Implicit labels at generation/edit time, source inheritance, format coverage, upstream identity coverage, and pending native acceptance |
 | [HTML Conversion](./references/html-conversion.md) | HTML to PNG and image-based PPTX, native capture, streaming output, implementation selection and pending acceptance |
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |

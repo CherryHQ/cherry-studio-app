@@ -134,11 +134,23 @@ export function readAiContentText(text: string, mediaType: string): AiContentLab
   return null;
 }
 
-export function writeAiContentText(text: string, mediaType: string, input: AiContentLabel): string {
-  const label = AiContentLabelSchema.parse(input);
-  readAiContentText(text, mediaType);
+/** Null clears a stale declaration on a new AI output without inventing replacement identity. */
+export function writeAiContentText(
+  text: string,
+  mediaType: string,
+  input: AiContentLabel | null,
+): string {
+  const label = input === null ? null : AiContentLabelSchema.parse(input);
+  if (label) readAiContentText(text, mediaType);
   if (mediaType === 'text/markdown') {
     const header = markdownHeader(text);
+    if (!label) {
+      if (!header?.document.has('AIGC')) return text;
+      header.document.delete('AIGC');
+      return !isMap(header.document.contents) || !header.document.contents.items.length
+        ? header.bom + header.body
+        : header.bom + '---\n' + header.document.toString() + '---\n' + header.body;
+    }
     const document = header?.document ?? parseDocument('{}');
     document.set('AIGC', label);
     const bom = header?.bom ?? (text.startsWith('\uFEFF') ? '\uFEFF' : '');
@@ -151,8 +163,9 @@ export function writeAiContentText(text: string, mediaType: string, input: AiCon
       .replace(/"/g, '&quot;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    const meta = '<meta name="AIGC" content="' + value + '">';
+    const meta = label ? '<meta name="AIGC" content="' + value + '">' : '';
     const { tags, head, end, metadata } = htmlMetadata(text);
+    if (!label && !metadata.length) return text;
     if (head && !end) throw new Error('Unclosed HTML head');
     if (head && end) {
       let body = text.slice(head.end, end.start);

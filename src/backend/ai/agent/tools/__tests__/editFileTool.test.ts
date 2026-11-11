@@ -1,6 +1,10 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import { createAiContent, type AiContent } from '@/shared/data/types/aiContent';
+import {
+  AiContentLabelSchema,
+  AiContentSchema,
+  type AiContent,
+} from '@/shared/data/types/aiContent';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 import { writeAiContentText } from '@/shared/utils/aiContentText';
 
@@ -120,9 +124,23 @@ describe('editFileTool', () => {
     });
   });
 
-  test('returns coordinates in the final file when a first AI edit inserts Markdown metadata', async () => {
-    const facts = createAiContent('ProviderExample', 'content-1');
-    const files = createFiles('l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n', undefined, facts);
+  test('returns final coordinates when an AI edit clears the previous content declaration', async () => {
+    const facts = AiContentSchema.parse({ version: 1, source: 'generated', label: null });
+    const previousLabel = AiContentLabelSchema.parse({
+      Label: '1',
+      ContentProducer: 'ProviderExample',
+      ProduceID: 'content-1',
+      ReservedCode1: '',
+      ContentPropagator: 'RelayExample',
+      PropagateID: 'relay-1',
+      ReservedCode2: '',
+    });
+    const original = writeAiContentText(
+      'l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n',
+      'text/markdown',
+      previousLabel,
+    );
+    const files = createFiles(original, undefined, facts);
     const output = await execute(createEditFileTool(files), {
       file_entry_id: SOURCE_ID,
       old_string: 'old',
@@ -136,7 +154,8 @@ describe('editFileTool', () => {
     };
     const lines = stored.split('\n');
     expect(snippetStartLine).toBe(lines.indexOf('l2') + 1);
-    expect(snippetStartLine).toBeGreaterThan(2);
+    expect(snippetStartLine).toBe(2);
+    expect(stored).not.toContain('ContentProducer');
     expect(lines.slice(snippetStartLine - 1, snippetStartLine + 4).join('\n') + '\n').toBe(snippet);
     expect(snippet).toContain('l4 new');
   });
@@ -705,9 +724,7 @@ function createFiles(content: string | Uint8Array, declaredSize?: number, aiCont
     async (input: Parameters<EditFileFiles['createTextEntry']>[0]) => {
       const id = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
       const data = new TextEncoder().encode(
-        aiContent?.label
-          ? writeAiContentText(input.data, input.mediaType, aiContent.label)
-          : input.data,
+        aiContent ? writeAiContentText(input.data, input.mediaType, aiContent.label) : input.data,
       );
       facts.set(id, {
         fileEntryId: id,

@@ -1,5 +1,5 @@
 import type { ExportSignature, ExportWatermark } from '@/shared/contracts/fileExport';
-import { createAiContent } from '@/shared/data/types/aiContent';
+import { inheritAiContent } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { prepareFileExport, prepareImageExport } from '../prepareImageExport';
@@ -119,7 +119,15 @@ test('discards a branded AI derivative if its metadata cannot be restored, retai
     size: original.length,
     createdAt: 1,
     updatedAt: 1,
-    aiContent: createAiContent('ProviderExample', 'content-1'),
+    aiContent: inheritAiContent({
+      Label: '1',
+      ContentProducer: 'ProviderExample',
+      ProduceID: 'content-1',
+      ReservedCode1: '',
+      ContentPropagator: 'RelayExample',
+      PropagateID: 'relay-1',
+      ReservedCode2: '',
+    }),
   });
   await expect(
     prepareFileExport({ entry, uri }, watermark, async () => {
