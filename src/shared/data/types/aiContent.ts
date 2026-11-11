@@ -17,16 +17,4 @@ export const AiContentLabelSchema = z.strictObject({
 });
 export type AiContentLabel = z.infer<typeof AiContentLabelSchema>;
 
-/** Source facts survive transformations, including formats without an in-file carrier. */
-export const AiContentSchema = z.strictObject({
-  version: z.literal(1),
-  source: z.enum(['generated', 'inherited']),
-  /** AI origin may be known even when the upstream service supplied no usable label. */
-  label: AiContentLabelSchema.nullable(),
-});
-export type AiContent = z.infer<typeof AiContentSchema>;
 export type AiContentOperation = 'generate' | 'edit';
-
-export function inheritAiContent(label: AiContentLabel): AiContent {
-  return AiContentSchema.parse({ version: 1, source: 'inherited', label });
-}

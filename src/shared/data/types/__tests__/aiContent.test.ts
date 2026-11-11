@@ -1,5 +1,4 @@
-import { AiContentLabelSchema, AiContentSchema, inheritAiContent } from '../aiContent';
-import { FileEntrySchema } from '../file';
+import { AiContentLabelSchema } from '../aiContent';
 
 const label = AiContentLabelSchema.parse({
   Label: '1',
@@ -21,12 +20,7 @@ test('serializes all seven Annex E fields as strings without private context', (
     PropagateID: 'relay-1',
     ReservedCode2: '',
   });
-  expect(AiContentSchema.parse(JSON.parse(JSON.stringify(inheritAiContent(label))))).toEqual({
-    version: 1,
-    source: 'inherited',
-    label,
-  });
-  expect(AiContentSchema.parse({ version: 1, source: 'generated', label: null }).label).toBeNull();
+  expect(AiContentLabelSchema.parse(JSON.parse(JSON.stringify(label)))).toEqual(label);
 });
 
 test('accepts upstream uncertainty but rejects noncanonical fields and characters', () => {
@@ -45,25 +39,4 @@ test('accepts upstream uncertainty but rejects noncanonical fields and character
     { ...label, prompt: 'private' },
   ])
     expect(AiContentLabelSchema.safeParse(invalid).success).toBe(false);
-});
-
-test('keeps legacy entries unknown and carries AI facts independently of provenance', () => {
-  const entry = {
-    id: '00000000-0000-7000-8000-000000000001',
-    filename: 'report.md',
-    mediaType: 'text/markdown',
-    provenance: 'generated',
-    size: 4,
-    createdAt: 1,
-    updatedAt: 1,
-  };
-  expect(FileEntrySchema.parse(entry).aiContent).toBeUndefined();
-  expect(FileEntrySchema.parse({ ...entry, aiContent: null }).aiContent).toBeNull();
-  const facts = inheritAiContent(label);
-  expect(
-    FileEntrySchema.parse({ ...entry, provenance: 'imported', aiContent: facts }).aiContent,
-  ).toEqual(facts);
-  expect(FileEntrySchema.safeParse({ ...entry, aiContent: { ...facts, version: 2 } }).success).toBe(
-    false,
-  );
 });

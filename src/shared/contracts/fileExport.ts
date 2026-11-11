@@ -1,4 +1,4 @@
-import type { AiContent } from '@/shared/data/types/aiContent';
+import type { AiContentLabel } from '@/shared/data/types/aiContent';
 
 export type ExportWatermarkStyle = ExportWatermark['kind'];
 export const DEFAULT_EXPORT_WATERMARK_STYLE: ExportWatermarkStyle = 'cherry';
@@ -37,5 +37,6 @@ export type ExportFile = {
   uri: string;
   filename: string;
   mediaType: string;
-  aiContent?: AiContent | null;
+  /** Captured from source bytes for this operation; the file remains authoritative. */
+  aiContentLabel?: AiContentLabel | null;
 };

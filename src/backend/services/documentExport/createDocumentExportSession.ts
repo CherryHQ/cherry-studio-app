@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { completeFileAiContent, createGeneratedAiContent } from '@/backend/services/file';
+import { completeFileAiContent } from '@/backend/services/file';
 import {
   DocumentExportError,
   type DocumentExportArtifact,
@@ -13,8 +13,6 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportFile } from '@/shared/contracts/fileExport';
-import { inheritAiContent, type AiContent } from '@/shared/data/types/aiContent';
-import type { FileEntryId } from '@/shared/data/types/file';
 import { readableFilename } from '@/shared/data/types/file';
 import { aiContentMarkdownBody, readAiContentText } from '@/shared/utils/aiContentText';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
@@ -25,7 +23,6 @@ import { renderMarkdown, renderMarkdownWithImages } from './renderMarkdown';
 import type { PreparedAsset, ReadManagedImage } from './resolveDocumentAssets';
 
 export type DocumentExportDependencies = {
-  hasAiAssets?(ids: readonly FileEntryId[], signal: AbortSignal): Promise<boolean>;
   readManagedImage: ReadManagedImage;
   saveFile(file: ExportFile, signal: AbortSignal): Promise<ResolvedFile>;
 };
@@ -50,26 +47,17 @@ export function createDocumentExportSession(
   const artifacts = new Map<string, DocumentExportArtifact>();
   const html = new Map<string, Awaited<ReturnType<typeof renderDocumentHtml>>>();
   const saved = new Map<string, ResolvedFile>();
-  let aiContent: AiContent | undefined = inheritedLabel
-    ? inheritAiContent(inheritedLabel)
-    : undefined;
-
   async function labelFile(file: ExportFile, signal: AbortSignal): Promise<ExportFile> {
-    if (aiContent === undefined) {
-      // Successful materialization records only referenced assets, excluding unused/failed sources.
-      const ids = [...assets.keys()]
-        .filter((key) => key.startsWith('managed:'))
-        .map((key) => key.slice('managed:'.length));
-      const hasAiContent =
-        document.aiGenerated || (ids.length > 0 && (await dependencies.hasAiAssets?.(ids, signal)));
-      if (!hasAiContent) return file;
-      aiContent = createGeneratedAiContent();
-    }
-    const facts = await completeFileAiContent(
-      { ...file, aiContent, aiOperation: aiContent.label ? undefined : 'generate' },
+    if (!inheritedLabel && !document.aiGenerated) return file;
+    const aiContentLabel = await completeFileAiContent(
+      {
+        ...file,
+        aiContentLabel: inheritedLabel,
+        aiOperation: document.aiGenerated ? 'generate' : undefined,
+      },
       signal,
     );
-    return { ...file, aiContent: facts };
+    return { ...file, aiContentLabel };
   }
   let disposed = false;
   let disposal: Promise<void> | undefined;

@@ -20,7 +20,7 @@ export async function importManagedFile(
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
   const source = new File(input.uri);
-  const aiContent = await readSourceAiContent(
+  const aiContentLabel = await readSourceAiContent(
     {
       uri: input.uri,
       mediaType:
@@ -39,7 +39,7 @@ export async function importManagedFile(
         ...input,
         ...normalized,
         provenance: 'imported',
-        aiContent,
+        aiContentLabel,
         source: 'uri',
       },
       signal,

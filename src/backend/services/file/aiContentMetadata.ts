@@ -4,9 +4,7 @@ import { strFromU8 } from 'fflate/browser';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
-  AiContentSchema,
-  inheritAiContent,
-  type AiContent,
+  AiContentLabelSchema,
   type AiContentLabel,
   type AiContentOperation,
 } from '@/shared/data/types/aiContent';
@@ -17,7 +15,8 @@ import { decodeManagedUtf8 } from './utf8Text';
 import { MAX_AI_METADATA_BYTES } from './xmpMetadata';
 
 export type AiContentWrite = {
-  aiContent?: AiContent | null;
+  /** Captured from source bytes before a mechanical encode; never persisted. */
+  aiContentLabel?: AiContentLabel | null;
   /** Set by a producing business path, never inferred from file provenance. */
   aiOperation?: AiContentOperation;
 };
@@ -28,11 +27,6 @@ const OFFICE: Record<string, 'docx' | 'xlsx' | 'pptx'> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 };
-
-export function createGeneratedAiContent(): AiContent {
-  // Local file/artifact IDs belong to Cherry. They are never upstream production IDs.
-  return { version: 1, source: 'generated', label: null };
-}
 
 function imageSource(file: File) {
   const handle = file.open(FileMode.ReadOnly);
@@ -49,7 +43,7 @@ function imageSource(file: File) {
 export async function readFileAiContent(
   file: { uri: string; mediaType: string },
   signal?: AbortSignal,
-): Promise<AiContent | null> {
+): Promise<AiContentLabel | null> {
   signal?.throwIfAborted();
   const source = new File(file.uri);
   const mediaType = file.mediaType.split(';')[0].trim().toLowerCase();
@@ -84,16 +78,15 @@ export async function readFileAiContent(
     ).label;
   }
   signal?.throwIfAborted();
-  return label ? inheritAiContent(label) : null;
+  return label;
 }
 
 /** Capture source declarations before a mechanical encode; unknown files keep their behavior. */
 export async function readSourceAiContent(
-  file: { uri: string; mediaType: string; aiContent?: AiContent | null },
+  file: { uri: string; mediaType: string },
   signal?: AbortSignal,
-): Promise<AiContent | null> {
+): Promise<AiContentLabel | null> {
   signal?.throwIfAborted();
-  if (file.aiContent) return AiContentSchema.parse(file.aiContent);
   try {
     return await readFileAiContent(file, signal);
   } catch (error) {
@@ -109,7 +102,7 @@ export async function readSourceAiContent(
 export async function completeFileAiContent(
   input: { uri: string; mediaType: string } & AiContentWrite,
   signal?: AbortSignal,
-): Promise<AiContent | null> {
+): Promise<AiContentLabel | null> {
   signal?.throwIfAborted();
   const mediaType = input.mediaType.split(';')[0].trim().toLowerCase();
   const supported =
@@ -118,29 +111,24 @@ export async function completeFileAiContent(
     mediaType === 'text/markdown' ||
     mediaType === 'text/html';
   const file = new File(input.uri);
-  let content = input.aiContent ? AiContentSchema.parse(input.aiContent) : null;
-  let existing: AiContent | null = null;
-  if (
-    supported &&
-    (!input.aiOperation || (input.aiOperation === 'generate' && !content && IMAGES.has(mediaType)))
-  ) {
+  let label = input.aiContentLabel ? AiContentLabelSchema.parse(input.aiContentLabel) : null;
+  const isOriginalModelImage =
+    input.aiOperation === 'generate' && input.aiContentLabel === undefined && IMAGES.has(mediaType);
+  let existing: AiContentLabel | null = null;
+  if (supported && input.aiContentLabel !== null && (!input.aiOperation || isOriginalModelImage)) {
     existing =
-      input.aiOperation || content
+      input.aiOperation || label
         ? await readFileAiContent({ uri: file.uri, mediaType }, signal)
         : await readSourceAiContent({ uri: file.uri, mediaType }, signal);
   }
   if (input.aiOperation) {
     // Only original model-image responses may retain an upstream declaration for this output.
-    content =
-      input.aiOperation === 'generate' && !content && IMAGES.has(mediaType) && existing?.label
-        ? existing
-        : createGeneratedAiContent();
-  } else content ??= existing;
-  if (!content || !supported || (!input.aiOperation && !content.label)) return content;
-  const label = content.label;
-  if (label && JSON.stringify(existing?.label) === JSON.stringify(label)) return content;
+    label = isOriginalModelImage ? existing : null;
+  } else if (input.aiContentLabel === undefined) label = existing;
+  if (!supported || (!label && !input.aiOperation)) return label;
+  if (label && JSON.stringify(existing) === JSON.stringify(label)) return label;
   // A new AI edit cannot keep an old producer's declaration. Clear it on the pending output
-  // when no declaration for the new content is available; retain the AI-origin fact internally.
+  // when no declaration for the new content is available.
   const temporary = new File(
     new Directory(file.parentDirectory.uri),
     createOrderedUuid() + '.metadata',
@@ -189,14 +177,14 @@ export async function completeFileAiContent(
     }
     signal?.throwIfAborted();
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);
-    if (JSON.stringify(extracted?.label ?? null) !== JSON.stringify(label))
+    if (JSON.stringify(extracted) !== JSON.stringify(label))
       throw new Error('AI content metadata did not round-trip');
     await temporary.copy(file, { overwrite: true });
     signal?.throwIfAborted();
     const published = await readFileAiContent({ uri: file.uri, mediaType }, signal);
-    if (JSON.stringify(published?.label ?? null) !== JSON.stringify(label))
+    if (JSON.stringify(published) !== JSON.stringify(label))
       throw new Error('Final file AI metadata did not round-trip');
-    return content;
+    return label;
   } finally {
     if (temporary.exists) temporary.delete();
   }

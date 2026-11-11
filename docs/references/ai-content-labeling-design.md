@@ -2,10 +2,11 @@
 
 Status: **implemented; upstream identity coverage and native acceptance pending**.
 
-The client records AI-source facts when a producing workflow generates or AI-edits a file. Existing
-upstream AIGC declarations travel with unchanged or mechanically transformed content. The client
-does not invent a generation-service identity or upstream production identifier. When a declaration
-is available, metadata completion and read-back precede publication of the file version.
+The client reads and writes implicit AI-content declarations in file metadata. Existing upstream
+AIGC declarations travel with unchanged or mechanically transformed content. The client does not
+invent a generation-service identity or upstream production identifier. Metadata completion and
+read-back precede publication of a changed file. No database field or separate source-fact record
+is added.
 
 The scope is file metadata. Visible AI notices, clipboard changes, additional brand watermarks,
 and distribution restrictions are outside this design. Existing text, image pixels, document
@@ -37,9 +38,9 @@ not determine the application's regulatory role.
 
 - Preserve the producer, production ID, propagator, propagation ID and declared confidence from an
   existing valid upstream label. Original model-image responses can supply such declarations.
-- New AI writes or edits without a declaration for the resulting content retain
-  `source: 'generated', label: null`. Missing upstream identity does not block generation or editing.
-  AI text that happens to contain an AIGC header is not trusted as upstream service metadata.
+- Missing upstream identity does not block generation or editing and does not create an internal
+  source record or fabricated file label. AI text containing an AIGC header is not trusted as
+  upstream service metadata.
 - A new AI edit clears superseded AIGC declarations from its pending supported-format output;
   historical source bytes remain intact. It cannot keep an old producer's ID for changed content.
 - Mechanical transformations preserve inherited declarations. They never turn an unlabeled source
@@ -47,9 +48,8 @@ not determine the application's regulatory role.
 - Cherry's existing managed entry IDs/revisions and temporary artifact IDs identify local files.
   They are separate from `ProduceID` and `PropagateID` and are not exported as upstream IDs.
 
-Internal AI-origin facts without an upstream label do not establish complete GB 45438 Annex E
-coverage, even for a format with an implemented writer. Full coverage requires upstream service
-identity/content information, or a separately confirmed application-service operator role and
+Without an upstream label, even an implemented writer does not establish complete GB 45438 Annex E
+coverage. Full coverage requires upstream service identity/content information, or a separately confirmed application-service operator role and
 identity. Empty or invented provider values and private AI flags are not treated as substitutes.
 Existing carrier read/write failures for established declarations remain operation errors.
 
@@ -62,39 +62,40 @@ separately in output evidence instead of counting them as AIGC metadata coverage
 
 Implementation owners are `file/aiContentMetadata.ts`, `file/imageMetadata.ts`,
 `shared/utils/aiContentText.ts`, and `office/officeMetadata.ts`. Source declarations are explicit in
-Agent and painting producers and selected chat exports. Transformations inspect existing metadata
-when historical database facts are absent, without bulk backfilling or rewriting historical blobs. XMP, legacy PNG AIGC text, and EXIF
+Agent and painting producers and selected chat exports. Transformations inspect source-file metadata
+before encoding, without backfilling records or rewriting historical blobs. XMP, legacy PNG AIGC text, and EXIF
 ImageDescription/UserComment declarations are read before image normalization; canonical image
 writes use XMP. Metadata inspection is bounded, and image codec payloads are copied without decoding.
 
-Regression suites cover serialized facts, migration preservation, text carriers/projections, image
+Regression suites cover field validation, source-file inheritance, text carriers/projections, image
 containers/EXIF, Office custom properties and native-job lifetime, production/inheritance behavior,
 export retries, edit coordinates, and branding failure cleanup. These tests have been written but
 have not been executed for this change. Type checking, builds, device acceptance, independent
 extraction samples, and store evidence have not been performed. Container fixtures do not establish
 native image decoding, Office rendering fidelity, Photos retention, or recipient behavior.
 
-## Source Facts
+## Producing And Transforming Files
 
-Keep `provenance` as the existing classification of how a file entered storage. Record AI-content
-facts separately. Neither a filename, an arbitrary tool result, nor `provenance: 'generated'` alone
-proves that content was AI-generated.
+Producing callers explicitly declare AI generation/editing for the current write operation. The
+existing `provenance` field keeps its original meaning and is not used to infer AI origin. Source
+files are the source of truth for inherited declarations; temporary operation inputs carry only
+labels read from their bytes.
 
-| Producing path | Source declaration and handling |
+| Producing path | Metadata handling |
 | --- | --- |
-| Agent `write_file` and `edit_file` | The host declares AI creation/modification; records source facts and clears obsolete declarations without assigning an unconfirmed producer |
-| Office creation, editing, and script outputs | The Agent adapter declares AI origin; obsolete AIGC properties are cleared on new outputs; read-only scripts create no file |
-| Agent image generation, image tools, and painting jobs | The generation call establishes AI origin; inherit a valid original response declaration, otherwise keep internal facts only |
-| Chat exports containing model answers or known AI assets | The export adapter freezes the selected content and declares its origin before creating the output |
-| Exports containing only user text without known AI assets | Preserve ordinary export behavior without adding an AI-generation assertion |
-| Imported files | Preserve existing labels; read origin before import-time normalization or compression |
-| Cropping, rotation, format conversion, and brand composition | Inherit existing AI facts without treating the mechanical operation as new AI creation |
-| MCP results, desktop resources, and downloads | Use explicit source facts or existing file labels; unknown origin remains unknown |
-| Historical files | Use reliable generation evidence when available; do not infer AI origin from old provenance values alone |
+| Agent `write_file` and `edit_file` | Clear superseded declarations on the new output without assigning an unconfirmed producer |
+| Office creation, editing, and script outputs | Clear obsolete AIGC properties on new AI outputs; read-only scripts create no file |
+| Agent image generation, image tools, and painting jobs | Retain a valid declaration from an original model response; otherwise add no fabricated label |
+| Chat exports containing model answers | Clear obsolete or model-authored declarations; do not infer service identity from reply text |
+| Labeled Markdown and HTML conversion | Read the source declaration and restore it in the output carrier after rendering |
+| Imported files | Read existing labels before normalization or compression and restore them afterward |
+| Cropping, rotation, and brand composition | Capture source metadata before encoding and restore it afterward |
+| Copies, workspace attachments, upload snapshots, and unchanged delivery | Keep original file bytes; no separate origin record is needed |
+| MCP results, desktop resources, downloads, and historical files | Keep existing metadata without guessing origin from filenames or provenance values |
 
-Parsed upstream metadata is a source declaration, not authenticated provenance. Preserve upstream
-production information when inheriting a label. A new AI modification supersedes the previous content declaration. It does not allocate an
-upstream production ID locally.
+Parsed upstream metadata is a source declaration, not authenticated provenance. A new AI
+modification supersedes the previous content declaration and does not allocate an upstream
+production ID locally.
 
 ## Fields And Identifiers
 
@@ -102,7 +103,7 @@ Use the seven Annex E fields, with string values and one canonical metadata labe
 
 | Field | Rule |
 | --- | --- |
-| `Label` | Retain the upstream declaration: `"1"` (AI-generated), `"2"` (possibly AI-generated), or `"3"` (suspected AI-generated); internal known AI origin alone does not synthesize a full label |
+| `Label` | Retain the upstream declaration: `"1"` (AI-generated), `"2"` (possibly AI-generated), or `"3"` (suspected AI-generated); a producing operation alone does not synthesize a full label |
 | `ContentProducer` | The upstream declaration's service-provider name or code; never inferred from a model or editable Provider nickname |
 | `ProduceID` | The content identifier assigned by the upstream producer; a local file UUID is separate |
 | `ReservedCode1` | Retain the upstream value; this client creates no generation-service signature |
@@ -146,7 +147,7 @@ establish in-file coverage for new AI content when the upstream service supplies
 | DOCX, XLSX, PPTX | `docProps/custom.xml` in OOXML | Use `property name="AIGC"` with a `vt:lpwstr` value; maintain content types and root relationships, preserving unrelated properties and parts |
 | SVG | Future dedicated `metadata` adapter | Confirm namespace and extraction compatibility; preserve vector delivery and do not claim initial coverage |
 | Existing PDF | Preserve existing metadata | No new PDF generation or metadata writer is included |
-| TXT, JSON, CSV, TSV, YAML, and source code | No general in-file carrier selected | Preserve original content and existing capabilities; record internal AI facts without claiming in-file labeling |
+| TXT, JSON, CSV, TSV, YAML, and source code | No general in-file carrier selected | Preserve original content and existing capabilities without claiming in-file labeling |
 
 Image XMP uses the `AIGC` property in `http://www.tc260.org.cn/ns/AIGC/1.0/`. Updating that
 property preserves other properties in the namespace. Merge existing canonical labels rather than
@@ -157,40 +158,27 @@ Do not inject fields, body lines, zero-width characters, or sidecar declarations
 conversion; or add a sharing restriction. Internal records, sidecars, and an outer ZIP declaration
 do not establish that the original file carries metadata. Coverage reports must distinguish them.
 
-## Ownership And Persistence
+## Ownership
 
-Migration `0015_ai_content_metadata` adds nullable `aiContent` JSON to `file_entry`. Its minimal contents are
-a structure version, source mode (AI-producing workflow or inherited declaration), and nullable
-canonical fields. `label: null` records AI origin without claiming complete in-file labeling.
-Null means there are no established AI-source facts. Unsupported formats may still have internal
-facts; this field does not assert successful metadata embedding.
-
-Do not add an `isLabeled` success flag. Actual file contents establish whether a label is present.
-Preserve source facts across versions, queries, workspace copies, upload snapshots, backups, and
-restores. Older backups or remote records without those facts map to null.
+Labels live in the files. No database column, migration, `FileEntry` property, backup field, or
+persistent manager is introduced. Unchanged byte copies preserve metadata directly. When an
+operation re-encodes content, read the source declaration before encoding and pass it temporarily
+until the output metadata is restored and read back.
 
 | Existing owner | Responsibility |
 | --- | --- |
-| Shared file types and necessary existing contracts | Represent optional AI-source facts as pure data |
-| File schema, data service, and migrations | Persist source snapshots with file versions and preserve them in copies |
-| File service | Own field validation, format identification, metadata read/write dispatch, and the public capability reused by producers |
-| File creation, draft rewriting, and image editing | Connect source declarations, completed bytes, metadata handling, and publication in one operation |
-| Office service | Process final package custom properties in the existing compute sandbox |
-| Document export service | Carry source facts and inherited declarations into completed temporary HTML, Markdown, images, and HTML-to-PPTX outputs |
-| App-shell file export | Restore metadata on the brand-composition outputs it re-encodes; retain ordinary byte-copy delivery |
-| File reading and text-editing tools | Distinguish reading presentation from stored text and return results matching final bytes |
+| Shared label types and temporary processing contracts | Validate the seven file-metadata fields and pass captured labels during processing |
+| File service | Identify formats and dispatch metadata reads/writes |
+| File creation and draft rewriting | Complete metadata handling before publishing bytes and committing the final size |
+| Office service | Process custom properties in the existing compute sandbox |
+| Document export service | Restore inherited labels on temporary outputs; clear obsolete declarations on AI-authored outputs |
+| App-shell file export | Restore source metadata after brand composition; keep ordinary byte-copy delivery |
+| File reading and text-editing tools | Preserve reading presentation and return coordinates matching final stored text |
 
-Keep the implementation within the file service and reuse its public module boundary. Do not add
-a separate top-level labeling service, persistent manager, settings surface, network service, or
-global delivery gate. Office package processing uses its existing public capability without
-creating cyclic imports between service internals.
-
-Frontend callers use `FileModule`, not concrete backend services, when they need to finalize
-metadata on a derived file. The operation receives frozen source facts, the file, and cancellation,
-and returns the completed output. Temporary `ExportFile` descriptors and export caches must retain
-source facts too. Reuse existing ZIP, XML, UUID, digest, and YAML capabilities. Large Office packages
-stay on disk and in the native compute sandbox, without whole-package Base64 round trips through
-the main JavaScript thread.
+Frontend derivatives use `FileModule.completeExportFile`, which reads a referenced managed source
+and finalizes only caller-owned cache outputs. Cancellation and cleanup stay with existing owners.
+Reuse existing ZIP, XML, UUID, digest and YAML capabilities. Large Office packages stay on disk and
+in the native compute sandbox without whole-package Base64 round trips through the main thread.
 
 ## Publication And Transformation
 
@@ -198,10 +186,10 @@ For generation or AI editing:
 
 1. The producing workflow declares AI origin independently of service identity.
 2. Finish content processing into the pending output.
-3. Inherit a valid original model-image declaration. Otherwise record internal AI facts and clear
-   superseded AIGC metadata from supported-format AI outputs, without inventing a replacement.
-4. Read completed metadata changes back, record the final size/facts, and publish the version.
-5. Unsupported formats retain their original content and internal facts without an in-file claim.
+3. Inherit a valid original model-image declaration. Otherwise clear superseded AIGC metadata
+   from supported-format AI outputs without inventing a replacement.
+4. Read completed metadata changes back, record the final size, and publish the version.
+5. Unsupported formats retain their original content without an in-file claim.
 
 A supported-format write or read-back failure fails that file operation before successful
 publication or workspace-version advancement. Preserve the original and previous successful
@@ -210,12 +198,12 @@ response after a labeling failure remains outside this change.
 
 Editing an imported original or historical file produces a new version. Same-turn drafts retain
 their controlled rewrite path. Complete metadata handling before replacing a draft, with
-content, source facts, size, and `updatedAt` updates serialized by the existing write queue.
+content, size, and `updatedAt` updates serialized by the existing write queue.
 Filesystem writes and SQLite commits are not one atomic transaction. No success flag is persisted;
 crash repair remains outside this change.
 
-For content with established AI-source facts, mechanical transformations first capture the source
-version and facts, then finish the last content encode before restoring metadata on the output.
+Mechanical transformations first read metadata from the source version, then finish the last
+content encode before restoring that metadata on the output.
 Read back that completed output before publication. Import normalization reads source metadata
 before compression. Cropping, rotation, screenshots, chat exports, HTML conversion, and brand
 composition follow this rule wherever they produce new bytes. Mechanical transformations preserve
@@ -254,15 +242,14 @@ delivery; system-sharing and permission ownership remain unchanged.
 ## Unsupported Formats, Historical Files, And Errors
 
 Missing upstream identity and unsupported carriers do not block ordinary generation, editing or
-delivery. Retain internal source facts without claiming a complete label. Conflicting declarations,
-carrier write/read-back failures and cancellation still use existing operation handling and must
-not publish an incomplete replacement.
-Distinguish absent metadata from a failed metadata read.
+delivery. Do not fabricate a replacement label. Source inspection is best-effort for ordinary files
+without an established declaration. Once a valid label is captured, carrier write/read-back errors
+and cancellation use existing operation handling and must not publish an incomplete replacement.
 
 Do not rewrite historical bytes in bulk or require repair before ordinary opening, copying, or
 sharing. A later AI edit or transformation follows the corresponding new-output workflow. An
-export of historical model answers can establish origin from its actual selection without
-backfilling all message records.
+export of historical model answers uses its current producing operation without backfilling message
+records.
 
 Identify formats using structure and existing media-type rules. Bound metadata, XML, and
 decompression work on untrusted files; do not execute scripts or macros to read labels. Preserve
@@ -291,7 +278,7 @@ samples, extracted metadata, screenshots, recordings, a manifest, and the explan
 
 | Phase | Work | Completion evidence |
 | --- | --- | --- |
-| Source facts and common rules | Fields, upstream role separation, migration, inheritance, format capabilities, and error results | AI creation/editing, mechanical conversion, and unknown origin remain distinct across versions, copies, backups, and restores |
+| Metadata and common rules | Fields, upstream role separation, source-file inheritance, format capabilities, and error results | AI edits clear superseded declarations; mechanical conversion restores source metadata; unchanged copies retain their bytes |
 | Text and Office files | HTML, Markdown, DOCX, XLSX, PPTX; creation, edits, scripts, and temporary exports | Final-file metadata is readable; body and unrelated package parts survive; Markdown edit coordinates match stored text |
 | Images and transformations | PNG, JPEG, WebP, GIF; generation, normalization, editing, capture, and brand composition | Metadata survives final encoding; metadata writes preserve pixels, animation, and transparency |
 | Actual evidence | Independent extraction, real samples, and technical explanation | Coverage matches the installation package, exposed paths, and final sample bytes |

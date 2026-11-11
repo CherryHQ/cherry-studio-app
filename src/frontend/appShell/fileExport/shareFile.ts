@@ -101,7 +101,7 @@ export async function prepareSharedFile(
   try {
     signal?.throwIfAborted();
     // One path per revision and treatment, so sharing again replaces rather than adds a copy.
-    const metadataVersion = prepared.aiContent ? '-aigc-' + prepared.aiContent.version : '';
+    const metadataVersion = prepared.uri === file.uri ? '' : '-aigc-1';
     const directory = new Directory(
       Paths.cache,
       'FileExports',
@@ -128,7 +128,7 @@ export async function prepareSharedFile(
       uri: exported.uri,
       filename: prepared.filename,
       mediaType: prepared.mediaType,
-      ...(prepared.aiContent ? { aiContent: prepared.aiContent } : {}),
+      ...(prepared.aiContentLabel ? { aiContentLabel: prepared.aiContentLabel } : {}),
     };
   } finally {
     prepared.release();

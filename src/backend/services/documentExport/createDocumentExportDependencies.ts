@@ -1,7 +1,6 @@
 import { File } from 'expo-file-system';
 
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import { readSourceAiContent } from '@/backend/services/file';
 import {
   createInternalEntry,
   getInternalFileUri,
@@ -15,17 +14,6 @@ export function createDocumentExportDependencies(
   entries: FileEntryService,
 ): DocumentExportDependencies {
   return {
-    hasAiAssets: async (ids, signal) => {
-      signal.throwIfAborted();
-      const files = await entries.findAvailableByIds(ids);
-      signal.throwIfAborted();
-      for (const entry of files) {
-        if (entry.aiContent) return true;
-        const uri = getInternalFileUri(entry);
-        if (uri && (await readSourceAiContent({ ...entry, uri }, signal))) return true;
-      }
-      return false;
-    },
     readManagedImage: async (id, signal) => {
       signal.throwIfAborted();
       const resolved = await resolveFileEntry(entries, id);
@@ -43,7 +31,7 @@ export function createDocumentExportDependencies(
           name: file.filename,
           mediaType: file.mediaType,
           provenance: 'document-export',
-          aiContent: file.aiContent,
+          aiContentLabel: file.aiContentLabel,
         },
         signal,
       );

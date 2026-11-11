@@ -1,7 +1,5 @@
 import * as z from 'zod';
 
-import { AiContentSchema } from './aiContent';
-
 /**
  * Mobile-native file model.
  *
@@ -67,8 +65,6 @@ export const FileEntrySchema = z
     mediaType: MediaTypeSchema,
     /** How the bytes came to exist: imported, generated, exported, or unproven. */
     provenance: FileEntryProvenanceSchema,
-    /** Established AI origin; embedding is determined from the actual file, not this fact. */
-    aiContent: AiContentSchema.nullish(),
     /** File size in bytes. */
     size: z.int().nonnegative(),
     updatedAt: TimestampSchema,

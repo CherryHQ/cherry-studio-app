@@ -1,4 +1,4 @@
-import type { AiContent } from '@/shared/data/types/aiContent';
+import type { AiContentLabel } from '@/shared/data/types/aiContent';
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ResolvedFile } from './file';
@@ -143,7 +143,7 @@ export type CaptureHtmlPages = (input: {
   onPage(page: CapturedHtmlPage, index: number, total: number): Promise<void>;
 }) => Promise<void>;
 export type HtmlConversionInput = {
-  aiContent?: AiContent | null;
+  aiContentLabel?: AiContentLabel | null;
   title: string;
   format: HtmlConversionFormat;
   capture: CaptureHtmlPages;

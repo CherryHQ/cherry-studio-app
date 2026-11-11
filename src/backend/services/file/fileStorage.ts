@@ -6,7 +6,6 @@ import type { FileEntryService } from '@/backend/data/services/FileEntryService'
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { AiContent } from '@/shared/data/types/aiContent';
 import {
   FALLBACK_MEDIA_TYPE,
   type FileEntry,
@@ -24,7 +23,11 @@ import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
-import { completeFileAiContent, type AiContentWrite } from './aiContentMetadata';
+import {
+  completeFileAiContent,
+  readSourceAiContent,
+  type AiContentWrite,
+} from './aiContentMetadata';
 import { deleteFilePreview } from './filePreviewCache';
 import { deleteFileTextCache } from './fileTextCache';
 
@@ -63,7 +66,6 @@ type WrittenInternalFile = {
   id: FileEntryId;
   mediaType: string;
   provenance: FileEntryProvenance;
-  aiContent: AiContent | null;
   size: number;
 };
 
@@ -158,15 +160,17 @@ async function writeInternalFile(
   try {
     await write(destination);
     signal?.throwIfAborted();
-    const aiContent = await completeFileAiContent(
-      {
-        uri: destination.uri,
-        mediaType,
-        aiContent: input.aiContent,
-        aiOperation: input.aiOperation,
-      },
-      signal,
-    );
+    if (input.aiOperation || input.aiContentLabel) {
+      await completeFileAiContent(
+        {
+          uri: destination.uri,
+          mediaType,
+          aiContentLabel: input.aiContentLabel,
+          aiOperation: input.aiOperation,
+        },
+        signal,
+      );
+    }
 
     if (!destination.exists) {
       throw new Error(`Internal file does not exist after write: ${destination.uri}`);
@@ -177,7 +181,7 @@ async function writeInternalFile(
       throw new Error(`Internal file has an invalid size: ${destination.uri}`);
     }
 
-    return { filename, id, mediaType, provenance: input.provenance, aiContent, size };
+    return { filename, id, mediaType, provenance: input.provenance, size };
   } catch (error) {
     try {
       if (destination.exists) {
@@ -295,15 +299,17 @@ export async function rewriteInternalTextEntry(
     signal?.throwIfAborted();
     // Availability, synchronous bytes and metadata share the deletion write queue.
     // Once bytes change, complete bookkeeping even if the caller cancels.
+    const aiContentLabel = input.aiOperation
+      ? null
+      : await readSourceAiContent({ uri: file.uri, mediaType: entry.mediaType }, signal);
     const pending = new File(fileDirectory(), createOrderedUuid() + '.draft');
-    let aiContent: AiContent | null;
     try {
       pending.writeSync(input.data);
-      aiContent = await completeFileAiContent(
+      await completeFileAiContent(
         {
           uri: pending.uri,
           mediaType: entry.mediaType,
-          aiContent: entry.aiContent,
+          aiContentLabel,
           aiOperation: input.aiOperation,
         },
         signal,
@@ -321,7 +327,7 @@ export async function rewriteInternalTextEntry(
     if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
     }
-    return entries.updateSizeTx(tx, entry.id, size, aiContent);
+    return entries.updateSizeTx(tx, entry.id, size);
   });
   publishFileEntryChanges([updatedEntry.id]);
   return updatedEntry;

@@ -1,6 +1,6 @@
 import type { CaptureExportHtml } from '@/shared/contracts/documentExport';
 import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
-import { inheritAiContent } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
@@ -83,7 +83,7 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-test('records AI export facts without inventing identity and reuses the artifact across retries and saves', async () => {
+test('exports AI text without inventing identity and reuses the artifact across retries and saves', async () => {
   const saveFile = jest.fn(async (_file: ExportFile) => savedFile);
   const session = createDocumentExportSession(
     {
@@ -102,15 +102,17 @@ test('records AI export facts without inventing identity and reuses the artifact
   expect(artifact.text).toBe('Model answer\n');
   expect(mockFiles.get(artifact.file.uri)).toBe(artifact.text);
   expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
-  expect(artifact.file.aiContent).toEqual({ version: 1, source: 'generated', label: null });
+  expect(artifact.file.aiContentLabel).toBeNull();
   expect(await session.render({ format: 'markdown' })).toBe(artifact);
   await session.save(artifact);
-  expect(saveFile.mock.calls[0]?.[0]).toMatchObject({ aiContent: artifact.file.aiContent });
+  expect(saveFile.mock.calls[0]?.[0]).toMatchObject({
+    aiContentLabel: artifact.file.aiContentLabel,
+  });
   await session.dispose();
 });
 
 test('converts labeled Markdown without displaying its AIGC header or inventing another producer', async () => {
-  const facts = inheritAiContent({
+  const label = AiContentLabelSchema.parse({
     Label: '1',
     ContentProducer: 'UpstreamExample',
     ProduceID: 'upstream-1',
@@ -120,7 +122,7 @@ test('converts labeled Markdown without displaying its AIGC header or inventing 
     ReservedCode2: '',
   });
   const session = createDocumentExportSession(
-    { kind: 'markdown', source: writeAiContentText('Body', 'text/markdown', facts.label!) },
+    { kind: 'markdown', source: writeAiContentText('Body', 'text/markdown', label) },
     { readManagedImage: jest.fn(), saveFile: jest.fn() },
     () => {},
     () => {},
@@ -129,7 +131,7 @@ test('converts labeled Markdown without displaying its AIGC header or inventing 
   const artifact = await session.render({ format: 'html', presentation });
   if (artifact.format !== 'html') throw new Error('Expected HTML');
   expect(artifact.html).not.toContain('ContentProducer');
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/html')).toEqual(facts.label);
+  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/html')).toEqual(label);
   await session.dispose();
 });
 
@@ -158,7 +160,7 @@ test('a model-authored metadata header is not treated as upstream service metada
   const artifact = await session.render({ format: 'markdown' });
   if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
   expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
-  expect(artifact.file.aiContent).toEqual({ version: 1, source: 'generated', label: null });
+  expect(artifact.file.aiContentLabel).toBeNull();
   expect(mockFiles.get(artifact.file.uri)).toBe('Model answer\n');
   await session.dispose();
 });
@@ -174,13 +176,13 @@ test('unused asset declarations do not label ordinary exported text as AI-genera
         },
       },
     },
-    { readManagedImage: jest.fn(), hasAiAssets: async () => true, saveFile: jest.fn() },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
     () => {},
     () => {},
   );
   const artifact = await session.render({ format: 'markdown' });
   if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(artifact.file.aiContent).toBeUndefined();
+  expect(artifact.file.aiContentLabel).toBeUndefined();
   expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
   await session.dispose();
 });

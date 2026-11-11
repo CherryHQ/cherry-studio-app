@@ -156,7 +156,6 @@ export async function prepareFileExport(
       uri,
       filename: entry.filename,
       mediaType: entry.mediaType,
-      ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
       release() {},
     };
   }
@@ -166,7 +165,6 @@ export async function prepareFileExport(
       ...image,
       filename: entry.filename,
       mediaType: entry.mediaType,
-      ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
     };
   }
   const stem = entry.filename.replace(/\.[^.]+$/, '');
@@ -174,14 +172,12 @@ export async function prepareFileExport(
     uri: image.uri,
     filename: `${stem.slice(0, 251)}.png`,
     mediaType: 'image/png',
-    ...(entry.aiContent ? { aiContent: entry.aiContent } : {}),
   };
   try {
     if (completeExportFile) {
       const completed = await completeExportFile({ ...descriptor, sourceFileEntryId: entry.id });
       return { ...completed, release: image.release };
     }
-    if (entry.aiContent) throw new Error('AI image metadata finalizer is unavailable');
     return { ...descriptor, release: image.release };
   } catch (error) {
     image.release();

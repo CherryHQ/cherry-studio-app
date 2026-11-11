@@ -11,9 +11,9 @@ import type {
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { ExportFile } from '@/shared/contracts/fileExport';
 import {
-  AiContentSchema,
+  AiContentLabelSchema,
   type AiContentOperation,
-  type AiContent,
+  type AiContentLabel,
 } from '@/shared/data/types/aiContent';
 import {
   type FileEntry,
@@ -70,7 +70,7 @@ const createTextEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema,
   name: SafeNameSchema,
   provenance: FileEntryProvenanceSchema,
-  aiContent: AiContentSchema.nullish(),
+  aiContentLabel: AiContentLabelSchema.nullish(),
   aiOperation: z.enum(['generate', 'edit']).optional(),
 });
 
@@ -102,20 +102,23 @@ export const fileContent = {
     const uri = new File(input.uri).uri;
     const cache = new Directory(Paths.cache).uri.replace(/\/$/, '') + '/';
     if (!uri.startsWith(cache)) throw new Error('Only temporary exports may be labeled');
-    let sourceFacts = input.aiContent;
-    if (!sourceFacts && input.sourceFileEntryId) {
+    let label = input.aiContentLabel;
+    if (label === undefined && input.sourceFileEntryId) {
       const source = await resolveFileEntry(
         fileEntryService,
         FileEntryIdSchema.parse(input.sourceFileEntryId),
       );
       if (!source) throw new Error('Export source is unavailable');
-      sourceFacts = await readSourceAiContent({ ...source.entry, uri: source.uri }, signal);
+      label = await readSourceAiContent(
+        { uri: source.uri, mediaType: source.entry.mediaType },
+        signal,
+      );
     }
-    const aiContent = await completeFileAiContent(
-      { uri, mediaType: input.mediaType, aiContent: sourceFacts },
+    const aiContentLabel = await completeFileAiContent(
+      { uri, mediaType: input.mediaType, aiContentLabel: label },
       signal,
     );
-    return { uri, filename: input.filename, mediaType: input.mediaType, aiContent };
+    return { uri, filename: input.filename, mediaType: input.mediaType, aiContentLabel };
   },
   observeFileOcr,
   editImage: editFileImage,
@@ -140,7 +143,6 @@ export const fileContent = {
       mediaType: source.entry.mediaType,
       folderId: folder.id,
       provenance: source.entry.provenance,
-      aiContent: source.entry.aiContent,
       source: 'uri',
     });
     return resolveCreatedEntry(entry);
@@ -189,7 +191,7 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
-      aiContent?: AiContent | null;
+      aiContentLabel?: AiContentLabel | null;
       aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
@@ -207,7 +209,7 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
-      aiContent?: AiContent | null;
+      aiContentLabel?: AiContentLabel | null;
       aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
@@ -277,7 +279,6 @@ export const fileContent = {
       name: source.entry.filename,
       mediaType: source.entry.mediaType,
       provenance: 'imported',
-      aiContent: source.entry.aiContent,
     });
     const snapshot = await resolveFileEntry(fileEntryService, entry.id);
     if (!snapshot) throw new Error('Upload snapshot is unavailable');

@@ -166,7 +166,6 @@ describe('fileStorage', () => {
       id: '00000000-0000-7000-8000-000000000001',
       mediaType: 'application/pdf',
       provenance: 'imported',
-      aiContent: null,
       size: 42,
       updatedAt: 1,
     });
@@ -176,7 +175,6 @@ describe('fileStorage', () => {
         id: '00000000-0000-7000-8000-000000000001',
         mediaType: 'application/pdf',
         provenance: 'imported',
-        aiContent: null,
         size: 42,
       },
       undefined,
@@ -632,7 +630,7 @@ describe('fileStorage', () => {
     ]);
     expect(testState.files.get(uri)).toBe(14);
     expect([...testState.files.keys()].filter((path) => path.endsWith('.draft'))).toEqual([]);
-    expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14, null);
+    expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
     expect(rewritten.size).toBe(14);
     expect(onFileChange).toHaveBeenCalledTimes(1);
     expect(onFileChange).toHaveBeenCalledWith(

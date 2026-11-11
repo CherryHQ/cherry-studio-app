@@ -1,10 +1,6 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import {
-  AiContentLabelSchema,
-  AiContentSchema,
-  type AiContent,
-} from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 import { writeAiContentText } from '@/shared/utils/aiContentText';
 
@@ -125,7 +121,6 @@ describe('editFileTool', () => {
   });
 
   test('returns final coordinates when an AI edit clears the previous content declaration', async () => {
-    const facts = AiContentSchema.parse({ version: 1, source: 'generated', label: null });
     const previousLabel = AiContentLabelSchema.parse({
       Label: '1',
       ContentProducer: 'ProviderExample',
@@ -140,7 +135,7 @@ describe('editFileTool', () => {
       'text/markdown',
       previousLabel,
     );
-    const files = createFiles(original, undefined, facts);
+    const files = createFiles(original);
     const output = await execute(createEditFileTool(files), {
       file_entry_id: SOURCE_ID,
       old_string: 'old',
@@ -697,7 +692,7 @@ describe('editFileTool', () => {
   });
 });
 
-function createFiles(content: string | Uint8Array, declaredSize?: number, aiContent?: AiContent) {
+function createFiles(content: string | Uint8Array, declaredSize?: number) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   const source: ManagedFileFact = {
     fileEntryId: SOURCE_ID,
@@ -724,7 +719,7 @@ function createFiles(content: string | Uint8Array, declaredSize?: number, aiCont
     async (input: Parameters<EditFileFiles['createTextEntry']>[0]) => {
       const id = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
       const data = new TextEncoder().encode(
-        aiContent ? writeAiContentText(input.data, input.mediaType, aiContent.label) : input.data,
+        input.aiOperation ? writeAiContentText(input.data, input.mediaType, null) : input.data,
       );
       facts.set(id, {
         fileEntryId: id,
@@ -739,7 +734,6 @@ function createFiles(content: string | Uint8Array, declaredSize?: number, aiCont
         id,
         mediaType: input.mediaType,
         provenance: input.provenance,
-        ...(aiContent ? { aiContent } : {}),
         size: data.byteLength,
         updatedAt: 2,
       });
@@ -748,7 +742,9 @@ function createFiles(content: string | Uint8Array, declaredSize?: number, aiCont
   const rewriteTextEntry = jest.fn(
     async (input: Parameters<EditFileFiles['rewriteTextEntry']>[0]) => {
       const fact = facts.get(input.id) ?? source;
-      const data = new TextEncoder().encode(input.data);
+      const data = new TextEncoder().encode(
+        input.aiOperation ? writeAiContentText(input.data, fact.mediaType, null) : input.data,
+      );
       blobs.set(input.id, data);
       facts.set(input.id, { ...fact, size: data.byteLength });
       return FileEntrySchema.parse({

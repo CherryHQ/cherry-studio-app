@@ -28,7 +28,7 @@ export async function editFileImage(
   }
   signal?.throwIfAborted();
 
-  const aiContent = await readSourceAiContent({ ...source.entry, uri: source.uri }, signal);
+  const aiContentLabel = await readSourceAiContent({ ...source.entry, uri: source.uri }, signal);
   let temporary: Awaited<ReturnType<typeof renderEditedImage>> | undefined;
   let entry: FileEntry | undefined;
   let committed = false;
@@ -43,7 +43,7 @@ export async function editFileImage(
         baseFileEntryId: source.entry.id,
         mediaType: source.entry.mediaType,
         provenance: source.entry.provenance,
-        aiContent,
+        aiContentLabel,
         source: 'uri',
       },
       signal,

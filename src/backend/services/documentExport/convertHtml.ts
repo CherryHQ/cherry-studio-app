@@ -41,7 +41,7 @@ export async function convertHtml(
   let output: ReturnType<File['open']> | undefined;
   let presentation: ReturnType<typeof createImagePresentation> | undefined;
   const previews: ExportImagePage[] = [];
-  let aiContent = input.aiContent ?? null;
+  let aiContentLabel = input.aiContentLabel ?? null;
   let published = false;
   const release = () => {
     try {
@@ -112,12 +112,12 @@ export async function convertHtml(
             ? file
             : new File(directory, `page-${String(index + 1).padStart(3, '0')}.png`);
         if (input.format !== 'image') await image.copy(preview);
-        if (aiContent)
-          aiContent = await completeFileAiContent(
+        if (aiContentLabel)
+          aiContentLabel = await completeFileAiContent(
             {
               uri: preview.uri,
               mediaType: 'image/png',
-              aiContent,
+              aiContentLabel,
             },
             signal,
           );
@@ -126,7 +126,7 @@ export async function convertHtml(
             uri: preview.uri,
             filename: preview.name,
             mediaType: 'image/png',
-            ...(aiContent ? { aiContent } : {}),
+            ...(aiContentLabel ? { aiContentLabel } : {}),
           },
           width: page.width,
           height: page.height,
@@ -148,10 +148,10 @@ export async function convertHtml(
         input.format === 'image'
           ? 'image/png'
           : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      ...(aiContent ? { aiContent } : {}),
+      ...(aiContentLabel ? { aiContentLabel } : {}),
     };
-    if (preparedFile.aiContent)
-      preparedFile.aiContent = await completeFileAiContent(preparedFile, signal);
+    if (preparedFile.aiContentLabel)
+      preparedFile.aiContentLabel = await completeFileAiContent(preparedFile, signal);
     let saved: ResolvedFile | undefined;
     let saving: Promise<ResolvedFile> | undefined;
     let disposed = false;
