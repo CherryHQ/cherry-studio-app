@@ -115,7 +115,7 @@ type ReadContent =
         warnings: ParsedAnydocDocument['output']['warnings'];
         assets: {
           assetRef: string;
-          contentType: string;
+          contentType: ParsedAnydocDocument['output']['assets'][number]['contentType'];
           size: number;
           delivery: 'reference-only';
         }[];
