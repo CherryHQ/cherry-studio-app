@@ -107,6 +107,7 @@ test('keeps a fixed two-pass byte scale across hashing and packing with percenta
   jest
     .mocked(packBackup)
     .mockImplementation(async (_root, manifest, _output, _signal, progress) => {
+      expect(manifest.formatVersion).toBe(3);
       expect(manifest.entries.map(({ size }) => size)).toEqual([64 * 1024, 192 * 1024]);
       const before = states.length;
       for (const done of [0, 0, 1]) progress(done, payloadBytes);

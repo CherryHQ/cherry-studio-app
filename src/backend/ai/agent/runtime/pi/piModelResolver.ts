@@ -320,6 +320,7 @@ export function createPiModelResolver(
           ? undefined
           : {
               model: invocationModel,
+              providerId: provider.presetProviderId ?? provider.id,
               profile: reasoningProfile.wire,
               selection: runtimeOptions.reasoningEffort,
               summary:

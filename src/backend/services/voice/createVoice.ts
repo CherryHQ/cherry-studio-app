@@ -34,14 +34,16 @@ export function createVoice({
   language,
   dictationLanguage,
   transcriptionLanguage,
+  getCountry,
 }: {
   preference: VoicePreferences;
   permissions: SystemPromptQueue;
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
   transcriptionLanguage(): AppLanguage;
+  getCountry(): Promise<string>;
 }) {
-  const model = createVoiceModel();
+  const model = createVoiceModel(getCountry);
   const bindTranscription = (
     engine: ReturnType<typeof createSenseVoiceTranscription>,
   ): TranscriptionEngine => ({

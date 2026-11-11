@@ -36,6 +36,13 @@ const block: z.ZodType<ExportBlock> = z.lazy(() =>
 );
 const documentSchema = z.strictObject({
   title: text.optional(),
+  header: z
+    .strictObject({
+      title: z.string().max(256),
+      avatar: z.string().max(16).optional(),
+      date: z.string().max(256).optional(),
+    })
+    .optional(),
   labels: z
     .strictObject({
       code: z.string().max(256),

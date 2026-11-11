@@ -1,0 +1,75 @@
+diff --git a/android/src/main/java/expo/modules/fetch/NativeRequest.kt b/android/src/main/java/expo/modules/fetch/NativeRequest.kt
+--- a/android/src/main/java/expo/modules/fetch/NativeRequest.kt
++++ b/android/src/main/java/expo/modules/fetch/NativeRequest.kt
+@@ -12,6 +12,8 @@
+ import okhttp3.Request
+ import okhttp3.RequestBody
+ import okhttp3.RequestBody.Companion.toRequestBody
++import okio.BufferedSink
++import okio.source
+ import java.net.URL
+ 
+ private data class RequestHolder(var request: Request?)
+@@ -19,7 +21,18 @@
+ internal val METHODS_REQUIRING_BODY = arrayOf("POST", "PUT", "PATCH")
+ 
+ internal fun buildRequestBody(method: String, requestBody: ByteArray?, mediaType: MediaType?): RequestBody? {
+-  return requestBody?.toRequestBody(mediaType) ?: run {
++  return requestBody?.let { bytes ->
++    object : RequestBody() {
++      override fun contentType(): MediaType? = mediaType
++
++      override fun contentLength(): Long = bytes.size.toLong()
++
++      override fun writeTo(sink: BufferedSink) {
++        // Emit segments as they are filled instead of buffering a second copy of the full body.
++        bytes.inputStream().source().use { sink.writeAll(it) }
++      }
++    }
++  } ?: run {
+     // OkHttp requires a non-null body for POST/PATCH/PUT, unlike WinterTC fetch. Provide an empty
+     // (zero-length) body to match it, not `byteArrayOf(0)`, which sends a single 0x00 byte.
+     // Ref: https://github.com/expo/expo/issues/46668
+diff --git a/android/src/test/java/expo/modules/fetch/NativeRequestTest.kt b/android/src/test/java/expo/modules/fetch/NativeRequestTest.kt
+--- a/android/src/test/java/expo/modules/fetch/NativeRequestTest.kt
++++ b/android/src/test/java/expo/modules/fetch/NativeRequestTest.kt
+@@ -4,6 +4,9 @@
+ 
+ import com.google.common.truth.Truth.assertThat
+ import okhttp3.MediaType.Companion.toMediaTypeOrNull
++import okio.Buffer
++import okio.ForwardingSink
++import okio.buffer
+ import org.junit.Test
+ 
+ class NativeRequestTest {
+@@ -30,4 +33,29 @@
+     assertThat(body).isNotNull()
+     assertThat(body!!.contentLength()).isEqualTo(5L)
+   }
++
++  @Test
++  fun `large request bodies use bounded buffering and can be replayed`() {
++    val bytes = ByteArray(64 * 1024 + 7) { (it % 251).toByte() }
++    val body = buildRequestBody("POST", bytes, jsonMediaType)!!
++    assertThat(body.contentLength()).isEqualTo(bytes.size.toLong())
++    assertThat(body.contentType()).isEqualTo(jsonMediaType)
++
++    repeat(2) {
++      val received = Buffer()
++      var largestPendingBuffer = 0L
++      val sink = object : ForwardingSink(received) {
++        override fun write(source: Buffer, byteCount: Long) {
++          largestPendingBuffer = maxOf(largestPendingBuffer, source.size)
++          super.write(source, byteCount)
++        }
++      }.buffer()
++
++      body.writeTo(sink)
++      assertThat(sink.isOpen).isTrue()
++      sink.flush()
++      assertThat(received.readByteArray()).isEqualTo(bytes)
++      assertThat(largestPendingBuffer).isAtMost(8192L)
++    }
++  }
+ }

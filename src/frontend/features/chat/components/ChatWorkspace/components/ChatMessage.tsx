@@ -16,11 +16,13 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
 import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
+import { ChatShareSelectionRow } from '../../../share/ChatShareControls';
+import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerCards } from './MessageAnswerCards';
+import { MessageAnswerGroup } from './MessageAnswerGroup';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -59,6 +61,7 @@ function AssistantMessageHeader({
 }) {
   const { t } = useTranslation();
   const [isNameWrapped, setIsNameWrapped] = useState(false);
+  const isSelecting = useIsChatShareSelecting();
   // Several answers name their models on their own cards instead.
   const model = message.branch ? undefined : message.model;
 
@@ -76,7 +79,11 @@ function AssistantMessageHeader({
           zero-height line below the name, which this row clips away. */}
       <View className="mt-0.5 min-w-0 flex-1 flex-row flex-wrap gap-x-1 overflow-hidden">
         <Text
-          className="min-w-0 shrink font-semibold text-foreground text-sm"
+          className={
+            isSelecting
+              ? 'min-w-0 shrink font-medium text-foreground text-sm'
+              : 'min-w-0 shrink font-semibold text-foreground text-sm'
+          }
           onTextLayout={
             model ? (event) => setIsNameWrapped(event.nativeEvent.lines.length > 1) : undefined
           }
@@ -108,7 +115,7 @@ function AssistantMessageHeader({
     </View>
   );
 
-  if (!model) return header;
+  if (!model || isSelecting) return header;
   return (
     <BackgroundPressExclusion>
       <InfoPopover
@@ -126,9 +133,8 @@ function AssistantMessageHeader({
 }
 
 /**
- * An answer with its header and actions. Several answers to one question are cards to swipe
- * between, each opening in full over the screen; a source that cannot switch answers shows only
- * the selected one.
+ * An answer with its header and actions. Grouped answers use the preferred presentation;
+ * a source that cannot switch answers shows only the selected one.
  */
 function AssistantChatMessage({
   accessories,
@@ -144,13 +150,14 @@ function AssistantChatMessage({
   renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
 }) {
   const { selectBranch } = useAssistantMessageActions();
-  const isGrouped = Boolean(message.branch && selectBranch);
+  const isSelecting = useIsChatShareSelecting();
+  const isGrouped = Boolean(message.branch && selectBranch && !isSelecting);
   const header = <AssistantMessageHeader message={message} presentation={presentation} />;
   const extras = (
     <>
       {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
       {accessories}
-      {message.status !== 'pending' ? (
+      {message.status !== 'pending' && !isSelecting ? (
         <BackgroundPressExclusion>
           <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
             <AssistantMessageToolbar message={message} />
@@ -166,10 +173,9 @@ function AssistantChatMessage({
     <View className="w-full gap-2.5">
       {header}
       {isGrouped ? (
-        <>
-          <MessageAnswerCards message={message} />
-          <View className="w-full gap-2">{extras}</View>
-        </>
+        <View className="w-full gap-2.5" pointerEvents={isSelecting ? 'none' : 'auto'}>
+          <MessageAnswerGroup message={message}>{extras}</MessageAnswerGroup>
+        </View>
       ) : (
         <AssistantMessage message={message}>{extras}</AssistantMessage>
       )}
@@ -205,6 +211,7 @@ export const ChatMessage = memo(function ChatMessage({
   accessories,
   renderUsage,
 }: ChatMessageProps) {
+  const isSelecting = useIsChatShareSelecting();
   const quotePart = message.data.parts?.find(
     (part) => part.type === 'text' && readCherryMeta(part)?.quotes,
   );
@@ -214,6 +221,7 @@ export const ChatMessage = memo(function ChatMessage({
     message.role === 'user' ? (
       <View className="gap-2">
         <UserMessage
+          variant={isSelecting ? 'selection' : 'default'}
           attachments={attachments}
           message={message}
           quote={quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : undefined}
@@ -241,13 +249,15 @@ export const ChatMessage = memo(function ChatMessage({
           {createdAt}
         </Text>
       ) : null}
-      {isMessageActionsEnabled ? (
-        <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
-          {content}
-        </ChatMessageContextMenu>
-      ) : (
-        content
-      )}
+      <ChatShareSelectionRow message={message}>
+        {isMessageActionsEnabled ? (
+          <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
+            {content}
+          </ChatMessageContextMenu>
+        ) : (
+          content
+        )}
+      </ChatShareSelectionRow>
     </View>
   );
 });
@@ -262,6 +272,7 @@ function ChatMessageContextMenu({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
+  const isSelecting = useIsChatShareSelecting();
   const { copyAssistantMessage, shareAssistantMessage } = useAssistantMessageActions();
   // These existing actions and the text projection accept either message role.
   const text =
@@ -270,7 +281,7 @@ function ChatMessageContextMenu({
   // selection and lands on whatever the finger happens to reach, which is not
   // a gesture that should be able to remove a turn.
   const items: readonly MenuItem[] =
-    message.status === 'pending'
+    message.status === 'pending' || isSelecting
       ? []
       : [
           {

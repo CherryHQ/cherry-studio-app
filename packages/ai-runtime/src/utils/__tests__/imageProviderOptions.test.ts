@@ -171,6 +171,44 @@ describe('image provider option routing', () => {
     });
   });
 
+  it('maps output format for custom compatible providers without losing sampling options', () => {
+    expect(
+      build(
+        'openai-compatible',
+        { outputFormat: 'gif', complexity: 'medium', cfg: 7.5, seed: 4 },
+        provider('custom-provider'),
+      ),
+    ).toEqual({
+      'custom-provider': {
+        output_format: 'gif',
+        complexity: 'medium',
+        cfg: 7.5,
+        seed: 4,
+      },
+    });
+  });
+
+  it.each(['aihubmix', 'openai-compatible'])(
+    'keeps compatible AiHubMix format fields and native OpenAI options separate via %s',
+    (aiSdkProviderId) => {
+      expect(
+        build(
+          aiSdkProviderId,
+          { outputFormat: 'gif', complexity: 'medium', seed: 9, cfg: 7.5 },
+          provider('imported-aihubmix', 'aihubmix'),
+        ),
+      ).toEqual({
+        [aiSdkProviderId === 'openai-compatible' ? 'imported-aihubmix' : 'aihubmix']: {
+          output_format: 'gif',
+          complexity: 'medium',
+          seed: 9,
+          cfg: 7.5,
+        },
+        openai: { outputFormat: 'gif', complexity: 'medium', seed: 9 },
+      });
+    },
+  );
+
   it('uses the shared MiniMax and Doubao wire registrations', () => {
     expect(
       build(

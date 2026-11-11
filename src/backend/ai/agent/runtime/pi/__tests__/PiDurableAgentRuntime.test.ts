@@ -1640,8 +1640,7 @@ describe('Native web tools', () => {
           ...options,
           apiKey: 'test-key',
           maxRetries: 0,
-          // The Google SDK owns its transport and reaches the scripted one through the global.
-          ...(api === 'google-generative-ai' ? {} : { fetch }),
+          fetch,
         }),
     });
     return { ...state, payloads, fetch };
@@ -2052,7 +2051,9 @@ describe('Native web tools', () => {
       'google-generative-ai',
       streamGoogle as PiStreamFn,
     );
-    const globalFetch = jest.spyOn(globalThis, 'fetch').mockImplementation(state.fetch as never);
+    const globalFetch = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('Gemini must use its injected transport.'));
     const runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {
@@ -2118,7 +2119,9 @@ describe('Native web tools', () => {
       'google-generative-ai',
       streamGoogle as PiStreamFn,
     );
-    const globalFetch = jest.spyOn(globalThis, 'fetch').mockImplementation(state.fetch as never);
+    const globalFetch = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('Gemini must use its injected transport.'));
     let runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {

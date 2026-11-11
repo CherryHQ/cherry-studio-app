@@ -8,6 +8,11 @@ const github = createHttpClient({
   headers: { Accept: 'application/vnd.github+json' },
   timeoutMs: 10_000,
 });
+const gitcode = createHttpClient({
+  baseUrl: 'https://api.gitcode.com/api/v5',
+  headers: { Accept: 'application/json' },
+  timeoutMs: 10_000,
+});
 /** The release-page section about attachments and checksums; the app installs for the user. */
 const DOWNLOAD_HEADING = /^##\s+(下载安装|Download and Installation)\s*$/m;
 
@@ -24,23 +29,32 @@ export function normalizeReleaseNotes(body: string | null | undefined): string |
 }
 
 /**
- * GitCode publishes Simplified Chinese only. Other UI languages read the equivalent English notes
- * GitHub publishes for the same tag, keeping the Chinese notes when GitHub cannot be reached.
+ * GitCode publishes Chinese notes and GitHub publishes English notes. UI language selects the
+ * notes independently of the IP-selected package source; lookup failures keep the published notes.
  */
 export async function readReleaseNotes(
   release: AppUpdateRelease,
   language: string,
 ): Promise<string | null> {
-  if (release.channel !== 'apk' || /^zh\b/i.test(language)) return release.notes;
+  if (
+    release.channel !== 'apk' &&
+    !(release.channel === 'domestic-stores' && release.notesSource === 'gitcode')
+  )
+    return release.notes;
+  const wantsChinese = /^zh\b/i.test(language);
+  const hasChinese =
+    release.channel === 'domestic-stores' ||
+    new URL(release.downloadUrl).hostname === 'gitcode.com';
+  if (wantsChinese === hasChinese) return release.notes;
   try {
-    const { data } = await github.request<{ body?: string | null }>({
+    const { data } = await (wantsChinese ? gitcode : github).request<{ body?: string | null }>({
       method: 'GET',
       path: `/repos/CherryHQ/cherry-studio-app/releases/tags/v${release.latestVersion}`,
       maxResponseBytes: 512_000,
     });
     return normalizeReleaseNotes(data.body) ?? release.notes;
   } catch (error) {
-    logger.warn('English release notes are unavailable', { error });
+    logger.warn('Localized release notes are unavailable', { error });
     return release.notes;
   }
 }

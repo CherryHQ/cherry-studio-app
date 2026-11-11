@@ -784,7 +784,9 @@ successive `text` windows until `nextOffset` is null recovers the complete origi
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Document assets remain `reference-only`; an explicit read of an authorized managed image is a
 separate operation.
-Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
+For text, PDF, AnyDoc, and OCR reads, mixed line/offset parameters are rejected before content is
+read, after schema validation, reference authorization, and source resolution succeed.
+The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
 
 The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
@@ -851,11 +853,14 @@ A client without the native module, or whose native module predates the interact
 no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
 `read_file` can explicitly read PNG, JPEG, WebP and GIF within its conversation or workspace access scope.
-It reuses native image normalization and the existing attachment byte limit. Vision-capable model
-calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
-details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
-When rebuilding from transcript alone, read the image again if its pixels are needed. Arbitrary
-paths and directory enumeration remain unavailable.
+It reuses native image normalization and the existing attachment byte limit. After schema validation,
+reference authorization, source resolution, and the attachment byte-limit check succeed, direct-pixel
+image reads reject any supplied paging parameter, including mixed line/offset groups, before reading or
+normalizing pixels, and instruct the caller to retry without start_line, limit, offset, or max_characters.
+Text-only models retain OCR text paging. Vision-capable model calls receive bounded pixels; scripts
+receive metadata. Visible Cherry transcript parts and tool details omit pixels, but a valid context
+checkpoint within the 256 KiB limit can retain them. When rebuilding from transcript alone, read the image
+again if its pixels are needed. Arbitrary paths and directory enumeration remain unavailable.
 
 ### Skill Boundary
 

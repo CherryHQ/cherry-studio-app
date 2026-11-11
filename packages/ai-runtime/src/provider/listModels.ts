@@ -48,6 +48,7 @@ import {
   OllamaTagsResponseSchema,
   OpenAIModelsResponseSchema,
   OVMSConfigResponseSchema,
+  PoeModelsResponseSchema,
   TogetherModelsResponseSchema,
   VercelGatewayModelsResponseSchema,
   VertexPublisherModelsResponseSchema,
@@ -62,6 +63,7 @@ export interface ModelListContext extends VertexModelListContext {
   appHeaders?: Readonly<Record<string, string>>;
   getCopilotToken?: (headers: Record<string, string>, signal?: AbortSignal) => Promise<string>;
   getRotatedApiKey: (providerId: string) => Promise<string> | string;
+  getModelEndpointTypes?: (modelId: string) => readonly EndpointType[] | undefined;
   diagnostics?: ProviderRuntimeDiagnostics;
 }
 
@@ -77,6 +79,21 @@ type ModelFetcher = {
 
 function emitDiagnostic(context: ModelListContext, diagnostic: ModelListDiagnostic): void {
   emitProviderRuntimeDiagnostic(context.diagnostics, diagnostic);
+}
+
+function reportSkippedModels(
+  provider: Provider,
+  context: ModelListContext,
+  ...responses: { data: unknown[]; skippedModelCount?: number }[]
+): void {
+  const count = responses.reduce((total, response) => total + (response.skippedModelCount ?? 0), 0);
+  if (count > 0) {
+    emitDiagnostic(context, {
+      code: 'model-list-entries-skipped',
+      providerId: provider.id,
+      error: new Error(`Skipped ${count} malformed model-list entries`),
+    });
+  }
 }
 
 function handleOptionalModelListFailure<T>(
@@ -598,6 +615,13 @@ const openRouterFetcher: ModelFetcher = {
         ),
       ),
     ]);
+    reportSkippedModels(
+      provider,
+      context,
+      modelsResponse,
+      embedModelsResponse,
+      imageModelsResponse,
+    );
     const imageModelsById = new Map(imageModelsResponse.data.map((model) => [model.id, model]));
     const all = [...modelsResponse.data, ...embedModelsResponse.data, ...imageModelsResponse.data];
     return dedup(all, (m) => m.id).map((m) => {
@@ -661,6 +685,7 @@ const ppioFetcher: ModelFetcher = {
         ),
       ),
     ]);
+    reportSkippedModels(provider, context, chat, embed, reranker);
     const modelsById = new Map<string, Partial<Model>>();
     const mergeModel = (
       model: OpenAIModelResponseItem,
@@ -790,6 +815,7 @@ const jinaFetcher: ModelFetcher = {
       responseSchema: OpenAIModelsResponseSchema,
       abortSignal: signal,
     });
+    reportSkippedModels(provider, context, response);
     return dedup(response.data, (m) => m.id).map((m) => {
       const apiModelId = m.id.replace(/^jina-ai\//, '');
       return toModel(apiModelId, provider, { name: m.name || apiModelId, ownedBy: m.owned_by });
@@ -807,6 +833,7 @@ const openAIFetcher: ModelFetcher = {
       responseSchema: OpenAIModelsResponseSchema,
       abortSignal: signal,
     });
+    reportSkippedModels(provider, context, response);
     return dedup(response.data, (m) => m.id)
       .filter((m) => isSupportedOpenAIModel(m.id))
       .map((m) => toModel(m.id, provider, { ownedBy: m.owned_by }));
@@ -823,10 +850,53 @@ const openAICompatibleFetcher: ModelFetcher = {
       responseSchema: OpenAIModelsResponseSchema,
       abortSignal: signal,
     });
+    reportSkippedModels(provider, context, response);
     return dedup(response.data, (m) => m.id).map((m) =>
       toModel(m.id, provider, {
         name: m.name || m.id,
         ownedBy: m.owned_by,
+      }),
+    );
+  },
+};
+
+function resolvePoeEndpointTypes(
+  supportedEndpoints: readonly string[] | undefined,
+  registered: readonly EndpointType[] | undefined,
+): EndpointType[] | undefined {
+  if (!supportedEndpoints?.length) {
+    return registered?.length ? [...registered] : [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS];
+  }
+  const endpoints = [
+    ['/v1/messages', ENDPOINT_TYPE.ANTHROPIC_MESSAGES],
+    ['/v1/responses', ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ['/v1/chat/completions', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+  ] as const;
+  const declared = endpoints
+    .filter(([path]) => supportedEndpoints.includes(path))
+    .map(([, endpoint]) => endpoint);
+  const preferred = registered?.filter((endpoint) => declared.some((type) => type === endpoint));
+  return preferred?.length ? preferred : declared.length ? declared : undefined;
+}
+
+const poeFetcher: ModelFetcher = {
+  match: (provider) => matchesPreset(provider, 'poe'),
+  fetch: async (provider, context, signal) => {
+    const response = await getFromApi({
+      url: `${formatApiHost(getBaseUrl(provider))}/models`,
+      headers: await providerHeaders(provider, context),
+      responseSchema: PoeModelsResponseSchema,
+      abortSignal: signal,
+    });
+    reportSkippedModels(provider, context, response);
+    return dedup(response.data, (model) => model.id).map((model) =>
+      toModel(model.id, provider, {
+        name: model.name || model.id,
+        ownedBy: model.owned_by,
+        endpointTypes: resolvePoeEndpointTypes(
+          model.supported_endpoints,
+          context.getModelEndpointTypes?.(model.id),
+        ),
       }),
     );
   },
@@ -850,6 +920,7 @@ const fetchers: ModelFetcher[] = [
   anthropicFetcher,
   jinaFetcher,
   openAIFetcher,
+  poeFetcher,
   openAICompatibleFetcher, // always-match fallback, must be last
 ];
 

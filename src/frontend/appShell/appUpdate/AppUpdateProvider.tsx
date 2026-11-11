@@ -1,6 +1,14 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, type PropsWithChildren, use, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type PropsWithChildren,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data/BackendProvider';
@@ -26,8 +34,8 @@ type AppUpdateActions = {
 const AppUpdateActionsContext = createContext<AppUpdateActions | null>(null);
 
 /**
- * Shared decisions and the one update dialog. The dialog's open release is the only state here;
- * availability and transfer subscriptions remain in leaf consumers.
+ * Shared decisions and the update dialog for a known release.
+ * Availability and transfer subscriptions remain in leaf consumers.
  */
 export function AppUpdateProvider({ children }: PropsWithChildren) {
   const appUpdate = useBackendModule('appUpdate');
@@ -37,6 +45,14 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const [release, setRelease] = useState<AppUpdateRelease | null>(null);
   const pendingCheck = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    if (!release) return;
+    cacheService.setPersist('app_update.last_reminder', {
+      releaseId: release.id,
+      remindedAt: Date.now(),
+    });
+  }, [release]);
 
   const dialog = useMemo(() => {
     const close = () => setRelease(null);
@@ -113,12 +129,8 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
 
   const actions = useMemo<AppUpdateActions>(() => {
     const open = (next: AppUpdateRelease) => {
-      // Any presentation counts as the reminder, so a cold start does not repeat it within a day.
-      cacheService.setPersist('app_update.last_reminder', {
-        releaseId: next.id,
-        remindedAt: Date.now(),
-      });
-      setRelease(next);
+      // Never replace a prompt already being read, including two opens in the same render.
+      setRelease((current) => current ?? next);
     };
 
     const check = async () => {

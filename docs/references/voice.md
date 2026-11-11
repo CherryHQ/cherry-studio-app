@@ -135,10 +135,15 @@ config-plugin version; its installation script downloads prebuilt libraries rath
 
 The user selects **Settings → Voice → Input method → Offline**, then downloads the model from its
 row. The row groups the model name, size or current status, and download/cancel/delete action. The pinned
-`senseVoiceAssets.ts` manifest contains a ModelScope revision, exact sizes and SHA-256 values for
+`senseVoiceAssets.ts` manifest pins byte-identical ModelScope and Hugging Face revisions, exact sizes and SHA-256 values for
 `model.int8.onnx` and `tokens.txt`, totaling 239,549,735 bytes (about 240 MB). The model source is
 [pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue](https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue);
-the upstream model and its licensing information are
+the overseas mirror is
+[csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17).
+The shared IP country selects ModelScope in CN and Hugging Face elsewhere. When detection is
+unavailable, the download client retains its ModelScope preference without asserting
+a country. Existing verified files remain usable in either region. The upstream model and its
+licensing information are
 [FunAudioLLM/SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall).
 Model weights are not bundled in the app or copied from DSH Go source.
 
@@ -148,6 +153,7 @@ observes the backend-owned operation; leaving settings does not cancel it. Retry
 verified assets and restarts an interrupted file. Model storage survives cache eviction and is
 excluded from OS backup. A new app generation verifies cached bytes before use. Deletion is blocked
 while recognition holds a model lease; disposal cancels downloads and joins active native work.
+Cancellation also releases a pending country lookup wait without cancelling the shared lookup.
 
 [`modules/voice-input`](../../modules/voice-input/README.md) records 16 kHz mono PCM16 WAV, with a
 native 30-second limit. Stop or the limit transitions the composer to transcription. SenseVoice
