@@ -680,9 +680,10 @@ and success flag. Its membership comes from the input's execution metadata, excl
 alternatives; it is published only after every member is terminal, and every member must succeed.
 Released inputs without group metadata remain readable but do not authorize automatic sending.
 Frontend queues consume a completion once and only while its identity matches `answerGroupId`,
-independently of read receipts, live row disposal and route observation. Stop intent names the
-current group, so it cannot suppress a later regeneration. Draft queue state and consumed completion
-cursors are memory-only; accepted messages keep normal transcript storage.
+independently of read receipts, live row disposal and route observation. Stop retains existing
+drafts for individual manual sending or take-back; later successful groups cannot dispatch those
+drafts. Newly queued drafts still follow ordinary FIFO dispatch. Draft queue state and consumed
+completion cursors are memory-only; accepted messages keep normal transcript storage.
 
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.

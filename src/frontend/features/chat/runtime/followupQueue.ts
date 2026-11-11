@@ -15,26 +15,20 @@ export type FollowupQueueItem = Readonly<{
   id: string;
   request: AgentSubmitMessageInput;
   draft: FollowupDraft;
+  /** Later answer completions cannot release a retained draft. */
+  isManualSendRequired?: boolean;
 }>;
-
-export type FollowupSendOutcome = 'accepted' | 'cancelled' | 'failed';
 
 export type FollowupQueueState = Readonly<{
   items: readonly FollowupQueueItem[];
-  isPaused: boolean;
   pendingId: string | null;
   consumedCompletionId: string | null;
-  stoppedGroupId: string | null;
-  hasFailedSend: boolean;
 }>;
 
 const EMPTY_QUEUE: FollowupQueueState = Object.freeze({
   items: Object.freeze([]),
-  isPaused: false,
   pendingId: null,
   consumedCompletionId: null,
-  stoppedGroupId: null,
-  hasFailedSend: false,
 });
 
 const keyFor = (sessionId: string) => `chat.followup_queue.${sessionId}`;
@@ -61,15 +55,16 @@ export function enqueueFollowup(item: FollowupQueueItem, completionId: string | 
   });
 }
 
-export function setFollowupQueuePaused(sessionId: string, isPaused: boolean) {
-  const state = readFollowupQueue(sessionId);
-  if (!state.items.length) return;
-  writeQueue(sessionId, { ...state, isPaused, hasFailedSend: false });
+function holdItems(items: readonly FollowupQueueItem[]) {
+  return items.map((item) =>
+    item.isManualSendRequired ? item : { ...item, isManualSendRequired: true },
+  );
 }
 
-export function stopFollowupAdvance(sessionId: string, groupId: string | undefined) {
+export function holdFollowupQueue(sessionId: string) {
   const state = readFollowupQueue(sessionId);
-  if (groupId && state.items.length) writeQueue(sessionId, { ...state, stoppedGroupId: groupId });
+  if (!state.items.some((item) => !item.isManualSendRequired)) return;
+  writeQueue(sessionId, { ...state, items: holdItems(state.items) });
 }
 
 export function removeFollowup(sessionId: string, id: string): FollowupQueueItem | undefined {
@@ -84,30 +79,18 @@ export function removeFollowup(sessionId: string, id: string): FollowupQueueItem
   return item;
 }
 
-export function reorderFollowups(sessionId: string, items: readonly FollowupQueueItem[]) {
-  const state = readFollowupQueue(sessionId);
-  if (
-    state.pendingId ||
-    items.length !== state.items.length ||
-    new Set(items.map((item) => item.id)).size !== items.length ||
-    items.some((item) => !state.items.includes(item))
-  )
-    return;
-  writeQueue(sessionId, { ...state, items });
-}
-
 export function claimFollowup(sessionId: string, id: string): FollowupQueueItem | undefined {
   const state = readFollowupQueue(sessionId);
   if (state.pendingId) return;
   const item = state.items.find((candidate) => candidate.id === id);
-  if (item) writeQueue(sessionId, { ...state, pendingId: id, hasFailedSend: false });
+  if (item) writeQueue(sessionId, { ...state, pendingId: id });
   return item;
 }
 
 export function settleFollowup(
   sessionId: string,
   id: string,
-  outcome: FollowupSendOutcome,
+  accepted: boolean,
   completionId: string | null,
 ) {
   const state = readFollowupQueue(sessionId);
@@ -115,10 +98,8 @@ export function settleFollowup(
   writeQueue(sessionId, {
     ...state,
     pendingId: null,
-    items: outcome === 'accepted' ? state.items.filter((item) => item.id !== id) : state.items,
-    consumedCompletionId: outcome === 'failed' ? state.consumedCompletionId : completionId,
-    isPaused: outcome === 'failed' ? true : state.isPaused,
-    hasFailedSend: outcome === 'failed',
+    items: accepted ? state.items.filter((item) => item.id !== id) : holdItems(state.items),
+    consumedCompletionId: completionId,
   });
 }
 

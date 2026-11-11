@@ -1,5 +1,7 @@
+import { useToast } from '@cherrystudio/ui/components';
 import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
 import { useAgentSessionStatus } from '@/frontend/hooks/agent/useAgentSessionStatus';
@@ -10,11 +12,8 @@ import {
   claimFollowup,
   enqueueFollowup,
   type FollowupQueueItem,
-  type FollowupSendOutcome,
   readFollowupQueue,
   removeFollowup,
-  reorderFollowups,
-  setFollowupQueuePaused,
   settleFollowup,
   subscribeFollowupQueue,
 } from './followupQueue';
@@ -31,6 +30,8 @@ export function useFollowupQueue({
   isReady: boolean;
 }) {
   const focused = useIsFocused();
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const status = useAgentSessionStatus(sessionId ?? 'draft');
   const completion = status?.completion;
   const answerGroupId = status?.answerGroupId;
@@ -51,34 +52,29 @@ export function useFollowupQueue({
       const item = claimFollowup(sessionId, id);
       if (!item) return false;
       const completionId = client.getSessionStatus(sessionId)?.completion?.id ?? null;
-      let outcome: FollowupSendOutcome = 'failed';
+      let accepted = false;
       try {
         await client.submitMessage(item.request);
-        outcome = 'accepted';
+        accepted = true;
         return true;
       } catch (error) {
-        if (error instanceof AgentProtocolError && error.view.code === 'CANCELLED')
-          outcome = 'cancelled';
+        if (!(error instanceof AgentProtocolError && error.view.code === 'CANCELLED'))
+          toast.show({ label: t('chat.queue.sendFailed'), variant: 'danger' });
         return false;
       } finally {
-        settleFollowup(sessionId, id, outcome, completionId);
+        settleFollowup(sessionId, id, accepted, completionId);
       }
     },
-    [client, focused, isReady, sessionId],
+    [client, focused, isReady, sessionId, t, toast],
   );
 
   useEffect(() => {
     if (!sessionId || !focused || !isReady || isBusy || AppState.currentState !== 'active') return;
-    if (
-      queue.isPaused ||
-      queue.pendingId ||
-      !completion?.succeeded ||
-      completion.id !== answerGroupId
-    )
-      return;
-    if (completion.id === queue.consumedCompletionId || completion.id === queue.stoppedGroupId)
-      return;
-    const head = queue.items[0];
+    // Stop can retain drafts after render but before this effect dispatches.
+    const currentQueue = readFollowupQueue(sessionId);
+    if (currentQueue.pendingId || !completion?.succeeded || completion.id !== answerGroupId) return;
+    if (completion.id === currentQueue.consumedCompletionId) return;
+    const head = currentQueue.items.find((item) => !item.isManualSendRequired);
     if (head) void send(head.id);
   }, [sessionId, focused, isReady, isBusy, queue, completion, answerGroupId, send]);
 
@@ -94,12 +90,6 @@ export function useFollowupQueue({
     },
     send,
     remove: (id: string) => (sessionId ? removeFollowup(sessionId, id) : undefined),
-    reorder: (items: typeof queue.items) => {
-      if (sessionId) reorderFollowups(sessionId, items);
-    },
-    setPaused: (paused: boolean) => {
-      if (sessionId) setFollowupQueuePaused(sessionId, paused);
-    },
   };
 }
 

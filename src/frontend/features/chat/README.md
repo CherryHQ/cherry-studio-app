@@ -62,8 +62,10 @@ message list keeps its geometry and selection does not subscribe into the chat r
 `useAgentChatControls` runs once in the content leaf, keyed by the existing composer identity.
 While execution is busy, its send action captures an unsent draft in `followupQueue` through the
 frontend cache's memory tier. `useFollowupQueue` coordinates one dispatch per successful answer
-group; pause, edit, removal and ordering belong to this feature, not Pi's inbox. Cached drafts
-outlive route mounts but not the app process. Queue presence alone does not make execution busy.
+group. Stop retains waiting drafts for manual sending or take-back, and later successful answers
+cannot dispatch them automatically. Preview, manual sending, take-back/edit and removal belong to
+this feature, not Pi's inbox. Cached drafts outlive route mounts but not the app process. Queue
+presence alone does not make execution busy.
 For an actual submission, the send action allocates Session/message IDs and displays the text, files, and
 assistant waiting row before awaiting preparation. The same IDs pass through the normal send
 function into persistence and events. `ChatWorkspace` merges the pending rows with formal messages

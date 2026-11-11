@@ -17,7 +17,7 @@ import type {
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 
-import { setFollowupQueuePaused, stopFollowupAdvance } from './followupQueue';
+import { holdFollowupQueue } from './followupQueue';
 import { ToolInputPreviewStore } from './ToolInputPreviewStore';
 
 export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
@@ -319,7 +319,7 @@ export class AgentSessionChatClient {
 
   /** Shows the branch containing `messageId`; work on other branches keeps running. */
   async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView> {
-    setFollowupQueuePaused(sessionId, true);
+    holdFollowupQueue(sessionId);
     const session = await this.protocol.selectMessage({ sessionId, messageId });
     this.options.onSessionChanged?.(sessionId);
     this.options.onTranscriptChanged?.(sessionId);
@@ -466,15 +466,14 @@ export class AgentSessionChatClient {
     if (messageId) {
       const message = entry.liveMessages.get(messageId);
       if (message) {
-        if (message.turnId)
-          stopFollowupAdvance(sessionId, this.getSessionStatus(sessionId)?.answerGroupId);
+        if (message.turnId) holdFollowupQueue(sessionId);
         if (!message.turnId || isTerminalMessage(message)) return;
         await this.protocol.cancelTurn({ sessionId, turnId: message.turnId, messageId });
         return;
       }
       if (turn?.assistantMessageId !== messageId) return;
     }
-    if (turn) stopFollowupAdvance(sessionId, this.getSessionStatus(sessionId)?.answerGroupId);
+    if (turn) holdFollowupQueue(sessionId);
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
       await this.protocol.cancelTurn({
         sessionId,
@@ -487,6 +486,7 @@ export class AgentSessionChatClient {
     // Stop before the Host reserves the turn: the pending call rejects with
     // CANCELLED, whether it is still observing here or preparing in the Host.
     if (entry.submission && !entry.submission.isCancelled) {
+      holdFollowupQueue(sessionId);
       entry.submission.isCancelled = true;
       await this.protocol.cancelSubmission({ sessionId });
     }

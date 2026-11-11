@@ -22,6 +22,8 @@ const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
 const mockSubmitMessage = jest.fn();
+const mockToast = { show: jest.fn() };
+const mockTranslate = (key: string) => key;
 const mockChatState: AgentSessionChatState = {
   status: 'ready',
   sessionId: 'session-1',
@@ -42,6 +44,9 @@ const mockSubscribe = jest.fn((_sessionId: string, listener: () => void) => {
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
+
+jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
 
 jest.mock('expo-router', () => ({
   useIsFocused: () => true,

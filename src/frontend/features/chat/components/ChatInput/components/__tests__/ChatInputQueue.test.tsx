@@ -18,11 +18,8 @@ import { ChatInputComposer, ChatInputSurface } from '../../ChatInputSurface';
 import { toAgentInputParts } from '../../utils/agentInputParts';
 import { ChatInputQueue } from '../ChatInputQueue';
 
-const mockToast = jest.fn();
 const mockRemove = jest.fn();
 const mockQueueSend = jest.fn(async () => true);
-const mockPauseQueue = jest.fn();
-const mockReorder = jest.fn();
 const mockSubmit = jest.fn();
 const mockStop = jest.fn();
 const mockOpenFile = jest.fn();
@@ -128,7 +125,6 @@ jest.mock('@cherrystudio/ui/components', () => {
       EditorSecondary: host('EditorSecondary'),
     }),
     FilePreview: host('FilePreview'),
-    ReorderList: host('ReorderList'),
     BottomSheet: ({
       children,
       footer,
@@ -139,7 +135,6 @@ jest.mock('@cherrystudio/ui/components', () => {
       footer?: ReactNode;
       open?: boolean;
     }) => (open ? React.createElement('Sheet', props, children, footer) : null),
-    useToast: () => ({ toast: { show: mockToast } }),
     useComposerExpansion: () => null,
   };
 });
@@ -282,16 +277,11 @@ function queueController(): FollowupQueueController {
   });
   return {
     items,
-    isPaused: false,
     pendingId: null,
     consumedCompletionId: null,
-    stoppedGroupId: null,
-    hasFailedSend: false,
     canSend: true,
     send: mockQueueSend,
     enqueue: jest.fn(),
-    setPaused: mockPauseQueue,
-    reorder: mockReorder,
     remove: (id) => {
       const item = items.find((entry) => entry.id === id);
       mockRemove(id);
@@ -634,16 +624,10 @@ it('asks before replacing a quote the composer already holds', async () => {
   expect(mockRestoreQuote).not.toHaveBeenCalled();
 });
 
-it('offers direct sending, independent queue pause and ordering without editing the draft', async () => {
+it('keeps manual sending in the preview without editing the current draft', async () => {
   render('Keep this draft');
-  await press('queue-send-turn-1');
+  open();
+  await press('queue-detail-send');
   expect(mockQueueSend).toHaveBeenCalledWith('turn-1');
-  await press('queue-toggle-pause');
-  expect(mockPauseQueue).toHaveBeenCalledWith(true);
-  await press('queue-reorder');
-  const list = tree.root.findByType('ReorderList' as never);
-  const reversed = list.props.items.toReversed();
-  act(() => list.props.onReorder(reversed));
-  expect(mockReorder).toHaveBeenCalledWith(reversed);
   expect(composer.draft).toBe('Keep this draft');
 });

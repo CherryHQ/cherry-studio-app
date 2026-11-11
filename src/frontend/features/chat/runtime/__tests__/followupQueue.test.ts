@@ -5,12 +5,10 @@ import {
   clearFollowupQueue,
   enqueueFollowup,
   type FollowupQueueItem,
+  holdFollowupQueue,
   readFollowupQueue,
   removeFollowup,
-  reorderFollowups,
-  setFollowupQueuePaused,
   settleFollowup,
-  stopFollowupAdvance,
   subscribeFollowupQueue,
 } from '../followupQueue';
 
@@ -43,22 +41,18 @@ test('retains drafts and selections across subscribers, isolated by session', ()
   expect(readFollowupQueue('queue-other').items).toEqual([]);
 });
 
-test('stopping an answer leaves both queue membership and pause choice intact', () => {
+test('stopping retains existing drafts for manual sending without holding later drafts', () => {
   const items = [queuedItem('B'), queuedItem('C')];
   for (const item of items) enqueueFollowup(item, null);
-  stopFollowupAdvance('queue-test', 'A');
-  expect(readFollowupQueue('queue-test')).toMatchObject({
-    items,
-    isPaused: false,
-    stoppedGroupId: 'A',
-  });
-  setFollowupQueuePaused('queue-test', true);
-  stopFollowupAdvance('queue-test', 'D');
-  expect(readFollowupQueue('queue-test')).toMatchObject({
-    items,
-    isPaused: true,
-    stoppedGroupId: 'D',
-  });
+  holdFollowupQueue('queue-test');
+  const heldItems = items.map((item) => ({ ...item, isManualSendRequired: true }));
+  expect(readFollowupQueue('queue-test').items).toEqual(heldItems);
+  const heldState = readFollowupQueue('queue-test');
+  holdFollowupQueue('queue-test');
+  expect(readFollowupQueue('queue-test')).toBe(heldState);
+  const d = queuedItem('D');
+  enqueueFollowup(d, null);
+  expect(readFollowupQueue('queue-test').items).toEqual([...heldItems, d]);
 });
 
 test('pending admission stays exclusive and is removed only after acceptance', () => {
@@ -69,9 +63,8 @@ test('pending admission stays exclusive and is removed only after acceptance', (
   expect(claimFollowup('queue-test', b.id)).toEqual(b);
   expect(claimFollowup('queue-test', b.id)).toBeUndefined();
   expect(removeFollowup('queue-test', b.id)).toBeUndefined();
-  reorderFollowups('queue-test', [c, b]);
   expect(readFollowupQueue('queue-test').items).toEqual([b, c]);
-  settleFollowup('queue-test', b.id, 'accepted', 'A-completed');
+  settleFollowup('queue-test', b.id, true, 'A-completed');
   expect(readFollowupQueue('queue-test')).toMatchObject({
     items: [c],
     pendingId: null,
@@ -79,31 +72,32 @@ test('pending admission stays exclusive and is removed only after acceptance', (
   });
 });
 
-test('a failed submission keeps the draft, pauses advancement and permits retry', () => {
-  const b = queuedItem('B');
-  enqueueFollowup(b, null);
-  claimFollowup('queue-test', b.id);
-  settleFollowup('queue-test', b.id, 'failed', 'A-completed');
-  expect(readFollowupQueue('queue-test')).toMatchObject({
-    items: [b],
-    isPaused: true,
-    hasFailedSend: true,
-    consumedCompletionId: null,
-  });
-  setFollowupQueuePaused('queue-test', false);
-  expect(claimFollowup('queue-test', b.id)).toEqual(b);
-});
-
-test('reordering and take-back preserve original payloads and do not resurrect deleted sessions', () => {
+test('unaccepted admission retains the drafts for manual retry', () => {
   const b = queuedItem('B');
   const c = queuedItem('C');
   enqueueFollowup(b, null);
   enqueueFollowup(c, null);
-  reorderFollowups('queue-test', [c, b]);
-  expect(removeFollowup('queue-test', c.id)).toEqual(c);
-  expect(readFollowupQueue('queue-test').items).toEqual([b]);
+  claimFollowup('queue-test', b.id);
+  settleFollowup('queue-test', b.id, false, 'A-completed');
+  expect(readFollowupQueue('queue-test')).toMatchObject({
+    items: [b, c].map((item) => ({ ...item, isManualSendRequired: true })),
+    consumedCompletionId: 'A-completed',
+  });
+  expect(claimFollowup('queue-test', b.id)).toEqual({ ...b, isManualSendRequired: true });
+  settleFollowup('queue-test', b.id, true, 'A-completed');
+  expect(readFollowupQueue('queue-test').items).toEqual([{ ...c, isManualSendRequired: true }]);
+});
+
+test('take-back preserves the held payload and late acceptance cannot resurrect deleted sessions', () => {
+  const b = queuedItem('B');
+  const c = queuedItem('C');
+  enqueueFollowup(b, null);
+  enqueueFollowup(c, null);
+  holdFollowupQueue('queue-test');
+  expect(removeFollowup('queue-test', c.id)).toEqual({ ...c, isManualSendRequired: true });
+  expect(readFollowupQueue('queue-test').items).toEqual([{ ...b, isManualSendRequired: true }]);
   claimFollowup('queue-test', b.id);
   clearFollowupQueue('queue-test');
-  settleFollowup('queue-test', b.id, 'accepted', 'old');
+  settleFollowup('queue-test', b.id, true, 'old');
   expect(readFollowupQueue('queue-test').items).toEqual([]);
 });

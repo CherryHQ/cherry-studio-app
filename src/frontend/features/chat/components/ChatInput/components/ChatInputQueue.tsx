@@ -1,18 +1,6 @@
-import ArrowUpIcon from '@cherrystudio/app-icons/icons/arrow-up';
-import ArrowUpDownIcon from '@cherrystudio/app-icons/icons/arrow-up-down';
-import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import PlayIcon from '@cherrystudio/app-icons/icons/play';
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import {
-  Alert,
-  BottomSheet,
-  Button,
-  ReorderList,
-  Surface,
-  useToast,
-} from '@cherrystudio/ui/components';
-import { useIsFocused } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Alert, Button, Surface } from '@cherrystudio/ui/components';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -34,20 +22,13 @@ function previewText(input: FollowupQueueItem) {
 
 export function ChatInputQueue({ queue }: { queue: FollowupQueueController }) {
   const { t } = useTranslation();
-  const focused = useIsFocused();
-  const { toast } = useToast();
   const composer = useComposerState();
   const { setDraft, setAttachments } = useComposerActions();
   const quoteActions = useChatQuoteActions();
   const [previewId, setPreviewId] = useState<string>();
   const [conflict, setConflict] = useState(false);
-  const [sorting, setSorting] = useState(false);
   const preview = queue.items.find((item) => item.id === previewId);
   const pending = !!queue.pendingId || composer.isSubmitting;
-
-  useEffect(() => {
-    if (queue.hasFailedSend) toast.show({ label: t('chat.queue.sendFailed'), variant: 'danger' });
-  }, [queue.hasFailedSend, t, toast]);
 
   function takeBack() {
     if (!preview || pending) return;
@@ -63,30 +44,6 @@ export function ChatInputQueue({ queue }: { queue: FollowupQueueController }) {
     <>
       {queue.items.length > 0 ? (
         <Surface testID="chat-input-queue">
-          <View className="flex-row items-center gap-1 px-2 pt-1">
-            <Text className="flex-1 pl-2 text-xs text-muted-foreground">
-              {t(queue.isPaused ? 'chat.queue.paused' : 'chat.queue.title')}
-            </Text>
-            {queue.items.length > 1 ? (
-              <Button
-                accessibilityLabel={t('chat.queue.reorder')}
-                disabled={pending}
-                icon={<ArrowUpDownIcon />}
-                onPress={() => setSorting(true)}
-                size="xs"
-                variant="ghost"
-                testID="queue-reorder"
-              />
-            ) : null}
-            <Button
-              accessibilityLabel={t(queue.isPaused ? 'chat.queue.resume' : 'chat.queue.pause')}
-              icon={queue.isPaused ? <PlayIcon /> : <PauseIcon />}
-              onPress={() => queue.setPaused(!queue.isPaused)}
-              size="xs"
-              variant="ghost"
-              testID="queue-toggle-pause"
-            />
-          </View>
           <ScrollView
             className="max-h-40"
             contentContainerClassName="py-1 pl-4 pr-2"
@@ -99,13 +56,8 @@ export function ChatInputQueue({ queue }: { queue: FollowupQueueController }) {
                 input={input}
                 position={index + 1}
                 pending={pending}
-                isSending={queue.pendingId === input.id}
-                canSend={queue.canSend}
                 onPreview={() => setPreviewId(input.id)}
                 onRemove={() => queue.remove(input.id)}
-                onSend={() => {
-                  void queue.send(input.id);
-                }}
               />
             ))}
           </ScrollView>
@@ -147,28 +99,6 @@ export function ChatInputQueue({ queue }: { queue: FollowupQueueController }) {
           },
         ]}
       />
-      <BottomSheet
-        open={sorting && focused && queue.items.length > 0}
-        onClose={() => setSorting(false)}
-        size="medium"
-        title={t('chat.queue.reorder')}
-        closeAction={{ accessibilityLabel: t('common.close') }}
-      >
-        <ScrollView contentContainerClassName="p-5">
-          <ReorderList
-            items={queue.items}
-            getItemKey={(item) => item.id}
-            getItemLabel={(item) => previewText(item) || t('chat.queue.message')}
-            labels={{
-              moveUp: (item) =>
-                t('common.moveUp', { name: previewText(item) || t('chat.queue.message') }),
-              moveDown: (item) =>
-                t('common.moveDown', { name: previewText(item) || t('chat.queue.message') }),
-            }}
-            onReorder={queue.reorder}
-          />
-        </ScrollView>
-      </BottomSheet>
     </>
   );
 }
@@ -177,20 +107,14 @@ function QueuedInputRow({
   input,
   position,
   pending,
-  isSending,
-  canSend,
   onPreview,
   onRemove,
-  onSend,
 }: {
   input: FollowupQueueItem;
   position: number;
   pending: boolean;
-  isSending: boolean;
-  canSend: boolean;
   onPreview: () => void;
   onRemove: () => void;
-  onSend: () => void;
 }) {
   const { t } = useTranslation();
   const text = previewText(input);
@@ -226,17 +150,6 @@ function QueuedInputRow({
           </Text>
         ) : null}
       </Pressable>
-      <Button
-        accessibilityLabel={t('chat.queue.send')}
-        disabled={!canSend || pending}
-        loading={isSending}
-        icon={<ArrowUpIcon />}
-        onPress={onSend}
-        shape="pill"
-        size="xs"
-        variant="ghost"
-        testID={`queue-send-${input.id}`}
-      />
       <Button
         accessibilityLabel={t('chat.queue.remove', { position })}
         disabled={pending}

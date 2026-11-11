@@ -31,125 +31,7 @@ const wire: Model<Api> = {
 };
 
 describe('Pi durable execution integration', () => {
-  test.each([false, true])(
-    'queued inputs advance in order after first run failure: %s',
-    async (failFirst) => {
-      const requests: TranscriptContext[] = [];
-      const streams: AssistantMessageEventStream[] = [];
-      const arrivals: (() => void)[] = [];
-      let runtime!: PiDurableRuntime;
-      const bridge = createPiDurableModels(
-        {
-          preflightModel: async () => ({
-            contextWindow: 32768,
-            maxInputTokens: 28672,
-            maxOutputTokens: 4096,
-            inputModalities: ['text'],
-            supportsTools: false,
-          }),
-          resolveModel: async () => ({
-            model: wire,
-            defaultThinkingLevel: 'off',
-            redactionValues: [],
-            supportsTools: false,
-            usageContext: {
-              providerId: reference.providerId,
-              providerName: null,
-              modelId: reference.modelId,
-              modelName: null,
-              pricingSnapshot: null,
-              trustProviderReportedCost: false,
-              reportedCostCurrency: null,
-              credentialReceipt: { attribution: 'unknown' },
-            },
-            streamFn: (_model, context) => {
-              requests.push(context);
-              const stream = new AssistantMessageEventStream();
-              streams.push(stream);
-              arrivals.shift()?.();
-              return stream;
-            },
-          }),
-        },
-        (affinity) => runtime.requestOptions(affinity),
-      );
-      await bridge.registerModel(reference);
-      runtime = await PiDurableRuntime.open(new MemoryStorage(), {
-        models: bridge.models,
-        registry: createRegistry(),
-        settings: {
-          followUpMode: 'one-at-a-time',
-          afterFailedRun: 'continue',
-          compaction: { enabled: false },
-          retry: { enabled: false },
-        },
-      });
-      const arrived = async (count: number) => {
-        while (requests.length < count)
-          await new Promise<void>((resolve) => arrivals.push(resolve));
-      };
-      const finish = (index: number, failure = false) => {
-        const message: AssistantMessage = {
-          ...emptyAssistantMessage(wire),
-          stopReason: failure ? 'error' : 'stop',
-          content: [{ type: 'text', text: failure ? 'failure' : 'answer' }],
-          ...(failure ? { errorMessage: 'provider failure' } : {}),
-        };
-        streams[index]!.push(
-          failure
-            ? { type: 'error', reason: 'error', error: message }
-            : { type: 'done', reason: 'stop', message },
-        );
-      };
-      try {
-        await runtime.ensureConversation({
-          sessionId: 'ordered',
-          revision: 0,
-          options: { maxOutputTokens: 512 },
-          agent: {
-            model: { provider: reference.providerId, modelId: reference.modelId },
-            instructions: 'Answer.',
-          },
-        });
-        const a = await runtime.submit(
-          'ordered',
-          { type: 'input', requestId: 'A', content: 'A' },
-          {},
-        );
-        await arrived(1);
-        const b = await runtime.submit(
-          'ordered',
-          { type: 'input', requestId: 'B', content: 'B', whenBusy: 'followUp' },
-          {},
-        );
-        const c = await runtime.submit(
-          'ordered',
-          { type: 'input', requestId: 'C', content: 'C', whenBusy: 'followUp' },
-          {},
-        );
-        finish(0, failFirst);
-        await arrived(2);
-        finish(1);
-        await arrived(3);
-        finish(2);
-        await c.wait(BACKGROUND_CONTEXT);
-        expect((await b.wait(BACKGROUND_CONTEXT)).status).toBe('done');
-        expect((await a.wait(BACKGROUND_CONTEXT)).status).toBe(failFirst ? 'unanswered' : 'done');
-        expect(
-          requests.map((request) =>
-            request.messages
-              .filter((message) => message.role === 'user')
-              .map((message) => message.content)
-              .at(-1),
-          ),
-        ).toEqual(['A', 'B', 'C']);
-      } finally {
-        await runtime.close();
-      }
-    },
-  );
-
-  test('stopping preserves partial output and withdraws native queued inputs', async () => {
+  test('stopping preserves streamed partial output and permits a new submission', async () => {
     const requests: TranscriptContext[] = [];
     let signal: AbortSignal | undefined;
     let started!: () => void;
@@ -246,16 +128,6 @@ describe('Pi durable execution integration', () => {
       const a = await runtime.submit('stop', { type: 'input', requestId: 'A', content: 'A' }, {});
       await firstStarted;
       await partialObserved;
-      await runtime.submit(
-        'stop',
-        { type: 'input', requestId: 'B', content: 'B', whenBusy: 'followUp' },
-        {},
-      );
-      await runtime.submit(
-        'stop',
-        { type: 'input', requestId: 'C', content: 'C', whenBusy: 'followUp' },
-        {},
-      );
       await runtime.stopTurn('stop', 'A');
       await a.wait(BACKGROUND_CONTEXT);
       expect(signal?.aborted).toBe(true);
@@ -263,8 +135,6 @@ describe('Pi durable execution integration', () => {
       expect(JSON.stringify((await runtime.history('stop', 256)).entries)).toContain(
         'Partial answer',
       );
-      expect((await runtime.inputRecord('stop', 'B'))?.status).toBe('unanswered');
-      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('unanswered');
       const resent = await runtime.submit(
         'stop',
         { type: 'input', requestId: 'B-new', content: 'B' },
@@ -277,7 +147,6 @@ describe('Pi durable execution integration', () => {
           .filter((message) => message.role === 'user')
           .map((message) => message.content),
       ).toEqual(['A', 'B']);
-      expect((await runtime.inputRecord('stop', 'C'))?.status).toBe('unanswered');
       await watch.stop();
     } finally {
       await runtime.close();

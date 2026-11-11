@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
@@ -570,55 +572,96 @@ describe('PiDurableRuntime identity and handoff', () => {
   });
 });
 
-test('stopTurn withdraws native inputs only when its request is current', async () => {
-  const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
-  try {
-    const conversation = await runtime.ensureConversation(seed);
-    await conversation.commit(async (tx) => {
-      const live = await tx.doc(LiveDoc, conversation.id);
-      const inbox = await tx.doc(InboxDoc, conversation.id);
-      const entry = await tx.appendEntry(UserEntry, conversation.id, {
-        model: [{ role: 'user', content: 'A', timestamp: 1 }],
-      });
-      const a = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        requestId: 'A',
-        status: 'placed',
-        entry: entry.id,
-      });
-      const taskId = await tx.createTask(
-        GenerationTask,
-        {},
-        { ownership: { kind: 'conversation' }, conversationId: conversation.id },
-      );
-      live.run = { taskId, inputs: [a.id], turns: 0 };
-      const b = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        requestId: 'B',
-        status: 'queued',
-      });
-      const c = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        requestId: 'C',
-        status: 'queued',
-      });
-      inbox.items.push(
-        { id: b.id, mode: 'followUp', content: 'B' },
-        { id: c.id, mode: 'followUp', content: 'C' },
-      );
-      return { b: b.id, c: c.id };
-    }, BACKGROUND_CONTEXT);
-    await runtime.stopTurn(seed.sessionId, 'A');
-    await runtime.stopTurn(seed.sessionId, 'A');
-    for (const id of ['B', 'C']) {
-      expect(await runtime.inputRecord(seed.sessionId, id)).toMatchObject({ status: 'unanswered' });
-    }
-    await runtime.stop(seed.sessionId);
-    expect((await runtime.inputRecord(seed.sessionId, 'B'))!.status).toBe('unanswered');
-  } finally {
-    await runtime.close();
-  }
+test('the registered pi-durable patch delivers the current-input stop guard', () => {
+  const patchPath = 'patches/@earendil-works__pi-durable@1.5.0.patch';
+  expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(patchPath);
+  expect(readFileSync(patchPath, 'utf8')).toContain('expectedInput');
+  expect(
+    JSON.parse(readFileSync('node_modules/@earendil-works/pi-durable/package.json', 'utf8'))
+      .version,
+  ).toBe('1.5.0');
 });
+
+test.each(['current', 'settled', 'other conversation', 'outside live run'] as const)(
+  'stop guards preserve other work when targeting the %s input',
+  async (target) => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      const other =
+        target === 'other conversation'
+          ? await runtime.ensureConversation({ ...seed, sessionId: 'other' })
+          : conversation;
+      const ids = await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'A', timestamp: 1 }],
+        });
+        const active = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          requestId: 'A',
+          status: 'placed',
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        live.run = { taskId, inputs: [active.id], turns: 0 };
+        const selected =
+          target === 'current'
+            ? active
+            : await tx.createSubmission({
+                conversationId: other.id,
+                type: 'input',
+                ...(target === 'settled'
+                  ? { status: 'done' as const, entry: entry.id, answer: entry.id }
+                  : { status: 'placed' as const, entry: entry.id }),
+              });
+        for (const requestId of ['B', 'C']) {
+          const queued = await tx.createSubmission({
+            conversationId: conversation.id,
+            type: 'input',
+            requestId,
+            status: 'queued',
+          });
+          inbox.items.push({ id: queued.id, mode: 'followUp', content: requestId });
+        }
+        return { selected: selected.id, taskId };
+      }, BACKGROUND_CONTEXT);
+      await runtime.stopTurn(seed.sessionId, 'missing');
+      expect((await runtime.inputRecord(seed.sessionId, 'B'))?.status).toBe('queued');
+      if (target === 'current') {
+        await runtime.stopTurn(seed.sessionId, 'A');
+        await runtime.stopTurn(seed.sessionId, 'A');
+      } else {
+        // This exercises the atomic upstream guard after the adapter's earlier lookup.
+        await conversation.abort(BACKGROUND_CONTEXT, {
+          background: true,
+          expectedInput: ids.selected,
+        });
+        expect((await runtime.inputRecord(seed.sessionId, 'B'))?.status).toBe('queued');
+        expect((await runtime.inputRecord(seed.sessionId, 'C'))?.status).toBe('queued');
+        expect(
+          await conversation.commit(
+            async (tx) => (await tx.doc(LiveDoc, conversation.id)).run?.taskId,
+            BACKGROUND_CONTEXT,
+          ),
+        ).toBe(ids.taskId);
+        await runtime.stopTurn(seed.sessionId, 'A');
+      }
+      for (const requestId of ['B', 'C'])
+        expect((await runtime.inputRecord(seed.sessionId, requestId))?.status).toBe('unanswered');
+      await runtime.stop(seed.sessionId);
+      expect((await runtime.inputRecord(seed.sessionId, 'B'))?.entry).toBeUndefined();
+    } finally {
+      await runtime.close();
+    }
+  },
+);

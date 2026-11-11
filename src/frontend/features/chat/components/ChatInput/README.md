@@ -152,14 +152,15 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   duplicate dispatch after refresh or remount; every model in the current admission must finish
   successfully. Historical answer alternatives do not participate, and a retained completion from
   a previous admission cannot advance a regenerating question's queue. Stop, failure,
-  interruption and pending admission do not advance it. Stop leaves both queued drafts and their
-  independent pause choice intact. A later successful send or regeneration can advance an unpaused
-  queue; stopping an earlier group does not suppress the new group.
-- Queue controls offer pause/resume, direct sending while idle, preview, local take-back/edit,
-  removal and ordering. Existing draft replacement requires confirmation. Pending admission locks
-  its item; acceptance removes it, whereas failure keeps it and pauses automatic sending.
-  Stopping preparation keeps that draft and consumes its automatic-send trigger without pausing.
+  interruption and pending admission do not advance it. Stop retains waiting drafts for individual
+  manual sending or take-back; later successful sends or regenerations cannot release those drafts.
+  Newly queued drafts remain eligible for ordinary FIFO dispatch.
+- Queue rows offer preview and removal. The preview also offers manual sending while idle and
+  local take-back/edit. Existing draft replacement requires confirmation. Pending admission locks
+  its item; acceptance removes it, whereas failure or cancellation retains waiting drafts for manual
+  retry or take-back.
 - Only the focused foreground chat dispatches queued drafts. Returning refreshes authoritative
-  execution state before processing a retained completion. Branch selection pauses a waiting queue.
+  execution state before processing a retained completion. Branch selection retains waiting drafts
+  for manual sending so they cannot enter a different branch automatically.
   The Host rejects ordinary submissions while busy rather than creating a native follow-up;
   stable submission identities make a repeated admission return the original message pair.

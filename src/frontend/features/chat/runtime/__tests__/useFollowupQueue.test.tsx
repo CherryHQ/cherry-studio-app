@@ -8,8 +8,9 @@ import type { AgentSessionChatClient } from '../AgentSessionChatClient';
 import {
   clearFollowupQueue,
   enqueueFollowup,
+  type FollowupQueueItem,
+  holdFollowupQueue,
   readFollowupQueue,
-  stopFollowupAdvance,
 } from '../followupQueue';
 import { useFollowupQueue } from '../useFollowupQueue';
 
@@ -18,6 +19,8 @@ let mockAnswerGroupId: string | undefined;
 let mockFocused = true;
 let mockActiveTurnId: string | null = null;
 const mockSubmit = jest.fn();
+const mockToast = { show: jest.fn() };
+const mockTranslate = (key: string) => key;
 const client = {
   getState: () => ({
     activeTurn: mockActiveTurnId ? { id: mockActiveTurnId, status: 'running' } : null,
@@ -28,19 +31,16 @@ const client = {
   submitMessage: mockSubmit,
 } as unknown as AgentSessionChatClient;
 
+jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
 jest.mock('expo-router', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('@/frontend/hooks/agent/useAgentSessionStatus', () => ({
   useAgentSessionStatus: () => ({ answerGroupId: mockAnswerGroupId, completion: mockCompletion }),
 }));
 
 let controller: ReturnType<typeof useFollowupQueue>;
-function Harness({
-  sessionId = 'hook-queue',
-  busy = false,
-}: {
-  sessionId?: string;
-  busy?: boolean;
-}) {
+type HarnessProps = { sessionId?: string; busy?: boolean };
+function Harness({ sessionId = 'hook-queue', busy = false }: HarnessProps) {
   const queue = useFollowupQueue({ sessionId, client, isBusy: busy, isReady: true });
   useEffect(() => {
     controller = queue;
@@ -48,23 +48,33 @@ function Harness({
   return null;
 }
 
-function enqueue(text: string, sessionId = 'hook-queue') {
-  enqueueFollowup(
-    {
-      id: text,
-      request: {
-        sessionId,
-        userMessageId: `user-${text}`,
-        assistantMessageId: `answer-${text}`,
-        parts: [{ type: 'text', text }],
-      },
-      draft: { text, attachments: [], quote: {} },
+function draft(text: string, sessionId = 'hook-queue'): FollowupQueueItem {
+  return {
+    id: text,
+    request: {
+      sessionId,
+      userMessageId: `user-${text}`,
+      assistantMessageId: `answer-${text}`,
+      parts: [{ type: 'text', text }],
     },
-    null,
-  );
+    draft: { text, attachments: [], quote: {} },
+  };
+}
+const enqueue = (text: string, sessionId?: string) => enqueueFollowup(draft(text, sessionId), null);
+function complete(id: string, turnId = id, succeeded = true) {
+  mockCompletion = { id, turnId, succeeded };
+  mockAnswerGroupId = id;
 }
 
 let tree: ReactTestRenderer;
+async function render(props: HarnessProps = {}) {
+  await act(async () => {
+    tree = create(<Harness {...props} />);
+  });
+}
+async function update(props: HarnessProps = {}) {
+  await act(async () => tree.update(<Harness {...props} />));
+}
 beforeEach(() => {
   clearFollowupQueue('hook-queue');
   clearFollowupQueue('hook-other');
@@ -74,224 +84,146 @@ beforeEach(() => {
   mockActiveTurnId = null;
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   mockSubmit.mockReset().mockResolvedValue({});
+  mockToast.show.mockClear();
 });
 afterEach(() => act(() => tree?.unmount()));
 
 test('a success sends one FIFO draft, and remounting cannot consume that completion twice', async () => {
   enqueue('B');
   enqueue('C');
-  mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
-  mockAnswerGroupId = 'A-done';
-  await act(async () => {
-    tree = create(<Harness />);
-  });
+  complete('A-done');
+  await render();
   expect(mockSubmit.mock.calls.map(([request]) => request.parts[0].text)).toEqual(['B']);
   expect(controller.items.map((item) => item.id)).toEqual(['C']);
   act(() => tree.unmount());
-  await act(async () => {
-    tree = create(<Harness />);
-  });
+  await render();
   expect(mockSubmit).toHaveBeenCalledTimes(1);
-  mockCompletion = { id: 'B-done', turnId: 'B', succeeded: true };
-  mockAnswerGroupId = 'B-done';
-  await act(async () => tree.update(<Harness />));
+  complete('B-done');
+  await update();
   expect(mockSubmit.mock.calls.map(([request]) => request.parts[0].text)).toEqual(['B', 'C']);
 });
 
-test.each([false, true])(
-  'a stopped or unsuccessful turn cannot advance the queue (success: %s)',
-  async (succeeded) => {
+test('busy and unfocused views retain drafts until the successful completion is eligible', async () => {
+  enqueue('B');
+  complete('A-done');
+  await render({ busy: true });
+  expect(mockSubmit).not.toHaveBeenCalled();
+  mockFocused = false;
+  await update();
+  expect(mockSubmit).not.toHaveBeenCalled();
+  mockFocused = true;
+  await update();
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+});
+
+test.each(['failure', 'cancellation'] as const)(
+  '%s retains admission for manual retry and reports only real failures',
+  async (outcome) => {
     enqueue('B');
-    stopFollowupAdvance('hook-queue', 'A-done');
-    mockCompletion = { id: 'A-done', turnId: 'A', succeeded };
-    mockAnswerGroupId = 'A-done';
-    await act(async () => {
-      tree = create(<Harness />);
-    });
-    expect(mockSubmit).not.toHaveBeenCalled();
-    expect(controller.items.map((item) => item.id)).toEqual(['B']);
+    mockSubmit.mockRejectedValueOnce(
+      outcome === 'failure'
+        ? new Error('not admitted')
+        : new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: true }),
+    );
+    complete('A-done');
+    await render();
+    expect(controller.items[0]).toMatchObject({ id: 'B', isManualSendRequired: true });
+    expect(mockToast.show).toHaveBeenCalledTimes(outcome === 'failure' ? 1 : 0);
+    complete('D-done');
+    await update();
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
     await act(async () => {
       await controller.send('B');
     });
-    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(mockSubmit).toHaveBeenCalledTimes(2);
     expect(controller.items).toEqual([]);
   },
 );
 
-test('busy and unfocused views retain drafts until the observed successful completion is eligible', async () => {
-  enqueue('B');
-  mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
-  mockAnswerGroupId = 'A-done';
-  await act(async () => {
-    tree = create(<Harness busy />);
-  });
-  expect(mockSubmit).not.toHaveBeenCalled();
-  mockFocused = false;
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).not.toHaveBeenCalled();
-  mockFocused = true;
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).toHaveBeenCalledTimes(1);
-});
-
-test('failed admission retains the item and resume retries without a new completion', async () => {
-  enqueue('B');
-  mockSubmit.mockRejectedValueOnce(new Error('not admitted'));
-  mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
-  mockAnswerGroupId = 'A-done';
-  await act(async () => {
-    tree = create(<Harness />);
-  });
-  expect(controller.items.map((item) => item.id)).toEqual(['B']);
-  expect(controller.isPaused).toBe(true);
-  await act(async () => controller.setPaused(false));
-  expect(mockSubmit).toHaveBeenCalledTimes(2);
-  expect(controller.items).toEqual([]);
-});
-
-test('an earlier success cannot drain a draft queued behind a different running turn', async () => {
-  mockCompletion = { id: 'previous-done', turnId: 'previous', succeeded: true };
-  mockAnswerGroupId = 'A-failed';
-  mockActiveTurnId = 'A';
-  act(() => {
-    tree = create(<Harness busy />);
-  });
-  act(() =>
-    controller.enqueue({
-      id: 'B',
-      request: {
-        sessionId: 'hook-queue',
-        userMessageId: 'B-user',
-        assistantMessageId: 'B-answer',
-        parts: [{ type: 'text', text: 'B' }],
-      },
-      draft: { text: 'B', attachments: [], quote: {} },
-    }),
-  );
-  mockActiveTurnId = null;
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).not.toHaveBeenCalled();
-  mockCompletion = { id: 'A-failed', turnId: 'A', succeeded: false };
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).not.toHaveBeenCalled();
-  mockCompletion = { id: 'D-done', turnId: 'D', succeeded: true };
-  mockAnswerGroupId = 'D-done';
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).toHaveBeenCalledTimes(1);
-});
-
-test.each([false, true])(
-  'a sibling regeneration cannot reuse the previous success before its own completion (%s)',
-  async (succeeded) => {
-    mockCompletion = { id: 'original-done', turnId: 'shared-turn', succeeded: true };
-    mockAnswerGroupId = 'regeneration-done';
-    mockActiveTurnId = 'shared-turn';
-    act(() => {
-      tree = create(<Harness busy />);
-    });
-    act(() =>
-      controller.enqueue({
-        id: 'B',
-        request: {
-          sessionId: 'hook-queue',
-          userMessageId: 'B-user',
-          assistantMessageId: 'B-answer',
-          parts: [{ type: 'text', text: 'B' }],
-        },
-        draft: { text: 'B', attachments: [], quote: {} },
-      }),
-    );
-    expect(controller.consumedCompletionId).toBe('original-done');
-
-    // Terminal chat events may arrive before the Host publishes this group's outcome.
+test.each([
+  ['previous-turn', false],
+  ['previous-turn', true],
+  ['current-turn', false],
+  ['current-turn', true],
+] as const)(
+  'an older success cannot dispatch a pending group (previous turn %s, success %s)',
+  async (previousTurn, succeeded) => {
+    complete('previous-done', previousTurn);
+    mockAnswerGroupId = 'current-done';
+    mockActiveTurnId = 'current-turn';
+    await render({ busy: true });
+    act(() => controller.enqueue(draft('B')));
+    expect(controller.consumedCompletionId).toBe('previous-done');
+    // Live rows can settle before the current group's persisted completion arrives.
     mockActiveTurnId = null;
-    await act(async () => tree.update(<Harness />));
+    await update();
     expect(mockSubmit).not.toHaveBeenCalled();
-    expect(controller.items.map((item) => item.id)).toEqual(['B']);
-
-    mockCompletion = { id: 'regeneration-done', turnId: 'shared-turn', succeeded };
-    await act(async () => tree.update(<Harness />));
+    complete('current-done', 'current-turn', succeeded);
+    await update();
     expect(mockSubmit).toHaveBeenCalledTimes(succeeded ? 1 : 0);
-    expect(controller.items.map((item) => item.id)).toEqual(succeeded ? [] : ['B']);
+    if (!succeeded) {
+      complete('D-done');
+      await update();
+      expect(mockSubmit).toHaveBeenCalledTimes(1);
+    }
   },
 );
 
-test('stopping one group does not suppress a later successful regeneration of the same question', async () => {
+test('stopped drafts stay manual after regeneration and after sending one retained item', async () => {
   enqueue('B');
-  stopFollowupAdvance('hook-queue', 'original-done');
-  mockCompletion = { id: 'original-done', turnId: 'shared-turn', succeeded: true };
-  mockAnswerGroupId = 'original-done';
-  await act(async () => {
-    tree = create(<Harness />);
-  });
+  enqueue('C');
+  holdFollowupQueue('hook-queue');
+  complete('original-done', 'shared-turn');
+  await render();
   expect(mockSubmit).not.toHaveBeenCalled();
-  expect(controller.isPaused).toBe(false);
-
-  mockAnswerGroupId = 'regeneration-done';
-  mockCompletion = { id: 'regeneration-done', turnId: 'shared-turn', succeeded: true };
-  await act(async () => tree.update(<Harness />));
+  complete('regeneration-done', 'shared-turn');
+  await update();
+  expect(mockSubmit).not.toHaveBeenCalled();
+  expect(controller.items.map((item) => item.id)).toEqual(['B', 'C']);
+  await act(async () => {
+    await controller.send('B');
+  });
+  complete('B-done');
+  await update();
   expect(mockSubmit).toHaveBeenCalledTimes(1);
-  expect(controller.items).toEqual([]);
+  expect(controller.items.map((item) => item.id)).toEqual(['C']);
+});
+
+test('new drafts advance in FIFO order while older stopped drafts wait for manual sending', async () => {
+  enqueue('B');
+  holdFollowupQueue('hook-queue');
+  enqueue('D');
+  enqueue('E');
+  complete('C-done');
+  await render();
+  expect(mockSubmit.mock.calls.map(([request]) => request.parts[0].text)).toEqual(['D']);
+  complete('D-done');
+  await update();
+  expect(mockSubmit.mock.calls.map(([request]) => request.parts[0].text)).toEqual(['D', 'E']);
+  expect(controller.items.map((item) => item.id)).toEqual(['B']);
 });
 
 test('an unknown current answer group cannot authorize automatic sending', async () => {
   enqueue('B');
-  mockCompletion = { id: 'previous-done', turnId: 'previous', succeeded: true };
-  await act(async () => {
-    tree = create(<Harness />);
-  });
+  complete('previous-done');
+  mockAnswerGroupId = undefined;
+  await render();
   expect(mockSubmit).not.toHaveBeenCalled();
   expect(controller.items.map((item) => item.id)).toEqual(['B']);
 });
 
-test('cancelling pending admission keeps the draft and pause choice without immediately resending', async () => {
-  enqueue('B');
-  mockSubmit.mockRejectedValueOnce(
-    new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: true }),
-  );
-  mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
-  mockAnswerGroupId = 'A-done';
-  await act(async () => {
-    tree = create(<Harness />);
-  });
-  expect(controller.items.map((item) => item.id)).toEqual(['B']);
-  expect(controller.isPaused).toBe(false);
-  expect(controller.hasFailedSend).toBe(false);
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).toHaveBeenCalledTimes(1);
-  mockCompletion = { id: 'D-done', turnId: 'D', succeeded: true };
-  mockAnswerGroupId = 'D-done';
-  await act(async () => tree.update(<Harness />));
-  expect(mockSubmit).toHaveBeenCalledTimes(2);
-  expect(controller.items).toEqual([]);
-});
-
-test('a fresh completion preceding the terminal chat snapshot is not discarded at enqueue', async () => {
-  mockCompletion = { id: 'A-done', turnId: 'A', succeeded: true };
-  mockAnswerGroupId = 'A-done';
+test('a completion preceding terminal live rows remains eligible when its draft is enqueued', async () => {
+  complete('A-done');
   mockActiveTurnId = 'A';
-  act(() => {
-    tree = create(<Harness busy />);
-  });
-  act(() =>
-    controller.enqueue({
-      id: 'B',
-      request: {
-        sessionId: 'hook-queue',
-        userMessageId: 'B-user',
-        assistantMessageId: 'B-answer',
-        parts: [{ type: 'text', text: 'B' }],
-      },
-      draft: { text: 'B', attachments: [], quote: {} },
-    }),
-  );
+  await render({ busy: true });
+  act(() => controller.enqueue(draft('B')));
   mockActiveTurnId = null;
-  await act(async () => tree.update(<Harness />));
+  await update();
   expect(mockSubmit).toHaveBeenCalledTimes(1);
   expect(controller.items).toEqual([]);
 });
 
-test('a pending send remains exclusive across routes and settles in its originating queue', async () => {
+test('a pending send stays exclusive across routes and settles in its originating queue', async () => {
   enqueue('B');
   enqueue('C', 'hook-other');
   let accept!: () => void;
@@ -301,9 +233,7 @@ test('a pending send remains exclusive across routes and settles in its originat
         accept = resolve;
       }),
   );
-  act(() => {
-    tree = create(<Harness />);
-  });
+  await render();
   let sending!: Promise<boolean>;
   act(() => {
     sending = controller.send('B');
@@ -311,7 +241,7 @@ test('a pending send remains exclusive across routes and settles in its originat
   await act(async () => {
     expect(await controller.send('B')).toBe(false);
   });
-  act(() => tree.update(<Harness sessionId="hook-other" />));
+  await update({ sessionId: 'hook-other' });
   await act(async () => {
     accept();
     await sending;
