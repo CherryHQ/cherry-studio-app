@@ -49,7 +49,7 @@ export function durableAnswerGroup(turn: RuntimeDurableTurn) {
 }
 
 export function durableAnswerGroupId(turnId: string, messageIds: readonly string[]) {
-  return `${turnId}:${messageIds.toSorted().join(':')}`;
+  return `${turnId}:${[...messageIds].sort().join(':')}`;
 }
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */
