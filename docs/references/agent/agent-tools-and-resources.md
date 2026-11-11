@@ -196,8 +196,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
-library management, Office operations, Health, Reminders, Calendar, Location, image generation and Agent management) register as upstream `deferred`
+MCP capabilities and built-in tools marked `deferred` (managed-file read/write/edit, file-library and
+workspace tools, Skill creation/installation/adaptation, Office operations, Health, Reminders,
+Calendar, Location, image generation and Agent management) register as upstream `deferred`
 tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
 because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
@@ -227,8 +228,10 @@ The initial prompt retains plugin capability overviews, critical constraints, an
 rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
 connection's tools are refused before approval until its guide is present. Loading ends its tool
 round; dependent actions are planned only after the next request supplies the complete instructions.
-Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
-their full routing descriptions retain the existing catalog budget.
+Loaded guides remain for later turns of the Session. Questions and Skill readers remain directly
+exposed so clarification and workflow loading do not require a discovery round. Their concise
+descriptions preserve invocation and pagination rules; full Skill routing metadata retains the
+existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -275,7 +278,9 @@ Agent's approval mode decides whether a mutation waits for the user. A successfu
 permits editing that source into a workspace copy during this turn and leaves the source unchanged.
 It does not grant `read_file` future outside-library access.
 
-The six management tools are deferred; `library_search_files` names them for `tool_search`.
+Library search/read and the six management tools are deferred, alongside managed-file and workspace
+tools. The initial Tools On Demand section names them for `tool_search`; a loaded
+`library_search_files` also names the management tools.
 `library_list_folders` searches active folder names or lists direct children, returning stable ids
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,

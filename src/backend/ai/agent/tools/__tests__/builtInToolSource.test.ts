@@ -74,9 +74,15 @@ describe('createSystemCapabilitySource', () => {
     ]);
   });
 
-  test('keeps file-library task tools available with their read/mutation approval', async () => {
+  test('defers file tools without changing their read/mutation approval', async () => {
     const tools = await resolve({});
-    const reads = ['library_search_files', 'library_read_file'];
+    const files = [
+      'library_search_files',
+      'library_read_file',
+      'read_file',
+      'write_file',
+      'edit_file',
+    ];
     const management = {
       library_list_folders: 'auto',
       library_move_item: 'ask',
@@ -85,10 +91,13 @@ describe('createSystemCapabilitySource', () => {
       library_list_trash: 'auto',
       library_restore_item: 'ask',
     };
-    for (const name of reads) {
+    for (const name of files) {
       const tool = tools.find((item) => item.providerName === name);
-      expect(tool).toMatchObject({ approval: 'auto', autoApprovalEligible: true });
-      expect(tool?.deferred).toBeUndefined();
+      expect(tool).toMatchObject({
+        approval: 'auto',
+        autoApprovalEligible: true,
+        deferred: true,
+      });
     }
     for (const [name, approval] of Object.entries(management)) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
@@ -143,6 +152,9 @@ describe('createSystemCapabilitySource', () => {
     expect(linked.find((tool) => tool.providerName === 'list_workspace')?.description).toContain(
       'file-library folder "项目资料"',
     );
+    for (const name of ['list_workspace', 'find_workspace_files', 'create_workspace_folder']) {
+      expect(linked.find((tool) => tool.providerName === name)?.deferred).toBe(true);
+    }
 
     folder.mockClear();
     const unlinked = await resolve({});

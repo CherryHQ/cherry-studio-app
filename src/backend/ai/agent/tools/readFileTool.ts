@@ -166,6 +166,7 @@ export function createReadFileTool(
     ref: { source: 'builtin', capabilityId: READ_FILE_TOOL_NAME },
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
+    deferred: true,
     description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. This turn uses the ${documentParserMode} document parser. ${
       documentParserMode === 'anydoc'
         ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
