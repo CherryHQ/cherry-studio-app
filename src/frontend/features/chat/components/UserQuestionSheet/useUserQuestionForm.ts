@@ -60,11 +60,10 @@ export function useUserQuestionForm({
   const answer = answers.get(question.id) ?? emptyAnswer;
   const locked = disabled || busy;
   const isLast = index === questions.length - 1;
-  const answered = isAnswered(answer);
-  const canSkip = !(question.required ?? !allowSkip);
-  const isComplete = questions.every(
-    ({ id, required }) => !(required ?? !allowSkip) || isAnswered(answers.get(id)),
-  );
+  const answered = isAnswered(question, answer);
+  const isReview = requiresChoice(question);
+  const canSkip = !isReview && !(question.required ?? !allowSkip);
+  const isComplete = isFormComplete(questions, answers, allowSkip);
   const action: 'submit' | 'next' | 'skip' = isLast
     ? 'submit'
     : answered || !canSkip
@@ -103,14 +102,22 @@ export function useUserQuestionForm({
     navigate(index + 1);
   }
 
-  async function submit() {
-    if (disabled || submitting.current || !active.current || !isComplete) return;
+  async function submit(drafts = answers) {
+    if (
+      disabled ||
+      submitting.current ||
+      !active.current ||
+      !isFormComplete(questions, drafts, allowSkip)
+    )
+      return;
     submitting.current = true;
+    setAnswers(drafts);
     setBusy(true);
     setFailed(false);
-    const response = questions.map(({ id, input }) => {
-      const answer = answers.get(id);
-      return answer && isAnswered(answer)
+    const response = questions.map((question) => {
+      const { id, input } = question;
+      const answer = drafts.get(id);
+      return answer && isAnswered(question, answer)
         ? {
             ...answer,
             text: input?.preserveWhitespace ? answer.text : answer.text.trim(),
@@ -135,6 +142,17 @@ export function useUserQuestionForm({
     }
   }
 
+  async function respondOption(id: string) {
+    if (!isReview || !question.options.some((option) => option.id === id)) return;
+    await submit(
+      new Map(answers).set(question.id, {
+        selectedOptionIds: [id],
+        text: '',
+        skipped: false,
+      }),
+    );
+  }
+
   function advance() {
     if (!canAct) return;
     if (action === 'submit') void submit();
@@ -151,18 +169,43 @@ export function useUserQuestionForm({
     canAct,
     failed,
     index,
+    isReview,
     isComplete,
     locked,
     navigate,
     question,
     questions,
+    respondOption,
     select,
     skip,
-    submit,
+    submit: () => submit(),
     setText: (text: string) => change((current) => ({ ...current, text, skipped: false })),
   };
 }
 
-function isAnswered(answer: AnswerDraft | undefined) {
-  return Boolean(answer && (answer.selectedOptionIds.length > 0 || answer.text.trim()));
+function isAnswered(question: QuestionFormQuestion, answer: AnswerDraft | undefined) {
+  if (!answer) return false;
+  // Saving reviewed changes requires a choice, rather than a skip or an unresolved suggestion.
+  if (requiresChoice(question)) return answer.selectedOptionIds.length === 1 && !answer.text.trim();
+  return answer.selectedOptionIds.length > 0 || Boolean(answer.text.trim());
+}
+
+function requiresChoice(question: QuestionFormQuestion) {
+  return (
+    question.selection === 'single' &&
+    Boolean(question.textChanges?.length) &&
+    question.options.length > 0
+  );
+}
+
+function isFormComplete(
+  questions: readonly QuestionFormQuestion[],
+  answers: ReadonlyMap<string, AnswerDraft>,
+  allowSkip: boolean,
+) {
+  return questions.every(
+    (question) =>
+      (!requiresChoice(question) && !(question.required ?? !allowSkip)) ||
+      isAnswered(question, answers.get(question.id)),
+  );
 }

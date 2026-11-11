@@ -101,8 +101,8 @@ test('shows exact changes through the existing question port, then replaces the 
     description: expect.stringContaining('所有'),
     textChanges: [{ before, after: '', reason: input.changes[0]!.reason }],
     options: [
-      { id: 'adapt', label: '适配并继续' },
-      { id: 'keep', label: '这次不修改' },
+      { id: 'adapt', label: '保存并继续' },
+      { id: 'keep', label: '保持原样' },
     ],
   });
   expect(result.value).toMatchObject({

@@ -43,6 +43,10 @@ message list keeps its geometry and selection does not subscribe into the chat r
   session; its text and attachments stay intact.
   The composer also reuses this sheet for MCP prompt parameters, with per-field requirements and a
   cancel action. Conversation questions keep their existing skip policy and non-dismissible behavior.
+  A single-choice question carrying reviewed text changes instead presents the decisions directly
+  as fixed footer buttons. The body contains only the explanation and before/after text, without
+  radio options, a free-text field or an extra submit step. Pressing a footer action submits that
+  decision immediately; both actions lock while it is being saved and become available on failure.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound
@@ -120,6 +124,10 @@ ConversationApprovals shows decisions only: it reads the interaction input (inli
 deferred for desktop), uses the bound response action and cancels only the execution associated
 with the displayed approval. Pending questions never open the approval sheet; desktop question
 forms use the same `ConversationQuestionSheet` as local questions.
+Approval overlays, like question sheets, only open while their source is current, so a disconnected
+or refreshing source leaves recovery controls reachable. Known local tools use translated titles;
+Skill creation and installation show readable operation-specific content, with raw arguments behind
+an explicit details action.
 
 The matching desktop protocol supports question answers and system-workspace creation. Question
 forms consume a bound resource; responses carry complete answers rather than a boolean approval.

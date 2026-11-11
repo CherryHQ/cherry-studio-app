@@ -28,7 +28,9 @@ const inputSchema = z.strictObject({
           .trim()
           .min(1)
           .max(300)
-          .describe('Explain the unsupported step and replacement in the user’s language.'),
+          .describe(
+            'Explain what changes for the user and why it helps on mobile, in the user’s language. Avoid internal tool names unless necessary.',
+          ),
         kind: z.enum(['replace-execution', 'remove-optional']),
         replacement_tools: z
           .array(z.string().min(1))
