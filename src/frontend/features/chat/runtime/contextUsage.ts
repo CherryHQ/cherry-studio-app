@@ -8,7 +8,7 @@ export type ContextUsageSource = Readonly<{
   modelId: UniqueModelId;
   providerId: string;
   providerModelId: string;
-  stats: Pick<MessageStats, 'contextTokens' | 'inputTokens' | 'inputTokenDetails'>;
+  stats: Pick<MessageStats, 'contextTokens'>;
 }>;
 
 /** Select only the newest terminal assistant on the already-selected branch. */
@@ -39,8 +39,6 @@ export function selectContextUsageSource(input: {
       providerModelId: model.modelId,
       stats: {
         contextTokens: stats?.contextTokens,
-        inputTokens: stats?.inputTokens,
-        inputTokenDetails: stats?.inputTokenDetails,
       },
     };
   }

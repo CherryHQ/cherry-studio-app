@@ -88,12 +88,13 @@ function activeTargets() {
 describe('Composer.Editor', () => {
   let renderer: ReactTestRenderer;
   const activeSignal = signal(false);
-  const renderEditor = (active: boolean) => (
+  const renderEditor = (active: boolean, restingTrailingActionCount = 1) => (
     <ComposerEditor
       active={active}
       activeSignal={activeSignal}
       expandLabel="Expand"
       field={<View />}
+      restingTrailingActionCount={restingTrailingActionCount}
     />
   );
 
@@ -108,6 +109,19 @@ describe('Composer.Editor', () => {
   });
 
   afterEach(() => act(() => renderer.unmount()));
+
+  it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {
+    const fieldInsets = () =>
+      renderer.root
+        .findAllByType(View)
+        .map((view) => view.props.style)
+        .find((style) => typeof style?.left === 'number' && typeof style?.right === 'number');
+    expect(fieldInsets()).toMatchObject({ left: 40, right: 40 });
+    act(() => renderer.update(renderEditor(false, 2)));
+    expect(fieldInsets()).toMatchObject({ left: 40, right: 80 });
+    act(() => renderer.update(renderEditor(false)));
+    expect(fieldInsets()).toMatchObject({ left: 40, right: 40 });
+  });
 
   it('starts the short shape change from the signal and ignores the later commit', () => {
     activeSignal.set(true);

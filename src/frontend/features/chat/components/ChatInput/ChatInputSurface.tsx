@@ -4,14 +4,7 @@ import {
   type ComposerInputProps,
   useComposerExpansion,
 } from '@cherrystudio/ui/components';
-import {
-  type ComponentProps,
-  type PropsWithChildren,
-  type ReactNode,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
 
@@ -20,7 +13,6 @@ import {
   ComposerEditorAccessories,
   ComposerSurface,
   useComposerPresentationState,
-  useComposerPresentationActions,
   useComposerState,
   useComposerSubmit,
 } from '@/frontend/components/Composer';
@@ -32,9 +24,8 @@ import { DictationCancelAction } from '../../voice/DictationCancelAction';
 import { DictationStatus } from '../../voice/DictationStatus';
 import { useDictation } from '../../voice/useDictation';
 import { useDictationAvailability } from '../../voice/useDictationAvailability';
-import { ContextUsageDetail } from './components/ContextUsageDetail';
 import { ContextUsageRing } from './components/ContextUsageRing';
-import { deriveContextUsage, formatContextUsagePercent } from './utils/contextUsage';
+import type { ContextUsage } from './utils/contextUsage';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
@@ -52,7 +43,7 @@ export function ChatInputAccessories({ children }: PropsWithChildren) {
 }
 
 type ChatInputSurfaceProps = {
-  contextUsage?: ReturnType<typeof deriveContextUsage>;
+  contextUsage?: ContextUsage;
   contextUsageSessionId?: string;
   contextUsageMessageId?: string;
   leadingAction?: ReactNode;
@@ -126,20 +117,7 @@ function ChatInputLayout({
   status?: ReactNode;
   renderPrimary?: (send: ReactNode) => ReactNode;
 }) {
-  const { t, i18n } = useTranslation();
-  const { runInputReplacement } = useComposerPresentationActions();
-  const owner = contextUsage
-    ? JSON.stringify([contextUsageSessionId, contextUsageMessageId])
-    : undefined;
-  const [ownership, setOwnership] = useState({ owner, generation: 0 });
-  if (ownership.owner !== owner) {
-    setOwnership({ owner, generation: ownership.generation + 1 });
-  }
-  const ownerRef = useRef(ownership);
-  useLayoutEffect(() => {
-    ownerRef.current = ownership;
-  }, [ownership]);
-  const [sheetOwner, setSheetOwner] = useState<{ owner: string; generation: number }>();
+  const { t } = useTranslation();
   const [submitOnReturn] = usePreference('chat.input.enter_to_send');
   const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
@@ -154,75 +132,44 @@ function ChatInputLayout({
   );
   const ring = contextUsage ? (
     <ContextUsageRing
-      arcRatio={contextUsage.arcRatio}
-      severity={contextUsage.severity}
-      label={
-        contextUsage.ratio === undefined
-          ? t('chat.contextUsage.accessibilityUnavailable')
-          : t('chat.contextUsage.accessibilityLabel', {
-              percent: formatContextUsagePercent(
-                contextUsage.ratio,
-                i18n.resolvedLanguage ?? i18n.language,
-              ),
-            })
-      }
-      onPress={() => {
-        const captured = ownerRef.current;
-        void runInputReplacement(() => {
-          if (captured.owner && ownerRef.current === captured)
-            setSheetOwner({ owner: captured.owner, generation: captured.generation });
-        });
-      }}
+      key={JSON.stringify([contextUsageSessionId, contextUsageMessageId])}
+      usage={contextUsage}
       testID={isEditing ? 'chat-context-usage-editing' : 'chat-context-usage-compact'}
     />
   ) : null;
   return (
-    <>
-      <ComposerEditor
-        compactAccessory={!active ? ring : undefined}
-        active={active}
-        attachmentMode={attachmentMode}
-        fieldStyle={fieldStyle}
-        onLinkPress={onLinkPress}
-        onReturnSubmit={submit}
-        placeholder={placeholder}
-        submitOnReturn={submitOnReturn}
-        testID="chat-composer"
-      >
-        {leadingAction ?? <View className="w-8" />}
-        {status ?? <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>}
-        {streaming && hasFollowUp && onStop ? (
-          <Composer.EditorSecondary>
-            <Composer.Action
-              accessibilityLabel={t('chat.input.action.stopGenerating')}
-              className="bg-transparent"
-              onPress={onStop}
-              testID="chat-composer-stop"
-            >
-              <PauseIcon className="size-6 text-foreground" />
-            </Composer.Action>
-          </Composer.EditorSecondary>
-        ) : null}
-        <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-          {active ? ring : null}
-          {trailingAction ? (
-            <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
-          ) : null}
-          {renderPrimary ? renderPrimary(send) : send}
-        </View>
-      </ComposerEditor>
-      {contextUsage &&
-      owner &&
-      sheetOwner?.owner === owner &&
-      sheetOwner.generation === ownership.generation ? (
-        <ContextUsageDetail
-          open
-          onClose={() => setSheetOwner(undefined)}
-          usage={contextUsage}
-          sessionId={contextUsageSessionId}
-          testID="chat-context-usage-detail"
-        />
+    <ComposerEditor
+      restingTrailingActionCount={contextUsage ? 2 : 1}
+      active={active}
+      attachmentMode={attachmentMode}
+      fieldStyle={fieldStyle}
+      onLinkPress={onLinkPress}
+      onReturnSubmit={submit}
+      placeholder={placeholder}
+      submitOnReturn={submitOnReturn}
+      testID="chat-composer"
+    >
+      {leadingAction ?? <View className="w-8" />}
+      {status ?? <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>}
+      {streaming && hasFollowUp && onStop ? (
+        <Composer.EditorSecondary>
+          <Composer.Action
+            accessibilityLabel={t('chat.input.action.stopGenerating')}
+            className="bg-transparent"
+            onPress={onStop}
+            testID="chat-composer-stop"
+          >
+            <PauseIcon className="size-6 text-foreground" />
+          </Composer.Action>
+        </Composer.EditorSecondary>
       ) : null}
-    </>
+      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+        {trailingAction ? (
+          <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
+        ) : null}
+        {ring}
+        {renderPrimary ? renderPrimary(send) : send}
+      </View>
+    </ComposerEditor>
   );
 }

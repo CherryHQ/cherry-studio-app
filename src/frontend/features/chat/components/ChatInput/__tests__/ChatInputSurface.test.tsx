@@ -5,7 +5,6 @@ import { deriveContextUsage } from '../utils/contextUsage';
 
 let mockEditing = false;
 let mockDraft = '';
-let mockPresent: (() => void) | undefined;
 const mockStop = jest.fn();
 const mockSubmit = jest.fn();
 jest.mock('react-i18next', () => ({
@@ -35,22 +34,19 @@ jest.mock('@/frontend/components/Composer', () => {
     ComposerEditorAccessories: ({ children }: any) => children,
     ComposerSurface: ({ children }: any) => children,
     useComposerPresentationState: () => ({ isEditing: mockEditing }),
-    useComposerPresentationActions: () => ({
-      runInputReplacement: (present: () => void) => {
-        mockPresent = present;
-        return Promise.resolve();
-      },
-    }),
     useComposerState: () => ({ draft: mockDraft, attachments: [] }),
     useComposerSubmit: () => mockSubmit,
   };
 });
-jest.mock('../components/ContextUsageRing', () => ({
-  ContextUsageRing: (props: object) => jest.requireActual('react').createElement('Ring', props),
-}));
-jest.mock('../components/ContextUsageDetail', () => ({
-  ContextUsageDetail: (props: object) => jest.requireActual('react').createElement('Detail', props),
-}));
+jest.mock('../components/ContextUsageRing', () => {
+  const React = jest.requireActual('react');
+  return {
+    ContextUsageRing: function MockRing(props: object) {
+      const [open, setOpen] = React.useState(false);
+      return React.createElement('Ring', { ...props, open, onPress: () => setOpen(true) });
+    },
+  };
+});
 jest.mock('../../../voice/DictationCancelAction', () => ({ DictationCancelAction: () => null }));
 jest.mock('../../../voice/DictationStatus', () => ({ DictationStatus: () => null }));
 jest.mock('../../../voice/useDictation', () => ({ useDictation: () => ({ state: 'idle' }) }));
@@ -79,24 +75,21 @@ describe('ChatInputSurface', () => {
   beforeEach(() => {
     mockEditing = false;
     mockDraft = '';
-    mockPresent = undefined;
   });
   afterEach(() => act(() => renderer.unmount()));
-  test('hands off before opening one sheet and preserves dictation and follow-up actions', () => {
+  test('keeps one right-side trigger and its open state while editing changes', () => {
     act(() => {
       renderer = create(render());
     });
     expect(ring().props.testID).toBe('chat-context-usage-compact');
     act(() => ring().props.onPress());
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(0);
-    act(() => mockPresent!());
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(1);
-    act(() => renderer.root.findByType('Detail' as never).props.onClose());
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(0);
+    expect(ring().props.open).toBe(true);
     mockEditing = true;
     mockDraft = 'draft';
     act(() => renderer.update(render()));
     expect(ring().props.testID).toBe('chat-context-usage-editing');
+    expect(renderer.root.findAllByType('Ring' as never)).toHaveLength(1);
+    expect(ring().props.open).toBe(true);
     expect(renderer.root.findByProps({ testID: 'chat-composer-stop' }).props.onPress).toBe(
       mockStop,
     );
@@ -105,19 +98,17 @@ describe('ChatInputSurface', () => {
     act(() => renderer.root.findByType('Editor' as never).props.onReturnSubmit('draft'));
     expect(mockSubmit).toHaveBeenCalledWith('draft');
   });
-  test('cancels a delayed opening when the owner changes, including a return to the old owner', () => {
+  test('closes the old measurement when its owner changes, including returning to the old owner', () => {
     act(() => {
       renderer = create(render());
     });
     act(() => ring().props.onPress());
     act(() => renderer.update(render('other')));
     act(() => renderer.update(render()));
-    act(() => mockPresent!());
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(0);
+    expect(ring().props.open).toBe(false);
     act(() => ring().props.onPress());
-    act(() => mockPresent!());
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(1);
+    expect(ring().props.open).toBe(true);
     act(() => renderer.update(render('other')));
-    expect(renderer.root.findAllByType('Detail' as never)).toHaveLength(0);
+    expect(ring().props.open).toBe(false);
   });
 });

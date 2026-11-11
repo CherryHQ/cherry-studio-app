@@ -1,10 +1,13 @@
-import { deriveContextUsage, formatContextUsagePercent, getCacheHitRate } from '../contextUsage';
+import {
+  deriveContextUsage,
+  formatContextCapacity,
+  formatContextUsagePercent,
+} from '../contextUsage';
 
 describe('context usage', () => {
   it('uses the last request measurement and declared capacity', () => {
-    expect(deriveContextUsage(1000, { contextTokens: 796, inputTokens: 1200 })).toMatchObject({
+    expect(deriveContextUsage(1000, { contextTokens: 796 })).toMatchObject({
       used: 796,
-      remaining: 204,
       ratio: 0.796,
       severity: 'primary',
     });
@@ -13,7 +16,6 @@ describe('context usage', () => {
     expect(deriveContextUsage(1000, { contextTokens: 950 })?.severity).toBe('error');
     expect(deriveContextUsage(1000, { contextTokens: 1100 })).toMatchObject({
       used: 1100,
-      remaining: 0,
       arcRatio: 1,
     });
   });
@@ -23,17 +25,10 @@ describe('context usage', () => {
     expect(deriveContextUsage(100, { contextTokens: 0 })?.used).toBeUndefined();
     expect(deriveContextUsage(100, { contextTokens: NaN })?.used).toBeUndefined();
   });
-  it('validates attributed cache buckets without reconstructing input', () => {
-    expect(getCacheHitRate(100, { cacheReadTokens: 0 })).toBe(0);
-    expect(getCacheHitRate(100, { cacheReadTokens: 30, cacheWriteTokens: 20 })).toBe(0.3);
-    expect(getCacheHitRate(undefined, { cacheReadTokens: 30 })).toBeUndefined();
-    expect(getCacheHitRate(100, { cacheReadTokens: 101 })).toBeUndefined();
-    expect(getCacheHitRate(100, { cacheReadTokens: 30, cacheWriteTokens: -1 })).toBeUndefined();
-    expect(
-      getCacheHitRate(100, { noCacheTokens: 50, cacheReadTokens: 30, cacheWriteTokens: 10 }),
-    ).toBeUndefined();
-    expect(
-      getCacheHitRate(100, { noCacheTokens: 60, cacheReadTokens: 30, cacheWriteTokens: 10 }),
-    ).toBe(0.3);
+  it('keeps capacities in thousands with language-aware decimals', () => {
+    expect(formatContextCapacity(200_000, 'en-US')).toBe('200');
+    expect(formatContextCapacity(8_192, 'en-US')).toBe('8.2');
+    expect(formatContextCapacity(8_192, 'de-DE')).toBe('8,2');
+    expect(formatContextCapacity(1_000_000, 'en-US')).toBe('1,000');
   });
 });

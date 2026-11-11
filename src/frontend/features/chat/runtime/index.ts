@@ -3,7 +3,6 @@ export {
   ChatProvider,
   type PendingChatSend,
   useAgentChatControls,
-  useAgentContextStatus,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
   useAgentChatClient,

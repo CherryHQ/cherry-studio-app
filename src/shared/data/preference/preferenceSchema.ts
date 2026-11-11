@@ -55,7 +55,6 @@ export interface PreferenceSchema {
 
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
-  'chat.cache_hit_rate.enabled': boolean;
   'chat.completion_notifications.enabled': boolean;
   'chat.multi_model.cards_enabled': boolean;
   'chat.process.auto_collapse': boolean;
@@ -117,7 +116,6 @@ export const PreferenceDefaults = {
   'app.background_run_guidance.seen': false,
 
   'chat.background_reply.enabled': true,
-  'chat.cache_hit_rate.enabled': false,
   'chat.completion_notifications.enabled': true,
   'chat.multi_model.cards_enabled': true,
   'chat.process.auto_collapse': true,
