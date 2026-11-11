@@ -43,10 +43,12 @@ message list keeps its geometry and selection does not subscribe into the chat r
   session; its text and attachments stay intact.
   The composer also reuses this sheet for MCP prompt parameters, with per-field requirements and a
   cancel action. Conversation questions keep their existing skip policy and non-dismissible behavior.
-  A single-choice question carrying reviewed text changes instead presents the decisions directly
-  as fixed footer buttons. The body contains only the explanation and before/after text, without
-  radio options, a free-text field or an extra submit step. Pressing a footer action submits that
-  decision immediately; both actions lock while it is being saved and become available on failure.
+  A form containing only one single-choice question with reviewed text changes instead presents
+  the decisions directly as fixed footer buttons. The body contains only the explanation and
+  before/after text, without radio options, a free-text field or an extra submit step. Pressing a
+  footer action submits that decision immediately; both actions lock while it is being saved and
+  become available on failure. Multi-question requests retain ordinary choices, free text and skip
+  policies, and submit all answers together even when questions include reviewed text changes.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound

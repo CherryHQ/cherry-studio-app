@@ -60,10 +60,15 @@ export function useUserQuestionForm({
   const answer = answers.get(question.id) ?? emptyAnswer;
   const locked = disabled || busy;
   const isLast = index === questions.length - 1;
-  const answered = isAnswered(question, answer);
-  const isReview = requiresChoice(question);
+  // Direct decisions settle the whole request; multi-question forms keep ordinary drafts.
+  const isReview =
+    questions.length === 1 &&
+    question.selection === 'single' &&
+    Boolean(question.textChanges?.length) &&
+    question.options.length > 0;
+  const answered = isAnswered(answer, isReview);
   const canSkip = !isReview && !(question.required ?? !allowSkip);
-  const isComplete = isFormComplete(questions, answers, allowSkip);
+  const isComplete = isFormComplete(questions, answers, allowSkip, isReview);
   const action: 'submit' | 'next' | 'skip' = isLast
     ? 'submit'
     : answered || !canSkip
@@ -107,7 +112,7 @@ export function useUserQuestionForm({
       disabled ||
       submitting.current ||
       !active.current ||
-      !isFormComplete(questions, drafts, allowSkip)
+      !isFormComplete(questions, drafts, allowSkip, isReview)
     )
       return;
     submitting.current = true;
@@ -117,7 +122,7 @@ export function useUserQuestionForm({
     const response = questions.map((question) => {
       const { id, input } = question;
       const answer = drafts.get(id);
-      return answer && isAnswered(question, answer)
+      return answer && isAnswered(answer, isReview)
         ? {
             ...answer,
             text: input?.preserveWhitespace ? answer.text : answer.text.trim(),
@@ -183,29 +188,22 @@ export function useUserQuestionForm({
   };
 }
 
-function isAnswered(question: QuestionFormQuestion, answer: AnswerDraft | undefined) {
+function isAnswered(answer: AnswerDraft | undefined, isReview: boolean) {
   if (!answer) return false;
   // Saving reviewed changes requires a choice, rather than a skip or an unresolved suggestion.
-  if (requiresChoice(question)) return answer.selectedOptionIds.length === 1 && !answer.text.trim();
+  if (isReview) return answer.selectedOptionIds.length === 1 && !answer.text.trim();
   return answer.selectedOptionIds.length > 0 || Boolean(answer.text.trim());
-}
-
-function requiresChoice(question: QuestionFormQuestion) {
-  return (
-    question.selection === 'single' &&
-    Boolean(question.textChanges?.length) &&
-    question.options.length > 0
-  );
 }
 
 function isFormComplete(
   questions: readonly QuestionFormQuestion[],
   answers: ReadonlyMap<string, AnswerDraft>,
   allowSkip: boolean,
+  isReview: boolean,
 ) {
   return questions.every(
     (question) =>
-      (!requiresChoice(question) && !(question.required ?? !allowSkip)) ||
-      isAnswered(question, answers.get(question.id)),
+      (!isReview && !(question.required ?? !allowSkip)) ||
+      isAnswered(answers.get(question.id), isReview),
   );
 }

@@ -221,6 +221,47 @@ const review: QuestionFormQuestion = {
   textChanges: [{ before: 'Old instructions', after: 'New instructions', reason: 'Use on mobile' }],
 };
 
+test.each(['skip', 'text'] as const)(
+  'preserves the %s answer to reviewed text alongside another question until submission',
+  async (mode) => {
+    act(() =>
+      renderer.update(
+        <Harness
+          key={`mixed-review-${mode}`}
+          value={[review, { ...questions[2], required: true }]}
+        />,
+      ),
+    );
+    if (mode === 'skip') {
+      act(() => form.skip());
+    } else {
+      act(() => form.setText('Please revise this step'));
+      act(() => form.advance());
+    }
+    expect(form.index).toBe(1);
+    expect(respond).not.toHaveBeenCalled();
+    act(() => form.navigate(0));
+    expect(form.answer).toEqual({
+      selectedOptionIds: [],
+      text: mode === 'text' ? 'Please revise this step' : '',
+      skipped: mode === 'skip',
+    });
+    act(() => form.navigate(1));
+    act(() => form.setText('More context'));
+    await act(async () => form.advance());
+    expect(respond).toHaveBeenCalledTimes(1);
+    expect(respond).toHaveBeenCalledWith([
+      {
+        questionId: 'review',
+        selectedOptionIds: [],
+        text: mode === 'text' ? 'Please revise this step' : '',
+        skipped: mode === 'skip',
+      },
+      { questionId: 'notes', selectedOptionIds: [], text: 'More context', skipped: false },
+    ]);
+  },
+);
+
 test.each(['adapt', 'keep'])(
   'submits the %s review decision directly without a prior selection',
   async (id) => {
