@@ -56,11 +56,12 @@ column widths with horizontal scrolling for wide tables. Markdown keeps authored
 content and represents resources explicitly. The chat adapter excludes thinking and process blocks
 from every format.
 
-Selected model-authored text tells the export operation to remove obsolete declarations without
-inventing upstream identity. Labeled Markdown input inherits its declaration without displaying the
+Selected model-authored text tells the export operation to replace obsolete or model-authored
+declarations with a fresh `CherryStudio` application-service label. Each completed artifact retains
+its label when reused or saved. Labeled Markdown input inherits its declaration without displaying the
 AIGC header. HTML conversion reads metadata from the source and restores it on final PNG/PPTX
 outputs and previews after encoding. Temporary descriptors carry labels only for that operation;
 managed storage keeps the resulting bytes, with no new database field or source-fact record.
-Export artifacts remain reusable across retries. This adds no visible AI notice. Upstream identity
-coverage and pending native acceptance are described in
+Export artifacts remain reusable across retries. This adds no visible AI notice. Service identity
+policy and pending native acceptance are described in
 [AI Content Metadata](../../../../docs/references/ai-content-labeling-design.md).

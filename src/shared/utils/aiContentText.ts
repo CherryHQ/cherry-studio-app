@@ -134,7 +134,7 @@ export function readAiContentText(text: string, mediaType: string): AiContentLab
   return null;
 }
 
-/** Null clears a stale declaration on a new AI output without inventing replacement identity. */
+/** Null removes the AIGC declaration while preserving other metadata and content. */
 export function writeAiContentText(
   text: string,
   mediaType: string,

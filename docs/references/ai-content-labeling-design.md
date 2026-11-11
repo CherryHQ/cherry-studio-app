@@ -1,12 +1,13 @@
 # AI Content Metadata
 
-Status: **implemented; upstream identity coverage and native acceptance pending**.
+Status: **implemented; native acceptance and store evidence pending**.
 
-The client reads and writes implicit AI-content declarations in file metadata. Existing upstream
-AIGC declarations travel with unchanged or mechanically transformed content. The client does not
-invent a generation-service identity or upstream production identifier. Metadata completion and
-read-back precede publication of a changed file. No database field or separate source-fact record
-is added.
+The client reads and writes implicit AI-content declarations in file metadata. Known AI outputs
+without a usable upstream declaration automatically receive a `CherryStudio` application-service
+label and a new content identifier. New AI edits replace superseded declarations with a fresh
+application-service label. Valid original model-image declarations and unchanged or mechanically
+transformed content retain their inherited fields. Metadata completion and read-back precede
+publication of a changed file. No database field or separate source-fact record is added.
 
 The scope is file metadata. Visible AI notices, clipboard changes, additional brand watermarks,
 and distribution restrictions are outside this design. Existing text, image pixels, document
@@ -28,30 +29,42 @@ The adapters follow the final practice guides. HTML uses a proposed `head` meta 
 independent extraction compatibility still needs acceptance. SVG remains unimplemented. This design does not add a visible-label
 implementation or the agreement and logging workflow for delivery without visible labels.
 
-## Upstream Identity And Validation
+## Service Identity And Validation
 
-Cherry is an aggregation client in this implementation. There is no required global producer
-configuration and no automatic assignment of Cherry as either the generation-service provider or
-network-content propagator. A selected model, editable Provider nickname, protocol family or
-arbitrary relay endpoint does not establish a formal service identity. This technical policy does
-not determine the application's regulatory role.
+The automatic writer uses `CherryStudio` as this application's generation-service name, not a
+registration code, model-vendor identity, or arbitrary relay identity. This follows the product
+decision to declare the application's own generation service when no usable upstream declaration
+is available. No additional environment setting or user-entered provider name is required.
+That product decision does not establish regulatory registration or store approval. A selected
+model, editable Provider nickname, protocol family or arbitrary endpoint does not establish an
+upstream service identity.
 
 - Preserve the producer, production ID, propagator, propagation ID and declared confidence from an
   existing valid upstream label. Original model-image responses can supply such declarations.
-- Missing upstream identity does not block generation or editing and does not create an internal
-  source record or fabricated file label. AI text containing an AIGC header is not trusted as
-  upstream service metadata.
-- A new AI edit clears superseded AIGC declarations from its pending supported-format output;
-  historical source bytes remain intact. It cannot keep an old producer's ID for changed content.
+  Malformed or conflicting original model-image metadata remains an operation error; it is not
+  silently treated as missing metadata.
+- Known AI generation without an upstream declaration writes `Label="1"`, the application-service
+  name, and a newly allocated content UUID. Under Annex E's initial-write rule, the propagation
+  service and identifier match the production service and identifier. Reserved signature fields
+  are empty. No source record is created outside the file.
+- AI-authored text containing an AIGC header is not trusted as upstream service metadata. Replace
+  that declaration with the application's own label.
+- A new AI edit replaces superseded AIGC declarations on its pending supported-format output with
+  a new application-service content identifier; historical source bytes remain intact. It cannot
+  keep an old producer's ID or signature for changed content.
 - Mechanical transformations preserve inherited declarations. They never turn an unlabeled source
   into a complete label by assigning a local UUID or platform identity.
-- Cherry's existing managed entry IDs/revisions and temporary artifact IDs identify local files.
-  They are separate from `ProduceID` and `PropagateID` and are not exported as upstream IDs.
+- Ordinary files and unlabeled mechanical conversions do not receive an AI classification merely
+  because they pass through this module.
+- Cherry's managed entry IDs/revisions and temporary artifact IDs identify local files. The
+  automatic writer allocates a separate content UUID for its application-service declaration;
+  none of these identifiers is represented as issued by an upstream model service.
 
-Without an upstream label, even an implemented writer does not establish complete GB 45438 Annex E
-coverage. Full coverage requires upstream service identity/content information, or a separately confirmed application-service operator role and
-identity. Empty or invented provider values and private AI flags are not treated as substitutes.
-Existing carrier read/write failures for established declarations remain operation errors.
+Automatic writes address missing upstream declarations for the supported file carriers. They do
+not establish complete coverage for unsupported formats or replace operator-role confirmation,
+native acceptance, independent extraction, or store evidence. Empty or invented provider values
+and private AI flags are not substitutes. Carrier write/read-back failures remain operation errors
+for both inherited and automatically created labels.
 
 This capability reads and writes TC260 `AIGC` declarations. C2PA signed Content Credentials and
 model-level watermarks such as SynthID are separate provenance mechanisms. Unchanged file copies
@@ -83,10 +96,10 @@ labels read from their bytes.
 
 | Producing path | Metadata handling |
 | --- | --- |
-| Agent `write_file` and `edit_file` | Clear superseded declarations on the new output without assigning an unconfirmed producer |
-| Office creation, editing, and script outputs | Clear obsolete AIGC properties on new AI outputs; read-only scripts create no file |
-| Agent image generation, image tools, and painting jobs | Retain a valid declaration from an original model response; otherwise add no fabricated label |
-| Chat exports containing model answers | Clear obsolete or model-authored declarations; do not infer service identity from reply text |
+| Agent `write_file` and `edit_file` | Write a fresh application-service label on supported-format AI outputs, replacing superseded declarations |
+| Office creation, editing, and script outputs | Write a fresh application-service AIGC property; read-only scripts create no file |
+| Agent image generation, image tools, and painting jobs | Retain a valid declaration from an original model response; otherwise write an application-service label |
+| Chat exports containing model answers | Replace obsolete or model-authored declarations with an application-service label; retain it on artifact reuse and saving |
 | Labeled Markdown and HTML conversion | Read the source declaration and restore it in the output carrier after rendering |
 | Imported files | Read existing labels before normalization or compression and restore them afterward |
 | Cropping, rotation, and brand composition | Capture source metadata before encoding and restore it afterward |
@@ -94,8 +107,8 @@ labels read from their bytes.
 | MCP results, desktop resources, downloads, and historical files | Keep existing metadata without guessing origin from filenames or provenance values |
 
 Parsed upstream metadata is a source declaration, not authenticated provenance. A new AI
-modification supersedes the previous content declaration and does not allocate an upstream
-production ID locally.
+modification supersedes the previous content declaration. Its new identifier belongs to the
+application service, not the upstream model service.
 
 ## Fields And Identifiers
 
@@ -103,13 +116,13 @@ Use the seven Annex E fields, with string values and one canonical metadata labe
 
 | Field | Rule |
 | --- | --- |
-| `Label` | Retain the upstream declaration: `"1"` (AI-generated), `"2"` (possibly AI-generated), or `"3"` (suspected AI-generated); a producing operation alone does not synthesize a full label |
-| `ContentProducer` | The upstream declaration's service-provider name or code; never inferred from a model or editable Provider nickname |
-| `ProduceID` | The content identifier assigned by the upstream producer; a local file UUID is separate |
-| `ReservedCode1` | Retain the upstream value; this client creates no generation-service signature |
-| `ContentPropagator` | Retain the declared propagation-service identity independently of the producer; local saving does not automatically assign Cherry this role |
-| `PropagateID` | Retain the upstream propagation identifier independently of the production ID; local copies do not fabricate one |
-| `ReservedCode2` | Retain the upstream value; this client creates no propagation-service signature |
+| `Label` | Automatically created labels use `"1"` for known AI output; inherited declarations retain `"1"`, `"2"` (possibly AI-generated), or `"3"` (suspected AI-generated) |
+| `ContentProducer` | `CherryStudio` for an application-service label, otherwise the inherited service-provider name or code; never inferred from a model or editable Provider nickname |
+| `ProduceID` | A fresh content UUID for an application-service label, otherwise the inherited producer's identifier; local managed-file identity is separate |
+| `ReservedCode1` | Empty for a new application-service label; retain the inherited value for unchanged or mechanically transformed content |
+| `ContentPropagator` | Equal to `ContentProducer` on an application's initial write under Annex E; inherited propagation-service identity remains independent |
+| `PropagateID` | Equal to `ProduceID` on an application's initial write; inherited propagation identifiers remain independent |
+| `ReservedCode2` | Empty for a new application-service label; retain the inherited value for unchanged or mechanically transformed content |
 
 Each adapter owns serialization. XMP's `TC260:AIGC` property and the Office custom property named
 `AIGC` contain a JSON string of the seven fields. Markdown uses an `AIGC` mapping in its header.
@@ -117,8 +130,9 @@ Do not add another `AIGC` wrapper indiscriminately inside properties already nam
 Validate character ranges against Annex E and use a confirmed ASCII provider name or identifier.
 Placeholder provider values must never reach production files.
 
-- New AI content or edits receive the existing local file/artifact identity or draft revision.
-  They do not receive a fabricated upstream production identifier.
+- New AI content or edits receive the existing local file/artifact identity or draft revision and,
+  when labeled by the application, a separate new service-content UUID. This is not an upstream
+  production identifier.
 - Preserve production identifiers for unchanged copies, renames, moves, and mechanical
   transformations. Record derivative relationships internally rather than claiming the identifier
   is a hash of every resulting file.
@@ -133,8 +147,9 @@ then contain its own digest.
 
 ## Format Coverage
 
-These adapters preserve or write established upstream declarations. Their availability does not
-establish in-file coverage for new AI content when the upstream service supplies no usable label.
+These adapters preserve inherited declarations and automatically write application-service labels
+for known AI outputs without usable upstream metadata. Carrier availability alone does not establish
+native fidelity, independent extraction compatibility, or complete store-facing coverage.
 
 | Format | Metadata location | Preservation and coverage |
 | --- | --- | --- |
@@ -171,7 +186,7 @@ until the output metadata is restored and read back.
 | File service | Identify formats and dispatch metadata reads/writes |
 | File creation and draft rewriting | Complete metadata handling before publishing bytes and committing the final size |
 | Office service | Process custom properties in the existing compute sandbox |
-| Document export service | Restore inherited labels on temporary outputs; clear obsolete declarations on AI-authored outputs |
+| Document export service | Restore inherited labels on temporary outputs; write application-service declarations on AI-authored outputs |
 | App-shell file export | Restore source metadata after brand composition; keep ordinary byte-copy delivery |
 | File reading and text-editing tools | Preserve reading presentation and return coordinates matching final stored text |
 
@@ -186,8 +201,8 @@ For generation or AI editing:
 
 1. The producing workflow declares AI origin independently of service identity.
 2. Finish content processing into the pending output.
-3. Inherit a valid original model-image declaration. Otherwise clear superseded AIGC metadata
-   from supported-format AI outputs without inventing a replacement.
+3. Inherit a valid original model-image declaration. Otherwise replace superseded or AI-authored
+   AIGC metadata with a fresh application-service declaration on supported-format AI outputs.
 4. Read completed metadata changes back, record the final size, and publish the version.
 5. Unsupported formats retain their original content without an in-file claim.
 
@@ -207,8 +222,8 @@ content encode before restoring that metadata on the output.
 Read back that completed output before publication. Import normalization reads source metadata
 before compression. Cropping, rotation, screenshots, chat exports, HTML conversion, and brand
 composition follow this rule wherever they produce new bytes. Mechanical transformations preserve
-production information; a new AI edit clears the superseded declaration and records the new local
-version without inventing upstream production information.
+production information; a new AI edit replaces the superseded declaration with a new application
+content identifier and records the new local version without inventing upstream production information.
 
 Unchanged saves, copies, uploads, shares, and system opens carry the existing metadata without
 another labeling operation. Enterprise WeChat and other upload tools do not need to route files
@@ -222,8 +237,8 @@ the body and existing treatment of other authored content. HTML and Office use t
 metadata locations without changing document layout.
 
 `read_file` and `edit_file` operate on actual stored text so exact replacements and line numbers
-agree. If an AI edit removes or changes Markdown header metadata, calculate or adjust the returned
-snippet and starting line from the final persisted text. Preserve exact-text copying without
+agree. After an AI edit adds or changes Markdown/HTML metadata, read the final persisted text to
+calculate the returned snippet and starting line. Preserve exact-text copying without
 adding a visible notice.
 
 Bind read-back to the actual published file. If a new artifact needs a stable copy, complete that
@@ -241,10 +256,11 @@ delivery; system-sharing and permission ownership remain unchanged.
 
 ## Unsupported Formats, Historical Files, And Errors
 
-Missing upstream identity and unsupported carriers do not block ordinary generation, editing or
-delivery. Do not fabricate a replacement label. Source inspection is best-effort for ordinary files
-without an established declaration. Once a valid label is captured, carrier write/read-back errors
-and cancellation use existing operation handling and must not publish an incomplete replacement.
+Missing upstream identity triggers application-service labeling for known AI outputs in supported
+formats; it does not require a provider setting. Unsupported carriers retain ordinary generation,
+editing and delivery behavior. Source inspection is best-effort for ordinary files without an
+established declaration. For inherited or automatically created labels, carrier write/read-back
+errors and cancellation use existing operation handling and must not publish an incomplete replacement.
 
 Do not rewrite historical bytes in bulk or require repair before ordinary opening, copying, or
 sharing. A later AI edit or transformation follows the corresponding new-output workflow. An
@@ -278,7 +294,7 @@ samples, extracted metadata, screenshots, recordings, a manifest, and the explan
 
 | Phase | Work | Completion evidence |
 | --- | --- | --- |
-| Metadata and common rules | Fields, upstream role separation, source-file inheritance, format capabilities, and error results | AI edits clear superseded declarations; mechanical conversion restores source metadata; unchanged copies retain their bytes |
+| Metadata and common rules | Fields, application-service creation, upstream role separation, source-file inheritance, format capabilities, and error results | Known AI outputs are labeled; AI edits receive new application content identifiers; mechanical conversion restores source metadata; unchanged copies retain their bytes |
 | Text and Office files | HTML, Markdown, DOCX, XLSX, PPTX; creation, edits, scripts, and temporary exports | Final-file metadata is readable; body and unrelated package parts survive; Markdown edit coordinates match stored text |
 | Images and transformations | PNG, JPEG, WebP, GIF; generation, normalization, editing, capture, and brand composition | Metadata survives final encoding; metadata writes preserve pixels, animation, and transparency |
 | Actual evidence | Independent extraction, real samples, and technical explanation | Coverage matches the installation package, exposed paths, and final sample bytes |
@@ -289,10 +305,10 @@ Office-part preservation, verify text-edit coordinates, and extract labels from 
 uploaded samples independently. Record platform-specific behavior, including Photos and sharing
 when iOS is included. These are planned acceptance criteria, not completed results.
 
-Complete store-facing coverage still needs formal upstream identity/content information or a
-confirmed application-service identity and responsibility, independent HTML carrier acceptance,
-and target-store evidence templates. Unsupported raw-data and source-code carriers remain outside the claimed coverage
-without becoming a reason to disable existing features.
+Complete store-facing coverage still needs application-operator responsibility and registration
+to match the declared service, native acceptance, independent HTML carrier acceptance, and target-store
+evidence templates. Unsupported raw-data and source-code carriers remain outside the claimed
+coverage without becoming a reason to disable existing features.
 
 ## Related Owners
 

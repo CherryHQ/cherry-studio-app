@@ -22,11 +22,26 @@ export type AiContentWrite = {
 };
 
 const IMAGES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+/** Application generation-service name; not a model vendor or registration code. */
+const CONTENT_PRODUCER = 'CherryStudio';
 const OFFICE: Record<string, 'docx' | 'xlsx' | 'pptx'> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
 };
+
+function createApplicationLabel(): AiContentLabel {
+  const contentId = createOrderedUuid();
+  return AiContentLabelSchema.parse({
+    Label: '1',
+    ContentProducer: CONTENT_PRODUCER,
+    ProduceID: contentId,
+    ReservedCode1: '',
+    ContentPropagator: CONTENT_PRODUCER,
+    PropagateID: contentId,
+    ReservedCode2: '',
+  });
+}
 
 function imageSource(file: File) {
   const handle = file.open(FileMode.ReadOnly);
@@ -110,25 +125,25 @@ export async function completeFileAiContent(
     Boolean(OFFICE[mediaType]) ||
     mediaType === 'text/markdown' ||
     mediaType === 'text/html';
-  const file = new File(input.uri);
   let label = input.aiContentLabel ? AiContentLabelSchema.parse(input.aiContentLabel) : null;
+  if (!supported) return label;
+  const file = new File(input.uri);
   const isOriginalModelImage =
     input.aiOperation === 'generate' && input.aiContentLabel === undefined && IMAGES.has(mediaType);
   let existing: AiContentLabel | null = null;
-  if (supported && input.aiContentLabel !== null && (!input.aiOperation || isOriginalModelImage)) {
+  if (input.aiContentLabel !== null && (!input.aiOperation || isOriginalModelImage)) {
     existing =
       input.aiOperation || label
         ? await readFileAiContent({ uri: file.uri, mediaType }, signal)
         : await readSourceAiContent({ uri: file.uri, mediaType }, signal);
   }
   if (input.aiOperation) {
-    // Only original model-image responses may retain an upstream declaration for this output.
-    label = isOriginalModelImage ? existing : null;
+    // Only original model-image responses may establish upstream identity for this output.
+    // All other AI writes declare this application's service with a fresh content number.
+    label = (isOriginalModelImage && existing) || createApplicationLabel();
   } else if (input.aiContentLabel === undefined) label = existing;
-  if (!supported || (!label && !input.aiOperation)) return label;
-  if (label && JSON.stringify(existing) === JSON.stringify(label)) return label;
-  // A new AI edit cannot keep an old producer's declaration. Clear it on the pending output
-  // when no declaration for the new content is available.
+  if (!label) return null;
+  if (JSON.stringify(existing) === JSON.stringify(label)) return label;
   const temporary = new File(
     new Directory(file.parentDirectory.uri),
     createOrderedUuid() + '.metadata',
@@ -173,7 +188,9 @@ export async function completeFileAiContent(
       });
     } else {
       const { text, hasBom } = decodeManagedUtf8(await file.bytes(), file.size);
-      temporary.writeSync(writeAiContentText((hasBom ? '\uFEFF' : '') + text, mediaType, label));
+      let content = (hasBom ? '\uFEFF' : '') + text;
+      if (input.aiOperation) content = writeAiContentText(content, mediaType, null);
+      temporary.writeSync(writeAiContentText(content, mediaType, label));
     }
     signal?.throwIfAborted();
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);

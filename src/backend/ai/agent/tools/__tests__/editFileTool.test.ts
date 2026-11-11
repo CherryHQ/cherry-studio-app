@@ -1,8 +1,8 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
+import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/aiContent';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
-import { writeAiContentText } from '@/shared/utils/aiContentText';
+import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
 import type { ManagedFileFact } from '../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
@@ -17,6 +17,15 @@ import { WorkspaceFileAccess } from '../workspaceFileAccess';
 
 const SOURCE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const EDITED_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
+const APPLICATION_LABEL = AiContentLabelSchema.parse({
+  Label: '1',
+  ContentProducer: 'CherryStudio',
+  ProduceID: 'application-content-1',
+  ReservedCode1: '',
+  ContentPropagator: 'CherryStudio',
+  PropagateID: 'application-content-1',
+  ReservedCode2: '',
+});
 const NO_DRAFTS: TurnEditScope = {
   availableFiles: new Map(),
   fileEntryIds: new Set([SOURCE_ID, EDITED_ID]),
@@ -120,40 +129,48 @@ describe('editFileTool', () => {
     });
   });
 
-  test('returns final coordinates when an AI edit clears the previous content declaration', async () => {
-    const previousLabel = AiContentLabelSchema.parse({
-      Label: '1',
-      ContentProducer: 'ProviderExample',
-      ProduceID: 'content-1',
-      ReservedCode1: '',
-      ContentPropagator: 'RelayExample',
-      PropagateID: 'relay-1',
-      ReservedCode2: '',
-    });
-    const original = writeAiContentText(
-      'l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n',
-      'text/markdown',
-      previousLabel,
-    );
-    const files = createFiles(original);
-    const output = await execute(createEditFileTool(files), {
-      file_entry_id: SOURCE_ID,
-      old_string: 'old',
-      new_string: 'new',
-    });
-    const available = await files.resolveAvailable([EDITED_ID]);
-    const stored = new TextDecoder().decode(await files.readAsBytes(available.get(EDITED_ID)!));
-    const { snippet, snippetStartLine } = output.value as {
-      snippet: string;
-      snippetStartLine: number;
-    };
-    const lines = stored.split('\n');
-    expect(snippetStartLine).toBe(lines.indexOf('l2') + 1);
-    expect(snippetStartLine).toBe(2);
-    expect(stored).not.toContain('ContentProducer');
-    expect(lines.slice(snippetStartLine - 1, snippetStartLine + 4).join('\n') + '\n').toBe(snippet);
-    expect(snippet).toContain('l4 new');
-  });
+  test.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])(
+    'returns stored coordinates after labeling (draft=%s, previousLabel=%s)',
+    async (draft, labeled) => {
+      const previousLabel = AiContentLabelSchema.parse({
+        Label: '1',
+        ContentProducer: 'ProviderExample',
+        ProduceID: 'content-1',
+        ReservedCode1: '',
+        ContentPropagator: 'RelayExample',
+        PropagateID: 'relay-1',
+        ReservedCode2: '',
+      });
+      const body = 'l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n';
+      const original = labeled ? writeAiContentText(body, 'text/markdown', previousLabel) : body;
+      const files = createFiles(original, undefined, APPLICATION_LABEL);
+      const output = await execute(createEditFileTool(files, draft ? SOURCE_IS_DRAFT : NO_DRAFTS), {
+        file_entry_id: SOURCE_ID,
+        old_string: 'old',
+        new_string: 'new',
+      });
+      const id = draft ? SOURCE_ID : EDITED_ID;
+      const available = await files.resolveAvailable([id]);
+      const stored = new TextDecoder().decode(await files.readAsBytes(available.get(id)!));
+      const { snippet, snippetStartLine } = output.value as {
+        snippet: string;
+        snippetStartLine: number;
+      };
+      const lines = stored.split('\n');
+      expect(snippetStartLine).toBe(lines.indexOf('l2') + 1);
+      expect(snippetStartLine).toBeGreaterThan(2);
+      expect(readAiContentText(stored, 'text/markdown')).toEqual(APPLICATION_LABEL);
+      expect(lines.slice(snippetStartLine - 1, snippetStartLine + 4).join('\n') + '\n').toBe(
+        snippet,
+      );
+      expect(snippet).toContain('l4 new');
+    },
+  );
 
   test('caps the snippet when the replacement itself is long', async () => {
     const files = createFiles('x');
@@ -335,11 +352,12 @@ describe('editFileTool', () => {
         const reading = deferred();
         const finishRead = deferred();
         const read = workspace.files.readAsBytes;
-        let paused = false;
+        let draftReads = 0;
         jest.spyOn(workspace.files, 'readAsBytes').mockImplementation(async (file, signal) => {
           const bytes = await read(file, signal);
-          if (file.fileEntryId === EDITED_ID && !paused) {
-            paused = true;
+          // The first draft read returns the first edit's final snippet. Pause the next
+          // edit's source read so later calls still exercise the shared write queue.
+          if (file.fileEntryId === EDITED_ID && ++draftReads === 2) {
             reading.resolve();
             await finishRead.promise;
           }
@@ -692,7 +710,11 @@ describe('editFileTool', () => {
   });
 });
 
-function createFiles(content: string | Uint8Array, declaredSize?: number) {
+function createFiles(
+  content: string | Uint8Array,
+  declaredSize?: number,
+  producedLabel: AiContentLabel | null = null,
+) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   const source: ManagedFileFact = {
     fileEntryId: SOURCE_ID,
@@ -719,7 +741,9 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
     async (input: Parameters<EditFileFiles['createTextEntry']>[0]) => {
       const id = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
       const data = new TextEncoder().encode(
-        input.aiOperation ? writeAiContentText(input.data, input.mediaType, null) : input.data,
+        input.aiOperation
+          ? writeAiContentText(input.data, input.mediaType, producedLabel)
+          : input.data,
       );
       facts.set(id, {
         fileEntryId: id,
@@ -743,7 +767,9 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
     async (input: Parameters<EditFileFiles['rewriteTextEntry']>[0]) => {
       const fact = facts.get(input.id) ?? source;
       const data = new TextEncoder().encode(
-        input.aiOperation ? writeAiContentText(input.data, fact.mediaType, null) : input.data,
+        input.aiOperation
+          ? writeAiContentText(input.data, fact.mediaType, producedLabel)
+          : input.data,
       );
       blobs.set(input.id, data);
       facts.set(input.id, { ...fact, size: data.byteLength });

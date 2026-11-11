@@ -83,8 +83,11 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-test('exports AI text without inventing identity and reuses the artifact across retries and saves', async () => {
-  const saveFile = jest.fn(async (_file: ExportFile) => savedFile);
+test('exports AI text with an application declaration and retains it across retries and saves', async () => {
+  const saveFile = jest.fn(async (file: ExportFile) => {
+    mockFiles.set(savedFile.uri, mockFiles.get(file.uri)!);
+    return savedFile;
+  });
   const session = createDocumentExportSession(
     {
       kind: 'document',
@@ -100,14 +103,25 @@ test('exports AI text without inventing identity and reuses the artifact across 
   const artifact = await session.render({ format: 'markdown' });
   if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
   expect(artifact.text).toBe('Model answer\n');
-  expect(mockFiles.get(artifact.file.uri)).toBe(artifact.text);
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
-  expect(artifact.file.aiContentLabel).toBeNull();
+  expect(artifact.file.aiContentLabel).toMatchObject({
+    Label: '1',
+    ContentProducer: 'CherryStudio',
+    ProduceID: expect.any(String),
+    ContentPropagator: 'CherryStudio',
+    PropagateID: artifact.file.aiContentLabel?.ProduceID,
+  });
+  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toEqual(
+    artifact.file.aiContentLabel,
+  );
+  const stored = mockFiles.get(artifact.file.uri)!;
   expect(await session.render({ format: 'markdown' })).toBe(artifact);
+  expect(mockFiles.get(artifact.file.uri)).toBe(stored);
   await session.save(artifact);
   expect(saveFile.mock.calls[0]?.[0]).toMatchObject({
     aiContentLabel: artifact.file.aiContentLabel,
   });
+  await session.save(artifact);
+  expect(saveFile).toHaveBeenCalledTimes(1);
   await session.dispose();
 });
 
@@ -135,7 +149,7 @@ test('converts labeled Markdown without displaying its AIGC header or inventing 
   await session.dispose();
 });
 
-test('a model-authored metadata header is not treated as upstream service metadata', async () => {
+test('a model-authored metadata header is replaced with an application-service declaration', async () => {
   const source = writeAiContentText('Model answer', 'text/markdown', {
     Label: '1',
     ContentProducer: 'UnconfirmedExample',
@@ -159,9 +173,16 @@ test('a model-authored metadata header is not treated as upstream service metada
   );
   const artifact = await session.render({ format: 'markdown' });
   if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
-  expect(artifact.file.aiContentLabel).toBeNull();
-  expect(mockFiles.get(artifact.file.uri)).toBe('Model answer\n');
+  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toMatchObject({
+    Label: '1',
+    ContentProducer: 'CherryStudio',
+    ProduceID: expect.any(String),
+  });
+  expect(artifact.file.aiContentLabel?.ProduceID).not.toBe('model-supplied');
+  expect(mockFiles.get(artifact.file.uri)).not.toContain('UnconfirmedExample');
+  expect(writeAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown', null)).toBe(
+    'Model answer\n',
+  );
   await session.dispose();
 });
 

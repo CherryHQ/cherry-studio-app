@@ -99,21 +99,62 @@ beforeEach(() => {
 test.each([
   ['text/markdown', '\uFEFFBody\n'],
   ['text/html', '<!DOCTYPE html><html><head></head><body>Body</body></html>'],
-  ['application/json', '{"data":1}\n'],
 ])(
-  'unknown upstream identity never blocks %s generation or invents a service identity',
+  'AI generation adds an application-service label to %s and later copies retain it',
   async (mediaType, text) => {
     const file = new File(uri);
     file.writeSync(text);
-    const original = mockFiles.get(uri)!.slice();
     const metadata = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
-    expect(metadata).toBeNull();
-    expect(mockFiles.get(uri)).toEqual(original);
+    expect(metadata).toEqual({
+      Label: '1',
+      ContentProducer: 'CherryStudio',
+      ProduceID: expect.stringMatching(/^content-/),
+      ReservedCode1: '',
+      ContentPropagator: 'CherryStudio',
+      PropagateID: metadata?.ProduceID,
+      ReservedCode2: '',
+    });
+    expect(readAiContentText(await file.text(), mediaType)).toEqual(metadata);
+    expect(writeAiContentText(await file.text(), mediaType, null)).toBe(text);
+    const completed = mockFiles.get(uri)!.slice();
+    await expect(completeFileAiContent({ uri, mediaType })).resolves.toEqual(metadata);
+    expect(mockFiles.get(uri)).toEqual(completed);
     expect([...mockFiles.keys()]).toEqual([uri]);
   },
 );
 
-test('a new AI edit clears old production identity without changing its historical source', async () => {
+test.each([
+  ['application/json', '{"data":1}\n'],
+  ['text/plain', 'Plain text\n'],
+  ['text/javascript', 'const value = 1;\n'],
+])('AI generation leaves unsupported %s bytes unchanged', async (mediaType, text) => {
+  new File(uri).writeSync(text);
+  const original = mockFiles.get(uri)!.slice();
+  await expect(
+    completeFileAiContent({ uri, mediaType, aiOperation: 'generate' }),
+  ).resolves.toBeNull();
+  expect(mockFiles.get(uri)).toEqual(original);
+  expect(mockId).toBe(0);
+});
+
+test.each([
+  ['text/markdown', '---\nAIGC: model-authored\ntitle: Report\n---\nBody\n'],
+  [
+    'text/html',
+    '<!DOCTYPE html><html><head><meta name="AIGC" content="not-json"></head><body>Body</body></html>',
+  ],
+])('a new AI %s output replaces untrusted authored declarations', async (mediaType, text) => {
+  const file = new File(uri);
+  file.writeSync(text);
+  const metadata = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
+  expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
+  expect(readAiContentText(await file.text(), mediaType)).toEqual(metadata);
+  expect(writeAiContentText(await file.text(), mediaType, null)).toBe(
+    writeAiContentText(text, mediaType, null),
+  );
+});
+
+test('each AI edit replaces old production identity without changing its historical source', async () => {
   const originalUri = 'file:///managed/original.md';
   const original = new File(originalUri);
   original.writeSync(writeAiContentText('\uFEFFBody\n', 'text/markdown', label));
@@ -127,9 +168,25 @@ test('a new AI edit clears old production identity without changing its historic
     aiContentLabel: previous,
     aiOperation: 'edit',
   });
-  expect(metadata).toBeNull();
-  expect(await file.text()).toBe('\uFEFFEdited\n');
-  expect(readAiContentText(await file.text(), 'text/markdown')).toBeNull();
+  expect(metadata).toMatchObject({
+    Label: '1',
+    ContentProducer: 'CherryStudio',
+    ContentPropagator: 'CherryStudio',
+    PropagateID: metadata?.ProduceID,
+    ReservedCode1: '',
+    ReservedCode2: '',
+  });
+  expect(metadata?.ProduceID).not.toBe(previous?.ProduceID);
+  expect(readAiContentText(await file.text(), 'text/markdown')).toEqual(metadata);
+  expect(writeAiContentText(await file.text(), 'text/markdown', null)).toBe('\uFEFFEdited\n');
+  file.writeSync((await file.text()).replace('Edited', 'Edited again'));
+  const next = await completeFileAiContent({
+    uri,
+    mediaType: 'text/markdown',
+    aiOperation: 'edit',
+  });
+  expect(next?.ProduceID).not.toBe(metadata?.ProduceID);
+  expect(next?.PropagateID).toBe(next?.ProduceID);
   expect(readAiContentText(await original.text(), 'text/markdown')).toEqual(label);
   expect((await original.text()).endsWith('Body\n')).toBe(true);
   expect([...mockFiles.keys()]).toEqual([originalUri, uri]);
@@ -155,7 +212,7 @@ test('copies and mechanical transformations retain independently supplied produc
   expect(readAiContentText(await new File(htmlUri).text(), 'text/html')).toEqual(label);
 });
 
-test.each([null, '1', '2', '3'] as const)(
+test.each(['1', '2', '3'] as const)(
   'original model-image responses preserve upstream confidence and bytes (Label=%s)',
   async (confidence) => {
     const raw = new Uint8Array(
@@ -164,20 +221,18 @@ test.each([null, '1', '2', '3'] as const)(
         'base64',
       ),
     );
-    const upstreamLabel = confidence ? { ...label, Label: confidence } : null;
-    const bytes = upstreamLabel
-      ? new Uint8Array(
-          Buffer.concat(
-            imageMetadata(
-              { size: raw.length, read: (offset, length) => raw.slice(offset, offset + length) },
-              'image/png',
-              upstreamLabel,
-            ).parts.map((part) =>
-              part instanceof Uint8Array ? part : raw.slice(part.offset, part.offset + part.length),
-            ),
-          ),
-        )
-      : raw;
+    const upstreamLabel = { ...label, Label: confidence };
+    const bytes = new Uint8Array(
+      Buffer.concat(
+        imageMetadata(
+          { size: raw.length, read: (offset, length) => raw.slice(offset, offset + length) },
+          'image/png',
+          upstreamLabel,
+        ).parts.map((part) =>
+          part instanceof Uint8Array ? part : raw.slice(part.offset, part.offset + part.length),
+        ),
+      ),
+    );
     const imageUri = 'file:///pending/image.png';
     mockFiles.set(imageUri, bytes);
     const metadata = await completeFileAiContent({
@@ -192,7 +247,7 @@ test.each([null, '1', '2', '3'] as const)(
 );
 
 test.each(['generate', 'edit'] as const)(
-  'a new %s image with explicit source metadata clears a superseded declaration',
+  'a new %s image with explicit source metadata receives a fresh application declaration',
   async (aiOperation) => {
     const raw = new Uint8Array(
       Buffer.from(
@@ -217,11 +272,35 @@ test.each(['generate', 'edit'] as const)(
       aiOperation,
       aiContentLabel: null,
     });
-    expect(metadata).toBeNull();
-    expect(await readFileAiContent({ uri: imageUri, mediaType: 'image/png' })).toBeNull();
+    expect(metadata).toMatchObject({
+      Label: '1',
+      ContentProducer: 'CherryStudio',
+      ContentPropagator: 'CherryStudio',
+      PropagateID: metadata?.ProduceID,
+    });
+    expect(metadata?.ProduceID).not.toBe(label.ProduceID);
+    expect(await readFileAiContent({ uri: imageUri, mediaType: 'image/png' })).toEqual(metadata);
     expect([...mockFiles.keys()]).toEqual([imageUri]);
   },
 );
+
+test('an original model image without upstream metadata receives an application declaration', async () => {
+  const raw = new Uint8Array(
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+      'base64',
+    ),
+  );
+  const imageUri = 'file:///pending/image.png';
+  mockFiles.set(imageUri, raw);
+  const metadata = await completeFileAiContent({
+    uri: imageUri,
+    mediaType: 'image/png',
+    aiOperation: 'generate',
+  });
+  expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
+  expect(await readFileAiContent({ uri: imageUri, mediaType: 'image/png' })).toEqual(metadata);
+});
 
 test('unlabeled conversions do not receive a fabricated producer', async () => {
   new File(uri).writeSync('<main>Converted</main>');

@@ -20,7 +20,6 @@ import {
 import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
-import { writeAiContentText } from '@/shared/utils/aiContentText';
 
 import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -229,9 +228,20 @@ export function createEditFileTool(
     }
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
-    const labeledSnippet = (entry: FileEntry) => {
+    const labeledSnippet = async (entry: FileEntry) => {
       if (!['text/markdown', 'text/html'].includes(entry.mediaType)) return snippet;
-      const finalText = writeAiContentText(data, entry.mediaType, null).replace(/^\uFEFF/, '');
+      const finalBytes = await files.readAsBytes(
+        {
+          fileEntryId: entry.id,
+          name: entry.filename,
+          mediaType: entry.mediaType,
+          size: entry.size,
+          revision: entry.updatedAt,
+        },
+        signal,
+      );
+      if (!finalBytes) throw new Error('The edited file could not be read after saving.');
+      const finalText = decodeManagedUtf8(finalBytes, entry.size).text;
       let prefix = 0;
       while (
         prefix < editedText.length &&
@@ -270,7 +280,7 @@ export function createEditFileTool(
           filename: entry.filename,
           size: entry.size,
           replacements: replacementCount,
-          ...labeledSnippet(entry),
+          ...(await labeledSnippet(entry)),
         },
         // The draft's artifact part already exists; a second one would show
         // the same file twice.
@@ -309,7 +319,7 @@ export function createEditFileTool(
         filename: entry.filename,
         size: entry.size,
         replacements: replacementCount,
-        ...labeledSnippet(entry),
+        ...(await labeledSnippet(entry)),
       },
       artifacts: [
         {
