@@ -9,8 +9,11 @@ import {
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { seedPresetProviders } from '@/backend/data/db/seeding';
+import { raceAbort } from '@/backend/utils/raceAbort';
 
-/** Installs the first recommended set after region detection, without gating first paint. */
+import { getProviderCatalogEdition } from './providerCatalogEdition';
+
+/** Installs the first recommended set using the same region policy as discovery. */
 @Injectable('ProviderCatalogRuntime')
 @DependsOn(['DbService', 'RegionService'])
 @ServicePhase(Phase.Gate)
@@ -19,6 +22,7 @@ export class ProviderCatalogRuntime extends BaseService {
   private initialization: Promise<void> | undefined;
   private stopped = false;
   private pending = false;
+  private readonly controller = new AbortController();
 
   ensureReady(): Promise<void> {
     if (this.stopped) return Promise.reject(new Error('Provider catalog has stopped'));
@@ -44,15 +48,19 @@ export class ProviderCatalogRuntime extends BaseService {
   private async initializeCatalog(): Promise<void> {
     const db = application.get('DbService');
     await seedPresetProviders(db, async () => {
-      const country = await application.get('RegionService').getCountry();
+      const country = await raceAbort(
+        application.get('RegionService').getCountry(),
+        this.controller.signal,
+      );
       this.initializationSignal?.throwIfAborted();
       if (this.stopped) throw new Error('Provider catalog has stopped');
-      return country === 'CN' ? 'cn' : 'global';
+      return getProviderCatalogEdition(country);
     });
   }
 
   protected async onStop(): Promise<void> {
     this.stopped = true;
+    this.controller.abort();
     await this.initialization?.catch(() => {});
   }
 }

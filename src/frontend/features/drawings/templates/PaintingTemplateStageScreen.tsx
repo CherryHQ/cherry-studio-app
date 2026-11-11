@@ -1,4 +1,4 @@
-import { ContentState, Spinner } from '@cherrystudio/ui/components';
+import { BottomSheetProvider, ContentState, Spinner } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,12 +51,14 @@ export function PaintingTemplateStageScreen() {
   return (
     <ComposerSessionProvider>
       <PaintingInputProvider>
-        <TemplateStage
-          initialTemplateId={templateId}
-          onClose={close}
-          origin={origin}
-          templates={templates.data}
-        />
+        <BottomSheetProvider>
+          <TemplateStage
+            initialTemplateId={templateId}
+            onClose={close}
+            origin={origin}
+            templates={templates.data}
+          />
+        </BottomSheetProvider>
       </PaintingInputProvider>
     </ComposerSessionProvider>
   );

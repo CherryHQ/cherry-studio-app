@@ -1,9 +1,14 @@
+import { loggerService } from '@logger';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
-import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
+import type {
+  AppUpdateModule,
+  AppUpdateResult,
+  DomesticAppStore,
+} from '@/shared/contracts/appUpdate';
 
 import { getNativeAppUpdate } from '../../../../modules/app-update';
 import { assertApkRelease, checkApkRelease } from './apkRelease';
@@ -26,8 +31,16 @@ export function createAppUpdateModule(dependencies: {
   );
   const download = createApkDownload();
   const lifetime = new AbortController();
-  const store =
-    channel === 'domestic-stores' ? (getNativeAppUpdate()?.getDomesticStore() ?? null) : null;
+  let store: DomesticAppStore | null = null;
+  if (channel === 'domestic-stores') {
+    try {
+      store = getNativeAppUpdate()?.getDomesticStore() ?? null;
+    } catch (error) {
+      loggerService
+        .withContext('AppUpdate')
+        .warn('Domestic store resolution is unavailable', error as Error);
+    }
+  }
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
 
   function requireApk() {

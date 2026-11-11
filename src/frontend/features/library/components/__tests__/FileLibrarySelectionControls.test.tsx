@@ -9,6 +9,11 @@ import {
 
 import { FileLibrarySelectionControls } from '../FileLibrarySelectionControls';
 
+const mockShareFiles = jest.fn(async () => {});
+jest.mock('@/frontend/appShell/sharing', () => ({
+  useShareFiles: () => ({ share: mockShareFiles, isSharing: false }),
+}));
+
 const mockTrigger = jest.fn();
 const mockToastShow = jest.fn();
 const refresh = jest.fn(async () => undefined);
@@ -128,3 +133,11 @@ async function press(testID: string) {
     renderer.root.findByProps({ testID }).props.onPress();
   });
 }
+
+it('shares the selected files without moving or clearing the source selection', async () => {
+  await press('selection-share');
+  expect(mockShareFiles).toHaveBeenCalledWith(['first', 'second', 'third']);
+  expect(state.isEditing).toBe(true);
+  expect(state.selectedIds).toEqual(new Set(['first', 'second', 'third']));
+  expect(mockTrigger).not.toHaveBeenCalled();
+});

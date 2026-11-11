@@ -1,4 +1,5 @@
 import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { MAX_PDF_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -14,6 +15,7 @@ import {
   READ_FILE_MAX_TEXT_BYTES,
   type ReadFileFiles,
 } from '../readFileTool';
+import type { WorkspaceFileAccess } from '../workspaceFileAccess';
 
 const FILE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const OTHER_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
@@ -298,6 +300,358 @@ describe('readFileTool', () => {
     });
     expect(JSON.stringify(output.value)).not.toContain('cGl4ZWxz');
     expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+
+  describe('image paging validation', () => {
+    const IMAGE_PAGING_MESSAGE =
+      'Images do not support paging parameters. Retry this read_file call without start_line, limit, offset, or max_characters.';
+    const MIXED_PAGING_MESSAGE = 'Line parameters and offset parameters cannot be combined.';
+    const INVALID_START_LINE_MESSAGE =
+      'Invalid input: ✖ Too small: expected number to be >=1\n  → at start_line';
+    const ALL_PAGING = { start_line: 1, limit: 1, offset: 0, max_characters: 100 };
+    const IMAGE_SUCCESS = {
+      value: {
+        status: 'ok',
+        fileEntryId: FILE_ID,
+        filename: 'chart.png',
+        mediaType: 'image/png',
+        delivery:
+          'image-to-model; scripts receive metadata only; read again if pixels are unavailable after rebuilding history',
+      },
+      modelImages: [{ data: 'cGl4ZWxz', mediaType: 'image/png' }],
+      artifacts: [],
+    };
+
+    beforeEach(() => {
+      jest.mocked(parseAnydocDocument).mockClear();
+    });
+
+    function imageFiles(overrides: Partial<ManagedFileFact> = {}) {
+      const files = createFiles('unused');
+      files.resolveAvailable.mockResolvedValue(
+        new Map([
+          [
+            FILE_ID,
+            {
+              fileEntryId: FILE_ID,
+              mediaType: 'image/png',
+              name: 'chart.png',
+              size: 12,
+              ...overrides,
+            },
+          ],
+        ]),
+      );
+      const readImage = jest.fn(async () => ({ data: 'cGl4ZWxz', mediaType: 'image/png' }));
+      return { ...files, readImage };
+    }
+
+    function expectNoContentReads(files: ReturnType<typeof imageFiles>) {
+      expect(files.readImage).not.toHaveBeenCalled();
+      expect(files.readAsBytes).not.toHaveBeenCalled();
+      expect(files.readDocumentText).not.toHaveBeenCalled();
+      expect(files.readImageText).not.toHaveBeenCalled();
+      expect(parseAnydocDocument).not.toHaveBeenCalled();
+    }
+
+    test.each<Record<string, number>>([
+      { start_line: 1 },
+      { limit: 1 },
+      { offset: 0 },
+      { max_characters: 1 },
+      { start_line: 1, offset: 0 },
+      { start_line: 1, max_characters: 1 },
+      { limit: 1, offset: 0 },
+      { limit: 1, max_characters: 1 },
+      ALL_PAGING,
+    ])(
+      'rejects every supplied direct-image paging parameter with recovery guidance: %j',
+      async (paging) => {
+        const files = imageFiles();
+        const result = await execute(createReadFileTool(files, IN_SCOPE), {
+          file_entry_id: FILE_ID,
+          ...paging,
+        });
+        expect(result).toEqual({
+          value: { status: 'error', message: IMAGE_PAGING_MESSAGE },
+          artifacts: [],
+        });
+        expect(result).not.toHaveProperty('modelImages');
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+        expectNoContentReads(files);
+      },
+    );
+
+    test('returns the same guidance for identical calls and reads pixels after paging is removed', async () => {
+      const files = imageFiles();
+      const tool = createReadFileTool(files, IN_SCOPE);
+      for (let call = 1; call <= 2; call++) {
+        expect(await execute(tool, { file_entry_id: FILE_ID, ...ALL_PAGING })).toEqual({
+          value: { status: 'error', message: IMAGE_PAGING_MESSAGE },
+          artifacts: [],
+        });
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(call);
+        expectNoContentReads(files);
+      }
+      expect(await execute(tool, { file_entry_id: FILE_ID })).toEqual(IMAGE_SUCCESS);
+      expect(files.resolveAvailable).toHaveBeenCalledTimes(3);
+      expect(files.readImage).toHaveBeenCalledTimes(1);
+      expect(files.readAsBytes).not.toHaveBeenCalled();
+      expect(files.readDocumentText).not.toHaveBeenCalled();
+      expect(files.readImageText).not.toHaveBeenCalled();
+      expect(parseAnydocDocument).not.toHaveBeenCalled();
+    });
+
+    test.each<{
+      name: string;
+      mediaType: string;
+      filename: string;
+      parser: DocumentParserMode;
+      acceptsImages: boolean;
+    }>([
+      {
+        name: 'text',
+        mediaType: 'text/plain',
+        filename: 'notes.txt',
+        parser: 'builtin',
+        acceptsImages: true,
+      },
+      {
+        name: 'built-in PDF',
+        mediaType: 'application/pdf',
+        filename: 'scan.pdf',
+        parser: 'builtin',
+        acceptsImages: true,
+      },
+      {
+        name: 'AnyDoc PDF',
+        mediaType: 'application/pdf',
+        filename: 'scan.pdf',
+        parser: 'anydoc',
+        acceptsImages: true,
+      },
+      {
+        name: 'AnyDoc RTF',
+        mediaType: 'application/rtf',
+        filename: 'report.rtf',
+        parser: 'anydoc',
+        acceptsImages: true,
+      },
+      {
+        name: 'OCR',
+        mediaType: 'image/png',
+        filename: 'receipt.png',
+        parser: 'builtin',
+        acceptsImages: false,
+      },
+      {
+        name: 'audio',
+        mediaType: 'audio/mpeg',
+        filename: 'recording.mp3',
+        parser: 'builtin',
+        acceptsImages: true,
+      },
+      {
+        name: 'unsupported image MIME',
+        mediaType: 'image/avif',
+        filename: 'photo.avif',
+        parser: 'builtin',
+        acceptsImages: true,
+      },
+      {
+        name: 'text with image extension',
+        mediaType: 'text/plain',
+        filename: 'chart.png',
+        parser: 'builtin',
+        acceptsImages: true,
+      },
+    ])(
+      'rejects mixed paging before reading $name content',
+      async ({ mediaType, filename, parser, acceptsImages }) => {
+        const files = imageFiles({ mediaType, name: filename });
+        expect(
+          await execute(createReadFileTool(files, IN_SCOPE, parser, undefined, acceptsImages), {
+            file_entry_id: FILE_ID,
+            start_line: 1,
+            offset: 0,
+          }),
+        ).toEqual({ value: { status: 'error', message: MIXED_PAGING_MESSAGE }, artifacts: [] });
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+        expectNoContentReads(files);
+      },
+    );
+
+    describe('preserves pre-read error precedence for mixed paging', () => {
+      test.each([
+        {
+          name: 'schema-invalid input',
+          input: { file_entry_id: FILE_ID, ...ALL_PAGING, start_line: 0 },
+          message: INVALID_START_LINE_MESSAGE,
+        },
+        {
+          name: 'missing id',
+          input: { ...ALL_PAGING },
+          message: 'Provide a managed file_entry_id.',
+        },
+        {
+          name: 'path-only reference without access adapter',
+          input: { path: 'chart.png', ...ALL_PAGING },
+          message: 'Provide a managed file_entry_id.',
+        },
+        {
+          name: 'id plus path without access adapter',
+          input: { file_entry_id: FILE_ID, path: 'chart.png', ...ALL_PAGING },
+          message: 'Provide a managed file_entry_id.',
+        },
+        {
+          name: 'out-of-scope id',
+          input: { file_entry_id: OTHER_ID, ...ALL_PAGING },
+          message: 'The file is not part of this conversation.',
+        },
+      ])('$name', async ({ input, message }) => {
+        const files = imageFiles();
+        expect(await execute(createReadFileTool(files, IN_SCOPE), input)).toEqual({
+          value: { status: 'error', message },
+          artifacts: [],
+        });
+        expect(files.resolveAvailable).not.toHaveBeenCalled();
+        expectNoContentReads(files);
+      });
+
+      test('workspace-access rejection', async () => {
+        const files = imageFiles();
+        const error = new Error('workspace access denied');
+        const resolveRead = jest.fn().mockRejectedValue(error);
+        const access = { resolveRead } as unknown as WorkspaceFileAccess;
+        await expect(
+          execute(createReadFileTool(files, IN_SCOPE, 'builtin', access), {
+            path: 'chart.png',
+            ...ALL_PAGING,
+          }),
+        ).rejects.toBe(error);
+        expect(resolveRead).toHaveBeenCalledTimes(1);
+        expect(files.resolveAvailable).not.toHaveBeenCalled();
+        expectNoContentReads(files);
+      });
+
+      test.each([false, true])(
+        'already-aborted signal with workspace access: %s',
+        async (useAccess) => {
+          const files = imageFiles();
+          const controller = new AbortController();
+          const error = new Error('turn cancelled');
+          controller.abort(error);
+          const resolveRead = jest.fn().mockResolvedValue(FILE_ID);
+          const access = useAccess
+            ? ({ resolveRead } as unknown as WorkspaceFileAccess)
+            : undefined;
+          await expect(
+            createReadFileTool(files, IN_SCOPE, 'builtin', access).execute({
+              input: { file_entry_id: FILE_ID, ...ALL_PAGING },
+              signal: controller.signal,
+              toolCallId: 'call-1',
+              turnId: 'turn-1',
+            }),
+          ).rejects.toBe(error);
+          expect(resolveRead).toHaveBeenCalledTimes(useAccess ? 1 : 0);
+          expect(files.resolveAvailable).not.toHaveBeenCalled();
+          expectNoContentReads(files);
+        },
+      );
+
+      test('authorized id absent from resolver', async () => {
+        const files = imageFiles();
+        files.resolveAvailable.mockResolvedValue(new Map());
+        expect(
+          await execute(createReadFileTool(files, IN_SCOPE), {
+            file_entry_id: FILE_ID,
+            ...ALL_PAGING,
+          }),
+        ).toEqual({
+          value: { status: 'error', message: 'The managed file is unavailable.' },
+          artifacts: [],
+        });
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+        expectNoContentReads(files);
+      });
+
+      test('resolver throwing', async () => {
+        const files = imageFiles();
+        const error = new Error('source resolution failed');
+        files.resolveAvailable.mockRejectedValue(error);
+        await expect(
+          execute(createReadFileTool(files, IN_SCOPE), { file_entry_id: FILE_ID, ...ALL_PAGING }),
+        ).rejects.toBe(error);
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+        expectNoContentReads(files);
+      });
+
+      test('allowed workspace-path PNG', async () => {
+        const files = imageFiles();
+        const resolveRead = jest.fn().mockResolvedValue(FILE_ID);
+        const access = { resolveRead } as unknown as WorkspaceFileAccess;
+        expect(
+          await execute(createReadFileTool(files, IN_SCOPE, 'builtin', access), {
+            path: 'chart.png',
+            ...ALL_PAGING,
+          }),
+        ).toEqual({ value: { status: 'error', message: IMAGE_PAGING_MESSAGE }, artifacts: [] });
+        expect(resolveRead).toHaveBeenCalledTimes(1);
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+        expectNoContentReads(files);
+      });
+    });
+
+    test.each([
+      {
+        name: 'schema-invalid start line',
+        size: 12,
+        startLine: 0,
+        message: INVALID_START_LINE_MESSAGE,
+        resolverCalls: 0,
+      },
+      {
+        name: 'exact image byte limit',
+        size: 10_485_760,
+        startLine: 1,
+        message: IMAGE_PAGING_MESSAGE,
+        resolverCalls: 1,
+      },
+      {
+        name: 'above image byte limit',
+        size: 10_485_761,
+        startLine: 1,
+        message: 'The image exceeds the attachment byte limit.',
+        resolverCalls: 1,
+      },
+    ])(
+      'keeps schema and image-size validation ahead of image paging: $name',
+      async ({ size, startLine, message, resolverCalls }) => {
+        const files = imageFiles({ size });
+        expect(
+          await execute(createReadFileTool(files, IN_SCOPE), {
+            file_entry_id: FILE_ID,
+            ...ALL_PAGING,
+            start_line: startLine,
+          }),
+        ).toEqual({ value: { status: 'error', message }, artifacts: [] });
+        expect(files.resolveAvailable).toHaveBeenCalledTimes(resolverCalls);
+        expectNoContentReads(files);
+      },
+    );
+
+    test('reads pixels without paging at the exact image byte limit', async () => {
+      const files = imageFiles({ size: 10_485_760 });
+      expect(
+        await execute(createReadFileTool(files, IN_SCOPE), { file_entry_id: FILE_ID }),
+      ).toEqual(IMAGE_SUCCESS);
+      expect(files.resolveAvailable).toHaveBeenCalledTimes(1);
+      expect(files.readImage).toHaveBeenCalledTimes(1);
+      expect(files.readAsBytes).not.toHaveBeenCalled();
+      expect(files.readDocumentText).not.toHaveBeenCalled();
+      expect(files.readImageText).not.toHaveBeenCalled();
+      expect(parseAnydocDocument).not.toHaveBeenCalled();
+    });
   });
 
   test('returns the whole file when it fits the default window', async () => {

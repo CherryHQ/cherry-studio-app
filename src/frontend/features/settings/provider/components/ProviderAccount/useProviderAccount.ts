@@ -50,12 +50,14 @@ export function useProviderAccount(
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const acting = useRef(false);
+  const refreshGeneration = useRef(0);
   const loginController = useRef<AbortController | null>(null);
   const promptAnswer = useRef<((value: string) => void) | null>(null);
   const [loginEvent, setLoginEvent] = useState<ProviderSignInEvent | null>(null);
   const [loginPrompt, setLoginPrompt] = useState<ProviderSignInPrompt | null>(null);
   useEffect(
     () => () => {
+      refreshGeneration.current += 1;
       loginController.current?.abort();
     },
     [providerId],
@@ -67,31 +69,40 @@ export function useProviderAccount(
     staleTime: Infinity,
   });
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     setRefreshing(true);
     try {
       const next = await accounts.refresh(providerId);
+      if (generation !== refreshGeneration.current) return;
       queryClient.setQueryData(queryKeys.providers.account(providerId), next);
       setError(null);
     } catch (error) {
+      if (generation !== refreshGeneration.current) return;
       setError(error instanceof ProviderAccountError ? error.reason : 'request');
       // An expired/revoked grant changes the stored status even when the request failed.
       await accounts
         .getStatus(providerId)
-        .then((next) => queryClient.setQueryData(queryKeys.providers.account(providerId), next))
+        .then((next) => {
+          if (generation === refreshGeneration.current)
+            queryClient.setQueryData(queryKeys.providers.account(providerId), next);
+        })
         .catch(() => undefined);
     } finally {
-      setRefreshing(false);
+      if (generation === refreshGeneration.current) setRefreshing(false);
     }
   }, [accounts, providerId, queryClient]);
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
+      if (!acting.current) void refresh();
     }, [refresh]),
   );
   async function act(action: () => Promise<void>) {
     if (acting.current) return;
     acting.current = true;
+    // Login/logout owns the next account state; older refreshes must not restore it.
+    refreshGeneration.current += 1;
+    setRefreshing(false);
     setBusy(true);
     onBusyChange(true);
     setError(null);
@@ -170,7 +181,11 @@ export function useProviderAccount(
       }
       await refresh();
     });
-  const logout = () => act(() => accounts.logout(providerId));
+  const logout = () =>
+    act(async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.providers.account(providerId) });
+      await accounts.logout(providerId);
+    });
 
   return {
     busy,

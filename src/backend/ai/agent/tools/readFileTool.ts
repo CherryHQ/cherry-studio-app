@@ -170,7 +170,7 @@ export function createReadFileTool(
       documentParserMode === 'anydoc'
         ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
         : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. ${
+    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. Use either start_line/limit or offset/max_characters; never combine the two groups. sourceTruncated means the extractor reached its own limit. ${
       acceptsImages
         ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
         : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
@@ -193,8 +193,6 @@ export function createReadFileTool(
         parsed.data.start_line !== undefined || parsed.data.limit !== undefined;
       const hasJsonParameters =
         parsed.data.offset !== undefined || parsed.data.max_characters !== undefined;
-      if (hasLineParameters && hasJsonParameters)
-        return invalid('Line parameters and offset parameters cannot be combined.');
       if (!access && (!file_entry_id || parsed.data.path))
         return invalid('Provide a managed file_entry_id.');
       const fileEntryId = access
@@ -209,6 +207,12 @@ export function createReadFileTool(
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
+      if (
+        hasLineParameters &&
+        hasJsonParameters &&
+        !(isAiSupportedImageMediaType(source.mediaType) && acceptsImages)
+      )
+        return invalid('Line parameters and offset parameters cannot be combined.');
       if (isAudioMediaType(source.mediaType))
         return invalid(
           'Audio has no readable text yet. Use transcribe_audio first, then read_file on its generated transcript. If that tool is unavailable, ask the user to transcribe the recording from the file menu.',
@@ -217,7 +221,9 @@ export function createReadFileTool(
         if (source.size > MAX_IMAGE_ATTACHMENT_BYTES)
           return invalid('The image exceeds the attachment byte limit.');
         if (hasLineParameters || hasJsonParameters)
-          return invalid('Images do not support paging parameters.');
+          return invalid(
+            'Images do not support paging parameters. Retry this read_file call without start_line, limit, offset, or max_characters.',
+          );
         try {
           const image = await files.readImage?.(source, signal);
           signal.throwIfAborted();

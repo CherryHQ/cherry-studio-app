@@ -13,6 +13,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (!['true', 'false'].includes(apkUpdatesSetting)) {
     throw new Error(`Invalid APK_UPDATES_ENABLED: ${apkUpdatesSetting}. Expected true or false.`);
   }
+  const domesticStoresSetting = process.env.DOMESTIC_STORES_ENABLED ?? 'false';
+  if (!['true', 'false'].includes(domesticStoresSetting)) {
+    throw new Error(
+      `Invalid DOMESTIC_STORES_ENABLED: ${domesticStoresSetting}. Expected true or false.`,
+    );
+  }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
   const bundleIdentifier = `${config.ios!.bundleIdentifier}${suffix}`;
@@ -62,6 +68,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         './scripts/withAppUpdates.js',
         {
+          // Profile env is shared by build submission, native generation and OTA fingerprints.
+          domesticStoresEnabled: domesticStoresSetting === 'true',
           apkUpdatesEnabled:
             profile !== 'preview' &&
             apkUpdatesSetting === 'true' &&
@@ -69,7 +77,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
               process.env.EAS_BUILD_PROFILE ?? '',
             ),
         },
-      ] as [string, { apkUpdatesEnabled: boolean }],
+      ] as [string, { apkUpdatesEnabled: boolean; domesticStoresEnabled: boolean }],
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       '@preeternal/react-native-file-hash',
