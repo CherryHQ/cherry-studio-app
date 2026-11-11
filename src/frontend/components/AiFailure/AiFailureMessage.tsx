@@ -1,6 +1,7 @@
 import { Button, MessagePart } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
@@ -95,7 +96,7 @@ export function AiFailureMessage({
 
 /**
  * Diagnostic detail the user explicitly asked for: the persisted `message`
- * and failure snapshot are shown verbatim here, never inline in the card.
+ * and failure snapshot remain available beneath the readable explanation.
  */
 export function AiFailureDetailSheet({
   data,
@@ -112,6 +113,7 @@ export function AiFailureDetailSheet({
   const { t } = useTranslation();
   const detail = readAiFailureDetail(data);
   const facts = Object.fromEntries(detail.facts.map((fact) => [t(fact.labelKey), fact.value]));
+  const titleKey = aiFailureReasonTitleKey(data.reasonCode);
 
   return (
     <MessagePart.Detail
@@ -134,20 +136,34 @@ export function AiFailureDetailSheet({
       testID={testID}
       title={t('chat.errorPart.detail.title')}
     >
-      {detail.message ? (
-        <MessageDetailText
-          tone="danger"
-          title={t('chat.errorPart.detail.message')}
-          value={detail.message}
-        />
-      ) : null}
-      <MessagePart.ValueSection title={t('chat.errorPart.detail.facts')} value={facts} />
-      {detail.responseBody ? (
-        <MessageDetailText
-          title={t('chat.errorPart.detail.responseBody')}
-          value={detail.responseBody}
-          variant="code"
-        />
+      <View className="gap-2">
+        <Text accessibilityRole="header" className="text-xl font-semibold text-foreground">
+          {t(titleKey ?? 'chat.errorPart.title')}
+        </Text>
+        <Text className="text-base text-muted-foreground">
+          {t(
+            data.reasonCode === 'auth'
+              ? 'chat.errorPart.message.auth'
+              : 'chat.errorPart.detail.guidance',
+          )}
+        </Text>
+      </View>
+      {detail.message || detail.facts.length || detail.responseBody ? (
+        <MessagePart.ToolGroup
+          state="complete"
+          testID={`${testID}-technical`}
+          title={t('chat.errorPart.detail.technical')}
+        >
+          <View className="gap-4">
+            <MessageDetailText title={t('chat.errorPart.detail.message')} value={detail.message} />
+            <MessagePart.ValueSection title={t('chat.errorPart.detail.facts')} value={facts} />
+            <MessageDetailText
+              title={t('chat.errorPart.detail.responseBody')}
+              value={detail.responseBody}
+              variant="code"
+            />
+          </View>
+        </MessagePart.ToolGroup>
       ) : null}
     </MessagePart.Detail>
   );

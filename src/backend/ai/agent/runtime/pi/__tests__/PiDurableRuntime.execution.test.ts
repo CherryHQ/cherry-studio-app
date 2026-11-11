@@ -61,8 +61,12 @@ function isolatedDiagnosticRuntime(
 }
 
 describe('Pi durable execution integration', () => {
-  test('an isolated diagnosis delivers read-tool evidence back to the same model loop', async () => {
+  test('an isolated diagnosis delivers one final report after reading tool evidence', async () => {
     const requests: TranscriptContext[] = [];
+    const answer = JSON.stringify({
+      cause: 'Authentication failed.',
+      advice: ['Check the API key.'],
+    });
     const runtime = isolatedDiagnosticRuntime((context) => {
       requests.push(context);
       const message: AssistantMessage =
@@ -82,9 +86,18 @@ describe('Pi durable execution integration', () => {
           : {
               ...emptyAssistantMessage(wire),
               stopReason: 'stop',
-              content: [{ type: 'text', text: 'The service rejected authentication.' }],
+              content: [{ type: 'text', text: answer }],
             };
       const stream = new AssistantMessageEventStream();
+      if (requests.length > 1) {
+        const text = answer.slice(0, 20);
+        const partial: AssistantMessage = {
+          ...message,
+          content: [{ type: 'text', text }],
+        };
+        stream.push({ type: 'start', partial });
+        stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial });
+      }
       stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
       return stream;
     });
@@ -117,9 +130,15 @@ describe('Pi durable execution integration', () => {
       expect(events).toContainEqual({ type: 'completed' });
       expect(requests).toHaveLength(2);
       expect(JSON.stringify(requests[1]?.messages)).toContain('401');
+      expect(
+        events.flatMap((event) =>
+          (event.type === 'part.add' || event.type === 'part.replace') && event.part.type === 'text'
+            ? [event.part.text]
+            : [],
+        ),
+      ).toEqual([answer]);
       expect(events).toContainEqual(
         expect.objectContaining({
-          type: 'part.replace',
           part: expect.objectContaining({
             type: 'tool',
             state: 'output-available',

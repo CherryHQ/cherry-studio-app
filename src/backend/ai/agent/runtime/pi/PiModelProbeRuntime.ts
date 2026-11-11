@@ -5,12 +5,7 @@ import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
 import { runtimeLane } from '../durableTypes';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
-import type {
-  AgentRuntime,
-  AgentRuntimeSession,
-  RuntimeExecutionRequest,
-  RuntimeOutputPart,
-} from '../types';
+import type { AgentRuntime, AgentRuntimeSession, RuntimeExecutionRequest } from '../types';
 import { toPiConversation } from './modelMessages';
 import { cherryClientIdentity, createPiDurableModels } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -108,17 +103,13 @@ class PiModelProbeSession implements AgentRuntimeSession {
         extensions: [extension],
       },
     });
-    const previous = new Map<string, RuntimeOutputPart>();
     this.observer = new PiDurableObserver(this.runtime, runtimeLane(request.sessionId), (event) => {
       if (event.type !== 'turn.updated') return;
-      for (const [index, part] of event.turn.parts.entries()) {
-        const old = previous.get(part.id);
-        if (!old) this.channel.push({ type: 'part.add', index, part });
-        else if (JSON.stringify(old) !== JSON.stringify(part))
-          this.channel.push({ type: 'part.replace', part });
-        previous.set(part.id, part);
-      }
+      // Live parts change IDs on commit; probes publish only the terminal snapshot.
       if (event.turn.status === 'running' || event.turn.status === 'queued') return;
+      for (const [index, part] of event.turn.parts.entries()) {
+        this.channel.push({ type: 'part.add', index, part });
+      }
       if (event.turn.status === 'completed') this.channel.push({ type: 'completed' });
       else if (event.turn.status === 'cancelled') this.channel.push({ type: 'cancelled' });
       else

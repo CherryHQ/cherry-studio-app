@@ -2,11 +2,13 @@ import ActivityIcon from '@cherrystudio/app-icons/icons/activity';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import ClockIcon from '@cherrystudio/app-icons/icons/clock';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import {
   BottomSheet,
   Button,
   ContentState,
+  MessagePart,
   Section,
   Spinner,
   useAlert,
@@ -18,58 +20,14 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFeedbackActions, useFeedbackCapture } from '@/frontend/appShell/feedback';
-import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
-import type {
-  DiagnosticCheck,
-  DiagnosticEvidence,
-  DiagnosticIssue,
-} from '@/shared/contracts/diagnosticSession';
+import type { DiagnosticCheck, DiagnosticEvidence } from '@/shared/contracts/diagnosticSession';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
+import { DiagnosticAiResult } from './DiagnosticAiResult';
+import { DiagnosticEvidenceDetail } from './DiagnosticEvidenceDetail';
+import { checkKeys, factKeys, issueKeys, statusKeys } from './diagnosticLabels';
 import { useDiagnosticSession } from './useDiagnosticSession';
-
-const issueKeys: Record<DiagnosticIssue, string> = {
-  missing_model: 'diagnosis.issue.missing_model',
-  configuration: 'diagnosis.issue.configuration',
-  authentication: 'diagnosis.issue.authentication',
-  permission: 'diagnosis.issue.permission',
-  quota: 'diagnosis.issue.quota',
-  rate_limit: 'diagnosis.issue.rate_limit',
-  network: 'diagnosis.issue.network',
-  timeout: 'diagnosis.issue.timeout',
-  model: 'diagnosis.issue.model',
-  unavailable: 'diagnosis.issue.unavailable',
-  unsupported: 'diagnosis.issue.unsupported',
-  remote: 'diagnosis.issue.remote',
-  storage: 'diagnosis.issue.storage',
-  unknown: 'diagnosis.issue.unknown',
-};
-const checkKeys: Record<DiagnosticCheck['id'], string> = {
-  model: 'diagnosis.check.model',
-  endpoint: 'diagnosis.check.endpoint',
-  model_list: 'diagnosis.check.model_list',
-  conversation: 'diagnosis.check.conversation',
-  plugins: 'diagnosis.check.plugins',
-  permissions: 'diagnosis.check.permissions',
-  storage: 'diagnosis.check.storage',
-};
-const statusKeys: Record<DiagnosticCheck['status'], string> = {
-  pass: 'diagnosis.status.pass',
-  warn: 'diagnosis.status.warn',
-  fail: 'diagnosis.status.fail',
-  skipped: 'diagnosis.status.skipped',
-  error: 'diagnosis.status.error',
-  pending: 'diagnosis.status.pending',
-};
-const factKeys: Record<string, string> = {
-  httpStatus: 'diagnosis.fact.httpStatus',
-  latencyMs: 'diagnosis.fact.latencyMs',
-  enabledCount: 'diagnosis.fact.enabledCount',
-  connectedCount: 'diagnosis.fact.connectedCount',
-  missingCount: 'diagnosis.fact.missingCount',
-  freeBytes: 'diagnosis.fact.freeBytes',
-};
 
 export function DiagnosisScreen() {
   const captured = useFeedbackCapture();
@@ -106,6 +64,10 @@ export function DiagnosisScreen() {
     : finding
       ? t('diagnosis.needsAttention')
       : t('diagnosis.passed');
+  const target = workflow.report?.target;
+  const settingsLabel = target
+    ? t('diagnosis.providerSettings', { provider: target.providerName })
+    : t('diagnosis.openSettings');
 
   function feedback() {
     const input = context ?? { feature: 'other' as const };
@@ -161,18 +123,33 @@ export function DiagnosisScreen() {
       <SettingsScrollPage
         contentClassName="gap-6"
         headerProps={{
+          onBack: showAi
+            ? () => {
+                workflow.cancel();
+                setShowAi(false);
+              }
+            : undefined,
           title: t(
-            showAi ? 'diagnosis.aiTitle' : context ? 'diagnosis.title' : 'diagnosis.systemTitle',
+            showAi
+              ? workflow.ai
+                ? 'diagnosis.aiResult'
+                : 'diagnosis.aiTitle'
+              : context
+                ? 'diagnosis.title'
+                : 'diagnosis.systemTitle',
           ),
         }}
       >
-        {workflow.report?.target ? (
-          <Section>
-            <Section.Item
-              label={workflow.report.target.modelName}
-              description={workflow.report.target.providerName}
-            />
-          </Section>
+        {target ? (
+          <View className="gap-1 px-1">
+            <Text className="text-xs text-muted-foreground">
+              {t(context ? 'diagnosis.targetModel' : 'diagnosis.checkedModel')}
+            </Text>
+            <Text className="text-base font-medium text-foreground">
+              {target.modelName}
+              <Text className="font-normal text-muted-foreground"> · {target.providerName}</Text>
+            </Text>
+          </View>
         ) : null}
 
         {workflow.busy ? (
@@ -196,50 +173,59 @@ export function DiagnosisScreen() {
 
         {showAi ? (
           <>
-            <Button
-              size="inline"
-              variant="text"
-              onPress={() => {
-                workflow.cancel();
-                setShowAi(false);
-              }}
-            >
-              {t('diagnosis.applicationChecks')}
-            </Button>
             {workflow.ai ? (
-              <View className="gap-3 px-1">
-                <Text className="text-xs text-muted-foreground">{workflow.ai.modelName}</Text>
-                <Text className="text-2xl font-semibold text-foreground" selectable>
-                  {workflow.ai.cause}
-                </Text>
+              <View className="px-1">
+                <DiagnosticAiResult
+                  report={workflow.ai}
+                  title={finding ? summary : t('diagnosis.conclusion')}
+                />
               </View>
             ) : !busy && !workflow.error ? (
               <ContentState.Empty title={t('diagnosis.aiTitle')} />
             ) : null}
             {workflow.evidence.length ? (
-              <Section title={t('diagnosis.evidence')}>
-                {workflow.evidence.map((entry) => (
-                  <Section.Item
-                    key={entry.id}
-                    label={t(`diagnosis.tool.${entry.tool}`)}
-                    leading={<CheckIcon className="size-4 text-success" />}
-                    onPress={() => setDetail(entry)}
-                  />
-                ))}
-              </Section>
+              <MessagePart.ToolGroup
+                state={workflow.busy === 'ai' ? 'running' : 'complete'}
+                statusText={new Intl.NumberFormat(i18n.resolvedLanguage).format(
+                  workflow.evidence.length,
+                )}
+                testID="diagnosis-evidence"
+                title={t('diagnosis.evidence')}
+              >
+                <Section>
+                  {workflow.evidence.map((entry) => (
+                    <Section.Item
+                      key={entry.id}
+                      label={t(`diagnosis.tool.${entry.tool}`)}
+                      leading={<FileTextIcon className="size-4 text-muted-foreground" />}
+                      onPress={() => setDetail(entry)}
+                    />
+                  ))}
+                </Section>
+              </MessagePart.ToolGroup>
             ) : null}
             {workflow.ai ? (
-              <View className="gap-3 px-1">
-                <Text className="text-base font-semibold text-foreground">
-                  {t('diagnosis.advice')}
-                </Text>
-                {workflow.ai.advice.map((advice, index) => (
-                  <Text
-                    key={advice}
-                    className="text-base text-foreground"
-                    selectable
-                  >{`${index + 1}. ${advice}`}</Text>
-                ))}
+              <View className="gap-4 px-1">
+                <Text className="text-xs text-muted-foreground">{t('diagnosis.analysisNote')}</Text>
+                <View className="gap-1">
+                  <Text className="text-xs text-muted-foreground">
+                    {t('diagnosis.diagnosticModel')}
+                  </Text>
+                  <Text className="text-sm text-foreground">{workflow.ai.modelName}</Text>
+                  <View className="items-start">
+                    <Button
+                      disabled={busy}
+                      size="inline"
+                      variant="text"
+                      onPress={() => {
+                        setShowAi(false);
+                        setPickerOpen(true);
+                      }}
+                    >
+                      {t('diagnosis.changeModel')}
+                    </Button>
+                  </View>
+                </View>
               </View>
             ) : null}
           </>
@@ -247,7 +233,9 @@ export function DiagnosisScreen() {
           <>
             {workflow.report && !busy ? (
               <View className="gap-2 px-1">
-                <Text className="text-2xl font-semibold text-foreground">{summary}</Text>
+                <Text accessibilityRole="header" className="text-xl font-semibold text-foreground">
+                  {summary}
+                </Text>
               </View>
             ) : null}
             {checks.length ? (
@@ -267,7 +255,11 @@ export function DiagnosisScreen() {
                     }
                     trailing={
                       <Text className="text-xs text-muted-foreground">
-                        {t(statusKeys[check.status])}
+                        {t(
+                          check.id === 'endpoint' && check.status === 'pass'
+                            ? 'diagnosis.endpointReachable'
+                            : statusKeys[check.status],
+                        )}
                       </Text>
                     }
                     onPress={() => setDetail(check)}
@@ -313,13 +305,9 @@ export function DiagnosisScreen() {
               } else if (model) void workflow.diagnose(model.modelId);
             }}
           >
-            {t(
-              workflow.ai
-                ? 'diagnosis.openSettings'
-                : workflow.error === 'stale'
-                  ? 'diagnosis.recheck'
-                  : 'common.retry',
-            )}
+            {workflow.ai
+              ? settingsLabel
+              : t(workflow.error === 'stale' ? 'diagnosis.recheck' : 'common.retry')}
           </Button>
         ) : (
           <Button
@@ -332,23 +320,20 @@ export function DiagnosisScreen() {
               }
             }}
           >
-            {t('diagnosis.aiTitle')}
+            {t('diagnosis.startAi')}
           </Button>
         )}
         <View className="flex-row items-center justify-center gap-6">
-          <Button
-            disabled={busy}
-            size="sm"
-            variant="ghost"
-            onPress={() => {
-              if (showAi) {
-                setShowAi(false);
-                setPickerOpen(true);
-              } else void workflow.check(context !== undefined || hasNetwork);
-            }}
-          >
-            {t(showAi ? 'diagnosis.changeModel' : 'diagnosis.recheck')}
-          </Button>
+          {!showAi ? (
+            <Button
+              disabled={busy}
+              size="sm"
+              variant="ghost"
+              onPress={() => void workflow.check(context !== undefined || hasNetwork)}
+            >
+              {t('diagnosis.recheck')}
+            </Button>
+          ) : null}
           <Button disabled={busy} size="sm" variant="ghost" onPress={feedback}>
             {t('diagnosis.feedback')}
           </Button>
@@ -380,14 +365,16 @@ export function DiagnosisScreen() {
         >
           <ScrollView contentContainerClassName="gap-4 px-5 pb-6">
             {'tool' in detail ? (
-              <MessageDetailText
-                title={t('diagnosis.evidence')}
-                value={detail.facts}
-                variant="code"
-              />
+              <DiagnosticEvidenceDetail evidence={detail} target={target} />
             ) : (
               <>
-                <Text className="text-base text-foreground">{t(statusKeys[detail.status])}</Text>
+                <Text className="text-base text-foreground">
+                  {t(
+                    detail.id === 'endpoint' && detail.status === 'pass'
+                      ? 'diagnosis.endpointReachable'
+                      : statusKeys[detail.status],
+                  )}
+                </Text>
                 {detail.issue ? (
                   <Text className="text-sm text-muted-foreground">
                     {t(issueKeys[detail.issue])}
@@ -404,6 +391,11 @@ export function DiagnosisScreen() {
                 {detail.id === 'endpoint' && workflow.report?.target?.endpointHost ? (
                   <Text className="font-mono text-sm text-foreground" selectable>
                     {workflow.report.target.endpointHost}
+                  </Text>
+                ) : null}
+                {detail.id === 'endpoint' && detail.status === 'pass' ? (
+                  <Text className="text-sm text-muted-foreground">
+                    {t('diagnosis.endpointNote')}
                   </Text>
                 ) : null}
                 {detail.id === 'conversation' && detail.status !== 'skipped' ? (
