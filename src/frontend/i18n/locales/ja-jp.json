@@ -456,6 +456,7 @@
   "chat.input.attachmentsRejected": "これらの添付ファイルは送信できません。形式とファイル サイズを確認し、文書が破損していないか、パスワードで保護されていないかを確認してください。サポートされているドキュメント: PDF、DOCX、PPTX、XLSX、およびテキスト ファイル。",
   "chat.input.disclaimer": "AI生成コンテンツです。参考情報としてご利用ください",
   "chat.input.editing.attachments": "保持する添付ファイル：{{number}}",
+  "chat.input.editing.continuation": "元の会話の続き",
   "chat.input.editing.title": "質問を編集中",
   "chat.input.sendError.agentNotFound": "このエージェントはもう存在しません。",
   "chat.input.sendError.executionUnavailable": "このエージェントのモデルまたはツールは利用できません。エージェントの設定を確認してください。",

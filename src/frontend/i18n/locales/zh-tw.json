@@ -456,6 +456,7 @@
   "chat.input.attachmentsRejected": "無法發送這些附件，請檢查格式、檔案大小，以及文檔是否損壞或受密碼保護。支持 PDF、DOCX、PPTX、XLSX 和文本檔案。",
   "chat.input.disclaimer": "內容由 AI 生成，僅供參考",
   "chat.input.editing.attachments": "保留附件：{{number}}",
+  "chat.input.editing.continuation": "原對話後續",
   "chat.input.editing.title": "正在編輯問題",
   "chat.input.sendError.agentNotFound": "該 Agent 已不存在。",
   "chat.input.sendError.executionUnavailable": "該 Agent 的模型或工具不可用，請檢查 Agent 設定。",

@@ -468,6 +468,7 @@
   "chat.input.attachmentsRejected": "Эти вложения невозможно отправить. Проверьте формат и размер файла, а также убедитесь, что документы не повреждены и не защищены паролем. Поддерживаемые документы: PDF, DOCX, PPTX, XLSX и текстовые файлы.",
   "chat.input.disclaimer": "Контент сгенерирован ИИ и носит справочный характер",
   "chat.input.editing.attachments": "Сохранено вложений: {{number}}",
+  "chat.input.editing.continuation": "Исходное продолжение",
   "chat.input.editing.title": "Редактирование вопроса",
   "chat.input.sendError.agentNotFound": "Этот Агент больше не существует.",
   "chat.input.sendError.executionUnavailable": "Модель или инструменты этого Агента недоступны. Проверьте настройки Агента.",

@@ -460,6 +460,7 @@
   "chat.input.attachmentsRejected": "These attachments cannot be sent. Check the format and file size, and make sure documents are not damaged or password-protected. Supported documents: PDF, DOCX, PPTX, XLSX, and text files.",
   "chat.input.disclaimer": "AI-generated content, for reference only",
   "chat.input.editing.attachments": "Keeps attachments: {{number}}",
+  "chat.input.editing.continuation": "Original continuation",
   "chat.input.editing.title": "Editing question",
   "chat.input.sendError.agentNotFound": "This Agent no longer exists.",
   "chat.input.sendError.executionUnavailable": "This Agent's model or tools are unavailable. Check the Agent settings.",

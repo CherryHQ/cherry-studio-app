@@ -460,6 +460,7 @@
   "chat.input.attachmentsRejected": "Bu ekler gönderilemiyor. Formatı ve dosya boyutunu kontrol edin ve belgelerin hasarlı veya parola korumalı olmadığından emin olun. Desteklenen belgeler: PDF, DOCX, PPTX, XLSX ve metin dosyaları.",
   "chat.input.disclaimer": "Yapay zekâ tarafından oluşturulan içerik yalnızca referans amaçlıdır",
   "chat.input.editing.attachments": "Korunan ekler: {{number}}",
+  "chat.input.editing.continuation": "Özgün devam",
   "chat.input.editing.title": "Soru düzenleniyor",
   "chat.input.sendError.agentNotFound": "Bu Ajan artık mevcut değil.",
   "chat.input.sendError.executionUnavailable": "Bu Ajanın modeli veya araçları kullanılamıyor. Ajan ayarlarını kontrol edin.",

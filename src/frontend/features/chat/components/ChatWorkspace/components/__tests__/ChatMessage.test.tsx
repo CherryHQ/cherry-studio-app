@@ -193,6 +193,30 @@ describe('ChatMessage', () => {
     expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
   });
 
+  test('labels the original continuation without dimming message content', () => {
+    act(() => {
+      renderer = create(
+        <ChatMessage
+          assistantPresentation={{ name: 'Assistant' }}
+          isMessageActionsEnabled={false}
+          message={createMessage('success')}
+          shouldShowTimestamp={false}
+          editingContext="continuation"
+          startsEditingContinuation
+        />,
+      );
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'editing-original-continuation' }).props.children,
+    ).toBe('chat.input.editing.continuation');
+    expect(
+      renderer!.root.findByProps({ testID: 'editing-continuation-edge' }).props.pointerEvents,
+    ).toBe('none');
+    expect(
+      renderer!.root.findByProps({ testID: 'chat-message-assistant-1' }).props.style,
+    ).toBeUndefined();
+  });
+
   test('offers Edit on a settled question the transcript can edit', () => {
     mockEditableMessageIds = new Set(['user-1']);
     act(() => {

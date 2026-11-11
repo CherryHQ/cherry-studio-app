@@ -49,6 +49,8 @@ type ChatMessageProps = {
   shouldShowTimestamp: boolean;
   attachments?: ReactNode;
   accessories?: ReactNode;
+  editingContext?: 'question' | 'continuation';
+  startsEditingContinuation?: boolean;
   /** A stable renderer, called here so the row's memo boundary still holds. */
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
@@ -277,7 +279,10 @@ export const ChatMessage = memo(function ChatMessage({
   attachments,
   accessories,
   renderUsage,
+  editingContext,
+  startsEditingContinuation = false,
 }: ChatMessageProps) {
+  const { t } = useTranslation();
   const isSelecting = useIsChatShareSelecting();
   const quotePart = message.data.parts?.find(
     (part) => part.type === 'text' && readCherryMeta(part)?.quotes,
@@ -289,6 +294,7 @@ export const ChatMessage = memo(function ChatMessage({
       <View className="gap-2">
         <UserMessage
           variant={isSelecting ? 'selection' : 'default'}
+          editingContext={isSelecting ? undefined : editingContext}
           attachments={attachments}
           message={message}
           quote={quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : undefined}
@@ -309,6 +315,11 @@ export const ChatMessage = memo(function ChatMessage({
   return (
     <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
       <MessageQuoteHighlight messageId={message.id} />
+      {startsEditingContinuation && !isSelecting ? (
+        <Text className="text-xs text-muted-foreground" testID="editing-original-continuation">
+          {t('chat.input.editing.continuation')}
+        </Text>
+      ) : null}
       {createdAt ? (
         <Text
           className="text-center font-mono text-muted-foreground text-xs"
@@ -317,15 +328,26 @@ export const ChatMessage = memo(function ChatMessage({
           {createdAt}
         </Text>
       ) : null}
-      <ChatShareSelectionRow message={message}>
-        {isMessageActionsEnabled ? (
-          <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
-            {content}
-          </ChatMessageContextMenu>
-        ) : (
-          content
-        )}
-      </ChatShareSelectionRow>
+      <View>
+        {/* Keep descendant body/attachment contrast intact. The grouping edge and quieter
+            question surfaces lower emphasis without dimming readable content to 35%. */}
+        {editingContext === 'continuation' && !isSelecting ? (
+          <View
+            pointerEvents="none"
+            className="absolute -left-2 top-0 bottom-0 border-l border-border-subtle"
+            testID="editing-continuation-edge"
+          />
+        ) : null}
+        <ChatShareSelectionRow message={message}>
+          {isMessageActionsEnabled ? (
+            <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
+              {content}
+            </ChatMessageContextMenu>
+          ) : (
+            content
+          )}
+        </ChatShareSelectionRow>
+      </View>
     </View>
   );
 });

@@ -464,6 +464,7 @@
   "chat.input.attachmentsRejected": "Aceste atașamente nu pot fi trimise. Verificați formatul și dimensiunea fișierului și asigurați-vă că documentele nu sunt deteriorate sau protejate prin parolă. Documente acceptate: PDF, DOCX, PPTX, XLSX și fișiere text.",
   "chat.input.disclaimer": "Conținut generat de IA, doar pentru referință",
   "chat.input.editing.attachments": "Atașamente păstrate: {{number}}",
+  "chat.input.editing.continuation": "Continuarea originală",
   "chat.input.editing.title": "Editarea întrebării",
   "chat.input.sendError.agentNotFound": "Acest agent nu mai există.",
   "chat.input.sendError.executionUnavailable": "Modelul sau instrumentele acestui agent nu sunt disponibile. Verificați setările Agentului.",

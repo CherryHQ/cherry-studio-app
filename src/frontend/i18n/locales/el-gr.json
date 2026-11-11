@@ -460,6 +460,7 @@
   "chat.input.attachmentsRejected": "Δεν είναι δυνατή η αποστολή αυτών των συνημμένων. Ελέγξτε τη μορφή και το μέγεθος του αρχείου και βεβαιωθείτε ότι τα έγγραφα δεν είναι κατεστραμμένα ή δεν προστατεύονται με κωδικό πρόσβασης. Υποστηριζόμενα έγγραφα: PDF, DOCX, PPTX, XLSX και αρχεία κειμένου.",
   "chat.input.disclaimer": "Περιεχόμενο που δημιουργήθηκε από AI, μόνο για αναφορά",
   "chat.input.editing.attachments": "Διατηρούνται συνημμένα: {{number}}",
+  "chat.input.editing.continuation": "Αρχική συνέχεια",
   "chat.input.editing.title": "Επεξεργασία ερώτησης",
   "chat.input.sendError.agentNotFound": "Αυτός ο Πράκτορας δεν υπάρχει πλέον.",
   "chat.input.sendError.executionUnavailable": "Το μοντέλο ή τα εργαλεία αυτού του πράκτορα δεν είναι διαθέσιμα. Ελέγξτε τις ρυθμίσεις πράκτορα.",
