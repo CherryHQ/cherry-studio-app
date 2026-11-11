@@ -1,6 +1,11 @@
 import { TransformStream as NodeTransformStream } from 'node:stream/web';
 
-import { Client, SdkErrorCode } from '@modelcontextprotocol/client';
+import {
+  Client,
+  InsufficientScopeError,
+  SdkErrorCode,
+  SdkHttpError,
+} from '@modelcontextprotocol/client';
 
 import { McpLegacyFallbackError } from '@/shared/contracts/mcp';
 
@@ -13,7 +18,7 @@ globalThis.TransformStream = NodeTransformStream as typeof TransformStream;
 
 function fixture(
   probe: '500' | 'network' | 'html' | 'unrecognized' | 'modern' | 'silent',
-  legacyFails: boolean | 'unsupported' = false,
+  legacyFails: boolean | 'unsupported' | 401 | 403 | 'insufficient_scope' = false,
 ) {
   const methods: string[] = [];
   mockFetch.mockImplementation(async (_url: string, init: RequestInit) => {
@@ -63,8 +68,15 @@ function fixture(
         }),
         { status: 400, headers: { 'content-type': 'application/json' } },
       );
+    if (request.method === 'initialize' && legacyFails === 'insufficient_scope')
+      return new Response('error', {
+        status: 403,
+        headers: { 'www-authenticate': 'Bearer error="insufficient_scope", scope="tools:read"' },
+      });
     if (request.method === 'initialize' && legacyFails)
-      return new Response('error', { status: 500 });
+      return new Response('error', {
+        status: typeof legacyFails === 'number' ? legacyFails : 500,
+      });
     const result =
       request.method === 'initialize'
         ? {
@@ -126,6 +138,46 @@ it('leaves SDK internal legacy negotiation alone', async () => {
   expect(callback).not.toHaveBeenCalled();
   await client.close();
 });
+
+it.each([
+  [401, false],
+  [403, false],
+  ['insufficient_scope', false],
+  [401, true],
+  [403, true],
+  ['insufficient_scope', true],
+] as const)(
+  'preserves a legacy %s rejection with cached preference %s',
+  async (legacyFailure, shouldUseLegacyProtocol) => {
+    const methods = fixture('500', legacyFailure);
+    const callback = jest.fn();
+    const error = await createRemoteMcpClient({
+      config: {
+        endpointUrl: 'https://example.com/mcp',
+        headers: { Authorization: 'Bearer expired-static-token' },
+      },
+      signal: new AbortController().signal,
+      foreground: false,
+      authorization: { token: jest.fn(), rejected: jest.fn() },
+      onLegacyPreferenceChanged: callback,
+      shouldUseLegacyProtocol,
+    }).catch((value: unknown) => value);
+    if (legacyFailure === 'insufficient_scope') {
+      expect(error).toBeInstanceOf(InsufficientScopeError);
+      expect(error).toMatchObject({ requiredScope: 'tools:read' });
+    } else {
+      expect(error).toBeInstanceOf(SdkHttpError);
+      expect(error).toMatchObject({
+        code: SdkErrorCode.ClientHttpNotImplemented,
+        status: legacyFailure,
+      });
+    }
+    expect(
+      methods.filter((method) => method === 'server/discover' || method === 'initialize'),
+    ).toEqual(shouldUseLegacyProtocol ? ['initialize'] : ['server/discover', 'initialize']);
+    expect(callback).not.toHaveBeenCalled();
+  },
+);
 
 it('retains both failures without exposing upstream messages', async () => {
   fixture('500', true);

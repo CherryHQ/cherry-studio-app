@@ -1,5 +1,6 @@
 import {
   Client,
+  InsufficientScopeError,
   ProtocolError,
   ProtocolErrorCode,
   SdkHttpError,
@@ -192,8 +193,11 @@ function isNonRetryableConnectionError(error: unknown, signal: AbortSignal): boo
   return (
     signal.aborted ||
     error instanceof McpAuthorizationError ||
+    error instanceof InsufficientScopeError ||
     error instanceof McpRedirectError ||
     (error instanceof Error && error.name === 'AbortError') ||
+    // Legacy handshakes use ClientHttpNotImplemented for ordinary 401/403 replies.
+    (SdkHttpError.isInstance(error) && (error.status === 401 || error.status === 403)) ||
     (SdkError.isInstance(error) &&
       [
         SdkErrorCode.RequestTimeout,
