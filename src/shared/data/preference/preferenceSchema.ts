@@ -52,6 +52,8 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'app.background_run_guidance.seen': boolean;
+  /** Device-local audio opt-in; null means unseen, and only explicit confirmation stores true. */
+  'app.background_audio.consent': boolean | null;
 
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
@@ -114,6 +116,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'app.background_run_guidance.seen': false,
+  'app.background_audio.consent': null,
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
@@ -160,6 +163,7 @@ export type PreferenceKeyType = keyof PreferenceSchema;
  * Restoring a backup keeps the target device's values for these keys.
  */
 export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_audio.consent',
   'app.background_run_guidance.seen',
   'app.feedback.shake_enabled',
   'app.feedback.shake_hint_decision',

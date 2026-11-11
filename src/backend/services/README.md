@@ -29,8 +29,8 @@ suffix.
   feature-agnostic `JobRuntime`. The runtime itself depends only on the database, that registry,
   and the `KeepAliveSource` capability; it must not import paintings or background activity
   implementations directly.
-- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: a finite UIKit background
-  execution window on iOS and a foreground service on Android. Each consumer decides when to
+- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: finite UIKit time with task-owned
+  native audio after explicit iOS consent, and a foreground service on Android. Each consumer decides when to
   acquire and how to handle expiry. `backgroundActivity` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state

@@ -62,7 +62,7 @@ The current execution classes are:
 | Class | Current behavior |
 | --- | --- |
 | `foreground-only` | Dispatched by the in-process pump without a background keep-alive lease |
-| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: a finite UIKit background execution window on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
+| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: finite UIKit time plus task-owned audio after consent on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
 | `bounded-background` | Defined but not dispatched; no background-task adapter is installed |
 | `system-transfer` | Defined but not dispatched; no system-transfer adapter is installed |
 
@@ -147,8 +147,9 @@ and may be retried explicitly.
 ## Current Boundaries
 
 - The ledger survives process death; an in-memory `JobHandle.finished` promise does not.
-- `user-continued` is best effort. `IosBackgroundExecutionSource` shares one finite UIKit window
-  across holders; expiry interrupts them and does not renew the window while backgrounded. For
+- `user-continued` is best effort. `IosBackgroundExecutionSource` shares finite UIKit time and,
+  after explicit consent, task-owned audio across holders. Loss of both interrupts them without
+  renewing the exhausted window or restarting audio in the same background stay. For
   painting jobs the interruption aborts/cancels execution; Durable Agent work instead suspends its
   Harness for later recovery. Android uses the `dataSync` foreground service in
   [Android Background Generation](./android-background-generation.md). Neither guarantees continuous

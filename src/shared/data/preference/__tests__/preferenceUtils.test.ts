@@ -41,6 +41,11 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });
 
+test('background audio needs a new device-local decision rather than prior guidance or backup consent', () => {
+  expect(getDefaultValue('app.background_audio.consent')).toBeNull();
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.background_audio.consent');
+});
+
 test('dictation is opt-in and voice engine choices stay on the device', () => {
   expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();

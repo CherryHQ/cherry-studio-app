@@ -270,7 +270,9 @@ user-owned verification policy.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, shared first downloads and request cancellation; the host stops it.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
-- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
+- `IosBackgroundExecutionSource` owns the finite UIKit window and task-scoped native audio after
+  device-local opt-in. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+  uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.

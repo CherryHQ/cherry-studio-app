@@ -121,7 +121,7 @@ turn-completion alerts from permission and question notifications.
 These are locally delivered alerts while the Mobile process can receive events. APNs/FCM device
 registration and a desktop/server push sender are not implemented; after iOS suspends Mobile,
 remote events cannot refresh its card or trigger an alert until execution resumes. A Live Activity
-does not extend the finite UIKit execution window. Reliable suspended-app delivery requires that
+does not itself grant execution time. Reliable suspended-app delivery requires that
 separate end-to-end push transport.
 
 ## Settled Surfaces
@@ -173,18 +173,27 @@ the card. This does not change stored task content.
 
 The frontend consumes the coordinator's public execution status rather than inferring protection
 from a visible card. Android reports active only after native foreground-service proof. Denied
-admission is limited; revocation is interrupted. iOS uses a finite UIKit background task and reports limited even after admission.
-The last lease release ends the assertion. Expiration ends it natively, then notifies held
-consumers to interrupt their work; no new assertion is requested in the same background stay.
-Returning to foreground permits a new window for remaining or newly started work. Late expiration
-callbacks cannot interrupt a replacement window. Suspension may delay JavaScript cleanup; cold
-startup still reconciles unfinished work. This does not promise a fixed duration or automatic replay.
+admission is limited; revocation is interrupted. iOS always reports limited: the system can revoke
+execution even when native admission succeeds. Its default protection is a finite UIKit background
+task. The existing first-use background guidance offers a short audio disclosure and Enable action.
+Only explicit confirmation stores `app.background_audio.consent: true`; showing or cancelling it
+leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
+target device's decision. No settings row or switch is added.
+
+Consenting unfinished work shares a task-owned silent audio loop alongside the finite window.
+Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
+expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
+finite allowance; when neither mechanism protects background work, each held consumer is interrupted
+once and audio cannot restart that work in the same background stay. The last lease release and
+service shutdown end both mechanisms. Foreground return allows a fresh window. Late native events
+cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
+unfinished work. This does not promise a fixed duration or automatic replay.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.
 
 iOS 26 continued-processing tasks are not integrated in this change. Their progress, expiration,
-and system-owned presentation require native feasibility acceptance before extending the finite
-UIKit window. Neither current platform mechanism promises survival of force-stop or process death.
+and system-owned presentation remain a separate native integration. Neither current platform
+mechanism promises survival of force-stop or process death.
 
 ## Acceptance
 
