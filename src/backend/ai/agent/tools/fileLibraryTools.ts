@@ -6,7 +6,12 @@ import { workspacePathSegments } from '@/shared/data/types/fileLibrary';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
-import { buildFileReadInstructions, createReadFileTool, readFileInputSchema } from './readFileTool';
+import {
+  buildFileReadInstructions,
+  createReadFileContentReader,
+  createReadFileTool,
+  readFileInputSchema,
+} from './readFileTool';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
@@ -48,6 +53,7 @@ export function createFileLibraryTools(
   /** The folder's display name, so the model knows which library folder is its workspace. */
   workspaceName?: string,
   acceptsImages = true,
+  readContent = createReadFileContentReader(files, parser),
 ): RuntimeTool[] {
   const tools: RuntimeTool[] = [
     {
@@ -97,8 +103,10 @@ export function createFileLibraryTools(
           parser,
           undefined,
           acceptsImages,
+          readContent,
         );
         const result = await reader.execute({ ...call, input: parsed });
+        call.signal.throwIfAborted();
         if (
           typeof result.value === 'object' &&
           result.value !== null &&
