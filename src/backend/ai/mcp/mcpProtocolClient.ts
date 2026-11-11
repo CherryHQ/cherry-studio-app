@@ -137,7 +137,7 @@ type RemoteMcpClientInput = {
   authorization: Pick<McpOAuthRuntime, 'token' | 'rejected'>;
   onCatalogChanged?: () => void;
   shouldUseLegacyProtocol?: boolean;
-  onLegacyFallback?: () => void;
+  onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
 };
 
 type RemoteMcpRuntimeClient = McpRuntimeClient & {
@@ -152,49 +152,55 @@ export async function createRemoteMcpClient(
   input: RemoteMcpClientInput,
 ): Promise<RemoteMcpRuntimeClient> {
   input.signal.throwIfAborted();
-  if (input.shouldUseLegacyProtocol) return connectRemoteMcpClient(input, 'legacy');
+  const shouldUseLegacyProtocol = input.shouldUseLegacyProtocol === true;
   try {
-    return await connectRemoteMcpClient(input, 'auto');
+    return await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'legacy' : 'auto');
   } catch (error) {
     if (
-      input.signal.aborted ||
-      error instanceof McpAuthorizationError ||
-      error instanceof McpRedirectError ||
-      !SdkError.isInstance(error) ||
-      error.code !== SdkErrorCode.EraNegotiationFailed
+      isNonRetryableConnectionError(error, input.signal) ||
+      (!shouldUseLegacyProtocol &&
+        (!SdkError.isInstance(error) || error.code !== SdkErrorCode.EraNegotiationFailed))
     )
       throw error;
+    // Forget a failed preference even if the fresh negotiation also fails.
+    if (shouldUseLegacyProtocol) input.onLegacyPreferenceChanged?.(false);
     let client: RemoteMcpRuntimeClient;
     try {
-      client = await connectRemoteMcpClient(input, 'legacy');
-    } catch (legacyError) {
-      if (
-        input.signal.aborted ||
-        legacyError instanceof McpAuthorizationError ||
-        legacyError instanceof McpRedirectError ||
-        (legacyError instanceof Error && legacyError.name === 'AbortError') ||
-        (SdkError.isInstance(legacyError) &&
-          [
-            SdkErrorCode.RequestTimeout,
-            SdkErrorCode.ClientHttpAuthentication,
-            SdkErrorCode.ClientHttpForbidden,
-          ].includes(legacyError.code))
-      )
-        throw legacyError;
-      throw new McpLegacyFallbackError(error, legacyError);
+      client = await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'auto' : 'legacy');
+    } catch (retryError) {
+      if (isNonRetryableConnectionError(retryError, input.signal)) throw retryError;
+      throw new McpLegacyFallbackError(
+        shouldUseLegacyProtocol ? retryError : error,
+        shouldUseLegacyProtocol ? error : retryError,
+      );
     }
     if (input.signal.aborted) {
       await client.close().catch(() => undefined);
       input.signal.throwIfAborted();
     }
     try {
-      input.onLegacyFallback?.();
+      if (!shouldUseLegacyProtocol) input.onLegacyPreferenceChanged?.(true);
     } catch (publicationError) {
       await client.close().catch(() => undefined);
       throw publicationError;
     }
     return client;
   }
+}
+
+function isNonRetryableConnectionError(error: unknown, signal: AbortSignal): boolean {
+  return (
+    signal.aborted ||
+    error instanceof McpAuthorizationError ||
+    error instanceof McpRedirectError ||
+    (error instanceof Error && error.name === 'AbortError') ||
+    (SdkError.isInstance(error) &&
+      [
+        SdkErrorCode.RequestTimeout,
+        SdkErrorCode.ClientHttpAuthentication,
+        SdkErrorCode.ClientHttpForbidden,
+      ].includes(error.code))
+  );
 }
 
 async function connectRemoteMcpClient(

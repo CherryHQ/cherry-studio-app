@@ -228,7 +228,7 @@ function createMcpClient(
   authorization: McpOAuthRuntime,
   pooled?: Pick<
     Parameters<typeof createRemoteMcpClient>[0],
-    'elicit' | 'onCatalogChanged' | 'shouldUseLegacyProtocol' | 'onLegacyFallback'
+    'elicit' | 'onCatalogChanged' | 'shouldUseLegacyProtocol' | 'onLegacyPreferenceChanged'
   >,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
@@ -992,9 +992,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
           elicit: (params, requestSignal) =>
             this.askForServer(server, state, params, requestSignal),
           shouldUseLegacyProtocol: state.shouldUseLegacyProtocol,
-          onLegacyFallback: () => {
+          onLegacyPreferenceChanged: (shouldUseLegacyProtocol) => {
             if (this.isCurrentState(state, generation) && !setupSignal.aborted)
-              state.shouldUseLegacyProtocol = true;
+              state.shouldUseLegacyProtocol = shouldUseLegacyProtocol;
           },
           onCatalogChanged: () => {
             if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);

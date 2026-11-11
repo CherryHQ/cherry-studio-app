@@ -13,7 +13,7 @@ globalThis.TransformStream = NodeTransformStream as typeof TransformStream;
 
 function fixture(
   probe: '500' | 'network' | 'html' | 'unrecognized' | 'modern' | 'silent',
-  legacyFails = false,
+  legacyFails: boolean | 'unsupported' = false,
 ) {
   const methods: string[] = [];
   mockFetch.mockImplementation(async (_url: string, init: RequestInit) => {
@@ -50,6 +50,19 @@ function fixture(
         { headers: { 'content-type': 'application/json' } },
       );
     }
+    if (request.method === 'initialize' && legacyFails === 'unsupported')
+      return new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: request.id,
+          error: {
+            code: -32022,
+            message: 'Unsupported protocol version',
+            data: { supported: ['2026-07-28'] },
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
     if (request.method === 'initialize' && legacyFails)
       return new Response('error', { status: 500 });
     const result =
@@ -76,13 +89,14 @@ function fixture(
   return methods;
 }
 
-function open(onLegacyFallback = jest.fn()) {
+function open(onLegacyPreferenceChanged = jest.fn(), shouldUseLegacyProtocol = false) {
   return createRemoteMcpClient({
     config: { endpointUrl: 'https://example.com/mcp' },
     signal: new AbortController().signal,
     foreground: false,
     authorization: { token: jest.fn(), rejected: jest.fn() },
-    onLegacyFallback,
+    onLegacyPreferenceChanged,
+    shouldUseLegacyProtocol,
   });
 }
 
@@ -146,6 +160,22 @@ it('connects through modern discovery without an explicit legacy fallback', asyn
     }
   } finally {
     serverVersion.mockRestore();
+  }
+});
+
+it('recovers a cached legacy connection after the server switches to modern only', async () => {
+  const methods = fixture('modern', 'unsupported');
+  const callback = jest.fn();
+  const client = await open(callback, true);
+  try {
+    expect(client.protocolInfo?.version).toBe('2026-07-28');
+    expect((await client.listTools()).tools).toHaveLength(67);
+    expect(
+      methods.filter((method) => method === 'initialize' || method === 'server/discover'),
+    ).toEqual(['initialize', 'server/discover']);
+    expect(callback.mock.calls).toEqual([[false]]);
+  } finally {
+    await client.close();
   }
 });
 

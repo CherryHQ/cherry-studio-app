@@ -40,16 +40,16 @@ jest.mock('../mcpProtocolClient', () => ({
     elicit,
     signal,
     shouldUseLegacyProtocol,
-    onLegacyFallback,
+    onLegacyPreferenceChanged,
   }: {
     shouldUseLegacyProtocol?: boolean;
-    onLegacyFallback?: () => void;
+    onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
     config: { endpointUrl: string; headers?: Record<string, string> };
     elicit?: MockElicit;
     signal: AbortSignal;
   }) => {
     mockElicit = elicit;
-    mockProtocolControls.push({ shouldUseLegacyProtocol, onLegacyFallback });
+    mockProtocolControls.push({ shouldUseLegacyProtocol, onLegacyPreferenceChanged });
     return mockSdkInitContract({
       initializationOptions: { signal },
       transport: { type: 'http', url: config.endpointUrl, headers: config.headers },
@@ -57,8 +57,10 @@ jest.mock('../mcpProtocolClient', () => ({
   },
 }));
 
-const mockProtocolControls: { shouldUseLegacyProtocol?: boolean; onLegacyFallback?: () => void }[] =
-  [];
+const mockProtocolControls: {
+  shouldUseLegacyProtocol?: boolean;
+  onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
+}[] = [];
 
 type MockElicit = (params: unknown, signal: AbortSignal) => Promise<{ action: string }>;
 /** The question handler the service gave its most recent remote client. */
@@ -772,7 +774,7 @@ describe('runtime lifecycle', () => {
   it('keeps a successful fallback preference isolated from a second server', async () => {
     mockCreateMCPClient
       .mockImplementationOnce(() => {
-        mockProtocolControls[0]!.onLegacyFallback?.();
+        mockProtocolControls[0]!.onLegacyPreferenceChanged?.(true);
         return Promise.resolve(makeClient([]));
       })
       .mockResolvedValue(makeClient([]));
@@ -815,7 +817,7 @@ describe('runtime lifecycle', () => {
     first.listTools.mockRejectedValueOnce(new Error('disconnected'));
     mockCreateMCPClient
       .mockImplementationOnce(() => {
-        mockProtocolControls[0]!.onLegacyFallback?.();
+        mockProtocolControls[0]!.onLegacyPreferenceChanged?.(true);
         return Promise.resolve(first);
       })
       .mockResolvedValue(makeClient([]));
@@ -823,11 +825,38 @@ describe('runtime lifecycle', () => {
     const { service } = makeService([server]);
     await service.listTools(server.id);
     expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(true);
-    mockProtocolControls[1]!.onLegacyFallback?.();
+    mockProtocolControls[1]!.onLegacyPreferenceChanged?.(true);
     service.invalidateServer(server.id);
     await service.listTools(server.id);
     expect(mockProtocolControls[2]!.shouldUseLegacyProtocol).toBe(false);
     await service._doStop();
+  });
+
+  it('keeps an invalidated legacy preference cleared when automatic recovery also fails', async () => {
+    const first = makeClient([]);
+    first.listTools.mockRejectedValueOnce(new Error('disconnected'));
+    const failure = new McpLegacyFallbackError(new Error('probe'), new Error('legacy'));
+    mockCreateMCPClient
+      .mockImplementationOnce(() => {
+        mockProtocolControls[0]!.onLegacyPreferenceChanged?.(true);
+        return Promise.resolve(first);
+      })
+      .mockImplementationOnce(() => {
+        mockProtocolControls[1]!.onLegacyPreferenceChanged?.(false);
+        return Promise.reject(failure);
+      })
+      .mockResolvedValue(makeClient([]));
+    const server = makeServer();
+    const { service } = makeService([server]);
+    try {
+      await expect(service.listTools(server.id)).rejects.toBe(failure);
+      expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(true);
+      await expect(service.listTools(server.id)).resolves.toEqual([]);
+      expect(mockProtocolControls).toHaveLength(3);
+      expect(mockProtocolControls[2]!.shouldUseLegacyProtocol).toBe(false);
+    } finally {
+      await service._doStop();
+    }
   });
 
   it('connects runnable servers before returning settings summaries', async () => {
