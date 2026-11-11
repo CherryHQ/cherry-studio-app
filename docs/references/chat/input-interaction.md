@@ -99,3 +99,8 @@ or selection conformance. With explicit device-verification authorization, check
 See the [Chat Input README](../../../src/frontend/features/chat/components/ChatInput/README.md),
 [shared Composer README](../../../src/frontend/components/Composer/README.md), and
 [Interaction And Gesture Arbitration](../interaction-and-gesture-arbitration.md) for ownership.
+
+The context usage ring stays on the right of the composer at rest and while editing, beside the
+primary action. It opens a compact anchored progress popover without dismissing the keyboard or
+changing the draft. The popover shows the measured percentage and total capacity in `k token`;
+outside taps and system back dismiss it. Dictation and send/stop actions remain available.

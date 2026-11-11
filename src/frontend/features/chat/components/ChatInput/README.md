@@ -152,3 +152,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
   deletes their unexecuted message pair without invalidating the current model context. Steering
   remains outside this composer.
+
+The chat-owned context usage action stays on the right of the composer at rest and while editing.
+Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
+percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
+its Session or measured answer changes, so an old measurement cannot reopen it.
