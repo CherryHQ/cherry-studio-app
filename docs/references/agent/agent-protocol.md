@@ -455,6 +455,17 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  editUserMessage(input: {
+    sessionId: string
+    messageId: string
+    text: string
+    modelId?: UniqueModelId
+    additionalReplies?: { modelId: UniqueModelId; assistantMessageId: string }[]
+    reasoningEffort?: ReasoningEffortOption
+    imageGeneration?: AgentImageGeneration
+    skillIds?: string[]
+    skillAction?: SkillAction
+  }): Promise<void>
   editMessage(input: { sessionId: string; messageId: string; parts: { id: string; expectedText: string; text: string }[] }): Promise<AgentMessageView>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
@@ -850,6 +861,60 @@ untouched answer. A successful answer or an explicit model selection keeps the o
 visible while its sibling is prepared. Admission makes the Session busy immediately and remains
 cancellable before a turn is reserved.
 
+## Editing a question
+
+`editUserMessage` answers a settled user question anew with edited `text` and the composer's
+current model and send settings. It never rewrites the question in place.
+
+**The edit branches beside the original question.** The Host validates the stored user row,
+rejects busy Sessions with `assertIdle` and `syncSession(requireIdle)`, and owns one admission
+boundary. It passes the question's parent explicitly into shared submission: `null` selects the
+root for a first-question edit, while an omitted parent on normal sends means the current selected
+leaf. Normal target planning, `chooseLanes(parent)` and `submitTargets` prepare one or several
+answers. The shared `reserveSubmission` transaction inserts the sibling question and its pending
+answer or answers and selects the first answer. No dedicated edit reservation is used.
+
+The original question, its answers and all descendants remain unchanged. Editing does not create
+another Session, invalidate unrelated working copies or advance `runtimeRevision`. Native
+continuation or Pi `fork(at)` uses the shared lane planner with its normal rebuild fallback.
+A missing/non-user question is rejected with `MESSAGE_NOT_FOUND`; unfinished work is rejected with
+`SESSION_BUSY` rather than entering the normal-send queue.
+
+The content payload stays text-based. The Host derives retained input from the stored question,
+remaps each original plugin, Skill and selection reference independently to non-overlapping
+occurrences in the edited text, then sorts by new offset. Removed mentions are dropped, so reordering
+A/B to B/A does not lose B. Stored file parts are carried unchanged through normal submission
+admission. Missing or mismatched managed files reject preparation rather than being silently
+filtered from the edit. Preparation failure leaves the original exchange unchanged.
+
+The composer's `modelId`, `additionalReplies`, reasoning effort, image-generation and applicable
+Skill settings define the new answers. Omitted model/effort/image-generation overrides use current
+Agent defaults, not the original answer's inference snapshot. Stored Skill selections/actions are
+inherited only when neither corresponding composer field is supplied; supplied Skill settings go
+through normal validation. Current credentials, instructions, permissions and attachment availability
+are revalidated by the shared submission path.
+
+The local message actions distinguish `editQuestion` (branch and resubmit) from `editAnswer`
+(in-place reply prose editing). Question editing is not added to remote contracts. Edit remains
+visible but disabled while the Session is busy, awaiting approval or admitting work. It loads and
+focuses the existing composer, with an Editing question row, cancel action and retained-file count.
+Attachment actions are hidden; model, reasoning and multi-model controls stay available. Switching
+to another question reloads that question's text without replacing the original interrupted draft
+stash. Re-selecting the same question preserves its in-progress revision.
+
+Entry stashes the complete prior composer draft and attachments. Cancellation or accepted submission
+restores that stash; failed admission keeps the edited text and editing state. Blank, unchanged and
+busy edits cannot send, including direct invocation. Dismissing the keyboard does not end editing.
+The transcript outlines the edited question and labels its original continuation while keeping
+readable descendant text and controls at full contrast. The continuation label adds layout height.
+
+There are no optimistic question rows: the new question and pending answers arrive through Host
+events. Live projection includes question sibling metadata immediately, consistent with history.
+The right-aligned previous/position/next pager remains available during generation. Selecting an old
+version restores that branch's latest continuation without cancelling the running answer or deleting
+either exchange. Native light/dark, keyboard/focus/scroll and screen-reader acceptance remain to be
+verified on a device; source-derived web fixtures do not establish those results.
+
 ## Branching
 
 A Session's messages form a tree (see [Agent Persistence](./agent-persistence.md)). The Session's
@@ -886,6 +951,10 @@ question has, and the questions an answer has, are alternatives the client can s
 - **Regeneration.** Regenerating a settled answer reserves a sibling answer to the same question and
   selects it. Answering with another model (`retryMessage` with `modelId`) does the same with the
   chosen model, adding one more answer to the question.
+- **Editing.** Editing a settled question (`editUserMessage`) reserves a sibling question under the
+  same parent, reserves its requested answer or answers below it, and selects the first answer; the original question and its
+  continuations stay in the tree as an alternative branch. The edited question shows its sibling
+  versions in the transcript, so either exchange can be selected.
 - **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
   selected branch up to the fork point, without its sibling alternatives, inside one transaction.
   Turns and approvals are not copied; the new Session starts idle.

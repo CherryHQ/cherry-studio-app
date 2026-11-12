@@ -22,6 +22,7 @@ import {
   type AgentMessageView,
   AgentProtocolError,
   type AgentQueuedInput,
+  type AgentEditUserMessageInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -409,6 +410,28 @@ export function useAgentChatControls(input: {
     },
     [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId, sshDraftId, ssh],
   );
+  const editMessage = useCallback(
+    async ({
+      additionalModelIds,
+      ...edit
+    }: Omit<AgentEditUserMessageInput, 'additionalReplies'> & {
+      /** Further models answering the edited question in parallel. */
+      additionalModelIds?: readonly UniqueModelId[];
+    }) => {
+      await client.editUserMessage({
+        ...edit,
+        ...(additionalModelIds?.length
+          ? {
+              additionalReplies: additionalModelIds.map((modelId) => ({
+                modelId,
+                assistantMessageId: uuidv7(),
+              })),
+            }
+          : {}),
+      });
+    },
+    [client],
+  );
   const completePendingSend = useCallback(
     (userMessageId: string) => {
       setSubmission((current) =>
@@ -435,6 +458,7 @@ export function useAgentChatControls(input: {
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
+    editMessage,
     isBusy: isAdmitting || isComposerBusy || isSubmitting,
     sendMessage: send,
   };
