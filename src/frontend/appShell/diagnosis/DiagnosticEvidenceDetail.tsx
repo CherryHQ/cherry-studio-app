@@ -9,9 +9,8 @@ import {
   type DiagnosticEvidence,
   type DiagnosticReport,
 } from '@/shared/contracts/diagnosticSession';
-import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 
-import { factKeys, issueKeys, statusKeys } from './diagnosticLabels';
+import { configurationIssueKeys, factKeys, issueKeys, statusKeys } from './diagnosticLabels';
 
 const configurationSchema = z.object({
   configurationIssue: z.string().nullable(),
@@ -22,16 +21,6 @@ const pluginSchema = z.object({
   enabledCount: z.number().int().nonnegative(),
   connectedCount: z.number().int().nonnegative(),
 });
-const configurationIssueKeys = {
-  'missing-oauth': 'settings.provider.setup.issues.missing-oauth',
-  'missing-api-key': 'diagnosis.missingApiKey',
-  'disabled-api-keys': 'settings.provider.setup.issues.disabled-api-keys',
-  'invalid-service-account': 'settings.provider.setup.issues.invalid-service-account',
-  'invalid-endpoint': 'settings.provider.setup.issues.invalid-endpoint',
-  'unsupported-auth': 'settings.provider.setup.issues.unsupported-auth',
-  'disabled-provider': 'settings.provider.status.disabled',
-} satisfies Record<ProviderConfigurationIssue | 'disabled-provider', string>;
-
 export function DiagnosticEvidenceDetail({
   evidence,
   target,

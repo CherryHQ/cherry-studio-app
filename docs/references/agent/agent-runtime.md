@@ -104,6 +104,12 @@ paths or changing application database fields.
 
 ## Descriptor and lifecycle
 
+`DurableAgentRuntime.inspectStorage(signal)` is an optional, read-only diagnostic capability. It
+reports `ready`, `not_initialized`, or `failed` for the existing storage connection. It never opens
+or initializes storage, starts tasks, resumes execution, or tests with writes. The Pi implementation
+reads the schema header and checks the current initialization or storage-session failure state; it does not claim
+that every historic task is recoverable. Normal task and approval waits are not storage failures.
+
 `RuntimeConversationConfiguration.webTools` carries the Host's `RuntimeWebTools` selection policy:
 `modelToolsPreferred`, `clientSearchAvailable`, and `clientFetchAvailable`. It is absent when the
 Agent may not use the web. The Runtime selects and persists one route per web capability with the

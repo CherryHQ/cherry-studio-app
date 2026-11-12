@@ -18,6 +18,17 @@ describe('diagnostic wire inputs', () => {
     expect(
       DiagnosticReportInputSchema.parse({ description: 'Connection failed', diagnosis }).diagnosis,
     ).toEqual(diagnosis);
+    const localChecks = {
+      ...diagnosis,
+      checks: [
+        { id: 'data', status: 'pass', facts: { missingCount: 0 } },
+        { id: 'runtime', status: 'skipped', issue: 'not_initialized' },
+      ],
+    };
+    expect(
+      DiagnosticReportInputSchema.parse({ description: 'Local checks', diagnosis: localChecks })
+        .diagnosis,
+    ).toEqual(localChecks);
     for (const unsafe of [
       { ...diagnosis, cause: 'private AI output' },
       {
@@ -29,7 +40,7 @@ describe('diagnostic wire inputs', () => {
         checks: [{ id: 'endpoint', status: 'pass', facts: { httpStatus: 'sk-private' } }],
       },
       { ...diagnosis, checks: [{ id: 'endpoint', status: 'pass', facts: { latencyMs: -1 } }] },
-      { ...diagnosis, checks: Array.from({ length: 8 }, () => diagnosis.checks[0]) },
+      { ...diagnosis, checks: Array.from({ length: 10 }, () => diagnosis.checks[0]) },
     ])
       expect(
         DiagnosticReportInputSchema.safeParse({

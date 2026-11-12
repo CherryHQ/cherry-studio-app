@@ -4,6 +4,7 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import {
   DiagnosticFeedbackContextSchema,
@@ -14,17 +15,12 @@ import {
   DiagnosticSessionError,
   type DiagnosticSession,
   type DiagnosticCheck,
-  type DiagnosticIssue,
   type DiagnosticReport,
   type DiagnosticAiReport,
   type DiagnosticEvidence,
   type DiagnosticToolId,
 } from '@/shared/contracts/diagnosticSession';
-import {
-  ModelPullError,
-  ModelPullTimeoutError,
-  type ModelsModule,
-} from '@/shared/contracts/models';
+import type { ModelsModule } from '@/shared/contracts/models';
 import type { PermissionStatuses } from '@/shared/contracts/permissions';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -50,7 +46,7 @@ type Dependencies = {
   resolveConnection(provider: Provider, model: Model): { baseUrl: string };
   model: Pick<ModelService, 'getById'>;
   provider: Pick<ProviderService, 'getByProviderId' | 'listApiKeys' | 'getAuthConfig'>;
-  models: Pick<ModelsModule, 'pull' | 'checkChat'>;
+  models: Pick<ModelsModule, 'checkChat'>;
   defaultModel(): Promise<string | null>;
   language(): string;
   oauthSignedIn(provider: Provider): Promise<boolean>;
@@ -61,6 +57,11 @@ type Dependencies = {
     connections: { state: string }[];
   }>;
   permissions(): Promise<PermissionStatuses>;
+  applicationData(
+    context: DiagnosticFeedbackContext | undefined,
+    signal: AbortSignal,
+  ): Promise<{ missingCount: number }>;
+  runtimeStorage(signal: AbortSignal): Promise<'ready' | 'not_initialized' | 'failed'>;
 };
 type Target = {
   model: Model;
@@ -70,7 +71,7 @@ type Target = {
   endpoint?: URL;
 };
 
-/** The bootstrap owns admission; each route owns its transient, cancellable session. */
+/** Bootstrap owns admission; each diagnostic sheet owns its cancellable session. */
 export function createDiagnosticsModule(dependencies: Dependencies) {
   const sessions = new Set<DiagnosticSession>();
   let stopped = false;
@@ -217,37 +218,6 @@ function createSession(
     }
   }
 
-  async function listCheck(signal: AbortSignal): Promise<DiagnosticCheck> {
-    await assertCurrent(signal);
-    if (!bound || bound.issue)
-      return { id: 'model_list', status: 'skipped', issue: 'configuration' };
-    if (bound.provider.modelListSource === 'registry')
-      return { id: 'model_list', status: 'skipped', issue: 'unsupported' };
-    try {
-      await deps.models.pull(bound.provider.id, signal);
-      await assertCurrent(signal);
-      return { id: 'model_list', status: 'pass' };
-    } catch (error) {
-      signal.throwIfAborted();
-      if (error instanceof DiagnosticSessionError) throw error;
-      const issue: DiagnosticIssue =
-        error instanceof ModelPullTimeoutError
-          ? 'timeout'
-          : error instanceof ModelPullError
-            ? (
-                {
-                  authentication: 'authentication',
-                  unavailable: 'unsupported',
-                  'rate-limited': 'rate_limit',
-                  network: 'network',
-                  failed: 'unknown',
-                } as const
-              )[error.reason]
-            : 'unknown';
-      return { id: 'model_list', status: issue === 'unsupported' ? 'skipped' : 'fail', issue };
-    }
-  }
-
   function store(check: DiagnosticCheck) {
     if (!report) throw new DiagnosticSessionError('unavailable');
     report = {
@@ -260,89 +230,128 @@ function createSession(
   return {
     check(options = {}) {
       return operation(async (signal) => {
-        report = undefined;
         bound = undefined;
-        bound = await raceAbort(loadTarget(), signal);
-        report = {
-          checkedAt: new Date().toISOString(),
-          context,
-          checks: [],
-          target: bound
-            ? {
-                uniqueModelId: bound.model.id,
-                providerId: bound.provider.id,
-                modelId: bound.model.modelId,
-                providerName: bound.provider.name,
-                modelName: bound.model.name,
-                endpointHost: bound.endpoint?.hostname,
-              }
-            : undefined,
-        };
+        report = { checkedAt: new Date().toISOString(), context, checks: [] };
         const publish = (check: DiagnosticCheck) => {
           signal.throwIfAborted();
           store(check);
           options.onCheck?.(check);
         };
-        const inspect = async (id: DiagnosticCheck['id'], read: () => Promise<DiagnosticCheck>) => {
+        const inspect = async (
+          id: DiagnosticCheck['id'],
+          read: (checkSignal: AbortSignal) => Promise<DiagnosticCheck>,
+        ) => {
+          publish({ id, status: 'pending' });
+          const timeout = new AbortController();
+          const linked = linkAbortSignals([signal, timeout.signal]);
+          const timer = setTimeout(() => timeout.abort(), 8000);
           try {
-            publish(await raceAbort(read(), signal));
+            const result = await raceAbort(read(linked.signal), linked.signal);
+            publish(result);
           } catch {
             signal.throwIfAborted();
-            publish({ id, status: 'error', issue: 'unavailable' });
+            publish({
+              id,
+              status: 'error',
+              issue: timeout.signal.aborted ? 'timeout' : 'unavailable',
+            });
+          } finally {
+            clearTimeout(timer);
+            linked.dispose();
           }
         };
-        publish({
-          id: 'model',
-          status: bound ? (bound.issue ? 'fail' : 'pass') : 'skipped',
-          issue: !bound
-            ? context?.executionSource === 'desktop'
-              ? 'remote'
-              : 'missing_model'
-            : bound.issue
-              ? 'configuration'
-              : undefined,
+        const configuration = inspect('model', async (checkSignal) => {
+          const target = await loadTarget();
+          checkSignal.throwIfAborted();
+          bound = target;
+          if (target)
+            report = {
+              ...report!,
+              target: {
+                uniqueModelId: target.model.id,
+                providerId: target.provider.id,
+                modelId: target.model.modelId,
+                providerName: target.provider.name,
+                modelName: target.model.name,
+                endpointHost: target.endpoint?.hostname,
+                configurationIssue: target.issue ?? undefined,
+              },
+            };
+          return {
+            id: 'model',
+            status: target ? (target.issue ? 'fail' : 'pass') : 'skipped',
+            issue: !target
+              ? context?.executionSource === 'desktop'
+                ? 'remote'
+                : 'missing_model'
+              : target.issue
+                ? 'configuration'
+                : undefined,
+          };
         });
+        const tasks = [
+          configuration,
+          inspect('data', async (checkSignal) => {
+            const facts = await deps.applicationData(context, checkSignal);
+            return {
+              id: 'data',
+              status: facts.missingCount ? 'fail' : 'pass',
+              issue: facts.missingCount ? 'data' : undefined,
+              facts,
+            };
+          }),
+          inspect('runtime', async (checkSignal) => {
+            const state = await deps.runtimeStorage(checkSignal);
+            return {
+              id: 'runtime',
+              status:
+                state === 'not_initialized' ? 'skipped' : state === 'failed' ? 'fail' : 'pass',
+              issue:
+                state === 'not_initialized'
+                  ? 'not_initialized'
+                  : state === 'failed'
+                    ? 'runtime'
+                    : undefined,
+            };
+          }),
+        ];
         if (!context) {
-          await inspect('plugins', async () => {
-            const counts = await deps.plugins();
-            return {
-              id: 'plugins',
-              status: counts.connectedCount === counts.enabledCount ? 'pass' : 'warn',
-              facts: { enabledCount: counts.enabledCount, connectedCount: counts.connectedCount },
-            };
-          });
-          await inspect('permissions', async () => {
-            const permissions = await deps.permissions();
-            const values = Object.values(permissions).filter((value) => value !== undefined);
-            const missingCount = values.filter(
-              (value) => !['granted', 'limited', 'requested'].includes(value.state),
-            ).length;
-            return {
-              id: 'permissions',
-              status: missingCount ? 'warn' : 'pass',
-              facts: { missingCount },
-            };
-          });
-          await inspect('storage', async () => {
-            const freeBytes = Paths.availableDiskSpace;
-            if (!Number.isFinite(freeBytes) || freeBytes < 0)
-              throw new Error('Storage unavailable');
-            return {
-              id: 'storage',
-              status: freeBytes < 100 * 1024 * 1024 ? 'warn' : 'pass',
-              facts: { freeBytes },
-            };
-          });
+          tasks.push(
+            inspect('plugins', async () => {
+              const counts = await deps.plugins();
+              return {
+                id: 'plugins',
+                status: counts.connectedCount === counts.enabledCount ? 'pass' : 'warn',
+                facts: { enabledCount: counts.enabledCount, connectedCount: counts.connectedCount },
+              };
+            }),
+            inspect('permissions', async () => {
+              const permissions = await deps.permissions();
+              const values = Object.values(permissions).filter((value) => value !== undefined);
+              const missingCount = values.filter(
+                (value) => !['granted', 'limited', 'requested'].includes(value.state),
+              ).length;
+              return {
+                id: 'permissions',
+                status: missingCount ? 'warn' : 'pass',
+                facts: { missingCount },
+              };
+            }),
+            inspect('storage', async () => {
+              const freeBytes = Paths.availableDiskSpace;
+              if (!Number.isFinite(freeBytes) || freeBytes < 0)
+                throw new Error('Storage unavailable');
+              return {
+                id: 'storage',
+                status: freeBytes < 100 * 1024 * 1024 ? 'warn' : 'pass',
+                facts: { freeBytes },
+              };
+            }),
+          );
         }
-        if (options.network && bound) {
-          publish(await endpointCheck(signal));
-          publish(await listCheck(signal));
-          publish({
-            id: 'conversation',
-            status: isTextGenerationModel(bound.model) ? 'pending' : 'skipped',
-            issue: !isTextGenerationModel(bound.model) ? 'unsupported' : undefined,
-          });
-        }
+        if (options.network)
+          tasks.push(configuration.then(() => inspect('endpoint', endpointCheck)));
+        await Promise.all(tasks);
         signal.throwIfAborted();
         return report!;
       });

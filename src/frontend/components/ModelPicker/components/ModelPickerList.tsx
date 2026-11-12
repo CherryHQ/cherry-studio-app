@@ -26,8 +26,12 @@ import { ModelPickerBadge } from './ModelPickerBadge';
 import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 
 const modelPickerEstimatedItemSize = 48;
+type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  /** The containing surface can own the gutter when embedding the list. */
+  contentInset?: 'default' | 'none';
+  density?: ModelPickerDensity;
   emptyAction?: { label: string; onPress: () => void };
   emptyText?: string;
   isLoading?: boolean;
@@ -45,6 +49,8 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  contentInset: 'default' | 'none';
+  density: ModelPickerDensity;
   selectedModelId: string | null;
   selectedModelIds?: readonly string[];
   isFull: boolean;
@@ -52,6 +58,8 @@ type ModelPickerListExtraData = {
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
 export function ModelPickerList({
+  contentInset = 'default',
+  density = 'default',
   emptyAction,
   emptyText,
   isLoading = false,
@@ -123,16 +131,25 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      contentInset,
+      density,
       selectedModelId,
       selectedModelIds,
       isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
     }),
-    [maxSelectedCount, selectedModelId, selectedModelIds],
+    [contentInset, density, maxSelectedCount, selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
       if (item.type === 'groupHeader') {
-        return <ModelPickerGroupHeader isFirstGroup={item.isFirstGroup} title={item.title} />;
+        return (
+          <ModelPickerGroupHeader
+            contentInset={extraData.contentInset}
+            density={extraData.density}
+            isFirstGroup={item.isFirstGroup}
+            title={item.title}
+          />
+        );
       }
 
       const isSelected = extraData.selectedModelIds
@@ -140,6 +157,8 @@ export function ModelPickerList({
         : item.item.modelId === extraData.selectedModelId;
       return (
         <ModelPickerRow
+          contentInset={extraData.contentInset}
+          density={extraData.density}
           isDisabled={Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected}
           isSelected={isSelected}
           item={item.item}
@@ -195,7 +214,12 @@ export function ModelPickerList({
   );
   if (listItems.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center gap-4 px-6 py-8">
+      <View
+        className={cn(
+          'flex-1 items-center justify-center gap-4 py-8',
+          contentInset === 'default' && 'px-6',
+        )}
+      >
         <Text className="text-center text-base text-muted-foreground">
           {isLoading ? loadingText : emptyText}
         </Text>
@@ -218,7 +242,7 @@ export function ModelPickerList({
         ]}
         data={listItems}
         drawDistance={320}
-        estimatedItemSize={modelPickerEstimatedItemSize}
+        estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
         extraData={listExtraData}
         getItemType={getItemType}
         keyboardDismissMode="on-drag"
@@ -245,15 +269,34 @@ export function ModelPickerList({
   );
 }
 
-function ModelPickerGroupHeader({ isFirstGroup, title }: { isFirstGroup: boolean; title: string }) {
+function ModelPickerGroupHeader({
+  contentInset,
+  density,
+  isFirstGroup,
+  title,
+}: {
+  contentInset: 'default' | 'none';
+  density: ModelPickerDensity;
+  isFirstGroup: boolean;
+  title: string;
+}) {
   return (
-    <View className={cn('px-6', isFirstGroup ? 'mt-2' : 'mt-4')}>
-      <Text className="text-base text-muted-foreground">{title}</Text>
+    <View className={cn(contentInset === 'default' && 'px-6', isFirstGroup ? 'mt-2' : 'mt-4')}>
+      <Text
+        className={cn(
+          'text-muted-foreground',
+          density === 'compact' ? 'text-xs font-medium' : 'text-base',
+        )}
+      >
+        {title}
+      </Text>
     </View>
   );
 }
 
 const ModelPickerRow = memo(function ModelPickerRow({
+  contentInset,
+  density,
   isDisabled,
   isSelected,
   item,
@@ -261,6 +304,8 @@ const ModelPickerRow = memo(function ModelPickerRow({
   onSelect,
   showBadges,
 }: {
+  contentInset: 'default' | 'none';
+  density: ModelPickerDensity;
   isDisabled: boolean;
   isSelected: boolean;
   item: ModelPickerModelItem;
@@ -285,15 +330,28 @@ const ModelPickerRow = memo(function ModelPickerRow({
         multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
       }
       className={cn(
-        'min-h-12 flex-row items-center gap-3 px-6 active:opacity-60',
+        'flex-row items-center gap-3 active:opacity-60',
+        density === 'compact' ? 'min-h-11 py-2' : 'min-h-12',
+        contentInset === 'default' && 'px-6',
         isDisabled && 'opacity-40',
       )}
       disabled={isDisabled}
       onPress={handleSelect}
     >
-      <ModelAvatar model={item.model} provider={item.provider} size={32} />
+      <ModelAvatar
+        artwork={density === 'compact' ? 'brand' : 'model'}
+        model={item.model}
+        provider={item.provider}
+        size={density === 'compact' ? 24 : 32}
+      />
       <View className="min-w-0 flex-1">
-        <Text className="text-base text-foreground" numberOfLines={2}>
+        <Text
+          className={cn(
+            'text-foreground',
+            density === 'compact' ? 'text-sm font-medium' : 'text-base',
+          )}
+          numberOfLines={2}
+        >
           {item.model.name}
         </Text>
       </View>
@@ -307,7 +365,9 @@ const ModelPickerRow = memo(function ModelPickerRow({
       {multiple ? (
         <SelectionIndicator selected={isSelected} />
       ) : isSelected ? (
-        <CheckIcon className="size-5 shrink-0 text-foreground" />
+        <CheckIcon
+          className={cn('shrink-0 text-foreground', density === 'compact' ? 'size-4' : 'size-5')}
+        />
       ) : null}
     </Pressable>
   );

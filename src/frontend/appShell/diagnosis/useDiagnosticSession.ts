@@ -1,5 +1,4 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
 import type { DiagnosticFeedbackContext } from '@/shared/contracts/diagnostics';
@@ -70,8 +69,6 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
     };
   }, [module, context]);
 
-  useFocusEffect(useCallback(() => () => session.current?.cancel(), []));
-
   async function perform(
     kind: 'check' | 'conversation' | 'ai',
     action: (owned: DiagnosticSession) => Promise<void>,
@@ -114,6 +111,7 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
         setReport(undefined);
         setAi(undefined);
         setChecks([]);
+        setEvidence([]);
         accept(
           owned,
           await owned.check({

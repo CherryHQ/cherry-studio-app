@@ -95,6 +95,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
   readonly descriptor = DESCRIPTOR;
   private runtime: PiDurableRuntime | undefined;
+  private storageDatabase: RuntimeSqlDatabase | undefined;
+  private runtimeFailed = false;
   private ports: RuntimeExecutionPorts | undefined;
   private readonly registry: Registry = createRegistry();
   /** Keyed by {@link laneKey}, the engine's session key. */
@@ -161,6 +163,19 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return Promise.resolve(this.dependencies.preflightModel(model));
   }
 
+  async inspectStorage(signal: AbortSignal): Promise<'ready' | 'not_initialized' | 'failed'> {
+    signal.throwIfAborted();
+    if (this.runtimeFailed) return 'failed';
+    const database = this.storageDatabase;
+    if (!this.runtime || !database) return 'not_initialized';
+    // Read the existing connection's schema header; never initialize or probe with writes.
+    const result = await database.get<{ schema_version: number }>('PRAGMA schema_version');
+    signal.throwIfAborted();
+    if (this.runtimeFailed) return 'failed';
+    if (this.storageDatabase !== database || !result) return 'not_initialized';
+    return 'ready';
+  }
+
   async initialize(
     database: RuntimeSqlDatabase,
     ports: RuntimeExecutionPorts,
@@ -174,6 +189,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       signal?.throwIfAborted();
       storage = await this.createStorage(database);
       signal?.throwIfAborted();
+      this.storageDatabase = database;
+      this.runtimeFailed = false;
       this.runtime = await PiDurableRuntime.open(storage, {
         models: this.models.models,
         registry: this.registry,
@@ -202,6 +219,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       void opened.closed
         .then((end) => {
           if (end.kind !== 'failed' || this.runtime !== opened) return;
+          this.runtimeFailed = true;
           logger.error('Pi storage session closed after a failure', { error: end.error });
           ports.onFailure?.({
             code: 'runtime_storage_failed',
@@ -230,6 +248,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       }
       signal?.throwIfAborted();
     } catch (error) {
+      this.runtimeFailed = !signal?.aborted;
       try {
         if (this.runtime) await this.runtime.close();
         else if (storage) await storage.close(BACKGROUND_CONTEXT);
@@ -245,6 +264,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         await this.codemodeSandbox?.close();
         this.codemodeSandbox = undefined;
         this.runtime = undefined;
+        this.storageDatabase = undefined;
         this.ports = undefined;
         this.configurations.clear();
         this.providerOwners.clear();
@@ -293,6 +313,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       await this.codemodeSandbox?.close();
       this.codemodeSandbox = undefined;
       this.runtime = undefined;
+      this.storageDatabase = undefined;
       this.ports = undefined;
       this.configurations.clear();
       this.providerOwners.clear();

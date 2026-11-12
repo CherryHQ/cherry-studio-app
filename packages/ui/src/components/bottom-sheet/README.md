@@ -88,6 +88,8 @@ same dismissal path as the downward gesture, scrim, Android back, and accessibil
 When showing a second level, `backAction` takes precedence over `closeAction`.
 For a title-only header, omit both actions and pass `titleAlign="center"`. Omitting `titleAlign`
 preserves the default: centered with `closeAction`, start-aligned otherwise.
+With `backAction` and `titleAlign="center"`, equal action columns keep the title centered in the
+card while moving between levels.
 
 Set `avoidKeyboard` when the sheet holds a text field. The card then rises with the keyboard frame
 by frame and keeps its footer a small gap above it; once the card reaches the top inset, its body

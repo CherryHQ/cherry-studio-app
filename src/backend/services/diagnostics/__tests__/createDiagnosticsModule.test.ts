@@ -59,7 +59,9 @@ function fixture() {
       }),
       getAuthConfig: async () => null,
     },
-    models: { pull: async () => ({ status: 'up-to-date' }), checkChat },
+    models: { checkChat },
+    applicationData: async () => ({ missingCount: 0 }),
+    runtimeStorage: async () => 'ready',
     resolveConnection: () => ({
       baseUrl: provider.endpointConfigs?.['openai-chat-completions']?.baseUrl ?? '',
     }),
@@ -88,7 +90,13 @@ test('an incident without model identity never checks the current default model'
   });
   const report = await session.check({ network: true });
   expect(report.target).toBeUndefined();
-  expect(report.checks).toEqual([{ id: 'model', status: 'skipped', issue: 'missing_model' }]);
+  expect(report.checks).toEqual(
+    expect.arrayContaining([
+      { id: 'model', status: 'skipped', issue: 'missing_model' },
+      { id: 'data', status: 'pass', facts: { missingCount: 0 } },
+      { id: 'runtime', status: 'pass' },
+    ]),
+  );
   expect(f.defaultModel).not.toHaveBeenCalled();
   await owner.dispose();
 });
@@ -99,7 +107,12 @@ test('desktop incidents do not run phone model probes or resolve its credentials
   const report = await owner.module
     .createSession({ ...f.context, executionSource: 'desktop' })
     .check({ network: true });
-  expect(report.checks).toEqual([{ id: 'model', status: 'skipped', issue: 'remote' }]);
+  expect(report.checks).toEqual(
+    expect.arrayContaining([
+      { id: 'model', status: 'skipped', issue: 'remote' },
+      { id: 'endpoint', status: 'skipped', issue: 'configuration' },
+    ]),
+  );
   expect(f.checkChat).not.toHaveBeenCalled();
   await owner.dispose();
 });
@@ -167,4 +180,83 @@ test('host disposal aborts and joins an admitted AI run and rejects later admiss
   await stopped;
   expect(() => owner.module.createSession()).toThrow(DiagnosticSessionError);
   await expect(session.check()).rejects.toMatchObject({ reason: 'cancelled' });
+});
+
+test('a stalled configuration lookup does not block local results or leave checks pending', async () => {
+  jest.useFakeTimers();
+  const f = fixture();
+  f.deps.model.getById = () => new Promise(() => {});
+  const owner = createDiagnosticsModule(f.deps);
+  const observed: { id: string; status: string }[] = [];
+  try {
+    const pending = owner.module
+      .createSession(f.context)
+      .check({ network: true, onCheck: (check) => observed.push(check) });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(observed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'data', status: 'pass' }),
+        { id: 'runtime', status: 'pass' },
+      ]),
+    );
+    await jest.advanceTimersByTimeAsync(8000);
+    const report = await pending;
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        { id: 'model', status: 'error', issue: 'timeout' },
+        { id: 'endpoint', status: 'skipped', issue: 'configuration' },
+      ]),
+    );
+    expect(report.checks.every((check) => check.status !== 'pending')).toBe(true);
+    expect(f.runAi).not.toHaveBeenCalled();
+    expect(f.checkChat).not.toHaveBeenCalled();
+  } finally {
+    await owner.dispose();
+    jest.useRealTimers();
+  }
+});
+
+test('an uninitialized runtime is skipped independently of an unreadable application database', async () => {
+  const f = fixture();
+  f.deps.applicationData = async () => {
+    throw new Error('Database unavailable');
+  };
+  f.deps.runtimeStorage = async () => 'not_initialized';
+  const owner = createDiagnosticsModule(f.deps);
+  const report = await owner.module.createSession(f.context).check({ network: true });
+  expect(report.checks).toEqual(
+    expect.arrayContaining([
+      { id: 'data', status: 'error', issue: 'unavailable' },
+      { id: 'runtime', status: 'skipped', issue: 'not_initialized' },
+      expect.objectContaining({ id: 'endpoint', status: 'pass' }),
+    ]),
+  );
+  await owner.dispose();
+});
+
+test('cancelled checks never publish the late result of an uncancellable read', async () => {
+  const f = fixture();
+  let release!: (value: { missingCount: number }) => void;
+  let started!: () => void;
+  const admitted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  f.deps.applicationData = () =>
+    new Promise((resolve) => {
+      release = resolve;
+      started();
+    });
+  const owner = createDiagnosticsModule(f.deps);
+  const session = owner.module.createSession(f.context);
+  const observed: { id: string; status: string }[] = [];
+  const pending = session.check({ onCheck: (check) => observed.push(check) });
+  const stopped = expect(pending).rejects.toMatchObject({ reason: 'cancelled' });
+  await admitted;
+  session.cancel();
+  await stopped;
+  const count = observed.length;
+  release({ missingCount: 1 });
+  await Promise.resolve();
+  expect(observed).toHaveLength(count);
+  await owner.dispose();
 });

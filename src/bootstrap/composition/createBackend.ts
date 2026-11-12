@@ -24,6 +24,7 @@ import type {
 } from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { readDiagnosticDataState } from '@/backend/data/services/diagnosticDataState';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
@@ -229,6 +230,12 @@ export function createBackend(
     model: services.model,
     provider: services.provider,
     models,
+    applicationData: (context, signal) => readDiagnosticDataState(dbService, context, signal),
+    runtimeStorage: async (signal) => {
+      const runtime = infrastructure.languageServing.conversations;
+      if (!runtime?.inspectStorage) throw new Error('Runtime storage inspection is unavailable');
+      return runtime.inspectStorage(signal);
+    },
     defaultModel: () => services.preference.get('agent.default_model_id'),
     language: () =>
       resolveAppLanguage(

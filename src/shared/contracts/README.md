@@ -144,7 +144,7 @@ Private disposers stay with bootstrap, and callers release their own observation
 | `permissions` | `DevicePermissions`: system permission queries, serialized prompts and settings recovery | Module-level native prompt queue; an open system prompt retains its slot until native completion |
 | `backgroundExecution` | `KeepAliveCoordinator`: background protection status, settings and observation | Host-owned platform sources; backend consumers acquire/release execution leases |
 | `backup` | `BackupRuntime`: capture, validation, staging and restore with storage admission | Host-owned operation and staged restore; explicit cancellation and host stop settle accepted work |
-| `diagnostics` | `createDiagnosticsModule` and `DiagnosticBundleService`: transient checks/AI diagnosis and metadata upload | Routes dispose diagnosis sessions; bootstrap drains them before host stop. Bundle and process-log lifetimes remain separate |
+| `diagnostics` | `createDiagnosticsModule` and `DiagnosticBundleService`: transient checks/AI diagnosis and metadata upload | Diagnostic sheets dispose sessions; bootstrap drains them before host stop. Bundle and process-log lifetimes remain separate |
 | `appUpdate` | `createAppUpdateModule`: channel routing, release discovery, APK transfer and installation | App-owned download; bootstrap's private `disposeAppUpdate` cancels/drains it. Closing a dialog does not cancel the download |
 | `profile` | `createProfileModule`: avatar storage and preference coordination | Per-call replacement; preferences and avatar bytes retain their own storage owners |
 

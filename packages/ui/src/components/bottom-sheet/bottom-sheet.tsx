@@ -152,6 +152,9 @@ export function BottomSheet(props: BottomSheetProps) {
   const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
+  const resolvedTitleAlign = titleAlign ?? (isCloseActionVisible ? 'center' : 'start');
+  const hasBalancedHeader =
+    isCloseActionVisible || Boolean(backAction && resolvedTitleAlign === 'center');
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
   const hasNotifiedCloseRef = useRef(false);
@@ -278,15 +281,20 @@ export function BottomSheet(props: BottomSheetProps) {
           {hasHeader ? (
             <View className="min-h-14 flex-row items-start px-5 py-1.5">
               {backAction ? (
-                <Pressable
-                  accessibilityLabel={backAction.accessibilityLabel}
-                  accessibilityRole="button"
-                  className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
-                  hitSlop={4}
-                  onPress={backAction.onPress}
-                >
-                  <ArrowLeftIcon className="size-6 text-foreground" />
-                </Pressable>
+                <View className={hasBalancedHeader ? 'min-w-11 flex-1 items-start' : undefined}>
+                  <Pressable
+                    accessibilityLabel={backAction.accessibilityLabel}
+                    accessibilityRole="button"
+                    className={cn(
+                      'size-11 items-center justify-center rounded-full active:bg-secondary',
+                      !hasBalancedHeader && '-ml-2 mr-2',
+                    )}
+                    hitSlop={4}
+                    onPress={backAction.onPress}
+                  >
+                    <ArrowLeftIcon className="size-6 text-foreground" />
+                  </Pressable>
+                </View>
               ) : closeAction ? (
                 <View className="min-w-11 flex-1 items-start">
                   <Pressable
@@ -307,15 +315,14 @@ export function BottomSheet(props: BottomSheetProps) {
                   'min-w-0 font-semibold text-foreground',
                   // Both variants fill the 44-point first line that the header controls centre on.
                   titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                  isCloseActionVisible ? 'shrink px-2' : 'flex-1',
-                  (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
-                    'text-center',
+                  hasBalancedHeader ? 'shrink px-2' : 'flex-1',
+                  resolvedTitleAlign === 'center' && 'text-center',
                 )}
                 numberOfLines={titleVariant === 'prompt' ? undefined : 2}
               >
                 {title}
               </Text>
-              {isCloseActionVisible ? (
+              {hasBalancedHeader ? (
                 <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
                   {headerAction}
                 </View>

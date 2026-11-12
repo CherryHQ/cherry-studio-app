@@ -1,9 +1,9 @@
 # Shake Feedback
 
-Error-detail actions can also hand the captured incident to `/settings/about/diagnosis`. Context
-survives navigation between that page and the feedback form, then clears on leaving the workflow.
-The diagnosis page supplies an optional structured check summary for feedback; the context switch
-omits both incident and check summary when disabled. Shaking is inactive on either workflow page.
+Error-detail actions can open the shared full-height `DiagnosisSheet` over the source page.
+The same incident is handed to the feedback form when requested and clears on leaving the workflow.
+The diagnostic panel supplies an optional structured check summary; the context switch omits both
+incident and check summary when disabled. Shaking is inactive while the panel or form is open.
 
 The app shell owns foreground motion observation, temporary screenshots and feedback context
 handoff. The settings page owns the form and submission. Manual entries use the same

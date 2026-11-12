@@ -3,8 +3,11 @@ import { z } from 'zod';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import type { DiagnosticFeedbackContext } from './diagnostics';
+import type { ProviderConfigurationIssue } from './providers';
 
 export const DiagnosticCheckIdSchema = z.enum([
+  'data',
+  'runtime',
   'model',
   'endpoint',
   'model_list',
@@ -22,6 +25,9 @@ export const DiagnosticCheckStatusSchema = z.enum([
   'pending',
 ]);
 export const DiagnosticIssueSchema = z.enum([
+  'data',
+  'runtime',
+  'not_initialized',
   'missing_model',
   'configuration',
   'authentication',
@@ -60,7 +66,7 @@ export type DiagnosticIssue = z.infer<typeof DiagnosticIssueSchema>;
 
 export const DiagnosticFeedbackSummarySchema = z.strictObject({
   checkedAt: z.iso.datetime({ offset: true }),
-  checks: z.array(DiagnosticCheckSchema).max(7),
+  checks: z.array(DiagnosticCheckSchema).max(DiagnosticCheckIdSchema.options.length),
   aiCompleted: z.boolean(),
 });
 export type DiagnosticFeedbackSummary = z.infer<typeof DiagnosticFeedbackSummarySchema>;
@@ -75,6 +81,7 @@ export type DiagnosticReport = {
     providerName: string;
     modelName: string;
     endpointHost?: string;
+    configurationIssue?: ProviderConfigurationIssue | 'disabled-provider';
   };
   checks: DiagnosticCheck[];
 };
@@ -92,7 +99,7 @@ export type DiagnosticAiReport = {
   evidence: DiagnosticEvidence[];
 };
 
-/** A route owns this transient run; dispose cancels and joins all admitted work. */
+/** The diagnostic sheet owns this run; dispose cancels and joins admitted work. */
 export interface DiagnosticSession {
   check(options?: {
     network?: boolean;

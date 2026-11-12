@@ -4,13 +4,19 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Public Interface
 
-- `ModelPickerDrawer` is the only model-selection view. Agent editing, painting, provider
+- `ModelPickerDrawer` is the standard model-selection sheet. Agent editing, painting, provider
   connectivity checks, and model settings all open this bottom sheet. Its search field filters the
   grouped model catalog in place without leaving the sheet. Callers may supply `onAddProvider` so
   the unfiltered empty state can hand off to provider setup without coupling the picker to routing.
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.
+  The diagnostic panel also embeds this public list and `useModelPickerData` so model selection
+  stays inside its existing full-height sheet.
+  Embedded consumers use `contentInset="none"` when their container already owns the gutter;
+  the shared picker keeps its existing inset by default.
+  `density="compact"` pairs 24-point model artwork with compact model text and group labels for
+  embedded flows; the standard picker retains its existing proportions.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value

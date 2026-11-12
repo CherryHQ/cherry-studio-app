@@ -224,6 +224,8 @@ export type RuntimeConversationEvent =
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
+  /** Inspect existing storage without opening it, scheduling tasks or resuming work. */
+  inspectStorage?(signal: AbortSignal): Promise<'ready' | 'not_initialized' | 'failed'>;
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;

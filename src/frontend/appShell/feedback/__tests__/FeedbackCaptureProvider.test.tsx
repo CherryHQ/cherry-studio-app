@@ -2,6 +2,8 @@ import { useLayoutEffect } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { DiagnosisSheet } from '@/frontend/appShell/diagnosis';
+
 import {
   FeedbackCaptureProvider,
   useFeedbackActions,
@@ -32,6 +34,7 @@ jest.mock('@/frontend/appShell/privacy', () => ({
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => [mockShakeEnabled, jest.fn()] }));
 jest.mock('../useShakeFeedback', () => ({ useShakeFeedback: jest.fn() }));
 jest.mock('../feedbackScreenshot', () => ({ removeFeedbackScreenshot: jest.fn() }));
+jest.mock('@/frontend/appShell/diagnosis', () => ({ DiagnosisSheet: jest.fn(() => null) }));
 
 let value: ReturnType<typeof useFeedbackCapture>;
 let actions: ReturnType<typeof useFeedbackActions>;
@@ -96,9 +99,9 @@ test('retains the selected incident and check summary across diagnosis and feedb
       { destination: 'diagnosis' },
     ),
   );
-  expect(mockPush).toHaveBeenLastCalledWith('/settings/about/diagnosis');
-  mockPath = '/settings/about/diagnosis';
-  act(() => renderer.update(tree()));
+  expect(mockPush).not.toHaveBeenCalled();
+  const sheet = jest.mocked(DiagnosisSheet).mock.calls.at(-1)![0];
+  expect(sheet.context.messageId).toBe('failed-message');
   expect(value.context?.messageId).toBe('failed-message');
   expect(options().enabled).toBe(false);
   const diagnosis = {
@@ -106,6 +109,10 @@ test('retains the selected incident and check summary across diagnosis and feedb
     checks: [{ id: 'endpoint' as const, status: 'pass' as const }],
     aiCompleted: true,
   };
+  mockPrepare.mockImplementationOnce(async () => {
+    sheet.onClose();
+    return true;
+  });
   await act(async () =>
     actions.openFeedback({ feature: 'chat', messageId: 'failed-message' }, { diagnosis }),
   );

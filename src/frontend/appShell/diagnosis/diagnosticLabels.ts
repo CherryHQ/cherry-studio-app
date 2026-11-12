@@ -1,6 +1,10 @@
 import type { DiagnosticCheck, DiagnosticIssue } from '@/shared/contracts/diagnosticSession';
+import type { ProviderConfigurationIssue } from '@/shared/contracts/providers';
 
 export const issueKeys: Record<DiagnosticIssue, string> = {
+  data: 'diagnosis.issue.data',
+  runtime: 'diagnosis.issue.runtime',
+  not_initialized: 'diagnosis.issue.not_initialized',
   missing_model: 'diagnosis.issue.missing_model',
   configuration: 'diagnosis.issue.configuration',
   authentication: 'diagnosis.issue.authentication',
@@ -17,6 +21,8 @@ export const issueKeys: Record<DiagnosticIssue, string> = {
   unknown: 'diagnosis.issue.unknown',
 };
 export const checkKeys: Record<DiagnosticCheck['id'], string> = {
+  data: 'diagnosis.check.data',
+  runtime: 'diagnosis.check.runtime',
   model: 'diagnosis.check.model',
   endpoint: 'diagnosis.check.endpoint',
   model_list: 'diagnosis.check.model_list',
@@ -25,6 +31,16 @@ export const checkKeys: Record<DiagnosticCheck['id'], string> = {
   permissions: 'diagnosis.check.permissions',
   storage: 'diagnosis.check.storage',
 };
+
+export const configurationIssueKeys = {
+  'missing-oauth': 'settings.provider.setup.issues.missing-oauth',
+  'missing-api-key': 'diagnosis.missingApiKey',
+  'disabled-api-keys': 'settings.provider.setup.issues.disabled-api-keys',
+  'invalid-service-account': 'settings.provider.setup.issues.invalid-service-account',
+  'invalid-endpoint': 'settings.provider.setup.issues.invalid-endpoint',
+  'unsupported-auth': 'settings.provider.setup.issues.unsupported-auth',
+  'disabled-provider': 'settings.provider.status.disabled',
+} satisfies Record<ProviderConfigurationIssue | 'disabled-provider', string>;
 export const statusKeys: Record<DiagnosticCheck['status'], string> = {
   pass: 'diagnosis.status.pass',
   warn: 'diagnosis.status.warn',
