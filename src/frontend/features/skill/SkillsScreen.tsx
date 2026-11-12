@@ -64,11 +64,7 @@ export function SkillsScreen() {
   };
 
   return (
-    <SkillPage
-      contentClassName={tab === 'discover' ? 'gap-2' : undefined}
-      headerProps={headerProps}
-      testID="skills-list"
-    >
+    <SkillPage headerProps={headerProps} testID="skills-list">
       <Tabs
         items={[
           { value: 'library', label: t('skills.library'), testID: 'skills-tab-library' },

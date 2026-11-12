@@ -65,13 +65,11 @@ plugin connection ownership and per-turn tool filtering.
 
 Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
 search in popularity order; the app offers no sort choice. Catalog and detail reads never download
-packages or require credentials. All CherryIN list requests send `mobileSupport=supported`;
-upstream owns this classification through the `mobileSupport` field (`supported` or `unsupported`).
-Search and pagination use the same server-filtered list. Pasted CherryIN
-links and market detail pages also hide entries whose `mobileSupport` is not `supported`. This is a
-discovery UI policy: backend detail resolution, installation and updates remain available regardless
-of that field, and installed Skills remain manageable in the library. The app does not maintain a
-mobile compatibility classifier or allowlist.
+packages or require credentials. CherryIN list requests do not filter by the upstream
+`mobileSupport` classification (`supported` or `unsupported`), so both kinds of entries are available
+through browsing, search, pagination, pasted links and market detail pages. This classification
+does not gate discovery, detail resolution, installation or updates, and installed Skills remain
+manageable in the library. The app does not maintain a mobile compatibility classifier or allowlist.
 
 CherryIN downloads are ZIP packages, bounded to 32 MiB compressed and expanded, with unsafe paths,
 symlinks, collisions and invalid checksums rejected before installation. Resolution discovers up to
