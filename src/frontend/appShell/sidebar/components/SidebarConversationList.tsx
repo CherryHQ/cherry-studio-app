@@ -1,7 +1,6 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import {
   ContextMenu,
   ContentState,
@@ -691,7 +690,6 @@ function DestinationSessionRow({
         <View className="min-w-0 flex-1">
           <Pressable
             accessibilityLabel={session.title || t('session.list.untitled')}
-            accessibilityHint={session.taskId ? t('session.list.scheduledTask') : undefined}
             accessibilityValue={
               status
                 ? {
@@ -718,11 +716,7 @@ function DestinationSessionRow({
                 }
                 className={cn('w-full', pressed && 'bg-sidebar-accent')}
               >
-                <SidebarSessionContent
-                  title={session.title}
-                  status={status}
-                  isScheduledTask={Boolean(session.taskId)}
-                />
+                <SidebarSessionContent title={session.title} status={status} />
               </SidebarRowContent>
             )}
           </Pressable>
@@ -835,7 +829,6 @@ function SidebarSessionRow({
   const row = (
     <ContextMenu.Trigger
       accessibilityLabel={session.title || t('session.list.untitled')}
-      accessibilityHint={session.taskId ? t('session.list.scheduledTask') : undefined}
       accessibilityValue={
         status
           ? {
@@ -871,7 +864,6 @@ function SidebarSessionRow({
           <SidebarSessionContent
             title={session.title}
             status={status}
-            isScheduledTask={Boolean(session.taskId)}
             isSelected={!isSelecting && selected}
           />
           {isSelecting ? (
@@ -921,12 +913,10 @@ function SidebarSessionRow({
 function SidebarSessionContent({
   title,
   status,
-  isScheduledTask = false,
   isSelected = false,
 }: {
   title: string;
   status?: ConversationListStatus;
-  isScheduledTask?: boolean;
   isSelected?: boolean;
 }) {
   const { t } = useTranslation();
@@ -941,9 +931,6 @@ function SidebarSessionContent({
       >
         {title || t('session.list.untitled')}
       </Text>
-      {isScheduledTask ? (
-        <ClockIcon accessible={false} className="size-3 shrink-0 text-muted-foreground" />
-      ) : null}
       <SidebarSessionStatus status={status} />
     </>
   );

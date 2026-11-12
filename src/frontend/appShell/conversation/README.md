@@ -52,13 +52,14 @@ completion are prioritized in that order when several Sessions have different st
 ## Remote
 
 `remote/` is the desktop-owned contract and its consumers. `remoteContracts.ts` adds what the
-authoritative-elsewhere case requires: `RemoteConversationSource` with `openSession`, drafts with
+authoritative-elsewhere case requires: `RemoteConversationSource` with `openSession` and a
+task-scoped read-only opener, drafts with
 idempotent starts and the operation journal; `RemoteConversationSession` with observation
 activation, `HistoryWindow` revisions and cursors, and `prepareSelection`; `pending`/`interrupted`
 outcomes; `RemoteConversationSnapshot` with `historyVersion`, send admission and terminal execution
 results. `useConversation`, `useConversationHistory`, `useConversationDraft` and
 `useRemoteConversationSource` are exported from `remote/index.ts` for the remote chat page and the
-desktop share route only.
+desktop share route and scheduled-task module.
 
 Retired catalogs, windows and deferred reads are cancelled and evicted from Query. Cursor and
 resource refs are bound to the source scope; a replacement pairing cannot reuse them. The desktop

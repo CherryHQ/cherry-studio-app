@@ -102,7 +102,14 @@ describe('DesktopSession', () => {
       'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
       'agent.sessions.list': list,
       'agent.tasks.list': () => ({
-        items: [{ taskId: 'task', agentId: 'a', name: 'Report' }],
+        items: [
+          {
+            taskId: 'task',
+            agentId: 'a',
+            name: 'Report',
+            trigger: { kind: 'cron', expr: '0 9 * * *' },
+          },
+        ],
         nextCursor: null,
       }),
     });

@@ -51,6 +51,9 @@ function fixture(scope = 'scope', binding = 'binding') {
     listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
+    listTasks: jest.fn(async () => ({ items: [] })),
+    listTaskSessions: jest.fn(async () => ({ items: [session] })),
+    readTaskSession: jest.fn(async () => session),
     peekSession: jest.fn(() => undefined),
     subscribeReads: jest.fn(() => () => undefined),
     readSession: jest.fn(async () => session),
@@ -123,6 +126,52 @@ function fixture(scope = 'scope', binding = 'binding') {
   };
 }
 const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
+
+it('exposes no mutation capabilities for a task transcript, including while execution awaits approval', async () => {
+  const test = fixture();
+  test.setState({ status: 'ready', attachments: true, preupload: true });
+  const handle = await test.source.openTaskSession('task', address, signal());
+  const release = handle.activate();
+  test.publish({
+    ...test.snapshot,
+    executions: [{ id: 'run', state: 'awaiting-approval', cancelTarget: 'cancel' }],
+    interactions: [
+      {
+        id: 'approval',
+        title: 'Approve',
+        state: 'pending',
+        input: 'input',
+        respondTarget: 'respond',
+      },
+    ],
+  });
+  const snapshot = handle.state.getSnapshot();
+  expect(snapshot.actions.send).toBeUndefined();
+  expect(snapshot.actions.inputPolicy.attachments).toBe(false);
+  expect(snapshot.attachmentPreparation).toBeUndefined();
+  expect(snapshot.upload).toBeUndefined();
+  expect(snapshot.undelivered).toBeUndefined();
+  expect(snapshot.executions[0].cancel).toBeUndefined();
+  expect(snapshot.interactions).toEqual([]);
+  expect(test.remote.start).not.toHaveBeenCalled();
+  expect(test.remote.send).not.toHaveBeenCalled();
+  expect(test.remote.cancel).not.toHaveBeenCalled();
+  expect(test.remote.respond).not.toHaveBeenCalled();
+  release();
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('does not observe a session rejected by its task-scoped catalog', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.readTaskSession).mockRejectedValueOnce({ code: 'NOT_FOUND' });
+  await expect(test.source.openTaskSession('other-task', address, signal())).rejects.toMatchObject({
+    failure: { code: 'not-found' },
+  });
+  expect(test.remote.observe).not.toHaveBeenCalled();
+  expect(test.remote.readSession).not.toHaveBeenCalled();
+  test.source.dispose();
+});
 
 it('opens without observing, disables send until synchronized, and releases observation without cancelling execution', async () => {
   const test = fixture();

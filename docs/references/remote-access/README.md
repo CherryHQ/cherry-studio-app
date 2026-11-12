@@ -85,7 +85,7 @@ pending-message presentation. Desktop intake and attachment-draft tables are rem
 ## Scheduled task results
 
 [Scheduled Task Result Conversations](./scheduled-task-results.md) describes how desktop-created
-task results appear in the existing Remote conversation list and chat, without task-management pages.
+task results appear in a separate, expandable Remote task list and a read-only transcript.
 
 ## Session read cache
 

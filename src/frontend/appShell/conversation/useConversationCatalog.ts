@@ -10,7 +10,7 @@ import type {
 } from './contracts';
 import { useConversationSource, useConversationSourceState } from './ConversationSourceBoundary';
 
-function useCatalog<T>(
+export function useCatalog<T>(
   key: readonly string[],
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
@@ -33,7 +33,8 @@ function useCatalog<T>(
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const active = enabled && availability.state === 'enabled';
   // Desktop-created conversations, including scheduled results, have no catalog notification.
-  const refreshSessions = source.ref.kind === 'desktop' && key[0] === 'sessions';
+  const refreshSessions =
+    source.ref.kind === 'desktop' && ['sessions', 'tasks', 'task-sessions'].includes(key[0]!);
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
@@ -89,9 +90,9 @@ function useCatalog<T>(
   };
 }
 
-export function useConversationAgents() {
+export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
-  return useCatalog(['agents'], catalog.listAgents);
+  return useCatalog(['agents'], catalog.listAgents, enabled);
 }
 export function useConversationSessions(agent?: AgentRef, enabled = true) {
   const { catalog } = useConversationSource();

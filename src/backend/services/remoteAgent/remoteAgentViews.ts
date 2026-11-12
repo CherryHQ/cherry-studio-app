@@ -6,12 +6,31 @@ import type {
   AgentSession,
 } from '@cherrystudio/remote-protocol/agent';
 
+import type { DesktopResult } from '@/backend/services/desktopConnections/DesktopSession';
 import type {
   RemoteMessagePart,
   RemoteMessageView,
   RemoteSessionSnapshot,
   RemoteSessionView,
+  RemoteTaskView,
 } from '@/shared/contracts/remoteAgent';
+
+export function projectTask(
+  task: DesktopResult<'agent.tasks.list'>['items'][number],
+): RemoteTaskView {
+  const trigger = task.trigger;
+  return {
+    id: task.taskId,
+    agentId: task.agentId,
+    name: task.name,
+    trigger:
+      trigger.kind === 'cron'
+        ? { kind: 'cron', expr: trigger.expr, timezone: trigger.timezone }
+        : trigger.kind === 'interval'
+          ? { kind: 'interval', ms: trigger.ms }
+          : { kind: 'once', at: trigger.at },
+  };
+}
 
 export const projectSession = (session: AgentSession): RemoteSessionView => ({
   id: session.sessionId,

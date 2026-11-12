@@ -126,6 +126,13 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       openPaintings: () => openDestination('/drawings'),
       openPlugins: () => openDestination({ pathname: '/plugins', params: { agentId, sessionId } }),
       openSkills: () => openDestination({ pathname: '/skills', params: { agentId, sessionId } }),
+      openScheduledTasks: () => {
+        if (remoteTarget.connectionId)
+          openDestination({
+            pathname: '/scheduled-tasks/[connectionId]',
+            params: { connectionId: remoteTarget.connectionId },
+          });
+      },
       openSettings: () => openDestination('/settings'),
       startNewChat: () => {
         navigation.closeDrawer();
@@ -149,6 +156,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       SearchPanel,
       setContent,
       source,
+      remoteTarget.connectionId,
       startRemoteChat,
       startNewChat,
     ],

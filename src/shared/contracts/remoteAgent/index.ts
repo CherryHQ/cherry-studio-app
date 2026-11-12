@@ -15,4 +15,6 @@ export type {
   RemoteSessionSnapshot,
   RemoteResourceValue,
   RemotePage,
+  RemoteTaskTrigger,
+  RemoteTaskView,
 } from './views';

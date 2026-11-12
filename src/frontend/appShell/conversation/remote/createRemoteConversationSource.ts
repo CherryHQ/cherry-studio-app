@@ -113,6 +113,35 @@ export function createRemoteConversationSource(
       remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
     catalog: {
       cacheScope,
+      listTasks: (cursor, signal) =>
+        read(signal, async () => {
+          const page = await remote.listTasks(
+            cursor ? catalogRefs.resolve(cursor, 'tasks').id : undefined,
+            signal,
+          );
+          return {
+            items: page.items,
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('tasks', page.next) } : {}),
+          };
+        }),
+      listTaskSessions: (taskId, cursor, signal) =>
+        read(signal, async () => {
+          const kind = `task-sessions:${taskId}`;
+          const page = await remote.listTaskSessions(
+            taskId,
+            cursor ? catalogRefs.resolve(cursor, kind).id : undefined,
+            signal,
+          );
+          return {
+            items: page.items.map((session) => ({
+              ref: { source: ref, sessionId: session.id },
+              agentId: session.agentId,
+              title: session.title,
+              updatedAt: session.updatedAt,
+            })),
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>(kind, page.next) } : {}),
+          };
+        }),
       subscribe: (listener) => {
         catalogListeners.add(listener);
         return () => {
@@ -127,7 +156,6 @@ export function createRemoteConversationSource(
           return {
             ref: address,
             agentId: session.agentId,
-            taskId: session.taskId,
             title: session.title,
             updatedAt: session.updatedAt,
           };
@@ -196,7 +224,6 @@ export function createRemoteConversationSource(
             items: page.items.map((session) => ({
               ref: { source: ref, sessionId: session.id },
               agentId: session.agentId,
-              taskId: session.taskId,
               title: session.title,
               updatedAt: session.updatedAt,
             })),
@@ -394,6 +421,23 @@ export function createRemoteConversationSource(
           assertSource,
           () => sessions.delete(session),
           !cached,
+        );
+        sessions.add(session);
+        return session;
+      }),
+    openTaskSession: (taskId, address, signal) =>
+      read(signal, async () => {
+        if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const initial = await remote.readTaskSession(taskId, address.sessionId, signal);
+        const session = createRemoteConversationSession(
+          remote,
+          address,
+          initial,
+          assertSource,
+          () => sessions.delete(session),
+          true,
+          'read-only',
         );
         sessions.add(session);
         return session;

@@ -152,6 +152,51 @@ function fixture(
   };
 }
 
+it('skips task-only pages while listing ordinary conversations', async () => {
+  const test = fixture();
+  const session = test.projection.session;
+  const original = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.tasks.list')
+      return { items: [{ taskId: 'task', agentId: 'a' }], nextCursor: null };
+    if (method === 'agent.sessions.list') {
+      if (params.taskId)
+        return { items: [{ ...session, sessionId: 'task-result' }], nextCursor: null };
+      return params.cursor
+        ? { items: [session], nextCursor: null }
+        : { items: [{ ...session, sessionId: 'task-result' }], nextCursor: 'next' };
+    }
+    return original(method, params);
+  });
+  const page = await test.source.listSessions(undefined, undefined, new AbortController().signal);
+  expect(page.items.map((item) => item.id)).toEqual(['s']);
+  expect(page.next).toBeUndefined();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('opens only conversations found in all pages of the selected task', async () => {
+  const test = fixture();
+  const original = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.sessions.list' && params.taskId === 'task')
+      return params.cursor
+        ? { items: [test.projection.session], nextCursor: null }
+        : { items: [], nextCursor: 'next' };
+    return original(method, params);
+  });
+  const signal = new AbortController().signal;
+  await expect(test.source.readTaskSession('task', 's', signal)).resolves.toMatchObject({
+    id: 's',
+  });
+  await expect(
+    test.source.readTaskSession('task', 'foreign-session', signal),
+  ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  expect(test.request.mock.calls.some(([method]) => method === 'agent.sessions.get')).toBe(false);
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it.each([{ agentAttachmentSelections: false }, { agentUploadsVersion: 0 }])(
   'disables attachments after reconnect loses capability %j',
   async (unsupported) => {

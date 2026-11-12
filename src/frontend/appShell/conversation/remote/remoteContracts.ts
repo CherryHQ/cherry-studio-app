@@ -1,8 +1,14 @@
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
-import type { RemoteAttachment, RemoteAttachmentDraftView } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteAttachment,
+  RemoteAttachmentDraftView,
+  RemoteTaskView,
+} from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
+  CatalogCursor,
+  CatalogPage,
   ConversationAction,
   ConversationCatalog,
   ConversationExecution,
@@ -11,6 +17,7 @@ import type {
   ConversationRef,
   ConversationSnapshot,
   ConversationSource,
+  ConversationSummary,
   QueryScope,
   Readable,
   TranscriptSnapshot,
@@ -126,6 +133,15 @@ export interface ConversationDraft {
   dispose(): void;
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
+  listTasks(
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<RemoteTaskView>>;
+  listTaskSessions(
+    taskId: string,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<ConversationSummary>>;
   prepareDraft(
     input: { agent: AgentRef; workspace?: WorkspaceRef; draftId: DraftId },
     signal: AbortSignal,
@@ -138,6 +154,12 @@ export interface RemoteConversationSource extends ConversationSource {
   /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
   hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;
+  /** Task-scoped membership is verified before opening a capability-free reader. */
+  openTaskSession(
+    taskId: string,
+    ref: ConversationRef,
+    signal: AbortSignal,
+  ): Promise<RemoteConversationSession>;
 }
 export function isRemoteConversationSource(
   source: ConversationSource,
