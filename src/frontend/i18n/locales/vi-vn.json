@@ -1548,6 +1548,7 @@
   "session.list.loadFailed": "Không thể tải phiên.",
   "session.list.loadMore": "Tải thêm",
   "session.list.loading": "Đang tải phiên...",
+  "session.list.scheduledTask": "Tác vụ theo lịch",
   "session.list.title": "Phiên họp",
   "session.list.untitled": "Phiên mới",
   "session.list.viewAll": "Xem tất cả",

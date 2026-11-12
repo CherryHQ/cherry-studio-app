@@ -1562,6 +1562,7 @@
   "session.list.loadFailed": "Sessions could not be loaded.",
   "session.list.loadMore": "Load more",
   "session.list.loading": "Loading sessions...",
+  "session.list.scheduledTask": "Scheduled task",
   "session.list.title": "Sessions",
   "session.list.untitled": "New session",
   "session.list.viewAll": "View all",

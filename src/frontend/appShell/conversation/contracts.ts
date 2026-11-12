@@ -229,6 +229,7 @@ export type WorkspaceSummary =
   | { ref: WorkspaceRef; kind: 'system'; id?: never; name?: never };
 export type ConversationSummary = {
   ref: ConversationRef;
+  taskId?: string;
   agentId?: string;
   title: string;
   updatedAt?: string;

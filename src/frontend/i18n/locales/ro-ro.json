@@ -1576,6 +1576,7 @@
   "session.list.loadFailed": "Sesiunile nu au putut fi încărcate.",
   "session.list.loadMore": "Încarcă mai mult",
   "session.list.loading": "Se încarcă sesiunile...",
+  "session.list.scheduledTask": "Sarcină programată",
   "session.list.title": "Sesiuni",
   "session.list.untitled": "Sesiune nouă",
   "session.list.viewAll": "Vezi toate",

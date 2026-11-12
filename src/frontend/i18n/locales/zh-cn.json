@@ -1548,6 +1548,7 @@
   "session.list.loadFailed": "无法加载会话。",
   "session.list.loadMore": "加载更多",
   "session.list.loading": "正在加载会话...",
+  "session.list.scheduledTask": "定时任务",
   "session.list.title": "全部会话",
   "session.list.untitled": "新会话",
   "session.list.viewAll": "查看全部",

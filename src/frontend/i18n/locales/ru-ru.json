@@ -1590,6 +1590,7 @@
   "session.list.loadFailed": "Не удалось загрузить сеансы.",
   "session.list.loadMore": "Загрузить ещё",
   "session.list.loading": "Загрузка сеансов...",
+  "session.list.scheduledTask": "Задача по расписанию",
   "session.list.title": "Сессии",
   "session.list.untitled": "Новая сессия",
   "session.list.viewAll": "Посмотреть все",

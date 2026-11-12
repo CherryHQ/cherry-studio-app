@@ -1562,6 +1562,7 @@
   "session.list.loadFailed": "Sitzungen konnten nicht geladen werden.",
   "session.list.loadMore": "Mehr laden",
   "session.list.loading": "Sitzungen werden geladen...",
+  "session.list.scheduledTask": "Geplante Aufgabe",
   "session.list.title": "Sitzungen",
   "session.list.untitled": "Neue Sitzung",
   "session.list.viewAll": "Alle anzeigen",

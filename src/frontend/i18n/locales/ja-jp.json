@@ -1548,6 +1548,7 @@
   "session.list.loadFailed": "セッションをロードできませんでした。",
   "session.list.loadMore": "もっと読み込む",
   "session.list.loading": "セッションをロード中...",
+  "session.list.scheduledTask": "予約タスク",
   "session.list.title": "セッション",
   "session.list.untitled": "新しいセッション",
   "session.list.viewAll": "全て見る",

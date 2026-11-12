@@ -32,6 +32,8 @@ function useCatalog<T>(
     availability.state === 'disabled' &&
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const active = enabled && availability.state === 'enabled';
+  // Desktop-created conversations, including scheduled results, have no catalog notification.
+  const refreshSessions = source.ref.kind === 'desktop' && key[0] === 'sessions';
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
@@ -40,7 +42,8 @@ function useCatalog<T>(
     enabled: active,
     retry: false,
     gcTime: shared ? 5 * 60_000 : 0,
-    staleTime: shared ? 30_000 : 0,
+    staleTime: refreshSessions ? 0 : shared ? 30_000 : 0,
+    refetchInterval: refreshSessions ? 15_000 : false,
     refetchOnMount: 'always',
   });
   useEffect(() => {
@@ -90,10 +93,12 @@ export function useConversationAgents() {
   const { catalog } = useConversationSource();
   return useCatalog(['agents'], catalog.listAgents);
 }
-export function useConversationSessions(agent?: AgentRef) {
+export function useConversationSessions(agent?: AgentRef, enabled = true) {
   const { catalog } = useConversationSource();
-  return useCatalog(['sessions', agent ?? ''], (cursor, signal) =>
-    catalog.listSessions({ agent }, cursor, signal),
+  return useCatalog(
+    ['sessions', agent ?? ''],
+    (cursor, signal) => catalog.listSessions({ agent }, cursor, signal),
+    enabled,
   );
 }
 export function useConversationSessionChildren(parent: ConversationRef, enabled = true) {

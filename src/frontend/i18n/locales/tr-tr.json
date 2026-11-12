@@ -1562,6 +1562,7 @@
   "session.list.loadFailed": "Oturumlar yüklenemedi.",
   "session.list.loadMore": "Daha fazla yükle",
   "session.list.loading": "Oturumlar yükleniyor...",
+  "session.list.scheduledTask": "Zamanlanmış görev",
   "session.list.title": "Oturumlar",
   "session.list.untitled": "Yeni oturum",
   "session.list.viewAll": "Tümünü görüntüle",

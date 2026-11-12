@@ -1562,6 +1562,7 @@
   "session.list.loadFailed": "Δεν ήταν δυνατή η φόρτωση των περιόδων σύνδεσης.",
   "session.list.loadMore": "Φόρτωση περισσότερων",
   "session.list.loading": "Φόρτωση περιόδων σύνδεσης...",
+  "session.list.scheduledTask": "Προγραμματισμένη εργασία",
   "session.list.title": "Συνεδρίες",
   "session.list.untitled": "Νέα συνεδρία",
   "session.list.viewAll": "Προβολή όλων",

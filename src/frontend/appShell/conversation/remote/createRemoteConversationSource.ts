@@ -127,6 +127,7 @@ export function createRemoteConversationSource(
           return {
             ref: address,
             agentId: session.agentId,
+            taskId: session.taskId,
             title: session.title,
             updatedAt: session.updatedAt,
           };
@@ -195,6 +196,7 @@ export function createRemoteConversationSource(
             items: page.items.map((session) => ({
               ref: { source: ref, sessionId: session.id },
               agentId: session.agentId,
+              taskId: session.taskId,
               title: session.title,
               updatedAt: session.updatedAt,
             })),

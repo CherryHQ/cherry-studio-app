@@ -1576,6 +1576,7 @@
   "session.list.loadFailed": "As sessões não puderam ser carregadas.",
   "session.list.loadMore": "Carregar mais",
   "session.list.loading": "A carregar sessões...",
+  "session.list.scheduledTask": "Tarefa agendada",
   "session.list.title": "Sessões",
   "session.list.untitled": "Nova sessão",
   "session.list.viewAll": "Ver tudo",

@@ -82,6 +82,11 @@ shared protocol, receiver, historical decisions and remaining acceptance/release
 [Managed Attachments](./managed-attachments-design.md) records the integrated simplification: mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable
 pending-message presentation. Desktop intake and attachment-draft tables are removed; mobile source-copy reduction remains pending.
 
+## Scheduled task results
+
+[Scheduled Task Result Conversations](./scheduled-task-results.md) describes how desktop-created
+task results appear in the existing Remote conversation list and chat, without task-management pages.
+
 ## Session read cache
 
 [Remote Session Read Cache](./session-read-cache.md) documents the cross-page read cache,
