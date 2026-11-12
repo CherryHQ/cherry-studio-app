@@ -162,4 +162,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 The chat-owned context usage action stays on the right of the composer at rest and while editing.
 Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
 percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
-its Session or measured answer changes, so an old measurement cannot reopen it.
+its Session or context answer changes, so an old measurement cannot reopen it. Usage comes from
+the selected branch's current Pi working context, including the retained answer and tool results.
+Committed background compaction updates the same value without waiting for another answer.
+Without a working copy, the Host estimates the saved checkpoint and normalized message tail in
+memory; estimated occupancy is prefixed with `≈`. It does not display a persisted input count or
+cumulative billing total as current occupancy. A new provider measurement calibrates the count.

@@ -4,6 +4,7 @@ export type {
   RuntimeConversationEvent,
   RuntimeConversationSeed,
   RuntimeConversationSnapshot,
+  RuntimeContextUsage,
   RuntimeDurableSubmission,
   RuntimeDurableTurn,
   RuntimeTurnTiming,

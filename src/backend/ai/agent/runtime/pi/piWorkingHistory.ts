@@ -9,8 +9,8 @@ import {
   UserEntry,
 } from '@earendil-works/pi-durable';
 
-import type { RuntimeContextCheckpoint, RuntimeExecutionRequest, RuntimeJsonValue } from '../types';
-import { toPiConversation } from './modelMessages';
+import type { RuntimeContextCheckpoint, RuntimeJsonValue } from '../types';
+import { type PiConversationInput, toPiConversation } from './modelMessages';
 import { parseCheckpointPayload } from './piLegacyCheckpoint';
 
 /**
@@ -18,8 +18,8 @@ import { parseCheckpointPayload } from './piLegacyCheckpoint';
  * historical tool. A checkpoint contains the bounded active context at a Cherry turn boundary.
  */
 export function createWorkingPiEntries(
-  request: RuntimeExecutionRequest,
-  model: Model<Api>,
+  request: PiConversationInput & { contextCheckpoint: RuntimeContextCheckpoint | null },
+  model: Pick<Model<Api>, 'api' | 'id' | 'provider' | 'input'>,
 ): EntryDraft[] {
   const conversation = toPiConversation(request, model);
   const checkpoint = request.contextCheckpoint;

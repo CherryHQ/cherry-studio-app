@@ -128,13 +128,7 @@ describe('Pi API adapters', () => {
     const second = quoted('Snapshot two', 'Request two');
     const conversation = toPiConversation(
       {
-        turnId: 'now',
-        sessionId: 's',
         instructions: '',
-        model: { providerId: 'test', modelId: 'model' },
-        contextCheckpoint: null,
-        options: {},
-        tools: [],
         input: [{ type: 'text', text: 'Continue' }],
         history: [
           {

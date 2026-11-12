@@ -586,6 +586,7 @@ with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 ```ts
 type AgentEvent =
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | { type: 'context.usage.updated'; usages: AgentContextUsage[] }
   | { type: 'runtime.failed' }
   | { type: 'question.updated'; question: AgentPendingQuestion | null }
   | { type: 'session.updated'; session: AgentSessionView }
@@ -603,6 +604,8 @@ type AgentMessageDelta =
   | { op: 'text.append'; partId: string; text: string }
   | { op: 'tool.input.preview'; partId: string; preview: AgentToolInputPreview }
   | { op: 'part.replace'; part: AgentMessagePart }
+
+type AgentContextUsage = { messageId: string; tokens: number; estimated?: boolean }
 ```
 
 `text.append` applies only to text and reasoning parts. State changes replace the addressed part;
@@ -616,6 +619,15 @@ gets the accumulated streaming message from the snapshot.
 value as `contextStatus`. `runtime.failed` means the engine's storage session closed after a failure:
 the client shows a retry action, and refreshing the Session reopens the engine and resumes
 unfinished work.
+
+`context.usage.updated` replaces the current working-context counts for the Session. Each value is
+anchored to the answer of its newest placed input, so a selected branch cannot consume another
+copy's count. Pi derives occupancy from effective model context, including retained output and
+compaction summaries, rather than cumulative consumption. Background compaction publishes a new
+count while idle; the snapshot repeats the current list as `contextUsages`. Without a matching Pi
+copy, the Host estimates the saved checkpoint and normalized history without creating runtime
+storage or executing a model. Such values, and native content estimates, carry `estimated: true`.
+Runtime failure clears these values until observation is restored.
 
 Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
 
@@ -665,6 +677,7 @@ type AgentSessionSnapshot = {
   pendingApprovals: AgentApprovalView[]
   pendingQuestion: AgentPendingQuestion | null
   contextStatus?: 'compacting' | 'compaction-failed' | null
+  contextUsages?: AgentContextUsage[]
 }
 ```
 

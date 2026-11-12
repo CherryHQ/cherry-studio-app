@@ -394,7 +394,11 @@ function TextChatInput({
     selectedModelItem.modelId === contextUsage.modelId &&
     selectedModelItem.model.providerId === contextUsage.providerId &&
     selectedModelItem.model.modelId === contextUsage.providerModelId
-      ? deriveContextUsage(selectedModelItem.model.contextWindow, contextUsage.stats)
+      ? deriveContextUsage(
+          selectedModelItem.model.contextWindow,
+          contextUsage.tokens,
+          contextUsage.estimated,
+        )
       : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   // One picker at a time; each closes only itself, so a late close never hides the next one.

@@ -1,17 +1,15 @@
-import type { MessageStats } from '@/shared/data/types/messageStats';
-
 export function deriveContextUsage(
   capacity: number | undefined,
-  stats?: Pick<MessageStats, 'contextTokens'>,
+  tokens?: number,
+  estimated = false,
 ) {
   if (capacity === undefined || !Number.isFinite(capacity) || capacity <= 0) return undefined;
-  const measured = stats?.contextTokens;
-  const used =
-    measured !== undefined && Number.isFinite(measured) && measured > 0 ? measured : undefined;
+  const used = tokens !== undefined && Number.isFinite(tokens) && tokens >= 0 ? tokens : undefined;
   const ratio = used === undefined ? undefined : used / capacity;
   return {
     capacity,
     used,
+    estimated,
     ratio,
     arcRatio: ratio === undefined ? undefined : Math.min(1, ratio),
     severity:
@@ -32,8 +30,14 @@ export function formatContextCapacity(capacity: number, language: string): strin
   return new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(capacity / 1000);
 }
 
-export function formatContextUsagePercent(ratio: number, language: string): string {
-  return new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(
-    ratio,
-  );
+export function formatContextUsagePercent(
+  ratio: number,
+  language: string,
+  estimated = false,
+): string {
+  const percent = new Intl.NumberFormat(language, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(ratio);
+  return estimated ? `≈${percent}` : percent;
 }

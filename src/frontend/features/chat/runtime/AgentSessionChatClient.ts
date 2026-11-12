@@ -37,6 +37,7 @@ export type AgentSessionChatState = {
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
+  contextUsages?: AgentSessionSnapshot['contextUsages'];
   status: AgentSessionChatStatus;
 };
 
@@ -619,6 +620,7 @@ export class AgentSessionChatClient {
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
       contextStatus: snapshot.contextStatus,
+      contextUsages: snapshot.contextUsages,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -633,10 +635,14 @@ export class AgentSessionChatClient {
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;
+      case 'context.usage.updated':
+        this.updateState(entry, { ...entry.state, contextUsages: event.usages });
+        return;
       case 'runtime.failed':
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,
+          contextUsages: [],
           pendingApprovals: [],
           pendingQuestion: null,
           status: 'error',

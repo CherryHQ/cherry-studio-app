@@ -149,4 +149,6 @@ time and navigation invalidates the old handoff immediately. Pending/uncertain o
 recoverable and cannot redirect the new draft when their replies arrive.
 
 The runtime public boundary exports `selectContextUsageSource` and `ContextUsageSource` for
-selecting the latest eligible branch measurement.
+selecting the current working-context usage for the newest answer on the selected branch.
+`useLocalConversation` exposes the Session observation's `contextUsages`, including updates after
+background compaction. Persisted message token statistics do not supply composer occupancy.

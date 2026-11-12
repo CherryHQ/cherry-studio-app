@@ -42,6 +42,15 @@ export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentContextStatusSchema = z.enum(['compacting', 'compaction-failed']).nullable();
 
+/** Current retained context, anchored to the answer of its newest placed input. */
+export const AgentContextUsageSchema = z.strictObject({
+  messageId: z.string().min(1),
+  tokens: z.number().finite().nonnegative(),
+  /** Recovery without a working copy cannot provide a fresh provider measurement. */
+  estimated: z.boolean().optional(),
+});
+export type AgentContextUsage = z.infer<typeof AgentContextUsageSchema>;
+
 export const AgentQueuedInputSchema = z.strictObject({
   turnId: z.string().min(1),
   userMessage: AgentMessageViewSchema,
@@ -52,6 +61,10 @@ export type AgentQueuedInput = z.infer<typeof AgentQueuedInputSchema>;
 export const AgentEventSchema = z.union([
   z.strictObject({ type: z.literal('queue.updated'), inputs: z.array(AgentQueuedInputSchema) }),
   z.strictObject({ type: z.literal('context.updated'), status: AgentContextStatusSchema }),
+  z.strictObject({
+    type: z.literal('context.usage.updated'),
+    usages: z.array(AgentContextUsageSchema),
+  }),
   z.strictObject({ type: z.literal('runtime.failed') }),
   z.strictObject({
     type: z.literal('question.updated'),
@@ -101,6 +114,8 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   pendingApprovals: z.array(AgentApprovalViewSchema),
   pendingQuestion: AgentPendingQuestionSchema.nullable(),
   contextStatus: AgentContextStatusSchema.optional(),
+  /** One current context per working copy; the selected branch chooses its matching answer. */
+  contextUsages: z.array(AgentContextUsageSchema).optional(),
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 

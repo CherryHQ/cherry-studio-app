@@ -195,7 +195,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     sessionId,
     target.kind === 'session' ? target.messageRequestId : undefined,
   );
-  const { snapshot, messages, messageWindow } = useLocalConversation({
+  const { snapshot, messages, messageWindow, contextUsages } = useLocalConversation({
     sessionId,
     title: session.data?.name,
     navigation: quoteNavigation.navigation ?? (target.kind === 'session' ? target : undefined),
@@ -391,6 +391,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           contextUsage={selectContextUsageSource({
                             sessionId,
                             messages,
+                            usages: contextUsages,
                             isCurrentWindow:
                               !messageWindow.hasNewerMessages &&
                               !messageWindow.isLoadingInitial &&

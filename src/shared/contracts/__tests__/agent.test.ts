@@ -1,5 +1,6 @@
 import {
   AgentEventSchema,
+  AgentContextUsageSchema,
   AgentRespondQuestionSchema,
   validateUserAnswers,
   AgentApprovalViewSchema,
@@ -50,12 +51,30 @@ test('transient context and runtime events round-trip without diagnostic payload
     { type: 'context.updated', status: 'compacting' },
     { type: 'context.updated', status: 'compaction-failed' },
     { type: 'context.updated', status: null },
+    { type: 'context.usage.updated', usages: [{ messageId: 'answer', tokens: 12_000 }] },
+    {
+      type: 'context.usage.updated',
+      usages: [{ messageId: 'answer', tokens: 12_000, estimated: true }],
+    },
+    { type: 'context.usage.updated', usages: [] },
     { type: 'runtime.failed' },
   ])
     expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
   expect(AgentEventSchema.safeParse({ type: 'runtime.failed', error: 'device path' }).success).toBe(
     false,
   );
+});
+
+test('context usage preserves zero and rejects invalid counts or runtime internals', () => {
+  const usage = { messageId: 'answer', tokens: 0 };
+  expect(AgentContextUsageSchema.parse(roundTrip(usage))).toEqual(usage);
+  for (const invalid of [
+    { ...usage, tokens: -1 },
+    { ...usage, tokens: Infinity },
+    { ...usage, messageId: '' },
+    { ...usage, messages: ['private context'] },
+  ])
+    expect(AgentContextUsageSchema.safeParse(invalid).success).toBe(false);
 });
 
 function roundTrip<T>(value: T): unknown {
@@ -460,6 +479,7 @@ describe('Agent tool and managed-file contracts', () => {
       additionalMessages: [
         { ...assistantMessage, id: 'settled-sibling', status: 'success', siblingsGroupId: 1 },
       ],
+      contextUsages: [{ messageId: 'assistant-1', tokens: 100 }],
     } as const;
 
     expect(AgentSessionSnapshotSchema.parse(roundTrip(snapshot))).toEqual(snapshot);
