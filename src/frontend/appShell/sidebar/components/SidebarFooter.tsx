@@ -3,10 +3,10 @@ import { Spinner, Surface } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { useUniwind } from 'uniwind';
+import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
@@ -27,6 +27,12 @@ export function SidebarFooter() {
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
+  const { backgroundColor: transparentSurfaceColor } = useResolveClassNames(
+    theme === 'dark' ? 'bg-sidebar/0' : 'bg-background/0',
+  );
+  // iOS needs the surface RGB at zero alpha to avoid interpolating through black.
+  const fadeStartColor =
+    Platform.OS === 'ios' ? (transparentSurfaceColor ?? 'transparent') : 'transparent';
   const fadeHeight = appSidebar.headerGapY * 2;
   const backgroundHeight = bottomPadding + appSidebar.dockHeight + fadeHeight;
   const { openSettings } = useSidebarActions('SidebarFooter');
@@ -60,7 +66,7 @@ export function SidebarFooter() {
       >
         <SidebarFade edge="bottom" size={backgroundHeight} />
         <LinearGradient
-          colors={['transparent', surfaceColor, surfaceColor]}
+          colors={[fadeStartColor, surfaceColor, surfaceColor]}
           locations={[0, fadeHeight / backgroundHeight, 1]}
           style={[StyleSheet.absoluteFill, { opacity: 0.9 }]}
         />
