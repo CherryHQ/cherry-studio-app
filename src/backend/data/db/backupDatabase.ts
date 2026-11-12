@@ -199,10 +199,16 @@ async function copyBackupRows(db: SQLiteDatabase, source: File): Promise<void> {
           ).map((column) => identifierKey(column.name)),
         );
         if (
-          columns.some(
-            (column) =>
-              !sourceColumns.has(column.name) && column.notnull && column.dflt_value === null,
-          )
+          columns.some((column) => {
+            if (sourceColumns.has(column.name)) return false;
+            // These defaults cannot replace the data backfill in 0012_message_tree.
+            // Older restore targets do not include these columns yet; their upgrade does.
+            const isMessageTreeColumn =
+              (name === 'agent_session' && column.name === 'active_node_id') ||
+              (name === 'agent_session_message' &&
+                (column.name === 'parent_id' || column.name === 'siblings_group_id'));
+            return (column.notnull && column.dflt_value === null) || isMessageTreeColumn;
+          })
         )
           throw new BackupError('invalid', `Missing required backup column in ${name}.`);
         const copiedColumns = columns
@@ -232,10 +238,11 @@ async function copyBackupRows(db: SQLiteDatabase, source: File): Promise<void> {
   }
 }
 
-/** Rebuild only the captured/extracted copy; never run source DDL or mutate the live database. */
+/** Rebuild only the private copy; exports regenerate its journal, restores require matching history. */
 export async function normalizeBackupDatabase(
   file: File,
   version: BackupDatabaseVersion,
+  purpose: 'export' | 'restore' = 'restore',
 ): Promise<void> {
   await validateBackupVersion(version);
   // Keep interrupted normalization inside the operation's existing cleanup boundary.
@@ -243,7 +250,7 @@ export async function normalizeBackupDatabase(
   directory.create();
   try {
     await withBackupDatabase(file, async (source) => {
-      await validateMigrationJournal(source, version);
+      if (purpose === 'restore') await validateMigrationJournal(source, version);
       await withBackupDatabase(new File(directory, 'cherry.db'), async (db) => {
         await applyMigrations(db, version.migrations.length);
         await copyBackupRows(db, file);

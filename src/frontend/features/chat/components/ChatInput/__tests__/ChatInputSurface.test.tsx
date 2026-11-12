@@ -60,7 +60,7 @@ jest.mock('../../../voice/ChatInputPrimaryAction', () => ({
 
 describe('ChatInputSurface', () => {
   let renderer: ReactTestRenderer;
-  const usage = deriveContextUsage(100, { contextTokens: 20 })!;
+  const usage = deriveContextUsage(100, 20)!;
   const render = (message = 'm') => (
     <ChatInputSurface
       contextUsage={usage}

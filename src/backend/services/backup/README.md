@@ -16,10 +16,15 @@ chats, agents, settings, provider keys, tool bindings, paintings and file metada
 
 New exports use format v4 so older readers reject memory resources before replacing their storage.
 The reader still accepts portable v1/v3 backups; experimental paired-database v2 remains rejected.
-This is a mobile format. Desktop physical backups are rejected. Compatibility requires an exact
-prefix of bundled SQLite migrations; different migration lineage and future formats are rejected.
-Export and import rebuild their private database copy from that prefix, then copy known tables and
-columns by name. Missing nullable/defaulted columns use the standard schema's defaults. Unknown
+This is a mobile format. Desktop physical backups are rejected.
+Restore compatibility requires an exact prefix of bundled SQLite migrations; different migration
+lineage and future formats are rejected.
+Exports rebuild their private database copy from the running app's bundled migrations; imports use
+the validated backup prefix. Both copy known tables and columns by name. Missing nullable/defaulted
+columns use the standard schema's defaults, except message-tree columns required by the target
+version (`active_node_id`, `parent_id`, `siblings_group_id`). These must be present: defaults cannot
+replace the historical data backfill. Genuine pre-tree backups still normalize at their own version
+and run that migration during restore. Unknown
 tables, columns, indexes, views and triggers are omitted; indexes, triggers and search state are
 rebuilt from bundled definitions. Source SQL is never executed and its text is not compared.
 Missing required tables/columns, invalid records and broken references still fail rather than
@@ -33,6 +38,13 @@ System sharing presents save destinations; opening or dismissing the share sheet
 successful saving.
 
 ## Export
+
+The captured database's migration journal does not need to match the current bundle. Missing,
+partial, extra or modified journal entries are regenerated in the normalized copy, matching the
+export manifest. Required tables and columns, record constraints, references and managed files
+remain checked; the live database's journal is never repaired or rewritten by export.
+An incomplete message-tree schema fails export instead of being marked fully migrated with
+invisible conversation history.
 
 While a backup or restore runs, an app-wide progress dialog blocks every route; the user can only
 wait or cancel. Capture refuses active chat/job execution, and a freeze keeps new Agent turns and
@@ -90,6 +102,8 @@ WebDAV/S3, scheduled backups, encryption, partial restore and desktop interchang
 Focused suites cover mutation admission, runtime progress state, serialized paths and limits, a
 pack/unpack round trip, ZIP truncation/encryption (in the shared reader suite), native-process
 state transitions, standard-schema imports, rebuilt search indexes and SQLite normalization/rollback.
+Database regressions also cover exporting with missing or mismatched migration journals, preserving
+the live source, validating the regenerated journal, and retaining strict restore checks.
 Export regressions cover the two-pass payload scale, manifest exclusion, file-boundary hashing,
 chunk-level packing before a database-only entry finishes, monotonic counters and integer-percentage
 publication deduplication, source-size mismatches, and cancellation during a chunk yield.
