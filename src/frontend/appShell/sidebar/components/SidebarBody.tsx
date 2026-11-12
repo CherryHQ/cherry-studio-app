@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
@@ -87,8 +88,14 @@ function SidebarBodyContent({
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
-    useSidebarActions('SidebarBody');
+  const {
+    navigateAgents,
+    openLibrary,
+    openPaintings,
+    openPlugins,
+    openSkills,
+    openScheduledTasks,
+  } = useSidebarActions('SidebarBody');
   const { isChatFocused, source } = useChatSource();
   const pane = useFilePane();
   const destination = useSidebarDestination();
@@ -143,6 +150,19 @@ function SidebarBodyContent({
               destination === 'library' ||
               Boolean(isChatFocused && pane?.isAvailable && pane.isOpen)
             }
+          />
+        </Animated.View>
+      ) : null}
+
+      {source === 'remote' ? (
+        <Animated.View style={navigationStyle}>
+          <SidebarNavRow
+            icon={ClockIcon}
+            label={t('remoteTasks.title')}
+            onPress={openScheduledTasks}
+            testID="sidebar-scheduled-tasks"
+            disabled={disabled}
+            isSelected={destination === 'scheduled-tasks'}
           />
         </Animated.View>
       ) : null}

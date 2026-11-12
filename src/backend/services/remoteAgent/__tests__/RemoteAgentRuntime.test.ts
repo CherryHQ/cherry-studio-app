@@ -20,6 +20,11 @@ function mockScope(lease: DesktopDomainLease) {
   const unsubscribe = jest.fn();
   const scope = {
     scope: 'scope',
+    tasks: {
+      list: jest.fn(async () => ({ items: [] })),
+      listSessions: jest.fn(async () => ({ items: [] })),
+      readSession: jest.fn(),
+    },
     hasPendingExecution: () => pending || executing,
     subscribeExecution: (listener: () => void) => {
       executionListeners.add(listener);
@@ -104,6 +109,20 @@ it('one cancelled acquisition cannot release the scope awaited by another route'
   expect(lease.release).not.toHaveBeenCalled();
   source.dispose();
   expect(lease.release).toHaveBeenCalledTimes(1);
+});
+
+it("retires a released caller's task capability while another caller retains the shared scope", async () => {
+  const first = await runtime.open('pc', signal());
+  const second = await runtime.open('pc', signal());
+  const tasks = first.tasks;
+  first.dispose();
+  expect(lease.release).not.toHaveBeenCalled();
+  expect(() => tasks.list(undefined, signal())).toThrow('Source released');
+  expect(() => tasks.listSessions('task', undefined, signal())).toThrow('Source released');
+  expect(() => tasks.readSession('task', 'session', signal())).toThrow('Source released');
+  expect(mockScopes[0].tasks.list).not.toHaveBeenCalled();
+  await expect(second.tasks.list(undefined, signal())).resolves.toEqual({ items: [] });
+  second.dispose();
 });
 
 it('retains admitted work after the last route leaves, then drains it before host shutdown completes', async () => {

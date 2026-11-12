@@ -51,6 +51,11 @@ function fixture(scope = 'scope', binding = 'binding') {
     listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
+    tasks: {
+      list: jest.fn(async () => ({ items: [] })),
+      listSessions: jest.fn(async () => ({ items: [session] })),
+      readSession: jest.fn(async () => session),
+    },
     peekSession: jest.fn(() => undefined),
     subscribeReads: jest.fn(() => () => undefined),
     readSession: jest.fn(async () => session),
@@ -123,6 +128,81 @@ function fixture(scope = 'scope', binding = 'binding') {
   };
 }
 const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
+
+it('exposes no mutation capabilities for a task transcript, including while execution awaits approval', async () => {
+  const test = fixture();
+  test.setState({ status: 'ready', attachments: true, preupload: true });
+  const handle = await test.source.openTaskSession('task', address, signal());
+  const release = handle.activate();
+  test.publish({
+    ...test.snapshot,
+    executions: [{ id: 'run', state: 'awaiting-approval', cancelTarget: 'cancel' }],
+    interactions: [
+      {
+        id: 'approval',
+        title: 'Approve',
+        state: 'pending',
+        input: 'input',
+        respondTarget: 'respond',
+      },
+    ],
+  });
+  const snapshot = handle.state.getSnapshot();
+  expect(snapshot.actions.send).toBeUndefined();
+  expect(snapshot.actions.inputPolicy.attachments).toBe(false);
+  expect(snapshot.attachmentPreparation).toBeUndefined();
+  expect(snapshot.upload).toBeUndefined();
+  expect(snapshot.undelivered).toBeUndefined();
+  expect(snapshot.executions[0].cancel).toBeUndefined();
+  expect(snapshot.interactions).toEqual([]);
+  expect(test.remote.start).not.toHaveBeenCalled();
+  expect(test.remote.send).not.toHaveBeenCalled();
+  expect(test.remote.cancel).not.toHaveBeenCalled();
+  expect(test.remote.respond).not.toHaveBeenCalled();
+  release();
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('does not observe a session rejected by its task-scoped catalog', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.tasks.readSession).mockRejectedValueOnce({ code: 'NOT_FOUND' });
+  await expect(test.source.openTaskSession('other-task', address, signal())).rejects.toMatchObject({
+    failure: { code: 'not-found' },
+  });
+  expect(test.remote.observe).not.toHaveBeenCalled();
+  expect(test.remote.readSession).not.toHaveBeenCalled();
+  test.source.dispose();
+});
+
+it('keeps task-session cursors scoped to their task and separate from ordinary conversation cursors', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.tasks.listSessions).mockResolvedValue({ items: [session], next: 'next' });
+  const page = await test.source.tasks.listSessions('task', undefined, signal());
+  expect(page.items[0]).toMatchObject({ ref: address, title: session.title });
+  await expect(
+    test.source.tasks.listSessions('other-task', page.next, signal()),
+  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  await expect(test.source.catalog.listSessions({}, page.next, signal())).rejects.toMatchObject({
+    failure: { code: 'invalid-input' },
+  });
+  expect(test.remote.tasks.listSessions).toHaveBeenCalledTimes(1);
+  test.source.dispose();
+});
+
+it('rejects task catalog reads after its frontend source is disposed', async () => {
+  const test = fixture();
+  const tasks = test.source.tasks;
+  test.source.dispose();
+  await expect(tasks.list(undefined, signal())).rejects.toMatchObject({
+    failure: { code: 'retired' },
+  });
+  await expect(tasks.listSessions('task', undefined, signal())).rejects.toMatchObject({
+    failure: { code: 'retired' },
+  });
+  expect(test.remote.tasks.list).not.toHaveBeenCalled();
+  expect(test.remote.tasks.listSessions).not.toHaveBeenCalled();
+});
 
 it('opens without observing, disables send until synchronized, and releases observation without cancelling execution', async () => {
   const test = fixture();

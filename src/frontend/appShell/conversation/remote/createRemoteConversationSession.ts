@@ -97,7 +97,9 @@ export function createRemoteConversationSession(
   assertSource: () => void,
   onDispose: () => void,
   bootstrapVerified = false,
+  access: 'interactive' | 'read-only' = 'interactive',
 ): RemoteConversationSession {
+  const isReadOnly = access === 'read-only';
   const scope = source.scope as QueryScope;
   const refs = createConversationReferences(scope, ref.sessionId);
   const lifetime = new AbortController();
@@ -238,18 +240,22 @@ export function createRemoteConversationSession(
   }
   function snapshot(): RemoteConversationSnapshot {
     const sourceState = source.getState();
-    const send = action<ConversationInput, Submission>(
-      'send',
-      latest?.sendTarget,
-      (target, input) => {
-        const value = remoteInput(input);
-        return source.send(target, value.text, value.attachments);
-      },
-      { conversation: ref },
-    );
-    const undelivered = source
-      .getCommands()
-      .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
+    const send = isReadOnly
+      ? undefined
+      : action<ConversationInput, Submission>(
+          'send',
+          latest?.sendTarget,
+          (target, input) => {
+            const value = remoteInput(input);
+            return source.send(target, value.text, value.attachments);
+          },
+          { conversation: ref },
+        );
+    const undelivered = isReadOnly
+      ? undefined
+      : source
+          .getCommands()
+          .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
     return {
       title: session.title,
       agentId: session.agentId,
@@ -291,7 +297,8 @@ export function createRemoteConversationSession(
                 },
               }
             : {}),
-          ...(['running', 'awaiting-approval', 'finalizing'].includes(execution.state)
+          ...(!isReadOnly &&
+          ['running', 'awaiting-approval', 'finalizing'].includes(execution.state)
             ? {
                 cancel: action(
                   `cancel:${execution.id}`,
@@ -302,35 +309,39 @@ export function createRemoteConversationSession(
               }
             : {}),
         })) ?? [],
-      interactions:
-        latest?.interactions.map((interaction) => ({
-          id: interaction.id,
-          ...(interaction.executionId ? { execution: interaction.executionId } : {}),
-          kind: interaction.kind ?? 'decision',
-          title: interaction.title,
-          state: interaction.state,
-          input: resource(interaction.input),
-          ...(interaction.state === 'pending'
-            ? {
-                respond: action<ConversationInteractionResponse, void>(
-                  `respond:${interaction.id}`,
-                  interaction.respondTarget,
-                  (target, decision) => {
-                    if (decision.kind === 'user-answer')
-                      throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
-                    return source.respond(target, decision);
-                  },
-                  undefined,
-                ),
-              }
-            : {}),
-        })) ?? [],
+      interactions: !isReadOnly
+        ? (latest?.interactions.map((interaction) => ({
+            id: interaction.id,
+            ...(interaction.executionId ? { execution: interaction.executionId } : {}),
+            kind: interaction.kind ?? 'decision',
+            title: interaction.title,
+            state: interaction.state,
+            input: resource(interaction.input),
+            ...(interaction.state === 'pending'
+              ? {
+                  respond: action<ConversationInteractionResponse, void>(
+                    `respond:${interaction.id}`,
+                    interaction.respondTarget,
+                    (target, decision) => {
+                      if (decision.kind === 'user-answer')
+                        throw new ConversationReadError({ code: 'unsupported', retry: 'none' });
+                      return source.respond(target, decision);
+                    },
+                    undefined,
+                  ),
+                }
+              : {}),
+          })) ?? [])
+        : [],
       actions: {
-        inputPolicy: { ...REMOTE_INPUT_POLICY, attachments: sourceState.attachments === true },
+        inputPolicy: {
+          ...REMOTE_INPUT_POLICY,
+          attachments: !isReadOnly && sourceState.attachments === true,
+        },
         send,
       },
       attachmentPreparation:
-        sourceState.preupload && source.stageAttachments
+        !isReadOnly && sourceState.preupload && source.stageAttachments
           ? {
               draft: sourceState.attachmentDrafts?.find(
                 (draft) => draft.key === `session:${ref.sessionId}`,
@@ -344,7 +355,7 @@ export function createRemoteConversationSession(
             }
           : undefined,
       upload:
-        sourceState.upload?.sessionId === ref.sessionId
+        !isReadOnly && sourceState.upload?.sessionId === ref.sessionId
           ? {
               ...sourceState.upload,
               cancel: () => source.cancelUpload?.(sourceState.upload!.id),
@@ -352,6 +363,7 @@ export function createRemoteConversationSession(
           : undefined,
       undelivered:
         undelivered &&
+        send &&
         undeliveredMessage(undelivered, operationId(undelivered.id), send, () => {
           assertCurrent();
           source.discard(undelivered.id);
@@ -373,7 +385,7 @@ export function createRemoteConversationSession(
     if (status === 'retired') lifetime.abort();
     publish();
   });
-  const unoperations = source.subscribeOperations(publish);
+  const unoperations = isReadOnly ? () => {} : source.subscribeOperations(publish);
   const handle: RemoteConversationSession = {
     ref,
     scope,

@@ -48,14 +48,13 @@ import {
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useBackendModule } from '@/frontend/data';
-import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
 import { ChatShareComposerGuard, ChatShareSelectionControls } from '../share/ChatShareControls';
 import { ChatShareSelectionProvider } from '../share/ChatShareSelectionProvider';
-import type { ChatShareTarget } from '../share/chatShareTarget';
 import { ConversationPresenter } from './ConversationPresenter';
+import { remoteChatShareTarget } from './remoteChatShareTarget';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
 import { readRemoteDraft } from './useRemoteDraftPersistence';
@@ -199,37 +198,8 @@ function RemoteChatSession() {
     history.hasNewerMessages,
   );
   const session = opened.session;
-  const shareTarget = useMemo<ChatShareTarget | undefined>(
-    () =>
-      session
-        ? {
-            ref: session.ref,
-            prepareSelection: (ids, signal) => session.history.prepareSelection(ids, signal),
-            readSelectableIds: async (signal) => {
-              const window = await session.history.openLatest(signal);
-              try {
-                const ids: string[] = [];
-                let page = window.initial;
-                while (true) {
-                  ids.unshift(
-                    ...page.items
-                      .filter(
-                        (message) =>
-                          message.completeness === 'complete' &&
-                          message.display.role !== 'system' &&
-                          !['pending', 'streaming'].includes(message.state),
-                      )
-                      .map((message) => message.key),
-                  );
-                  if (!page.older || ids.length > DOCUMENT_EXPORT_MAX_SECTIONS) return ids;
-                  page = await window.read(page.older, signal);
-                }
-              } finally {
-                window.dispose();
-              }
-            },
-          }
-        : undefined,
+  const shareTarget = useMemo(
+    () => (session ? remoteChatShareTarget(session) : undefined),
     [session],
   );
   const agents = useConversationAgents();
