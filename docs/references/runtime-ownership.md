@@ -44,11 +44,10 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Local execution owns one stable Session lease from user submission through persistence and
-  final delivery. Awaiting input retains the decision and marks the lease idle only when all answers
-  and real tool invocations wait. iOS shares a 60-second idle grace across consumers; expiry releases
-  protection without cancelling the conversation. Active requests do not expire from lack of screen
-  interaction. Stored history does not acquire a lease. Platform protection remains subject to OS
-  limits and process death.
+  final delivery. Awaiting input retains the decision and the same lease. iOS and Android retain
+  shared protection while work remains unfinished, including questions and approvals; the last
+  release stops protection immediately without an inactivity countdown. Stored history does not
+  acquire a lease. Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
   `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
@@ -275,9 +274,9 @@ user-owned verification policy.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
 - `IosBackgroundExecutionSource` prefers task-scoped native continued processing for explicit
   foreground user work, retains a finite UIKit window, and uses consented audio only as fallback.
-  `DurableAgentHost` owns stable Session leases; reply presentation never transfers them. A shared
-  60-second idle grace retains finite/audio protection after active demand ends; new work cancels
-  that countdown, and idle expiry preserves pending input. Official requests follow actual work.
+  `DurableAgentHost` owns stable Session leases; reply presentation never transfers them. Questions
+  and approvals retain protection on the same lease. The final release stops finite/audio protection
+  immediately. Official requests follow the owning work through final settlement.
   New local painting enqueues carry process-local intent and real handler progress. Native continued-task
   revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
   uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`

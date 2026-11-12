@@ -31,8 +31,8 @@ suffix.
   implementations directly.
 - `keepAlive` owns the reference-counted `KeepAliveCoordinator`: official continued processing for
   foreground user work on iOS 26+, finite UIKit time and consented audio fallback, and a foreground service on Android. Each consumer decides when to
-  acquire and how to handle expiry. The iOS source owns one shared 60-second idle grace; active
-  execution cancels it and waiting decisions survive its expiry. Local Agent execution owns stable
+  acquire and how to handle expiry. Questions and approvals retain execution leases; the last
+  consumer's release stops shared protection immediately on both platforms. Local Agent execution owns stable
   Session leases independently of reply presentation. `backgroundActivity` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state

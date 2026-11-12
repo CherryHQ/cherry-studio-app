@@ -133,7 +133,6 @@ type LiveSession = {
   lastAnswerId: string | null;
   question: AgentPendingQuestion | null;
   questions: TurnUserQuestions;
-  runningTools: Set<string>;
   approvals: Map<
     string,
     { view: AgentApprovalView; resolve: (decision: 'approve' | 'deny') => void }
@@ -459,15 +458,10 @@ export class DurableAgentHost implements AgentProtocol {
       this.executionLease?.release();
       this.executionLease = undefined;
     }
-    this.updateExecutionIdle();
   }
 
   private startSessionExecution(sessionId: string): void {
-    const existing = this.sessionExecutions.get(sessionId);
-    if (existing) {
-      existing.lease.setIdle?.(false);
-      return;
-    }
+    if (this.sessionExecutions.has(sessionId)) return;
     const lease = this.ports.executionLease?.(
       (reason) =>
         reason instanceof KeepAliveInterruptionError &&
@@ -488,17 +482,8 @@ export class DurableAgentHost implements AgentProtocol {
       if (!admitting && !preparing && !states.some((state) => state.active || state.queue.length)) {
         this.sessionExecutions.delete(sessionId);
         execution.lease.release(execution.completed ? 'completed' : undefined);
-      } else if (!admitting && isWaitingForInput(states)) execution.lease.setIdle?.(true);
+      }
     }
-    this.updateExecutionIdle();
-  }
-
-  private updateExecutionIdle(): void {
-    this.executionLease?.setIdle?.(
-      this.admissions.size === 0 &&
-        this.settlements.size === 0 &&
-        isWaitingForInput([...this.live.values()]),
-    );
   }
 
   private releaseSessionExecutions(): void {
@@ -1392,7 +1377,6 @@ export class DurableAgentHost implements AgentProtocol {
     );
     const pending = state?.approvals.get(parsed.approvalId);
     if (!pending) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
-    this.sessionExecutions.get(parsed.sessionId)?.lease.setIdle?.(false);
     pending.resolve(parsed.decision);
   }
 
@@ -1405,7 +1389,6 @@ export class DurableAgentHost implements AgentProtocol {
     );
     if (!state) fail('QUESTION_NOT_FOUND', 'The question is no longer pending.');
     state.questions.respond(parsed.toolCallId, parsed.answer);
-    this.sessionExecutions.get(parsed.sessionId)?.lease.setIdle?.(false);
   }
 
   async readReasoning(input: Parameters<AgentProtocol['readReasoning']>[0]) {
@@ -1606,10 +1589,6 @@ export class DurableAgentHost implements AgentProtocol {
     return {
       ...tool,
       execute: async (call) => {
-        const state = this.live.get(laneKey(identity));
-        state?.runningTools.add(call.toolCallId);
-        this.sessionExecutions.get(identity.sessionId)?.lease.setIdle?.(false);
-        this.updateExecutionIdle();
         const span = this.ports.traces?.startTrace(
           'pi.execute_tool',
           { ...identity, agentId: plan.agent.id },
@@ -1625,9 +1604,6 @@ export class DurableAgentHost implements AgentProtocol {
         } catch (error) {
           span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           throw error;
-        } finally {
-          state?.runningTools.delete(call.toolCallId);
-          this.updateSessionExecution(identity.sessionId);
         }
       },
     };
@@ -1652,7 +1628,6 @@ export class DurableAgentHost implements AgentProtocol {
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
-    this.updateSessionExecution(identity.sessionId);
     const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
@@ -1673,7 +1648,6 @@ export class DurableAgentHost implements AgentProtocol {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
-      this.updateSessionExecution(identity.sessionId);
       // Every pending request leaves the client projection, even when another answer keeps running.
       this.publish(identity.sessionId, {
         type: 'approval.resolved',
@@ -1737,7 +1711,6 @@ export class DurableAgentHost implements AgentProtocol {
     const { sessionId } = state.lane;
     const response = state.questions.ask(question, call);
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
-    this.updateSessionExecution(sessionId);
     this.publish(sessionId, { type: 'question.updated', question: state.question });
     this.publishCurrentStatus(sessionId, state);
     this.updateBackgroundInteraction(sessionId);
@@ -1745,7 +1718,6 @@ export class DurableAgentHost implements AgentProtocol {
       return await response;
     } finally {
       state.question = null;
-      this.updateSessionExecution(sessionId);
       this.updateBackgroundInteraction(sessionId);
       this.publish(sessionId, { type: 'question.updated', question: null });
       this.publishCurrentStatus(sessionId, state);
@@ -1999,7 +1971,6 @@ export class DurableAgentHost implements AgentProtocol {
           lastAnswerId: null,
           question: null,
           questions: new TurnUserQuestions(),
-          runningTools: new Set(),
           approvals: new Map(),
         };
         // The engine's exact watch is acquired before scheduling. App route listeners are independent.
@@ -2568,20 +2539,6 @@ function fail(
     retryable: code === 'SESSION_BUSY' || code === 'EXECUTION_UNAVAILABLE',
   });
 }
-/** A single waiting answer cannot idle its still-running siblings. */
-function isWaitingForInput(states: readonly LiveSession[]): boolean {
-  const active = states.filter((state) => state.active);
-  return (
-    active.length > 0 &&
-    active.every(
-      (state) =>
-        state.contextStatus !== 'compacting' &&
-        (state.question !== null || state.approvals.size > 0) &&
-        [...state.runningTools].every((id) => id === state.question?.toolCallId),
-    )
-  );
-}
-
 /** Keyed by copy: answers of one question share a turn but never a copy and request. */
 function executionKey(lane: RuntimeLane, requestId: string) {
   return `${laneKey(lane)}:${requestId}`;

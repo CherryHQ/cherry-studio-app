@@ -152,8 +152,8 @@ and may be retried explicitly.
   work, and automatic retries cannot create another official request. Foreground dispatch requests
   iOS 26+ continued processing and forwards actual handler progress; committed completion marks
   success only after queue handoff. Running jobs remain active regardless of output or screen
-  interaction. After the last active consumer releases, one shared iOS 60-second idle grace retains
-  finite UIKit time and consented audio; new work cancels that countdown. Official processing ends
+  interaction. The last consumer's release immediately stops shared iOS finite UIKit time and
+  consented audio, matching Android's service lifetime. Official processing ends
   with the actual job. The source uses consented audio only when official processing is unavailable.
   Loss of available protection interrupts work
   without renewing the exhausted window or restarting audio in the same background stay. Painting

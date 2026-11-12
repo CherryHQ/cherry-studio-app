@@ -39,9 +39,9 @@ authorized.
 ## iOS execution protection
 
 `beginBackgroundExecution` and `endBackgroundExecution` own one finite UIKit background assertion.
-Only the backend iOS execution source consumes them. It shares one 60-second idle grace across
-released or waiting consumers, cancelled by new work; idle expiry does not cancel pending decisions.
-Active model/tool requests never become idle from lack of output. Expiration ends the native assertion
+Only the backend iOS execution source consumes them. Unfinished work, including questions and
+approvals, retains its lease without an inactivity countdown. The final release stops shared
+protection immediately. Expiration ends the native assertion
 even if JavaScript cannot run, emits its owner ID, and prevents renewal until foreground return.
 
 `beginContinuedProcessingTask` prefers iOS 26+ `BGContinuedProcessingTask` for explicit foreground
@@ -50,10 +50,9 @@ each attempt. iOS 27 uses the asynchronous submission API off the main thread; i
 original submission API. Submission is not execution proof: native state events confirm launch,
 failure, or expiration. A five-second admission deadline cancels a missing launch and enables
 fallback; late handlers complete unsuccessfully without taking over a replacement. Updates carry
-localized titles and real progress. A stable execution lease may outlive its native request: waiting
-ends official processing, while finite/audio protection follows the shared idle grace. An explicit
-foreground continuation can request another native task on that same lease. Completion, cancellation,
-and module disposal release requests.
+localized titles and real progress. The same execution lease and native request remain held across
+questions and approvals; responding does not release or reacquire protection. Completion, cancellation,
+and module disposal release requests. The system can revoke a native task before the lease releases.
 Expiration includes system-UI cancellation and must stop the owning task, even in foreground.
 
 Only when continued processing is unavailable, explicit device-local consent permits a silent `AVAudioEngine` loop through

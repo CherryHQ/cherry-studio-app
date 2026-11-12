@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 function executionProtection() {
-  const lease = { release: jest.fn(), update: jest.fn(), setIdle: jest.fn() };
+  const lease = { release: jest.fn(), update: jest.fn() };
   const acquire = jest.fn<
     KeepAliveLease,
     Parameters<NonNullable<MobileAgentHostPorts['executionLease']>>
@@ -2145,7 +2145,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('parallel replies become idle only when all answers await input and reuse their lease when one resumes', async () => {
+  test('parallel replies retain one execution lease while all answers await approvals and when one resumes', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
     const controllers = [new AbortController(), new AbortController()];
@@ -2177,9 +2177,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
             .catch((error: unknown) => error),
         );
         await settle();
-        if (index === running.length - 1)
-          expect(protection.lease.setIdle).toHaveBeenLastCalledWith(true);
-        else expect(protection.lease.setIdle).not.toHaveBeenCalledWith(true);
+        expect(protection.acquire).toHaveBeenCalledTimes(1);
         expect(protection.lease.release).not.toHaveBeenCalled();
       }
       await state.host.respondApproval({
@@ -2189,7 +2187,6 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         decision: 'approve',
       });
       await decisions[0];
-      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(false);
       expect(protection.acquire).toHaveBeenCalledTimes(1);
       expect(protection.lease.release).not.toHaveBeenCalled();
     } finally {
@@ -2199,7 +2196,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('parallel tool execution remains active through a question and answering reuses protection despite a stale tool message', async () => {
+  test('a question retains protection after a parallel tool finishes and answering reuses it despite a stale tool message', async () => {
     const protection = executionProtection();
     let finishRead!: () => void;
     const readGate = new Promise<void>((resolve) => {
@@ -2280,10 +2277,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           },
         ],
       });
-      expect(protection.lease.setIdle).not.toHaveBeenCalledWith(true);
+      expect(protection.lease.release).not.toHaveBeenCalled();
       finishRead();
       await reading;
-      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(true);
+      expect(protection.lease.release).not.toHaveBeenCalled();
       await state.host.respondQuestion({
         sessionId: state.sessionId,
         turnId: turn.identity.turnId,
@@ -2293,9 +2290,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         },
       });
       await question;
-      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(false);
       expect(protection.acquire).toHaveBeenCalledTimes(1);
       expect(protection.lease.release).not.toHaveBeenCalled();
+      state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith('completed');
     } finally {
       finishRead();
       controller.abort();
