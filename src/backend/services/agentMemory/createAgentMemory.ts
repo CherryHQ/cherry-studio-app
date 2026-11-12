@@ -1,19 +1,18 @@
+import { AgentIdSchema } from '@/shared/data/types/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
+
+import { AGENT_MEMORY_DOCUMENT_KEYS } from './memoryFiles';
 import {
   AGENT_MEMORY_DOCUMENT_BYTES,
   AGENT_MEMORY_JOURNAL_BYTES,
   AgentMemoryDocumentKeySchema,
   AgentMemoryError,
-  AgentMemoryKeySchema,
+  type AgentMemoryDocumentKey,
   type AgentMemoryFile,
   type AgentMemoryJournalEntry,
   type AgentMemoryKey,
-  type AgentMemoryModule,
   type AgentMemorySnapshot,
-} from '@/shared/contracts/agentMemory';
-import { AgentIdSchema } from '@/shared/data/types/agent';
-import { sha256HexOfText } from '@/shared/utils/sha256';
-
-import { AGENT_MEMORY_DOCUMENT_KEYS } from './memoryFiles';
+} from './memoryTypes';
 
 export interface MemoryStorage {
   read(agentId: string, key: AgentMemoryKey): Promise<string | null>;
@@ -21,7 +20,10 @@ export interface MemoryStorage {
 }
 
 export type AgentMemory = ReturnType<typeof createAgentMemory>;
-export type AgentMemoryOperations = Pick<AgentMemory, 'module' | 'snapshot' | 'append' | 'search'>;
+export type AgentMemoryOperations = Pick<
+  AgentMemory,
+  'read' | 'write' | 'snapshot' | 'append' | 'search'
+>;
 
 /** Owns per-Agent ordering, revisions and limits independently of Expo and the model loop. */
 export function createAgentMemory(deps: {
@@ -67,18 +69,20 @@ export function createAgentMemory(deps: {
     };
   }
 
-  const module: AgentMemoryModule = {
-    read(agentId, key, signal) {
-      AgentMemoryKeySchema.parse(key);
-      return run(agentId, signal, async () => {
-        const file = await readFile(agentId, key);
-        if (key !== 'journal' || file.content.length <= 32_000) return file;
-        const tail = file.content.slice(-32_000);
-        const newline = tail.indexOf('\n');
-        return { ...file, content: newline < 0 ? tail : tail.slice(newline + 1), truncated: true };
-      });
+  return {
+    read(agentId: string, key: AgentMemoryDocumentKey, signal?: AbortSignal) {
+      AgentMemoryDocumentKeySchema.parse(key);
+      return run(agentId, signal, () => readFile(agentId, key));
     },
-    write(input, signal) {
+    write(
+      input: {
+        agentId: string;
+        key: AgentMemoryDocumentKey;
+        content: string;
+        expectedVersion: string;
+      },
+      signal?: AbortSignal,
+    ) {
       AgentMemoryDocumentKeySchema.parse(input.key);
       deps.assertWritable();
       return run(input.agentId, signal, async () => {
@@ -93,10 +97,6 @@ export function createAgentMemory(deps: {
         return readFile(input.agentId, input.key);
       });
     },
-  };
-
-  return {
-    module,
     snapshot(agentId: string, signal?: AbortSignal): Promise<AgentMemorySnapshot> {
       return run(agentId, signal, async () => {
         const [soul, user, fact] = await Promise.all(

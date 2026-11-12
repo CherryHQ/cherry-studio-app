@@ -1,7 +1,6 @@
-import { AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from '@/shared/contracts/agentMemory';
-
 import { createAgentMemory } from '../createAgentMemory';
 import { memoryContext } from '../memoryContext';
+import { AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from '../memoryTypes';
 
 const A = '10000000-0000-4000-8000-000000000001';
 const B = '10000000-0000-4000-8000-000000000002';
@@ -38,7 +37,7 @@ function fixture() {
 
 test('keeps identity isolated per Agent across independent readers and clears old context explicitly', async () => {
   const { memory } = fixture();
-  const first = await memory.module.write({
+  const first = await memory.write({
     agentId: A,
     key: 'user',
     content: 'Use Chinese',
@@ -46,7 +45,7 @@ test('keeps identity isolated per Agent across independent readers and clears ol
   });
   expect((await memory.snapshot(A)).user.content).toBe('Use Chinese');
   expect((await memory.snapshot(B)).user.content).toBe('');
-  await memory.module.write({
+  await memory.write({
     agentId: A,
     key: 'user',
     content: '',
@@ -61,7 +60,7 @@ test('rejects the second of two fact replacements based on the same revision', a
   const { memory } = fixture();
   const writes = await Promise.allSettled(
     ['Keep decision A', 'Keep decision B'].map((content) =>
-      memory.module.write({ agentId: A, key: 'fact', content, expectedVersion: 'missing' }),
+      memory.write({ agentId: A, key: 'fact', content, expectedVersion: 'missing' }),
     ),
   );
   expect(writes[0].status).toBe('fulfilled');
@@ -76,7 +75,7 @@ test('serializes journal appends and searches recent matches without confusing f
       memory.append(A, text, ['Work']),
     ),
   );
-  await memory.module.write({
+  await memory.write({
     agentId: A,
     key: 'fact',
     content: 'Unrelated permanent fact',
@@ -101,7 +100,7 @@ test('ignores damaged journal lines without losing valid earlier events', async 
 test('enforces UTF-8 size before replacing a document and rejects a journal replacement', async () => {
   const { memory } = fixture();
   await expect(
-    memory.module.write({
+    memory.write({
       agentId: A,
       key: 'fact',
       content: '中'.repeat(AGENT_MEMORY_DOCUMENT_BYTES / 2),
@@ -110,7 +109,7 @@ test('enforces UTF-8 size before replacing a document and rejects a journal repl
   ).rejects.toMatchObject({ code: 'too-large' });
   expect((await memory.snapshot(A)).fact.version).toBe('missing');
   await expect(async () =>
-    memory.module.write({
+    memory.write({
       agentId: A,
       key: 'journal' as 'fact',
       content: 'erase',
@@ -130,7 +129,7 @@ test('refuses writes while storage is frozen, after deletion, and after its owne
   const frozen = fixture();
   frozen.freeze();
   expect(() =>
-    frozen.memory.module.write({
+    frozen.memory.write({
       agentId: A,
       key: 'fact',
       content: 'x',
@@ -163,12 +162,12 @@ test('withdraws unreadable memory without preventing the next conversation turn'
     version: 'unavailable',
     truncated: false,
   });
-  await expect(memory.module.read(A, 'fact')).rejects.toThrow('Storage read failed');
+  await expect(memory.read(A, 'fact')).rejects.toThrow('Storage read failed');
 });
 
 test('bounds escaped identity context and requires a full read before replacing a preview', async () => {
   const { memory } = fixture();
-  await memory.module.write({
+  await memory.write({
     agentId: A,
     key: 'fact',
     content: '<'.repeat(12_000),
@@ -179,12 +178,12 @@ test('bounds escaped identity context and requires a full read before replacing 
   const data = JSON.parse(context.text.split('<agent_memory>\n')[1].split('\n</agent_memory>')[0]);
   expect(data.fact).toMatchObject({ truncated: true, version: 'read-required' });
   await expect(
-    memory.module.write({
+    memory.write({
       agentId: A,
       key: 'fact',
       content: 'Replace the preview',
       expectedVersion: data.fact.version,
     }),
   ).rejects.toMatchObject({ code: 'conflict' });
-  expect((await memory.module.read(A, 'fact')).content).toBe('<'.repeat(12_000));
+  expect((await memory.read(A, 'fact')).content).toBe('<'.repeat(12_000));
 });

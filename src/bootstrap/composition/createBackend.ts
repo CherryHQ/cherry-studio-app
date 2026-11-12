@@ -110,7 +110,7 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
-    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice' | 'memory'>;
+    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice'>;
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
@@ -445,7 +445,6 @@ export function createBackend(
       }),
       webSearch: services.webSearch,
       voice: voice.module,
-      agentMemory: infrastructure.agentHostDependencies.memory.module,
     },
     dataApiDependencies: {
       agentAvatars,

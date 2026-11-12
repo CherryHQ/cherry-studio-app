@@ -158,8 +158,8 @@ Instructions. Image-generation turns do not load memory.
 follow the system write approval policy and never enter a parallel read-only answer. Minimal mode
 receives identity context but no memory tools. Tools are bound to the current Agent; callers never
 choose another Agent or a physical path. Document updates require a fresh content revision and
-refresh the running conversation's trusted memory section after commit. The editor and tools share
-one ordered backend writer, with backup freeze and host-generation teardown.
+refresh the running conversation's trusted memory section after commit. Memory mutations use one
+ordered backend writer, with backup freeze and host-generation teardown.
 
 ## Snapshot Resolution
 

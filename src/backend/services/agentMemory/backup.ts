@@ -1,10 +1,10 @@
 import { Directory, File } from 'expo-file-system';
 
-import { AgentMemoryError } from '@/shared/contracts/agentMemory';
 import { AgentIdSchema } from '@/shared/data/types/agent';
 
 import { AGENT_MEMORY_FILES, AGENT_MEMORY_KEYS } from './memoryFiles';
 import { memoryFile } from './memoryStorage';
+import { AgentMemoryError } from './memoryTypes';
 
 export function captureMemoryPaths(root: Directory, agentIds: readonly string[]): string[] {
   if (!new Directory(root, 'Data', 'Agents').exists) return [];

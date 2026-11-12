@@ -11,7 +11,7 @@ import {
   AGENT_MEMORY_DOCUMENT_BYTES,
   AgentMemoryDocumentKeySchema,
   AgentMemoryError,
-} from '@/shared/contracts/agentMemory';
+} from '@/backend/services/agentMemory/memoryTypes';
 
 export function createMemoryTools(memory: AgentMemoryOperations, agentId: string): RuntimeTool[] {
   const readSchema = z.strictObject({ key: AgentMemoryDocumentKeySchema });
@@ -84,7 +84,7 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
       readSchema,
       'read',
       async ({ key }, signal) => ({
-        value: await memory.module.read(agentId, key, signal),
+        value: await memory.read(agentId, key, signal),
         artifacts: [],
       }),
     ),
@@ -94,7 +94,7 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
       updateSchema,
       'write',
       async ({ key, content, expected_version }, signal) => {
-        const file = await memory.module.write(
+        const file = await memory.write(
           { agentId, key, content, expectedVersion: expected_version },
           signal,
         );

@@ -1,5 +1,6 @@
-import type { AgentMemoryKey } from '@/shared/contracts/agentMemory';
 import { AgentIdSchema } from '@/shared/data/types/agent';
+
+import type { AgentMemoryKey } from './memoryTypes';
 
 export const AGENT_MEMORY_FILES = {
   soul: ['SOUL.md'],

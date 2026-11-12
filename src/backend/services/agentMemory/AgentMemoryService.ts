@@ -4,11 +4,11 @@ import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backe
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
 import { agentTable } from '@/backend/data/db/schemas/agent';
-import { AgentMemoryError, type AgentMemoryModule } from '@/shared/contracts/agentMemory';
 
 import { createAgentMemory, type AgentMemoryOperations } from './createAgentMemory';
 import { memoryContext } from './memoryContext';
 import { memoryStorage } from './memoryStorage';
+import { AgentMemoryError } from './memoryTypes';
 
 @Injectable('AgentMemoryService')
 @ServicePhase(Phase.Gate)
@@ -33,9 +33,6 @@ export class AgentMemoryService extends BaseService {
     });
   }
 
-  get module(): AgentMemoryModule {
-    return this.memory.module;
-  }
   get operations(): AgentMemoryOperations {
     return this.memory;
   }

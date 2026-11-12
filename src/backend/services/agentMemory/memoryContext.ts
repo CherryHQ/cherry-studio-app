@@ -1,4 +1,4 @@
-import type { AgentMemoryFile, AgentMemorySnapshot } from '@/shared/contracts/agentMemory';
+import type { AgentMemoryFile, AgentMemorySnapshot } from './memoryTypes';
 
 export const AGENT_MEMORY_INSTRUCTION_KEY = 'agent-memory';
 

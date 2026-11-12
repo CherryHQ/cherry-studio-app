@@ -48,7 +48,6 @@ import type { SkillListItem } from '@/shared/data/types/skill';
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
-import { AgentMemorySection } from './components/AgentMemorySection';
 import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
@@ -544,7 +543,6 @@ function AgentEditForm({
             skills={skills}
           />
         ) : null}
-        {agentId ? <AgentMemorySection agentId={agentId} /> : null}
         {hasFailedSave ? (
           <Button onPress={retry} size="sm" variant="secondary">
             {t('agent.actions.retry')}

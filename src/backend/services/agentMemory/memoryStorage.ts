@@ -2,16 +2,16 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File } from 'expo-file-system';
 
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
+import type { MemoryStorage } from './createAgentMemory';
+import { AGENT_MEMORY_FILES } from './memoryFiles';
 import {
   AGENT_MEMORY_DOCUMENT_BYTES,
   AGENT_MEMORY_JOURNAL_BYTES,
   AgentMemoryError,
   type AgentMemoryKey,
-} from '@/shared/contracts/agentMemory';
-import { loggerService } from '@/shared/core/logger/LoggerService';
-
-import type { MemoryStorage } from './createAgentMemory';
-import { AGENT_MEMORY_FILES } from './memoryFiles';
+} from './memoryTypes';
 
 const logger = loggerService.withContext('AgentMemoryStorage');
 
