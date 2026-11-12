@@ -1,5 +1,5 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Button, ContentState, Section, Tabs } from '@cherrystudio/ui/components';
+import { Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -10,10 +10,14 @@ import { useBackendModule } from '@/frontend/data';
 import { formatCompactNumber } from '@/frontend/utils/compactNumber';
 import type { CherryinSkill } from '@/shared/contracts/skillMarketplace';
 import type { SkillListing, SkillsModule } from '@/shared/contracts/skills';
-import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
+import {
+  cherryinSkillUrl,
+  marketplaceText,
+  parseCherryinSkillUrl,
+} from '@/shared/utils/cherryinSkills';
 
-import { marketplaceText, type SkillDiscoverySource } from './discover/skillDiscovery';
-import { SkillSourceFilter } from './discover/SkillSourceFilter';
+import type { SkillDiscoverySource } from './skillDiscovery';
+import { SkillSourceFilter } from './SkillSourceFilter';
 
 type DiscoveryResult = {
   name: string;
@@ -199,17 +203,6 @@ export function SkillDiscoveryTab({
 
   return (
     <>
-      <Tabs
-        accessibilityLabel={t('skills.marketplace.source')}
-        items={[
-          { value: 'cherryin', label: 'CherryIN' },
-          { value: 'skills-sh', label: 'skills.sh' },
-        ]}
-        layout="hug"
-        onValueChange={onSourceChange}
-        value={source}
-        variant="chips"
-      />
       {current.isLoading ? (
         <ContentState.Loading title={t('skills.loading')} />
       ) : current.isError && !current.data ? (

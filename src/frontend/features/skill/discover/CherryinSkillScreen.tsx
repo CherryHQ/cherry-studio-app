@@ -20,10 +20,13 @@ import {
   type SkillInspection,
   type SkillsErrorCode,
 } from '@/shared/contracts/skills';
-import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
+import {
+  cherryinSkillUrl,
+  marketplaceText,
+  parseCherryinSkillUrl,
+} from '@/shared/utils/cherryinSkills';
 
 import { SkillPage } from '../SkillPage';
-import { marketplaceText } from './skillDiscovery';
 
 const errorCode = (error: unknown): SkillsErrorCode =>
   isSkillsError(error) ? error.code : 'source-unreachable';

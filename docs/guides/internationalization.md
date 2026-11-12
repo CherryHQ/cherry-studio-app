@@ -73,7 +73,12 @@ and must not be changed merely because the UI language changed.
 Painting template names and prompts have a separate catalog under
 [`assets/paintings/templates`](../../assets/paintings/templates/README.md). Its current explicit
 policy is Simplified Chinese for `zh-CN` and English for other languages; user-edited prompts are
-never retranslated. Native permission descriptions are separate from the UI catalog:
+never retranslated. Agent templates have a separate bundled catalog under
+[`assets/agents/templates`](../../assets/agents/templates/README.md): Chinese UI locales use the
+upstream Chinese content and all other locales use the upstream English content. The 16 newer
+templates retain their upstream shared English instructions. Marketplace controls are translated
+in every UI locale; names and instructions copied into an Agent remain user-owned.
+Native permission descriptions are separate from the UI catalog:
 `app.json` supplies the English defaults, and
 [`assets/permissions/locales`](../../assets/permissions/locales) supplies calendar, reminders and
 foreground-location descriptions in every supported language through Expo's `locales` setting.

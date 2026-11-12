@@ -2,7 +2,7 @@ import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
-import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
+import StoreIcon from '@cherrystudio/app-icons/icons/store';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,8 +126,8 @@ function SidebarBodyContent({
             isSelected={destination === 'plugins'}
           />
           <SidebarNavRow
-            icon={ToolCaseIcon}
-            label={t('skills.title')}
+            icon={StoreIcon}
+            label={t('marketplace.title')}
             onPress={openSkills}
             testID="sidebar-skills"
             disabled={disabled}

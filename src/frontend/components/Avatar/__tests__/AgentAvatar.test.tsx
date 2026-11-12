@@ -25,8 +25,10 @@ test.each([
   { expected: '周', props: { name: ' 周报助手' } },
   { expected: '', props: { name: '', emoji: '   ' } },
   { expected: 'D', props: { name: 'Developer', avatar: 'managed-file-id' } },
+  { expected: '👨‍💼', props: { name: 'Product Manager', avatar: '👨‍💼' } },
+  { expected: '🧑🏽‍💻', props: { name: 'Developer', avatar: '🧑🏽‍💻' } },
 ])(
-  'falls back to the name initial, never a managed file reference: $props',
+  'resolves avatar content without displaying managed file references: $props',
   ({ expected, props }) => {
     act(() => {
       tree = create(<AgentAvatar {...props} />);

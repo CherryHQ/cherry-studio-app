@@ -1,4 +1,5 @@
 import type { CreateAgentDto } from '@/shared/data/api/schemas/agents';
+import type { AgentTemplate } from '@/shared/data/presets/agentTemplates';
 import {
   type Agent,
   type AgentMode,
@@ -27,13 +28,16 @@ type BuildAgentDtoOptions = {
   inheritDefaultModel?: boolean;
 };
 
-export function createAgentFormState(agent?: Agent): AgentFormState {
+export function createAgentFormState(
+  agent?: Agent,
+  template?: Pick<AgentTemplate, 'name' | 'prompt'>,
+): AgentFormState {
   return {
     avatarUri: agent?.avatarUri ?? null,
-    instructions: agent?.instructions ?? '',
+    instructions: agent?.instructions ?? template?.prompt ?? '',
     mode: agent?.mode ?? DEFAULT_AGENT_MODE,
     model: agent?.model ?? null,
-    name: agent?.name ?? '',
+    name: agent?.name ?? template?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
 }

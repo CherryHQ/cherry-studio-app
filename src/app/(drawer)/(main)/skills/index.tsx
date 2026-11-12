@@ -1,1 +1,1 @@
-export { SkillsScreen as default } from '@/frontend/features/skill';
+export { MarketplaceScreen as default } from '@/frontend/features/marketplace';

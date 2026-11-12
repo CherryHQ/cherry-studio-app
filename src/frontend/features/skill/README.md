@@ -1,5 +1,9 @@
 # Skills
 
+`SkillsScreen` is the installed library at `/skills/library`. Market discovery is owned by
+`frontend/features/marketplace`, which retains `/skills` as the sidebar's root URL. Existing
+candidate, installed-Skill and CherryIN detail routes remain in this page tree.
+
 `SkillPage` owns scrolling content and an optional fixed footer with bottom safe-area padding.
 Candidate installation and CherryIN detail actions use this footer, including opening an already
 installed Skill and installing selected collection members. The document scrolls independently of
