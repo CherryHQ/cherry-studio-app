@@ -8,6 +8,9 @@ The module root exposes `completeFileAiContent`, `readFileAiContent` and `readSo
 for backend producers and transformations. Read source bytes before encoding and pass the captured
 label only for that operation. Only pending, caller-owned outputs may be completed; immutable
 managed files must not be edited through this capability.
+`readImageAiContent` inspects bytes already loaded by document export, without another file read
+or decoding pixels. HTML inspection streams the complete head, retaining only bounded metadata tags
+and skipping script/style bodies; document-body bytes are not needed for label discovery.
 Frontend callers use `FileModule.completeExportFile`, which accepts only cache-directory outputs
 and an optional managed source reference for inherited declarations.
 The caller retains publication, cancellation and cleanup ownership.

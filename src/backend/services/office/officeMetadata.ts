@@ -72,11 +72,11 @@ if (incomingLabel !== null) {
     relationships.documentElement.appendChild(relationship);
   }
   for (const [path, doc] of [[propertyPath, properties], ['[Content_Types].xml', types], ['_rels/.rels', relationships]]) {
-    parts[path] = new TextEncoder().encode(serializer.serializeToString(doc));
+    parts[path] = new TextEncoder().encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + serializer.serializeToString(doc.documentElement));
     if (parts[path].length > 262144) throw new Error('Oversized Office metadata part.');
   }
 } else {
-  parts[propertyPath] = new TextEncoder().encode(serializer.serializeToString(properties));
+  parts[propertyPath] = new TextEncoder().encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + serializer.serializeToString(properties.documentElement));
   if (parts[propertyPath].length > 262144) throw new Error('Oversized Office metadata part.');
 }
 const bytes = zip.zipSync(parts);

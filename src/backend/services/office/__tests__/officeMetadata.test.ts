@@ -145,6 +145,69 @@ test.each(requests)(
   },
 );
 
+test.each([true, false])(
+  'normalizes UTF-16 metadata XML with littleEndian=%s to matching UTF-8',
+  async (little) => {
+    const request = requests[0];
+    const generated = (await runOfficeJob(createOfficeCode(request, {}))).output!;
+    const parts = unzipSync(generated);
+    parts['docProps/custom.xml'] = strToU8(
+      '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">' +
+        '<property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="9" name="Authored"><vt:lpwstr>原文 😀</vt:lpwstr></property></Properties>',
+    );
+    const source = zipSync(parts);
+    const initial = sandboxFor(source);
+    await processOfficeMetadata({
+      uri: 'file:///source',
+      size: source.length,
+      format: request.format,
+      output: 'file:///labeled',
+      label,
+      sandbox: initial.sandbox,
+    });
+    const labeled = unzipSync(initial.output());
+    const metadataParts = ['docProps/custom.xml', '[Content_Types].xml', '_rels/.rels'];
+    for (const path of metadataParts) {
+      const text =
+        '<?xml version="1.0" encoding="UTF-16" standalone="yes"?>\n' +
+        strFromU8(labeled[path]).replace(/^<\?xml[^?]*\?>\s*/, '');
+      const bytes = Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, 'utf16le')]);
+      if (!little) bytes.swap16();
+      labeled[path] = new Uint8Array(bytes);
+    }
+    const input = zipSync(labeled);
+    for (const next of [edited, null]) {
+      const worker = sandboxFor(input);
+      await processOfficeMetadata({
+        uri: 'file:///utf16',
+        size: input.length,
+        format: request.format,
+        output: 'file:///updated',
+        label: next,
+        sandbox: worker.sandbox,
+      });
+      const output = worker.output();
+      const updated = unzipSync(output);
+      for (const path of next ? metadataParts : ['docProps/custom.xml']) {
+        const xml = strFromU8(updated[path]);
+        expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"')).toBe(true);
+        expect(updated[path].includes(0)).toBe(false);
+        expect(xml).not.toContain('encoding="UTF-16"');
+      }
+      expect(strFromU8(updated['docProps/custom.xml'])).toContain('原文 😀');
+      const reader = sandboxFor(output);
+      expect(
+        await processOfficeMetadata({
+          uri: 'file:///updated',
+          size: output.length,
+          format: request.format,
+          sandbox: reader.sandbox,
+        }),
+      ).toMatchObject({ label: next });
+    }
+  },
+);
+
 test('retains file lifetime until a cancelled native metadata job has actually settled', async () => {
   let finish!: () => void;
   let started!: () => void;

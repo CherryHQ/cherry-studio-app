@@ -28,7 +28,11 @@ export async function renderMarkdownWithImages(
   document.sections.forEach((section) => visit(section.blocks));
   const prepared = await resolveDocumentAssets(sources, cache, readManagedImage, signal);
   signal.throwIfAborted();
-  return { text: renderMarkdown(document, prepared.images), issues: prepared.issues };
+  return {
+    text: renderMarkdown(document, prepared.images),
+    issues: prepared.issues,
+    aiContentLabel: prepared.aiContentLabel,
+  };
 }
 
 export function renderMarkdown(

@@ -8,7 +8,11 @@ import {
   type AiContentLabel,
   type AiContentOperation,
 } from '@/shared/data/types/aiContent';
-import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
+import {
+  readAiContentHtml,
+  readAiContentText,
+  writeAiContentText,
+} from '@/shared/utils/aiContentText';
 
 import { imageMetadata, type ImageMetadataSource } from './imageMetadata';
 import { decodeManagedUtf8 } from './utf8Text';
@@ -70,7 +74,7 @@ export async function readFileAiContent(
     } finally {
       reader.close();
     }
-  } else if (mediaType === 'text/markdown' || mediaType === 'text/html') {
+  } else if (mediaType === 'text/markdown') {
     const handle = source.open(FileMode.ReadOnly);
     try {
       // Only header carriers are inspected; importing a large text file never loads its body.
@@ -78,6 +82,24 @@ export async function readFileAiContent(
         strFromU8(handle.readBytesSync(Math.min(source.size, MAX_AI_METADATA_BYTES))),
         mediaType,
       );
+    } finally {
+      handle.close();
+    }
+  } else if (mediaType === 'text/html') {
+    const handle = source.open(FileMode.ReadOnly);
+    function* chunks() {
+      let remaining = source.size;
+      while (remaining > 0) {
+        signal?.throwIfAborted();
+        const bytes = handle.readBytesSync(Math.min(64 * 1024, remaining));
+        if (!bytes.length) throw new Error('Truncated HTML metadata source');
+        remaining -= bytes.length;
+        // Carrier syntax and field values are ASCII; preserve its delimiters across UTF-8 chunks.
+        yield strFromU8(bytes, true);
+      }
+    }
+    try {
+      label = readAiContentHtml(chunks());
     } finally {
       handle.close();
     }

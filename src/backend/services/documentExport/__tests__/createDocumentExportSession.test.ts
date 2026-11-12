@@ -1,18 +1,28 @@
-import type { CaptureExportHtml } from '@/shared/contracts/documentExport';
+import { completeFileAiContent, readFileAiContent } from '@/backend/services/file';
+import type { CaptureExportHtml, DocumentExportTarget } from '@/shared/contracts/documentExport';
 import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
 import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
+import { renderHtml } from '../renderHtml';
 
 const mockFiles = new Map<string, string>();
+const mockBinaryFiles = new Map<string, Uint8Array>();
 const mockDirectories = new Set<string>();
 let mockNextId = 0;
 const mockCopy = jest.fn(async (source: string, destination: string) => {
+  const bytes = mockBinaryFiles.get(source);
+  if (bytes) {
+    mockBinaryFiles.set(destination, bytes.slice());
+    mockFiles.delete(destination);
+    return;
+  }
   const contents = mockFiles.get(source);
   if (contents === undefined) throw new Error('Missing source');
   mockFiles.set(destination, contents);
+  mockBinaryFiles.delete(destination);
 });
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => `export-${++mockNextId}` }));
@@ -32,19 +42,23 @@ jest.mock('expo-file-system', () => {
     get exists() {
       return (
         mockDirectories.has(this.uri) ||
-        [...mockFiles.keys()].some((path) => path.startsWith(`${this.uri}/`))
+        [...mockFiles.keys(), ...mockBinaryFiles.keys()].some((path) =>
+          path.startsWith(`${this.uri}/`),
+        )
       );
     }
     delete() {
       for (const path of mockFiles.keys())
         if (path.startsWith(`${this.uri}/`)) mockFiles.delete(path);
+      for (const path of mockBinaryFiles.keys())
+        if (path.startsWith(`${this.uri}/`)) mockBinaryFiles.delete(path);
       for (const path of mockDirectories)
         if (path === this.uri || path.startsWith(`${this.uri}/`)) mockDirectories.delete(path);
     }
   }
   return {
     Directory,
-    FileMode: { ReadOnly: 'r' },
+    FileMode: { ReadOnly: 'r', WriteOnly: 'w' },
     File: class {
       uri: string;
       constructor(...parts: (string | { uri: string })[]) {
@@ -54,23 +68,51 @@ jest.mock('expo-file-system', () => {
         return new Directory(this.uri.slice(0, this.uri.lastIndexOf('/')));
       }
       get exists() {
-        return mockFiles.has(this.uri);
+        return mockFiles.has(this.uri) || mockBinaryFiles.has(this.uri);
       }
       get size() {
-        return new TextEncoder().encode(mockFiles.get(this.uri) ?? '').length;
+        return (
+          mockBinaryFiles.get(this.uri)?.length ??
+          new TextEncoder().encode(mockFiles.get(this.uri) ?? '').length
+        );
       }
       async text() {
         return mockFiles.get(this.uri)!;
       }
       async bytes() {
-        return new TextEncoder().encode(mockFiles.get(this.uri));
+        return (
+          mockBinaryFiles.get(this.uri)?.slice() ??
+          new TextEncoder().encode(mockFiles.get(this.uri))
+        );
       }
       open() {
-        const bytes = new TextEncoder().encode(mockFiles.get(this.uri));
-        return { readBytesSync: (length: number) => bytes.slice(0, length), close() {} };
+        const path = this.uri;
+        return {
+          offset: 0,
+          readBytesSync(length: number) {
+            const bytes =
+              mockBinaryFiles.get(path) ?? new TextEncoder().encode(mockFiles.get(path));
+            const result = bytes.slice(this.offset, this.offset + length);
+            this.offset += result.length;
+            return result;
+          },
+          writeBytesSync(bytes: Uint8Array) {
+            const previous = mockBinaryFiles.get(path) ?? new Uint8Array();
+            const output = new Uint8Array(Math.max(previous.length, this.offset + bytes.length));
+            output.set(previous);
+            output.set(bytes, this.offset);
+            this.offset += bytes.length;
+            mockBinaryFiles.set(path, output);
+          },
+          close() {},
+        };
+      }
+      create() {
+        mockBinaryFiles.set(this.uri, new Uint8Array());
       }
       delete() {
         mockFiles.delete(this.uri);
+        mockBinaryFiles.delete(this.uri);
       }
       writeSync(text: string) {
         mockFiles.set(this.uri, text);
@@ -208,7 +250,11 @@ test('unused asset declarations do not label ordinary exported text as AI-genera
   await session.dispose();
 });
 jest.mock('../renderHtml', () => ({
-  renderHtml: async () => ({ html: '<main>Content</main>', issues: [] }),
+  renderHtml: jest.fn(async () => ({
+    html: '<main>Content</main>',
+    issues: [],
+    aiContentLabel: null,
+  })),
 }));
 
 const presentation = {
@@ -249,9 +295,82 @@ const savedFile = {
 
 beforeEach(() => {
   mockFiles.clear();
+  mockBinaryFiles.clear();
   mockDirectories.clear();
   mockCopy.mockClear();
 });
+
+test.each(['markdown', 'html', 'image'] as const)(
+  'image-only replies retain their source declaration in %s artifacts and cached reuse',
+  async (format) => {
+    const sourceLabel = AiContentLabelSchema.parse({
+      Label: '2',
+      ContentProducer: 'UpstreamExample',
+      ProduceID: 'image-1',
+      ReservedCode1: '',
+      ContentPropagator: 'RelayExample',
+      PropagateID: 'relay-1',
+      ReservedCode2: '',
+    });
+    const raw = new Uint8Array(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const sourceUri = 'file:///input/ai.png';
+    mockBinaryFiles.set(sourceUri, raw);
+    await completeFileAiContent({
+      uri: sourceUri,
+      mediaType: 'image/png',
+      aiContentLabel: sourceLabel,
+    });
+    const session = createDocumentExportSession(
+      {
+        kind: 'document',
+        document: {
+          sections: [
+            { id: 'answer', blocks: [{ kind: 'image', assetId: 'image', alt: 'Generated image' }] },
+          ],
+          assets: {
+            image: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000002' },
+          },
+        },
+      },
+      { readManagedImage: async () => mockBinaryFiles.get(sourceUri)!, saveFile: jest.fn() },
+      () => {},
+      () => {},
+    );
+    if (format !== 'markdown')
+      jest
+        .mocked(renderHtml)
+        .mockImplementationOnce(
+          jest.requireActual<typeof import('../renderHtml')>('../renderHtml').renderHtml,
+        );
+    const target: DocumentExportTarget =
+      format === 'markdown'
+        ? { format }
+        : format === 'html'
+          ? { format, presentation }
+          : {
+              format,
+              layout: 'single',
+              presentation,
+              capture: async ({ onPage }) => {
+                const uri = 'file:///native.png';
+                mockBinaryFiles.set(uri, raw);
+                await onPage({ uri, width: 1, height: 1, index: 0, total: 1 });
+                mockBinaryFiles.delete(uri);
+              },
+            };
+    const artifact = await session.render(target);
+    const file = artifact.format === 'image' ? artifact.pages[0].file : artifact.file;
+    expect(file.aiContentLabel).toEqual(sourceLabel);
+    expect(await readFileAiContent(file)).toEqual(sourceLabel);
+    expect(await session.render(target)).toBe(artifact);
+    await session.dispose();
+  },
+);
 
 test('Markdown preview stays in memory and repeated sharing reuses its persistent file', async () => {
   const saveFile = jest.fn(async (file: { uri: string }) => {

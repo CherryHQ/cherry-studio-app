@@ -1,6 +1,7 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { OFFICE_MEDIA_TYPES } from '@/backend/services/office';
 import { FileEntrySchema } from '@/shared/data/types/file';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { createOfficeEditTools } from '../officeEditTools';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
@@ -93,6 +94,40 @@ test('publishes an image-only derivative and keeps the resolved media inside the
   });
   expect(run.code).toContain(`"${IMAGE}":{"index":1,"mediaType":"image/png"}`);
   expect(files.createFileEntry).toHaveBeenCalledTimes(1);
+});
+
+test('the published digest includes final metadata and can guard a subsequent edit', async () => {
+  const { execute, files, allowedIds } = setup();
+  const sourceUri = `file:///managed/${SOURCE}`;
+  const publishedUri = `file:///managed/${OUTPUT}`;
+  const temporaryUri = 'file:///cache/1.docx';
+  const contents = new Map([
+    [sourceUri, 'original Office bytes'],
+    [temporaryUri, 'edited Office bytes'],
+  ]);
+  files.hash.mockImplementation(async (uri) => sha256HexOfText(contents.get(uri)!));
+  files.createFileEntry.mockImplementation(async () => {
+    contents.set(publishedUri, 'edited Office bytes with completed AIGC metadata');
+    return entry;
+  });
+  const result = await execute({ source_sha256: sha256HexOfText(contents.get(sourceUri)!) });
+  const publishedDigest = sha256HexOfText(contents.get(publishedUri)!);
+  expect(result.value).toMatchObject({ status: 'created', sha256: publishedDigest });
+  expect(publishedDigest).not.toBe(sha256HexOfText(contents.get(temporaryUri)!));
+
+  const facts = await files.resolveAvailable();
+  facts.set(OUTPUT, {
+    fileEntryId: entry.id,
+    name: entry.filename,
+    mediaType: entry.mediaType,
+    size: entry.size,
+  });
+  files.resolveAvailable.mockResolvedValue(facts);
+  files.sizes.set(publishedUri, entry.size);
+  allowedIds.add(OUTPUT);
+  expect(
+    (await execute({ file_entry_id: OUTPUT, source_sha256: publishedDigest })).value,
+  ).toMatchObject({ status: 'created' });
 });
 
 test('stale sources and unavailable replacement images never publish a derivative', async () => {

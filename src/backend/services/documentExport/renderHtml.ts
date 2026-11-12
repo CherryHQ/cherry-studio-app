@@ -35,7 +35,7 @@ export async function renderHtml(
   const prepared = await resolveDocumentAssets(renderer.sources, cache, readManagedImage, signal);
   const result = renderer.render(prepared.images, prepared.issues);
   signal.throwIfAborted();
-  return result;
+  return { ...result, aiContentLabel: prepared.aiContentLabel };
 }
 
 /** Render prepared Markdown without network reads or new files. Embedded PNG/JPEG stays visible. */

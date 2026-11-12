@@ -62,6 +62,11 @@ its label when reused or saved. Labeled Markdown input inherits its declaration 
 AIGC header. HTML conversion reads metadata from the source and restores it on final PNG/PPTX
 outputs and previews after encoding. Temporary descriptors carry labels only for that operation;
 managed storage keeps the resulting bytes, with no new database field or source-fact record.
+Image-only exports inherit a declaration from successfully resolved image bytes. A document's own
+declaration takes precedence; otherwise the first labeled image in document order supplies the
+inherited declaration, including its confidence and independent service identifiers. Unused,
+unavailable and unlabeled images do not establish AI origin. Asset and rendered-HTML caches retain
+this temporary declaration so format changes and repeated exports keep the same inheritance.
 Export artifacts remain reusable across retries. This adds no visible AI notice. Service identity
 policy and pending native acceptance are described in
 [AI Content Metadata](../../../../docs/references/ai-content-labeling-design.md).

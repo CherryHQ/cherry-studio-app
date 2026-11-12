@@ -100,6 +100,7 @@ labels read from their bytes.
 | Office creation, editing, and script outputs | Write a fresh application-service AIGC property; read-only scripts create no file |
 | Agent image generation, image tools, and painting jobs | Retain a valid declaration from an original model response; otherwise write an application-service label |
 | Chat exports containing model answers | Replace obsolete or model-authored declarations with an application-service label; retain it on artifact reuse and saving |
+| Image-only document and chat exports | Inherit the document declaration or the first successfully used labeled image in document order; keep its confidence and service fields |
 | Labeled Markdown and HTML conversion | Read the source declaration and restore it in the output carrier after rendering |
 | Imported files | Read existing labels before normalization or compression and restore them afterward |
 | Cropping, rotation, and brand composition | Capture source metadata before encoding and restore it afterward |

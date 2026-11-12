@@ -123,6 +123,34 @@ test.each([
   },
 );
 
+test.each(['script', 'style'])(
+  'labels HTML with a large inline %s and retains its content',
+  async (tag) => {
+    const text =
+      '<!DOCTYPE html><html><head><' +
+      tag +
+      '>' +
+      'x'.repeat(300 * 1024) +
+      '</' +
+      tag +
+      '></head><body>原文 😀</body></html>';
+    const file = new File(uri);
+    file.writeSync(text);
+    const metadata = await completeFileAiContent({
+      uri,
+      mediaType: 'text/html',
+      aiOperation: 'generate',
+    });
+    expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
+    expect(await readFileAiContent({ uri, mediaType: 'text/html' })).toEqual(metadata);
+    expect(writeAiContentText(await file.text(), 'text/html', null)).toBe(text);
+
+    const meta = writeAiContentText('<head></head>', 'text/html', label).match(/<meta[^>]+>/)![0];
+    file.writeSync(text.replace('</head>', meta + '</head>'));
+    expect(await readSourceAiContent({ uri, mediaType: 'text/html' })).toEqual(label);
+  },
+);
+
 test.each([
   ['application/json', '{"data":1}\n'],
   ['text/plain', 'Plain text\n'],

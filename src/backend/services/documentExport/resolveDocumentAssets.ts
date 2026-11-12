@@ -1,11 +1,13 @@
 import { fetch } from 'expo/fetch';
 
+import { readImageAiContent } from '@/backend/services/file';
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { DocumentExportIssue, ExportDocument } from '@/shared/contracts/documentExport';
+import type { AiContentLabel } from '@/shared/data/types/aiContent';
 
 import { safeExportUrl } from './normalizeDocument';
 
-export type PreparedAsset = { dataUrl: string };
+export type PreparedAsset = { dataUrl: string; aiContentLabel: AiContentLabel | null };
 export type ReadManagedImage = (id: string, signal: AbortSignal) => Promise<Uint8Array>;
 
 export async function resolveDocumentAssets(
@@ -13,7 +15,11 @@ export async function resolveDocumentAssets(
   cache: Map<string, PreparedAsset>,
   readManagedImage: ReadManagedImage,
   signal: AbortSignal,
-): Promise<{ images: Map<string, string>; issues: DocumentExportIssue[] }> {
+): Promise<{
+  images: Map<string, string>;
+  issues: DocumentExportIssue[];
+  aiContentLabel: AiContentLabel | null;
+}> {
   const images = new Map<string, string>();
   const issues: DocumentExportIssue[] = [];
   const slots = createConcurrencySlots(2);
@@ -38,7 +44,16 @@ export async function resolveDocumentAssets(
           signal.throwIfAborted();
           const { width, height, mediaType } = inspectImage(bytes);
           if (width < 1 || height < 1) throw new Error('Invalid image dimensions');
-          const asset = { dataUrl: `data:${mediaType};base64,${encodeBase64(bytes)}` };
+          let aiContentLabel: AiContentLabel | null = null;
+          try {
+            aiContentLabel = readImageAiContent(bytes, mediaType);
+          } catch {
+            // Unrecognized source metadata does not prevent ordinary image exports.
+          }
+          const asset = {
+            dataUrl: `data:${mediaType};base64,${encodeBase64(bytes)}`,
+            aiContentLabel,
+          };
           cache.set(key, asset);
           return asset;
         } finally {
@@ -50,11 +65,14 @@ export async function resolveDocumentAssets(
     }),
   );
   signal.throwIfAborted();
+  let aiContentLabel: AiContentLabel | null = null;
   resolved.forEach((result, index) => {
-    if (result.status === 'fulfilled') images.set(entries[index][0], result.value.dataUrl);
-    else issues.push({ code: 'image-unavailable', label: 'Image' });
+    if (result.status === 'fulfilled') {
+      images.set(entries[index][0], result.value.dataUrl);
+      aiContentLabel ??= result.value.aiContentLabel;
+    } else issues.push({ code: 'image-unavailable', label: 'Image' });
   });
-  return { images, issues };
+  return { images, issues, aiContentLabel };
 }
 
 async function fetchImage(value: string, signal: AbortSignal): Promise<Uint8Array> {

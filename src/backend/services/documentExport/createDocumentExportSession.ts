@@ -13,6 +13,7 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportFile } from '@/shared/contracts/fileExport';
+import type { AiContentLabel } from '@/shared/data/types/aiContent';
 import { readableFilename } from '@/shared/data/types/file';
 import { aiContentMarkdownBody, readAiContentText } from '@/shared/utils/aiContentText';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
@@ -47,12 +48,17 @@ export function createDocumentExportSession(
   const artifacts = new Map<string, DocumentExportArtifact>();
   const html = new Map<string, Awaited<ReturnType<typeof renderDocumentHtml>>>();
   const saved = new Map<string, ResolvedFile>();
-  async function labelFile(file: ExportFile, signal: AbortSignal): Promise<ExportFile> {
-    if (!inheritedLabel && !document.aiGenerated) return file;
+  async function labelFile(
+    file: ExportFile,
+    signal: AbortSignal,
+    assetLabel: AiContentLabel | null,
+  ): Promise<ExportFile> {
+    const sourceLabel = inheritedLabel ?? assetLabel;
+    if (!sourceLabel && !document.aiGenerated) return file;
     const aiContentLabel = await completeFileAiContent(
       {
         ...file,
-        aiContentLabel: inheritedLabel,
+        aiContentLabel: sourceLabel,
         aiOperation: document.aiGenerated ? 'generate' : undefined,
       },
       signal,
@@ -150,7 +156,11 @@ export function createDocumentExportSession(
           format: 'markdown',
           text: markdownText,
           issues: preparedMarkdown!.issues,
-          file: await labelFile({ uri: file.uri, filename, mediaType: 'text/markdown' }, signal),
+          file: await labelFile(
+            { uri: file.uri, filename, mediaType: 'text/markdown' },
+            signal,
+            preparedMarkdown!.aiContentLabel,
+          ),
         };
       } else {
         progress('resolving-assets');
@@ -184,7 +194,11 @@ export function createDocumentExportSession(
             format: 'html',
             html: result.html,
             issues: result.issues,
-            file: await labelFile({ uri: file.uri, filename, mediaType: 'text/html' }, signal),
+            file: await labelFile(
+              { uri: file.uri, filename, mediaType: 'text/html' },
+              signal,
+              result.aiContentLabel,
+            ),
           };
         } else {
           const pages: ExportImagePage[] = [];
@@ -231,6 +245,7 @@ export function createDocumentExportSession(
                         uri: file.uri,
                       },
                       signal,
+                      result.aiContentLabel,
                     ),
                   ),
                 }),

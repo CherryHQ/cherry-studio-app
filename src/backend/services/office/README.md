@@ -274,3 +274,5 @@ property in `docProps/custom.xml`, its content type and root relationship. Unrel
 package-part contents survive repacking. Inputs and outputs remain alive until native settlement,
 including cancellation. This adapter accepts the existing HTML conversion's 128 MiB package limit;
 ordinary Office tool limits remain 64 MiB. Native metadata acceptance has not been performed.
+Rewritten metadata parts use UTF-8 bytes and a matching XML declaration, including when their source
+parts use UTF-16. Edit receipts hash the final managed file after metadata completion.

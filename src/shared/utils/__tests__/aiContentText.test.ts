@@ -1,6 +1,11 @@
 import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 
-import { aiContentMarkdownBody, readAiContentText, writeAiContentText } from '../aiContentText';
+import {
+  aiContentMarkdownBody,
+  readAiContentHtml,
+  readAiContentText,
+  writeAiContentText,
+} from '../aiContentText';
 
 const label = AiContentLabelSchema.parse({
   Label: '1',
@@ -91,4 +96,39 @@ test('preserves fragments and refuses conflicting declarations', () => {
   expect(() =>
     writeAiContentText('<html><head><title>incomplete</title>', 'text/html', label),
   ).toThrow();
+});
+
+test.each([1, 7, 64 * 1024])(
+  'HTML carrier parsing survives %s-character chunk boundaries',
+  (size) => {
+    const source = writeAiContentText(
+      '<!DOCTYPE html><!-- <head>fake</head> --><html><head>' +
+        '<template><head><meta name="AIGC" content="bad"></head></template>' +
+        '<script>const sample = "<head><meta name=AIGC content=bad></head>";</script>' +
+        '<style>p:before{content:"<meta name=AIGC>"}</style></head>',
+      'text/html',
+      label,
+    );
+    function* chunks() {
+      for (let offset = 0; offset < source.length; offset += size)
+        yield source.slice(offset, offset + size);
+      throw new Error('The document body must not be read');
+    }
+    expect(readAiContentHtml(chunks())).toEqual(label);
+  },
+);
+
+test('scans past a large script but still rejects a conflicting declaration at the end of head', () => {
+  const first = writeAiContentText('<head></head>', 'text/html', label).match(/<meta[^>]+>/)![0];
+  const second = writeAiContentText('<head></head>', 'text/html', edited).match(/<meta[^>]+>/)![0];
+  function* chunks() {
+    yield '<html><head>' + first + '<script>';
+    for (let index = 0; index < 8; index++) yield 'x'.repeat(64 * 1024);
+    yield '</scr';
+    yield 'ipt>' + second + '</head></html>';
+  }
+  expect(() => readAiContentHtml(chunks())).toThrow('Conflicting AIGC HTML metadata');
+  expect(() =>
+    readAiContentHtml(['<head><meta name="AIGC" content="', 'x'.repeat(256 * 1024), '"></head>']),
+  ).toThrow('Oversized HTML metadata');
 });

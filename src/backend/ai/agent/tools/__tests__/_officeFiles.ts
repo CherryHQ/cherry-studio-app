@@ -17,7 +17,12 @@ export function fakeOfficeFiles(facts: readonly ManagedFileFact[], entry: FileEn
     size: jest.fn(
       (uri: string) => sizes.get(uri) ?? (uri.startsWith('file:///cache/') ? 4 : undefined),
     ),
-    hash: jest.fn(async (uri: string) => (uri.startsWith('file:///cache/') ? 'b' : 'a').repeat(64)),
+    hash: jest.fn(async (uri: string) =>
+      (uri.startsWith('file:///cache/') || uri === `file:///managed/${entry.id}`
+        ? 'b'
+        : 'a'
+      ).repeat(64),
+    ),
     temporaryUri: jest.fn((extension: string) => `file:///cache/${++outputs}.${extension}`),
     discard: jest.fn(),
     createFileEntry: jest.fn(async () => entry),
