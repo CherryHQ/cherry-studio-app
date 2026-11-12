@@ -11,9 +11,10 @@ navigates to the chat-owned read-only transcript. Returning preserves expansion 
 ## Ownership
 
 - `RemoteTaskBoundary` retains the desktop conversation source and handles an unavailable pairing.
-- Remote catalog hooks own query lifetime and refresh; collapsed or unfocused groups do not poll.
+- Task hooks consume the source's separate `tasks` query interface and own query refresh;
+  collapsed or unfocused groups do not poll. The shared source still owns connection demand.
 - `taskSchedule` formats supported trigger metadata. Common daily and weekly cron rules get a
   localized label; other expressions remain visible without guessing their meaning.
-- Backend catalog methods project task metadata, filter ordinary conversation lists, and verify
-  task membership before opening a transcript. Task writes and desktop execution stay outside this
-  page.
+- Backend `RemoteTaskCatalog` owns task metadata, task-session reads and membership checks;
+  ordinary conversation catalogs use its association cache to exclude task results. Task writes
+  and desktop execution stay outside this page.

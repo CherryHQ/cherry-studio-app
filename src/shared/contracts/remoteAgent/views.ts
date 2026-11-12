@@ -78,16 +78,6 @@ export type RemoteSessionView = {
   updatedAt: string;
   historyVersion: string;
 };
-export type RemoteTaskTrigger =
-  | { kind: 'cron'; expr: string; timezone?: string }
-  | { kind: 'interval'; ms: number }
-  | { kind: 'once'; at: number };
-export type RemoteTaskView = {
-  id: string;
-  agentId: string;
-  name: string;
-  trigger: RemoteTaskTrigger;
-};
 export type RemoteResource = string;
 export type RemoteMessagePart =
   | {

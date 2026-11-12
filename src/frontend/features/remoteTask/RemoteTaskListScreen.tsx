@@ -13,13 +13,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ConversationReadError,
   useConversationAgents,
+  useConversationSource,
   useConversationSourceState,
 } from '@/frontend/appShell/conversation';
-import {
-  useRemoteTaskSessions,
-  useRemoteTasks,
-  useRemoteConversationSource,
-} from '@/frontend/appShell/conversation/remote';
+import { useRemoteTaskSessions, useRemoteTasks } from '@/frontend/appShell/conversation/remote';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -42,7 +39,7 @@ function TaskList({ connectionId }: { connectionId: string }) {
   const { t, i18n } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const { availability } = useConversationSourceState();
-  const source = useRemoteConversationSource();
+  const source = useConversationSource();
   const tasks = useRemoteTasks(focused);
   const [selected, setSelected] = useState<{ taskId: string; sessionId: string }>();
   const agents = useConversationAgents(focused);

@@ -14,6 +14,7 @@ export function useCatalog<T>(
   key: readonly string[],
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
+  options: { refetchInterval?: number | false } = {},
 ) {
   const kind = ['selected-session', 'session-children', 'session-path'].includes(key[0]!)
     ? 'sessions'
@@ -32,9 +33,10 @@ export function useCatalog<T>(
     availability.state === 'disabled' &&
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const active = enabled && availability.state === 'enabled';
-  // Desktop-created conversations, including scheduled results, have no catalog notification.
-  const refreshSessions =
-    source.ref.kind === 'desktop' && ['sessions', 'tasks', 'task-sessions'].includes(key[0]!);
+  // Desktop-created conversations have no catalog notification; other catalogs own their policy.
+  const refetchInterval =
+    options.refetchInterval ??
+    (source.ref.kind === 'desktop' && key[0] === 'sessions' ? 15_000 : false);
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
@@ -43,8 +45,8 @@ export function useCatalog<T>(
     enabled: active,
     retry: false,
     gcTime: shared ? 5 * 60_000 : 0,
-    staleTime: refreshSessions ? 0 : shared ? 30_000 : 0,
-    refetchInterval: refreshSessions ? 15_000 : false,
+    staleTime: refetchInterval ? 0 : shared ? 30_000 : 0,
+    refetchInterval,
     refetchOnMount: 'always',
   });
   useEffect(() => {

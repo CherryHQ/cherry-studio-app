@@ -3,6 +3,62 @@ import { RemoteReadCoordinator } from '../RemoteReadCoordinator';
 import { RemoteTaskCatalog } from '../RemoteTaskCatalog';
 
 const signal = () => new AbortController().signal;
+const session = {
+  sessionId: 's',
+  agentId: 'a',
+  workspaceId: 'w',
+  title: 'Report',
+  updatedAt: '2026-11-12T01:00:00.000Z',
+  historyRevision: '1',
+};
+
+it('projects task metadata without exposing task configuration or conversation commands', async () => {
+  const request = jest.fn(async () => ({
+    items: [
+      {
+        taskId: 'task',
+        agentId: 'a',
+        name: 'Daily',
+        trigger: { kind: 'interval', ms: 60_000, anchor: 'createdAt' },
+        prompt: 'Private task configuration',
+      },
+    ],
+    nextCursor: 'next',
+  }));
+  const catalog = new RemoteTaskCatalog(new RemoteReadCoordinator(), request as never);
+  const caller = signal();
+  expect(await catalog.list('current', caller)).toEqual({
+    items: [{ id: 'task', agentId: 'a', name: 'Daily', trigger: { kind: 'interval', ms: 60_000 } }],
+    next: 'next',
+  });
+  expect(request).toHaveBeenCalledWith('agent.tasks.list', { cursor: 'current' }, caller);
+});
+
+it('opens only conversations found in the selected task, including later pages', async () => {
+  const request = jest.fn(async (_method: string, params: Record<string, string>) =>
+    params.cursor ? { items: [session], nextCursor: null } : { items: [], nextCursor: 'next' },
+  );
+  const catalog = new RemoteTaskCatalog(new RemoteReadCoordinator(), request as never);
+  const caller = signal();
+  await expect(catalog.readSession('task', 's', caller)).resolves.toMatchObject({ id: 's' });
+  await expect(catalog.readSession('task', 'foreign-session', caller)).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+  expect(
+    request.mock.calls.every(
+      ([method, params]) => method === 'agent.sessions.list' && params.taskId === 'task',
+    ),
+  ).toBe(true);
+});
+
+it('rejects a repeated task-session cursor instead of looping indefinitely', async () => {
+  const request = jest.fn(async () => ({ items: [], nextCursor: 'repeated' }));
+  const catalog = new RemoteTaskCatalog(new RemoteReadCoordinator(), request as never);
+  await expect(catalog.readSession('task', 'missing', signal())).rejects.toMatchObject({
+    code: 'PROTOCOL_ERROR',
+  });
+  expect(request).toHaveBeenCalledTimes(2);
+});
 
 it('identifies fresh and reused task conversations across both cursor lists without run records', async () => {
   const request = jest.fn(async (method: string, params: Record<string, string>) => {

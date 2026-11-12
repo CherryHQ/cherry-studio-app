@@ -2,15 +2,16 @@ import { useCatalog } from '../useConversationCatalog';
 import { useRemoteConversationSource } from './useRemoteConversationSource';
 
 export function useRemoteTasks(enabled: boolean) {
-  const { catalog } = useRemoteConversationSource();
-  return useCatalog(['tasks'], catalog.listTasks, enabled);
+  const { tasks } = useRemoteConversationSource();
+  return useCatalog(['tasks'], tasks.list, enabled, { refetchInterval: 15_000 });
 }
 
 export function useRemoteTaskSessions(taskId: string, enabled: boolean) {
-  const { catalog } = useRemoteConversationSource();
+  const { tasks } = useRemoteConversationSource();
   return useCatalog(
     ['task-sessions', taskId],
-    (cursor, signal) => catalog.listTaskSessions(taskId, cursor, signal),
+    (cursor, signal) => tasks.listSessions(taskId, cursor, signal),
     enabled,
+    { refetchInterval: 15_000 },
   );
 }

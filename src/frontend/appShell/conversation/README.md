@@ -61,6 +61,13 @@ results. `useConversation`, `useConversationHistory`, `useConversationDraft` and
 `useRemoteConversationSource` are exported from `remote/index.ts` for the remote chat page and the
 desktop share route and scheduled-task module.
 
+Task metadata is a separate `RemoteTaskCatalogQueries` contract in `remote/remoteTaskContracts.ts`,
+exposed as `RemoteConversationSource.tasks`. It is not part of `RemoteConversationCatalog`.
+Task hooks consume only these reads and own their visible-list polling policy. Both catalogs share
+the retained source, binding-scoped metadata cache, cursor validation and read cancellation.
+The task-session opener composes backend task membership validation with the existing read-only
+conversation Session; it does not implement task queries itself.
+
 Retired catalogs, windows and deferred reads are cancelled and evicted from Query. Cursor and
 resource refs are bound to the source scope; a replacement pairing cannot reuse them. The desktop
 adapter does not invent missing catalog capabilities, and message actions the protocol lacks are

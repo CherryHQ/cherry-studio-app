@@ -1,14 +1,8 @@
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
-import type {
-  RemoteAttachment,
-  RemoteAttachmentDraftView,
-  RemoteTaskView,
-} from '@/shared/contracts/remoteAgent';
+import type { RemoteAttachment, RemoteAttachmentDraftView } from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
-  CatalogCursor,
-  CatalogPage,
   ConversationAction,
   ConversationCatalog,
   ConversationExecution,
@@ -17,12 +11,12 @@ import type {
   ConversationRef,
   ConversationSnapshot,
   ConversationSource,
-  ConversationSummary,
   QueryScope,
   Readable,
   TranscriptSnapshot,
   WorkspaceRef,
 } from '../contracts';
+import type { RemoteTaskCatalogQueries } from './remoteTaskContracts';
 
 /**
  * Desktop-owned conversation contract. Everything here exists because the authoritative state lives
@@ -133,15 +127,6 @@ export interface ConversationDraft {
   dispose(): void;
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
-  listTasks(
-    cursor: CatalogCursor | undefined,
-    signal: AbortSignal,
-  ): Promise<CatalogPage<RemoteTaskView>>;
-  listTaskSessions(
-    taskId: string,
-    cursor: CatalogCursor | undefined,
-    signal: AbortSignal,
-  ): Promise<CatalogPage<ConversationSummary>>;
   prepareDraft(
     input: { agent: AgentRef; workspace?: WorkspaceRef; draftId: DraftId },
     signal: AbortSignal,
@@ -151,6 +136,7 @@ export interface RemoteConversationSource extends ConversationSource {
   /** Stable identity/grant binding for unsent drafts; independent of Query lifetime. */
   readonly draftScope: string;
   readonly catalog: RemoteConversationCatalog;
+  readonly tasks: RemoteTaskCatalogQueries;
   /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
   hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;

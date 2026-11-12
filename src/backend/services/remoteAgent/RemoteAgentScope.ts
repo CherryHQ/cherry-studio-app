@@ -35,6 +35,7 @@ import type {
   RemoteSessionSnapshot,
   RemoteSourceState,
   RemoteResourceValue,
+  RemoteTaskQueries,
 } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentActions } from './RemoteAgentActions';
@@ -43,7 +44,6 @@ import {
   createMessageViewCache,
   projectMessage,
   projectSession,
-  projectTask,
   projectSnapshot,
   type MessageViewCache,
   type RemoteResourceDescriptor,
@@ -114,6 +114,7 @@ const targetSchema = z.object({
 export class RemoteAgentScope implements RemoteAgentSource {
   readonly scope: string;
   readonly draftScope: string;
+  readonly tasks: RemoteTaskQueries;
   private readonly reads = new RemoteReadCoordinator();
   private readonly taskCatalog: RemoteTaskCatalog;
   private state: RemoteSourceState;
@@ -178,6 +179,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.draftScope = lease.scope;
     this.state = lease.getSnapshot();
     this.taskCatalog = new RemoteTaskCatalog(this.reads, this.request);
+    this.tasks = this.taskCatalog;
     this.actions = new RemoteAgentActions(
       `${lease.connectionId}:${lease.scope}`,
       journal,
@@ -577,30 +579,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (items.length || !page.nextCursor) return { items, next: page.nextCursor ?? undefined };
       cursor = page.nextCursor ?? undefined;
     }
-  }
-  async listTasks(cursor: string | undefined, signal: AbortSignal) {
-    const page = await this.request('agent.tasks.list', { cursor }, signal);
-    return { items: page.items.map(projectTask), next: page.nextCursor ?? undefined };
-  }
-  async listTaskSessions(taskId: string, cursor: string | undefined, signal: AbortSignal) {
-    const page = await this.request('agent.sessions.list', { taskId, cursor }, signal);
-    return {
-      items: page.items.map(projectSession),
-      next: page.nextCursor ?? undefined,
-    };
-  }
-  async readTaskSession(taskId: string, sessionId: string, signal: AbortSignal) {
-    const visited = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const page = await this.listTaskSessions(taskId, cursor, signal);
-      const session = page.items.find((session) => session.id === sessionId);
-      if (session) return session;
-      cursor = page.next;
-      if (cursor && visited.has(cursor)) throw new RemoteAgentError('PROTOCOL_ERROR');
-      if (cursor) visited.add(cursor);
-    } while (cursor);
-    throw new RemoteAgentError('NOT_FOUND');
   }
   private cacheEntry(sessionId: string) {
     return this.readCache.entry(

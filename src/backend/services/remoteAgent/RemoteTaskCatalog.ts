@@ -2,8 +2,10 @@ import type {
   DesktopParams,
   DesktopResult,
 } from '@/backend/services/desktopConnections/DesktopSession';
+import type { RemoteTaskQueries, RemoteTaskView } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
+import { projectSession } from './remoteAgentViews';
 import type { RemoteReadCoordinator } from './RemoteReadCoordinator';
 
 type TaskCatalogMethod = 'agent.tasks.list' | 'agent.sessions.list';
@@ -15,7 +17,7 @@ type TaskCatalogRequest = <M extends TaskCatalogMethod>(
 type Membership = { readAt: number; taskIds: Map<string, string>; seen: Set<string> };
 
 /** Task-scoped queries establish provenance without relying on conversation titles or run history. */
-export class RemoteTaskCatalog {
+export class RemoteTaskCatalog implements RemoteTaskQueries {
   private readonly entries = new Map<string | undefined, Membership>();
   private isUnsupported = false;
   private generation = 0;
@@ -29,6 +31,30 @@ export class RemoteTaskCatalog {
     this.entries.clear();
     this.isUnsupported = false;
     this.generation++;
+  }
+
+  async list(cursor: string | undefined, signal: AbortSignal) {
+    const page = await this.request('agent.tasks.list', { cursor }, signal);
+    return { items: page.items.map(projectTask), next: page.nextCursor ?? undefined };
+  }
+
+  async listSessions(taskId: string, cursor: string | undefined, signal: AbortSignal) {
+    const page = await this.request('agent.sessions.list', { taskId, cursor }, signal);
+    return { items: page.items.map(projectSession), next: page.nextCursor ?? undefined };
+  }
+
+  async readSession(taskId: string, sessionId: string, signal: AbortSignal) {
+    const visited = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const page = await this.listSessions(taskId, cursor, signal);
+      const session = page.items.find((session) => session.id === sessionId);
+      if (session) return session;
+      cursor = page.next;
+      if (cursor && visited.has(cursor)) throw new RemoteAgentError('PROTOCOL_ERROR');
+      if (cursor) visited.add(cursor);
+    } while (cursor);
+    throw new RemoteAgentError('NOT_FOUND');
   }
 
   async identify(agentId: string | undefined, sessionIds: string[], signal: AbortSignal) {
@@ -112,4 +138,19 @@ export class RemoteTaskCatalog {
     } while (cursor);
     return items;
   }
+}
+
+function projectTask(task: DesktopResult<'agent.tasks.list'>['items'][number]): RemoteTaskView {
+  const trigger = task.trigger;
+  return {
+    id: task.taskId,
+    agentId: task.agentId,
+    name: task.name,
+    trigger:
+      trigger.kind === 'cron'
+        ? { kind: 'cron', expr: trigger.expr, timezone: trigger.timezone }
+        : trigger.kind === 'interval'
+          ? { kind: 'interval', ms: trigger.ms }
+          : { kind: 'once', at: trigger.at },
+  };
 }

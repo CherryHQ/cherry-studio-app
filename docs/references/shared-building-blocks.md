@@ -62,6 +62,7 @@ it already exists.
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
+| Desktop scheduled-task metadata, conversation membership and association caching | `RemoteTaskCatalog` in `src/backend/services/remoteAgent`, exposed through the existing Agent source's read-only `tasks` capability |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |

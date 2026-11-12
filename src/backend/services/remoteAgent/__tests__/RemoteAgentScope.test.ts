@@ -175,28 +175,6 @@ it('skips task-only pages while listing ordinary conversations', async () => {
   await test.source.drain();
 });
 
-it('opens only conversations found in all pages of the selected task', async () => {
-  const test = fixture();
-  const original = test.request.getMockImplementation()!;
-  test.request.mockImplementation(async (method, params) => {
-    if (method === 'agent.sessions.list' && params.taskId === 'task')
-      return params.cursor
-        ? { items: [test.projection.session], nextCursor: null }
-        : { items: [], nextCursor: 'next' };
-    return original(method, params);
-  });
-  const signal = new AbortController().signal;
-  await expect(test.source.readTaskSession('task', 's', signal)).resolves.toMatchObject({
-    id: 's',
-  });
-  await expect(
-    test.source.readTaskSession('task', 'foreign-session', signal),
-  ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  expect(test.request.mock.calls.some(([method]) => method === 'agent.sessions.get')).toBe(false);
-  test.source.dispose();
-  await test.source.drain();
-});
-
 it.each([{ agentAttachmentSelections: false }, { agentUploadsVersion: 0 }])(
   'disables attachments after reconnect loses capability %j',
   async (unsupported) => {

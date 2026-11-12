@@ -111,11 +111,10 @@ export function createRemoteConversationSource(
     state,
     hasSubmission: (draftId) =>
       remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
-    catalog: {
-      cacheScope,
-      listTasks: (cursor, signal) =>
+    tasks: {
+      list: (cursor, signal) =>
         read(signal, async () => {
-          const page = await remote.listTasks(
+          const page = await remote.tasks.list(
             cursor ? catalogRefs.resolve(cursor, 'tasks').id : undefined,
             signal,
           );
@@ -124,10 +123,10 @@ export function createRemoteConversationSource(
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('tasks', page.next) } : {}),
           };
         }),
-      listTaskSessions: (taskId, cursor, signal) =>
+      listSessions: (taskId, cursor, signal) =>
         read(signal, async () => {
           const kind = `task-sessions:${taskId}`;
-          const page = await remote.listTaskSessions(
+          const page = await remote.tasks.listSessions(
             taskId,
             cursor ? catalogRefs.resolve(cursor, kind).id : undefined,
             signal,
@@ -142,6 +141,9 @@ export function createRemoteConversationSource(
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>(kind, page.next) } : {}),
           };
         }),
+    },
+    catalog: {
+      cacheScope,
       subscribe: (listener) => {
         catalogListeners.add(listener);
         return () => {
@@ -429,7 +431,7 @@ export function createRemoteConversationSource(
       read(signal, async () => {
         if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
           throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
-        const initial = await remote.readTaskSession(taskId, address.sessionId, signal);
+        const initial = await remote.tasks.readSession(taskId, address.sessionId, signal);
         const session = createRemoteConversationSession(
           remote,
           address,

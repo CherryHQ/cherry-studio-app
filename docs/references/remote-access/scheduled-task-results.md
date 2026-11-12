@@ -12,6 +12,12 @@ Daily and weekly cron rules, intervals and one-time triggers have localized labe
 expressions retain their configured expression and timezone. Membership comes from the task-scoped
 catalog, including all cursor pages, rather than titles or retained run records.
 
+`RemoteTaskCatalog` owns task metadata projection, task-session reads, membership validation and
+association caching. It is composed into the existing Agent scope, whose frontend-facing `tasks`
+capability is read-only and retires with its caller. Frontend task queries are separate from the
+conversation catalog; the shared source still owns authorization, connection demand, cursor scope
+and cancellation. No separate task runtime or connection is created.
+
 The chat route confirms task membership before opening a Session. Its read model omits send,
 cancel, approval, attachment-upload and undelivered-message actions. The header has no new-chat or
 Agent-picker action, and no composer is mounted. Existing history, live result rendering, readable

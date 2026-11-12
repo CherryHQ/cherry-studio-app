@@ -1,4 +1,5 @@
 import type { InteractionResponse } from '../interaction';
+import type { RemoteTaskQueries } from './tasks';
 import type {
   RemoteAttachment,
   RemoteAttachmentDraftTarget,
@@ -14,13 +15,13 @@ import type {
   RemoteSessionReadPreview,
   RemoteSourceState,
   RemoteStartOperation,
-  RemoteTaskView,
 } from './views';
 
 /** One retained credential-free scope. Disposing observations never cancels desktop execution. */
 export interface RemoteAgentSource {
   readonly scope: string;
   readonly draftScope: string;
+  readonly tasks: RemoteTaskQueries;
   getState(): RemoteSourceState;
   subscribeState(listener: () => void): () => void;
   listAgents(
@@ -39,18 +40,6 @@ export interface RemoteAgentSource {
     cursor: string | undefined,
     signal: AbortSignal,
   ): Promise<RemotePage<RemoteSessionView>>;
-  listTasks(cursor: string | undefined, signal: AbortSignal): Promise<RemotePage<RemoteTaskView>>;
-  listTaskSessions(
-    taskId: string,
-    cursor: string | undefined,
-    signal: AbortSignal,
-  ): Promise<RemotePage<RemoteSessionView>>;
-  /** Confirms task ownership through the task-scoped catalog before opening a transcript. */
-  readTaskSession(
-    taskId: string,
-    sessionId: string,
-    signal: AbortSignal,
-  ): Promise<RemoteSessionView>;
   peekSession(sessionId: string): RemoteSessionReadPreview | undefined;
   subscribeReads(sessionId: string, listener: () => void): () => void;
   readSession(sessionId: string, signal: AbortSignal): Promise<RemoteSessionView>;
