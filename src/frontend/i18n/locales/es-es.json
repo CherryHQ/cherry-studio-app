@@ -1825,7 +1825,6 @@
   "settings.items.permissions": "Permisos del sistema",
   "settings.items.profile": "Perfil",
   "settings.items.theme": "Tema",
-  "settings.keepScreenOn.description": "Mantiene la pantalla encendida mientras Cherry está en primer plano y se generan respuestas, traducciones o imágenes. Esta función se pausa mientras se espera tu aprobación o intervención. Al desactivarla, se mantiene el comportamiento actual: se aplica el tiempo de espera habitual de la pantalla del sistema.",
   "settings.keepScreenOn.saveFailed": "No se ha podido guardar el ajuste de pantalla encendida. Inténtalo de nuevo.",
   "settings.keepScreenOn.title": "Mantener la pantalla encendida durante la generación",
   "settings.language.saveFailed": "No se pudo guardar el idioma de la aplicación. Inténtalo de nuevo.",

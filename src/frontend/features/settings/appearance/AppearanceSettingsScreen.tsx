@@ -91,7 +91,6 @@ export default function AppearanceSettingsScreen() {
           />
           <EnterToSendSetting />
           <Section.SwitchItem
-            description={t('settings.keepScreenOn.description')}
             label={t('settings.keepScreenOn.title')}
             onValueChange={changeKeepScreenOn}
             testID="settings-keep-screen-on"
