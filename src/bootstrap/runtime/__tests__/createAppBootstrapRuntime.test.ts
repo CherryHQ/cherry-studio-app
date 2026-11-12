@@ -25,6 +25,7 @@ const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockSsh = { kind: 'ssh', hasPendingStorageWork: () => false };
 const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime', hasPendingStorageWork: () => false };
 const mockScreenAwake = { acquire: jest.fn() };
@@ -53,6 +54,7 @@ const mockServices = {
   jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
   preference: mockPreference,
+  sshProfile: { initialize: jest.fn() },
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
@@ -155,6 +157,7 @@ const createRuntime = () =>
     BackupRuntime: mockBackup,
     TrashRuntime: mockTrash,
     DesktopConnectionRuntime: mockDesktopConnections,
+    SshRuntime: mockSsh,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
@@ -271,6 +274,7 @@ describe('createAppBootstrapRuntime', () => {
     await Promise.race([initializing, boot]);
     expect(mockValidateRestoringStorage).toHaveBeenCalledTimes(1);
     expect(mockCache.resetForRestore).toHaveBeenCalledTimes(1);
+    expect(mockServices.sshProfile.initialize).toHaveBeenCalledTimes(1);
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     initialized();
     await boot;
@@ -302,6 +306,18 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     expect(mockRejectStorageCandidate).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  test('does not commit a restored generation when its SSH configuration cannot initialize', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    mockServices.sshProfile.initialize.mockImplementationOnce(() => {
+      throw new Error('SSH configuration storage failed');
+    });
+    const runtime = createRuntime();
+    await expect(runtime.initialize()).rejects.toMatchObject({ code: 'restart-required' });
+    expect(mockCommitStorageBoot).not.toHaveBeenCalled();
+    expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
 
@@ -347,6 +363,7 @@ describe('createAppBootstrapRuntime', () => {
       backup: mockBackup,
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      ssh: mockSsh,
       remoteAgent: mockRemoteAgent,
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,

@@ -5,7 +5,10 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import { ChatScreen } from '../ChatScreen';
 
 const mockShareApi = { get: jest.fn() };
-jest.mock('@/frontend/data', () => ({ useApiClient: () => mockShareApi }));
+jest.mock('@/frontend/data', () => ({
+  useApiClient: () => mockShareApi,
+  useBackendModule: () => ({ getTarget: () => null }),
+}));
 jest.mock('../share/ChatShareSelectionProvider', () => ({
   ChatShareSelectionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));

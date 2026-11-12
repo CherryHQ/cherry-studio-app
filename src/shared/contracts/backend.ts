@@ -15,6 +15,7 @@ import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { RemoteAgentModule } from './remoteAgent';
 import type { SkillsModule } from './skills';
+import type { SshModule } from './ssh';
 import type { SystemEntryModule } from './systemEntry';
 import type { TranslationModule } from './translation';
 import type { UuRemoteModule } from './uuRemote';
@@ -22,6 +23,7 @@ import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly ssh: SshModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;

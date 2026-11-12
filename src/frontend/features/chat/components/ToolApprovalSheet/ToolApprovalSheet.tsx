@@ -1,10 +1,10 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
-import { MessageDetailValue } from '@/frontend/components/MessageDetail';
+import { MessageDetailText, MessageDetailValue } from '@/frontend/components/MessageDetail';
 import { getBuiltInToolTitleKey } from '@/shared/data/types/builtInToolTitles';
 import { CreateSkillInputSchema } from '@/shared/data/types/skill';
 
@@ -15,11 +15,14 @@ export type PendingToolApproval = {
   input: unknown;
   displayName: string;
   toolName?: string;
+  sshCommand?: boolean;
+  canGrantSshDiagnostics?: boolean;
 };
 
 export type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
+  sshDiagnosticsGrant?: true;
 };
 
 type ToolApprovalSheetProps = {
@@ -46,13 +49,18 @@ export function ToolApprovalSheet({
   const [response, setResponse] = useState({
     approvalId: approvals[0]?.approvalId,
     isSubmitting: false,
+    allowSshDiagnostics: false,
   });
   const submitting = useRef(new Set<string>());
   if (approvals[0] && approvals[0] !== lastApproval) {
     setLastApproval(approvals[0]);
   }
   if (approvals[0] && approvals[0].approvalId !== response.approvalId) {
-    setResponse({ approvalId: approvals[0].approvalId, isSubmitting: false });
+    setResponse({
+      approvalId: approvals[0].approvalId,
+      isSubmitting: false,
+      allowSshDiagnostics: false,
+    });
   }
   const approval = approvals[0] ?? lastApproval;
 
@@ -79,7 +87,13 @@ export function ToolApprovalSheet({
     submitting.current.add(approvalId);
     setResponse((current) => ({ ...current, isSubmitting: true }));
     try {
-      await onRespond({ approvalId, approved });
+      await onRespond({
+        approvalId,
+        approved,
+        ...(approved && approval.canGrantSshDiagnostics && response.allowSshDiagnostics
+          ? { sshDiagnosticsGrant: true as const }
+          : {}),
+      });
     } finally {
       submitting.current.delete(approvalId);
       setResponse((current) =>
@@ -121,6 +135,20 @@ export function ToolApprovalSheet({
         showsVerticalScrollIndicator={false}
       >
         <ToolApprovalContent approval={approval} />
+        {approval.canGrantSshDiagnostics ? (
+          <Section
+            footer={t(response.allowSshDiagnostics ? 'ssh.grant.onApproval' : 'ssh.grant.ask')}
+          >
+            <Section.SwitchItem
+              label={t('ssh.grant.title')}
+              disabled={!canDecide}
+              value={response.allowSshDiagnostics}
+              onValueChange={(allowSshDiagnostics) =>
+                setResponse((current) => ({ ...current, allowSshDiagnostics }))
+              }
+            />
+          </Section>
+        ) : null}
         {children}
       </ScrollView>
     </BottomSheet>
@@ -129,6 +157,7 @@ export function ToolApprovalSheet({
 
 function ToolApprovalContent({ approval }: { approval: PendingToolApproval }) {
   const { t } = useTranslation();
+  if (approval.sshCommand) return <SshCommandApproval input={approval.input} />;
   if (approval.toolName === 'create_skill') {
     const skill = CreateSkillInputSchema.safeParse(approval.input);
     if (skill.success)
@@ -226,6 +255,38 @@ function ToolApprovalSheetActions({
           <Button.Label>{approveLabel}</Button.Label>
         </Button>
       </View>
+    </View>
+  );
+}
+
+/** Full literal command data; scripts and paths must never be reduced to a preview. */
+function SshCommandApproval({ input }: { input: unknown }) {
+  const { t } = useTranslation();
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    return <MessageDetailValue title={t('chat.tool.arguments')} value={input} />;
+  const fields = input as Record<string, unknown>;
+  return (
+    <View className="gap-4">
+      <Text className="text-sm text-muted-foreground">{t('ssh.approval.notice')}</Text>
+      {[
+        ['target', t('ssh.selectTarget')],
+        ['cwd', t('ssh.command.cwd')],
+        ['command', t('ssh.command.label')],
+        ['stdin', t('ssh.command.stdin')],
+      ].map(([key, title]) => (
+        <MessageDetailText
+          key={key}
+          title={title}
+          value={
+            typeof fields[key] === 'string' && fields[key] ? fields[key] : t('ssh.approval.empty')
+          }
+          variant="code"
+        />
+      ))}
+      <MessageDetailValue
+        title={t('chat.tool.arguments')}
+        value={{ timeout_seconds: fields.timeout_seconds }}
+      />
     </View>
   );
 }

@@ -60,7 +60,9 @@ export function remoteInput(input: ConversationInput): {
         'quoteAuthor' in part ||
         (part.type !== 'text' && part.type !== 'file') ||
         (part.type === 'text' &&
-          (part.pluginReferences?.length || part.selectionReferences?.length)),
+          (part.pluginReferences?.length ||
+            part.selectionReferences?.length ||
+            part.sshReferences?.length)),
     )
   )
     throw new ConversationReadError({ code: 'unsupported', retry: 'revise-input' });

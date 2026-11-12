@@ -50,6 +50,9 @@ suffix.
   Bootstrap injects a persistence service bound to that same database; list/detail reads remain
   in Data API. Its private Expo transport rejects redirects and keeps the deadline active through
   response-body consumption.
+- `ssh` owns native SSH command admission, host identity trust, device-only credentials, temporary
+  conversation grants and cleanup. Profile reads remain in Data API. See
+  [SSH connections](../../../docs/references/ssh.md) for boundaries and limits.
 - `analytics` owns anonymous product reporting through `@cherrystudio/analytics-client`. Its client
   exists only while data collection is consented under the current privacy policy, so revoking
   consent destroys it along with anything queued. It keeps the desktop-aligned client identity in

@@ -31,7 +31,7 @@ import {
   useConversationSnapshot,
   useRemoteConversationSource,
 } from '@/frontend/appShell/conversation/remote';
-import { MainHeaderView, MainHeaderAgentPickerSheet } from '@/frontend/appShell/header';
+import { MainHeaderView } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   parseRemoteChatRoute,
@@ -39,6 +39,7 @@ import {
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
+import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -141,7 +142,8 @@ function RemoteHeader({
           setPickerOpen(true);
         }}
       />
-      <MainHeaderAgentPickerSheet
+      <AgentPickerSheet
+        testID="main-header-agent-picker"
         catalog={catalog}
         currentAgentId={header.agent?.id}
         open={pickerOpen}
