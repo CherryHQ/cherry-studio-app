@@ -1,7 +1,5 @@
-import type {
-  DesktopParams,
-  DesktopResult,
-} from '@/backend/services/desktopConnections/DesktopSession';
+import type { AgentParams, AgentResult } from '@cherrystudio/remote-protocol/agent';
+
 import type { RemoteTaskQueries, RemoteTaskView } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
@@ -11,9 +9,9 @@ import type { RemoteReadCoordinator } from './RemoteReadCoordinator';
 type TaskCatalogMethod = 'agent.tasks.list' | 'agent.sessions.list';
 type TaskCatalogRequest = <M extends TaskCatalogMethod>(
   method: M,
-  params: DesktopParams<M>,
+  params: AgentParams<M>,
   signal: AbortSignal,
-) => Promise<DesktopResult<M>>;
+) => Promise<AgentResult<M>>;
 type Membership = { readAt: number; taskIds: Map<string, string>; seen: Set<string> };
 
 /** Task-scoped queries establish provenance without relying on conversation titles or run history. */
@@ -144,7 +142,7 @@ export class RemoteTaskCatalog implements RemoteTaskQueries {
   }
 }
 
-function projectTask(task: DesktopResult<'agent.tasks.list'>['items'][number]): RemoteTaskView {
+function projectTask(task: AgentResult<'agent.tasks.list'>['items'][number]): RemoteTaskView {
   const trigger = task.trigger;
   return {
     id: task.taskId,

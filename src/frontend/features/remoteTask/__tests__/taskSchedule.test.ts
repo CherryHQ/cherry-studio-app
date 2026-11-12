@@ -9,6 +9,7 @@ beforeAll(async () => {
   await i18n.init({
     lng: 'en-US',
     keySeparator: false,
+    interpolation: { escapeValue: false },
     resources: { 'en-US': { translation: en } },
   });
 });

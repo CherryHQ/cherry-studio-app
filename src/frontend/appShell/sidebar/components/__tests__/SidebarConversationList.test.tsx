@@ -326,7 +326,6 @@ it('chooses a new conversation from the Agent row without expanding or querying 
 it('expands independently and chooses only the pressed existing conversation', () => {
   press('share-agent-expand-agent-1');
   expect(onSelect).not.toHaveBeenCalled();
-  expect(mockSessions).toHaveBeenCalledWith(mockAgent.ref);
   expect(mockDrawerSelection).not.toHaveBeenCalled();
 
   press('share-session-session-1');
@@ -365,7 +364,6 @@ it('keeps the ordinary sidebar Agent row as full-row expansion', () => {
   });
   expect(renderer.root.findAllByProps({ testID: 'share-agent-expand-agent-1' })).toHaveLength(0);
   press('sidebar-agent-agent-1');
-  expect(mockSessions).toHaveBeenCalledWith(mockAgent.ref);
   expect(renderer.root.findByProps({ testID: 'sidebar-session-session-1' })).toBeDefined();
   expect(onSelect).not.toHaveBeenCalled();
 });

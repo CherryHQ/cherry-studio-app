@@ -3,6 +3,8 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
+  type AgentParams,
+  type AgentResult,
   type AgentMessageListItem,
   type ContentRef,
   type AgentPart,
@@ -21,7 +23,6 @@ import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/
 import type {
   DesktopSession,
   DesktopParams,
-  DesktopResult,
 } from '@/backend/services/desktopConnections/DesktopSession';
 import {
   DesktopUnreachableError,
@@ -478,9 +479,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   private request = async <M extends AgentMethod>(
     method: M,
-    params: DesktopParams<M>,
+    params: AgentParams<M>,
     caller?: AbortSignal,
-  ): Promise<DesktopResult<M>> => {
+  ): Promise<AgentResult<M>> => {
     this.assertActive();
     const linked = caller ? linkAbortSignals([caller, this.lease.signal]) : undefined;
     const signal = linked?.signal ?? this.lease.signal;
@@ -496,7 +497,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         method === 'agent.messages.list' && session.agentMessageSummariesVersion === 1
           ? { ...params, partsMode: 'paged' as const }
           : params;
-      return await this.call(session, method, negotiatedParams as DesktopParams<M>, signal);
+      return await this.call(session, method, negotiatedParams as AgentParams<M>, signal);
     } finally {
       linked?.dispose();
     }
@@ -504,13 +505,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private async call<M extends AgentMethod>(
     session: DesktopSession,
     method: M,
-    params: DesktopParams<M>,
+    params: AgentParams<M>,
     signal: AbortSignal,
   ) {
     this.assertActive();
     signal.throwIfAborted();
     try {
-      const value = await this.track(session.request(method, params, signal));
+      const value = await this.track(session.request(method, params as DesktopParams<M>, signal));
       this.assertActive();
       signal.throwIfAborted();
       return value;

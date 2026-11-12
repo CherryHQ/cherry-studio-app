@@ -112,6 +112,11 @@ describe('catalog consumer ownership', () => {
       await act(async () => {
         await jest.advanceTimersByTimeAsync(15_000);
       });
+      expect(read).toHaveBeenCalledTimes(2);
+      // Deliver Query's batched notification after the poll completes.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1);
+      });
       expect(sessions.items).toEqual([result]);
       await act(async () => tree.update(renderSessions(false)));
       const reads = read.mock.calls.length;
