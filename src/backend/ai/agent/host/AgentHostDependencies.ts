@@ -32,6 +32,7 @@ import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type { AgentMemoryService } from '@/backend/services/agentMemory';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
@@ -77,6 +78,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'AgentMemoryService',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   scriptSandbox() {
@@ -163,6 +165,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    readonly memory: AgentMemoryService,
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({
@@ -214,6 +217,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      memory: this.memory.operations,
     }));
   }
 

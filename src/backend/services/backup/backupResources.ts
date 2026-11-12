@@ -1,6 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
+import { captureMemoryPaths, restoredMemoryFile } from '@/backend/services/agentMemory/backup';
 import { BackupError } from '@/shared/contracts/backup';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
 import { SkillManifestEntrySchema, skillContentHashHex } from '@/shared/data/types/skill';
@@ -18,6 +19,7 @@ const RESOURCE_DIRECTORIES = {
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
   if (path === 'database/cherry.db') return new File(root, ...path.split('/'));
+  if (path.startsWith('agent-memory/')) return restoredMemoryFile(root, path);
   if (path.startsWith('skills/'))
     return new File(root, 'Data', 'Skills', ...path.slice(7).split('/'));
   const slash = path.lastIndexOf('/');
@@ -35,6 +37,7 @@ export function requireDiskSpace(bytes: number): void {
 export async function describeDatabase(database: File): Promise<{
   requiredPaths: string[];
   counts: BackupManifest['counts'];
+  agentIds: string[];
 }> {
   return withBackupDatabase(database, async (db) => {
     const count = async (table: string) =>
@@ -91,7 +94,10 @@ export async function describeDatabase(database: File): Promise<{
       }
     }
     for (const path of requiredPaths) assertBackupPath(path);
-    return { requiredPaths: [...new Set(requiredPaths)], counts };
+    const agentIds = (await db.getAllAsync<{ id: string }>('SELECT id FROM agent')).map(
+      (agent) => agent.id,
+    );
+    return { requiredPaths: [...new Set(requiredPaths)], counts, agentIds };
   });
 }
 
@@ -105,6 +111,7 @@ export async function captureResources(
 }> {
   const description = await describeDatabase(archiveFile(target, 'database/cherry.db'));
   const paths = new Set(description.requiredPaths);
+  for (const path of captureMemoryPaths(source, description.agentIds)) paths.add(path);
   for (const [prefix, directory] of Object.entries(RESOURCE_DIRECTORIES)) {
     if (prefix === 'files') continue;
     const root = new Directory(source, ...directory);
@@ -139,7 +146,9 @@ export async function validateResourceReferences(
   root: Directory,
   manifest: BackupManifest,
 ): Promise<void> {
-  const { requiredPaths, counts } = await describeDatabase(archiveFile(root, 'database/cherry.db'));
+  const { requiredPaths, counts, agentIds } = await describeDatabase(
+    archiveFile(root, 'database/cherry.db'),
+  );
   if (
     Object.keys(counts).some(
       (key) => counts[key as keyof typeof counts] !== manifest.counts[key as keyof typeof counts],
@@ -148,8 +157,11 @@ export async function validateResourceReferences(
     throw new BackupError('invalid');
   const available = new Set(manifest.entries.map((entry) => entry.path));
   const required = new Set(requiredPaths);
+  const memoryAgents = new Set(agentIds);
   for (const path of required) if (!available.has(path)) throw new BackupError('invalid');
   for (const entry of manifest.entries) {
+    if (entry.path.startsWith('agent-memory/') && !memoryAgents.has(entry.path.split('/')[1]))
+      throw new BackupError('invalid');
     if (
       (entry.path.startsWith('files/') || entry.path.startsWith('skills/')) &&
       !required.has(entry.path)

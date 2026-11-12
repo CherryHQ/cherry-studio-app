@@ -4,17 +4,19 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 `BackupRuntime` owns operations, cancellation, progress and candidate lifetime. It is exposed as
 `Backend.backup`; the settings screen only chooses files, renders progress and requests confirmation.
 
-## Portable format v3
+## Portable format v4
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
-`skills/<folder>/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
+`skills/<folder>/<digest>/<package path>` for every live Skill package and
+`agent-memory/<agentId>/{SOUL.md,USER.md,memory/FACT.md,memory/JOURNAL.jsonl}` for saved Agent memory.
+The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
-New exports use format v3 so older readers reject inline-quote data before replacing their storage.
-The reader still accepts portable v1 backups; experimental paired-database v2 remains rejected.
-The ZIP layout is unchanged. This is a mobile format. Desktop physical backups are rejected.
+New exports use format v4 so older readers reject memory resources before replacing their storage.
+The reader still accepts portable v1/v3 backups; experimental paired-database v2 remains rejected.
+This is a mobile format. Desktop physical backups are rejected.
 Restore compatibility requires an exact prefix of bundled SQLite migrations; different migration
 lineage and future formats are rejected.
 Exports rebuild their private database copy from the running app's bundled migrations; imports use
@@ -50,6 +52,10 @@ background jobs from starting while the SQLite backup API snapshots the database
 data), the copy is normalized and managed resources are copied. Jobs resume before compression.
 Missing original files fail export rather than silently producing an incomplete full backup. Skill installation/update writes
 participate in the same capture exclusion and restored Skill packages follow the new generation.
+Memory operations also participate in capture admission. Exports include only the four known files
+of database-backed Agents, including soft-deleted Agents. Interrupted replacements export their
+recoverable previous copy under the canonical name. Restore checks Agent ownership and moves memory
+into the candidate generation; private staging files are never archived.
 A finished export stays in the `exported` phase, carrying the archive URI and content counts,
 until `cancel()` dismisses it. Dismissing deletes the archive, as does starting the next export;
 the user keeps only copies saved or shared from it.

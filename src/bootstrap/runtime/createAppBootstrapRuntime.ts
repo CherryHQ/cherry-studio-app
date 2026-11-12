@@ -207,6 +207,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      host.container.get('AgentMemoryService').hasPendingStorageWork() ||
       providerCatalog.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),

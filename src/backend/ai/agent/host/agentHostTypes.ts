@@ -63,6 +63,9 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  memory?: {
+    context(agentId: string, signal?: AbortSignal): Promise<{ key: string; text: string }>;
+  };
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;

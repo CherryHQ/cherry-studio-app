@@ -100,6 +100,9 @@ export type TurnPreparationDependencies = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  memory?: {
+    context(agentId: string, signal?: AbortSignal): Promise<{ key: string; text: string }>;
+  };
   /** The Host keeps the engine binding; preparation consumes that local Runtime. */
   runtime: Pick<AgentRuntime, 'descriptor' | 'preflightModel'>;
   runtimeTools: AgentRuntimeToolResolver;
@@ -147,6 +150,7 @@ export type TurnPlan = {
   pluginGuides: readonly PluginGuideSnapshot[];
   /** Plugin guides loaded earlier in the Session whose connection is still in this turn. */
   workflowInstructions: readonly { key: string; text: string }[];
+  memoryInstructions?: { key: string; text: string };
   /** The Skills usable in this turn, with their pinned revisions. */
   skills: TurnSkillPlan;
   toolDiscoveryWarnings: readonly string[];
@@ -742,6 +746,7 @@ export async function prepareResolvedTurn(
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,
     inferenceSnapshot,
+    memoryInstructions: await dependencies.memory?.context(agent.id, signal),
     inputParts: parts,
     modelPreflight,
     resources,

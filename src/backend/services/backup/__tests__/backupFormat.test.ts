@@ -25,11 +25,25 @@ test('accepts the portable mobile snapshot contract without platform-specific ab
   expect(validateManifest(manifest())).toEqual(manifest());
 });
 
-test('admits both legacy portable backups and the explicit inline-quote format', () => {
+test('admits memory backups and earlier portable v1/v3 archives', () => {
   expect(
     validateManifest({ ...manifest(), formatVersion: BACKUP_FORMAT_VERSION }).formatVersion,
-  ).toBe(3);
+  ).toBe(4);
+  expect(validateManifest({ ...manifest(), formatVersion: 3 }).formatVersion).toBe(3);
   expect(validateManifest(manifest()).formatVersion).toBe(1);
+});
+
+test('admits only the four fixed memory paths for a valid Agent id', () => {
+  const root = 'agent-memory/10000000-0000-4000-8000-000000000001/';
+  for (const name of ['SOUL.md', 'USER.md', 'memory/FACT.md', 'memory/JOURNAL.jsonl'])
+    expect(() => assertBackupPath(root + name)).not.toThrow();
+  for (const path of [
+    root + 'private.txt',
+    root + 'memory/../FACT.md',
+    root + 'memory/FACT.md.previous',
+    'agent-memory/not-an-agent/USER.md',
+  ])
+    expect(() => assertBackupPath(path)).toThrow();
 });
 
 test.each([
