@@ -173,7 +173,7 @@ function AgentEditForm({
     saveSkillBindings,
     saveToolBindings,
     skillBindingUpdates,
-  } = useAgentAutoSave(agentId);
+  } = useAgentAutoSave(agentId, agent?.instructionsVersion);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,

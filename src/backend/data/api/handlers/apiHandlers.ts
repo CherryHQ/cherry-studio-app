@@ -1,7 +1,6 @@
 import type { ApiImplementation } from '@/shared/data/api/types';
 
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
-import type { AgentService } from '../../services/AgentService';
 import type { AgentSessionMessageService } from '../../services/AgentSessionMessageService';
 import type { AgentSessionService } from '../../services/AgentSessionService';
 import type { AgentToolBindingService } from '../../services/AgentToolBindingService';
@@ -16,7 +15,7 @@ import type { PaintingService } from '../../services/PaintingService';
 import type { PluginAuthorizationService } from '../../services/PluginAuthorizationService';
 import type { ProviderService } from '../../services/ProviderService';
 import type { TrashService } from '../../services/TrashService';
-import { type AgentAvatars, createAgentHandlers } from './agents';
+import { type AgentAvatars, type AgentData, createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
 import { createAgentToolBindingHandlers } from './agentToolBindings';
@@ -42,7 +41,7 @@ export type DataApiDependencies = {
   trash: TrashService;
   trashMutations: TrashMutations;
   agentAvatars: AgentAvatars;
-  agents: AgentService;
+  agents: AgentData;
   agentGlobalSkills: AgentGlobalSkillService;
   skillAvailability: SkillAvailabilityReader;
   skillInstructions: SkillInstructionReader;

@@ -51,7 +51,7 @@ const SESSION: AgentSessionView = {
 const AGENT: AgentDefinition = {
   id: AGENT_ID,
   name: 'Planner Agent',
-  instructions: 'Plan carefully.',
+  soul: 'Plan carefully.',
   mode: 'standard',
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },

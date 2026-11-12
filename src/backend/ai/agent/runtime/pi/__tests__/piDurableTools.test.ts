@@ -1274,7 +1274,7 @@ describe('durable capability boundary', () => {
           execute: async () => ({
             value: { ...saved, instructionsLoaded: true },
             artifacts: [],
-            instructions: { key: 'skill:notes', text: 'x'.repeat(128_001) },
+            instructions: { key: 'skill:notes', text: 'A newly adapted instruction.' },
             instructionsFailureValue: saved,
           }),
         }),
@@ -1286,6 +1286,12 @@ describe('durable capability boundary', () => {
         { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
         BACKGROUND_CONTEXT,
       );
+      await conversation.commit(async (tx) => {
+        (await tx.doc(ToolInstructions, conversation.id)).sections = Array.from(
+          { length: 64 },
+          (_, index) => ({ key: `loaded:${index}`, text: 'Already loaded guidance.' }),
+        );
+      }, BACKGROUND_CONTEXT);
       await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
         role: 'toolResult',

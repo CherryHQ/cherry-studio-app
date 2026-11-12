@@ -165,7 +165,33 @@ test('withdraws unreadable memory without preventing the next conversation turn'
   await expect(memory.read(A, 'fact')).rejects.toThrow('Storage read failed');
 });
 
-test('bounds escaped identity context and requires a full read before replacing a preview', async () => {
+test('blocks backup admission during a profile workflow and drains it before closing', async () => {
+  const { memory } = fixture();
+  let release!: () => void;
+  const workflow = memory.withStorageWork(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  expect(memory.hasPendingStorageWork()).toBe(true);
+  await Promise.resolve();
+  let closed = false;
+  const closing = memory.close().then(() => {
+    closed = true;
+  });
+  await Promise.resolve();
+  expect(closed).toBe(false);
+  release();
+  await workflow;
+  await closing;
+  expect(memory.hasPendingStorageWork()).toBe(false);
+  await expect(memory.withStorageWork(async () => {})).rejects.toMatchObject({
+    code: 'unavailable',
+  });
+});
+
+test('keeps complete identity content and write versions while escaping markup', async () => {
   const { memory } = fixture();
   await memory.write({
     agentId: A,
@@ -174,16 +200,15 @@ test('bounds escaped identity context and requires a full read before replacing 
     expectedVersion: 'missing',
   });
   const context = memoryContext(await memory.snapshot(A));
-  expect(context.text.length).toBeLessThan(22_000);
+  expect(context.text).not.toContain('<'.repeat(12_000));
   const data = JSON.parse(context.text.split('<agent_memory>\n')[1].split('\n</agent_memory>')[0]);
-  expect(data.fact).toMatchObject({ truncated: true, version: 'read-required' });
-  await expect(
-    memory.write({
-      agentId: A,
-      key: 'fact',
-      content: 'Replace the preview',
-      expectedVersion: data.fact.version,
-    }),
-  ).rejects.toMatchObject({ code: 'conflict' });
-  expect((await memory.read(A, 'fact')).content).toBe('<'.repeat(12_000));
+  expect(data.fact).toMatchObject({ truncated: false, content: '<'.repeat(12_000) });
+  expect(data.fact.version).toBe((await memory.read(A, 'fact')).version);
+  await memory.write({
+    agentId: A,
+    key: 'fact',
+    content: 'A complete replacement',
+    expectedVersion: data.fact.version,
+  });
+  expect((await memory.read(A, 'fact')).content).toBe('A complete replacement');
 });

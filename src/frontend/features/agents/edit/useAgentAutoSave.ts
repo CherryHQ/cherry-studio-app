@@ -19,7 +19,7 @@ type SaveKey = keyof AgentFormState | 'toolBindings' | 'skillBindings';
 type SaveTask = () => Promise<unknown>;
 
 /** Keeps writes ordered and coalesces changes to the same field while a write is in flight. */
-export function useAgentAutoSave(agentId: string | undefined) {
+export function useAgentAutoSave(agentId: string | undefined, initialInstructionsVersion?: string) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { setAgentAvatar, updateAgent } = useAgentMutations();
@@ -37,6 +37,7 @@ export function useAgentAutoSave(agentId: string | undefined) {
   const isSaving = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasFailedSave, setHasFailedSave] = useState(false);
+  const instructionsVersion = useRef(initialInstructionsVersion);
 
   const drain = useCallback(async () => {
     if (isSaving.current) return;
@@ -120,8 +121,20 @@ export function useAgentAutoSave(agentId: string | undefined) {
       } else if (key === 'name' && typeof value === 'string') {
         const name = value.trim();
         schedule(key, name ? () => updateAgent(agentId, { name }) : null, true);
+      } else if (key === 'instructions' && typeof value === 'string') {
+        schedule(
+          key,
+          async () => {
+            const updated = await updateAgent(agentId, {
+              instructions: value,
+              expectedInstructionsVersion: instructionsVersion.current,
+            });
+            instructionsVersion.current = updated.instructionsVersion;
+          },
+          true,
+        );
       } else {
-        schedule(key, () => updateAgent(agentId, { [key]: value }), key === 'instructions');
+        schedule(key, () => updateAgent(agentId, { [key]: value }));
       }
     },
     [agentId, schedule, setAgentAvatar, updateAgent],

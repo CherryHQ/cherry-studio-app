@@ -10,7 +10,7 @@ describe('AgentSessionUsageRecorder', () => {
     recorder.record({
       agent: {
         id: 'agent-1',
-        instructions: '',
+        soul: '',
         mode: 'standard',
         model: { modelId: 'configured-model', providerId: 'provider-1' },
         name: 'Agent One',

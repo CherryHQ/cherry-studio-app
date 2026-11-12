@@ -92,31 +92,42 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('leaves persona persistence to the SOUL workflow instead of the legacy column', async () => {
+    const agent = await agentService.create({
+      name: 'Writer',
+      instructions: 'Persona belongs in a file',
+    });
+    await agentService.update(agent.id, { instructions: 'Do not write another SQL prompt' });
+    expect(
+      sqlite.prepare('SELECT instructions FROM agent WHERE id = ?').get(agent.id),
+    ).toMatchObject({ instructions: '' });
+  });
+
   it('rejects stale edits and only notifies caches after successful writes', async () => {
     const changed = jest.fn();
     const unsubscribe = subscribeDataApiChanges(changed);
     try {
-      const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+      const created = await agentService.create({ name: 'Writer' });
       expect(changed).toHaveBeenLastCalledWith(['/agents', `/agents/${created.id}`]);
       const updated = await agentService.update(
         created.id,
         { name: 'Renamed' },
         { expectedUpdatedAt: created.updatedAt },
       );
-      expect(updated.instructions).toBe('Original');
+      expect(updated.instructions).toBe('');
       expect(updated.updatedAt).not.toBe(created.updatedAt);
       changed.mockClear();
       await expect(
         agentService.update(
           created.id,
-          { instructions: 'Stale overwrite' },
+          { name: 'Stale overwrite' },
           { expectedUpdatedAt: created.updatedAt },
         ),
       ).rejects.toMatchObject({ code: 'CONFLICT' });
       expect(changed).not.toHaveBeenCalled();
       expect(await agentService.getById(created.id)).toMatchObject({
         name: 'Renamed',
-        instructions: 'Original',
+        instructions: '',
       });
     } finally {
       unsubscribe();
@@ -308,7 +319,7 @@ describe('AgentService persistence', () => {
   );
 
   it('rejects an edit committed between the read and the guarded write transaction', async () => {
-    const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+    const created = await agentService.create({ name: 'Writer' });
     const write = dbService.withWriteTx.bind(dbService);
     jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce(async (callback) => {
       sqlite
@@ -319,13 +330,13 @@ describe('AgentService persistence', () => {
     await expect(
       agentService.update(
         created.id,
-        { instructions: 'Tool edit' },
+        { name: 'Tool edit' },
         { expectedUpdatedAt: created.updatedAt },
       ),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(await agentService.getById(created.id)).toMatchObject({
       name: 'Manual edit',
-      instructions: 'Original',
+      instructions: '',
     });
   });
 
@@ -429,8 +440,8 @@ describe('AgentService persistence', () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000);
     const agent = await agentService.create({ name: 'Researcher' });
 
-    const firstUpdate = await agentService.update(agent.id, { instructions: 'First' });
-    const secondUpdate = await agentService.update(agent.id, { instructions: 'Second' });
+    const firstUpdate = await agentService.update(agent.id, { name: 'First' });
+    const secondUpdate = await agentService.update(agent.id, { name: 'Second' });
 
     expect(Date.parse(firstUpdate.updatedAt)).toBeGreaterThan(Date.parse(agent.updatedAt));
     expect(Date.parse(secondUpdate.updatedAt)).toBeGreaterThan(Date.parse(firstUpdate.updatedAt));

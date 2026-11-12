@@ -24,7 +24,10 @@ export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .strict();
 export type CreateAgentDto = z.infer<typeof CreateAgentSchema>;
 
-export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS).partial().strict();
+export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
+  .partial()
+  .extend({ expectedInstructionsVersion: z.string().min(1).optional() })
+  .strict();
 export type UpdateAgentDto = z.infer<typeof UpdateAgentSchema>;
 
 /**

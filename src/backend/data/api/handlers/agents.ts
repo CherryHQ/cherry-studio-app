@@ -15,7 +15,7 @@ import {
 import type { HandlersFor } from '@/shared/data/api/types';
 import type { Agent } from '@/shared/data/types/agent';
 
-type AgentData = Pick<
+export type AgentData = Pick<
   AgentService,
   'create' | 'delete' | 'getById' | 'list' | 'reorder' | 'reorderBatch' | 'update'
 >;

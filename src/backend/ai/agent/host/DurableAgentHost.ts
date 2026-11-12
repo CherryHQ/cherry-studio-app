@@ -741,12 +741,14 @@ export class DurableAgentHost implements AgentProtocol {
         model,
         history: toRuntimeHistory(storedTurnContext.history, new Map(), model.uniqueModelId),
         contextCheckpoint: runtimeContextCheckpoint,
-        instructions: buildAgentSystemPrompt({
-          agentInstructions: agent.instructions,
-          mode: agent.mode,
-          appLanguage: this.ports.appLanguage(),
-          tools: [],
-        }),
+        instructions: [
+          buildAgentSystemPrompt({
+            mode: agent.mode,
+            appLanguage: this.ports.appLanguage(),
+            tools: [],
+          }),
+          (await this.ports.memory?.context(agent.id, this.controller.signal))?.text ?? '',
+        ].join('\n\n'),
       });
       const current = await this.store.getSession(session.id);
       if (
@@ -1039,7 +1041,6 @@ export class DurableAgentHost implements AgentProtocol {
           : []),
       ],
       instructions: buildAgentSystemPrompt({
-        agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
         appLanguage: this.ports.appLanguage(),
         tools: plan.tools,

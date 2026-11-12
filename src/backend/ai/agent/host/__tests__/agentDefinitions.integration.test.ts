@@ -6,6 +6,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createTestDb } from '@/backend/data/services/__tests__/_testDb';
 import { agentService } from '@/backend/data/services/AgentService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import type { AgentMemoryService } from '@/backend/services/agentMemory';
 
 import { createAgentTableDefinitionSource } from '../agentDefinitions';
 
@@ -21,6 +22,7 @@ describe('agent-table definition source', () => {
     const { dbService } = createTestDb(sqlite);
     await installTestHost({
       DbService: dbService,
+      AgentMemoryService: { soul: async () => 'Be terse.' } as unknown as AgentMemoryService,
       PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
     });
   });
@@ -35,7 +37,6 @@ describe('agent-table definition source', () => {
     insertUserModel(sqlite, 'openai', 'gpt-4');
     const source = createAgentTableDefinitionSource();
     const agent = await agentService.create({
-      instructions: 'Be terse.',
       model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
@@ -48,7 +49,7 @@ describe('agent-table definition source', () => {
     await expect(source.getAgent(agent.id)).resolves.toEqual({
       mode: 'standard',
       id: agent.id,
-      instructions: 'Be terse.',
+      soul: 'Be terse.',
       model: { modelId: 'gpt-4', providerId: 'openai' },
       name: 'Researcher',
       options: {},

@@ -50,10 +50,13 @@ values, and leaves execution and authoritative Session state on the PC. The adap
 defined separately. The local Host never turns PC tools into `RuntimeTool` callbacks. See
 [Agent Architecture](./README.md#pc-agent-controller-boundary).
 
-The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
+The Agent's SOUL persona, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
 Runtime rules, guidance for application capabilities that are actually present, and the
-user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
+response-language policy into the prepared application prompt. Full SOUL/USER/FACT snapshots enter
+their own replaceable identity section, including in minimal/no-tool turns. SOUL follows Desktop's
+persona semantics and role fallback without a separate System Prompt; the legacy database
+instructions migrate into that file instead of another Agent Instructions section. Runtime adapters consume
 that policy without appending another application policy fragment; Pi appends only the
 binding-specific instructions for its deferred MCP catalog when that catalog is present and retains
 trusted built-in callback instruction contributions through native documents and prompt sections. The Host
@@ -240,7 +243,7 @@ type RuntimeExecutionRequest = {
   // Used only by isolated model probes; never persisted or included in traces or events.
   apiKeyOverride?: string
   turnId: string
-  // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
+  // Host-prepared application prompt: mobile Runtime rules, capability guidance and App language.
   instructions: string
   model: RuntimeModel
   history: RuntimeHistoryTurn[]
@@ -912,7 +915,7 @@ Under [Pi Durable](./pi-durable-migration.md) this turn is no longer outside Pi:
 submits it like any other, and a Pi image model schedules the Host's single `cherry_generate_image`
 tool (`createImageRequestTool`), which runs the prepared request.
 
-The image capability calls `AiService.generateImage` with the Agent instructions, current prompt,
+The image capability calls `AiService.generateImage` with the Agent's SOUL persona, current prompt,
 explicit reference attachments, and the reserved assistant message's usage attribution. It imports
 outputs as managed generated files, then the Host persists them as assistant artifact parts using
 its usual cancellation, background reply, naming, and terminal-state flow. A ten-minute request

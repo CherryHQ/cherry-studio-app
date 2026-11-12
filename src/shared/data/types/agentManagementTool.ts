@@ -6,7 +6,6 @@ import { AgentModeSchema, AgentSchema, DEFAULT_AGENT_MODE } from './agent';
 export const AgentToolRecordSchema = AgentSchema.pick({
   id: true,
   name: true,
-  instructions: true,
   mode: true,
   model: true,
   modelName: true,
@@ -19,7 +18,8 @@ export const AgentToolRecordSchema = AgentSchema.pick({
   })
   .strip();
 
-export const AgentMutationToolResultSchema = z.strictObject({
+// The activity card consumes metadata; private document receipts stay in the tool disclosure.
+export const AgentMutationToolResultSchema = z.object({
   status: z.enum(['created', 'updated']),
   // Historical tool outputs remain immutable when the Agent record fields change.
   agent: z.union([

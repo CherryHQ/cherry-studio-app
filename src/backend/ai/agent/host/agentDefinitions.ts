@@ -2,7 +2,7 @@
  * Minimal Agent configuration source.
  *
  * Tool bindings and the fixed built-in catalog are resolved separately from the
- * definition. Agent lookup owns the fixed mode boundary, model, instructions,
+ * definition. Agent lookup owns the fixed mode boundary, model, SOUL persona,
  * and interactive tool-approval preference.
  */
 
@@ -19,7 +19,7 @@ import type { RuntimeModel, RuntimeOptions } from '../runtime';
 export type AgentDefinition = {
   id: string;
   name: string;
-  instructions: string;
+  soul: string;
   mode: AgentMode;
   model: RuntimeModel;
   options: RuntimeOptions;
@@ -57,7 +57,7 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
       return {
         id: agent.id,
         name: agent.name,
-        instructions: agent.instructions,
+        soul: await application.get('AgentMemoryService').soul(agent.id),
         mode: agent.mode,
         model: { providerId, modelId },
         options: {},

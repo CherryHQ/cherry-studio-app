@@ -10,6 +10,7 @@ import {
 } from '@/backend/ai/provider/systemModelSupport';
 import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import type { AgentData } from '@/backend/data/api/handlers/agents';
 import {
   createMcpServerMutations,
   type McpServerMutations,
@@ -32,6 +33,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createAgentProfiles } from '@/backend/services/agents/createAgentProfiles';
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
@@ -99,6 +101,7 @@ export type BackendComposition = {
   disposeUuRemote(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
+    agents: AgentData;
     mcpServerMutations: McpServerMutations;
     pluginCatalog: PluginCatalogReader;
     skillAvailability: SkillAvailabilityReader;
@@ -110,7 +113,7 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
-    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice'>;
+    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice' | 'memory'>;
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
@@ -273,8 +276,16 @@ export function createBackend(
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },
   });
+  const agentProfiles = createAgentProfiles(
+    services.agentData,
+    infrastructure.agentHostDependencies.memory.operations,
+  );
   const agentAvatars = createAgentAvatars({
-    agents: services.agentData,
+    agents: {
+      getById: agentProfiles.getById,
+      setAvatar: async (...args) =>
+        agentProfiles.withSoul(await services.agentData.setAvatar(...args)),
+    },
     images: agentAvatarImages,
   });
   const userContentImages = createUserContentImageStorage(USER_AVATAR_IMAGE_CONFIG);
@@ -448,6 +459,12 @@ export function createBackend(
     },
     dataApiDependencies: {
       agentAvatars,
+      agents: {
+        ...agentProfiles,
+        delete: (...args) => services.agentData.delete(...args),
+        reorder: (...args) => services.agentData.reorder(...args),
+        reorderBatch: (...args) => services.agentData.reorderBatch(...args),
+      },
       mcpServerMutations,
       pluginCatalog: getBuiltInPluginCatalog,
       skillAvailability: skills.availability,

@@ -31,7 +31,7 @@ export const agentTable = sqliteTable(
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    // System instructions supplied to every turn
+    // Legacy migration source only. Active persona is stored in the Agent's SOUL.md.
     instructions: text().notNull().default(''),
     mode: text({ enum: ['standard', 'minimal'] })
       .$type<AgentMode>()

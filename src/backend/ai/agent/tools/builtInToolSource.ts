@@ -281,7 +281,7 @@ function createCatalog(
   const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
-    ...createAgentManagementTools(deps.agents, agentId),
+    ...createAgentManagementTools(deps.agents, agentId, deps.memory),
     ...(agentId && deps.memory ? createMemoryTools(deps.memory, agentId) : []),
     createEditFileTool(
       {

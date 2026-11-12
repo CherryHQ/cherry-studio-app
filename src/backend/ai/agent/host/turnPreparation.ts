@@ -445,7 +445,7 @@ export async function prepareResolvedTurn(
   };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
     workspaceFolderId: session.workspaceFolderId ?? null,
-    instructions: agent.instructions,
+    instructions: agent.soul,
     model: agent.model,
     parts,
     resources,

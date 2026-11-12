@@ -151,8 +151,11 @@ tool.
 durable facts and an append-only journal for each Agent. The Host loads a complete identity snapshot
 at each language-turn preparation, independently of model tool support. Empty sections withdraw
 previous memory, including copies in compacted summaries. The snapshot is a trusted application
-section; its contents remain contextual data subordinate to current user requests and Agent
-Instructions. Image-generation turns do not load memory.
+section. SOUL retains Desktop's persona semantics, including role definition without a separate
+Agent System Prompt; current user requests and Runtime rules constrain it. USER/FACT/journal are
+contextual data, not behavioral authority. Image-generation turns use SOUL as their persona input,
+without adding USER/FACT or journal history. Non-empty legacy instructions migrate once into SOUL;
+the existing editor/API field then projects that file instead of a separate prompt column.
 
 `memory_read` and `memory_search` are read-only built-ins. `memory_update` and `memory_append`
 follow the system write approval policy and never enter a parallel read-only answer. Minimal mode
@@ -998,10 +1001,10 @@ writes start at `ask` and follow the current Agent's approval
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
 or change MCP bindings.
 
-Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
-`AgentService` resolve the global default Agent model; omitted capability settings use the same
-disabled groups as the manual create form. A saved Agent without a model remains editable
-but cannot start chatting. The model derives instructions from the conversation and may use
+Creation accepts a name, optional `soul`/`user` text, and optional definition fields. Omitting `model` lets
+`AgentService` resolve the global default Agent model. SOUL carries persona and the role fallback;
+USER carries user preferences and background. A saved Agent without a model remains editable
+but cannot start chatting. The model derives relevant content from the conversation and may use
 `ask_user_question` for material missing requirements.
 
 Every model-facing property has a concrete type, because OpenAI-compatible gateways that
@@ -1011,7 +1014,8 @@ clear a model; the user does that in the editor. Agent targets are strings valid
 exact Agent ID or `current`.
 
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+and omits private memory. `agent_get` returns the editable definition, `updatedAt`, complete `soul`
+and `user` documents with their versions, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -1020,7 +1024,12 @@ latest definition. `changes.skills` applies only the listed bindings: `state: en
 enables, `disabled` binds and disables, and `removed` removes a binding. Unlisted bindings are
 preserved; this does not change the Skill library's global enablement. Definition edits and requested binding
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
-apply to future turns only.
+apply to future turns only. `changes.soul` and `changes.user` carry `{ content, expected_version }`;
+empty content clears the document. File replacements use their own revision checks and preserve
+unlisted documents. Metadata/Skill transactions and memory publication are separate, so an
+uncertain or failed multi-field update requires reading current state before another write.
+Successful edits to the current Agent's identity refresh its running context. Edits to another
+Agent never install that Agent's persona in the caller's context.
 
 A call saved before this contract, such as one still awaiting approval, fails validation without
 writing; the model reads the current definition and retries with the new form.

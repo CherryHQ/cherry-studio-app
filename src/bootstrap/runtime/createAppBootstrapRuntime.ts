@@ -222,7 +222,7 @@ export function createAppBootstrapRuntime(
       trash: trash.entries,
       trashMutations: trash,
       agentAvatars: dataApiDependencies.agentAvatars,
-      agents: services.agentData,
+      agents: dataApiDependencies.agents,
       agentGlobalSkills: services.agentGlobalSkill,
       agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,

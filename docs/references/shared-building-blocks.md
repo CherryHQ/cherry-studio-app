@@ -65,6 +65,7 @@ it already exists.
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Per-Agent private identity, facts, journal and conflict-checked memory writes | [Agent Memory](../../src/backend/services/agentMemory/README.md); `AgentMemoryService` supplies per-turn Host context and Agent-bound built-in tool operations |
+| Agent SOUL projection and persona creation/editing across API and tools | [Agent Profiles](../../src/backend/services/agents/README.md); `createAgentProfiles` coordinates Agent metadata and versioned memory without file I/O in data services |
 | Logging | `loggerService` in `src/shared/core/logger` |
 | Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |
 | Startup stage timing and milestones | `src/shared/core/logger/startupDiagnostics.ts`, exported through the diagnostic log allowlist |

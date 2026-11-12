@@ -30,7 +30,7 @@ let snapshot: Snapshot;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe({ skills }: { skills: readonly SkillListItem[] }) {
-  const autoSave = useAgentAutoSave('agent-1');
+  const autoSave = useAgentAutoSave('agent-1', 'initial-persona-version');
   const bindings = createAgentSkillBindingDraft(skills, autoSave.skillBindingUpdates);
   useEffect(() => {
     snapshot = { ...autoSave, bindings };
@@ -46,9 +46,43 @@ async function render(skills: readonly SkillListItem[]) {
 }
 
 beforeEach(() => {
+  mockUpdateAgent.mockReset();
   mockReplaceAgentSkills.mockReset();
   mockReplaceAgentSkills.mockResolvedValue(undefined);
   mockToastShow.mockClear();
+});
+
+it('uses the committed SOUL version when a second draft was queued during the first save', async () => {
+  let completeFirst!: (value: { instructionsVersion: string }) => void;
+  mockUpdateAgent
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeFirst = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({ instructionsVersion: 'third-version' });
+  await render([]);
+  await act(async () => {
+    snapshot.saveField('instructions', 'First persona');
+    snapshot.flush();
+  });
+  await act(async () => {
+    snapshot.saveField('instructions', 'Second persona');
+    snapshot.flush();
+  });
+  expect(mockUpdateAgent).toHaveBeenCalledTimes(1);
+  expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', {
+    instructions: 'First persona',
+    expectedInstructionsVersion: 'initial-persona-version',
+  });
+  await act(async () => {
+    completeFirst({ instructionsVersion: 'second-version' });
+  });
+  expect(mockUpdateAgent).toHaveBeenLastCalledWith('agent-1', {
+    instructions: 'Second persona',
+    expectedInstructionsVersion: 'second-version',
+  });
 });
 
 afterEach(async () => {

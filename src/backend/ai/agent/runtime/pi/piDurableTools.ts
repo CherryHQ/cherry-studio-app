@@ -287,9 +287,8 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ...(tools.some((tool) => tool.deferred) ? [createToolSearchTool()] : []),
     ],
     sections: [
-      ...(options.tools.some((tool) => tool.ref.source === 'builtin' && tool.approval !== 'deny')
-        ? [toolInstructionsSection]
-        : []),
+      // Identity applies even when this turn exposes no application tools.
+      toolInstructionsSection,
       ...(codemode ? [...(codemode.sections ?? []), codemodeRulesSection] : []),
     ],
     hooks: [

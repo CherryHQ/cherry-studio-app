@@ -18,7 +18,7 @@ surfaces.
   back and Done exit selection. Changing the search clears selection. Agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet for text and image models. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
-- The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
+- The editor exposes the Agent definition fields (avatar, name, default model) and its SOUL persona,
   standard/minimal mode, and its two-mode tool-approval preference.
   Inference parameters are not part of the Agent editor surface.
 - Skill and custom MCP bindings remain isolated per Agent. The editor lists only bound, enabled
@@ -26,12 +26,17 @@ surfaces.
   does not uninstall its package. Unavailable enabled bindings retain a status and removal action.
   Installation and connection management stay in their existing library/plugin pages, reachable
   from the add sheets. Connected built-in plugins retain their existing global scope.
-- Existing agents save edits automatically without a Save action. Name and instructions wait for
+- The existing `instructions` API field projects SOUL content and its revision; it is not a second
+  database prompt. SOUL follows Desktop's persona/role-fallback responsibilities. Legacy non-empty
+  instructions migrate once on startup; USER/FACT/JOURNAL retain their separate responsibilities.
+- Existing agents save edits automatically without a Save action. Name and SOUL wait for
   600 ms of idle input, then save; blur, leaving the page, and backgrounding flush pending text.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
-  field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
+  field. Queued SOUL saves use the revision returned by the preceding save. Failed writes keep the
+  draft and offer Retry; a conflicting external persona edit requires reopening the latest profile.
+  A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- The instructions input grows from 112 to a fixed maximum of 480 points, roughly filling the
+- The SOUL input grows from 112 to a fixed maximum of 480 points, roughly filling the
   remaining first-screen space on a typical phone without measuring the layout.
   Longer instructions scroll internally without truncating the saved text. Native text selection
   and scrolling stay owned by the input, while the outer scroll view moves the rest of the form.

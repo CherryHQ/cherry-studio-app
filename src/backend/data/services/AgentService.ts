@@ -46,7 +46,8 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     // Old switch values stay in storage but no longer constrain task-driven tools.
     disabledCapabilities: [],
     id: row.id,
-    instructions: row.instructions,
+    // SOUL content is projected by the application workflow, like the avatar URI.
+    instructions: '',
     mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,
@@ -208,7 +209,10 @@ export class AgentService {
     }
 
     const updates = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
+      Object.entries(dto).filter(
+        ([key, value]) =>
+          value !== undefined && key !== 'instructions' && key !== 'expectedInstructionsVersion',
+      ),
     ) as Partial<typeof agentTable.$inferInsert>;
 
     if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
@@ -397,11 +401,13 @@ export class AgentService {
 
   private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
     const modelId = await this.resolveCreateModelId(tx, dto.model);
+    const metadata = { ...dto };
+    delete metadata.instructions;
     return (await insertWithOrderKey(
       tx,
       agentTable,
       {
-        ...dto,
+        ...metadata,
         model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },

@@ -22,7 +22,7 @@ export interface MemoryStorage {
 export type AgentMemory = ReturnType<typeof createAgentMemory>;
 export type AgentMemoryOperations = Pick<
   AgentMemory,
-  'read' | 'write' | 'snapshot' | 'append' | 'search'
+  'read' | 'write' | 'snapshot' | 'append' | 'search' | 'withStorageWork'
 >;
 
 /** Owns per-Agent ordering, revisions and limits independently of Expo and the model loop. */
@@ -32,6 +32,7 @@ export function createAgentMemory(deps: {
   assertWritable(): void;
 }) {
   const queues = new Map<string, Promise<unknown>>();
+  const storageWork = new Set<Promise<unknown>>();
   let closed = false;
 
   function run<T>(agentId: string, signal: AbortSignal | undefined, task: () => Promise<T>) {
@@ -70,6 +71,23 @@ export function createAgentMemory(deps: {
   }
 
   return {
+    /** Covers metadata/file workflows before their first memory operation is queued. */
+    withStorageWork<T>(operation: () => Promise<T>): Promise<T> {
+      deps.assertWritable();
+      if (closed) return Promise.reject(new AgentMemoryError('unavailable'));
+      const pending = Promise.resolve().then(() => {
+        if (closed) throw new AgentMemoryError('unavailable');
+        deps.assertWritable();
+        return operation();
+      });
+      storageWork.add(pending);
+      void pending
+        .finally(() => {
+          storageWork.delete(pending);
+        })
+        .catch(() => {});
+      return pending;
+    },
     read(agentId: string, key: AgentMemoryDocumentKey, signal?: AbortSignal) {
       AgentMemoryDocumentKeySchema.parse(key);
       return run(agentId, signal, () => readFile(agentId, key));
@@ -156,10 +174,10 @@ export function createAgentMemory(deps: {
         return matches;
       });
     },
-    hasPendingStorageWork: () => queues.size > 0,
+    hasPendingStorageWork: () => queues.size > 0 || storageWork.size > 0,
     async close() {
       closed = true;
-      await Promise.allSettled(queues.values());
+      await Promise.allSettled([...queues.values(), ...storageWork]);
     },
   };
 }

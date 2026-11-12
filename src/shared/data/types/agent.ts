@@ -33,8 +33,9 @@ export const AgentSchema = z.strictObject({
   /** Retired switches are projected as empty for existing Data API readers. */
   disabledCapabilities: z.array(z.string()).max(0),
   id: AgentIdSchema,
-  /** System instructions supplied to every turn */
+  /** SOUL content projected by the Agent profile workflow; the field name is API compatibility. */
   instructions: z.string(),
+  instructionsVersion: z.string().optional(),
   mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */

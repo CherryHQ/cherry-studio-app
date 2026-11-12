@@ -9,9 +9,12 @@ import { z } from 'zod';
 
 import type { RuntimeToolResult } from '../types';
 
+// Three 1 MiB UTF-8 identity files can expand sixfold when escaped; the engine owns model budgets.
+export const MAX_TOOL_INSTRUCTION_CHARACTERS = 32 * 1024 * 1024;
+
 const instructionsSchema = z.strictObject({
   key: z.string().min(1).max(256),
-  text: z.string().min(1).max(128_000),
+  text: z.string().min(1).max(MAX_TOOL_INSTRUCTION_CHARACTERS),
 });
 
 /** Current execution only; the Host rebuilds applicable instructions for the next configuration. */
@@ -50,7 +53,8 @@ export async function retainToolInstructions(
     // Bounded independently of the compactable tool result, including concurrent tool loads.
     if (
       sections.length > 64 ||
-      sections.reduce((size, entry) => size + entry.text.length, 0) > 128_000
+      sections.reduce((size, entry) => size + entry.text.length, 0) >
+        MAX_TOOL_INSTRUCTION_CHARACTERS
     )
       throw new Error('The retained tool instruction budget is full.');
     document.sections = sections;
