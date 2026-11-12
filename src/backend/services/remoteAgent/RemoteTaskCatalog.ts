@@ -34,12 +34,16 @@ export class RemoteTaskCatalog implements RemoteTaskQueries {
   }
 
   async list(cursor: string | undefined, signal: AbortSignal) {
-    const page = await this.request('agent.tasks.list', { cursor }, signal);
+    const page = await this.reads.run(signal, () =>
+      this.request('agent.tasks.list', { cursor }, signal),
+    );
     return { items: page.items.map(projectTask), next: page.nextCursor ?? undefined };
   }
 
   async listSessions(taskId: string, cursor: string | undefined, signal: AbortSignal) {
-    const page = await this.request('agent.sessions.list', { taskId, cursor }, signal);
+    const page = await this.reads.run(signal, () =>
+      this.request('agent.sessions.list', { taskId, cursor }, signal),
+    );
     return { items: page.items.map(projectSession), next: page.nextCursor ?? undefined };
   }
 

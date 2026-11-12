@@ -1,16 +1,20 @@
 import { ContentState } from '@cherrystudio/ui/components';
+import { router } from 'expo-router';
 import { createContext, use, useMemo, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useConversationSourceState } from '@/frontend/appShell/conversation';
 import {
   useConversationHistory,
   useConversationSnapshot,
   type RemoteConversationSession,
 } from '@/frontend/appShell/conversation/remote';
 import { MainHeaderView } from '@/frontend/appShell/header';
+import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
+import { useBackendModule } from '@/frontend/data';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
@@ -118,7 +122,32 @@ function ReaderContent({
         onPendingSendDisplayed={ignorePending}
         renderUsage={renderUsage}
       />
+      {session.ref.source.kind === 'desktop' ? (
+        <ReaderConnectionStatus connectionId={session.ref.source.connectionId} />
+      ) : null}
       <ChatShareSelectionControls />
     </ChatShareSelectionProvider>
+  );
+}
+
+function ReaderConnectionStatus({ connectionId }: { connectionId: string }) {
+  const { availability } = useConversationSourceState();
+  const desktopConnections = useBackendModule('desktopConnections');
+  const { bottom } = useSafeAreaInsets();
+  if (availability.state === 'enabled') return null;
+  return (
+    <View style={{ paddingBottom: bottom }}>
+      <ConversationStatus
+        availability={availability}
+        onRepair={() => router.push('/settings/device-connections')}
+        onReconnect={() => desktopConnections.reconnect(connectionId)}
+        onOpenDeviceSettings={() =>
+          router.push({
+            pathname: '/settings/device-connections/[connectionId]',
+            params: { connectionId },
+          })
+        }
+      />
+    </View>
   );
 }

@@ -3,6 +3,7 @@ import { RemoteReadCoordinator } from '../RemoteReadCoordinator';
 import { RemoteTaskCatalog } from '../RemoteTaskCatalog';
 
 const signal = () => new AbortController().signal;
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const session = {
   sessionId: 's',
   agentId: 'a',
@@ -33,6 +34,74 @@ it('projects task metadata without exposing task configuration or conversation c
   });
   expect(request).toHaveBeenCalledWith('agent.tasks.list', { cursor: 'current' }, caller);
 });
+
+it('queues expanded task groups within the same read budget as other source reads', async () => {
+  const reads = new RemoteReadCoordinator(2);
+  let releaseOther!: () => void;
+  const other = reads.run(signal(), () => new Promise<void>((resolve) => (releaseOther = resolve)));
+  await tick();
+  const pending: (() => void)[] = [];
+  let running = 0;
+  let peak = 0;
+  const request = jest.fn(async () => {
+    peak = Math.max(peak, ++running);
+    await new Promise<void>((resolve) => pending.push(resolve));
+    running--;
+    return { items: [session], nextCursor: null };
+  });
+  const catalog = new RemoteTaskCatalog(reads, request as never);
+  const groups = Array.from({ length: 17 }, (_, index) =>
+    catalog.listSessions(`task-${index}`, undefined, signal()),
+  );
+  await tick();
+  expect(request).toHaveBeenCalledTimes(1);
+  releaseOther();
+  await other;
+  await tick();
+  expect(request).toHaveBeenCalledTimes(2);
+  while (pending.length) {
+    pending.shift()!();
+    await tick();
+  }
+  const pages = await Promise.all(groups);
+  expect(pages).toHaveLength(17);
+  expect(pages.every((page) => page.items[0]?.id === 's')).toBe(true);
+  expect(request).toHaveBeenCalledTimes(17);
+  expect(peak).toBe(2);
+});
+
+it.each(['tasks', 'task sessions', 'membership'] as const)(
+  'cancels queued %s reads before they reach the desktop',
+  async (kind) => {
+    const reads = new RemoteReadCoordinator(1);
+    let release!: () => void;
+    const busy = reads.run(signal(), () => new Promise<void>((resolve) => (release = resolve)));
+    await tick();
+    const request = jest.fn(async (method: string) => ({
+      items: method === 'agent.tasks.list' ? [] : [session],
+      nextCursor: null,
+    }));
+    const catalog = new RemoteTaskCatalog(reads, request as never);
+    const controller = new AbortController();
+    const queued =
+      kind === 'tasks'
+        ? catalog.list(undefined, controller.signal)
+        : kind === 'task sessions'
+          ? catalog.listSessions('task', undefined, controller.signal)
+          : catalog.readSession('task', 's', controller.signal);
+    await tick();
+    expect(request).not.toHaveBeenCalled();
+    controller.abort();
+    await expect(queued).rejects.toMatchObject({ name: 'AbortError' });
+    release();
+    await busy;
+    await expect(catalog.list(undefined, signal())).resolves.toEqual({
+      items: [],
+      next: undefined,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  },
+);
 
 it('opens only conversations found in the selected task, including later pages', async () => {
   const request = jest.fn(async (_method: string, params: Record<string, string>) =>
