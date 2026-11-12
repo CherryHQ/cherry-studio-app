@@ -1,4 +1,4 @@
-import type { AgentTemplateCategory } from '@/shared/data/presets/agentTemplates';
+import type { AgentTemplateCategory } from '@/shared/data/types/agentTemplate';
 
 export const AGENT_TEMPLATE_CATEGORY_KEYS = {
   writing: 'marketplace.category.writing',

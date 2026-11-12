@@ -27,6 +27,7 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
+import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { usePreference } from '@/frontend/data/hooks';
 import {
   useAgentApiById,
@@ -40,8 +41,8 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
-import { type AgentTemplate, getAgentTemplate } from '@/shared/data/presets/agentTemplates';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
+import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -74,7 +75,24 @@ export default function AgentEditScreen() {
   const templateId = !agentId ? getSingleRouteParam(params.templateId) : undefined;
   const sourceLanguage = getSingleRouteParam(params.templateLanguage);
   const templateLanguage = sourceLanguage ?? i18n.resolvedLanguage ?? i18n.language;
-  const template = templateId ? getAgentTemplate(templateId, templateLanguage) : undefined;
+  const templateIdentity = `${templateId ?? ''}:${sourceLanguage ?? 'app'}`;
+  const [templateSeed, setTemplateSeed] = useState<{
+    identity: string;
+    template: AgentTemplate;
+    language: string;
+  } | null>(null);
+  const seededTemplate = templateSeed?.identity === templateIdentity ? templateSeed : null;
+  const templateCatalog = useAgentTemplateCatalog(
+    templateLanguage,
+    Boolean(templateId) && !seededTemplate,
+  );
+  const template = templateId
+    ? (seededTemplate?.template ??
+      templateCatalog.catalog?.templates.find((item) => item.id === templateId))
+    : undefined;
+  // A create draft keeps its selected content even if the remote catalog changes or removes it.
+  if (template && !seededTemplate)
+    setTemplateSeed({ identity: templateIdentity, template, language: templateLanguage });
   const { agent, isLoading, refetch } = useAgentApiById(agentId);
   const {
     bindings,
@@ -103,7 +121,22 @@ export default function AgentEditScreen() {
       <>
         <RouteHeader title={t('agent.create.title')} />
         <View className="p-4">
-          <ContentState.Error title={t('marketplace.templates.unavailable')} />
+          {templateCatalog.isLoading || templateCatalog.isFetching ? (
+            <ContentState.Loading title={t('marketplace.templates.loading')} />
+          ) : (
+            <ContentState.Error
+              title={t(
+                templateCatalog.error
+                  ? 'marketplace.templates.loadFailed'
+                  : 'marketplace.templates.unavailable',
+              )}
+              primaryAction={
+                templateCatalog.error
+                  ? { children: t('common.retry'), onPress: () => void templateCatalog.refetch() }
+                  : undefined
+              }
+            />
+          )}
         </View>
       </>
     );
@@ -156,7 +189,7 @@ export default function AgentEditScreen() {
       }
       skills={skills}
       template={template}
-      templateLanguage={templateLanguage}
+      templateLanguage={seededTemplate?.language ?? templateLanguage}
     />
   );
 }

@@ -7,21 +7,21 @@ import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useInlineSearch } from '@/frontend/components/InlineSearch';
-import {
-  type AgentTemplate,
-  type AgentTemplateCategory,
-  getAgentTemplates,
-} from '@/shared/data/presets/agentTemplates';
+import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
+import { type AgentTemplate, type AgentTemplateCategory } from '@/shared/data/types/agentTemplate';
 
 import { AGENT_TEMPLATE_CATEGORY_KEYS } from './templateCategories';
+
+const EMPTY_TEMPLATES: readonly AgentTemplate[] = [];
 
 export function AgentTemplateCatalog() {
   const { t, i18n } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const language = i18n.resolvedLanguage ?? i18n.language;
+  const { catalog, error, isLoading, refetch } = useAgentTemplateCatalog(language);
   const [category, setCategory] = useState<AgentTemplateCategory | 'all'>('all');
   const { query, setQuery, results } = useInlineSearch({
-    items: getAgentTemplates(language),
+    items: catalog?.templates ?? EMPTY_TEMPLATES,
     fields: (template) => [
       template.name,
       template.description,
@@ -68,13 +68,25 @@ export function AgentTemplateCatalog() {
           variant="chips"
         />
       </ScrollView>
+      {error && catalog ? (
+        <View className="flex-row items-center gap-2 px-4">
+          <Text className="flex-1 text-sm text-muted-foreground">
+            {t('marketplace.templates.cached')}
+          </Text>
+          <Button size="sm" variant="ghost" onPress={() => void refetch()}>
+            {t('common.retry')}
+          </Button>
+        </View>
+      ) : null}
       <View className="flex-row flex-wrap items-center justify-between gap-2 px-4">
         <Text className="font-semibold text-lg text-foreground">
           {t('marketplace.templates.title')}
         </Text>
-        <Text className="text-sm text-muted-foreground">
-          {t('marketplace.templates.count', { count: filtered.length })}
-        </Text>
+        {catalog ? (
+          <Text className="text-sm text-muted-foreground">
+            {t('marketplace.templates.count', { count: filtered.length })}
+          </Text>
+        ) : null}
       </View>
       <FlatList
         key={`${category}:${query}`}
@@ -86,7 +98,18 @@ export function AgentTemplateCatalog() {
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         keyExtractor={(row) => row[0]!.id}
-        ListEmptyComponent={<ContentState.Empty title={t('marketplace.templates.empty')} />}
+        ListEmptyComponent={
+          isLoading ? (
+            <ContentState.Loading title={t('marketplace.templates.loading')} />
+          ) : error && !catalog ? (
+            <ContentState.Error
+              title={t('marketplace.templates.loadFailed')}
+              primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
+            />
+          ) : (
+            <ContentState.Empty title={t('marketplace.templates.empty')} />
+          )
+        }
         renderItem={({ item: row }) => (
           <View className="flex-row gap-3">
             {row.map((template) => (

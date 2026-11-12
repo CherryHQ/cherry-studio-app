@@ -7,8 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import { getAgentTemplate } from '@/shared/data/presets/agentTemplates';
 
 import { AGENT_TEMPLATE_CATEGORY_KEYS } from './templateCategories';
 
@@ -24,7 +24,10 @@ export function AgentTemplateScreen() {
   }>();
   const language =
     getSingleRouteParam(params.templateLanguage) ?? i18n.resolvedLanguage ?? i18n.language;
-  const template = getAgentTemplate(getSingleRouteParam(params.templateId) ?? '', language);
+  const { catalog, isLoading, isFetching, error, refetch } = useAgentTemplateCatalog(language);
+  const template = catalog?.templates.find(
+    (item) => item.id === getSingleRouteParam(params.templateId),
+  );
 
   async function copyInstructions() {
     if (!template) return;
@@ -102,7 +105,18 @@ export function AgentTemplateScreen() {
         </View>
       ) : (
         <View className="p-4">
-          <ContentState.Error title={t('marketplace.templates.unavailable')} />
+          {isLoading || isFetching ? (
+            <ContentState.Loading title={t('marketplace.templates.loading')} />
+          ) : (
+            <ContentState.Error
+              title={t(
+                error ? 'marketplace.templates.loadFailed' : 'marketplace.templates.unavailable',
+              )}
+              primaryAction={
+                error ? { children: t('common.retry'), onPress: () => void refetch() } : undefined
+              }
+            />
+          )}
         </View>
       )}
     </>

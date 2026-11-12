@@ -1,5 +1,4 @@
 import type { CreateAgentDto } from '@/shared/data/api/schemas/agents';
-import type { AgentTemplate } from '@/shared/data/presets/agentTemplates';
 import {
   type Agent,
   type AgentMode,
@@ -7,6 +6,7 @@ import {
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   type AgentToolApprovalMode,
 } from '@/shared/data/types/agent';
+import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {

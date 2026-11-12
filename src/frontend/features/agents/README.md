@@ -63,6 +63,9 @@ surfaces.
   the editor page.
 - `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screen.
+- Template creation reads the shared remote/saved catalog before mounting the form. Once selected,
+  template content and source language belong to the draft; background refreshes or removals cannot
+  replace user edits. First-use failures offer Retry before the form opens.
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
   background. Create and edit render the same form — a centered
   avatar and underlined name, then instructions, mode/model and approval, and MCP

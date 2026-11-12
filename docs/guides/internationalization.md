@@ -73,10 +73,11 @@ and must not be changed merely because the UI language changed.
 Painting template names and prompts have a separate catalog under
 [`assets/paintings/templates`](../../assets/paintings/templates/README.md). Its current explicit
 policy is Simplified Chinese for `zh-CN` and English for other languages; user-edited prompts are
-never retranslated. Agent templates have a separate bundled catalog under
-[`assets/agents/templates`](../../assets/agents/templates/README.md): Chinese UI locales use the
-upstream Chinese content and all other locales use the upstream English content. The 16 newer
-templates retain their upstream shared English instructions. Marketplace controls are translated
+never retranslated. Agent templates use a separate
+[remote catalog with local snapshots](../../src/backend/services/agentTemplates/README.md): Chinese UI locales use the
+upstream Chinese content and all other locales use the upstream English content. The newer
+marketplace templates retain their upstream shared English instructions. Source routing follows
+the network country independently of the UI language. Marketplace controls are translated
 in every UI locale; names and instructions copied into an Agent remain user-owned.
 Native permission descriptions are separate from the UI catalog:
 `app.json` supplies the English defaults, and

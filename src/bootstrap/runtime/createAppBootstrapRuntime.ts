@@ -175,6 +175,7 @@ export function createAppBootstrapRuntime(
     dataApiDependencies,
     disposeSystemEntry,
     disposeAppUpdate,
+    disposeAgentTemplates,
     disposeUuRemote,
     disposeSkills,
     disposeVoice,
@@ -270,6 +271,7 @@ export function createAppBootstrapRuntime(
           disposeSkills(),
           disposeVoice(),
           disposeAppUpdate(),
+          disposeAgentTemplates(),
           disposeUuRemote(),
         ]);
         // The expected-host check runs inside Application's serialized

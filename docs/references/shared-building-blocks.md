@@ -47,7 +47,7 @@ it already exists.
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
 | PDF text extraction and on-device PDF/image OCR | `modules/pdf-text-extractor`; `src/backend/services/file/fileTextExtraction.ts` shares extraction and derived disk results across `documentText.ts` and `imageText.ts` readers; `FileModule.observeFileOcr` reports one file's recognition progress |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
-| Bundled Agent template content and identity | `getAgentTemplates`, `getAgentTemplate` in `src/shared/data/presets/agentTemplates.ts`; source policy in `assets/agents/templates/README.md` |
+| Remote Agent template catalogs and saved content | `useAgentTemplateCatalog` in `src/frontend/data/agentTemplates`; `Backend.agentTemplates` owns region routing, validation and disk snapshots; [source policy](../../src/backend/services/agentTemplates/README.md) |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |

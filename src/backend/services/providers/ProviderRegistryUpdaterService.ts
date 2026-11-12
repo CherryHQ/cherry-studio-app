@@ -20,6 +20,7 @@ import {
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { repositorySourceOrder } from '@/backend/services/region';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
@@ -406,12 +407,12 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  private async getSourceOrder(): Promise<RegistryNetworkSource[]> {
+  private async getSourceOrder(): Promise<readonly RegistryNetworkSource[]> {
     const country = await raceAbort(
       application.get('RegionService').getCountry(),
       this.controller.signal,
     );
-    return country === 'CN' || country === null ? ['gitcode', 'github'] : ['github', 'gitcode'];
+    return repositorySourceOrder(country);
   }
 }
 
