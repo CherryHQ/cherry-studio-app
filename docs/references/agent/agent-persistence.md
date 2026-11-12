@@ -261,7 +261,7 @@ recency; no `orderKey`).
 
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
-| `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
+| `id` | text | PK, UUID v7 | Stable identity; transcript follows parent order, including queued inputs promoted to Steer |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
 | `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |

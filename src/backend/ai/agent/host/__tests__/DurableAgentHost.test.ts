@@ -79,6 +79,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     listeners.get(laneKey(turn.identity))?.({ type: 'turn.updated', turn });
   };
   const conversations: DurableAgentRuntime = {
+    steer: jest.fn(async () => 'not-found' as const),
     descriptor: new FakeRuntime().descriptor,
     preflightModel: async () => ({
       contextWindow: 32768,
@@ -761,6 +762,192 @@ describe('durable tool diagnostics', () => {
       await f.host.close();
     }
   });
+
+  test('recovery repairs promoted queue parents and shows the accepted question with its waiting reply', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const queued: RuntimeDurableTurn[] = [];
+    for (const text of ['Waiting', 'Guided']) {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      queued.push({
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      });
+    }
+    const [waiting, guided] = queued;
+    guided.identity.requestId += ':steer';
+    guided.metadata = {
+      ...guided.metadata,
+      steer: true,
+      parentMessageId: running.assistantMessageId,
+    };
+    waiting.metadata = { ...waiting.metadata, parentMessageId: guided.assistantMessageId };
+    // Native promotion committed, but the process died before Cherry persisted its parent changes.
+    f.copies.get(f.sessionId)!.turns = [running, guided, waiting];
+    await f.host.initialize();
+    try {
+      expect((await f.store.listMessages(f.sessionId)).map((message) => message.id)).toEqual(
+        [running, guided, waiting].flatMap((turn) => [turn.userMessageId, turn.assistantMessageId]),
+      );
+      const events: AgentEvent[] = [];
+      const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+      expect(observation.snapshot.queuedInputs.map((input) => input.turnId)).toEqual([
+        waiting.identity.turnId,
+      ]);
+      expect(observation.snapshot.additionalMessages?.map((message) => message.id)).toEqual([
+        guided.userMessageId,
+        guided.assistantMessageId,
+      ]);
+      expect(observation.snapshot.additionalMessages?.[1]).toMatchObject({
+        parentId: guided.userMessageId,
+        role: 'assistant',
+        status: 'pending',
+        parts: [],
+      });
+      expect(observation.snapshot.streamingMessage?.id).toBe(running.assistantMessageId);
+      f.emit(guided);
+      expect(events).toContainEqual({
+        type: 'message.created',
+        message: expect.objectContaining({
+          id: guided.assistantMessageId,
+          parentId: guided.userMessageId,
+          status: 'pending',
+          parts: [],
+        }),
+      });
+      observation.unsubscribe();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test.each([0, 1])(
+    'steering queued item %s keeps the remaining task selected before it streams',
+    async (index) => {
+      const f = fixture();
+      const running = await f.reserve('running');
+      const queued: RuntimeDurableTurn[] = [];
+      for (const text of ['First', 'Second']) {
+        const reserved = await f.store.reserveSubmission({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          userParts: [{ id: text, type: 'text', text, state: 'done' }],
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          inferenceSnapshot,
+        });
+        queued.push({
+          ...running,
+          identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+          userMessageId: reserved.userMessage.id,
+          assistantMessageId: reserved.assistantMessage.id,
+          inputBoundary: null,
+          answerBoundary: null,
+          status: 'queued',
+          parts: [],
+          metadata: {
+            ...running.metadata,
+            userParts: reserved.userMessage.parts as never,
+            parentMessageId: reserved.userMessage.parentId ?? null,
+          },
+        });
+      }
+      f.copies.get(f.sessionId)!.turns = [running, ...queued];
+      const observe = jest.spyOn(f.conversations, 'observe');
+      await f.host.initialize();
+      const events: AgentEvent[] = [];
+      let selected: string | null | undefined;
+      const observation = await f.host.observeSession(f.sessionId, (event) => {
+        events.push(event);
+        if (event.type === 'session.updated') selected = event.session.activeNodeId;
+      });
+      selected = observation.snapshot.session.activeNodeId;
+      const guided: RuntimeDurableTurn = {
+        ...queued[index],
+        identity: {
+          ...queued[index].identity,
+          requestId: `${queued[index].identity.requestId}:steer`,
+        },
+        metadata: {
+          ...queued[index].metadata,
+          steer: true,
+          parentMessageId: running.assistantMessageId,
+        },
+      };
+      const waiting: RuntimeDurableTurn = {
+        ...queued[1 - index],
+        metadata: { ...queued[1 - index].metadata, parentMessageId: guided.assistantMessageId },
+      };
+      jest.spyOn(f.conversations, 'steer').mockImplementation(async () => {
+        f.copies.get(f.sessionId)!.turns = [running, guided, waiting];
+        observe.mock.calls.find(([lane]) => lane.slot === 0)![1]({
+          type: 'queue.updated',
+          queue: [guided, waiting],
+        });
+        return 'accepted';
+      });
+      try {
+        const readSession = f.store.getSession.bind(f.store);
+        jest.spyOn(f.store, 'getSession').mockImplementationOnce(async (...args) => {
+          const before = await readSession(...args);
+          // Promotion commits while a new screen observation is being assembled.
+          await expect(
+            f.host.steerQueuedInput({ sessionId: f.sessionId, turnId: guided.identity.turnId }),
+          ).resolves.toBe('accepted');
+          return before;
+        });
+        const mounted = await f.host.observeSession(f.sessionId, () => {});
+        expect(mounted.snapshot.session.activeNodeId).toBe(waiting.assistantMessageId);
+        mounted.unsubscribe();
+        expect((await f.store.getSession(f.sessionId))?.activeNodeId).toBe(
+          waiting.assistantMessageId,
+        );
+        expect(selected).toBe(waiting.assistantMessageId);
+        f.emit({ ...running, status: 'completed' });
+        f.emit({ ...guided, status: 'completed', inputBoundary: 'pi:3', answerBoundary: 'pi:4' });
+        await settle();
+        events.length = 0;
+        f.emit({ ...waiting, status: 'running', inputBoundary: 'pi:5' });
+        expect(selected).toBe(waiting.assistantMessageId);
+        expect(events).toContainEqual({
+          type: 'message.created',
+          message: expect.objectContaining({
+            id: waiting.userMessageId,
+            parentId: guided.assistantMessageId,
+          }),
+        });
+        expect(events).toContainEqual({
+          type: 'message.created',
+          message: expect.objectContaining({
+            id: waiting.assistantMessageId,
+            status: 'streaming',
+            parts: [],
+          }),
+        });
+      } finally {
+        observation.unsubscribe();
+        await f.host.close();
+      }
+    },
+  );
 
   test('a queued removal that loses the placement race never aborts the active run', async () => {
     const f = fixture();
@@ -1577,6 +1764,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const state = fixture();
     const original = await state.reserve('completed');
     await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
     try {
       await state.store.finalizeAssistantMessage({
         assistantMessageId: original.assistantMessageId,
@@ -1597,6 +1788,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(question?.id).toBe(original.userMessageId);
       expect(answer).toMatchObject({ parentId: original.userMessageId, status: 'pending' });
       expect(answer?.id).not.toBe(original.assistantMessageId);
+      expect(events).toContainEqual({
+        type: 'message.created',
+        message: expect.objectContaining({
+          id: original.assistantMessageId,
+          parentId: original.userMessageId,
+          status: 'success',
+        }),
+      });
       expect(
         await state.store.getMessage(state.sessionId, original.assistantMessageId),
       ).toMatchObject({ status: 'success' });
@@ -1605,6 +1804,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(lane).toEqual(runtimeLane(state.sessionId, 1));
       expect(state.copies.get(state.sessionId)?.turns).toHaveLength(1);
     } finally {
+      observation.unsubscribe();
       await state.host.close();
     }
   });

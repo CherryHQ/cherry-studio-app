@@ -85,6 +85,48 @@ describe('SqliteAgentSessionStore conformance', () => {
     harness.cleanup();
   });
 
+  test('steered parent order survives context rebuild, repeated reconciliation and conversation forks', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original');
+    const waiting = await settleTurn(store, session.id, 'Waiting');
+    const guided = await settleTurn(store, session.id, 'Guided');
+    const inputs = [
+      {
+        userMessageId: waiting.userMessage.id,
+        assistantMessageId: waiting.assistantMessage.id,
+        parentMessageId: guided.assistantMessage.id,
+      },
+      {
+        userMessageId: guided.userMessage.id,
+        assistantMessageId: guided.assistantMessage.id,
+        parentMessageId: original.assistantMessage.id,
+      },
+    ];
+    await store.syncInputParents(session.id, inputs);
+    await store.syncInputParents(session.id, inputs);
+    const expected = [original, guided, waiting].flatMap((turn) => [
+      turn.userMessage.id,
+      turn.assistantMessage.id,
+    ]);
+    expect((await store.listMessages(session.id)).map((row) => row.id)).toEqual(expected);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(waiting.assistantMessage.id);
+    const context = await store.loadRuntimeTurnContext(session.id, guided.turnId);
+    expect(context.history.map((row) => row.id)).toEqual([
+      waiting.userMessage.id,
+      waiting.assistantMessage.id,
+    ]);
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: waiting.assistantMessage.id,
+    });
+    expect(fork.status).toBe('forked');
+    if (fork.status === 'forked') {
+      expect((await store.listMessages(fork.session.id)).map((row) => row.parts)).toEqual(
+        (await store.listMessages(session.id)).map((row) => row.parts),
+      );
+    }
+  });
+
   test('editing an answer commits text, search and revision together while clearing stale translation and context', async () => {
     const session = await harness.createEmptySession({ agentId });
     const previous = await settleTurn(store, session.id, 'Earlier');

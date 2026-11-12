@@ -289,6 +289,10 @@ export interface DurableAgentRuntime {
     | undefined
   >;
   submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
+  steer(
+    lane: RuntimeLane,
+    requestId: string,
+  ): Promise<'accepted' | 'already-started' | 'not-found'>;
   observe(
     lane: RuntimeLane,
     listener: (event: RuntimeConversationEvent) => void,

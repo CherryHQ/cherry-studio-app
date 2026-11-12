@@ -930,6 +930,48 @@ describe('agentMessageProjection', () => {
     expect(mergeAgentMessageViews([assistant], [user])).toEqual([user, assistant]);
   });
 
+  test('parent order survives steering an older reservation and retry timestamps', () => {
+    const user = message('user', { role: 'user', parentId: null });
+    const first = message('first', { parentId: user.id, createdAt: '2026-08-25T00:00:05.000Z' });
+    const steer = message('steer', {
+      role: 'user',
+      parentId: first.id,
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const reply = message('reply', { parentId: steer.id });
+    const followup = message('followup', { role: 'user', parentId: reply.id });
+    const expected = [user, first, steer, reply, followup];
+    expect(mergeAgentMessageViews([], [followup, reply, steer, first, user])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, steer, followup], [reply, first])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, followup, steer, first, reply], [])).toEqual(expected);
+  });
+
+  test('successive steer questions keep acceptance order before either answer exists', () => {
+    const original = message('original', { parentId: null, createdAt: '2026-08-25T00:00:00.000Z' });
+    const laterQueued = message('later-queued', {
+      role: 'user',
+      parentId: original.id,
+      createdAt: '2026-08-25T00:00:02.000Z',
+    });
+    const earlierQueued = message('earlier-queued', {
+      role: 'user',
+      parentId: 'guided-answer',
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const answer = message('guided-answer', { parentId: laterQueued.id });
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued])).toEqual([
+      original,
+      laterQueued,
+      earlierQueued,
+    ]);
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued, answer])).toEqual([
+      original,
+      laterQueued,
+      answer,
+      earlierQueued,
+    ]);
+  });
+
   test('keeps the saved position of a retried answer when its live creation time differs', () => {
     const user = message('user', { role: 'user', status: 'success' });
     const assistant = message('assistant', {

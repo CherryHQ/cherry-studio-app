@@ -683,6 +683,25 @@ client to reconcile observation. Withdrawal cleans up only its own reservation, 
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
 retains its existing semantics.
 
+`steerQueuedInput({ sessionId, turnId })` promotes one waiting input to **Steer** (**引导** in
+Chinese). Pi replaces its follow-up submission with a steer submission in one native commit,
+preserving display message IDs and using a stable replacement request ID for deduplication.
+Acceptance removes the composer queue item and exposes its question followed by a pending
+assistant placeholder in the transcript. The current invocation finishes at Pi's execution
+boundary; subsequent output fills that same assistant message below the steer question. An input that
+already started returns `already-started` without aborting anything; a failed commit leaves the
+follow-up queued. Native admission handles the idle race by starting the accepted input.
+
+Accepted steers form an inbox prefix in their acceptance order. Pi uses `steeringMode: 'all'`
+and `followUpMode: 'one-at-a-time'`, so a final boundary can take that prefix and one follow-up
+without reversing the transcript. Inputs coalesced at the same boundary share generation;
+earlier empty assistant placeholders settle in place and output belongs to the last input.
+
+Parent links follow execution order, including steering a later queue item ahead of earlier ones.
+Live rendering, pagination, history reconstruction and forks use that order rather than reservation
+timestamps. Earlier output stays with its original question, and accepted steer questions remain
+visible across remounts while awaiting their execution boundary.
+
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -15,6 +15,8 @@ import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/s
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
   messagePathIdsSql,
+  messageTreeDepthsSql,
+  messageTreeOrder,
   newestLeafIdSql,
   sessionNewestLeafIdSql,
 } from '@/backend/data/services/utils/agentMessageTree';
@@ -376,7 +378,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning();
 
       // The copy is the anchor's ancestor chain, in transcript order.
+      const order = messageTreeOrder(tx, input.sessionId);
       const copied = await tx
+        .with(order)
         .select({
           createdAt: agentSessionMessageTable.createdAt,
           data: agentSessionMessageTable.data,
@@ -391,6 +395,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           turnId: agentSessionMessageTable.turnId,
         })
         .from(agentSessionMessageTable)
+        .innerJoin(order, eq(order.id, agentSessionMessageTable.id))
         .where(
           and(
             eq(agentSessionMessageTable.sessionId, input.sessionId),
@@ -401,7 +406,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(input.sessionId, anchor.id)})`,
           ),
         )
-        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+        .orderBy(asc(order.depth), agentSessionMessageTable.id);
 
       const forkedTurnIds = new Map<string, string>();
       const messageCopies: ForkedMessageCopy[] = [];
@@ -426,9 +431,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return {
           // Deliberate exception to the "never write createdAt" rule in
           // `_columnHelpers.ts`: the fork presents the same history, so its
-          // rows keep the moment they were originally written. Ordering still
-          // holds because createdAt is the major sort key and the reissued ids
-          // break ties in the same direction as the source.
+          // rows keep the moment they were originally written. Parent links
+          // preserve execution order even when queued inputs were steered.
           createdAt: row.createdAt,
           data: {
             ...row.data,
@@ -504,6 +508,65 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       await removeTurnRows(tx, input.sessionId, rows);
       return rows.map((row) => row.id);
     });
+  }
+
+  async syncInputParents(
+    sessionId: string,
+    inputs: readonly {
+      userMessageId: string;
+      assistantMessageId: string;
+      parentMessageId: string | null;
+    }[],
+  ) {
+    if (!inputs.length) return;
+    await this.dbService.withWriteTx(async (tx) => {
+      for (const input of inputs) {
+        // Withdrawal may already have repaired this row while native metadata still names
+        // the removed reservation. Never restore a dangling parent during recovery.
+        if (input.parentMessageId) {
+          const [parent] = await tx
+            .select({ id: agentSessionMessageTable.id })
+            .from(agentSessionMessageTable)
+            .where(
+              and(
+                eq(agentSessionMessageTable.id, input.parentMessageId),
+                eq(agentSessionMessageTable.sessionId, sessionId),
+              ),
+            )
+            .limit(1);
+          if (!parent) continue;
+        }
+        await tx
+          .update(agentSessionMessageTable)
+          .set({ parentId: input.parentMessageId })
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, sessionId),
+              eq(agentSessionMessageTable.id, input.userMessageId),
+              eq(agentSessionMessageTable.role, 'user'),
+            ),
+          );
+      }
+      const parents = new Set(inputs.map((input) => input.parentMessageId));
+      const tail = inputs.findLast((input) => !parents.has(input.assistantMessageId));
+      if (tail)
+        await tx
+          .update(agentSessionTable)
+          .set({ activeNodeId: tail.assistantMessageId })
+          .where(
+            and(
+              eq(agentSessionTable.id, sessionId),
+              inArray(
+                agentSessionTable.activeNodeId,
+                inputs.map((input) => input.assistantMessageId),
+              ),
+            ),
+          );
+    });
+    publishDataApiChanges([
+      `/agent-sessions/${sessionId}`,
+      `/agent-sessions/${sessionId}/messages`,
+    ]);
   }
 
   async editMessage(input: EditMessageInput): Promise<EditMessageResult> {
@@ -861,17 +924,20 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]> {
-    const rows = await this.dbService
-      .getDb()
+    const db = this.dbService.getDb();
+    const order = messageTreeOrder(db, sessionId);
+    const rows = await db
+      .with(order)
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
+      .innerJoin(order, eq(order.id, agentSessionMessageTable.id))
       .where(
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId, through)})`,
         ),
       )
-      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+      .orderBy(asc(order.depth), agentSessionMessageTable.id);
     return rows.map(toAgentMessageView);
   }
 
@@ -980,15 +1046,16 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const historyRows = await readSqliteRows<Parameters<typeof fromAgentMessageViewSqlRow>[0]>(
       sqlite,
       sql`
+        WITH message_order AS MATERIALIZED (${messageTreeDepthsSql(sessionId)})
         SELECT ${agentMessageViewSqlColumns} FROM agent_session_message AS message
+        JOIN message_order ON message_order.id = message.id
         WHERE message.session_id = ${sessionId} AND ${onPath}
           ${
             anchor
-              ? sql`AND (message.created_at > ${anchor.createdAt}
-                  OR (message.created_at = ${anchor.createdAt} AND message.id > ${anchor.id}))`
+              ? sql`AND message_order.depth > (SELECT depth FROM message_order WHERE id = ${anchor.id})`
               : sql``
           }
-        ORDER BY message.created_at, message.id
+        ORDER BY message_order.depth, message.id
       `,
     );
     const messageRows = await readSqliteRows<{ id: string }>(
@@ -1027,10 +1094,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const skillRows = await readSqliteRows<{ messageId: string; activation: string }>(
       this.dbService.getSqlite(),
       sql`
+        WITH message_order AS MATERIALIZED (${messageTreeDepthsSql(sessionId)})
         SELECT messageId, activation FROM (
-        SELECT message.id AS "messageId", message.created_at AS createdAt, part.key AS partIndex,
+        SELECT message.id AS "messageId", message_order.depth AS depth, part.key AS partIndex,
                0 AS receiptIndex, json_extract(part.value, '$.output.value.activation') AS activation
-        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
+        FROM agent_session_message AS message
+        JOIN message_order ON message_order.id = message.id,
+             json_each(json_extract(message.data, '$.parts')) AS part
         WHERE message.session_id = ${sessionId} AND message.role = 'assistant' AND ${onPath}
           AND json_extract(part.value, '$.type') = 'dynamic-tool'
           AND json_extract(part.value, '$.toolRef.source') = 'builtin'
@@ -1038,13 +1108,15 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           AND json_extract(part.value, '$.state') = 'output-available'
           AND json_extract(part.value, '$.output.value.status') = 'ok'
         UNION ALL
-        SELECT message.id AS "messageId", message.created_at AS createdAt, part.key AS partIndex,
+        SELECT message.id AS "messageId", message_order.depth AS depth, part.key AS partIndex,
                receipt.key AS receiptIndex, receipt.value AS activation
-        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part,
+        FROM agent_session_message AS message
+        JOIN message_order ON message_order.id = message.id,
+             json_each(json_extract(message.data, '$.parts')) AS part,
              json_each(json_extract(part.value, '$.skillSelections')) AS receipt
         WHERE message.session_id = ${sessionId} AND message.role = 'user' AND ${onPath}
           AND json_extract(part.value, '$.type') = 'text'
-        ) ORDER BY createdAt, messageId, partIndex, receiptIndex
+        ) ORDER BY depth, messageId, partIndex, receiptIndex
       `,
     );
     return skillRows.flatMap(({ messageId, activation }) => {
@@ -1084,15 +1156,17 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const [row] = await readSqliteRows<{ assistantMessageId: string; checkpointJson: string }>(
       this.dbService.getSqlite(),
       sql`
-        SELECT id AS "assistantMessageId", context_checkpoint AS "checkpointJson"
+        WITH message_order AS MATERIALIZED (${messageTreeDepthsSql(sessionId)})
+        SELECT message.id AS "assistantMessageId", context_checkpoint AS "checkpointJson"
         FROM agent_session_message AS message
+        JOIN message_order ON message_order.id = message.id
         WHERE session_id = ${sessionId}
           AND message.id IN (${messagePathIdsSql(sessionId, through)})
           AND role = 'assistant'
           AND status = 'success'
           AND context_checkpoint IS NOT NULL
-          ${excludeAssistantMessageId ? sql`AND id != ${excludeAssistantMessageId}` : sql``}
-        ORDER BY created_at DESC, id DESC
+          ${excludeAssistantMessageId ? sql`AND message.id != ${excludeAssistantMessageId}` : sql``}
+        ORDER BY message_order.depth DESC, message.id DESC
         LIMIT 1
       `,
     );
@@ -1212,7 +1286,9 @@ async function clearCheckpointsFrom(
   sessionId: string,
   firstRow: { createdAt: number; id: string },
 ) {
+  const order = messageTreeOrder(tx, sessionId);
   await tx
+    .with(order)
     .update(agentSessionMessageTable)
     .set({ contextCheckpoint: null })
     .where(
@@ -1221,10 +1297,10 @@ async function clearCheckpointsFrom(
         isNotNull(agentSessionMessageTable.contextCheckpoint),
         sql`NOT EXISTS (
           SELECT 1 FROM agent_session_message AS anchor
+          JOIN message_order ON message_order.message_order_id = anchor.id
           WHERE anchor.session_id = ${sessionId}
             AND anchor.turn_id = json_extract(${agentSessionMessageTable.contextCheckpoint}, '$.anchorTurnId')
-            AND (anchor.created_at < ${firstRow.createdAt}
-              OR (anchor.created_at = ${firstRow.createdAt} AND anchor.id < ${firstRow.id})))`,
+            AND message_order.message_order_depth < (SELECT message_order_depth FROM message_order WHERE message_order_id = ${firstRow.id}))`,
       ),
     );
 }

@@ -144,14 +144,17 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
-  row shows the original text/attachment summary and can withdraw that one waiting input. The
+- Accepted follow-ups appear in a collapsible, bounded queue, expanded by default, above the composer until Pi starts them. Each
+  row shows the original text/attachment summary, offers Steer, and can withdraw that one waiting input. The
   queue comes from the Session observation snapshot and `queue.updated` events, so route changes
   and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
   Queue removal never falls back to stopping an active turn when placement wins the race.
   Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
-  deletes their unexecuted message pair without invalidating the current model context. Steering
-  remains outside this composer.
+  deletes their unexecuted message pair without invalidating the current model context. Steer
+  promotes the queued input through Pi's native admission. Its question appears in the transcript
+  when accepted; the next assistant reply appears below it when output starts. Failure leaves the
+  queue item available to retry. Pending and accepted actions stay locked until observation removes
+  the item, so repeated taps cannot send it twice. Preview/take-back retains the existing edit flow.
 
 The chat-owned context usage action stays on the right of the composer at rest and while editing.
 Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,

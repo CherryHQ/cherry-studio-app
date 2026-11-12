@@ -268,6 +268,16 @@ export interface AgentSessionStore {
    */
   discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
 
+  /** Reconcile engine admission order without changing message IDs or the working-copy revision. */
+  syncInputParents(
+    sessionId: string,
+    inputs: readonly {
+      userMessageId: string;
+      assistantMessageId: string;
+      parentMessageId: string | null;
+    }[],
+  ): Promise<void>;
+
   /** The ancestor chain ending at `through`, oldest first. */
   listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]>;
 

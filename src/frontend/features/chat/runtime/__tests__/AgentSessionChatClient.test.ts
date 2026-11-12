@@ -124,6 +124,7 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelSubmission: jest.fn(),
+    steerQueuedInput: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<
       ReturnType<AgentProtocol['cancelQueuedInput']>,
@@ -1323,7 +1324,7 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
-  test('keeps a regenerated question live while its new answer runs', async () => {
+  test('keeps a regenerated question and its previous answer live while its new answer runs', async () => {
     let publish!: (event: AgentEvent) => void;
     const protocol = protocolWithObservation(async (_sessionId, listener) => {
       publish = listener;
@@ -1332,20 +1333,23 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     await client.observe('session-1');
     const question = userMessage();
+    const previous = { ...assistantMessage(), parentId: question.id, status: 'success' as const };
     const answer = { ...assistantMessage(), id: 'assistant-2', parentId: question.id };
     publish({ type: 'message.created', message: question });
+    publish({ type: 'message.created', message: previous });
     publish({ type: 'message.created', message: answer });
 
     // A page read before the regeneration still holds the question with its earlier answer.
-    client.reconcilePersistedMessages('session-1', [question]);
+    client.reconcilePersistedMessages('session-1', [question, previous]);
     expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
       question.id,
+      previous.id,
       answer.id,
     ]);
 
     const settled = { ...answer, status: 'success' as const };
     publish({ type: 'message.finalized', message: settled });
-    client.reconcilePersistedMessages('session-1', [question, settled]);
+    client.reconcilePersistedMessages('session-1', [question, previous, settled]);
     expect(client.getState('session-1').liveMessages).toEqual([]);
     client.dispose();
   });
