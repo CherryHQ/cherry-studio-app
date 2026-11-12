@@ -13,7 +13,7 @@ import type {
   SshTarget,
 } from '@/shared/data/types/ssh';
 
-import type { ResolvedFile } from './file';
+import type { ResolvedFile, TemporaryFilePreview } from './file';
 
 export type SshHostProbe = { token: string; fingerprint: string };
 export interface SshModule {
@@ -39,6 +39,13 @@ export interface SshModule {
     signal: AbortSignal,
     onProgress?: (progress: SshTransferProgress) => void,
   ): Promise<ResolvedFile>;
+  /** Downloads only to cache; the caller must release the preview after use. */
+  preview(
+    reference: SshReference,
+    path: string,
+    signal: AbortSignal,
+    onProgress?: (progress: SshTransferProgress) => void,
+  ): Promise<TemporaryFilePreview>;
   upload(
     reference: SshReference,
     input: { path: string; fileEntryId: FileEntryId; overwrite: boolean },

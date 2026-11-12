@@ -47,8 +47,10 @@ automatic handling of command-time password prompts. `timeout_seconds` defaults 
 
 The file interface provides directory listing, UTF-8 reading/writing, downloading and uploading.
 Paths are relative to the profile directory. Listings are bounded to 500 entries, text to 256 KiB,
-and transfers to 20 MiB. The browser shows a bounded text preview; downloads retain the original
-bytes and use the existing library preview. Binary files are downloadable but cannot be read as
+and transfers to 20 MiB. The browser downloads original bytes only to disposable cache and opens
+the existing unified image, text, HTML or document viewer, without creating file/library records.
+Closing the preview releases its cache lease; unsupported formats retain system opening through
+the same viewer. Agent downloads still publish managed files. Binary files cannot be read as
 text. Browser uploads select an existing managed file and confirm the destination. Agent uploads
 must resolve a file explicitly available to the admitted turn or its local workspace; models never
 choose a device path. Agent downloads publish managed artifacts into that turn's local workspace,

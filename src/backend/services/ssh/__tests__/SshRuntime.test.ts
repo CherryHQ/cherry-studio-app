@@ -7,7 +7,7 @@ import { SshProfileService } from '@/backend/data/services/SshProfileService';
 import type { SaveSshProfile, SshProfile } from '@/shared/data/types/ssh';
 
 import { getSshNative, type SshNative } from '../../../../../modules/ssh';
-import { createSshStagingFile, importSshDownload } from '../sshFileStorage';
+import { cacheSshPreview, createSshStagingFile, importSshDownload } from '../sshFileStorage';
 import { SshRuntime } from '../SshRuntime';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -15,6 +15,7 @@ jest.mock('expo-crypto', () => ({ randomUUID: mockRandomUUID }));
 jest.mock('../../../../../modules/ssh', () => ({ getSshNative: jest.fn() }));
 jest.mock('../sshFileStorage', () => ({
   createSshStagingFile: jest.fn(),
+  cacheSshPreview: jest.fn(),
   importSshDownload: jest.fn(),
   stageSshUpload: jest.fn(),
 }));
@@ -521,6 +522,74 @@ test('does not publish a late download after its conversation target is cleared'
   expect(importSshDownload).not.toHaveBeenCalled();
   expect(dispose).toHaveBeenCalledTimes(1);
   expect(runtime.hasPendingStorageWork()).toBe(false);
+});
+
+test('downloads a preview through native path checks without publishing a managed file', async () => {
+  const profile = await trusted();
+  const dispose = jest.fn();
+  const signal = new AbortController().signal;
+  jest.mocked(createSshStagingFile).mockReturnValue({
+    file: { uri: 'file:///owned-stage' } as ReturnType<typeof createSshStagingFile>['file'],
+    path: '/owned-stage',
+    dispose,
+  });
+  const preview: Awaited<ReturnType<typeof cacheSshPreview>> = {
+    entry: {
+      id: mockRandomUUID(),
+      filename: 'hello.txt',
+      mediaType: 'text/plain',
+      size: 12,
+      updatedAt: 1,
+      provenance: 'unknown',
+    },
+    uri: 'file:///cache/preview.txt',
+    release: jest.fn(),
+  };
+  jest.mocked(cacheSshPreview).mockResolvedValue(preview);
+  native.run.mockResolvedValue(
+    JSON.stringify({
+      ...JSON.parse(outcome('completed')),
+      path: Buffer.from('/root/hello.txt').toString('base64'),
+    }),
+  );
+  await expect(runtime.preview(profile, 'hello.txt', signal)).resolves.toBe(preview);
+  expect(native.run).toHaveBeenLastCalledWith(
+    expect.any(String),
+    expect.objectContaining({
+      operation: 'download',
+      path: 'hello.txt',
+      localPath: '/owned-stage',
+    }),
+  );
+  expect(cacheSshPreview).toHaveBeenCalledWith(
+    'file:///owned-stage',
+    '/root/hello.txt',
+    expect.any(AbortSignal),
+  );
+  expect(importSshDownload).not.toHaveBeenCalled();
+  expect(dispose).toHaveBeenCalledTimes(1);
+  expect(preview.release).not.toHaveBeenCalled();
+});
+
+test('does not expose cache bytes when a preview is cancelled before native completion', async () => {
+  const profile = await trusted();
+  const controller = new AbortController();
+  const dispose = jest.fn();
+  jest.mocked(createSshStagingFile).mockReturnValue({
+    file: { uri: 'file:///owned-stage' } as ReturnType<typeof createSshStagingFile>['file'],
+    path: '/owned-stage',
+    dispose,
+  });
+  native.run.mockImplementationOnce(async () => {
+    controller.abort();
+    return outcome('completed');
+  });
+  await expect(runtime.preview(profile, 'hello.txt', controller.signal)).rejects.toMatchObject({
+    code: 'cancelled',
+  });
+  expect(cacheSshPreview).not.toHaveBeenCalled();
+  expect(importSshDownload).not.toHaveBeenCalled();
+  expect(dispose).toHaveBeenCalledTimes(1);
 });
 
 test.each(['not-started', 'unknown'] as const)(

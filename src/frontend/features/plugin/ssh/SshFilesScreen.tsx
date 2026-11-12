@@ -11,13 +11,11 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { openTemporaryFilePreview } from '@/frontend/appShell/filePreview';
 import { RouteHeader } from '@/frontend/appShell/header';
-import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
-import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { useBackendModule } from '@/frontend/data';
 import { useFileEntryPages } from '@/frontend/hooks/file';
 import { sshErrorLabel, useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
-import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileEntry } from '@/shared/data/types/file';
 import {
   SshError,
@@ -65,8 +63,6 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   const [directory, setDirectory] = useState<SshFileResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>();
-  const [preview, setPreview] = useState<{ path: string; result: SshFileResult } | null>(null);
-  const [downloaded, setDownloaded] = useState<ResolvedFile | null>(null);
   const [progress, setProgress] = useState<SshTransferProgress | null>(null);
   const [pickUpload, setPickUpload] = useState(false);
   const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language);
@@ -102,22 +98,16 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
       setLocation({ path: sourcePath });
       return;
     }
-    const result = await action.run((signal) =>
-      ssh.files(profile, { operation: 'read', path: sourcePath }, signal),
-    );
-    if (result) setPreview({ path: sourcePath, result });
-  }
-  async function download(sourcePath: string) {
     setProgress({ transferred: 0, total: null });
-    const result = await action.run((signal) =>
-      ssh.download(profile, sourcePath, signal, setProgress),
-    );
+    await action.run(async (signal) => {
+      const file = await ssh.preview(profile, sourcePath, signal, setProgress);
+      if (signal.aborted) {
+        file.release();
+        return;
+      }
+      openTemporaryFilePreview(file);
+    });
     setProgress(null);
-    if (result) {
-      setDownloaded(result);
-      setPreview(null);
-      toast.show({ label: t('ssh.files.downloaded'), variant: 'success' });
-    }
   }
   async function upload(entry: FileEntry, name: string, overwrite: boolean) {
     setProgress({ transferred: 0, total: entry.size });
@@ -240,64 +230,6 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
         <Text className="text-sm text-muted-foreground">{t('ssh.files.listTruncated')}</Text>
       ) : null}
       {directory?.diagnostics ? <SshDiagnosticsButton diagnostics={directory.diagnostics} /> : null}
-      {downloaded ? (
-        <View className="gap-2">
-          <Text className="text-sm text-muted-foreground">{t('ssh.files.downloaded')}</Text>
-          <FileEntryPreview entryId={downloaded.entry.id} />
-        </View>
-      ) : null}
-      {preview ? (
-        <Dialog
-          open
-          title={preview.path}
-          onOpenChange={(open) => {
-            if (!open && !action.busy) setPreview(null);
-          }}
-        >
-          <ScrollView className="max-h-96" contentContainerClassName="gap-2">
-            {preview.result.error ? (
-              <Text className="text-sm text-destructive">
-                {sshErrorLabel(new SshError(preview.result.error), t)}
-              </Text>
-            ) : null}
-            <MessageDetailText
-              title={t('chat.tool.output')}
-              value={preview.result.content.slice(0, 16000)}
-              variant="code"
-            />
-            {preview.result.content.length > 16000 ? (
-              <Text className="text-sm text-muted-foreground">
-                {t('ssh.files.previewTruncated')}
-              </Text>
-            ) : null}
-            {preview.result.diagnostics ? (
-              <SshDiagnosticsButton diagnostics={preview.result.diagnostics} />
-            ) : null}
-          </ScrollView>
-          <View className="gap-2 pt-4">
-            {progress ? (
-              <Text className="text-sm text-foreground" accessibilityLiveRegion="polite">
-                {t('ssh.files.progress', {
-                  transferred: number.format(progress.transferred),
-                  total: progress.total === null ? '—' : number.format(progress.total),
-                })}
-              </Text>
-            ) : null}
-            <Button disabled={action.busy} onPress={() => void download(preview.path)}>
-              {t('ssh.files.download')}
-            </Button>
-            <Button
-              variant="secondary"
-              onPress={() => {
-                if (action.busy) action.cancel();
-                else setPreview(null);
-              }}
-            >
-              {t(action.busy ? 'common.cancel' : 'common.close')}
-            </Button>
-          </View>
-        </Dialog>
-      ) : null}
       {pickUpload ? (
         <SshUploadPicker
           onClose={() => setPickUpload(false)}

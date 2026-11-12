@@ -51,7 +51,12 @@ import {
 } from '@/shared/data/types/ssh';
 
 import { getSshNative, type SshNativeOptions } from '../../../../modules/ssh';
-import { createSshStagingFile, importSshDownload, stageSshUpload } from './sshFileStorage';
+import {
+  cacheSshPreview,
+  createSshStagingFile,
+  importSshDownload,
+  stageSshUpload,
+} from './sshFileStorage';
 
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const secretKey = (id: string) => `ssh-secret.${id}`;
@@ -541,6 +546,9 @@ export class SshRuntime extends BaseService implements SshModule {
     onProgress?: (progress: SshTransferProgress) => void,
   ) => this.downloadFile(reference, path, signal, onProgress);
 
+  preview: SshModule['preview'] = (reference, path, signal, onProgress) =>
+    this.transferDownload(reference, path, signal, cacheSshPreview, onProgress);
+
   downloadForAgent(
     sessionId: string,
     target: SshTarget,
@@ -566,6 +574,25 @@ export class SshRuntime extends BaseService implements SshModule {
     agent?: AgentAccess,
     folderId: string | null = null,
   ): Promise<ResolvedFile> {
+    return this.transferDownload(
+      reference,
+      path,
+      signal,
+      (uri, remotePath, transferSignal) =>
+        importSshDownload(uri, remotePath, folderId, transferSignal),
+      onProgress,
+      agent,
+    );
+  }
+
+  private transferDownload<T>(
+    reference: SshReference,
+    path: string,
+    signal: AbortSignal,
+    consume: (uri: string, path: string, signal: AbortSignal) => T | Promise<T>,
+    onProgress?: (progress: SshTransferProgress) => void,
+    agent?: AgentAccess,
+  ): Promise<T> {
     return this.trackTransfer(
       reference,
       signal,
@@ -586,19 +613,14 @@ export class SshRuntime extends BaseService implements SshModule {
           state = result.state === 'not-started' ? 'not-started' : 'unknown';
           if (result.state !== 'completed' || result.error)
             throw new SshError(result.error || 'sftp');
-          // Admission remains counted through managed publication. A changed profile or
+          // Admission remains counted through file handoff. A changed profile or
           // revoked conversation cannot publish a download that finished late.
           return await this.serialize(async () => {
             await this.profiles.getRow(reference);
             this.assertActive();
             transferSignal.throwIfAborted();
             if (agent) this.assertAgentTarget(agent.sessionId, agent.target);
-            return importSshDownload(
-              stage.file.uri,
-              result.path || parsed.data,
-              folderId,
-              transferSignal,
-            );
+            return consume(stage.file.uri, result.path || parsed.data, transferSignal);
           });
         } catch (error) {
           throw new SshDownloadError(
