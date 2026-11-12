@@ -22,61 +22,6 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
-  test.each(['standard', 'minimal'] as const)(
-    '%s mode uses the user-edited base and language template without the other mode leaking in',
-    (mode) => {
-      const prompt = buildAgentSystemPrompt({
-        mode,
-        agentInstructions: 'Be a travel planner.',
-        appLanguage: 'zh-CN',
-        systemPrompts: {
-          standard: 'My standard instructions.',
-          minimal: 'My minimal instructions.',
-          language: 'App language: {{language}}. Fallback: {{language}}.',
-        },
-        tools: [],
-      });
-
-      expect(prompt.startsWith(`My ${mode} instructions.`)).toBe(true);
-      expect(prompt).toContain('App language: zh-CN. Fallback: zh-CN.');
-      expect(prompt).toContain('<agent_instructions>\nBe a travel planner.\n</agent_instructions>');
-      expect(prompt).not.toContain(
-        `My ${mode === 'standard' ? 'minimal' : 'standard'} instructions.`,
-      );
-      expect(prompt).not.toContain('# Cherry Studio Mobile Runtime');
-      expect(prompt).not.toContain('## Response Language');
-    },
-  );
-
-  test('restoring null overrides uses the bundled defaults', () => {
-    const prompt = buildAgentSystemPrompt({
-      agentInstructions: '',
-      appLanguage: 'en-US',
-      systemPrompts: { standard: null, language: null },
-      tools: [],
-    });
-
-    expect(prompt).toContain('# Cherry Studio Mobile Runtime');
-    expect(prompt).toContain("Use only this turn's tools");
-    expect(prompt).toContain('The current Cherry Studio App language is `en-US`.');
-  });
-
-  test('empty overrides omit those sections while retaining current capability guidance', () => {
-    const prompt = buildAgentSystemPrompt({
-      agentInstructions: 'Answer in detail.',
-      appLanguage: 'en-US',
-      systemPrompts: { standard: '', language: '' },
-      tools: [tool('web_search')],
-    });
-
-    expect(prompt).not.toContain('# Cherry Studio Mobile Runtime');
-    expect(prompt).not.toContain('## Response Language');
-    expect(prompt).toContain('## Web Research');
-    expect(prompt).toContain('## Web Citations');
-    expect(prompt).toContain('<agent_instructions>\nAnswer in detail.\n</agent_instructions>');
-    expect(prompt.startsWith('## Web Research')).toBe(true);
-  });
-
   test('minimal mode keeps chat context and custom instructions without capability guidance', () => {
     const prompt = buildAgentSystemPrompt({
       mode: 'minimal',

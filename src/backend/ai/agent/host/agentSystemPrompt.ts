@@ -3,10 +3,7 @@ import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from '@cherrystudio/univers
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
-import {
-  type AgentSystemPromptOverrides,
-  DEFAULT_AGENT_SYSTEM_PROMPTS,
-} from '@/shared/data/types/agentSystemPrompt';
+import { buildApplicationSystemRules } from '@/shared/utils/applicationSystemRules';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
@@ -42,7 +39,6 @@ export type BuildAgentSystemPromptInput = {
   agentInstructions: string;
   mode?: AgentMode;
   appLanguage: LanguageVarious;
-  systemPrompts?: AgentSystemPromptOverrides;
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
   skills?: TurnSkillPlan;
@@ -55,25 +51,18 @@ export type BuildAgentSystemPromptInput = {
   retry?: 'resumed' | 'restarted';
 };
 
-/** Build one Host-owned prompt from user-configurable defaults and the frozen tool snapshot. */
+/** Build one Host-owned application prompt from fixed policy and the frozen tool snapshot. */
 export function buildAgentSystemPrompt({
   agentInstructions,
   mode = DEFAULT_AGENT_MODE,
   appLanguage,
-  systemPrompts = {},
   tools,
   pluginGuides = [],
   skills,
   toolDiscoveryWarnings = [],
   retry,
 }: BuildAgentSystemPromptInput): string {
-  const sections = [
-    systemPrompts[mode] ?? DEFAULT_AGENT_SYSTEM_PROMPTS[mode],
-    (systemPrompts.language ?? DEFAULT_AGENT_SYSTEM_PROMPTS.language).replaceAll(
-      '{{language}}',
-      appLanguage,
-    ),
-  ];
+  const sections = [buildApplicationSystemRules(mode, appLanguage)];
   if (mode === 'standard') {
     sections.push(
       ...buildCapabilitySections({ tools, pluginGuides, skills, toolDiscoveryWarnings, retry }),
@@ -91,7 +80,7 @@ ${configuredInstructions}
 </agent_instructions>`);
   }
 
-  return sections.filter((section) => section.trim().length > 0).join('\n\n');
+  return sections.join('\n\n');
 }
 
 /** Only standard mode composes instructions for executable capabilities. */

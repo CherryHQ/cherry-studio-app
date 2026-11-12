@@ -50,6 +50,7 @@ import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
+import { ApplicationSystemRulesSection } from './components/ApplicationSystemRulesSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
 
 const agentFormAvatarSize = 96;
@@ -464,10 +465,7 @@ function AgentEditForm({
             ) : null}
           </View>
         </View>
-        <Section
-          footer={t('agent.form.instructionsDescription')}
-          title={t('agent.form.instructions')}
-        >
+        <Section title={t('agent.form.instructions')}>
           <TextInput
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect
@@ -482,10 +480,6 @@ function AgentEditForm({
             selectionColor={mutedForegroundColor}
             textAlignVertical="top"
             value={form.instructions}
-          />
-          <Section.Item
-            label={t('settings.systemPrompt.title')}
-            onPress={() => router.push('/settings/system-prompt')}
           />
         </Section>
         <View className="gap-3">
@@ -532,6 +526,7 @@ function AgentEditForm({
             </Button>
           ) : null}
         </View>
+        <ApplicationSystemRulesSection mode={form.mode} />
         {form.mode === 'standard' ? (
           <AgentToolsSection
             bindings={toolBindings}

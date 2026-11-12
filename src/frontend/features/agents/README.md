@@ -21,8 +21,11 @@ surfaces.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   standard/minimal mode, and its two-mode tool-approval preference.
   Inference parameters are not part of the Agent editor surface.
-  The instructions section links to shared system-prompt settings and explains that the Agent's
-  own instructions are appended separately from the app defaults.
+- The application system rules row below mode/model opens a read-only sheet with full-text copy.
+  It shows the current mode's base rules and response-language rules using the effective App
+  language, from the same source the Host uses. These rules are not Agent fields or editable
+  defaults. Agent instructions remain editable separately; tool, Skill and plugin guidance is
+  appended during conversations and is not part of this preview.
 - Skill and custom MCP bindings remain isolated per Agent. The editor lists only bound, enabled
   entries; separate Add Skill and Add MCP sheets offer available entries. Removing a Skill binding
   does not uninstall its package. Unavailable enabled bindings retain a status and removal action.
@@ -56,8 +59,8 @@ surfaces.
 
 ## Organization
 
-- `edit/components/` contains the editor's Skill and MCP binding sections; they remain private to
-  the editor page.
+- `edit/components/` contains the read-only application system rules viewer and the editor's Skill
+  and MCP binding sections; they remain private to the editor page.
 - `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screen.
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page

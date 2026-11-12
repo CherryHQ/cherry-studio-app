@@ -42,7 +42,6 @@ import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
-import { AGENT_SYSTEM_PROMPT_PREFERENCES } from '@/shared/data/types/agentSystemPrompt';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
@@ -223,10 +222,6 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       this.preferenceService.readCached('app.language'),
       getLocales().map((locale) => locale.languageTag),
     );
-  }
-
-  systemPrompts() {
-    return this.preferenceService.getMultipleCached(AGENT_SYSTEM_PROMPT_PREFERENCES);
   }
 
   documentParserMode(): DocumentParserMode {
