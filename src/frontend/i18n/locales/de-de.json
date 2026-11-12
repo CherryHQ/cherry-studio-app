@@ -2581,7 +2581,6 @@
   "ssh.files.notice": "Diese Pfade befinden sich auf dem Server. Vorschaudateien werden nur temporär zwischengespeichert und nicht zur Dateibibliothek hinzugefügt. Zum Hochladen wählen Sie Dateien aus der Bibliothek aus.",
   "ssh.files.overwrite": "Entfernte Datei ersetzen",
   "ssh.files.overwriteDescription": "Die entfernte Datei unter {{path}} ersetzen? Ihr bisheriger Inhalt geht verloren.",
-  "ssh.files.parent": "Übergeordnetes Verzeichnis",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Entfernte Datei lesen",
   "ssh.files.refresh": "Aktualisieren",

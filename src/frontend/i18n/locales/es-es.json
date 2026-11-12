@@ -2600,7 +2600,6 @@
   "ssh.files.notice": "Estas rutas están en el servidor. Las vistas previas usan archivos temporales en caché y no se añaden a la biblioteca de archivos. Para subir archivos, selecciónalos de la biblioteca.",
   "ssh.files.overwrite": "Reemplazar archivo remoto",
   "ssh.files.overwriteDescription": "¿Reemplazar el archivo remoto en {{path}}? Se perderá su contenido actual.",
-  "ssh.files.parent": "Directorio superior",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Leer archivo remoto",
   "ssh.files.refresh": "Actualizar",

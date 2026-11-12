@@ -5,6 +5,12 @@ saved SSH connections, with routes and page implementations beneath `plugins/ssh
 `frontend/features/plugin/ssh`. Adding or opening a connection uses the same form with a fixed
 save footer. Its menu owns enable/disable, remote files, opening an Agent draft, and deletion;
 host verification stays next to the saved fingerprint. Unchanged forms cannot be saved.
+Remote files reuse the library's CherryUI `FileBrowserRow` and `Breadcrumbs` presentation, including
+folder/file artwork, filename truncation, secondary metadata and row dividers. Header back moves up
+one directory; breadcrumbs jump to ancestors. Refresh and upload use the standard header menu.
+The upload chooser uses the same rows while retaining destination and overwrite confirmation.
+Opening an Agent draft reuses the shared `AgentPickerSheet` with standard Agents only; target
+selection stays in the profile owner so closing the choice sheet cannot cancel the handoff.
 The chat composer's plus menu opens an anchored server picker and inserts the selected server as
 an inline mention. That picker only selects servers. Opening a draft or selecting a target does
 not send a message or run a command. There is no standalone command panel.

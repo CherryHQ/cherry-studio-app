@@ -2562,7 +2562,6 @@
   "ssh.files.notice": "這些路徑位於伺服器上。預覽檔案僅存放於暫存快取，不會加入檔案庫；上傳時從檔案庫選擇檔案。",
   "ssh.files.overwrite": "取代遠端檔案",
   "ssh.files.overwriteDescription": "取代 {{path}} 的遠端檔案？其目前內容將遺失。",
-  "ssh.files.parent": "上層目錄",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "讀取遠端檔案",
   "ssh.files.refresh": "重新整理",

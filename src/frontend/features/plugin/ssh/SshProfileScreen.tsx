@@ -9,12 +9,14 @@ import {
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
+import { randomUUID } from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { chatHref, createChatComposerHandoff } from '@/frontend/appShell/navigation/chat';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { useBackendModule } from '@/frontend/data';
 import { useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
@@ -159,6 +161,24 @@ function SshProfileEditor({ profile }: { profile?: SshProfile }) {
           });
       },
     });
+  }
+
+  async function openWithAi(agentId: string) {
+    if (!profile) return;
+    const draftId = randomUUID();
+    const selected = await action.run(async () => {
+      await ssh.selectTarget(`draft:${draftId}`, profile);
+      return true;
+    });
+    if (!selected) return;
+    router.push(
+      chatHref({
+        kind: 'draft',
+        agentId,
+        sshDraftId: draftId,
+        composerHandoff: createChatComposerHandoff({ draft: '', attachments: [] }),
+      }),
+    );
   }
 
   return (
@@ -410,7 +430,10 @@ function SshProfileEditor({ profile }: { profile?: SshProfile }) {
           />
         ) : null}
         {pickAgent && profile ? (
-          <SshAgentPicker profile={profile} onClose={() => setPickAgent(false)} />
+          <SshAgentPicker
+            onClose={() => setPickAgent(false)}
+            onSelect={(agentId) => void openWithAi(agentId)}
+          />
         ) : null}
       </PluginPage>
     </>

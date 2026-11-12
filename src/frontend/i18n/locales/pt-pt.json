@@ -2600,7 +2600,6 @@
   "ssh.files.notice": "Estes caminhos pertencem ao servidor. As pré-visualizações usam ficheiros temporários em cache e não são adicionadas à biblioteca de ficheiros. Para carregar ficheiros, selecione-os na biblioteca.",
   "ssh.files.overwrite": "Substituir ficheiro remoto",
   "ssh.files.overwriteDescription": "Substituir o ficheiro remoto em {{path}}? O conteúdo atual será perdido.",
-  "ssh.files.parent": "Diretório superior",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Ler ficheiro remoto",
   "ssh.files.refresh": "Atualizar",

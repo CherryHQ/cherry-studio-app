@@ -2562,7 +2562,6 @@
   "ssh.files.notice": "这些路径位于服务器上。预览文件仅存放在临时缓存中，不会加入文件库；上传时从文件库选择文件。",
   "ssh.files.overwrite": "替换远程文件",
   "ssh.files.overwriteDescription": "替换 {{path}} 处的远程文件？其当前内容将丢失。",
-  "ssh.files.parent": "上级目录",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "读取远程文件",
   "ssh.files.refresh": "刷新",

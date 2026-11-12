@@ -2600,7 +2600,6 @@
   "ssh.files.notice": "Ces chemins se trouvent sur le serveur. Les aperçus utilisent des fichiers temporaires en cache, sans les ajouter à la bibliothèque de fichiers. Pour envoyer des fichiers, sélectionnez-les dans la bibliothèque.",
   "ssh.files.overwrite": "Remplacer le fichier distant",
   "ssh.files.overwriteDescription": "Remplacer le fichier distant à l’emplacement {{path}} ? Son contenu actuel sera perdu.",
-  "ssh.files.parent": "Répertoire parent",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Lire le fichier distant",
   "ssh.files.refresh": "Actualiser",

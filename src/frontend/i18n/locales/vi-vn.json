@@ -2562,7 +2562,6 @@
   "ssh.files.notice": "Các đường dẫn này nằm trên máy chủ. Tệp xem trước chỉ được lưu trong bộ nhớ đệm tạm thời và không được thêm vào thư viện tệp. Khi tải lên, hãy chọn tệp từ thư viện.",
   "ssh.files.overwrite": "Thay thế tệp từ xa",
   "ssh.files.overwriteDescription": "Thay thế tệp từ xa tại {{path}}? Nội dung hiện tại sẽ bị mất.",
-  "ssh.files.parent": "Thư mục cha",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Đọc tệp từ xa",
   "ssh.files.refresh": "Làm mới",

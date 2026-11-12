@@ -2581,7 +2581,6 @@
   "ssh.files.notice": "Bu yollar sunucuya aittir. Önizlemeler geçici önbellek dosyalarını kullanır ve dosya kitaplığına eklenmez. Yüklenecek dosyaları kitaplıktan seçin.",
   "ssh.files.overwrite": "Uzak dosyayı değiştir",
   "ssh.files.overwriteDescription": "{{path}} yolundaki uzak dosya değiştirilsin mi? Mevcut içeriği kaybolacak.",
-  "ssh.files.parent": "Üst dizin",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Uzak dosyayı oku",
   "ssh.files.refresh": "Yenile",

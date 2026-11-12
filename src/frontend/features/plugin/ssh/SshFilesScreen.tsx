@@ -1,22 +1,30 @@
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import {
+  Breadcrumbs,
   Button,
   ContentState,
   Dialog,
-  Section,
+  FileBrowserRow,
+  FilePreview,
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { Fragment, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { openTemporaryFilePreview } from '@/frontend/appShell/filePreview';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
+import { LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
 import { useBackendModule } from '@/frontend/data';
 import { useFileEntryPages } from '@/frontend/hooks/file';
 import { sshErrorLabel, useSshAction, useSshProfiles } from '@/frontend/hooks/ssh';
-import type { FileEntry } from '@/shared/data/types/file';
+import { filenameExtension, type FileEntry } from '@/shared/data/types/file';
 import {
   SshError,
   type SshFileEntry,
@@ -33,13 +41,12 @@ export function SshFilesScreen() {
   const profiles = useSshProfiles();
   const { t } = useTranslation();
   const profile = profiles.data?.find((item) => item.id === profileId);
+  if (profile) return <RemoteFiles key={profile.revision} profile={profile} />;
   return (
     <>
       <RouteHeader title={t('ssh.files.title')} />
       <PluginPage>
-        {profile ? (
-          <RemoteFiles key={profile.revision} profile={profile} />
-        ) : profiles.isLoading ? (
+        {profiles.isLoading ? (
           <ContentState.Loading title={t('ssh.loading')} />
         ) : (
           <ContentState.Error
@@ -54,6 +61,8 @@ export function SshFilesScreen() {
 
 function RemoteFiles({ profile }: { profile: SshProfile }) {
   const { t, i18n } = useTranslation();
+  const contentTopInset = resolveHeaderContentInset(useHeaderHeight());
+  const { bottom, left, right } = useSafeAreaInsets();
   const { alert } = useAlert();
   const { toast } = useToast();
   const ssh = useBackendModule('ssh');
@@ -65,7 +74,13 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   const [error, setError] = useState<unknown>();
   const [progress, setProgress] = useState<SshTransferProgress | null>(null);
   const [pickUpload, setPickUpload] = useState(false);
-  const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language);
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const number = new Intl.NumberFormat(locale);
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
   useFocusEffect(
     useCallback(() => {
       const controller = new AbortController();
@@ -91,6 +106,12 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   );
 
   const busy = loading || action.busy;
+  const segments = path === '.' ? [] : path.split('/');
+  const entries = [...(directory?.entries ?? [])].sort(
+    (a, b) =>
+      Number(b.type === 'directory') - Number(a.type === 'directory') ||
+      a.name.localeCompare(b.name, locale),
+  );
   const childPath = (name: string) => (path === '.' ? name : `${path}/${name}`);
   async function read(entry: SshFileEntry) {
     const sourcePath = childPath(entry.name);
@@ -150,86 +171,176 @@ function RemoteFiles({ profile }: { profile: SshProfile }) {
   }
   return (
     <>
-      <View className="gap-2">
-        <Text className="text-base font-medium text-foreground">{profile.name}</Text>
-        <Text selectable className="font-mono text-sm text-muted-foreground">
-          {directory?.path || profile.remoteDirectory}
-        </Text>
-        <Text className="text-sm text-muted-foreground">{t('ssh.files.notice')}</Text>
-      </View>
-      <View className="flex-row flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          disabled={busy || path === '.'}
-          onPress={() =>
-            setLocation({ path: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.' })
-          }
-        >
-          {t('ssh.files.parent')}
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={busy}
-          onPress={() => setLocation((current) => ({ ...current }))}
-        >
-          {t('ssh.files.refresh')}
-        </Button>
-        <Button variant="secondary" disabled={busy || !!error} onPress={() => setPickUpload(true)}>
-          {t('ssh.files.upload')}
-        </Button>
-      </View>
-      {action.busy ? (
-        <View className="gap-2" accessibilityLiveRegion="polite">
-          {progress ? (
-            <Text className="text-sm text-foreground">
-              {t('ssh.files.progress', {
-                transferred: number.format(progress.transferred),
-                total: progress.total === null ? '—' : number.format(progress.total),
-              })}
-            </Text>
-          ) : (
-            <ContentState.Loading title={t('ssh.loading')} />
-          )}
-          <Button variant="secondary" onPress={action.cancel}>
-            {t('common.cancel')}
-          </Button>
-        </View>
-      ) : null}
-      {loading ? (
-        <ContentState.Loading title={t('ssh.loading')} />
-      ) : error ? (
-        <ContentState.Error
-          title={sshErrorLabel(error, t)}
-          primaryAction={{
-            children: t('common.retry'),
-            onPress: () => setLocation((current) => ({ ...current })),
-          }}
-        />
-      ) : directory?.entries.length ? (
-        <Section>
-          {directory.entries.map((entry) => (
-            <Section.Item
-              key={entry.name}
-              label={entry.name}
-              description={
-                entry.type === 'directory'
-                  ? t('ssh.files.directory')
-                  : entry.size === null
-                    ? undefined
-                    : t('ssh.files.bytes', { size: number.format(entry.size) })
+      <RouteHeader
+        title={segments.at(-1) ?? t('ssh.files.title')}
+        onBack={
+          path === '.'
+            ? undefined
+            : () => {
+                action.cancel();
+                setLocation({ path: segments.slice(0, -1).join('/') || '.' });
               }
-              disabled={action.busy}
-              onPress={() => void read(entry)}
-            />
-          ))}
-        </Section>
-      ) : (
-        <ContentState.Empty title={t('ssh.files.empty')} />
-      )}
-      {directory?.truncated ? (
-        <Text className="text-sm text-muted-foreground">{t('ssh.files.listTruncated')}</Text>
-      ) : null}
-      {directory?.diagnostics ? <SshDiagnosticsButton diagnostics={directory.diagnostics} /> : null}
+        }
+        rightActions={[
+          {
+            key: 'ssh-file-actions',
+            type: 'menu',
+            icon: EllipsisIcon,
+            nativeIcon: require('@/assets/header-toolbar/ellipsis.png'),
+            accessibilityLabel: t('common.more'),
+            items: [
+              {
+                id: 'refresh',
+                label: t('ssh.files.refresh'),
+                disabled: busy,
+                onPress: () => setLocation((current) => ({ ...current })),
+              },
+              {
+                id: 'upload',
+                label: t('ssh.files.upload'),
+                disabled: busy || !!error,
+                onPress: () => setPickUpload(true),
+              },
+            ],
+          },
+        ]}
+      />
+      <View
+        className="flex-1 bg-background"
+        style={{ paddingLeft: left, paddingRight: right, paddingTop: contentTopInset }}
+      >
+        <View className="w-full max-w-[800px] self-center gap-1 px-4 pt-2 pb-4">
+          <Breadcrumbs
+            disabled={busy}
+            items={[
+              {
+                key: '.',
+                label: profile.name,
+                onPress: path === '.' ? undefined : () => setLocation({ path: '.' }),
+              },
+              ...segments.map((name, index) => {
+                const ancestor = segments.slice(0, index + 1).join('/');
+                return {
+                  key: ancestor,
+                  label: name,
+                  onPress: ancestor === path ? undefined : () => setLocation({ path: ancestor }),
+                };
+              }),
+            ]}
+            testID="ssh-file-breadcrumbs"
+          />
+          <Text selectable className="font-mono text-sm text-muted-foreground">
+            {directory?.path || profile.remoteDirectory}
+          </Text>
+          <Text className="text-sm text-muted-foreground">{t('ssh.files.notice')}</Text>
+        </View>
+        {action.busy ? (
+          <View
+            className="w-full max-w-[800px] self-center gap-2 px-4 pb-4"
+            accessibilityLiveRegion="polite"
+          >
+            {progress ? (
+              <Text className="text-sm text-foreground">
+                {t('ssh.files.progress', {
+                  transferred: number.format(progress.transferred),
+                  total: progress.total === null ? '—' : number.format(progress.total),
+                })}
+              </Text>
+            ) : (
+              <ContentState.Loading title={t('ssh.loading')} />
+            )}
+            <View className="items-start">
+              <Button size="sm" variant="ghost" onPress={action.cancel}>
+                {t('common.cancel')}
+              </Button>
+            </View>
+          </View>
+        ) : null}
+        <ScrollView
+          key={path}
+          className="flex-1"
+          contentContainerClassName="w-full max-w-[800px] grow self-center px-4"
+          contentContainerStyle={{ paddingBottom: bottom + 16 }}
+          showsVerticalScrollIndicator={false}
+          testID="ssh-file-list"
+        >
+          {loading || error || entries.length === 0 ? (
+            <View className="min-h-48 flex-1 justify-center pb-24">
+              {loading ? (
+                <ContentState.Loading title={t('ssh.loading')} />
+              ) : error ? (
+                <ContentState.Error
+                  title={sshErrorLabel(error, t)}
+                  primaryAction={{
+                    children: t('common.retry'),
+                    onPress: () => setLocation((current) => ({ ...current })),
+                  }}
+                />
+              ) : (
+                <ContentState.Empty title={t('ssh.files.empty')} />
+              )}
+            </View>
+          ) : (
+            entries.map((entry, index) => {
+              const description = [
+                entry.type !== 'directory' && entry.size !== null
+                  ? t('ssh.files.bytes', { size: number.format(entry.size) })
+                  : undefined,
+                entry.modifiedAt === null
+                  ? undefined
+                  : t('library.modifiedAt', { date: dateFormatter.format(entry.modifiedAt) }),
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <Fragment key={entry.name}>
+                  {index > 0 ? <View className="h-px bg-border" /> : null}
+                  <FileBrowserRow
+                    description={
+                      description ||
+                      (entry.type === 'directory' ? t('ssh.files.directory') : undefined)
+                    }
+                    disabled={action.busy}
+                    name={entry.name}
+                    onPress={() => void read(entry)}
+                    preview={
+                      entry.type === 'directory' ? (
+                        <FolderIcon className="size-7 text-muted-foreground" />
+                      ) : (
+                        <FilePreview
+                          labels={{
+                            openWith: t('filePreview.openWith'),
+                            unavailable: t('filePreview.unavailable'),
+                          }}
+                          metadata={{
+                            displayName: entry.name,
+                            extensionLabel:
+                              filenameExtension(entry.name)?.slice(0, 5).toUpperCase() ?? '',
+                            kind: 'document',
+                          }}
+                          onPress={() => void read(entry)}
+                          size={40}
+                          variant="icon"
+                        />
+                      )
+                    }
+                  />
+                </Fragment>
+              );
+            })
+          )}
+          {directory?.truncated ? (
+            <Text className="pt-4 text-sm text-muted-foreground">
+              {t('ssh.files.listTruncated')}
+            </Text>
+          ) : null}
+          {directory?.diagnostics ? (
+            <View className="pt-4">
+              <SshDiagnosticsButton diagnostics={directory.diagnostics} />
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
       {pickUpload ? (
         <SshUploadPicker
           onClose={() => setPickUpload(false)}
@@ -261,8 +372,13 @@ function SshUploadPicker({
   onClose: () => void;
   onSelect: (entry: FileEntry, name: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const files = useFileEntryPages({ enabled: true });
+  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
   return (
     <Dialog
       open
@@ -271,16 +387,26 @@ function SshUploadPicker({
         if (!open) onClose();
       }}
     >
-      <ScrollView className="max-h-96" contentContainerClassName="gap-3">
-        {files.entries.map(({ entry, libraryFile, uri }) => (
-          <Button
-            key={entry.id}
-            variant="secondary"
-            disabled={!uri}
-            onPress={() => onSelect(entry, libraryFile?.name ?? entry.filename)}
-          >
-            {libraryFile?.name ?? entry.filename}
-          </Button>
+      <ScrollView className="max-h-96">
+        {files.entries.map(({ entry, libraryFile, uri, previewUri }, index) => (
+          <Fragment key={entry.id}>
+            {index > 0 ? <View className="h-px bg-border" /> : null}
+            <FileBrowserRow
+              description={t('library.modifiedAt', { date: dateFormatter.format(entry.updatedAt) })}
+              disabled={!uri}
+              name={libraryFile?.name ?? entry.filename}
+              onPress={() => onSelect(entry, libraryFile?.name ?? entry.filename)}
+              preview={
+                <LoadedFileEntryPreview
+                  entry={entry}
+                  previewUri={previewUri}
+                  size={40}
+                  uri={uri}
+                  variant="icon"
+                />
+              }
+            />
+          </Fragment>
         ))}
         {files.error ? (
           <ContentState.Error

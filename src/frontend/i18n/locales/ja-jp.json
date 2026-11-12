@@ -2562,7 +2562,6 @@
   "ssh.files.notice": "これらはサーバー上のパスです。プレビュー用ファイルは一時キャッシュにのみ保存され、ファイルライブラリには追加されません。アップロードするファイルはライブラリから選択します。",
   "ssh.files.overwrite": "リモートファイルを置き換える",
   "ssh.files.overwriteDescription": "{{path}} のリモートファイルを置き換えますか？現在の内容は失われます。",
-  "ssh.files.parent": "親ディレクトリ",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "リモートファイルを読む",
   "ssh.files.refresh": "更新",

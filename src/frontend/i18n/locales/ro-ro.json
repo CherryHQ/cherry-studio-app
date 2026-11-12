@@ -2600,7 +2600,6 @@
   "ssh.files.notice": "Aceste căi se află pe server. Previzualizările folosesc fișiere temporare în cache și nu sunt adăugate în biblioteca de fișiere. Pentru încărcare, selectați fișiere din bibliotecă.",
   "ssh.files.overwrite": "Înlocuiește fișierul de la distanță",
   "ssh.files.overwriteDescription": "Înlocuiești fișierul de la distanță de la {{path}}? Conținutul său actual se va pierde.",
-  "ssh.files.parent": "Director părinte",
   "ssh.files.progress": "{{transferred}} / {{total}} B",
   "ssh.files.read": "Citește fișierul de la distanță",
   "ssh.files.refresh": "Reîmprospătează",
