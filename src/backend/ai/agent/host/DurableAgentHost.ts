@@ -955,6 +955,7 @@ export class DurableAgentHost implements AgentProtocol {
         agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
         appLanguage: this.ports.appLanguage(),
+        systemPrompts: this.ports.systemPrompts?.(),
         tools: plan.tools,
         pluginGuides: plan.pluginGuides,
         skills: plan.skills,

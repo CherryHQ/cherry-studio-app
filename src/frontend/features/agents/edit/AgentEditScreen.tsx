@@ -464,7 +464,10 @@ function AgentEditForm({
             ) : null}
           </View>
         </View>
-        <Section title={t('agent.form.instructions')}>
+        <Section
+          footer={t('agent.form.instructionsDescription')}
+          title={t('agent.form.instructions')}
+        >
           <TextInput
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect
@@ -479,6 +482,10 @@ function AgentEditForm({
             selectionColor={mutedForegroundColor}
             textAlignVertical="top"
             value={form.instructions}
+          />
+          <Section.Item
+            label={t('settings.systemPrompt.title')}
+            onPress={() => router.push('/settings/system-prompt')}
           />
         </Section>
         <View className="gap-3">

@@ -1,5 +1,6 @@
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
+import type { AgentSystemPromptOverrides } from '@/shared/data/types/agentSystemPrompt';
 
 import type { TraceRecorder } from '../../observability';
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
@@ -59,6 +60,7 @@ export type MobileAgentHostPorts = {
   ): Promise<void>;
   agents: AgentDefinitionSource;
   appLanguage: () => LanguageVarious;
+  systemPrompts?(): AgentSystemPromptOverrides;
   documentParserMode: () => DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;

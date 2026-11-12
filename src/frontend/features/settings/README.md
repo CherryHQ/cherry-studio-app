@@ -27,3 +27,9 @@ This page tree owns the settings home and every page reached beneath `/settings`
   `/settings/appearance` route.
 - `model/` and `provider/` remain under `settings/` because they implement `/settings/*` page flows.
   Their own nested routes continue as child directories.
+- `systemPrompt/` owns the shared standard/minimal base prompts and response-language template.
+  Each editor shows the same default text used by turn assembly, supports full-text copy, explicit
+  save and restore, and preserves an unsaved draft after a failed write. Empty text omits that
+  section; null follows the bundled default. Committed changes apply to subsequent local Agent
+  turns. Agent instructions and capability, Skill and plugin guidance remain separate additions;
+  this page does not present a captured provider request.

@@ -21,10 +21,14 @@ and Turkish.
   show a translated error.
 - The Agent reads the same resolver with the current preference and full device language tags.
   Backend code must not import frontend i18n or implement another language fallback policy.
-- In both standard and minimal modes, reply language follows the user's explicit language request,
-  then the Agent Instructions' language preference, then the user's message and conversation context.
+- By default, in both standard and minimal modes, reply language follows the user's explicit
+  language request, then the Agent Instructions' language preference, then the user's message and
+  conversation context.
   The resolved app language is only a fallback when those do not establish a language. Replies may
   use languages outside the supported UI locales.
+  System-prompt settings can customize or omit the shared response-language template;
+  `{{language}}` inserts the same resolved app language. The template and user-authored prompts are
+  model instructions, not UI translations, and are never retranslated when the app language changes.
 - `app.config.ts` derives the native supported-language declaration from the same list. Native
   configuration changes need a new development build; changing JavaScript does not rebuild it.
   It registers `tsx/cjs` to import the shared TypeScript module, following

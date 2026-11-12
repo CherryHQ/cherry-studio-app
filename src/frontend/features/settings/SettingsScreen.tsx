@@ -2,6 +2,7 @@ import ActivityIcon from '@cherrystudio/app-icons/icons/activity';
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import MicIcon from '@cherrystudio/app-icons/icons/mic';
@@ -56,6 +57,12 @@ export default function SettingsScreen() {
               label={t('settings.items.defaultModel')}
               leading={<PackageIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/model')}
+            />
+            <Section.Item
+              label={t('settings.systemPrompt.title')}
+              leading={<FileTextIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/system-prompt')}
+              testID="settings-system-prompt"
             />
             <Section.Item
               label={t('aiUsage.title')}

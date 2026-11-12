@@ -21,6 +21,8 @@ surfaces.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   standard/minimal mode, and its two-mode tool-approval preference.
   Inference parameters are not part of the Agent editor surface.
+  The instructions section links to shared system-prompt settings and explains that the Agent's
+  own instructions are appended separately from the app defaults.
 - Skill and custom MCP bindings remain isolated per Agent. The editor lists only bound, enabled
   entries; separate Add Skill and Add MCP sheets offer available entries. Removing a Skill binding
   does not uninstall its package. Unavailable enabled bindings retain a status and removal action.

@@ -59,6 +59,10 @@ export interface PreferenceSchema {
   'chat.multi_model.cards_enabled': boolean;
   'chat.process.auto_collapse': boolean;
   'agent.default_model_id': string | null;
+  /** Null follows the bundled default; an empty string omits the corresponding prompt section. */
+  'agent.system_prompt.standard': string | null;
+  'agent.system_prompt.minimal': string | null;
+  'agent.system_prompt.language': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
   'chat.web_search.default_fetch_urls_provider': WebSearchProviderId;
@@ -120,6 +124,9 @@ export const PreferenceDefaults = {
   'chat.multi_model.cards_enabled': true,
   'chat.process.auto_collapse': true,
   'agent.default_model_id': null,
+  'agent.system_prompt.standard': null,
+  'agent.system_prompt.minimal': null,
+  'agent.system_prompt.language': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',
   'chat.web_search.default_fetch_urls_provider': 'jina',
