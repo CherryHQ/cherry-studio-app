@@ -34,10 +34,10 @@ refresh every 15 seconds while foregrounded, and refresh when reopened or reconn
 groups, unfocused task pages and a closed sidebar stop their respective polling. Local catalogs
 retain their event-driven behavior.
 
-The published protocol dependency remains 0.7.0. `remoteTaskCatalogProtocol.ts` supplements only the
-consumed Task-list fields and Session task filter from PR #24299. Remove this backend-only schema
-supplement when the published package provides them. No task detail, run-history or mutation methods
-are introduced.
+Mobile consumes the Task-list contracts and Session task filter directly from the published
+`@cherrystudio/remote-protocol@0.8.0` package through `agentMethods`; no local schema supplement is
+needed. The frontend-facing task capability remains limited to task lists and conversation reads;
+task details, run history and mutations are not exposed.
 
 The desktop owns execution, persistence and visibility. Mobile never substitutes a generated result
 or bypasses desktop authorization. Mock-desktop device previews establish mobile presentation;

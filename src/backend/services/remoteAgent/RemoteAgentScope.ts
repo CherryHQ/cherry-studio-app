@@ -476,7 +476,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       throw error;
     }
   }
-  private request = async <M extends AgentMethod | 'agent.tasks.list'>(
+  private request = async <M extends AgentMethod>(
     method: M,
     params: DesktopParams<M>,
     caller?: AbortSignal,
@@ -501,7 +501,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       linked?.dispose();
     }
   };
-  private async call<M extends AgentMethod | 'agent.tasks.list'>(
+  private async call<M extends AgentMethod>(
     session: DesktopSession,
     method: M,
     params: DesktopParams<M>,

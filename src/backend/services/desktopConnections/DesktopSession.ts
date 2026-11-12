@@ -19,7 +19,6 @@ import { createJSONRPCErrorResponse, JSONRPCClient, JSONRPCErrorException } from
 import type * as z from 'zod';
 
 import { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
-import { taskCatalogMethods } from './remoteTaskCatalogProtocol';
 import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
@@ -43,7 +42,6 @@ export const desktopMethods = {
   ...pairingMethods(remoteAuthorizationSchema),
   ...configurationMethods,
   ...agentMethods,
-  ...taskCatalogMethods,
 };
 export type DesktopMethod = keyof typeof desktopMethods;
 export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMethods)[M]['params']>;
