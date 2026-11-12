@@ -10,6 +10,7 @@ import type {
   UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { estimateMessageTokens } from '@earendil-works/pi-ai/utils/estimate';
 
 import type {
   RuntimeDocumentAttachmentPart,
@@ -48,10 +49,16 @@ export type PiHistoryTurn = {
   messages: PiMessage[];
 };
 
+type PiHistoryModel = Pick<PiModel<PiApi>, 'api' | 'id' | 'provider' | 'input'>;
+export type PiConversationInput = Pick<
+  RuntimeExecutionRequest,
+  'instructions' | 'history' | 'input' | 'resume'
+>;
+
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
-  request: RuntimeExecutionRequest,
-  model: PiModel<PiApi>,
+  request: PiConversationInput,
+  model: PiHistoryModel,
 ): PiConversation {
   const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
@@ -218,7 +225,7 @@ function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
   return { type: 'image', data: part.uri.slice(prefix.length), mimeType: part.mediaType };
 }
 
-function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
+function collectProviderNames(request: PiConversationInput): Map<string, string> {
   const result = new Map<string, string>();
   for (const part of request.resume ?? []) {
     if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
@@ -243,7 +250,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
-  model: PiModel<PiApi>,
+  model: PiHistoryModel,
   contextTokens?: number,
 ): void {
   let content: AssistantMessage['content'] = [];
@@ -308,9 +315,15 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
-  // The measured size of the request that ended this answer anchors Pi's
-  // estimate; everything replayed after it is estimated by content.
+  // Persisted measurements cover input only. Include the rebuilt answer's estimated output
+  // so Pi's full-context estimator does not treat an input count as input plus output.
   if (lastAssistant && contextTokens !== undefined) {
-    lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
+    const output = estimateMessageTokens(lastAssistant);
+    lastAssistant.usage = {
+      ...EMPTY_PI_USAGE,
+      input: contextTokens,
+      output,
+      totalTokens: contextTokens + output,
+    };
   }
 }

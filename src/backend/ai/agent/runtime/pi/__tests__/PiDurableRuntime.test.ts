@@ -1,8 +1,10 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import {
   createRegistry,
+  CompactionEntry,
+  ResetEntry,
   defineDocFamily,
   defineTask,
   Harness,
@@ -70,6 +72,65 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('counts measured input, cached input and output, then follows compaction and reset context', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const conversation = await runtime.ensureConversation({ ...seed, resourceFileEntryIds: [] });
+      const response = {
+        role: 'assistant',
+        api: 'openai-completions',
+        provider: 'provider',
+        model: 'model',
+        content: [{ type: 'text', text: 'Answer.' }],
+        stopReason: 'stop',
+        timestamp: 2,
+        usage: {
+          input: 100,
+          cacheRead: 200,
+          cacheWrite: 50,
+          output: 25,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      } satisfies AssistantMessage;
+      const answer = await conversation.commit(
+        (tx) => tx.appendEntry(conversation.id, { kind: 'pi.assistant', model: [response] }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, answer.id)).tokens).toBe(375);
+      const tail = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: UserEntry.kind,
+            model: [{ role: 'user', content: 'Next...', timestamp: 3 }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, tail.id)).tokens).toBe(377);
+      const compacted = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: CompactionEntry.kind,
+            head: answer.id,
+            data: { reason: 'manual' },
+            model: [{ role: 'user', content: 'Summary', timestamp: 4 }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      // The summary precedes retained messages, invalidating their older usage measurement.
+      expect((await runtime.contextUsageEstimate(seed.sessionId, compacted.id)).tokens).toBe(6);
+      // Reads remain tied to their captured watch frame even after a later compaction.
+      expect((await runtime.contextUsageEstimate(seed.sessionId, answer.id)).tokens).toBe(375);
+      const reset = await conversation.commit(
+        (tx) => tx.appendEntry(conversation.id, { kind: ResetEntry.kind, head: 'self' }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, reset.id)).tokens).toBe(0);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('forks replace current source grants with the supplied history prefix grants', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
@@ -422,6 +483,20 @@ describe('PiDurableRuntime identity and handoff', () => {
       const record = await input.wait(BACKGROUND_CONTEXT);
       const history = await runtime.history(seed.sessionId, 256);
       expect(history.submissions).toContainEqual({ record, metadata });
+      const compaction = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: CompactionEntry.kind,
+            head: 'self',
+            data: { reason: 'manual' },
+            model: [{ role: 'user', content: 'Summary', timestamp: Date.now() }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect(await runtime.latestInput(seed.sessionId, compaction.id)).toEqual({
+        record,
+        metadata,
+      });
       await runtime.history(seed.sessionId, 1);
       expect(
         scan.mock.calls.filter(([query]) => query.conversationId === conversation.id),

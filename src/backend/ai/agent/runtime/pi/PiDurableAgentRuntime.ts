@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { estimateContextTokens, estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   createRegistry,
@@ -89,6 +90,26 @@ const CURRENT_DATE_SECTION = section('current-date', () => {
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
+  estimateStoredContextUsage(
+    input: Parameters<DurableAgentRuntime['estimateStoredContextUsage']>[0],
+  ) {
+    const entries = createWorkingPiEntries(
+      { ...input, input: [] },
+      {
+        api: 'cherry',
+        id: input.model.modelId,
+        provider: input.model.providerId,
+        input: ['text', 'image'],
+      },
+    );
+    const estimate = estimateContextTokens(entries.flatMap((entry) => entry.model ?? []));
+    // A measured prefix already includes its system prompt. Content-only recovery needs one.
+    return (
+      estimate.tokens +
+      (estimate.lastUsageIndex === null ? estimateTextTokens(input.instructions) : 0)
+    );
+  }
+
   async drainUsage() {
     await this.delivery;
     await this.deliverUsage();

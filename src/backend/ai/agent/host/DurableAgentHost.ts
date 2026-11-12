@@ -68,6 +68,7 @@ import {
   type RuntimeLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
+  type RuntimeContextUsage,
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
@@ -97,6 +98,7 @@ import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareDurableTurn,
+  loadTurnContext,
   prepareInitialTurn,
   prepareTurn,
   type TurnPlan,
@@ -127,6 +129,7 @@ type LiveSession = {
    */
   withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
+  contextUsage: RuntimeContextUsage | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
@@ -173,6 +176,8 @@ export class DurableAgentHost implements AgentProtocol {
   >();
   private readonly preparing = new Map<string, Promise<PreparedInput>>();
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  /** Read-side estimates for observed branches without a matching working copy. */
+  private readonly storedContextUsages = new Map<string, RuntimeContextUsage>();
   private readonly statuses = new Map<string, AgentSessionStatus>();
   private readonly statusListeners = new Map<string, Set<() => void>>();
   private readonly allStatusListeners = new Set<() => void>();
@@ -241,6 +246,13 @@ export class DurableAgentHost implements AgentProtocol {
       await this.suspension;
     } finally {
       await this.resumeSuspended();
+      for (const sessionId of [...this.listeners.keys()]) {
+        const session = await this.store.getSession(sessionId);
+        if (!session) continue;
+        await this.attachedLanes(sessionId);
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(sessionId);
+      }
     }
   }
   pendingTurns(sessionId: string) {
@@ -444,6 +456,7 @@ export class DurableAgentHost implements AgentProtocol {
     } finally {
       for (const state of this.live.values()) state.background?.retire();
       this.live.clear();
+      this.storedContextUsages.clear();
       this.prepared.clear();
       this.preparing.clear();
       this.listeners.clear();
@@ -676,6 +689,78 @@ export class DurableAgentHost implements AgentProtocol {
 
   private liveStates(sessionId: string) {
     return [...this.live.values()].filter((state) => state.lane.sessionId === sessionId);
+  }
+
+  private publishContextUsages(sessionId: string) {
+    this.publish(sessionId, {
+      type: 'context.usage.updated',
+      usages: this.contextUsages(sessionId),
+    });
+  }
+
+  private contextUsages(sessionId: string) {
+    const usages = this.liveStates(sessionId).flatMap((state) => state.contextUsage ?? []);
+    const stored = this.storedContextUsages.get(sessionId);
+    if (stored && !usages.some((usage) => usage.messageId === stored.messageId))
+      usages.push(stored);
+    return usages;
+  }
+
+  private async refreshStoredContextUsage(session: AgentSessionView) {
+    this.storedContextUsages.delete(session.id);
+    if (
+      !this.listeners.has(session.id) ||
+      !session.activeNodeId ||
+      this.contextUsages(session.id).some((usage) => usage.messageId === session.activeNodeId)
+    )
+      return;
+    try {
+      const revision = await this.store.getRuntimeRevision(session.id);
+      const answer = await this.store.getMessage(session.id, session.activeNodeId);
+      const inference = answer?.inferenceSnapshot;
+      if (
+        !answer ||
+        answer.role !== 'assistant' ||
+        answer.status === 'pending' ||
+        answer.status === 'streaming' ||
+        inference?.status !== 'supported' ||
+        inference.snapshot.imageGeneration
+      )
+        return;
+      const agent = await this.ports.agents.getAgent(session.agentId);
+      if (!agent) return;
+      const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
+        this.preparation,
+        session.id,
+        this.controller.signal,
+        undefined,
+        answer.id,
+      );
+      const model = inference.snapshot.model;
+      const tokens = this.conversations.estimateStoredContextUsage({
+        model,
+        history: toRuntimeHistory(storedTurnContext.history, new Map(), model.uniqueModelId),
+        contextCheckpoint: runtimeContextCheckpoint,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: agent.instructions,
+          mode: agent.mode,
+          appLanguage: this.ports.appLanguage(),
+          tools: [],
+        }),
+      });
+      const current = await this.store.getSession(session.id);
+      if (
+        !this.controller.signal.aborted &&
+        this.listeners.has(session.id) &&
+        current?.activeNodeId === answer.id &&
+        revision === (await this.store.getRuntimeRevision(session.id))
+      )
+        this.storedContextUsages.set(session.id, { messageId: answer.id, tokens, estimated: true });
+    } catch (error) {
+      logger.warn('Could not estimate the saved Agent context', error as Error, {
+        sessionId: session.id,
+      });
+    }
   }
 
   /** Copies of a Session with an active or queued input. */
@@ -1203,8 +1288,11 @@ export class DurableAgentHost implements AgentProtocol {
           if (live.assistant?.id === message.id) live.assistant = result.message;
         this.publish(session.id, { type: 'message.edited', message: result.message });
         const updatedSession = await this.store.getSession(session.id);
-        if (updatedSession)
+        if (updatedSession) {
           this.publish(session.id, { type: 'session.updated', session: updatedSession });
+          await this.refreshStoredContextUsage(updatedSession);
+          this.publishContextUsages(session.id);
+        }
         this.ports.durableStorage?.notifyTranscript(session.id);
         return result.message;
       } catch (error) {
@@ -1227,6 +1315,8 @@ export class DurableAgentHost implements AgentProtocol {
     if (!session) fail('MESSAGE_NOT_FOUND', 'The message no longer exists.');
     this.publish(session.id, { type: 'session.updated', session });
     this.ports.durableStorage?.notifyTranscript(session.id);
+    await this.refreshStoredContextUsage(session);
+    this.publishContextUsages(session.id);
     return session;
   }
 
@@ -1259,7 +1349,11 @@ export class DurableAgentHost implements AgentProtocol {
       );
       // Deleting the selected branch moves the Session's active node.
       const session = await this.store.getSession(parsed.sessionId);
-      if (session) this.publish(parsed.sessionId, { type: 'session.updated', session });
+      if (session) {
+        this.publish(parsed.sessionId, { type: 'session.updated', session });
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(session.id);
+      }
       this.ports.durableStorage?.notifyTranscript(parsed.sessionId);
     });
   }
@@ -1312,6 +1406,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** Retires every working copy of a Session; Cherry history stays the source of truth. */
   private async detachConversation(sessionId: string) {
+    this.storedContextUsages.delete(sessionId);
+    this.publishContextUsages(sessionId);
     for (const lane of await this.sessionLanes(sessionId)) await this.detachLane(lane);
   }
 
@@ -1320,6 +1416,8 @@ export class DurableAgentHost implements AgentProtocol {
     await state?.unsubscribe();
     state?.background?.retire();
     this.live.delete(laneKey(lane));
+    this.storedContextUsages.delete(lane.sessionId);
+    this.publishContextUsages(lane.sessionId);
     if (await this.conversations.hasConversation(lane))
       await this.conversations.discardConversation(lane);
   }
@@ -1477,6 +1575,7 @@ export class DurableAgentHost implements AgentProtocol {
         : null,
       pendingQuestion: states.find((candidate) => candidate.question)?.question ?? null,
       contextStatus: state?.contextStatus ?? null,
+      contextUsages: this.contextUsages(sessionId),
       pendingApprovals: states.flatMap((candidate) =>
         [...candidate.approvals.values()].map((entry) => entry.view),
       ),
@@ -1486,9 +1585,14 @@ export class DurableAgentHost implements AgentProtocol {
     listeners.add(listener);
     const unsubscribe = () => {
       listeners.delete(listener);
-      if (!listeners.size) this.listeners.delete(sessionId);
+      if (!listeners.size) {
+        this.listeners.delete(sessionId);
+        this.storedContextUsages.delete(sessionId);
+      }
     };
     try {
+      await this.refreshStoredContextUsage(session);
+      snapshot.contextUsages = this.contextUsages(sessionId);
       // Settled history omits an entire turn while any answer runs. Restore its completed
       // siblings too. Subscribe before the read so terminal events during it cannot be lost.
       const turnIds = new Set(running.map((candidate) => candidate.active!.identity.turnId));
@@ -1984,6 +2088,7 @@ export class DurableAgentHost implements AgentProtocol {
           queue: [],
           withdrawnParents: new Map(),
           contextStatus: null,
+          contextUsage: null,
           unsubscribe: async () => {},
           background: null,
           backgroundRequestId: null,
@@ -2008,8 +2113,10 @@ export class DurableAgentHost implements AgentProtocol {
         }
         state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
         state.contextStatus = observed.snapshot.contextStatus ?? null;
+        state.contextUsage = observed.snapshot.contextUsage ?? null;
         state.unsubscribe = observed.unsubscribe;
         this.live.set(key, state);
+        if (state.contextUsage) this.publishContextUsages(lane.sessionId);
         this.updateQueue(state, observed.snapshot.queue);
         if (state.active) this.present(state.active);
         installed = true;
@@ -2032,11 +2139,16 @@ export class DurableAgentHost implements AgentProtocol {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
       this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
+      state.contextUsage = event.snapshot.contextUsage ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
+      this.publishContextUsages(sessionId);
       if (state.active) this.present(state.active);
     } else if (event.type === 'context.updated') {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
+    } else if (event.type === 'context.usage.updated') {
+      state.contextUsage = event.usage;
+      this.publishContextUsages(sessionId);
     } else if (event.type === 'queue.updated') {
       this.updateQueue(state, event.queue);
     } else {

@@ -1,4 +1,5 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
 import type { RuntimeExecutionRequest } from '../../types';
 import { toPiConversation } from '../modelMessages';
@@ -26,6 +27,27 @@ function request(overrides: Partial<RuntimeExecutionRequest>): RuntimeExecutionR
     ...overrides,
   };
 }
+
+test('rebuilt context includes the answer after a persisted input-only measurement', () => {
+  const conversation = toPiConversation(
+    request({
+      history: [
+        {
+          turnId: 'earlier',
+          messages: [
+            {
+              role: 'assistant',
+              parts: [{ type: 'text', text: 'Answer.' }],
+              contextTokens: 100,
+            },
+          ],
+        },
+      ],
+    }),
+    model,
+  );
+  expect(estimateContextTokens(conversation.history).tokens).toBe(102);
+});
 
 test('an attached image names its managed file, in the prompt and in rebuilt history', () => {
   const label = {

@@ -289,6 +289,29 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
+The composer reads current context usage separately from persisted request and billing statistics.
+At each committed transcript boundary, the observer reads Pi's public `Conversation.context()` and
+passes its effective messages to pi-ai's `estimateContextTokens`. This includes measured input,
+cache and output plus estimates for the following messages; after compaction, reset or reply edits,
+the same read uses the newly retained context. Background compaction updates usage even when no
+answer is running. Reattachment restores the current count. Rebuilt normalized history adds an
+estimate of the retained answer to its persisted input-only measurement.
+
+Each usage value names the answer of its newest placed input. The Host exposes current copies in
+`contextUsages` and replaces that list with `context.usage.updated`; the composer selects only the
+current branch's newest answer and still requires the selected model to match. No value is inferred
+from cumulative billed usage. Streaming-only progress does not reread the committed context on
+every text delta. Content-only and trailing-message estimates carry `estimated: true`, displayed
+with `≈` instead of implying a fresh provider measurement.
+
+If the selected branch has no working copy, observation estimates from the same validated Cherry
+checkpoint and normalized tail used by rebuild. This is an in-memory read: it opens no Pi copy,
+resolves no credentials or tools, and makes no model call. A measured prefix already includes its
+system prompt; content-only recovery adds the current base Agent instructions. Future tool
+configuration and reloaded attachment content can change the next request, so this fallback is
+explicitly approximate. A new native context supersedes it. Clearing the working file refreshes
+existing observers too; switching or editing a branch refreshes its stored estimate.
+
 ## Branches, Fork, Retry And Delete
 
 A Cherry Session's message tree runs on up to eight Pi conversations (working copies), one per
