@@ -146,6 +146,11 @@ describe('Pi durable execution integration', () => {
                     ...emptyAssistantMessage(wire),
                     stopReason: 'toolUse',
                     content: [
+                      {
+                        type: 'thinking',
+                        thinking: 'live thought',
+                        thinkingSignature: 'opaque-live-signature',
+                      },
                       { type: 'toolCall', id: 'lookup-call', name: 'lookup', arguments: {} },
                     ],
                   }
@@ -234,6 +239,28 @@ describe('Pi durable execution integration', () => {
       expect(requests[1]?.messages).toContainEqual(
         expect.objectContaining({ role: 'toolResult', toolCallId: 'lookup-call' }),
       );
+      expect(
+        requests[1]!.messages.filter(
+          (message) => message.role === 'assistant' || message.role === 'toolResult',
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          role: 'assistant',
+          content: [
+            {
+              type: 'thinking',
+              thinking: 'live thought',
+              thinkingSignature: 'opaque-live-signature',
+            },
+            { type: 'toolCall', id: 'lookup-call', name: 'lookup', arguments: {} },
+          ],
+        }),
+        expect.objectContaining({
+          role: 'toolResult',
+          toolCallId: 'lookup-call',
+          content: [{ type: 'text', text: JSON.stringify({ value: 'Tool value', artifacts: [] }) }],
+        }),
+      ]);
       expect(JSON.stringify(requests[1]?.messages)).toContain('Tool value');
       expect(getCurrentSystemPrompt(requests[1]!.messages)).toContain(instructionBody);
       // Providers send a tool result's content; its details keep the full display value.

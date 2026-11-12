@@ -52,6 +52,44 @@ export function readPiWebResult(message: AssistantMessage): PiWebResult | undefi
   return result.success ? result.data : undefined;
 }
 
+/** Remove prefix-bound raw thinking only when rebuilding historical context. */
+export function projectPiWebReplayForImport(message: AssistantMessage): AssistantMessage {
+  const web = readPiWebResult(message);
+  if (!web || !Array.isArray(message.content)) return message;
+  const removed = message.content.flatMap((block, index) =>
+    block.type === 'thinking' ? [index] : [],
+  );
+  const anthropicContent = web.anthropicContent?.filter(
+    (block) => block.type !== 'thinking' && block.type !== 'redacted_thinking',
+  );
+  if (!removed.length && anthropicContent?.length === web.anthropicContent?.length) return message;
+  const moved = (index: number) => index - removed.filter((before) => before < index).length;
+  return {
+    ...message,
+    diagnostics: message.diagnostics?.map((diagnostic) => {
+      if (diagnostic.type !== PI_WEB_DIAGNOSTIC) return diagnostic;
+      return {
+        ...diagnostic,
+        details: {
+          ...diagnostic.details,
+          ...(anthropicContent === undefined ? {} : { anthropicContent }),
+          texts: web.texts.flatMap((text, index) =>
+            removed.includes(text.contentIndex)
+              ? []
+              : [
+                  {
+                    ...(diagnostic.details!.texts as JsonObject[])[index],
+                    contentIndex: moved(text.contentIndex),
+                  },
+                ],
+          ),
+          ...(web.replayIndex === undefined ? {} : { replayIndex: moved(web.replayIndex) }),
+        },
+      };
+    }),
+  };
+}
+
 /** Return provider state Pi's history does not model to the place it held in the response. */
 export function applyPiWebReplay(
   payload: unknown,
