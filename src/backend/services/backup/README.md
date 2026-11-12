@@ -19,7 +19,10 @@ Restore compatibility requires an exact prefix of bundled SQLite migrations; dif
 lineage and future formats are rejected.
 Exports rebuild their private database copy from the running app's bundled migrations; imports use
 the validated backup prefix. Both copy known tables and columns by name. Missing nullable/defaulted
-columns use the standard schema's defaults. Unknown
+columns use the standard schema's defaults, except message-tree columns required by the target
+version (`active_node_id`, `parent_id`, `siblings_group_id`). These must be present: defaults cannot
+replace the historical data backfill. Genuine pre-tree backups still normalize at their own version
+and run that migration during restore. Unknown
 tables, columns, indexes, views and triggers are omitted; indexes, triggers and search state are
 rebuilt from bundled definitions. Source SQL is never executed and its text is not compared.
 Missing required tables/columns, invalid records and broken references still fail rather than
@@ -38,6 +41,8 @@ The captured database's migration journal does not need to match the current bun
 partial, extra or modified journal entries are regenerated in the normalized copy, matching the
 export manifest. Required tables and columns, record constraints, references and managed files
 remain checked; the live database's journal is never repaired or rewritten by export.
+An incomplete message-tree schema fails export instead of being marked fully migrated with
+invisible conversation history.
 
 While a backup or restore runs, an app-wide progress dialog blocks every route; the user can only
 wait or cancel. Capture refuses active chat/job execution, and a freeze keeps new Agent turns and

@@ -199,10 +199,16 @@ async function copyBackupRows(db: SQLiteDatabase, source: File): Promise<void> {
           ).map((column) => identifierKey(column.name)),
         );
         if (
-          columns.some(
-            (column) =>
-              !sourceColumns.has(column.name) && column.notnull && column.dflt_value === null,
-          )
+          columns.some((column) => {
+            if (sourceColumns.has(column.name)) return false;
+            // These defaults cannot replace the data backfill in 0012_message_tree.
+            // Older restore targets do not include these columns yet; their upgrade does.
+            const isMessageTreeColumn =
+              (name === 'agent_session' && column.name === 'active_node_id') ||
+              (name === 'agent_session_message' &&
+                (column.name === 'parent_id' || column.name === 'siblings_group_id'));
+            return (column.notnull && column.dflt_value === null) || isMessageTreeColumn;
+          })
         )
           throw new BackupError('invalid', `Missing required backup column in ${name}.`);
         const copiedColumns = columns
