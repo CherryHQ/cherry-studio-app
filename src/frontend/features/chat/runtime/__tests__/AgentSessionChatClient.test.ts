@@ -132,6 +132,7 @@ function protocolWithObservation(
     clearWorkingStorage: jest.fn(),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
+    editUserMessage: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
     editMessage: jest.fn(),
@@ -168,6 +169,36 @@ async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> 
 }
 
 describe('AgentSessionChatClient', () => {
+  test('hands the retry overlay to its reserved message before admission finishes', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const admission = deferred<void>();
+    protocol.retryMessage.mockImplementation(() => admission.promise);
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
+    await waitForCall(protocol.retryMessage);
+    const replacement: AgentMessageView = {
+      ...assistantMessage(),
+      turnId: 'retry-turn',
+      status: 'pending',
+      parts: [],
+    };
+    publish({ type: 'message.created', message: replacement });
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').liveMessages).toEqual([replacement]);
+    admission.resolve();
+    await retry;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    unsubscribe();
+  });
+
   test('keeps live text on runtime failure and clears the error after refreshing the observation', async () => {
     let publish!: (event: AgentEvent) => void;
     const protocol = protocolWithObservation(async (_id, listener) => {
@@ -437,32 +468,42 @@ describe('AgentSessionChatClient', () => {
     unsubscribe();
   });
 
-  test('hands the retry overlay to its reserved message before admission finishes', async () => {
-    let publish!: (event: AgentEvent) => void;
-    const protocol = protocolWithObservation(async (_id, listener) => {
-      publish = listener;
-      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+  test('admits an edit while the original exchange stays visible', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    const changed: string[] = [];
+    let admitEdit!: () => void;
+    protocol.editUserMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          admitEdit = () => resolve();
+        }),
+    );
+    const client = new AgentSessionChatClient(protocol, {
+      onTranscriptChanged: (sessionId) => changed.push(sessionId),
     });
-    const admission = deferred<void>();
-    protocol.retryMessage.mockImplementation(() => admission.promise);
-    const client = new AgentSessionChatClient(protocol);
     const unsubscribe = client.subscribe('session-1', () => undefined);
-    await client.observe('session-1');
-    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
-    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
-    await waitForCall(protocol.retryMessage);
-    const replacement: AgentMessageView = {
-      ...assistantMessage(),
-      turnId: 'retry-turn',
-      status: 'pending',
-      parts: [],
-    };
-    publish({ type: 'message.created', message: replacement });
-    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
+    const edit = client.editUserMessage({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
+
     expect(client.getState('session-1').isSubmitting).toBe(true);
-    expect(client.getState('session-1').liveMessages).toEqual([replacement]);
-    admission.resolve();
-    await retry;
+    await client.refresh('session-1');
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+
+    changed.length = 0;
+    admitEdit();
+    await edit;
+    expect(protocol.editUserMessage).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
+    expect(changed).toEqual(['session-1']);
     expect(client.getState('session-1').isSubmitting).toBe(false);
     unsubscribe();
   });

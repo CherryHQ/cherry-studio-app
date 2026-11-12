@@ -1,8 +1,9 @@
 import type {
   AgentApprovalView,
+  AgentEditUserMessageInput,
+  AgentEvent,
   AgentPendingQuestion,
   AgentUserAnswers,
-  AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -350,33 +351,55 @@ export class AgentSessionChatClient {
   }
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
-    const entry = this.getEntry(input.sessionId);
-    // Explicit model selection adds a branch and keeps the source answer visible.
-    const submission = this.beginSubmission(entry, {
+    // A retry without a model replaces the displayed answer; explicit model selection adds
+    // another answer and keeps its source visible. A returned Session also needs invalidation.
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.retryMessage(input), {
       pendingRetryMessageId: input.modelId === undefined ? input.messageId : undefined,
+      applied: (session) => {
+        if (session) {
+          this.options.onSessionChanged?.(session.id);
+          this.options.onTranscriptChanged?.(session.id);
+        }
+      },
+    });
+  }
+
+  async editUserMessage(input: AgentEditUserMessageInput): Promise<void> {
+    // Editing adds a sibling question; it never hides or rewrites the original exchange.
+    return this.runTranscriptSubmission(input.sessionId, () =>
+      this.protocol.editUserMessage(input),
+    );
+  }
+
+  /** One idle-only admission/observation lifecycle, with operation semantics kept by callers. */
+  private async runTranscriptSubmission<Result>(
+    sessionId: string,
+    submit: () => Promise<Result>,
+    options: { pendingRetryMessageId?: string; applied?: (result: Result) => void } = {},
+  ): Promise<Result> {
+    const entry = this.getEntry(sessionId);
+    const submission = this.beginSubmission(entry, {
+      pendingRetryMessageId: options.pendingRetryMessageId,
     });
     try {
-      await this.observe(input.sessionId);
+      await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
-      const session = await this.protocol.retryMessage(input);
-      this.options.onSessionChanged?.(input.sessionId);
-      this.options.onTranscriptChanged?.(input.sessionId);
-      if (session) {
-        this.options.onSessionChanged?.(session.id);
-        this.options.onTranscriptChanged?.(session.id);
-      }
-      return session;
+      const result = await submit();
+      this.options.onSessionChanged?.(sessionId);
+      this.options.onTranscriptChanged?.(sessionId);
+      options.applied?.(result);
+      return result;
     } finally {
-      // Drop the display overlay; preparation never mutates the source answer.
+      // Preparation never mutates a source row; retire only its pending display overlay.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
         pendingRetryMessageId: undefined,
       });
-      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+      if (entry.listeners.size === 0 && this.sessions.get(sessionId) === entry) {
         this.stopObservation(entry);
-        this.sessions.delete(input.sessionId);
+        this.sessions.delete(sessionId);
       }
     }
   }

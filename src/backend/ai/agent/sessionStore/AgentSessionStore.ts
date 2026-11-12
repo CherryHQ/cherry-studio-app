@@ -3,6 +3,7 @@ import type {
   AgentEditMessageInput,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
+  AgentMessageSibling,
   AgentMessageView,
   AgentSessionView,
 } from '@/shared/contracts/agent';
@@ -203,6 +204,13 @@ export interface AgentSessionStore {
    * execution starts (protocol invariant 2), and selects the first answer.
    */
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
+
+  /**
+   * Every child of `parentId` in creation order, as branch alternatives. The
+   * Host attaches them to live message projections so branch switching matches
+   * settled transcript reads while the new turn is still running.
+   */
+  listBranchSiblings(sessionId: string, parentId: string | null): Promise<AgentMessageSibling[]>;
 
   /** Atomically reserves a sibling answer to an existing question and selects it. */
   reserveAnswer(input: ReserveAnswerInput): Promise<ReserveSubmissionResult>;
