@@ -1867,10 +1867,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         modelId: second,
       });
       const turns = await state.store.listTurnMessages(state.sessionId, question!.turnId!);
-      expect(turns.filter((row) => row.role === 'assistant').map((row) => row.modelId)).toEqual([
-        second,
-        inferenceSnapshot.model.uniqueModelId,
-      ]);
+      // Turn reads sort by creation time and ID, not by the selected model's priority.
+      expect(
+        turns
+          .filter((row) => row.role === 'assistant')
+          .map((row) => row.modelId)
+          .sort(),
+      ).toEqual([second, inferenceSnapshot.model.uniqueModelId].sort());
       expect(answer?.id).not.toBe(original.assistantMessageId);
       expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(answer?.id);
       for (const id of [
