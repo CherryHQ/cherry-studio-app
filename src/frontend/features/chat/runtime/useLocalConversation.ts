@@ -5,6 +5,7 @@ import type {
   ConversationMessage,
   ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
+import type { AgentContextUsage } from '@/shared/contracts/agent';
 
 import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
@@ -34,6 +35,7 @@ export function useLocalConversation(input: {
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
   messageWindow: ConversationHistoryView;
+  contextUsages?: readonly AgentContextUsage[];
 } {
   const { sessionId, title, navigation } = input;
   const { client, onSessionChanged } = useAgentChatClient();
@@ -112,5 +114,10 @@ export function useLocalConversation(input: {
     () => ({ ...window, messages: historyMessages }),
     [window, historyMessages],
   );
-  return { snapshot, messages, messageWindow };
+  return {
+    snapshot,
+    messages,
+    messageWindow,
+    contextUsages: state.status === 'ready' ? state.contextUsages : undefined,
+  };
 }

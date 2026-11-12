@@ -16,7 +16,7 @@ export function ContextUsageRing({ usage, testID }: { usage: ContextUsage; testI
   const percent =
     ratio === undefined
       ? t('chat.messageUsage.unavailable')
-      : formatContextUsagePercent(ratio, language);
+      : formatContextUsagePercent(ratio, language, usage.estimated);
   const targetRef = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<InfoPopoverAnchor>();
   const close = useCallback(() => setAnchor(undefined), []);

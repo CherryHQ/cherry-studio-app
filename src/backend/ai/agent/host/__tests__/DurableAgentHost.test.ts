@@ -80,6 +80,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   };
   const conversations: DurableAgentRuntime = {
     descriptor: new FakeRuntime().descriptor,
+    estimateStoredContextUsage: jest.fn(() => 100),
     preflightModel: async () => ({
       contextWindow: 32768,
       maxInputTokens: 28672,
@@ -312,6 +313,11 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     steps,
     copies,
     emit,
+    emitContextUsage: (tokens: number, messageId: string) =>
+      listeners.get(sessionId)?.({
+        type: 'context.usage.updated',
+        usage: { messageId, tokens },
+      }),
     reserve,
     background,
     reply,
@@ -323,6 +329,117 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 async function settle() {
   for (let round = 0; round < 20; round++) await new Promise((resolve) => setImmediate(resolve));
 }
+
+describe('durable context usage', () => {
+  test('publishes idle context changes and includes the latest count when observing again', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observed = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      f.emitContextUsage(90_000, turn.assistantMessageId);
+      f.emitContextUsage(12_000, turn.assistantMessageId);
+      expect(events.filter((event) => event.type === 'context.usage.updated')).toEqual([
+        {
+          type: 'context.usage.updated',
+          usages: [{ messageId: turn.assistantMessageId, tokens: 90_000 }],
+        },
+        {
+          type: 'context.usage.updated',
+          usages: [{ messageId: turn.assistantMessageId, tokens: 12_000 }],
+        },
+      ]);
+      const reopened = await f.host.observeSession(f.sessionId, () => {});
+      try {
+        expect(reopened.snapshot.activeTurn).toBeNull();
+        expect(reopened.snapshot.contextUsages).toEqual([
+          { messageId: turn.assistantMessageId, tokens: 12_000 },
+        ]);
+      } finally {
+        reopened.unsubscribe();
+      }
+    } finally {
+      observed.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test.each([false, true])(
+    'estimates a missing copy from saved context (checkpoint: %s)',
+    async (compacted) => {
+      const f = fixture();
+      const turn = await f.reserve();
+      await f.host.initialize();
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: turn.identity.turnId,
+        payload: {
+          kind: 'pi-durable-context-v1',
+          messages: [{ role: 'user', content: 'Summary', timestamp: 1 }],
+        },
+      };
+      if (compacted)
+        await f.store.saveContextCheckpoint(
+          turn.assistantMessageId,
+          turn.identity.turnId,
+          checkpoint,
+        );
+      f.copies.clear();
+      const createCopy = jest.spyOn(f.conversations, 'ensureConversation');
+      const observed = await f.host.observeSession(f.sessionId, () => {});
+      try {
+        expect(observed.snapshot.contextUsages).toEqual([
+          { messageId: turn.assistantMessageId, tokens: 100, estimated: true },
+        ]);
+        expect(f.conversations.estimateStoredContextUsage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            contextCheckpoint: compacted ? checkpoint : null,
+            history: compacted
+              ? []
+              : expect.arrayContaining([expect.objectContaining({ turnId: turn.identity.turnId })]),
+          }),
+        );
+        expect(createCopy).not.toHaveBeenCalled();
+        expect(f.conversations.submit).not.toHaveBeenCalled();
+      } finally {
+        observed.unsubscribe();
+        await f.host.close();
+      }
+    },
+  );
+
+  test('replaces an already observed count with a stored estimate after clearing the working file', async () => {
+    const discard = jest.fn();
+    const f = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript() {},
+      },
+    });
+    const turn = await f.reserve();
+    discard.mockImplementation(() => f.copies.clear());
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observed = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    const createCopy = jest.spyOn(f.conversations, 'ensureConversation');
+    try {
+      f.emitContextUsage(90_000, turn.assistantMessageId);
+      await f.host.clearWorkingStorage();
+      expect(events.findLast((event) => event.type === 'context.usage.updated')).toEqual({
+        type: 'context.usage.updated',
+        usages: [{ messageId: turn.assistantMessageId, tokens: 100, estimated: true }],
+      });
+      expect(createCopy).not.toHaveBeenCalled();
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      observed.unsubscribe();
+      await f.host.close();
+    }
+  });
+});
 
 describe('durable tool diagnostics', () => {
   test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {

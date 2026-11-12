@@ -451,6 +451,11 @@ The Host stores the latest positive measured request input in the completed answ
 size or a measurement after compaction. Other persisted token counts aggregate attributed calls for
 analytics and are not context-size measurements.
 
+The input-only `stats.contextTokens` is not the composer's current occupancy. The durable
+observation supplies a separate context usage value computed from Pi's effective `ContextView`
+with pi-ai's estimator, including the retained answer and changes after compaction. See
+[Rebuilding Model Context](./pi-durable-migration.md#rebuilding-model-context).
+
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;
 they do not duplicate attachment bodies or raw retained tool results. Anchors remain complete
