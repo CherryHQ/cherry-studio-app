@@ -51,7 +51,7 @@ type ProbeHandle = ReturnType<typeof useChatEditDraft> &
 
 function Probe({ ref }: { ref: Ref<ProbeHandle> }) {
   const { inputRef } = useComposerMeta();
-  inputRef.current = { focus: mockFocus } as never;
+  useImperativeHandle(inputRef, () => ({ focus: mockFocus }) as never, []);
   const editDraft = useChatEditDraft();
   const editing = useChatEditing();
   const composerActions = useComposerActions();
