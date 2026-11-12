@@ -232,10 +232,11 @@ async function copyBackupRows(db: SQLiteDatabase, source: File): Promise<void> {
   }
 }
 
-/** Rebuild only the captured/extracted copy; never run source DDL or mutate the live database. */
+/** Rebuild only the private copy; exports regenerate its journal, restores require matching history. */
 export async function normalizeBackupDatabase(
   file: File,
   version: BackupDatabaseVersion,
+  purpose: 'export' | 'restore' = 'restore',
 ): Promise<void> {
   await validateBackupVersion(version);
   // Keep interrupted normalization inside the operation's existing cleanup boundary.
@@ -243,7 +244,7 @@ export async function normalizeBackupDatabase(
   directory.create();
   try {
     await withBackupDatabase(file, async (source) => {
-      await validateMigrationJournal(source, version);
+      if (purpose === 'restore') await validateMigrationJournal(source, version);
       await withBackupDatabase(new File(directory, 'cherry.db'), async (db) => {
         await applyMigrations(db, version.migrations.length);
         await copyBackupRows(db, file);

@@ -110,7 +110,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           const database = archiveFile(work, 'database/cherry.db');
           await captureDatabase(this.dbService.getSqlite(), database);
           requireDiskSpace(database.size);
-          await normalizeBackupDatabase(database, version);
+          await normalizeBackupDatabase(database, version, 'export');
           resources = await captureResources(storageDirectory(), work, signal);
         } finally {
           release();

@@ -411,45 +411,47 @@ test('rebuilds a standard copy, preserving known records and defaulting missing 
   }
 });
 
-test.each([
-  'ALTER TABLE agent RENAME COLUMN name TO legacy_name',
-  'DROP TABLE preference',
-  `PRAGMA foreign_keys = OFF;
-   INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
-   VALUES ('orphan', 'missing-agent', 1, 1, 1)`,
-])(
-  'rejects missing required data or broken references without replacing the source: %s',
-  async (sql) => {
+describe.each(['export', 'restore'] as const)('%s normalization', (purpose) => {
+  test.each([
+    'ALTER TABLE agent RENAME COLUMN name TO legacy_name',
+    'DROP TABLE preference',
+    `PRAGMA foreign_keys = OFF;
+     INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+     VALUES ('orphan', 'missing-agent', 1, 1, 1)`,
+  ])(
+    'rejects missing required data or broken references without replacing the source: %s',
+    async (sql) => {
+      const path = join(workDirectory, 'cherry.db');
+      const database = createAppDatabase(path, currentBundle);
+      database.exec(sql);
+      database.close();
+      const before = readFileSync(path);
+
+      await expect(
+        normalizeBackupDatabase(new File(path), await captureVersion(currentBundle), purpose),
+      ).rejects.toMatchObject({ code: 'invalid' });
+      expect(readFileSync(path)).toEqual(before);
+    },
+  );
+
+  test('does not skip records that violate the standard constraints', async () => {
     const path = join(workDirectory, 'cherry.db');
     const database = createAppDatabase(path, currentBundle);
-    database.exec(sql);
+    database.exec(`
+      PRAGMA ignore_check_constraints = ON;
+      INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
+      INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session', 'agent', 1, 1, 1);
+      INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+      VALUES ('message', 'session', 'unknown-role', '{"parts":[]}', 'success', 1, 1);
+    `);
     database.close();
     const before = readFileSync(path);
 
     await expect(
-      normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
+      normalizeBackupDatabase(new File(path), await captureVersion(currentBundle), purpose),
     ).rejects.toMatchObject({ code: 'invalid' });
     expect(readFileSync(path)).toEqual(before);
-  },
-);
-
-test('does not skip records that violate the standard constraints', async () => {
-  const path = join(workDirectory, 'cherry.db');
-  const database = createAppDatabase(path, currentBundle);
-  database.exec(`
-    PRAGMA ignore_check_constraints = ON;
-    INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
-    INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session', 'agent', 1, 1, 1);
-    INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-    VALUES ('message', 'session', 'unknown-role', '{"parts":[]}', 'success', 1, 1);
-  `);
-  database.close();
-  const before = readFileSync(path);
-
-  await expect(
-    normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
-  ).rejects.toMatchObject({ code: 'invalid' });
-  expect(readFileSync(path)).toEqual(before);
+  });
 });
 
 test.each([
@@ -467,6 +469,59 @@ test.each([
     normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
   ).rejects.toMatchObject({ code: 'incompatible' });
   expect(readFileSync(path)).toEqual(before);
+});
+
+test.each([
+  'DROP TABLE __drizzle_migrations',
+  'DELETE FROM __drizzle_migrations',
+  'DELETE FROM __drizzle_migrations WHERE created_at = (SELECT max(created_at) FROM __drizzle_migrations)',
+  'UPDATE __drizzle_migrations SET created_at = created_at - 1',
+  "UPDATE __drizzle_migrations SET hash = 'unexpected'",
+  "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('unexpected', 9999999999999)",
+])('exports current data and regenerates a nonstandard migration journal: %s', async (sql) => {
+  const originalPath = join(workDirectory, 'live.db');
+  const path = join(workDirectory, 'captured.db');
+  const database = createAppDatabase(originalPath, currentBundle);
+  database.exec(`
+    INSERT INTO agent (id, name, order_key, created_at, updated_at)
+    VALUES ('agent', 'Preserved agent', 'a0', 1, 1);
+    INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+    VALUES ('session', 'agent', 1, 1, 1);
+    INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+    VALUES ('message', 'session', 'assistant', '{"parts":[]}', 'success', 1, 1);
+  `);
+  database.exec(sql);
+  database.close();
+  const original = readFileSync(originalPath);
+  copyFileSync(originalPath, path);
+  const file = new File(path);
+  const version = await captureVersion(currentBundle);
+
+  await normalizeBackupDatabase(file, version, 'export');
+  await validateBackupDatabase(file, version);
+  // A newly exported copy must also satisfy the unchanged restore path.
+  await normalizeBackupDatabase(file, version);
+
+  expect(readFileSync(originalPath)).toEqual(original);
+  const exported = new DatabaseSync(path);
+  try {
+    expect(
+      exported
+        .prepare('SELECT created_at, hash FROM __drizzle_migrations ORDER BY created_at')
+        .all(),
+    ).toEqual(version.migrations.map(({ when }) => ({ created_at: when, hash: '' })));
+    expect(exported.prepare('SELECT id, name FROM agent').all()).toEqual([
+      { id: 'agent', name: 'Preserved agent' },
+    ]);
+    expect(exported.prepare('SELECT id, agent_id FROM agent_session').all()).toEqual([
+      { id: 'session', agent_id: 'agent' },
+    ]);
+    expect(
+      exported.prepare('SELECT id, session_id, data FROM agent_session_message').all(),
+    ).toEqual([{ id: 'message', session_id: 'session', data: '{"parts":[]}' }]);
+  } finally {
+    exported.close();
+  }
 });
 
 test('rejects a different migration lineage before opening the database', async () => {
