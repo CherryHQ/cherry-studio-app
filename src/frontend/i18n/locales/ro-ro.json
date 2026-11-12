@@ -1825,7 +1825,6 @@
   "settings.items.permissions": "Permisiuni de sistem",
   "settings.items.profile": "Profil",
   "settings.items.theme": "Temă",
-  "settings.keepScreenOn.description": "Menține ecranul aprins cât timp Cherry este în prim-plan și se generează răspunsuri, traduceri sau imagini. Funcția se întrerupe cât timp se așteaptă aprobarea sau intervenția dvs. Dacă este dezactivată, se păstrează comportamentul actual: se aplică timpul normal de stingere a ecranului stabilit de sistem.",
   "settings.keepScreenOn.saveFailed": "Nu s-a putut salva setarea de menținere a ecranului aprins. Încercați din nou.",
   "settings.keepScreenOn.title": "Menține ecranul aprins în timpul generării",
   "settings.language.saveFailed": "Nu s-a putut salva limba aplicației. Încearcă din nou.",
