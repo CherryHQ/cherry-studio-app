@@ -28,7 +28,7 @@ const variants: ButtonVariant[] = [
   'text',
 ];
 const shapes: ButtonShape[] = ['rounded', 'pill'];
-const sizes: ButtonSize[] = ['xs', 'sm', 'inline', 'default', 'field', 'lg'];
+const sizes: ButtonSize[] = ['xs', 'sm', 'inline', 'default', 'field', 'footer', 'lg'];
 
 type ThemePreviewProps = {
   args: ButtonProps;

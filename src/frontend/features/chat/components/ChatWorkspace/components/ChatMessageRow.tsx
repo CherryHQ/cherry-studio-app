@@ -30,6 +30,8 @@ export const ChatMessageRow = memo(function ChatMessageRow({
     <ConversationMessageContent messageState={row.messageState} tools={row.tools}>
       <ChatMessage
         assistantPresentation={assistantPresentation}
+        editingContext={row.editingContext}
+        startsEditingContinuation={row.startsEditingContinuation}
         attachments={
           row.attachments?.length ? (
             <ConversationAttachments attachments={row.attachments} />

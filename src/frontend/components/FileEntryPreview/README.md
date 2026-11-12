@@ -31,7 +31,7 @@ logging, and the single opening policy shared by the composer, messages, and fil
   the attachment image and painting outputs so neither renders a broken frame.
 
 Application-level sharing and watermark preparation belong to `appShell/fileExport`. System
-opening consumes its `prepareFileExport`; completed document exports retain their original bytes.
+opening consumes its `prepareFileExport`; managed bitmap images follow the requested watermark style.
 
 Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
 The image thumbnail query uses the same resolved-entry shape and query key as the file library.
@@ -55,6 +55,8 @@ Do not infer a second classification from filenames at individual surfaces.
 
 Rows that already render filename metadata use the explicit `icon` variant: images retain their
 thumbnail, while other files use the same type-icon presentation as Composer and the library.
+Callers can set `iconSize` for a larger glyph inside an `icon` tile; existing callers keep the
+24-point glyph. Sharing uses this to enlarge the library artwork without a platform thumbnail.
 The default `thumbnail` variant keeps Quick Look on iOS and the Android extension-card fallback for
 text and unsupported documents.
 The composer's `attachment` and library's `card` variants use the shared file icon/title layout.

@@ -67,7 +67,7 @@ const CASES: {
     baseUrl: 'https://api.google.test',
     endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
     expectedBaseUrl: 'https://api.google.test/v1beta',
-    expectedFetch: undefined,
+    expectedFetch: mockFetch,
     streamSimple: mockGoogleStreamSimple,
   },
 ];
@@ -128,13 +128,7 @@ describe('Pi API adapters', () => {
     const second = quoted('Snapshot two', 'Request two');
     const conversation = toPiConversation(
       {
-        turnId: 'now',
-        sessionId: 's',
         instructions: '',
-        model: { providerId: 'test', modelId: 'model' },
-        contextCheckpoint: null,
-        options: {},
-        tools: [],
         input: [{ type: 'text', text: 'Continue' }],
         history: [
           {

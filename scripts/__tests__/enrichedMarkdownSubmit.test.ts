@@ -64,7 +64,8 @@ describe('native soft-keyboard submission', () => {
     );
     expect(input).toContain('setOnEditorActionListener');
     expect(input).toContain('actionId != EditorInfo.IME_ACTION_SEND || event != null');
-    expect(input).toContain('BaseInputConnection.getComposingSpanStart(text) < 0');
+    expect(input).toContain('text?.let { editable ->');
+    expect(input).toContain('BaseInputConnection.getComposingSpanStart(editable) < 0');
     expect(input).toContain('eventEmitter.emitSubmit()');
     expect(input).toContain('EditorInfo.IME_FLAG_NO_ENTER_ACTION');
     expect(input).toContain('inputMethodManager?.restartInput(this)');

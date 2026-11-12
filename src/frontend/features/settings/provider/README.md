@@ -83,7 +83,8 @@ Runtime admits compatible endpoints; native Ollama endpoints remain unsupported.
 reachability. Optional API-key authentication is persisted through `authConfig.required`, so
 keyless gateways can serve conversations and run connection checks without adding a dummy key.
 Before returning a preview with selectable providers, the workflow prepares the shared model
-catalog so its first download cannot become a new dependency failure only after confirmation.
+catalog from a compatible saved snapshot or a shared download before confirmation. A failed first
+download leaves the workflow retryable.
 
 ## Provider Configuration
 
@@ -163,3 +164,18 @@ Each adapter declares the desktop app's registered client ID and redirect URL. C
 `cherrystudio://oauth/callback` with desktop; a custom-scheme callback only reaches the app on the
 device that opened the browser. Only production builds register the `cherrystudio` scheme, so
 development and preview builds cannot complete provider sign-in.
+
+## Regional Discovery
+
+The shared IP country selects the new-provider catalog and recommendations from the
+bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
+All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
+international discovery once detected. Discovery and first-install recommendations share
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region
+from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
+global entries; only a missing device region retains the domestic default. The detection result
+remains unknown. Mobile capability exclusions and the
+recommended-provider subset remain locally owned; model metadata is shared across editions. Saved providers keep their
+settings, visibility and runtime availability across region changes. Chat setup also lists saved
+presets absent from the current regional catalog beside custom connections, so travelling does not
+remove their setup path.

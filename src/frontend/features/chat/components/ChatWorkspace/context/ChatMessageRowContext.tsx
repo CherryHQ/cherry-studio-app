@@ -22,6 +22,12 @@ export type ChatMessageRowState = Readonly<
     /** Tool status follows the source message, which can settle without new display parts. */
     messageState?: ConversationMessage['state'];
     showsTimestamp: boolean;
+    /** Editing highlights a question and quiets its visible original continuation. */
+    editingContext?: 'question' | 'continuation';
+    startsEditingContinuation?: boolean;
+    previousMessageId?: string;
+    nextMessageId?: string;
+    nextShowsTimestamp?: boolean;
   }
 >;
 
@@ -32,10 +38,15 @@ const TIMESTAMP_ONLY_ROW: ChatMessageRowState = { showsTimestamp: true };
 
 function isSameRow(left: ChatMessageRowState, right: ChatMessageRowState) {
   return (
+    left.editingContext === right.editingContext &&
+    left.startsEditingContinuation === right.startsEditingContinuation &&
     left.completeness === right.completeness &&
     left.attachments === right.attachments &&
     left.messageState === right.messageState &&
     left.showsTimestamp === right.showsTimestamp &&
+    left.previousMessageId === right.previousMessageId &&
+    left.nextMessageId === right.nextMessageId &&
+    left.nextShowsTimestamp === right.nextShowsTimestamp &&
     left.tools === right.tools
   );
 }
@@ -45,15 +56,37 @@ function reconcileRows(
   previous: ChatMessageRows,
   messages: readonly ConversationMessage[],
   timestampMessageIds: ReadonlySet<string>,
+  breakAfterMessageId?: string,
+  editingMessageId?: string,
 ): ChatMessageRows {
   const next = new Map<string, ChatMessageRowState>();
-  for (const message of messages) {
+  const visibleMessages = messages.filter((message) => message.display.role !== 'system');
+  const editingIndex = editingMessageId
+    ? visibleMessages.findIndex((message) => message.key === editingMessageId)
+    : -1;
+  for (const [index, message] of visibleMessages.entries()) {
     const candidate: ChatMessageRowState = {
+      editingContext:
+        editingIndex < 0 || index < editingIndex
+          ? undefined
+          : index === editingIndex
+            ? 'question'
+            : 'continuation',
+      startsEditingContinuation: editingIndex >= 0 && index === editingIndex + 1,
       completeness: message.completeness,
       attachments: message.attachments,
       messageState: message.state,
       showsTimestamp: timestampMessageIds.has(message.key),
       tools: message.tools,
+      previousMessageId:
+        visibleMessages[index - 1]?.key === breakAfterMessageId
+          ? undefined
+          : visibleMessages[index - 1]?.key,
+      nextMessageId:
+        message.key === breakAfterMessageId ? undefined : visibleMessages[index + 1]?.key,
+      nextShowsTimestamp: visibleMessages[index + 1]
+        ? timestampMessageIds.has(visibleMessages[index + 1].key)
+        : false,
     };
     const existing = previous.get(message.key);
     next.set(message.key, existing && isSameRow(existing, candidate) ? existing : candidate);
@@ -76,6 +109,8 @@ type ChatMessageRowSource = Readonly<{
   record: (
     messages: readonly ConversationMessage[],
     timestampMessageIds: ReadonlySet<string>,
+    breakAfterMessageId?: string,
+    editingMessageId?: string,
   ) => void;
   /** Wakes only rows whose state changed since the last publish. */
   publish: () => void;
@@ -88,8 +123,14 @@ function createChatMessageRowSource(): ChatMessageRowSource {
   const listenersById = new Map<string, Set<() => void>>();
   return {
     get: (messageId) => rows.get(messageId) ?? EMPTY_ROW,
-    record: (messages, timestampMessageIds) => {
-      rows = reconcileRows(rows, messages, timestampMessageIds);
+    record: (messages, timestampMessageIds, breakAfterMessageId, editingMessageId) => {
+      rows = reconcileRows(
+        rows,
+        messages,
+        timestampMessageIds,
+        breakAfterMessageId,
+        editingMessageId,
+      );
     },
     publish: () => {
       if (publishedRows === rows) return;
@@ -122,17 +163,21 @@ export function ChatMessageRowProvider({
   children,
   messages,
   timestampMessageIds,
+  breakAfterMessageId,
+  editingMessageId,
 }: PropsWithChildren<{
   messages: readonly ConversationMessage[];
   timestampMessageIds: ReadonlySet<string>;
+  breakAfterMessageId?: string;
+  editingMessageId?: string;
 }>) {
   const [source] = useState(createChatMessageRowSource);
   // Rows whose items changed in this commit render with the new state directly;
   // the publish reaches the remaining rows whose own state changed.
-  source.record(messages, timestampMessageIds);
+  source.record(messages, timestampMessageIds, breakAfterMessageId, editingMessageId);
   useLayoutEffect(() => {
     source.publish();
-  }, [messages, source, timestampMessageIds]);
+  }, [breakAfterMessageId, editingMessageId, messages, source, timestampMessageIds]);
 
   return <ChatMessageRowContext value={source}>{children}</ChatMessageRowContext>;
 }

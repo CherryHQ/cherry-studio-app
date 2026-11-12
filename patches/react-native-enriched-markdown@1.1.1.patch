@@ -183,7 +183,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    private var detectScrollMovement = false
    var scrollEnabled: Boolean = true
  
-@@ -151,6 +192,15 @@ class EnrichedMarkdownTextInputView(
+@@ -151,6 +192,17 @@ class EnrichedMarkdownTextInputView(
    init {
      setupDetectorPipeline()
      prepareComponent()
@@ -192,14 +192,25 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
 +        false
 +      } else {
 +        // Candidate confirmation must never submit. The IME owns committing it.
-+        if (BaseInputConnection.getComposingSpanStart(text) < 0) eventEmitter.emitSubmit()
++        text?.let { editable ->
++          if (BaseInputConnection.getComposingSpanStart(editable) < 0) eventEmitter.emitSubmit()
++        }
 +        true
 +      }
 +    }
      isComponentReady = true
    }
  
-@@ -210,8 +260,18 @@ class EnrichedMarkdownTextInputView(
+@@ -172,7 +224,7 @@
+     gravity = Gravity.TOP or Gravity.START
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY
++      breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+     }
+ 
+     setEditableFactory(MarkdownEditableFactory(this))
+@@ -210,8 +262,18 @@ class EnrichedMarkdownTextInputView(
      inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
    }
  
@@ -218,7 +229,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      return InputConnectionWrapper(base, this)
    }
  
-@@ -278,6 +338,7 @@ class EnrichedMarkdownTextInputView(
+@@ -278,6 +340,7 @@ class EnrichedMarkdownTextInputView(
    override fun isLayoutRequested(): Boolean = false
  
    override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -226,7 +237,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
      when (ev.action) {
        MotionEvent.ACTION_DOWN -> {
          detectScrollMovement = true
-@@ -295,7 +356,19 @@ class EnrichedMarkdownTextInputView(
+@@ -295,7 +358,19 @@ class EnrichedMarkdownTextInputView(
          }
        }
      }
@@ -247,7 +258,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    }
  
    override fun performClick(): Boolean = super.performClick()
-@@ -315,7 +388,10 @@ class EnrichedMarkdownTextInputView(
+@@ -315,7 +390,10 @@ class EnrichedMarkdownTextInputView(
        super.performLongClick()
      } catch (e: NullPointerException) {
        val top = e.stackTrace.firstOrNull()
@@ -259,7 +270,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
          throw e
        }
        Log.w(TAG, "Absorbed framework NPE in performLongClick (issue #728)", e)
-@@ -336,6 +412,32 @@ class EnrichedMarkdownTextInputView(
+@@ -336,6 +414,32 @@ class EnrichedMarkdownTextInputView(
  
    override fun canScrollHorizontally(direction: Int): Boolean = scrollEnabled && super.canScrollHorizontally(direction)
  
@@ -292,7 +303,7 @@ diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/Enriche
    fun attachTextWatcher(editable: Editable) {
      if (textWatcher != null) {
        editable.removeSpan(textWatcher)
-@@ -498,6 +600,12 @@ class EnrichedMarkdownTextInputView(
+@@ -498,6 +602,12 @@ class EnrichedMarkdownTextInputView(
        postAdjust(editable)
        lastProcessedText = editable.toString()
        applyFormattingAndEmit()
@@ -330,7 +341,7 @@ index 8e3fc760ea1b6ff2c5ccc0911b0801b87da84aec..c2ce8ce4ea42211d67b0bd0088b91ba1
      }
  
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
-index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb16459b6fe 100644
+index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..604e820431aa84223e2b21b42e64d90601f707c6 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/input/layout/InputMeasurementStore.kt
 @@ -2,6 +2,7 @@ package com.swmansion.enriched.markdown.input.layout
@@ -375,6 +386,15 @@ index d7fc9ac55b5c9b9f9f9553f18c86fe742b245ccf..9d6f22f128ed6d3498445e9d633aefb1
      return size
    }
  
+@@ -128,7 +132,7 @@
+         .setLineSpacing(0f, 1f)
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
++      builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE)
+     }
+ 
+     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt
 index a961e675a0b0e4358675f9de6d8c75e83dd34bae..e785ba8fa23fe2ba663a74a614845b426fc5d410 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/input/model/InputFormatterStyle.kt

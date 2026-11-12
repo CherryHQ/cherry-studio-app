@@ -9,6 +9,53 @@ export type AiFailureFacts = {
   statusCode?: number;
 };
 
+// Known provider values only: compatible gateways can return arbitrary finish-reason text.
+const KNOWN_FINISH_REASONS = new Set([
+  'stop',
+  'length',
+  'tool_calls',
+  'function_call',
+  'content_filter',
+  // Pi retains Responses statuses, including the two known incomplete-reason combinations.
+  'completed',
+  'failed',
+  'cancelled',
+  'in_progress',
+  'queued',
+  'incomplete',
+  'incomplete.max_output_tokens',
+  'incomplete.content_filter',
+  'end_turn',
+  'max_tokens',
+  'stop_sequence',
+  'tool_use',
+  'pause_turn',
+  'refusal',
+  'model_context_window_exceeded',
+  'FINISH_REASON_UNSPECIFIED',
+  'STOP',
+  'MAX_TOKENS',
+  'SAFETY',
+  'RECITATION',
+  'LANGUAGE',
+  'OTHER',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'MALFORMED_FUNCTION_CALL',
+  'UNEXPECTED_TOOL_CALL',
+  'TOO_MANY_TOOL_CALLS',
+  'IMAGE_SAFETY',
+  'IMAGE_PROHIBITED_CONTENT',
+  'IMAGE_RECITATION',
+  'IMAGE_OTHER',
+  'NO_IMAGE',
+]);
+
+export function readKnownAiFinishReason(value: unknown): string | undefined {
+  return typeof value === 'string' && KNOWN_FINISH_REASONS.has(value) ? value : undefined;
+}
+
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   authentication_error: 'auth',
   content_filter: 'content_filter',

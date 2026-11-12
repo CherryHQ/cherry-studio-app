@@ -289,6 +289,32 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
+The composer reads current context usage separately from persisted request and billing statistics.
+At each committed transcript boundary, the observer reads Pi's public `Conversation.context()` and
+passes its effective messages to pi-ai's `estimateContextTokens`. This includes measured input,
+cache and output plus estimates for the following messages; after compaction, reset or reply edits,
+the same read uses the newly retained context. Background compaction updates usage even when no
+answer is running. Reattachment restores the current count. For rebuilt normalized replies, the
+display estimate ignores synthetic input-only usage and counts retained content instead. A reply
+can merge several provider responses, so adding its full text to the final request's input would
+count earlier response text twice. Execution history keeps its existing input measurement;
+composer estimation does not rewrite usage or change execution's compaction thresholds.
+
+Each usage value names the answer of its newest placed input. The Host exposes current copies in
+`contextUsages` and replaces that list with `context.usage.updated`; the composer selects only the
+current branch's newest answer and still requires the selected model to match. No value is inferred
+from cumulative billed usage. Streaming-only progress does not reread the committed context on
+every text delta. Content-only and trailing-message estimates carry `estimated: true`, displayed
+with `≈` instead of implying a fresh provider measurement.
+
+If the selected branch has no working copy, observation estimates from the same validated Cherry
+checkpoint and normalized tail used by rebuild. This is an in-memory read: it opens no Pi copy,
+resolves no credentials or tools, and makes no model call. A measured prefix already includes its
+system prompt; content-only recovery adds the current base Agent instructions. Future tool
+configuration and reloaded attachment content can change the next request, so this fallback is
+explicitly approximate. A new native context supersedes it. Clearing the working file refreshes
+existing observers too; switching or editing a branch refreshes its stored estimate.
+
 ## Branches, Fork, Retry And Delete
 
 A Cherry Session's message tree runs on up to eight Pi conversations (working copies), one per
@@ -516,7 +542,7 @@ delay remains unattributed.
 | Pi AI Google signatures over Chat Completions | Protocol compatibility: capture streamed `extra_content.google.thought_signature` in the existing durable tool-call field and replay it only for the same provider, model and API; legacy encrypted reasoning remains in `reasoning_details` | [piApiAdapters.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piApiAdapters.test.ts); retire when upstream preserves Google tool signatures through streamed response parsing and replay, with cross-model isolation unchanged. Regression sources are added but unrun |
 | Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation. Behavior and performance checks remain unrun |
 | Pi AI native OAuth; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
-| Pi AI Vertex bearer token and Google GenAI Web auth/fetch injection | Platform compatibility: pi-durable resolves host-owned service-account tokens for each invocation; the Web SDK uses the injected stream transport without API-key placeholders, global fetch replacement or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts); retained until upstream provides equivalent explicit Web auth and instance fetch, followed by native acceptance. Google GenAI is separately pinned by [its 2.21.0 patch](../../../patches/@google__genai@2.21.0.patch) |
+| Pi AI Gemini fetch and Vertex bearer authentication | Platform compatibility: Gemini and host-authenticated Vertex use instance-scoped `httpOptions.fetch`, preserving native body-failure facts and cancellation without global fetch replacement. Vertex resolves service-account tokens per invocation without API-key placeholders or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts). Google GenAI is pinned to 2.23.0: its native `httpOptions.fetch` replaces the 2.21.0 transport patch; [the remaining Web patch](../../../patches/@google__genai@2.23.0.patch) only injects host authentication. Retire the Pi fetch wiring and Web auth hunks when upstream exposes equivalent behavior, followed by native acceptance |
 | Anthropic Vertex native Google auth browser map | Platform compatibility: the official SDK receives host-owned `authClient` credentials; Metro redirects its `google-auth-library` import to a guard that requires injection. Node retains its ordinary auth path. Pi's public `stream()` client injection and the SDK's Vertex request shaping are unchanged | [piVertexAnthropic.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexAnthropic.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and local [metroResolution.test.ts](../../../scripts/__tests__/metroResolution.test.ts); the [0.22.0 patch](../../../patches/@anthropic-ai__vertex-sdk@0.22.0.patch) can retire when the official SDK offers a native-safe injected-auth entry, followed by native acceptance. This SDK version shares Pi's pinned Anthropic SDK 0.129.0 |
 | Chord numeric array keys | Hermes compatibility: JSON changes to array indexes are interpreted consistently | [piChordPatch.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piChordPatch.test.ts); require the behavior on Hermes, not only Node |
 

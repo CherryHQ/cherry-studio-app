@@ -5,13 +5,15 @@ type check, automated tests, or device verification were run for this implementa
 
 ## Product Behavior
 
-The HTML file viewer's overflow menu offers **Share as image** and **Share as PPT**. Truncated or empty
-HTML cannot be shared in these formats. Conversion shows a compact spinner, progress label and cancel
-action above the visible HTML content, then opens the system share sheet immediately through the
-shared file export helper. The user stays in the HTML viewer throughout preparation and returns to
-it when dismissing the share sheet.
-The resulting PNG or image-based PPTX remains in the file library. Repeated share actions are
-disabled until the current operation finishes, and cancelled conversions do not open a share sheet.
+The HTML viewer's More menu opens the common bottom sharing panel. An all-HTML file collection
+can choose Original, Image or PPT there. The same card stack previews files and captured slides;
+there are no parallel conversion actions in the viewer. Changing format prepares a temporary
+result. Share explicitly opens one system chooser after all selected results are ready; Save
+explicitly stores the result in the file library. Neither preview nor Share automatically persists
+files. Closing the system chooser leaves the panel open.
+
+Truncated HTML cannot be converted. Cancellation waits for in-flight capture and copying; a failed
+member prevents partial delivery. Original files retain their bytes.
 
 Conversion renders a fresh copy of the saved HTML at a desktop layout width of 1280 CSS pixels.
 It does not serialize interactive state from the live preview. Authored images, fonts and scripts
@@ -40,7 +42,7 @@ fonts/images, charts, cancellation, backgrounding and PowerPoint opening without
 
 ## Ownership And Resource Use
 
-`files` owns the conversion UI, HTML capture strategy and watermark policy. The shared
+`features/sharing` owns the conversion UI, HTML capture strategy and request-local watermark policy. The shared
 [`HtmlCapture`](../../src/frontend/components/HtmlCapture/README.md) family owns the temporary WebView,
 native layout/ready handshake, sequential capture and session lifecycle for both HTML conversion
 and document export. The WebView keeps file access and
@@ -52,8 +54,10 @@ The interactive `FileHtmlBody` still has no message bridge.
 `Backend.documentExport.convertHtml` owns serialization, cache files, managed persistence and
 foreground cancellation. It admits one HTML conversion at a time and waits for cleanup before
 admitting another. A screenshot is released after its consumer finishes, including late native
-completion after cancellation. Temporary output is removed after success or failure; a committed
-managed file outlives the viewer.
+completion after cancellation. Successful conversion returns a temporary artifact with its file, captured page previews, explicit
+`save` and `dispose`. The sharing request retains it until closure and waits for native work before
+disposal. Failed conversion removes its partial output; only an explicitly saved managed file
+outlives the request. The runtime disposes retained artifacts during host shutdown.
 
 The shared executor prevents overlapping native capture between the two workflows and holds its
 lease through cancellation until in-flight capture, watermark and copy work finishes.

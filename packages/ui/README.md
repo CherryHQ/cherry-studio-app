@@ -5,6 +5,16 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
+flat previous/current/next cards and page dots, with native horizontal fling recognition and
+accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;
+vertical movement yields to the sheet, and cancelled flings never change the index. Callers own
+items, index, translated labels, content, selection, conversion, file access and delivery. Background
+slots must disable irrelevant interactions. The default `fill` layout lets a single item occupy
+its whole frame without pagination space; `compact` keeps the bounded media geometry for one item.
+Collections use 290-point cards when available, without rotation or overlapping stack layers.
+
+
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
 rows with labeled up/down buttons, disables moves at the first and last positions, and returns
 a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
@@ -128,6 +138,8 @@ label and type metadata.
 
 Audio cards use a neutral waveform icon. Compact audio attachments show their extension below
 the filename; opening and transcription state remain caller-owned.
+The `icon` variant accepts `iconSize` for the glyph, independently of the tile's `size`;
+omitting it keeps the existing 24-point glyph.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
@@ -410,9 +422,12 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
 behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
 its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
-`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+`inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
-compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
+to 14/20 labels, 20-point icons and a minimum 48-point touch target in both dimensions, growing for
+larger text. Other platforms retain `lg` sizing. This adaptation stays inside Button; feature code
+does not branch by platform. The `icon` prop renders an icon before
 the label and automatically switches to the matching icon-only padding when no label is provided.
 Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
 composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
@@ -426,6 +441,8 @@ from its immediate parent. `Section.Item` and its semantic row variants use `den
 `Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
 and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
 platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+`variant="floating"` provides a 42-point capsule at default text size, with iOS-owned glass where
+available and the same token-backed capsule fallback elsewhere. Items can combine icons and labels.
 
 `DateRangePicker` is a controlled calendar for selecting a start and end day on one surface.
 It adapts `react-native-ui-datepicker` with Cherry typography, theme tokens, range highlighting,
@@ -651,7 +668,10 @@ taps, system back, and viewport changes dismiss it without changing the underlyi
 `AnchoredInfoPopover` accepts a caller-owned `InfoPopoverAnchor` in window coordinates instead of
 wrapping a trigger. Native editor links and inline transcript text use it when they measure their
 own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
-Its keyboard-preserving overlay shares the existing menu surface and bounded text reader.
+Its keyboard-preserving overlay shares the existing menu surface and bounded text reader. Optional
+children compose a visual readout while `text` supplies its accessible description; `width` requests
+a compact panel within the usual safe-area bounds, and `placement="above"` prefers the space above
+the anchor. The composed presentation remains stable through dismissal.
 
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
@@ -886,6 +906,9 @@ row and moving the caller-composed toolbar below the full-width field during edi
 state is caller-owned; an optional action-sized `compactAccessory` previews an attachment without
 activating editing. The `field` stays mounted, and `Composer.Input` automatically adapts its
 native layout and action inset to the editor frame, including through app-specific field wrappers.
+`Composer.Editor` accepts `restingTrailingActionCount` (default 1) to reserve the field space for
+visible action-sized slots at the end of the resting toolbar. The toolbar children stay mounted
+while editing changes. The existing leading `compactAccessory` remains independent.
 `Composer.EditorSecondary` reveals secondary toolbar tools, and
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
 The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it

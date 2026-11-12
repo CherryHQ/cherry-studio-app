@@ -41,9 +41,19 @@ describe('ChatMessageRowContext', () => {
       <RowProbe id="pending" />
     </>
   );
-  const render = (messages: readonly ConversationMessage[], timestamps: ReadonlySet<string>) => {
+  const render = (
+    messages: readonly ConversationMessage[],
+    timestamps: ReadonlySet<string>,
+    breakAfterMessageId?: string,
+    editingMessageId?: string,
+  ) => {
     const element = (
-      <ChatMessageRowProvider messages={messages} timestampMessageIds={timestamps}>
+      <ChatMessageRowProvider
+        messages={messages}
+        timestampMessageIds={timestamps}
+        breakAfterMessageId={breakAfterMessageId}
+        editingMessageId={editingMessageId}
+      >
         {probes}
       </ChatMessageRowProvider>
     );
@@ -58,6 +68,26 @@ describe('ChatMessageRowContext', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('editing context follows the selected visible continuation and clears on exit', () => {
+    const rows = [message('a'), message('b'), message('pending')];
+    render(rows, new Set(), undefined, 'b');
+    expect(latest('a')?.editingContext).toBeUndefined();
+    expect(latest('b')?.editingContext).toBe('question');
+    expect(latest('b')?.startsEditingContinuation).toBe(false);
+    expect(latest('pending')?.editingContext).toBe('continuation');
+    expect(latest('pending')?.startsEditingContinuation).toBe(true);
+    render(rows, new Set());
+    expect(latest('b')?.editingContext).toBeUndefined();
+    expect(latest('pending')?.editingContext).toBeUndefined();
+    expect(latest('pending')?.startsEditingContinuation).toBe(false);
+  });
+
+  test('a target outside the loaded branch does not quiet unrelated rows', () => {
+    render([message('a'), message('b')], new Set(), undefined, 'not-loaded');
+    expect(latest('a')?.editingContext).toBeUndefined();
+    expect(latest('b')?.editingContext).toBeUndefined();
   });
 
   test('wakes only the row whose own state changed', () => {
@@ -101,5 +131,16 @@ describe('ChatMessageRowContext', () => {
     render([message('a')], new Set(['pending']));
     expect(latest('pending')?.showsTimestamp).toBe(true);
     expect(seen.get('a')).toHaveLength(1);
+  });
+
+  test('a fork-origin divider breaks selection adjacency on both sides', () => {
+    const messages = [message('a'), message('b')];
+    render(messages, new Set());
+    expect(latest('a')?.nextMessageId).toBe('b');
+    expect(latest('b')?.previousMessageId).toBe('a');
+
+    render(messages, new Set(), 'a');
+    expect(latest('a')?.nextMessageId).toBeUndefined();
+    expect(latest('b')?.previousMessageId).toBeUndefined();
   });
 });

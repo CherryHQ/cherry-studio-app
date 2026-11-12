@@ -75,7 +75,23 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -220,7 +221,13 @@
+@@ -33,14 +34,11 @@
+             timestamp: Date.now(),
+         };
+         try {
+-            if (options?.fetch && options.fetch !== globalThis.fetch) {
+-                throw new Error("Custom fetch is not supported by the Google Generative AI adapter");
+-            }
+             const apiKey = options?.apiKey;
+             if (!apiKey) {
+                 throw new Error(`No API key for provider: ${model.provider}`);
+             }
+-            const client = createClient(model, apiKey, options?.headers, options?.identity);
++            const client = createClient(model, apiKey, options?.headers, options?.identity, options?.fetch);
+             let params = buildParams(model, normalizedContext, options);
+             const nextParams = await options?.onPayload?.(params, model);
+             if (nextParams !== undefined) {
+@@ -220,7 +218,13 @@
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -90,6 +106,19 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
+@@ -261,8 +265,11 @@
+         },
+     });
+ };
+-function createClient(model, apiKey, optionsHeaders, identity) {
++function createClient(model, apiKey, optionsHeaders, identity, fetch) {
+     const httpOptions = {};
++    if (fetch) {
++        httpOptions.fetch = fetch;
++    }
+     if (model.baseUrl) {
+         httpOptions.baseUrl = model.baseUrl;
+         httpOptions.apiVersion = ""; // baseUrl already includes version path, don't append
 diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
 --- a/dist/api/google-vertex.d.ts
 +++ b/dist/api/google-vertex.d.ts
@@ -165,7 +194,7 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
      };
      if (!options?.reasoning) {
          return stream(model, context, {
-@@ -265,6 +274,22 @@
+@@ -265,6 +274,21 @@
          },
      });
  };
@@ -180,9 +209,8 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
 +                headers.set("Authorization", `Bearer ${options.accessToken}`);
 +            },
 +        },
-+        fetch: options.fetch,
 +        // The host has already resolved the complete project collection and API version.
-+        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity), apiVersion: "" },
++        httpOptions: { ...buildHttpOptions(model, options.headers, options.identity), apiVersion: "", fetch: options.fetch },
 +    });
 +}
  function createClient(model, project, location, optionsHeaders, env, identity) {
@@ -447,6 +475,16 @@ diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
  import { getProviderEnvValue } from "../../utils/provider-env.js";
  import { sleep } from "../../utils/sleep.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
+@@ -181,6 +182,9 @@
+         }
+         catch (error) {
++            // Native fetch bindings preserve terminal OAuth rejection metadata.
++            if (error && typeof error.status === "number" && error.status >= 400 && error.status < 500 && error.status !== 429)
++                throw error;
+             lastError = error instanceof Error ? error : new Error(String(error));
+             continue;
+         }
+         const json = await readJson(response);
 diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
 --- a/dist/auth/oauth/openai-codex.js
 +++ b/dist/auth/oauth/openai-codex.js
@@ -480,6 +518,15 @@ diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
  }
  function parseAuthorizationInput(input) {
      const value = input.trim();
+@@ -136,7 +127,7 @@
+     }
+     catch (error) {
+-        throw new Error(`OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`);
++        throw new Error(`OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+     }
+     return readTokenResponse(response, "refresh");
+ }
+ async function startOpenAICodexDeviceAuth(signal) {
 diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
 --- a/dist/auth/oauth/openrouter.js
 +++ b/dist/auth/oauth/openrouter.js

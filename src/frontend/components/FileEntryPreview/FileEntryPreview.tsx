@@ -26,6 +26,7 @@ export function FileEntryPreview({
   badge,
   entryId,
   size,
+  iconSize,
   variant,
   transfer,
   onImageReplace,
@@ -33,6 +34,7 @@ export function FileEntryPreview({
   badge?: ReactNode;
   entryId: FileEntryId;
   size?: number;
+  iconSize?: number;
   variant?: FilePreviewVariant;
   transfer?: FilePreviewTransfer;
   /** Explicitly enables editing for this caller; ordinary file previews stay read-only. */
@@ -51,6 +53,7 @@ export function FileEntryPreview({
       entry={data?.entry}
       entryId={entryId}
       size={size}
+      iconSize={iconSize}
       uri={data?.uri}
       variant={variant}
       transfer={transfer}
@@ -97,6 +100,7 @@ export function LoadedFileEntryPreview({
   entry,
   previewUri,
   size,
+  iconSize,
   uri,
   variant,
 }: {
@@ -104,6 +108,7 @@ export function LoadedFileEntryPreview({
   entry: FileEntry;
   previewUri: string | undefined;
   size?: number;
+  iconSize?: number;
   uri: string | undefined;
   variant?: FilePreviewVariant;
 }) {
@@ -115,6 +120,7 @@ export function LoadedFileEntryPreview({
       entryId={entry.id}
       previewUri={previewUri}
       size={size}
+      iconSize={iconSize}
       uri={uri}
       variant={variant}
       onOpen={openFileEntry}
@@ -128,6 +134,7 @@ function EntryPreview({
   entryId,
   previewUri,
   size,
+  iconSize,
   uri,
   variant,
   transfer,
@@ -138,6 +145,7 @@ function EntryPreview({
   entryId: FileEntryId;
   previewUri?: string;
   size?: number;
+  iconSize?: number;
   uri: string | undefined;
   variant?: FilePreviewVariant;
   transfer?: FilePreviewTransfer;
@@ -159,6 +167,7 @@ function EntryPreview({
         if (entry && uri) onOpen({ entry, uri });
       }}
       size={size}
+      iconSize={iconSize}
       variant={variant}
       transfer={transfer}
     />

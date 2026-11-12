@@ -31,7 +31,12 @@ import {
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
 import { archiveFile, packBackup, unpackBackup } from './backupArchive';
-import { BACKUP_LIMITS, type BackupManifest, validateManifest } from './backupFormat';
+import {
+  BACKUP_FORMAT_VERSION,
+  BACKUP_LIMITS,
+  type BackupManifest,
+  validateManifest,
+} from './backupFormat';
 import {
   captureResources,
   requireDiskSpace,
@@ -105,7 +110,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           const database = archiveFile(work, 'database/cherry.db');
           await captureDatabase(this.dbService.getSqlite(), database);
           requireDiskSpace(database.size);
-          await normalizeBackupDatabase(database, version);
+          await normalizeBackupDatabase(database, version, 'export');
           resources = await captureResources(storageDirectory(), work, signal);
         } finally {
           release();
@@ -153,7 +158,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           throw new BackupError('unavailable');
         const manifest = validateManifest({
           product: 'cherry-mobile',
-          formatVersion: 1,
+          formatVersion: BACKUP_FORMAT_VERSION,
           id: randomUUID(),
           createdAt: new Date().toISOString(),
           appVersion: Application.nativeApplicationVersion ?? 'unknown',

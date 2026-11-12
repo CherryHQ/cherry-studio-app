@@ -14,7 +14,7 @@ on:
         required: true
         default: all
         type: choice
-        options: [all, apk, google-play, ios]
+        options: [all, apk, google-play, domestic-stores, ios]
       message:
         description: Update message shown on EAS
         required: true
@@ -58,7 +58,7 @@ jobs:
             echo "::error::$sha is the release tag $tag itself; its builds already contain this code."
             exit 1
           fi
-          if [[ "$TARGETS" == all ]]; then targets='["apk","google-play","ios"]'; else targets="[\"$TARGETS\"]"; fi
+          if [[ "$TARGETS" == all ]]; then targets='["apk","google-play","domestic-stores","ios"]'; else targets="[\"$TARGETS\"]"; fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
           {

@@ -6,7 +6,7 @@ import { useReturnToChat } from './useReturnToChat';
 import { useSelectionSourceChat } from './useSelectionSourceChat';
 
 /**
- * Adds the previewed document or text file to the chat that opened it, without sending.
+ * Adds the previewed file to the chat that opened it, without sending.
  * A chat whose Agent cannot take the file offers no action.
  */
 export function useAddFileToChat(file: ResolvedFile, sourceChat: ChatTarget | undefined) {

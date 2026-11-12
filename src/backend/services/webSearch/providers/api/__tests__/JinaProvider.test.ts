@@ -11,9 +11,9 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 
 import { JinaProvider } from '../JinaProvider';
 
-const mockIsMainland = jest.fn(() => false);
-jest.mock('@/backend/services/device', () => ({
-  isDeviceRegionMainlandChina: () => mockIsMainland(),
+const mockGetCountry = jest.fn(async () => 'US');
+jest.mock('@/backend/core/application/Application', () => ({
+  application: { get: () => ({ getCountry: mockGetCountry }) },
 }));
 
 const config: WebSearchExecutionConfig = {
@@ -23,7 +23,7 @@ const config: WebSearchExecutionConfig = {
 const request = jest.fn<Promise<WebSearchHttpResponse>, [WebSearchHttpRequest]>();
 
 beforeEach(() => {
-  mockIsMainland.mockReturnValue(false);
+  mockGetCountry.mockReset().mockResolvedValue('US');
   request.mockReset().mockResolvedValue({
     bodyText: JSON.stringify({ data: { content: 'Page' } }),
     headers: {},
@@ -32,9 +32,9 @@ beforeEach(() => {
 });
 
 test.each([false, true])(
-  'selects built-in hosts using device region (mainland=%s)',
+  'selects built-in hosts using IP country (mainland=%s)',
   async (mainland) => {
-    mockIsMainland.mockReturnValue(mainland);
+    mockGetCountry.mockResolvedValue(mainland ? 'CN' : 'US');
     const provider = createProvider(['key']);
     request.mockResolvedValueOnce({ bodyText: '{"data":[]}', headers: {}, status: 200 });
     await provider.searchKeywords('Cherry Studio', config);
@@ -96,8 +96,33 @@ test.each([401, 429, 503])('does not retry when the service answered HTTP %s', a
   expect(request).toHaveBeenCalledTimes(1);
 });
 
+test.each(['searchKeywords', 'fetchUrls'] as const)(
+  'custom %s hosts do not depend on country detection',
+  async (capability) => {
+    const search = capability === 'searchKeywords';
+    const input = search ? 'Cherry Studio' : 'https://example.com';
+    request.mockResolvedValueOnce({
+      bodyText: JSON.stringify(search ? { data: [] } : { data: { content: 'Page' } }),
+      headers: {},
+      status: 200,
+    });
+    const provider = createProvider(
+      ['key'],
+      'https://reader.internal/',
+      'https://search.internal/',
+    );
+    await expect(provider[capability](input, config)).resolves.toMatchObject({ capability });
+    expect(mockGetCountry).not.toHaveBeenCalled();
+    expect(request.mock.calls.map(([call]) => call.url)).toEqual([
+      search
+        ? 'https://search.internal/Cherry%20Studio'
+        : 'https://reader.internal/https://example.com',
+    ]);
+  },
+);
+
 test('does not retry a custom host', async () => {
-  mockIsMainland.mockReturnValue(true);
+  mockGetCountry.mockResolvedValue('CN');
   request.mockRejectedValue(new WebSearchTransportError('network', 'offline'));
   await expect(
     createProvider([], 'https://reader.internal/').fetchUrls('https://example.com', config),
@@ -121,7 +146,11 @@ test('retains the longer page-rendering deadline and anonymous reader access', a
   expect(request.mock.calls[0][0].headers).not.toHaveProperty('Authorization');
 });
 
-function createProvider(apiKeys: string[], readerHost = 'https://r.jina.ai') {
+function createProvider(
+  apiKeys: string[],
+  readerHost = 'https://r.jina.ai',
+  searchHost = 'https://s.jina.ai',
+) {
   const provider: WebSearchProvider = {
     id: 'jina',
     ...WEB_SEARCH_PROVIDER_PRESET_MAP.jina,
@@ -131,7 +160,7 @@ function createProvider(apiKeys: string[], readerHost = 'https://r.jina.ai') {
     engines: [],
     capabilities: WEB_SEARCH_PROVIDER_PRESET_MAP.jina.capabilities.map((item) => ({
       ...item,
-      ...(item.feature === 'fetchUrls' ? { apiHost: readerHost } : {}),
+      apiHost: item.feature === 'fetchUrls' ? readerHost : searchHost,
     })),
   };
   return new JinaProvider(provider, new ApiKeyRotationState(), jina, { request });

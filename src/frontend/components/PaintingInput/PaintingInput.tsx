@@ -61,6 +61,8 @@ type PaintingModelSelection = {
 type PaintingInputProps = {
   /** Chat presentation only: context the prompt carries, shown above everything else. */
   accessory?: ReactNode;
+  /** Question editing keeps the original attachments, so none may be added. */
+  attachmentsEnabled?: boolean;
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
   initialParamValues?: ImageParamDraft;
@@ -87,6 +89,7 @@ export function PaintingWorkspaceInput(
 
 function PaintingInputControls({
   accessory,
+  attachmentsEnabled = true,
   canSend,
   dismissKeyboardOnSend,
   initialParamValues,
@@ -128,6 +131,7 @@ function PaintingInputControls({
     onGenerate,
     preparePrompt,
     onSubmissionSettled,
+    attachmentsEnabled,
   });
   const { reference, strategy } = input;
   const openProviderSetup = useOpenProviderSetup(
@@ -139,7 +143,7 @@ function PaintingInputControls({
   const visibleAttachments = isReferenceVisible
     ? input.attachments
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
-  const paramFields = getImageParamFields(input.resolvedMode);
+  const paramFields = getImageParamFields(input.resolvedMode, input.paramValues);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
   const modelLabel =
     selectedModel?.name ?? historicalModelLabel(painting) ?? t('settings.model.painting.title');
@@ -191,10 +195,13 @@ function PaintingInputControls({
       ) : (
         <>
           {accessory}
-          {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
+          {attachmentsEnabled &&
+          isReferenceVisible &&
+          reference.isPickerOpen &&
+          strategy.acceptsImages ? (
             <PaintingReferencePicker reference={reference} />
           ) : null}
-          {visibleAttachments.length > 0 ? (
+          {attachmentsEnabled && visibleAttachments.length > 0 ? (
             <View className="gap-2 pb-2">
               {isReferenceVisible && input.referenceAttachment ? (
                 <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -216,7 +223,7 @@ function PaintingInputControls({
           ) : null}
           <ComposerField onLinkPress={onLinkPress} placeholder={t('painting.input.placeholder')} />
           <Composer.Toolbar>
-            <ComposerMenu media="images" />
+            {attachmentsEnabled ? <ComposerMenu media="images" /> : null}
             {input.resolvedMode && paramFields.length > 0 ? (
               <Composer.Action
                 accessibilityLabel={

@@ -27,6 +27,7 @@ test('backgrounding cancels active work and returning to the foreground permits 
   const session = {
     document: { sections: [] },
     markdown: 'Content',
+    previewDocument: () => '<p>Content</p>',
     previewMarkdown: () => '<p>Content</p>',
     cancel,
     dispose: jest.fn(async () => {}),
@@ -67,6 +68,7 @@ test('shutdown retains a closing session until its cleanup settles', async () =>
       return {
         document: { sections: [] },
         markdown: 'Content',
+        previewDocument: () => '<p>Content</p>',
         previewMarkdown: () => '<p>Content</p>',
         render: jest.fn(),
         save: jest.fn(),
@@ -126,4 +128,23 @@ test('HTML conversion cancels on background and retains its lease until late cle
   await rejection;
   await stopping;
   expect(stopped).toBe(true);
+});
+
+test('prepared HTML artifacts stay temporary and are released when the runtime stops', async () => {
+  const dispose = jest.fn(async () => {});
+  const save = jest.fn();
+  jest.mocked(convertHtml).mockResolvedValueOnce({
+    file: { uri: 'file:///temporary.png', filename: 'temporary.png', mediaType: 'image/png' },
+    pages: [],
+    save,
+    dispose,
+  });
+  const runtime = new DocumentExportRuntime();
+  runtime.configure({ readManagedImage: jest.fn(), saveFile: jest.fn() });
+  await runtime._doInit();
+  await runtime.convertHtml({ title: 'Page', format: 'image', capture: async () => {} });
+  expect(save).not.toHaveBeenCalled();
+  expect(dispose).not.toHaveBeenCalled();
+  await runtime._doStop();
+  expect(dispose).toHaveBeenCalledTimes(1);
 });

@@ -19,6 +19,10 @@ jest.mock('react-native-view-shot', () => ({
 jest.mock('expo-file-system', () => ({
   FileMode: { ReadOnly: 'r' },
   File: class {
+    uri: string;
+    constructor(path: string) {
+      this.uri = path.startsWith('/') ? `file://${path}` : path;
+    }
     open(mode: string) {
       return mockOpen(mode);
     }
@@ -45,6 +49,14 @@ test('retains one native PNG above 16K until the caller releases it', async () =
   result.release();
   expect(mockReleaseCapture).toHaveBeenCalledTimes(1);
   expect(mockReleaseCapture).toHaveBeenCalledWith('file:///native.png');
+});
+
+test('normalizes a native disk path for image consumers and releases the original path', async () => {
+  mockCapture.mockResolvedValue('/native.png');
+  const result = await capturePng(1, plan, new AbortController().signal);
+  expect(result.uri).toBe('file:///native.png');
+  result.release();
+  expect(mockReleaseCapture).toHaveBeenCalledWith('/native.png');
 });
 
 test('rejects a clipped screenshot and releases its native file', async () => {

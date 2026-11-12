@@ -6,6 +6,7 @@
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentDeleteTurnInput,
+  AgentEditUserMessageInput,
   AgentEditMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
@@ -83,6 +84,17 @@ export interface AgentProtocol {
    * stays in the tree.
    */
   retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
+
+  /**
+   * Editing a settled question sends a new sibling question under the same
+   * parent through the shared submission path: the edited text is the payload,
+   * and the composer's current model, reasoning, and other send settings define
+   * the new answer or answers. The original question and its answers stay in
+   * the tree as an unselected branch, and the history continues from the edited
+   * message. Editing rejects a busy Session rather than entering the
+   * normal-send queue.
+   */
+  editUserMessage(input: AgentEditUserMessageInput): Promise<void>;
 
   /**
    * Selects the branch containing `messageId`. Unless it is already on the

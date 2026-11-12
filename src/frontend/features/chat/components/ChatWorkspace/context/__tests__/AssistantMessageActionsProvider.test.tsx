@@ -6,6 +6,10 @@ import { localConversationFailure } from '@/frontend/appShell/conversation/local
 import { AgentProtocolError, type AgentErrorView } from '@/shared/contracts/agent';
 
 import {
+  ChatShareSelectionStoreContext,
+  createChatShareSelectionStore,
+} from '../../../../share/chatShareSelection';
+import {
   AssistantMessageActionsProvider,
   ChatMessageActionsProvider,
   useAssistantMessageActions,
@@ -13,8 +17,14 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 let mockRetryOutcome: OperationOutcome<void>;
+let mockEditOutcome: OperationOutcome<void>;
+let mockQuestionEnabled = true;
+let mockAnswerEnabled = true;
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockEditMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockBeginEdit = jest.fn();
+const mockEndEdit = jest.fn();
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
 /** Captures the confirm request so a test can accept it the way a user would. */
@@ -24,13 +34,8 @@ const mockShare = jest.fn();
 jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslationStore: () => null,
 }));
-let mockFocusEffect: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
-  useFocusEffect: (effect: () => void) => {
-    mockFocusEffect = effect;
-    effect();
-  },
 }));
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
@@ -55,6 +60,9 @@ const mockAlert = {
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
 jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+jest.mock('../../../../context/ChatEditingProvider', () => ({
+  useChatEditing: () => ({ editing: null, beginEdit: mockBeginEdit, endEdit: mockEndEdit }),
+}));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
@@ -112,6 +120,31 @@ function ProviderHarness({
       }}
       messages={[
         {
+          key: 'user-1',
+          state: 'success',
+          completeness: 'complete',
+          display: {
+            id: 'user-1',
+            role: 'user',
+            status: 'success',
+            turnId: 'turn-1',
+            data: {
+              parts: [{ type: 'text', text: 'Question' }],
+            },
+          },
+          actions: {
+            editQuestion: {
+              availability: mockQuestionEnabled
+                ? { state: 'enabled' }
+                : { state: 'disabled', reason: 'busy' },
+              execute: async ({ text }) => {
+                await mockEditMessage({ messageId: 'user-1', text });
+                return mockEditOutcome;
+              },
+            },
+          },
+        },
+        {
           key: 'assistant-1',
           state: 'success',
           completeness: 'complete',
@@ -123,6 +156,11 @@ function ProviderHarness({
             data: {},
           },
           actions: {
+            editAnswer: {
+              availability: mockAnswerEnabled
+                ? { state: 'enabled' }
+                : { state: 'disabled', reason: 'busy' },
+            },
             retry: { availability: { state: 'enabled' }, execute: async () => mockRetryOutcome },
             remove: {
               availability: { state: 'enabled' },
@@ -159,7 +197,10 @@ describe('AssistantMessageActionsProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
+    mockQuestionEnabled = true;
+    mockAnswerEnabled = true;
     mockRetryOutcome = { state: 'applied', value: undefined };
+    mockEditOutcome = { state: 'applied', value: undefined };
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -173,6 +214,20 @@ describe('AssistantMessageActionsProvider', () => {
       renderer = create(<ProviderHarness probeRef={probeRef} />);
     });
   }
+
+  it('keeps question and answer editability separate', () => {
+    mockQuestionEnabled = false;
+    renderProvider();
+    expect([...probeRef.current!.state.editableQuestionIds]).toEqual(['user-1']);
+    expect([...probeRef.current!.state.editableAnswerIds]).toEqual(['assistant-1']);
+    expect(probeRef.current!.state.isEditQuestionDisabled).toBe(true);
+    expect(probeRef.current!.state.isEditAnswerDisabled).toBe(false);
+    mockQuestionEnabled = true;
+    mockAnswerEnabled = false;
+    act(() => renderer!.update(<ProviderHarness probeRef={probeRef} />));
+    expect(probeRef.current!.state.isEditQuestionDisabled).toBe(false);
+    expect(probeRef.current!.state.isEditAnswerDisabled).toBe(true);
+  });
 
   function startCopy(messageId: string, text: string) {
     act(() => probeRef.current?.actions.copyAssistantMessage({ messageId, text }));
@@ -279,19 +334,55 @@ describe('AssistantMessageActionsProvider', () => {
     expect(mockRetryMessage).not.toHaveBeenCalled();
   });
 
-  test('ignores repeated share taps until the chat regains focus', () => {
+  test('starts composer edit mode with the question text', () => {
     renderProvider();
+    act(() => probeRef.current?.actions.editQuestion!({ messageId: 'user-1' }));
+
+    // The composer owns the editing session from here: it submits through the
+    // chat controls and restores the typed edit when admission is rejected.
+    expect(mockBeginEdit).toHaveBeenCalledWith({
+      messageId: 'user-1',
+      initialText: 'Question',
+      attachmentCount: 0,
+    });
+  });
+
+  test('disables message actions during share selection and restores them on cancellation', () => {
+    const store = createChatShareSelectionStore();
+    mockShare
+      .mockImplementationOnce(store.beginSelection)
+      .mockImplementationOnce(store.beginSelection);
     act(() => {
-      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-1' });
-      probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-2' });
+      renderer = create(
+        <ChatShareSelectionStoreContext value={store}>
+          <ProviderHarness probeRef={probeRef} />
+        </ChatShareSelectionStoreContext>,
+      );
+    });
+    expect(probeRef.current!.state.isAssistantToolbarEnabled).toBe(true);
+
+    act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-1' }));
+    expect(probeRef.current!.state).toMatchObject({
+      isAssistantToolbarEnabled: false,
+      isDeleteDisabled: true,
+      isRetryDisabled: true,
+    });
+    act(() =>
+      probeRef.current!.actions.deleteMessageTurn!({ turnId: 'turn-1', messageId: 'assistant-1' }),
+    );
+    expect(mockAlertConfirm).not.toHaveBeenCalled();
+
+    act(() => store.cancelSelection());
+    expect(probeRef.current!.state).toMatchObject({
+      isAssistantToolbarEnabled: true,
+      isDeleteDisabled: false,
+      isRetryDisabled: false,
     });
 
-    expect(mockShare).toHaveBeenCalledTimes(1);
-    expect(mockShare).toHaveBeenCalledWith('answer-1', undefined);
-
-    act(() => mockFocusEffect?.());
-    act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-3' }));
+    act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-2' }));
     expect(mockShare).toHaveBeenCalledTimes(2);
+    expect(mockShare).toHaveBeenLastCalledWith('answer-2', undefined);
+    expect(probeRef.current!.state.isAssistantToolbarEnabled).toBe(false);
   });
 
   test('shows copied feedback until it expires', async () => {

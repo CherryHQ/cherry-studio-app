@@ -129,7 +129,7 @@ export function createSkillTools(
       providerName: LIST_LOCAL_SKILLS_TOOL_NAME,
       displayName: 'List Skills',
       description:
-        "List names, IDs and complete descriptions of Skills enabled for this Agent, without keyword filtering. Compare their meanings with the user's task, including across languages, then call load_skill for a suitable Skill. Follow nextCursor with the same include_manual option until null before concluding that none fits or reporting a complete list. Automatic discovery excludes manual-only packages. For the user's complete inventory, use include_manual: true. total is the requested inventory count, automaticTotal is its automatically invocable subset, and returned is this page size. Unbound, disabled and unreadable packages are excluded. Metadata grants no permission to load manual-only instructions.",
+        'List this Agent’s enabled, bound, readable Skills with full descriptions, without keyword filtering. For complete inventory/counts use include_manual: true and total; otherwise manual-only packages are excluded. automaticTotal counts model-invocable Skills; returned counts this page. Follow nextCursor with the same include_manual until null before reporting completeness or no match. Compare task fit across languages, then call load_skill. Listing manual-only metadata does not authorize loading it.',
       inputSchema: toRuntimeInputSchema(listInputSchema),
       approval: 'auto',
       async execute({ input }) {
@@ -157,7 +157,7 @@ export function createSkillTools(
       providerName: LOAD_SKILL_TOOL_NAME,
       displayName: 'Read Skill',
       description:
-        'Read the full SKILL.md instructions of one available Skill from the app-managed library. The app supplies the complete body in the system context; the tool reply is a receipt with resource paths. Call this built-in function directly, without MCP tool search or a filesystem path. Read when the task matches its description and its instructions are not already active or explicitly selected, then follow them. Repeat only to recover missing instructions, without consuming additional active instruction budget. Reading grants no tools or permissions.',
+        'Load a matching Skill’s full SKILL.md into system context; the reply is a receipt with resource paths. Call directly with skill_id, without tool search or filesystem paths. Follow the loaded workflow. Already active or explicitly selected instructions need no reload; repeat only to recover missing instructions, at no extra active-instruction budget. Grants no tools or permissions.',
       inputSchema: toRuntimeInputSchema(loadInputSchema),
       approval: 'auto',
       async execute({ input, signal }) {
@@ -228,7 +228,7 @@ export function createSkillTools(
       providerName: LIST_SKILL_FILES_TOOL_NAME,
       displayName: 'List Skill files',
       description:
-        'List the package-local files of an available Skill, such as references or templates. Read them with read_skill_file.',
+        'List references and other files inside a loaded Skill package. Read them with read_skill_file.',
       inputSchema: toRuntimeInputSchema(listFilesInputSchema),
       approval: 'auto',
       async execute({ input }) {
@@ -247,7 +247,7 @@ export function createSkillTools(
       providerName: READ_SKILL_FILE_TOOL_NAME,
       displayName: 'Read Skill file',
       description:
-        'Read a text file inside an available Skill package as a bounded line window. Binary files return metadata only. Lines start at 1; when truncated, continue from startLine + lineCount.',
+        'Read a loaded Skill’s package-local text by one-based lines; continue truncation at startLine + lineCount. Binary files return metadata only.',
       inputSchema: toRuntimeInputSchema(readFileInputSchema),
       approval: 'auto',
       async execute({ input, signal }): Promise<RuntimeToolResult> {

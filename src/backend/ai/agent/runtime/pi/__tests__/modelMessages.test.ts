@@ -1,9 +1,15 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
 import type { RuntimeExecutionRequest } from '../../types';
-import { toPiConversation } from '../modelMessages';
+import { estimatePiContextUsage, toPiConversation } from '../modelMessages';
 
-const model = { input: ['text', 'image'] } as unknown as Model<Api>;
+const model = {
+  api: 'cherry',
+  id: 'model',
+  provider: 'provider',
+  input: ['text', 'image'],
+} as unknown as Model<Api>;
 const image = {
   type: 'file' as const,
   fileEntryId: '00000000-0000-7000-8000-000000000001',
@@ -26,6 +32,37 @@ function request(overrides: Partial<RuntimeExecutionRequest>): RuntimeExecutionR
     ...overrides,
   };
 }
+
+test('estimates merged replay by content without changing execution input measurements', () => {
+  const conversation = toPiConversation(
+    request({
+      history: [
+        {
+          turnId: 'earlier',
+          messages: [
+            { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+            {
+              role: 'assistant',
+              // A pause_turn continuation's final input already includes the first text block.
+              parts: [
+                { type: 'text', text: 'Searching. ' },
+                { type: 'text', text: 'Cherries are red.' },
+              ],
+              contextTokens: 100,
+            },
+          ],
+        },
+      ],
+    }),
+    model,
+  );
+  expect(estimateContextTokens(conversation.history).tokens).toBe(100);
+  expect(estimatePiContextUsage(conversation.history)).toMatchObject({
+    tokens: 11,
+    lastUsageIndex: null,
+  });
+  expect(estimateContextTokens(conversation.history).tokens).toBe(100);
+});
 
 test('an attached image names its managed file, in the prompt and in rebuilt history', () => {
   const label = {

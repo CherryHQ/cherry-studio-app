@@ -24,12 +24,14 @@ export async function capturePng(
     signal.throwIfAborted();
     screenshotUri = await captureRef(view, { format: 'png', result: 'tmpfile' });
     signal.throwIfAborted();
-    const { width, height } = readPngDimensions(screenshotUri);
+    // iOS view-shot can return a bare path; image loaders require a file URI.
+    const uri = new File(screenshotUri).uri;
+    const { width, height } = readPngDimensions(uri);
     if (Math.abs(width - plan.width) > 1 || Math.abs(height - plan.height) > 1) {
       throw new DocumentExportError('capture-failed');
     }
     signal.throwIfAborted();
-    return { uri: screenshotUri, width, height, release };
+    return { uri, width, height, release };
   } catch (error) {
     release();
     throw error;

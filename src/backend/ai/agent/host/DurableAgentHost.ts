@@ -12,6 +12,7 @@ import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditUserMessageInputSchema,
   AgentEditMessageInputSchema,
   AgentEventSchema,
   AgentForkSessionInputSchema,
@@ -31,6 +32,7 @@ import {
   type AgentErrorView,
   type AgentEvent,
   type AgentInputPart,
+  type AgentMessageSibling,
   type AgentMessageView,
   type AgentPendingQuestion,
   type AgentProtocol,
@@ -41,12 +43,17 @@ import {
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
   type AgentTurnView,
+  type MessageQuote,
+  type QuoteAuthor,
 } from '@/shared/contracts/agent';
 import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { PluginTextReference } from '@/shared/data/types/plugin';
+import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
+import type { SkillTextReference } from '@/shared/data/types/skill';
 import type { TraceContext } from '@/shared/data/types/trace';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
@@ -61,6 +68,7 @@ import {
   type RuntimeLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
+  type RuntimeContextUsage,
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
@@ -90,6 +98,7 @@ import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareDurableTurn,
+  loadTurnContext,
   prepareInitialTurn,
   prepareTurn,
   type TurnPlan,
@@ -120,6 +129,7 @@ type LiveSession = {
    */
   withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
+  contextUsage: RuntimeContextUsage | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
@@ -157,6 +167,8 @@ export class DurableAgentHost implements AgentProtocol {
   private readonly attachments = new Map<string, Promise<LiveSession>>();
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
+  /** Branch alternatives by {@link siblingKey}, refreshed when a sibling set changes. */
+  private readonly branchSiblings = new Map<string, AgentMessageSibling[]>();
   /** Approval waits are app-observed; they join the turn's timing and its settled message. */
   private readonly approvalWaits = new Map<
     string,
@@ -164,6 +176,8 @@ export class DurableAgentHost implements AgentProtocol {
   >();
   private readonly preparing = new Map<string, Promise<PreparedInput>>();
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  /** Read-side estimates for observed branches without a matching working copy. */
+  private readonly storedContextUsages = new Map<string, RuntimeContextUsage>();
   private readonly statuses = new Map<string, AgentSessionStatus>();
   private readonly statusListeners = new Map<string, Set<() => void>>();
   private readonly allStatusListeners = new Set<() => void>();
@@ -235,6 +249,13 @@ export class DurableAgentHost implements AgentProtocol {
       await this.suspension;
     } finally {
       await this.resumeSuspended();
+      for (const sessionId of [...this.listeners.keys()]) {
+        const session = await this.store.getSession(sessionId);
+        if (!session) continue;
+        await this.attachedLanes(sessionId);
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(sessionId);
+      }
     }
   }
   pendingTurns(sessionId: string) {
@@ -440,6 +461,7 @@ export class DurableAgentHost implements AgentProtocol {
     } finally {
       for (const state of this.live.values()) state.background?.retire();
       this.live.clear();
+      this.storedContextUsages.clear();
       this.prepared.clear();
       this.preparing.clear();
       this.listeners.clear();
@@ -593,39 +615,48 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
-      const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
-      if (quote?.type === 'text' && quote.quotes) {
-        for (const sourceMessageId of new Set(quote.quotes.map((item) => item.sourceMessageId))) {
-          const source = await this.store.getMessage(parsed.sessionId, sourceMessageId);
-          if (source?.role !== 'assistant')
-            fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
-        }
-      }
-      const parent = session.activeNodeId ?? null;
-      const answers = replyTargets(parsed);
-      const busy = this.busyLanes(parsed.sessionId);
-      if (busy.length && answers.length > 1)
-        fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
-      const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
-      // Only a follow-up to the busy lane's newest answer can wait in its queue.
-      const [first] = choices;
-      if (
-        busy.length &&
-        (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
-      )
-        fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
-      const scope = { through: parent, readOnlyTools: answers.length > 1 };
-      const targets = await eachAnswer(
-        answers,
-        signal,
-        async (answer, index, signal): Promise<ReplyTarget> => {
-          const input = { ...parsed, ...answer };
-          const choice = choices[index]!;
-          return { ...choice, plan: await this.planAnswer(choice, input, signal, scope), input };
-        },
-      );
-      return this.submitTargets(parsed, parent, targets, signal);
+      return this.submitAdmitted(parsed, session.activeNodeId ?? null, current, signal);
     });
+  }
+
+  /** The shared submission path: a new question plans its answers and reserves them. */
+  private async submitAdmitted(
+    parsed: AgentSubmitMessageInput,
+    parent: string | null,
+    current: RuntimeLane[],
+    signal: AbortSignal,
+  ) {
+    const quote = parsed.parts.find((part) => part.type === 'text' && part.quotes);
+    if (quote?.type === 'text' && quote.quotes) {
+      for (const sourceMessageId of new Set(quote.quotes.map((item) => item.sourceMessageId))) {
+        const source = await this.store.getMessage(parsed.sessionId, sourceMessageId);
+        if (source?.role !== 'assistant')
+          fail('CAPABILITY_UNSUPPORTED', 'The quoted answer is unavailable.');
+      }
+    }
+    const answers = replyTargets(parsed);
+    const busy = this.busyLanes(parsed.sessionId);
+    if (busy.length && answers.length > 1)
+      fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
+    const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
+    // Only a follow-up to the busy lane's newest answer can wait in its queue.
+    const [first] = choices;
+    if (
+      busy.length &&
+      (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
+    )
+      fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
+    const scope = { through: parent, readOnlyTools: answers.length > 1 };
+    const targets = await eachAnswer(
+      answers,
+      signal,
+      async (answer, index, signal): Promise<ReplyTarget> => {
+        const input = { ...parsed, ...answer };
+        const choice = choices[index]!;
+        return { ...choice, plan: await this.planAnswer(choice, input, signal, scope), input };
+      },
+    );
+    return this.submitTargets(parsed, parent, targets, signal);
   }
 
   /** Rebuilt copies read their history from Cherry; native and forked ones keep the engine's. */
@@ -690,6 +721,78 @@ export class DurableAgentHost implements AgentProtocol {
 
   private liveStates(sessionId: string) {
     return [...this.live.values()].filter((state) => state.lane.sessionId === sessionId);
+  }
+
+  private publishContextUsages(sessionId: string) {
+    this.publish(sessionId, {
+      type: 'context.usage.updated',
+      usages: this.contextUsages(sessionId),
+    });
+  }
+
+  private contextUsages(sessionId: string) {
+    const usages = this.liveStates(sessionId).flatMap((state) => state.contextUsage ?? []);
+    const stored = this.storedContextUsages.get(sessionId);
+    if (stored && !usages.some((usage) => usage.messageId === stored.messageId))
+      usages.push(stored);
+    return usages;
+  }
+
+  private async refreshStoredContextUsage(session: AgentSessionView) {
+    this.storedContextUsages.delete(session.id);
+    if (
+      !this.listeners.has(session.id) ||
+      !session.activeNodeId ||
+      this.contextUsages(session.id).some((usage) => usage.messageId === session.activeNodeId)
+    )
+      return;
+    try {
+      const revision = await this.store.getRuntimeRevision(session.id);
+      const answer = await this.store.getMessage(session.id, session.activeNodeId);
+      const inference = answer?.inferenceSnapshot;
+      if (
+        !answer ||
+        answer.role !== 'assistant' ||
+        answer.status === 'pending' ||
+        answer.status === 'streaming' ||
+        inference?.status !== 'supported' ||
+        inference.snapshot.imageGeneration
+      )
+        return;
+      const agent = await this.ports.agents.getAgent(session.agentId);
+      if (!agent) return;
+      const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
+        this.preparation,
+        session.id,
+        this.controller.signal,
+        undefined,
+        answer.id,
+      );
+      const model = inference.snapshot.model;
+      const tokens = this.conversations.estimateStoredContextUsage({
+        model,
+        history: toRuntimeHistory(storedTurnContext.history, new Map(), model.uniqueModelId),
+        contextCheckpoint: runtimeContextCheckpoint,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: agent.instructions,
+          mode: agent.mode,
+          appLanguage: this.ports.appLanguage(),
+          tools: [],
+        }),
+      });
+      const current = await this.store.getSession(session.id);
+      if (
+        !this.controller.signal.aborted &&
+        this.listeners.has(session.id) &&
+        current?.activeNodeId === answer.id &&
+        revision === (await this.store.getRuntimeRevision(session.id))
+      )
+        this.storedContextUsages.set(session.id, { messageId: answer.id, tokens, estimated: true });
+    } catch (error) {
+      logger.warn('Could not estimate the saved Agent context', error as Error, {
+        sessionId: session.id,
+      });
+    }
   }
 
   /** Copies of a Session with an active or queued input. */
@@ -784,6 +887,11 @@ export class DurableAgentHost implements AgentProtocol {
     }
     const { turnId } = reserved;
     const assistants = [reserved.assistantMessage, ...reserved.additionalAssistantMessages];
+    // The reservation committed the branch before execution: every alternative
+    // is already readable, so live projections can carry it while the turn runs.
+    await this.refreshBranchSiblings(sessionId, parent);
+    for (const answerParent of new Set(assistants.map((message) => message.parentId ?? null)))
+      if (answerParent !== parent) await this.refreshBranchSiblings(sessionId, answerParent);
     // The reservation selected the new answer. Observers learn the branch before its rows arrive.
     const selected = await this.store.getSession(sessionId);
     if (selected) this.publish(sessionId, { type: 'session.updated', session: selected });
@@ -1119,6 +1227,43 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
+  async editUserMessage(input: Parameters<AgentProtocol['editUserMessage']>[0]): Promise<void> {
+    const parsed = AgentEditUserMessageInputSchema.parse(input);
+    this.assertIdle(parsed.sessionId);
+    return this.admit(parsed.sessionId, async (signal) => {
+      const current = await this.syncSession(parsed.sessionId, true);
+      const session = await this.requireSession(parsed.sessionId);
+      const edited = await this.store.getMessage(session.id, parsed.messageId);
+      if (!edited || edited.role !== 'user' || !edited.turnId)
+        fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
+      const parts = editedUserInput(edited.parts, parsed.text);
+      // Question editing is a normal new submission from an explicit parent.
+      // Omitted composer overrides use the Agent's current defaults, never a
+      // historical answer's inference snapshot.
+      const edit: AgentSubmitMessageInput = {
+        sessionId: session.id,
+        userMessageId: uuidv7(),
+        assistantMessageId: uuidv7(),
+        parts,
+        ...(parsed.modelId ? { modelId: parsed.modelId } : {}),
+        ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
+        ...(parsed.reasoningEffort !== undefined
+          ? { reasoningEffort: parsed.reasoningEffort }
+          : {}),
+        ...(parsed.imageGeneration ? { imageGeneration: parsed.imageGeneration } : {}),
+        ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined
+          ? {
+              ...(parsed.skillIds ? { skillIds: parsed.skillIds } : {}),
+              ...(parsed.skillAction ? { skillAction: parsed.skillAction } : {}),
+            }
+          : submittedSkills(edited.parts)),
+      };
+      // The edited row keeps its own answers; the new question branches from
+      // the edited row's parent and the shared path selects its answer.
+      await this.submitAdmitted(edit, edited.parentId ?? null, current, signal);
+    });
+  }
+
   async editMessage(input: Parameters<AgentProtocol['editMessage']>[0]) {
     const parsed = AgentEditMessageInputSchema.parse(input);
     this.assertIdle(parsed.sessionId);
@@ -1175,8 +1320,11 @@ export class DurableAgentHost implements AgentProtocol {
           if (live.assistant?.id === message.id) live.assistant = result.message;
         this.publish(session.id, { type: 'message.edited', message: result.message });
         const updatedSession = await this.store.getSession(session.id);
-        if (updatedSession)
+        if (updatedSession) {
           this.publish(session.id, { type: 'session.updated', session: updatedSession });
+          await this.refreshStoredContextUsage(updatedSession);
+          this.publishContextUsages(session.id);
+        }
         this.ports.durableStorage?.notifyTranscript(session.id);
         return result.message;
       } catch (error) {
@@ -1199,6 +1347,8 @@ export class DurableAgentHost implements AgentProtocol {
     if (!session) fail('MESSAGE_NOT_FOUND', 'The message no longer exists.');
     this.publish(session.id, { type: 'session.updated', session });
     this.ports.durableStorage?.notifyTranscript(session.id);
+    await this.refreshStoredContextUsage(session);
+    this.publishContextUsages(session.id);
     return session;
   }
 
@@ -1207,12 +1357,16 @@ export class DurableAgentHost implements AgentProtocol {
     this.assertIdle(parsed.sessionId);
     return this.admit(parsed.sessionId, async () => {
       await this.syncSession(parsed.sessionId, true);
+      const removed = await this.store.listTurnMessages(parsed.sessionId, parsed.turnId);
+      const affectedParents = new Set(removed.map((row) => row.parentId ?? null));
       const result = await this.store.deleteTurn(parsed);
       if (result.status === 'session-not-found')
         fail('SESSION_NOT_FOUND', 'The session no longer exists.');
       if (result.status === 'turn-not-found')
         fail('MESSAGE_NOT_FOUND', 'The turn no longer exists.');
       if (result.status === 'turn-unsettled') fail('SESSION_BUSY', 'The turn has not settled.');
+      for (const parentId of affectedParents)
+        await this.refreshBranchSiblings(parsed.sessionId, parentId);
       // The same Cherry transaction invalidated the old revision. A crash before retirement is safe.
       await this.detachConversation(parsed.sessionId).catch((error: unknown) =>
         logger.warn('Deferred obsolete working-copy cleanup', error as Error),
@@ -1227,7 +1381,11 @@ export class DurableAgentHost implements AgentProtocol {
       );
       // Deleting the selected branch moves the Session's active node.
       const session = await this.store.getSession(parsed.sessionId);
-      if (session) this.publish(parsed.sessionId, { type: 'session.updated', session });
+      if (session) {
+        this.publish(parsed.sessionId, { type: 'session.updated', session });
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(session.id);
+      }
       this.ports.durableStorage?.notifyTranscript(parsed.sessionId);
     });
   }
@@ -1246,6 +1404,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   async deleteSession(input: Parameters<AgentProtocol['deleteSession']>[0]) {
     const { sessionId } = AgentDeleteSessionInputSchema.parse(input);
+    for (const key of [...this.branchSiblings.keys()])
+      if (key.startsWith(`${sessionId} `)) this.branchSiblings.delete(key);
     storageMutationGate.assertWritable();
     if (!this.accepting) fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not ready.');
     if (this.deleting.has(sessionId)) fail('SESSION_BUSY', 'This session is being deleted.');
@@ -1278,6 +1438,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** Retires every working copy of a Session; Cherry history stays the source of truth. */
   private async detachConversation(sessionId: string) {
+    this.storedContextUsages.delete(sessionId);
+    this.publishContextUsages(sessionId);
     for (const lane of await this.sessionLanes(sessionId)) await this.detachLane(lane);
   }
 
@@ -1287,6 +1449,8 @@ export class DurableAgentHost implements AgentProtocol {
     state?.background?.retire();
     this.live.delete(laneKey(lane));
     this.reconcileScreenAwake();
+    this.storedContextUsages.delete(lane.sessionId);
+    this.publishContextUsages(lane.sessionId);
     if (await this.conversations.hasConversation(lane))
       await this.conversations.discardConversation(lane);
   }
@@ -1440,16 +1604,20 @@ export class DurableAgentHost implements AgentProtocol {
       capabilities: this.conversations.descriptor.capabilities,
       activeTurn: view ? this.turnStatus(view.turn, state!) : null,
       queuedInputs: this.queuedInputs(states.flatMap((candidate) => candidate.queue)),
-      activeUserMessage: view?.user ?? null,
-      streamingMessage: view?.assistant ?? null,
+      activeUserMessage: view?.user ? this.withBranchSiblings(session.id, view.user) : null,
+      streamingMessage: view?.assistant
+        ? this.withBranchSiblings(session.id, view.assistant)
+        : null,
       additionalMessages: running
         .slice(1)
-        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? []),
+        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? [])
+        .map((message) => this.withBranchSiblings(session.id, message)),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
       pendingQuestion: states.find((candidate) => candidate.question)?.question ?? null,
       contextStatus: state?.contextStatus ?? null,
+      contextUsages: this.contextUsages(sessionId),
       pendingApprovals: states.flatMap((candidate) =>
         [...candidate.approvals.values()].map((entry) => entry.view),
       ),
@@ -1459,9 +1627,14 @@ export class DurableAgentHost implements AgentProtocol {
     listeners.add(listener);
     const unsubscribe = () => {
       listeners.delete(listener);
-      if (!listeners.size) this.listeners.delete(sessionId);
+      if (!listeners.size) {
+        this.listeners.delete(sessionId);
+        this.storedContextUsages.delete(sessionId);
+      }
     };
     try {
+      await this.refreshStoredContextUsage(session);
+      snapshot.contextUsages = this.contextUsages(sessionId);
       // Settled history omits an entire turn while any answer runs. Restore its completed
       // siblings too. Subscribe before the read so terminal events during it cannot be lost.
       const turnIds = new Set(running.map((candidate) => candidate.active!.identity.turnId));
@@ -1961,6 +2134,7 @@ export class DurableAgentHost implements AgentProtocol {
           queue: [],
           withdrawnParents: new Map(),
           contextStatus: null,
+          contextUsage: null,
           unsubscribe: async () => {},
           background: null,
           backgroundRequestId: null,
@@ -1985,8 +2159,10 @@ export class DurableAgentHost implements AgentProtocol {
         }
         state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
         state.contextStatus = observed.snapshot.contextStatus ?? null;
+        state.contextUsage = observed.snapshot.contextUsage ?? null;
         state.unsubscribe = observed.unsubscribe;
         this.live.set(key, state);
+        if (state.contextUsage) this.publishContextUsages(lane.sessionId);
         this.updateQueue(state, observed.snapshot.queue);
         if (state.active) this.present(state.active);
         installed = true;
@@ -2012,11 +2188,16 @@ export class DurableAgentHost implements AgentProtocol {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
       this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
+      state.contextUsage = event.snapshot.contextUsage ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
+      this.publishContextUsages(sessionId);
       if (state.active) this.present(state.active);
     } else if (event.type === 'context.updated') {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
+    } else if (event.type === 'context.usage.updated') {
+      state.contextUsage = event.usage;
+      this.publishContextUsages(sessionId);
     } else if (event.type === 'queue.updated') {
       this.updateQueue(state, event.queue);
     } else {
@@ -2193,6 +2374,23 @@ export class DurableAgentHost implements AgentProtocol {
     );
   }
 
+  private siblingKey(sessionId: string, parentId: string | null) {
+    return `${sessionId} ${parentId ?? ''}`;
+  }
+
+  /** Fewer than two alternatives hide the switcher; the map holds no entry then. */
+  private async refreshBranchSiblings(sessionId: string, parentId: string | null) {
+    const key = this.siblingKey(sessionId, parentId);
+    const siblings = await this.store.listBranchSiblings(sessionId, parentId);
+    if (siblings.length >= 2) this.branchSiblings.set(key, siblings);
+    else this.branchSiblings.delete(key);
+  }
+
+  private withBranchSiblings<T extends AgentMessageView>(sessionId: string, view: T): T {
+    const siblings = this.branchSiblings.get(this.siblingKey(sessionId, view.parentId ?? null));
+    return siblings ? { ...view, siblings } : view;
+  }
+
   private publishRows(turn: RuntimeDurableTurn) {
     const { user, assistant } = this.projectTurn(turn);
     const { sessionId } = turn.identity;
@@ -2201,18 +2399,29 @@ export class DurableAgentHost implements AgentProtocol {
       // The answers of one question share it: the Session shows it once.
       const shown = this.liveStates(sessionId).some((candidate) => candidate.users.has(user.id));
       state?.users.add(user.id);
-      if (!shown) this.publish(sessionId, { type: 'message.created', message: user });
+      if (!shown)
+        this.publish(sessionId, {
+          type: 'message.created',
+          message: this.withBranchSiblings(sessionId, user),
+        });
     }
     if (!assistant) return;
     const terminal = turn.status !== 'running' && turn.status !== 'queued';
     const previous = state?.assistant;
-    if (terminal) this.publish(sessionId, { type: 'message.finalized', message: assistant });
+    if (terminal)
+      this.publish(sessionId, {
+        type: 'message.finalized',
+        message: this.withBranchSiblings(sessionId, assistant),
+      });
     else if (
       !previous ||
       previous.id !== assistant.id ||
       previous.parts.some((part, index) => assistant.parts[index]?.id !== part.id)
     )
-      this.publish(sessionId, { type: 'message.created', message: assistant });
+      this.publish(sessionId, {
+        type: 'message.created',
+        message: this.withBranchSiblings(sessionId, assistant),
+      });
     else
       for (const [index, part] of assistant.parts.entries()) {
         const old = previous.parts[index];
@@ -2689,4 +2898,136 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
       ];
     return [];
   });
+}
+
+/** Every stored reference kind an edit may carry onto the replacement text. */
+type InlineReferenceEntry =
+  | { kind: 'plugin'; reference: PluginTextReference }
+  | { kind: 'skill'; reference: SkillTextReference }
+  | { kind: 'selection'; reference: SelectionTextReference }
+  | {
+      kind: 'quote';
+      quote: MessageQuote;
+      reference: NonNullable<MessageQuote['reference']>;
+      author?: QuoteAuthor;
+    };
+
+/**
+ * The replacement input of an edited question: its text collapses into one text
+ * part and the original file parts stay attached. Inline
+ * references survive when their mention still occurs in the edited text,
+ * matched independently against the new text, then ordered by new offset.
+ * Reused ranges are excluded so mentions cannot overlap;
+ * mentions the user removed are dropped.
+ */
+function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentInputPart[] {
+  const texts = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
+  const pluginEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.pluginReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'plugin', reference }),
+    ),
+  );
+  const skillEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.skillReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'skill', reference }),
+    ),
+  );
+  const selectionEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.selectionReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'selection', reference }),
+    ),
+  );
+  // A quote's inline label is a truncated excerpt; the stored quote carries
+  // the full selected text, so surviving labels must remap the whole quote.
+  const quoteEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.quotes ?? []).flatMap((quote): InlineReferenceEntry[] =>
+      quote.reference
+        ? [{ kind: 'quote', quote, reference: quote.reference, author: part.quoteAuthor }]
+        : [],
+    ),
+  );
+  // Quotes without an inline reference lead the request as a whole; the edit
+  // buffer never shows them as mentions, so they carry over unchanged.
+  const floatingQuotes = texts.flatMap((part) =>
+    (part.quotes ?? [])
+      .filter((quote) => !quote.reference)
+      .map((quote) => ({ quote, author: part.quoteAuthor })),
+  );
+  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries, ...quoteEntries].sort(
+    (left, right) => left.reference.offset - right.reference.offset,
+  );
+  const kept: InlineReferenceEntry[] = [];
+  const ranges: { start: number; end: number }[] = [];
+  for (const entry of ordered) {
+    const label = entry.reference.label;
+    if (!label.length) continue;
+    let offset = text.indexOf(label);
+    while (
+      offset >= 0 &&
+      ranges.some((range) => offset < range.end && offset + label.length > range.start)
+    )
+      offset = text.indexOf(label, offset + 1);
+    if (offset < 0) continue;
+    ranges.push({ start: offset, end: offset + label.length });
+    switch (entry.kind) {
+      case 'plugin':
+        kept.push({ kind: 'plugin', reference: { ...entry.reference, offset } });
+        break;
+      case 'skill':
+        kept.push({ kind: 'skill', reference: { ...entry.reference, offset } });
+        break;
+      case 'selection':
+        kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
+        break;
+      case 'quote':
+        kept.push({
+          kind: 'quote',
+          quote: entry.quote,
+          reference: { ...entry.reference, offset },
+          author: entry.author,
+        });
+        break;
+    }
+  }
+  kept.sort((left, right) => left.reference.offset - right.reference.offset);
+  const pluginReferences = kept.flatMap((entry) =>
+    entry.kind === 'plugin' ? [entry.reference] : [],
+  );
+  const skillReferences = kept.flatMap((entry) =>
+    entry.kind === 'skill' ? [entry.reference] : [],
+  );
+  const selectionReferences = kept.flatMap((entry) =>
+    entry.kind === 'selection' ? [entry.reference] : [],
+  );
+  const quotes = [
+    ...kept.flatMap((entry) =>
+      entry.kind === 'quote' ? [{ ...entry.quote, reference: entry.reference }] : [],
+    ),
+    ...floatingQuotes.map((entry) => entry.quote),
+  ];
+  const quoteAuthor =
+    kept.find((entry) => entry.kind === 'quote')?.author ?? floatingQuotes[0]?.author;
+  return [
+    AgentInputPartSchema.parse({
+      type: 'text',
+      text,
+      // Quotes and their author are stored as a pair; never emit one alone.
+      ...(quotes.length && quoteAuthor ? { quotes, quoteAuthor } : {}),
+      ...(pluginReferences.length ? { pluginReferences } : {}),
+      ...(skillReferences.length ? { skillReferences } : {}),
+      ...(selectionReferences.length ? { selectionReferences } : {}),
+    }),
+    ...parts.flatMap((part) =>
+      part.type === 'file'
+        ? [
+            AgentInputPartSchema.parse({
+              type: part.type,
+              fileEntryId: part.fileEntryId,
+              mediaType: part.mediaType,
+              ...(part.filename !== undefined ? { filename: part.filename } : {}),
+            }),
+          ]
+        : [],
+    ),
+  ];
 }
