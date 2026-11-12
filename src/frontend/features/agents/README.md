@@ -31,6 +31,10 @@ surfaces.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
+- Existing Agents also expose private memory in a separate section. Persona, user context and
+  durable facts use an independent Save/Close sheet with revision checks and dirty-draft confirmation;
+  they do not participate in Agent-definition autosave. Journals are read-only. Minimal mode can
+  view/edit identity in settings but has no conversation memory tools.
 - The instructions input grows from 112 to a fixed maximum of 480 points, roughly filling the
   remaining first-screen space on a typical phone without measuring the layout.
   Longer instructions scroll internally without truncating the saved text. Native text selection

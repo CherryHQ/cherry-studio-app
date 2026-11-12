@@ -21,6 +21,7 @@ import { Platform } from 'react-native';
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
+import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -60,6 +61,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createMemoryTools } from './memoryTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -116,6 +118,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
+    memory?: AgentMemoryOperations;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -132,6 +135,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  memory?: AgentMemoryOperations;
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
@@ -278,6 +282,7 @@ function createCatalog(
   const tools = [
     createAskUserQuestionTool(askUser),
     ...createAgentManagementTools(deps.agents, agentId),
+    ...(agentId && deps.memory ? createMemoryTools(deps.memory, agentId) : []),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -439,6 +444,7 @@ function resolveDependencies(
 ): SystemCapabilitySourceDependencies {
   return {
     voice: overrides.voice ?? services.voice,
+    memory: overrides.memory ?? services.memory,
     agents: overrides.agents ?? agentService,
     trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,

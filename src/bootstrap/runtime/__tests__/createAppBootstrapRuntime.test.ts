@@ -138,6 +138,7 @@ jest.mock('@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActiv
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
+    AgentMemoryService: { hasPendingStorageWork: () => false },
     AgentHostDependencies: mockAgentHostDependencies,
     AgentRuntime: mockAgentRuntime,
     AiService: mockAi,

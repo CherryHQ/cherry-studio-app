@@ -947,10 +947,12 @@ export class DurableAgentHost implements AgentProtocol {
         ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
         : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
-      initialInstructions:
-        plan.agent.mode === 'standard'
+      initialInstructions: [
+        ...(plan.memoryInstructions ? [plan.memoryInstructions] : []),
+        ...(plan.agent.mode === 'standard'
           ? [...buildInitialSkillInstructions(plan.skills), ...plan.workflowInstructions]
-          : [],
+          : []),
+      ],
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
@@ -1523,6 +1525,7 @@ export class DurableAgentHost implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
+      memory: this.ports.memory,
       runtime: this.conversations,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,

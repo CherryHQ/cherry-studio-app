@@ -8,6 +8,7 @@ import { TraceStorageService } from '@/backend/ai/observability/TraceStorageServ
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { AgentMemoryService } from '@/backend/services/agentMemory';
 import { AnalyticsService } from '@/backend/services/analytics';
 import { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
@@ -56,6 +57,7 @@ export const services = {
   ResourceScopeCoordinator,
   CacheService,
   DbService,
+  AgentMemoryService,
   BackupRuntime,
   TrashRuntime,
   DesktopConnectionManager,

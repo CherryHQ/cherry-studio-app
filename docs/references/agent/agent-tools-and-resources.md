@@ -145,6 +145,22 @@ A temporarily undiscovered tool keeps its stored `enabled` value; only its effec
 unavailable. This resolver returns configuration facts only and does not create or inject a Runtime
 tool.
 
+## Agent Memory
+
+[Agent Memory](../../../src/backend/services/agentMemory/README.md) owns private persona, user context,
+durable facts and an append-only journal for each Agent. The Host loads a complete identity snapshot
+at each language-turn preparation, independently of model tool support. Empty sections withdraw
+previous memory, including copies in compacted summaries. The snapshot is a trusted application
+section; its contents remain contextual data subordinate to current user requests and Agent
+Instructions. Image-generation turns do not load memory.
+
+`memory_read` and `memory_search` are read-only built-ins. `memory_update` and `memory_append`
+follow the system write approval policy and never enter a parallel read-only answer. Minimal mode
+receives identity context but no memory tools. Tools are bound to the current Agent; callers never
+choose another Agent or a physical path. Document updates require a fresh content revision and
+refresh the running conversation's trusted memory section after commit. The editor and tools share
+one ordered backend writer, with backup freeze and host-generation teardown.
+
 ## Snapshot Resolution
 
 Before admitting a turn, the Host resolves tools in this order:
