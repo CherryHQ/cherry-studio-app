@@ -1,14 +1,12 @@
 import { loggerService } from '@logger';
-import { z } from 'zod';
 
 import { createHttpClient } from '@/backend/services/http';
 import { repositorySourceOrder, type RepositorySource } from '@/backend/services/region';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import type { AgentTemplatesModule } from '@/shared/contracts/agentTemplates';
-import {
-  AgentTemplateRevisionSchema,
-  type AgentTemplateCatalog,
-  type AgentTemplateLanguage,
+import type {
+  AgentTemplateCatalog,
+  AgentTemplateLanguage,
 } from '@/shared/data/types/agentTemplate';
 
 import { parseAgentTemplateCatalog } from './agentTemplateCatalog';
@@ -33,24 +31,27 @@ const rawGithub = createHttpClient({
   ...options,
   baseUrl: 'https://raw.githubusercontent.com/CherryHQ/cherry-studio',
 });
-const BranchSchema = z.object({
-  commit: z.object({ id: z.string().optional(), sha: z.string().optional() }),
-});
-
-async function readRevision(source: RepositorySource, signal: AbortSignal): Promise<string> {
-  const { data } = await (source === 'gitcode' ? gitcode : github).request<unknown>({
-    method: 'GET',
-    path: '/branches/main',
-    maxResponseBytes: 256 * 1024,
-    signal,
-  });
-  const { commit } = BranchSchema.parse(data);
-  return AgentTemplateRevisionSchema.parse(source === 'gitcode' ? commit.id : commit.sha);
+async function readRevision(source: RepositorySource, signal: AbortSignal): Promise<string | null> {
+  try {
+    const { data } = await (source === 'gitcode' ? gitcode : github).request<unknown>({
+      method: 'GET',
+      path: '/branches/main',
+      maxResponseBytes: 256 * 1024,
+      signal,
+    });
+    const branch = data as { commit?: { id?: unknown; sha?: unknown } } | null;
+    const revision = source === 'gitcode' ? branch?.commit?.id : branch?.commit?.sha;
+    return typeof revision === 'string' && revision.trim() ? revision.trim() : null;
+  } catch (error) {
+    signal.throwIfAborted();
+    logger.warn('Template revision unavailable; using the default branch', { source, error });
+    return null;
+  }
 }
 
 async function readCatalogFile(
   source: RepositorySource,
-  revision: string,
+  revision: string | null,
   name: string,
   signal: AbortSignal,
 ): Promise<unknown> {
@@ -60,8 +61,11 @@ async function readCatalogFile(
     responseType: 'text',
     maxResponseBytes: 5 * 1024 * 1024,
     signal,
-    path: source === 'gitcode' ? `/raw/${encodeURIComponent(path)}` : `/${revision}/${path}`,
-    query: source === 'gitcode' ? { ref: revision } : undefined,
+    path:
+      source === 'gitcode'
+        ? `/raw/${encodeURIComponent(path)}`
+        : `/${encodeURIComponent(revision ?? 'main')}/${path}`,
+    query: source === 'gitcode' ? { ref: revision ?? 'main' } : undefined,
   });
   return JSON.parse(data);
 }
@@ -71,6 +75,7 @@ export function createAgentTemplatesModule(dependencies: {
 }): AgentTemplatesModule & { dispose(): Promise<void> } {
   const lifetime = new AbortController();
   const snapshots = new Map<AgentTemplateLanguage, Promise<AgentTemplateSnapshot | null>>();
+  const catalogs = new Map<AgentTemplateLanguage, AgentTemplateCatalog>();
   const requests = new Map<AgentTemplateLanguage, Promise<AgentTemplateCatalog>>();
 
   function readSnapshot(language: AgentTemplateLanguage) {
@@ -88,18 +93,40 @@ export function createAgentTemplatesModule(dependencies: {
       try {
         const revision = await readRevision(source, signal);
         signal.throwIfAborted();
-        if (previous?.catalog.revision === revision) return previous.catalog;
+        if (revision && previous?.isComplete && previous.catalog.revision === revision) {
+          catalogs.set(language, previous.catalog);
+          return previous.catalog;
+        }
         const [legacy, agents] = await Promise.allSettled([
           readCatalogFile(source, revision, `agents-${language}.json`, signal),
           readCatalogFile(source, revision, 'marketplace-agents.json', signal),
         ]);
         signal.throwIfAborted();
-        if (legacy.status === 'rejected') throw legacy.reason;
-        if (agents.status === 'rejected') throw agents.reason;
-        const catalog = parseAgentTemplateCatalog(legacy.value, agents.value, language, revision);
-        const snapshot = await writeAgentTemplateSnapshot(catalog, previous);
-        signal.throwIfAborted();
-        snapshots.set(language, Promise.resolve(snapshot));
+        if (legacy.status === 'rejected' && agents.status === 'rejected') throw legacy.reason;
+        const catalog = parseAgentTemplateCatalog(
+          legacy.status === 'fulfilled' ? legacy.value : undefined,
+          agents.status === 'fulfilled' ? agents.value : undefined,
+          language,
+          revision ?? '',
+        );
+        if (!catalog.templates.length)
+          throw new Error('No templates are available from this source');
+        catalogs.set(language, catalog);
+        try {
+          const snapshot = await writeAgentTemplateSnapshot(
+            catalog,
+            previous,
+            legacy.status === 'fulfilled' && agents.status === 'fulfilled',
+          );
+          signal.throwIfAborted();
+          snapshots.set(language, Promise.resolve(snapshot));
+        } catch (error) {
+          signal.throwIfAborted();
+          logger.warn('Could not save templates; keeping downloaded content in memory', {
+            language,
+            error,
+          });
+        }
         return catalog;
       } catch (error) {
         signal.throwIfAborted();
@@ -116,7 +143,8 @@ export function createAgentTemplatesModule(dependencies: {
 
   return {
     async readCached(language) {
-      return (await readSnapshot(language))?.catalog ?? null;
+      const snapshot = await readSnapshot(language);
+      return catalogs.get(language) ?? snapshot?.catalog ?? null;
     },
     refresh(language, signal) {
       lifetime.signal.throwIfAborted();
@@ -136,6 +164,7 @@ export function createAgentTemplatesModule(dependencies: {
       lifetime.abort();
       await Promise.allSettled([...snapshots.values(), ...requests.values()]);
       snapshots.clear();
+      catalogs.clear();
     },
   };
 }

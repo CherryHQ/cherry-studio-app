@@ -1,5 +1,6 @@
 import type { AgentTemplateCatalog } from '@/shared/data/types/agentTemplate';
 
+import { parseAgentTemplateCatalog } from '../agentTemplateCatalog';
 import { readAgentTemplateSnapshot, writeAgentTemplateSnapshot } from '../agentTemplateSnapshot';
 
 jest.mock('expo-file-system', () => {
@@ -93,6 +94,7 @@ it.each([
     body: JSON.stringify({
       schemaVersion: 2,
       fetchedAt: Number.MAX_SAFE_INTEGER,
+      isComplete: true,
       catalog: catalog('b'),
     }),
     reason: 'an incompatible schema',
@@ -101,6 +103,7 @@ it.each([
     body: JSON.stringify({
       schemaVersion: 1,
       fetchedAt: Number.MAX_SAFE_INTEGER,
+      isComplete: true,
       catalog: { ...catalog('b'), language: 'zh' },
     }),
     reason: 'a mismatched language',
@@ -109,6 +112,7 @@ it.each([
     body: JSON.stringify({
       schemaVersion: 1,
       fetchedAt: Number.MAX_SAFE_INTEGER,
+      isComplete: true,
       catalog: { ...catalog('b'), templates: [] },
     }),
     reason: 'invalid template content',
@@ -129,4 +133,25 @@ it('selects the last complete write even if the wall clock moves backwards', asy
   } finally {
     clock.mockRestore();
   }
+});
+
+it('restores partial content with its retry requirement after an application restart', async () => {
+  const complete = await writeAgentTemplateSnapshot(catalog('a'), null);
+  const partial = await writeAgentTemplateSnapshot(catalog('b'), complete, false);
+  await expect(readAgentTemplateSnapshot('en')).resolves.toEqual(partial);
+  expect(partial.isComplete).toBe(false);
+});
+
+it('round-trips field defaults and long instructions from tolerant remote reads', async () => {
+  const prompt = 'x'.repeat(200_001);
+  const normalized = parseAgentTemplateCatalog(
+    [{ id: 'defaults' }, { id: 'long', emoji: '🎯 ', prompt }],
+    null,
+    'en',
+    '',
+  );
+  const saved = await writeAgentTemplateSnapshot(normalized, null);
+  await expect(readAgentTemplateSnapshot('en')).resolves.toEqual(saved);
+  expect(saved.catalog.templates[0]?.prompt).toBe('');
+  expect(saved.catalog.templates[1]?.prompt).toBe(prompt);
 });

@@ -3,7 +3,7 @@ import type {
   AgentTemplateLanguage,
 } from '@/shared/data/types/agentTemplate';
 
-/** Region-aware remote catalogs and validated, recoverable local snapshots. */
+/** Region-aware catalogs with per-field defaults and recoverable local snapshots. */
 export interface AgentTemplatesModule {
   readCached(language: AgentTemplateLanguage): Promise<AgentTemplateCatalog | null>;
   refresh(language: AgentTemplateLanguage, signal?: AbortSignal): Promise<AgentTemplateCatalog>;

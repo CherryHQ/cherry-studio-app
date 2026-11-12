@@ -15,28 +15,22 @@ export const AgentTemplateCategorySchema = z.enum([
 ]);
 export type AgentTemplateCategory = z.infer<typeof AgentTemplateCategorySchema>;
 
-export const AgentTemplateSchema = z.strictObject({
-  id: z.string().min(1).max(200),
-  name: z.string().min(1).max(500),
-  description: z.string().max(20_000),
+/** Shape of normalized local content; remote fields are read with per-field defaults. */
+export const AgentTemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
   emoji: AgentEmojiAvatarSchema,
-  group: z.array(z.string().max(200)).max(100),
-  prompt: z.string().min(1).max(200_000),
-  categories: z.array(AgentTemplateCategorySchema).max(6),
+  group: z.array(z.string()),
+  prompt: z.string(),
+  categories: z.array(AgentTemplateCategorySchema),
 });
 export type AgentTemplate = z.infer<typeof AgentTemplateSchema>;
 
-export const AgentTemplateRevisionSchema = z.string().regex(/^[a-f0-9]{40}$/);
-export const AgentTemplateCatalogSchema = z.strictObject({
+export const AgentTemplateCatalogSchema = z.object({
   language: AgentTemplateLanguageSchema,
-  revision: AgentTemplateRevisionSchema,
-  templates: z
-    .array(AgentTemplateSchema)
-    .min(1)
-    .max(10_000)
-    .refine(
-      (items) => new Set(items.map((item) => item.id)).size === items.length,
-      'Duplicate template IDs',
-    ),
+  /** Empty when branch metadata was unavailable; never used to skip a later download. */
+  revision: z.string(),
+  templates: z.array(AgentTemplateSchema).min(1),
 });
 export type AgentTemplateCatalog = z.infer<typeof AgentTemplateCatalogSchema>;

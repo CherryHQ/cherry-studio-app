@@ -1,3 +1,5 @@
+import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
+
 import { parseAgentTemplateCatalog } from '../agentTemplateCatalog';
 
 const revision = 'a'.repeat(40);
@@ -56,26 +58,97 @@ it.each([
   expect(catalog.templates[0]?.categories).toEqual(categories);
 });
 
-it('rejects duplicate identities across the two source files', () => {
-  expect(() =>
-    parseAgentTemplateCatalog([{ ...legacy[0], id: 'new' }], newer, 'en', revision),
-  ).toThrow('Duplicate template IDs');
+it('keeps one usable template for duplicate identities without dropping the catalog', () => {
+  const catalog = parseAgentTemplateCatalog([{ ...legacy[0], id: 'new' }], newer, 'en', revision);
+  expect(catalog.templates).toHaveLength(1);
+  expect(catalog.templates[0]?.name).toBe('Editor');
 });
 
-it.each([
-  { invalid: [], reason: 'empty catalogs' },
-  {
-    invalid: [{ ...legacy[0], emoji: 'https://example.com/avatar.png' }],
-    reason: 'non-emoji avatars',
+it.each(['🎯 ', '📈\r\n', '🩺\r\n\r\n'])(
+  'reads real upstream avatar whitespace without rejecting other templates: %j',
+  (emoji) => {
+    const catalog = parseAgentTemplateCatalog([{ ...legacy[0], emoji }], newer, 'en', revision);
+    expect(catalog.templates).toHaveLength(2);
+    expect(catalog.templates[0]?.emoji).toBe(emoji.trim());
   },
-  { invalid: [{ ...legacy[0], prompt: '' }], reason: 'empty instructions' },
-  { invalid: [{ ...legacy[0], prompt: 'x'.repeat(200_001) }], reason: 'oversized instructions' },
-])('rejects $reason before it can replace a snapshot', ({ invalid }) => {
-  expect(() => parseAgentTemplateCatalog(invalid, newer, 'en', revision)).toThrow();
+);
+
+it('uses field defaults and ignores non-object entries without rejecting usable content', () => {
+  const catalog = parseAgentTemplateCatalog(
+    [null, 7, [], { id: 'missing', name: 12, emoji: 'https://example.com/avatar.png' }, legacy[0]],
+    undefined,
+    'en',
+    revision,
+  );
+  expect(catalog.templates).toHaveLength(2);
+  expect(catalog.templates[0]).toEqual({
+    id: 'missing',
+    name: 'missing',
+    description: '',
+    emoji: CHERRY_AGENT_AVATAR,
+    group: [],
+    prompt: '',
+    categories: [],
+  });
+  expect(catalog.templates[1]?.id).toBe('original');
 });
 
-it('rejects incompatible marketplace schemas', () => {
-  expect(() =>
-    parseAgentTemplateCatalog(legacy, { ...newer, schemaVersion: 2 }, 'en', revision),
-  ).toThrow();
+it('uses a stable source identity when an upstream template has no ID', () => {
+  const catalog = parseAgentTemplateCatalog([{ name: 'Nameless ID' }], null, 'en', revision);
+  expect(catalog.templates[0]).toMatchObject({ id: 'legacy-1', name: 'Nameless ID', prompt: '' });
 });
+
+it('falls back to available localized text and reads items across upstream schema versions', () => {
+  const catalog = parseAgentTemplateCatalog(
+    undefined,
+    {
+      schemaVersion: 2,
+      items: [
+        { ...newer.items[0], name: { zh: '编辑' }, description: 'Shared description' },
+        { id: 'defaults', name: {}, description: null, avatar: false },
+      ],
+    },
+    'en',
+    revision,
+  );
+  expect(catalog.templates[0]).toMatchObject({ name: '编辑', description: 'Shared description' });
+  expect(catalog.templates[1]).toMatchObject({
+    id: 'defaults',
+    name: 'defaults',
+    description: '',
+    emoji: CHERRY_AGENT_AVATAR,
+    prompt: '',
+    group: [],
+  });
+});
+
+it('retains empty and long instructions instead of rejecting the catalog', () => {
+  const prompt = 'x'.repeat(200_001);
+  const catalog = parseAgentTemplateCatalog(
+    [
+      { ...legacy[0], prompt: '' },
+      { ...legacy[0], id: 'long', prompt },
+    ],
+    newer,
+    'en',
+    revision,
+  );
+  expect(catalog.templates.map((item) => item.prompt)).toEqual([
+    '',
+    prompt,
+    newer.items[0]!.instructions,
+  ]);
+});
+
+it.each([null, undefined, 7, {}, 'unavailable'])(
+  'uses an empty collection for unavailable remote content: %j',
+  (unavailable) => {
+    expect(parseAgentTemplateCatalog(unavailable, newer, 'en', revision).templates).toHaveLength(1);
+    expect(parseAgentTemplateCatalog(legacy, unavailable, 'en', revision).templates).toHaveLength(
+      1,
+    );
+    expect(parseAgentTemplateCatalog(unavailable, unavailable, 'en', revision).templates).toEqual(
+      [],
+    );
+  },
+);

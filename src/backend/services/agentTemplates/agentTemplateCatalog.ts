@@ -1,40 +1,10 @@
-import { z } from 'zod';
-
-import {
-  AgentTemplateCatalogSchema,
-  type AgentTemplateCategory,
-  type AgentTemplateLanguage,
+import { AgentEmojiAvatarSchema, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
+import type {
+  AgentTemplate,
+  AgentTemplateCatalog,
+  AgentTemplateCategory,
+  AgentTemplateLanguage,
 } from '@/shared/data/types/agentTemplate';
-
-const LegacyTemplatesSchema = z
-  .array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string().default(''),
-      emoji: z.string(),
-      group: z.array(z.string()).default([]),
-      prompt: z.string(),
-    }),
-  )
-  .min(1)
-  .max(10_000);
-const LocalizedTextSchema = z.object({ en: z.string(), zh: z.string() });
-const NewTemplatesSchema = z.object({
-  schemaVersion: z.literal(1),
-  items: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: LocalizedTextSchema,
-        description: LocalizedTextSchema,
-        avatar: z.string(),
-        category: z.string(),
-        instructions: z.string(),
-      }),
-    )
-    .max(10_000),
-});
 
 const CATEGORY_GROUPS: Record<AgentTemplateCategory, readonly string[]> = {
   writing: [
@@ -101,28 +71,66 @@ function categoriesFor(groups: readonly string[]): AgentTemplateCategory[] {
   );
 }
 
+function readText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function localizedText(value: unknown, language: AgentTemplateLanguage): string {
+  if (typeof value === 'string') return value;
+  const text = value as { en?: unknown; zh?: unknown } | null | undefined;
+  return readText(text?.[language]) || readText(text?.en) || readText(text?.zh);
+}
+
+function readTemplates(
+  value: unknown,
+  source: 'legacy' | 'marketplace',
+  language: AgentTemplateLanguage,
+): AgentTemplate[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: unknown, index) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const item = entry as Record<string, unknown>;
+    const isLegacy = source === 'legacy';
+    const id = readText(item.id).trim() || `${source}-${index + 1}`;
+    const group = isLegacy
+      ? Array.isArray(item.group)
+        ? item.group.filter((value): value is string => typeof value === 'string')
+        : []
+      : [readText(item.category)].filter(Boolean);
+    const avatar = AgentEmojiAvatarSchema.safeParse(
+      readText(isLegacy ? item.emoji : item.avatar).trim(),
+    );
+    return [
+      {
+        id,
+        name: (isLegacy ? readText(item.name) : localizedText(item.name, language)).trim() || id,
+        description: isLegacy
+          ? readText(item.description)
+          : localizedText(item.description, language),
+        emoji: avatar.success ? avatar.data : CHERRY_AGENT_AVATAR,
+        group,
+        prompt: readText(isLegacy ? item.prompt : item.instructions),
+        categories: categoriesFor(group),
+      },
+    ];
+  });
+}
+
+/** Remote fields are optional display content, never a whole-catalog validation gate. */
 export function parseAgentTemplateCatalog(
   legacy: unknown,
   agents: unknown,
   language: AgentTemplateLanguage,
   revision: string,
-) {
-  const assistants = LegacyTemplatesSchema.parse(legacy);
-  const templates = NewTemplatesSchema.parse(agents);
-  return AgentTemplateCatalogSchema.parse({
+): AgentTemplateCatalog {
+  const marketplace = agents as { items?: unknown } | null | undefined;
+  const templates = [
+    ...readTemplates(legacy, 'legacy', language),
+    ...readTemplates(marketplace?.items, 'marketplace', language),
+  ];
+  return {
     language,
     revision,
-    templates: [
-      ...assistants.map((item) => ({ ...item, categories: categoriesFor(item.group) })),
-      ...templates.items.map((item) => ({
-        id: item.id,
-        name: item.name[language],
-        description: item.description[language],
-        emoji: item.avatar,
-        group: [item.category],
-        prompt: item.instructions,
-        categories: categoriesFor([item.category]),
-      })),
-    ],
-  });
+    templates: [...new Map(templates.map((item) => [item.id, item])).values()],
+  };
 }

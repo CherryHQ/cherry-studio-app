@@ -12,6 +12,7 @@ const logger = loggerService.withContext('AgentTemplateSnapshot');
 const SnapshotSchema = z.strictObject({
   schemaVersion: z.literal(1),
   fetchedAt: z.number().int().positive(),
+  isComplete: z.boolean(),
   catalog: AgentTemplateCatalogSchema,
 });
 const slots = ['a', 'b'] as const;
@@ -47,11 +48,13 @@ export async function readAgentTemplateSnapshot(
 export async function writeAgentTemplateSnapshot(
   catalog: AgentTemplateCatalog,
   previous: AgentTemplateSnapshot | null,
+  isComplete = true,
 ): Promise<AgentTemplateSnapshot> {
   const slot = previous?.slot === 'a' ? 'b' : 'a';
   const snapshot = {
     schemaVersion: 1 as const,
     fetchedAt: Math.max(Date.now(), (previous?.fetchedAt ?? 0) + 1),
+    isComplete,
     catalog,
   };
   const destination = snapshotFile(catalog.language, slot);

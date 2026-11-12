@@ -27,11 +27,24 @@ const legacy = [
     prompt: 'Write.\r\n',
   },
 ];
-const newer = { schemaVersion: 1, items: [] };
+const newer = {
+  schemaVersion: 1,
+  items: [
+    {
+      id: 'editor',
+      name: { en: 'Editor', zh: '编辑' },
+      description: { en: 'Edits', zh: '编辑文字' },
+      avatar: '📝',
+      category: 'Writing',
+      instructions: 'Edit.',
+    },
+  ],
+};
 const savedCatalog = parseAgentTemplateCatalog(legacy, newer, 'en', gitcodeRevision);
 const saved = {
   schemaVersion: 1 as const,
   fetchedAt: 1,
+  isComplete: true,
   catalog: savedCatalog,
   slot: 'a' as const,
 };
@@ -55,7 +68,11 @@ beforeEach(() => {
   jest.mocked(readAgentTemplateSnapshot).mockResolvedValue(null);
   jest
     .mocked(writeAgentTemplateSnapshot)
-    .mockImplementation(async (catalog: AgentTemplateCatalog) => ({ ...saved, catalog }));
+    .mockImplementation(async (catalog: AgentTemplateCatalog, _previous, isComplete = true) => ({
+      ...saved,
+      catalog,
+      isComplete,
+    }));
   activeModule = createAgentTemplatesModule({ getCountry });
 });
 afterEach(async () => {
@@ -118,7 +135,7 @@ it('falls back after invalid primary content and resolves the fallback commit in
   );
 });
 
-it('keeps the saved catalog when every source fails validation', async () => {
+it('keeps the saved catalog when no source has readable templates', async () => {
   jest.mocked(readAgentTemplateSnapshot).mockResolvedValue(saved);
   mockRequest.mockImplementation((_baseUrl: string, request: Request) =>
     request.path === '/branches/main'
@@ -128,6 +145,96 @@ it('keeps the saved catalog when every source fails validation', async () => {
   await expect(activeModule.refresh('en')).rejects.toThrow();
   await expect(activeModule.readCached('en')).resolves.toEqual(savedCatalog);
   expect(writeAgentTemplateSnapshot).not.toHaveBeenCalled();
+});
+
+it.each(['agents-en.json', 'marketplace-agents.json'])(
+  'uses the available file when %s fails, then retries the same revision for complete content',
+  async (failedFile) => {
+    mockRequest.mockImplementation((baseUrl: string, request: Request) => {
+      if (decodeURIComponent(request.path).endsWith(failedFile)) throw new Error('Timed out');
+      return response(baseUrl, request);
+    });
+    const partial = await activeModule.refresh('en');
+    expect(partial.templates.map((item) => item.id)).toEqual([
+      failedFile === 'agents-en.json' ? 'editor' : 'writer',
+    ]);
+    expect(writeAgentTemplateSnapshot).toHaveBeenCalledWith(partial, null, false);
+    await expect(activeModule.readCached('en')).resolves.toEqual(partial);
+    expect(mockRequest).not.toHaveBeenCalledWith(
+      expect.stringContaining('gitcode'),
+      expect.anything(),
+    );
+
+    mockRequest.mockImplementation(response);
+    const complete = await activeModule.refresh('en');
+    expect(complete.revision).toBe(partial.revision);
+    expect(complete.templates.map((item) => item.id)).toEqual(['writer', 'editor']);
+    expect(writeAgentTemplateSnapshot).toHaveBeenLastCalledWith(
+      complete,
+      expect.objectContaining({ isComplete: false }),
+      true,
+    );
+  },
+);
+
+it('retries a partial snapshot restored from disk even when its revision is unchanged', async () => {
+  jest.mocked(readAgentTemplateSnapshot).mockResolvedValue({
+    ...saved,
+    isComplete: false,
+    catalog: {
+      ...savedCatalog,
+      revision: githubRevision,
+      templates: savedCatalog.templates.slice(0, 1),
+    },
+  });
+  const catalog = await activeModule.refresh('en');
+  expect(catalog.templates.map((item) => item.id)).toEqual(['writer', 'editor']);
+  expect(writeAgentTemplateSnapshot).toHaveBeenCalledTimes(1);
+});
+
+it.each(['missing', 'failed'])(
+  'downloads the default branch when revision metadata is %s without freezing that fallback',
+  async (failure) => {
+    mockRequest.mockImplementation((baseUrl: string, request: Request) => {
+      if (request.path === '/branches/main') {
+        if (failure === 'failed') throw new Error('Rate limited');
+        return { data: { commit: { futureField: 'unknown' } } };
+      }
+      return response(baseUrl, request);
+    });
+    await expect(activeModule.refresh('en')).resolves.toMatchObject({ revision: '' });
+    await activeModule.refresh('en');
+    const downloads = mockRequest.mock.calls.filter(
+      ([, request]) => request.path !== '/branches/main',
+    );
+    expect(downloads).toHaveLength(4);
+    expect(downloads.every(([, request]) => request.path.startsWith('/main/resources/data/'))).toBe(
+      true,
+    );
+  },
+);
+
+it('serves downloaded templates from memory when saving fails and retries persistence later', async () => {
+  jest.mocked(readAgentTemplateSnapshot).mockResolvedValue(saved);
+  jest.mocked(writeAgentTemplateSnapshot).mockRejectedValueOnce(new Error('Disk full'));
+  const catalog = await activeModule.refresh('en');
+  expect(catalog.revision).toBe(githubRevision);
+  await expect(activeModule.readCached('en')).resolves.toEqual(catalog);
+  expect(mockRequest).not.toHaveBeenCalledWith(
+    expect.stringContaining('gitcode'),
+    expect.anything(),
+  );
+
+  await expect(activeModule.refresh('en')).resolves.toEqual(catalog);
+  expect(writeAgentTemplateSnapshot).toHaveBeenCalledTimes(2);
+  expect(writeAgentTemplateSnapshot).toHaveBeenLastCalledWith(catalog, saved, true);
+});
+
+it('serves a first-use download without requiring a writable snapshot directory', async () => {
+  jest.mocked(writeAgentTemplateSnapshot).mockRejectedValueOnce(new Error('Cannot move file'));
+  const catalog = await activeModule.refresh('en');
+  expect(catalog.templates.map((item) => item.id)).toEqual(['writer', 'editor']);
+  await expect(activeModule.readCached('en')).resolves.toEqual(catalog);
 });
 
 it('shares a refresh while allowing one caller to stop waiting', async () => {
@@ -171,5 +278,28 @@ it('aborts and joins owned network work during disposal', async () => {
   await activeModule.dispose();
   await rejected;
   expect(writeAgentTemplateSnapshot).not.toHaveBeenCalled();
+  await expect(activeModule.readCached('en')).rejects.toThrow();
+});
+
+it('joins a pending snapshot write and does not swallow disposal as a cache failure', async () => {
+  let started!: () => void;
+  const admitted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finish!: () => void;
+  jest.mocked(writeAgentTemplateSnapshot).mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        finish = () => reject(new Error('Write interrupted'));
+        started();
+      }),
+  );
+  const pending = activeModule.refresh('en');
+  const rejected = expect(pending).rejects.toThrow();
+  await admitted;
+  const disposal = activeModule.dispose();
+  finish();
+  await disposal;
+  await rejected;
   await expect(activeModule.readCached('en')).rejects.toThrow();
 });
