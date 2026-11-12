@@ -23,11 +23,12 @@ import { KeepAliveInterruptionError } from './KeepAliveInterruptionError';
 type Holder = {
   onInterrupt?: (reason: Error) => void | Promise<void>;
   isInterrupted: boolean;
+  isIdle: boolean;
+  task?: KeepAliveTask;
 };
 
 type ContinuedTask = {
   holder: Holder;
-  task: KeepAliveTask;
   state: 'starting' | 'active' | 'unavailable' | 'expired';
   submitted: boolean;
   sent?: KeepAliveTask;
@@ -35,6 +36,7 @@ type ContinuedTask = {
 };
 
 const logger = loggerService.withContext('IosBackgroundExecution');
+const IDLE_TIMEOUT_MS = 60_000;
 let nextTaskId = 0;
 
 /** Foreground user tasks prefer continued processing; consented audio is fallback only. */
@@ -57,6 +59,8 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   private audioRevision = 0;
   private starting = false;
   private operationTail: Promise<void> = Promise.resolve();
+  private idleUntil?: number;
+  private idleTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly preference: Pick<PreferenceService, 'readCached' | 'subscribeChange'>,
@@ -98,6 +102,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
           this.disposed ||
           !continued ||
           !this.holders.has(continued.holder) ||
+          continued.holder.isIdle ||
           continued.state === 'unavailable' ||
           continued.state === 'expired'
         )
@@ -123,10 +128,10 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   }
 
   getStatus = (): BackgroundExecutionStatus => {
-    if (this.holders.size === 0) return 'idle';
-    if (this.isUnprotected()) {
+    if ([...this.holders].some((holder) => !holder.isIdle) && this.isUnprotected()) {
       return 'interrupted';
     }
+    if (!this.hasDemand()) return 'idle';
     return this.starting ? 'starting' : 'limited';
   };
 
@@ -139,14 +144,10 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
 
   acquire(_tag: string, onInterrupt?: Holder['onInterrupt'], task?: KeepAliveTask): KeepAliveLease {
     if (this.disposed) return { release: () => {} };
-    const holder: Holder = { onInterrupt, isInterrupted: false };
+    const holder: Holder = { onInterrupt, isInterrupted: false, isIdle: false, task };
     this.holders.add(holder);
-    // Foreground return or restored demand must never manufacture another user action.
-    const continued =
-      task && AppState.currentState === 'active' && this.native?.beginContinuedProcessingTask
-        ? { holder, task, state: 'starting' as const, submitted: false, success: false }
-        : undefined;
-    if (continued) this.continuedTasks.set(`cherry-continued-${uuidv7()}`, continued);
+    this.requestContinuedTask(holder);
+    this.updateIdleTimeout();
     this.publishStatus();
     if (this.isUnprotected()) {
       // Let the caller install its cancellation ownership before notifying it.
@@ -158,21 +159,32 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     return {
       release: (outcome) => {
         if (!this.holders.delete(holder)) return;
-        if (continued) continued.success = outcome === 'completed';
+        for (const continued of this.continuedTasks.values())
+          if (continued.holder === holder) continued.success = outcome === 'completed';
+        this.updateIdleTimeout();
+        this.publishStatus();
+        this.enqueueReconcile();
+      },
+      setIdle: (isIdle) => {
+        if (!this.holders.has(holder) || holder.isInterrupted || holder.isIdle === isIdle) return;
+        holder.isIdle = isIdle;
+        if (!isIdle) this.requestContinuedTask(holder);
+        this.updateIdleTimeout();
         this.publishStatus();
         this.enqueueReconcile();
       },
       update: (next) => {
-        if (!continued || holder.isInterrupted || !this.holders.has(holder)) return;
-        const previous = continued.task;
+        if (!holder.task || holder.isInterrupted || !this.holders.has(holder)) return;
+        const previous = holder.task;
+        const updated = { ...previous, ...next };
         if (
-          previous.title === next.title &&
-          previous.subtitle === next.subtitle &&
-          previous.completedUnitCount === next.completedUnitCount &&
-          previous.totalUnitCount === next.totalUnitCount
+          previous.title === updated.title &&
+          previous.subtitle === updated.subtitle &&
+          previous.completedUnitCount === updated.completedUnitCount &&
+          previous.totalUnitCount === updated.totalUnitCount
         )
           return;
-        continued.task = next;
+        holder.task = updated;
         this.enqueueReconcile();
       },
     };
@@ -180,6 +192,9 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
 
   protected async onStop(): Promise<void> {
     this.disposed = true;
+    if (this.idleTimer !== undefined) clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+    this.idleUntil = undefined;
     this.holders.clear();
     this.publishStatus();
     this.enqueueReconcile();
@@ -209,9 +224,50 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
       });
   }
 
+  private hasActiveHolders(): boolean {
+    return [...this.holders].some((holder) => !holder.isIdle && !holder.isInterrupted);
+  }
+
+  private hasDemand(): boolean {
+    return !this.disposed && (this.hasActiveHolders() || (this.idleUntil ?? 0) > Date.now());
+  }
+
+  private updateIdleTimeout(): void {
+    if (this.hasActiveHolders()) {
+      if (this.idleTimer !== undefined) clearTimeout(this.idleTimer);
+      this.idleTimer = undefined;
+      this.idleUntil = undefined;
+    } else if (this.idleUntil === undefined && !this.disposed) {
+      this.idleUntil = Date.now() + IDLE_TIMEOUT_MS;
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = undefined;
+        this.publishStatus();
+        this.enqueueReconcile();
+      }, IDLE_TIMEOUT_MS);
+    }
+  }
+
+  private requestContinuedTask(holder: Holder): void {
+    // Only acquiring work or explicitly resuming it may request official processing.
+    if (
+      !holder.task ||
+      AppState.currentState !== 'active' ||
+      !this.native?.beginContinuedProcessingTask ||
+      [...this.continuedTasks.values()].some((continued) => continued.holder === holder)
+    )
+      return;
+    this.continuedTasks.set(`cherry-continued-${uuidv7()}`, {
+      holder,
+      state: 'starting',
+      submitted: false,
+      success: false,
+    });
+  }
+
   private async reconcile(): Promise<void> {
     for (const [id, continued] of this.continuedTasks) {
-      if (this.disposed || !this.holders.has(continued.holder)) {
+      const task = continued.holder.task;
+      if (this.disposed || !this.holders.has(continued.holder) || continued.holder.isIdle) {
         this.continuedTasks.delete(id);
         await this.native?.endContinuedProcessingTask?.(id, continued.success);
       } else if (continued.holder.isInterrupted) {
@@ -221,21 +277,21 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
         }
       } else if (!continued.submitted) {
         continued.submitted = true;
-        continued.sent = continued.task;
+        continued.sent = task;
         try {
-          const submitted = await this.native?.beginContinuedProcessingTask?.(id, continued.task);
+          const submitted = task && (await this.native?.beginContinuedProcessingTask?.(id, task));
           // A launch/expiry event may already describe the newer state.
           if (!submitted && continued.state === 'starting') continued.state = 'unavailable';
         } catch (error) {
           if (continued.state === 'starting') continued.state = 'unavailable';
           logger.warn('Continued processing unavailable; using fallback', { error });
         }
-      } else if (continued.state === 'active' && continued.sent !== continued.task) {
-        continued.sent = continued.task;
-        await this.native?.updateContinuedProcessingTask?.(id, continued.task);
+      } else if (task && continued.state === 'active' && continued.sent !== task) {
+        continued.sent = task;
+        await this.native?.updateContinuedProcessingTask?.(id, task);
       }
     }
-    if (this.disposed || this.holders.size === 0) {
+    if (!this.hasDemand()) {
       const id = this.taskId;
       this.taskId = undefined;
       try {
@@ -247,7 +303,6 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     }
     const audioAllowed =
       this.preference.readCached('app.background_audio.consent') === true &&
-      [...this.holders].some((holder) => !holder.isInterrupted) &&
       ![...this.continuedTasks.values()].some(
         // Revoked work retains this fence until its owner has settled cancellation and released.
         (continued) => continued.state !== 'unavailable',
@@ -304,7 +359,10 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   }
 
   private interruptIfUnprotected(): void {
-    if (!this.isUnprotected()) return;
+    if (!this.hasActiveHolders() || !this.isUnprotected()) return;
+    // The revoked owner is already cancelling. Let it release before evaluating fallback demand.
+    if ([...this.continuedTasks.values()].some((continued) => continued.state === 'expired'))
+      return;
     // An exhausted finite window and lost audio cannot restart work in this background stay.
     if (!this.audioBlocked) {
       this.audioBlocked = true;
@@ -328,14 +386,14 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   }
 
   private interruptHolders(): void {
-    for (const holder of [...this.holders]) this.interruptHolder(holder);
+    for (const holder of [...this.holders]) if (!holder.isIdle) this.interruptHolder(holder);
   }
 
   private interruptHolder(
     holder: Holder,
     reason = new Error('iOS background execution time expired'),
   ): void {
-    if (this.disposed || !this.holders.has(holder) || holder.isInterrupted) return;
+    if (this.disposed || !this.holders.has(holder) || holder.isIdle || holder.isInterrupted) return;
     holder.isInterrupted = true;
     try {
       void Promise.resolve(holder.onInterrupt?.(reason)).catch((error: unknown) =>

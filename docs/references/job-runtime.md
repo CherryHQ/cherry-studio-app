@@ -151,8 +151,11 @@ and may be retried explicitly.
   New immediate root enqueues retain that intent only in memory; rollback, cold recovery, delayed
   work, and automatic retries cannot create another official request. Foreground dispatch requests
   iOS 26+ continued processing and forwards actual handler progress; committed completion marks
-  success only after queue handoff. The source retains finite UIKit time and, only when official
-  processing is unavailable, consented task-owned audio. Loss of available protection interrupts work
+  success only after queue handoff. Running jobs remain active regardless of output or screen
+  interaction. After the last active consumer releases, one shared iOS 60-second idle grace retains
+  finite UIKit time and consented audio; new work cancels that countdown. Official processing ends
+  with the actual job. The source uses consented audio only when official processing is unavailable.
+  Loss of available protection interrupts work
   without renewing the exhausted window or restarting audio in the same background stay. Painting
   jobs abort/cancel execution; ordinary finite-window loss suspends the Agent Harness for foreground
   recovery. Android uses the `dataSync` foreground service in

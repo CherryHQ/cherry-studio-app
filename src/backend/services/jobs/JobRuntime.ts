@@ -927,7 +927,7 @@ export class JobRuntime extends BaseService {
         else sourceLease.release();
       },
       ...(sourceLease.update
-        ? { update: (next: KeepAliveTask) => sourceLease.update?.(next) }
+        ? { update: (next: Partial<KeepAliveTask>) => sourceLease.update?.(next) }
         : {}),
     };
     this.activeKeepAliveLeases.set(row.id, lease);

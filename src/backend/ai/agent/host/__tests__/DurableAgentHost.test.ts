@@ -1,6 +1,7 @@
 import { v7 as uuid } from 'uuid';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import type {
   AgentEvent,
@@ -32,6 +33,7 @@ import {
   createSqliteStoreHarness,
   type SqliteStoreHarness,
 } from '../../sessionStore/__tests__/_sqliteStoreHarness';
+import { createAskUserQuestionTool } from '../../tools/askUserQuestionTool';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
@@ -59,6 +61,15 @@ const harnesses: SqliteStoreHarness[] = [];
 afterEach(() => {
   for (const harness of harnesses.splice(0)) harness.cleanup();
 });
+
+function executionProtection() {
+  const lease = { release: jest.fn(), update: jest.fn(), setIdle: jest.fn() };
+  const acquire = jest.fn<
+    KeepAliveLease,
+    Parameters<NonNullable<MobileAgentHostPorts['executionLease']>>
+  >(() => lease);
+  return { lease, acquire };
+}
 
 function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const harness = createSqliteStoreHarness();
@@ -252,8 +263,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     update: jest.fn(),
   };
   const background = {
-    acquirePreparation: () => ({ release() {} }),
-    resumeProcessing: jest.fn(),
+    prepareSession: () => () => {},
     clearSession() {},
     updateSessionTitle() {},
     startTurn: jest.fn((_input: BackgroundReplyTurnInput) => reply),
@@ -2068,8 +2078,236 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('continued processing revocation cancels the Session without suspending or reopening the whole engine', async () => {
-    const state = fixture();
+  test('execution protection survives successful admission before asynchronous reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observe = state.conversations.observe.bind(state.conversations);
+    const pending: (() => void)[] = [];
+    let finishDelivery!: () => void;
+    state.reply.finish.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishDelivery = resolve;
+      }),
+    );
+    let deferEvents = true;
+    jest.spyOn(state.conversations, 'observe').mockImplementation((lane, listener) =>
+      observe(lane, (event) => {
+        if (deferEvents) pending.push(() => listener(event));
+        else listener(event);
+      }),
+    );
+    try {
+      await askTwoModels(state);
+      expect(state.background.startTurn).not.toHaveBeenCalled();
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      deferEvents = false;
+      pending.splice(0).forEach((deliver) => deliver());
+      await settle();
+      const running = runningTurns(state);
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      for (const turn of running)
+        state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(state.reply.finish).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      finishDelivery();
+      await settle();
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith('completed');
+    } finally {
+      finishDelivery();
+      await state.host.close();
+    }
+  });
+
+  test('failed native admission releases its preparation protection after reservation reconciliation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    jest.spyOn(state.conversations, 'submit').mockRejectedValueOnce(new Error('Admission failed'));
+    try {
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Start' }],
+        }),
+      ).rejects.toThrow('Admission failed');
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalledWith('completed');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('parallel replies become idle only when all answers await input and reuse their lease when one resumes', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    const controllers = [new AbortController(), new AbortController()];
+    const decisions: Promise<unknown>[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const approvalIds = running.map(() => uuid());
+      for (const [index, turn] of running.entries()) {
+        decisions.push(
+          state
+            .execution()!
+            .requestApproval(
+              turn.identity,
+              {
+                id: approvalIds[index]!,
+                turnId: turn.identity.turnId,
+                toolCallId: `read-${index}`,
+                toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'read' },
+                displayName: 'Read',
+                input: {},
+                status: 'pending',
+              },
+              controllers[index]!.signal,
+            )
+            .catch((error: unknown) => error),
+        );
+        await settle();
+        if (index === running.length - 1)
+          expect(protection.lease.setIdle).toHaveBeenLastCalledWith(true);
+        else expect(protection.lease.setIdle).not.toHaveBeenCalledWith(true);
+        expect(protection.lease.release).not.toHaveBeenCalled();
+      }
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: running[0]!.identity.turnId,
+        approvalId: approvalIds[0]!,
+        decision: 'approve',
+      });
+      await decisions[0];
+      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(false);
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+    } finally {
+      controllers.forEach((controller) => controller.abort());
+      await Promise.all(decisions);
+      await state.host.close();
+    }
+  });
+
+  test('parallel tool execution remains active through a question and answering reuses protection despite a stale tool message', async () => {
+    const protection = executionProtection();
+    let finishRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const read: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'read_file' },
+      providerName: 'read_file',
+      displayName: 'Read',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        await readGate;
+        return { value: null, artifacts: [] };
+      },
+    };
+    const state = fixture({
+      executionLease: protection.acquire,
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser), read] },
+    });
+    const controller = new AbortController();
+    let question: Promise<unknown> | undefined;
+    let reading: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Ask me' }],
+      });
+      await settle();
+      const turn = runningTurns(state)[0]!;
+      const readTool = await state
+        .execution()!
+        .resolveTool(turn.identity, read.ref, controller.signal);
+      reading = readTool.execute({
+        input: {},
+        turnId: turn.identity.turnId,
+        toolCallId: 'read-call',
+        signal: controller.signal,
+      });
+      const toolRef = { source: 'builtin', capabilityId: 'ask_user_question' } as const;
+      const tool = await state.execution()!.resolveTool(turn.identity, toolRef, controller.signal);
+      question = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'question-call',
+        signal: controller.signal,
+        input: {
+          questions: [
+            {
+              id: 'choice',
+              question: 'Choose',
+              selection: 'single',
+              options: [
+                { id: 'yes', label: 'Yes' },
+                { id: 'no', label: 'No' },
+              ],
+            },
+          ],
+        },
+      });
+      await settle();
+      state.emit({
+        ...turn,
+        parts: [
+          {
+            id: 'question',
+            type: 'tool',
+            toolCallId: 'question-call',
+            toolRef,
+            providerName: 'ask_user_question',
+            displayName: 'Ask user',
+            state: 'running',
+            input: {},
+          },
+        ],
+      });
+      expect(protection.lease.setIdle).not.toHaveBeenCalledWith(true);
+      finishRead();
+      await reading;
+      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(true);
+      await state.host.respondQuestion({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'question-call',
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: ['yes'], text: '', skipped: false }],
+        },
+      });
+      await question;
+      expect(protection.lease.setIdle).toHaveBeenLastCalledWith(false);
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+    } finally {
+      finishRead();
+      controller.abort();
+      await reading;
+      await question?.catch(() => {});
+      await state.host.close();
+    }
+  });
+
+  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
     await state.reserve('completed');
     await state.host.initialize();
     try {
@@ -2077,7 +2315,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await settle();
       const running = runningTurns(state);
       const before = [...state.steps];
-      await state.background.startTurn.mock.calls[0]![0].onInterrupt?.(
+      await protection.acquire.mock.calls[0]![0](
         new KeepAliveInterruptionError('continued-processing-expired'),
       );
       await settle();

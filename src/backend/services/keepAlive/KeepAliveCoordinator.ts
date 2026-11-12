@@ -25,10 +25,12 @@ export type KeepAliveTask = {
 };
 
 export type KeepAliveLease = {
-  /** Idempotent; the last release across all holders stops the platform mechanism. */
+  /** Idempotent; the platform may retain a short shared idle grace after the last release. */
   release(outcome?: 'completed'): void;
+  /** Waiting for input is idle, not cancellation. Resuming work reuses this same lease. */
+  setIdle?(isIdle: boolean): void;
   /** Actual work milestones; platforms without task progress may omit this capability. */
-  update?(task: KeepAliveTask): void;
+  update?(task: Partial<KeepAliveTask>): void;
 };
 
 export type KeepAliveSource = {

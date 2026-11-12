@@ -1,10 +1,11 @@
 # Background Activity Presentation
 
-The shared activity manager owns task surfaces and their retirement. Execution demand stays with
-`KeepAliveCoordinator`; presentation preferences, notification permission, and app visibility never
-release an unfinished conversation's execution lease. “Conversation” here means an admitted round,
-including preparation, tool use, awaiting user input/approval, persistence, and final delivery.
-Stored history and an idle chat page do not keep execution alive.
+The shared activity manager owns task surfaces and their retirement. Local execution owns one
+stable `KeepAliveCoordinator` lease from user submission through persistence and final delivery;
+presentation never acquires or transfers it. Presentation preferences, notification permission,
+and app visibility do not determine execution lifetime. Waiting for input preserves the conversation
+but may release iOS protection after the shared idle grace. Stored history and an idle chat page do
+not begin a new protection period.
 
 ## One Destination, One Surface
 
@@ -36,9 +37,16 @@ that preference. Completion preferences control completion alerts; they do not t
 
 ## Execution And Attention
 
-Preparation hands its lease to the round before releasing it. Awaiting a question or approval keeps
-that lease. Terminal content appears immediately, while bounded final metadata work and notification
-delivery retain protection. The lease releases after delivery settles, including delivery failure.
+`DurableAgentHost` acquires a Session's lease before preparation. The same lease covers all of its
+parallel answers and survives asynchronous presentation admission. Real execution tracks whether all
+answers wait for input; a running sibling or tool keeps the Session active. Answering wakes the same
+lease without consulting a streamed message's waiting label. Terminal content appears immediately;
+persistence and awaitable final delivery settle before the execution owner releases its lease.
+
+On iOS, the last active lease entering idle or releasing starts one shared 60-second grace. Any new
+work cancels the countdown. Long model/tool requests remain active even without output or screen
+interaction. Idle expiry releases finite/audio protection without cancelling pending decisions.
+Foreground return alone does not renew expired idle demand. Android retains its existing lifetime.
 
 Android uses persistent numeric notification IDs shared between its existing foreground service
 and the SystemIntegration notification bridge. One conversation anchors the service notification;
@@ -52,14 +60,15 @@ ongoing state before detachment. This prevents streaming text from repeatedly de
 the same island.
 
 iOS completion delivery checks permission and current generation, retires its settled Live Activity,
-then posts a deterministic completion notice for that destination. This replacement retains a short
-delivery lease. A superseded round cannot retire or post over its successor.
+then posts a deterministic completion notice for that destination. Local execution awaits this
+replacement; remote sessions retain their existing delivery lease. A superseded round cannot retire
+or post over its successor.
 
 Local and observed desktop sessions distinguish waiting for approval from waiting for an answer.
 The compact Live Activity replaces its timer with the translated waiting label and attention icon.
 Each request carries its approval, tool-call, or remote interaction identity: title/preview updates
 stay silent, while consecutive requests each receive an alert even without an intermediate running
-phase. Both waiting states retain execution demand.
+phase. Both waiting states retain their pending decisions; local iOS execution can become idle.
 
 On iOS, pending decisions also raise a local notification independently of the Live Activities and
 completion-notification preferences. Notification permission is requested once after a user starts a
@@ -183,10 +192,11 @@ target device's decision. No settings row or switch is added.
 Explicit foreground user work first requests iOS 26+ `BGContinuedProcessingTask`. The native
 launch callback, not submission success, confirms protection. iOS 27 uses asynchronous submission;
 iOS 26 retains its original API. Each request has a unique native identifier and real progress.
-Chat hands one request from preparation through reply delivery, reports preparation/admission/text
-milestones, and releases it while waiting for a question or approval. A foreground response may
-request another; observation and restoration never do. Painting's immediate local enqueue carries
-process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
+The execution owner reports preparation/reply milestones on its stable Session lease. Official
+processing ends when the Session waits for input; the shared finite/audio idle grace remains.
+A foreground answer can request another official task through the same lease. Observation,
+restoration, and foreground return alone never create official-task intent. Painting's immediate
+local enqueue carries process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
 do not inherit that intent. System-UI cancellation or expiration stops the owning conversation/job
 without silently restarting it through audio; ordinary finite-window loss still suspends the Agent
 Harness for later foreground recovery.
@@ -198,9 +208,11 @@ missing-launch deadline enables fallback; a stale launch cannot adopt a released
 Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
 expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
 finite allowance; when neither mechanism protects background work, each held consumer is interrupted
-once and audio cannot restart that work in the same background stay. The last lease release and
-service shutdown release all native mechanisms. Foreground return allows a fresh window. Late native events
-cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
+once and audio cannot restart that work in the same background stay. The last active lease starts
+the shared idle grace; its expiry and service shutdown release finite/audio protection. Official
+requests complete with their actual work rather than extending displayed progress across the grace.
+Foreground return allows a fresh finite window only while execution demand remains. Late native
+events cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
 unfinished work. This does not promise a fixed duration or automatic replay.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.

@@ -49,7 +49,7 @@ it already exists.
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
-| Task-owned iOS continued processing, finite execution and audio fallback | `KeepAliveCoordinator` carries user-task metadata and real progress to `IosBackgroundExecutionSource`; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
+| Task-owned iOS continued processing, finite execution and audio fallback | `DurableAgentHost` and `JobRuntime` own execution leases; `KeepAliveCoordinator` carries activity and real progress to `IosBackgroundExecutionSource`, which owns one shared 60-second idle grace; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
 | Quoted answer snapshots and inline positions on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquotes in `runtimeUserText` and `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |

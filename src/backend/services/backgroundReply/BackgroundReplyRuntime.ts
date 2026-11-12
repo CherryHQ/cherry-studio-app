@@ -15,11 +15,7 @@ import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
-import type {
-  KeepAliveLease,
-  KeepAliveSource,
-  KeepAliveTask,
-} from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundActivityActions,
   BackgroundActivityActionResponse,
@@ -68,8 +64,7 @@ type TurnRecord = {
   key: string;
   latestMessage?: BackgroundReplyMessage;
   onInterrupt?: (reason: Error) => void | Promise<void>;
-  processingLease?: KeepAliveLease;
-  processingUnits: number;
+  keepAlive: boolean;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -97,7 +92,7 @@ type EnvironmentPort = {
 /**
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
- * messages, and holds execution until the turn and its final delivery settle.
+ * messages, and delivers the final result. Local execution owns its protection.
  * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
  * behind the injected session manager. Platform availability is a presenter
  * and lease-source concern; this runtime never branches on it.
@@ -110,7 +105,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
-  private readonly preparationLeases = new Set<KeepAliveLease>();
   private turns = new Map<string, TurnRecord>();
 
   constructor(
@@ -156,69 +150,25 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     for (const record of this.turns.values()) {
       this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
       this.clearUpdateTimer(record);
-      this.releaseProcessing(record);
       record.session?.cancel();
       record.session = undefined;
     }
-    for (const lease of this.preparationLeases) lease.release();
-    this.preparationLeases.clear();
   }
 
-  acquirePreparation = (
-    sessionId: string,
-    onInterrupt: (reason: Error) => void,
-  ): KeepAliveLease => {
-    if (!this.isReady || this.disposed) return { release() {} };
+  prepareSession = (sessionId: string): (() => void) => {
+    if (!this.isReady || this.disposed) return () => {};
     const prepared = this.prepareTurn(sessionId);
-    const record = this.turns.get(sessionId);
-    const task = record && !record.processingLease ? this.toProcessingTask(record) : undefined;
-    const lease = this.keepAlive.acquire(
-      'chat.preparation',
-      (reason) => {
-        onInterrupt(reason);
-        const current = this.turns.get(sessionId);
-        if (current?.processingLease === lease) return current.onInterrupt?.(reason);
-      },
-      task,
-    );
-    if (record && task && lease.update) record.processingLease = lease;
-    this.preparationLeases.add(lease);
     if (prepared) {
-      // Request execution before a notification-permission prompt can make iOS inactive.
       this.beginReplyDestination(prepared);
       this.ensureSession(prepared);
     }
-    return {
-      release: () => {
-        if (!this.preparationLeases.delete(lease)) return;
-        const current = this.turns.get(sessionId);
-        // A turn that started owns the record now. Nothing took it over means
-        // preparation ended without one, so its surface has nothing to say.
-        if (prepared && current === prepared) {
-          if (current.processingLease !== lease) lease.release();
-          this.clearTurn(sessionId);
-        } else if (current?.processingLease !== lease) lease.release();
-        else if (replyAttentionKey(current.content)) this.releaseProcessing(current);
-      },
+    return () => {
+      if (prepared && this.turns.get(sessionId) === prepared) this.clearTurn(sessionId);
     };
   };
 
-  resumeProcessing = (sessionId: string): void => {
-    const record = this.turns.get(sessionId);
-    if (!record || record.processingLease || this.disposed || !record.onInterrupt) return;
-    record.processingUnits = 1;
-    const lease = this.keepAlive.acquire(
-      'chat.continuation',
-      record.onInterrupt,
-      this.toProcessingTask(record),
-    );
-    if (lease.update) record.processingLease = lease;
-    else lease.release();
-  };
-
   /**
-   * Prepares the Session's record. The caller acquires execution before opening
-   * its surface or requesting notification permission while the app is active.
+   * Prepares presentation only. The execution owner acquires protection before calling this.
    */
   private prepareTurn(sessionId: string): TurnRecord | undefined {
     if (this.turns.has(sessionId)) return undefined;
@@ -230,7 +180,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       deepLinkUrl: sessionTaskUrl(sessionId),
       generation: ++this.generation,
       key: sessionId,
-      processingUnits: 0,
+      keepAlive: false,
       startedAtEpochMs: Date.now(),
     };
     this.turns.set(sessionId, record);
@@ -255,14 +205,11 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       generation,
       key: normalized.key,
       onInterrupt: input.onInterrupt,
-      processingLease: existing?.processingLease,
-      processingUnits: 1,
+      keepAlive: input.connectionId !== undefined,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
-    if (existing) existing.processingLease = undefined;
     this.turns.set(record.key, record);
-    record.processingLease?.update?.(this.toProcessingTask(record));
     this.beginReplyDestination(record);
     this.ensureSession(record);
 
@@ -300,7 +247,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           });
         }),
       finish: (outcome, options) => {
-        void this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
+        return this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
           (error: unknown) => {
             logger.error('Background reply failed to finish turn', error as Error, {
               key: record.key,
@@ -314,7 +261,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           this.turns.delete(record.key);
           this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
           this.clearUpdateTimer(record);
-          this.releaseProcessing(record);
           // Cancellation leaves no settled card behind.
           record.session?.cancel();
           record.session = undefined;
@@ -336,9 +282,8 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       const record = this.turns.get(key);
       if (!record || record.conversationTitle === title.trim()) return;
       record.conversationTitle = title.trim();
-      record.processingLease?.update?.(this.toProcessingTask(record));
       record.session?.update(this.toActivityProps(record), {
-        keepAlive: true,
+        keepAlive: record.keepAlive,
         urgent: true,
       });
     });
@@ -355,7 +300,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
 
     this.turns.delete(key);
     this.clearUpdateTimer(record);
-    this.releaseProcessing(record);
     record.session?.cancel();
     record.session = undefined;
   }
@@ -381,7 +325,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
 
     record.latestMessage = message;
     if (!this.isReady) return;
-    if (record.processingUnits < 2 && hasReplyText(message)) record.processingUnits = 2;
 
     if (options?.deferPreview) {
       if (record.content.phase === 'thinking' && !hasReplyText(message)) {
@@ -409,7 +352,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
         ])
       : undefined;
     record.interaction = interaction;
-    if (interaction) this.releaseProcessing(record);
     if (key === record.interactionKey) return;
     record.interactionKey = key;
     record.actions = interaction
@@ -419,7 +361,11 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     // A different answer may have owned the decision. Restore the local reply's latest content
     // now, without waiting for its owner to stream another update. Remote sources supply content.
     if (!interaction && record.latestMessage) this.refreshContent(record);
-    else record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+    else
+      record.session?.update(this.toActivityProps(record), {
+        keepAlive: record.keepAlive,
+        urgent: true,
+      });
     if (record.actions && record.content.attentionId === interaction?.id)
       this.deliverAttention(record, false);
   }
@@ -452,11 +398,8 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     const attention = replyAttentionKey(content);
     const urgent = record.content.phase !== content.phase || previousAttention !== attention;
     record.content = content;
-    // Waiting for a person is not continued processing. A foreground response can request again.
-    if (attention) this.releaseProcessing(record);
-    else record.processingLease?.update?.(this.toProcessingTask(record));
     record.session?.update(this.toActivityProps(record), {
-      keepAlive: true,
+      keepAlive: record.keepAlive,
       urgent,
     });
     const notifications = this.environment.replyNotifications;
@@ -540,14 +483,16 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       preview,
       this.environment.translate,
     );
-    // Keep the turn's lease through persistence and terminal delivery. A
-    // foreground/background transition or an attention phase never releases it.
-    record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
-    // iOS may replace the finished activity with a completion notification.
-    // Keep protection through that handoff even though finish ends the session.
-    const deliveryLease = this.environment.replyNotifications
-      ? this.keepAlive.acquire('chat.replyNotice')
-      : undefined;
+    // The local execution owner awaits delivery before completing its task.
+    record.session?.update(this.toActivityProps(record), {
+      keepAlive: record.keepAlive,
+      urgent: true,
+    });
+    // Remote sessions retain their existing notification handoff protection.
+    const deliveryLease =
+      record.keepAlive && this.environment.replyNotifications
+        ? this.keepAlive.acquire('chat.replyNotice')
+        : undefined;
     try {
       if (waitFor) await this.waitForFinishDependency(key, waitFor);
       await this.enqueue(async () => {
@@ -560,28 +505,8 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
         if (this.turns.get(key) === record) this.turns.delete(key);
       });
     } finally {
-      this.releaseProcessing(record, outcome === 'completed' ? 'completed' : undefined);
       deliveryLease?.release();
     }
-  }
-
-  private toProcessingTask(record: TurnRecord): KeepAliveTask {
-    return {
-      title: record.conversationTitle || record.actorName,
-      subtitle: record.content.detail,
-      // Actual milestones: preparation, admitted execution, reply text, committed delivery.
-      completedUnitCount: record.processingUnits,
-      totalUnitCount: 3,
-    };
-  }
-
-  private releaseProcessing(record: TurnRecord, outcome?: 'completed'): void {
-    const lease = record.processingLease;
-    record.processingLease = undefined;
-    if (!lease) return;
-    this.preparationLeases.delete(lease);
-    if (outcome) lease.release(outcome);
-    else lease.release();
   }
 
   /** A new reply on a destination retires its previous completion notice; the
@@ -640,11 +565,11 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     if (timeout !== undefined) clearTimeout(timeout);
   }
 
-  /** The manager owns presentation; every unfinished turn owns execution. */
+  /** Local execution is independent of presentation; remote sessions retain their existing lease. */
   private ensureSession(record: TurnRecord): void {
     if (!this.isReady || this.disposed) return;
 
-    const keepAlive = true;
+    const keepAlive = record.keepAlive;
     if (record.session) {
       record.session.update(this.toActivityProps(record), { keepAlive, urgent: true });
       return;

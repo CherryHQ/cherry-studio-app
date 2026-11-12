@@ -57,6 +57,7 @@ describe('IosBackgroundExecutionSource', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     mockBegin.mockResolvedValue(true);
     mockEnd.mockResolvedValue(undefined);
     mockBeginAudio.mockResolvedValue(true);
@@ -77,9 +78,12 @@ describe('IosBackgroundExecutionSource', () => {
     });
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
 
-  test('shares a finite window and ends it only after the last idempotent release', async () => {
+  test('shares a finite window and stops after one idle grace following the last release', async () => {
     const source = new IosBackgroundExecutionSource(preference);
     await source._doInit();
     const first = source.acquire('chat');
@@ -94,6 +98,9 @@ describe('IosBackgroundExecutionSource', () => {
     expect(mockEnd).not.toHaveBeenCalled();
     second.release();
     await flushOperations();
+    await jest.advanceTimersByTimeAsync(59_999);
+    expect(mockEnd).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
     expect(mockEnd).toHaveBeenCalledWith(id);
     expect(source.getStatus()).toBe('idle');
     await source._doStop();
@@ -124,6 +131,7 @@ describe('IosBackgroundExecutionSource', () => {
     expect(mockBegin).toHaveBeenCalledTimes(1);
     first.release();
     changeState('active');
+    source.acquire('new work');
     await flushOperations();
     expect(mockBegin).toHaveBeenCalledTimes(2);
     mockExpire({ id });
@@ -216,7 +224,7 @@ describe('IosBackgroundExecutionSource', () => {
     await source._doStop();
   });
 
-  test('the last release stops shared audio and finite protection even when release repeats', async () => {
+  test('the last release stops shared audio and finite protection after the idle grace', async () => {
     consent = true;
     const source = new IosBackgroundExecutionSource(preference);
     await source._doInit();
@@ -229,6 +237,8 @@ describe('IosBackgroundExecutionSource', () => {
     expect(mockEndAudio).not.toHaveBeenCalled();
     second.release();
     await flushOperations();
+    expect(mockEndAudio).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(60_000);
     expect(mockEndAudio).toHaveBeenCalledTimes(1);
     expect(mockEnd).toHaveBeenCalledTimes(1);
     expect(source.getStatus()).toBe('idle');
@@ -324,7 +334,7 @@ describe('IosBackgroundExecutionSource', () => {
     expect(mockEndContinued).toHaveBeenCalledWith(id, true);
     mockContinuedState({ id, state: 'expired' });
     expect(interrupt).not.toHaveBeenCalled();
-    expect(source.getStatus()).toBe('idle');
+    expect(source.getStatus()).toBe('limited');
     await source._doStop();
   });
 
@@ -400,6 +410,32 @@ describe('IosBackgroundExecutionSource', () => {
     await source._doStop();
   });
 
+  test('revocation after finite expiry lets owner cancellation settle before protecting unrelated demand with audio', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const cancel = jest.fn();
+    const other = jest.fn();
+    const lease = source.acquire('chat', cancel, task);
+    source.acquire('other', other);
+    await flushOperations();
+    const id = mockBeginContinued.mock.calls[0][0];
+    mockContinuedState({ id, state: 'active' });
+    changeState('background');
+    mockExpire({ id: mockBegin.mock.calls[0][0] });
+    mockContinuedState({ id, state: 'expired' });
+    await flushOperations();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    expect(mockBeginAudio).not.toHaveBeenCalled();
+    lease.release();
+    await flushOperations();
+    expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+    expect(other).not.toHaveBeenCalled();
+    await source._doStop();
+  });
+
   test('revoking one task leaves another admitted task protected', async () => {
     consent = true;
     mockBeginContinued.mockResolvedValue(true);
@@ -421,6 +457,93 @@ describe('IosBackgroundExecutionSource', () => {
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).not.toHaveBeenCalled();
     expect(mockBeginAudio).not.toHaveBeenCalled();
+    await source._doStop();
+  });
+
+  test('active work never becomes idle merely because no progress or screen interaction arrives', async () => {
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const interrupt = jest.fn();
+    source.acquire('long request', interrupt);
+    await flushOperations();
+    await jest.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mockEnd).not.toHaveBeenCalled();
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(source.getStatus()).toBe('limited');
+    await source._doStop();
+  });
+
+  test('idle expires shared protection without cancelling the pending conversation, which resumes on the same lease', async () => {
+    consent = true;
+    mockBeginContinued.mockResolvedValue(true);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const interrupt = jest.fn();
+    const lease = source.acquire('chat', interrupt, task);
+    await flushOperations();
+    const firstId = mockBeginContinued.mock.calls[0][0];
+    mockContinuedState({ id: firstId, state: 'active' });
+    lease.setIdle?.(true);
+    await flushOperations();
+    expect(mockEndContinued).toHaveBeenCalledWith(firstId, false);
+    expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(source.getStatus()).toBe('idle');
+    expect(mockEndAudio).toHaveBeenCalledTimes(1);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+    expect(interrupt).not.toHaveBeenCalled();
+    // An expired idle lease does not create another grace merely by being marked idle again.
+    lease.setIdle?.(true);
+    await flushOperations();
+    expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+    lease.setIdle?.(false);
+    await flushOperations();
+    const secondId = mockBeginContinued.mock.calls[1][0];
+    expect(secondId).not.toBe(firstId);
+    mockContinuedState({ id: firstId, state: 'expired' });
+    mockContinuedState({ id: secondId, state: 'active' });
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(source.getStatus()).toBe('limited');
+    expect(interrupt).not.toHaveBeenCalled();
+    lease.release('completed');
+    await source._doStop();
+  });
+
+  test('another active task cancels the shared idle countdown and an idle sibling cannot stop it', async () => {
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const waiting = source.acquire('waiting');
+    await flushOperations();
+    waiting.setIdle?.(true);
+    await jest.advanceTimersByTimeAsync(30_000);
+    const active = source.acquire('painting');
+    await flushOperations();
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(mockEnd).not.toHaveBeenCalled();
+    active.release();
+    await jest.advanceTimersByTimeAsync(59_999);
+    expect(mockEnd).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+    waiting.release();
+    await flushOperations();
+    expect(source.getStatus()).toBe('idle');
+    await source._doStop();
+  });
+
+  test('foreground return cannot revive an idle grace whose wall-clock deadline already passed', async () => {
+    consent = true;
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const lease = source.acquire('waiting');
+    await flushOperations();
+    lease.setIdle?.(true);
+    jest.setSystemTime(Date.now() + 61_000);
+    changeState('active');
+    await flushOperations();
+    expect(source.getStatus()).toBe('idle');
+    expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+    expect(mockEndAudio).toHaveBeenCalledTimes(1);
     await source._doStop();
   });
 
