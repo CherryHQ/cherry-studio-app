@@ -438,6 +438,9 @@ importers:
       expo-intent-launcher:
         specifier: ~58.0.3
         version: 58.0.3(expo@58.0.22)
+      expo-keep-awake:
+        specifier: ~58.0.3
+        version: 58.0.3(expo@58.0.22)(react@19.3.0)
       expo-linear-gradient:
         specifier: ~58.0.3
         version: 58.0.3(expo@58.0.22)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
