@@ -196,6 +196,9 @@ export class DurableAgentHost implements AgentProtocol {
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: { release(): void } | undefined;
+  private screenAwakeLease: { release(): void } | undefined;
+  /** Cancelling is published before Pi updates its stored running turn. */
+  private readonly screenSuppressedRequests = new Set<string>();
 
   private skillWorkflow: SkillsModule | undefined;
 
@@ -422,6 +425,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.accepting = true;
       initialized = true;
       this.conversations.resume();
+      this.reconcileScreenAwake();
       recovery?.end('ok');
     } catch (error) {
       recovery?.end('error', traceErrorAttributes(error));
@@ -441,6 +445,7 @@ export class DurableAgentHost implements AgentProtocol {
   private async closeGeneration() {
     this.accepting = false;
     this.controller.abort(new Error('The Agent Host generation is closing.'));
+    this.reconcileScreenAwake();
     for (const admission of this.admissions.values())
       admission.controller.abort(this.controller.signal.reason);
     await this.suspension?.catch((error) => logger.warn('Previous runtime cleanup failed', error));
@@ -475,12 +480,38 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private reconcileScreenAwake(): void {
+    const screenDemand =
+      this.accepting &&
+      !this.suspended &&
+      !this.controller.signal.aborted &&
+      [...this.live.values()].some(
+        (state) =>
+          state.active?.status === 'running' &&
+          state.approvals.size === 0 &&
+          state.question === null &&
+          !this.screenSuppressedRequests.has(state.active.identity.requestId),
+      );
+    try {
+      if (screenDemand && !this.screenAwakeLease)
+        this.screenAwakeLease = this.ports.generationLease?.('agent.durable');
+      if (!screenDemand && this.screenAwakeLease) {
+        const lease = this.screenAwakeLease;
+        this.screenAwakeLease = undefined;
+        lease.release();
+      }
+    } catch (error) {
+      logger.warn('Failed to reconcile Agent screen-awake demand', { error });
+    }
+  }
+
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
   private suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
       this.suspended = true;
+      this.reconcileScreenAwake();
       for (const admission of this.admissions.values()) admission.controller.abort(reason);
       await Promise.allSettled([...this.admissions.values()].map((entry) => entry.promise));
       await this.workWatch?.unsubscribe();
@@ -519,6 +550,7 @@ export class DurableAgentHost implements AgentProtocol {
       }
     })().finally(() => {
       this.resuming = undefined;
+      this.reconcileScreenAwake();
     });
     return this.resuming;
   }
@@ -1417,6 +1449,7 @@ export class DurableAgentHost implements AgentProtocol {
     await state?.unsubscribe();
     state?.background?.retire();
     this.live.delete(laneKey(lane));
+    this.reconcileScreenAwake();
     this.storedContextUsages.delete(lane.sessionId);
     this.publishContextUsages(lane.sessionId);
     if (await this.conversations.hasConversation(lane))
@@ -1437,7 +1470,16 @@ export class DurableAgentHost implements AgentProtocol {
 
   async cancelTurn(input: Parameters<AgentProtocol['cancelTurn']>[0]) {
     const parsed = AgentCancelTurnInputSchema.parse(input);
-    for (const state of await this.attachedLanes(parsed.sessionId)) {
+    const states = await this.attachedLanes(parsed.sessionId);
+    // Suppress every affected answer before aborting any lane, which may take time.
+    for (const state of states)
+      if (
+        state.active?.identity.turnId === parsed.turnId &&
+        (!parsed.messageId || state.active.assistantMessageId === parsed.messageId)
+      )
+        this.screenSuppressedRequests.add(state.active.identity.requestId);
+    this.reconcileScreenAwake();
+    for (const state of states) {
       if (state.active?.identity.turnId !== parsed.turnId) {
         if (parsed.messageId) continue;
         const queued = state.queue.find((turn) => turn.identity.turnId === parsed.turnId);
@@ -1758,6 +1800,7 @@ export class DurableAgentHost implements AgentProtocol {
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
+    this.reconcileScreenAwake();
     const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
@@ -1778,6 +1821,7 @@ export class DurableAgentHost implements AgentProtocol {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
+      this.reconcileScreenAwake();
       // Every pending request leaves the client projection, even when another answer keeps running.
       this.publish(identity.sessionId, {
         type: 'approval.resolved',
@@ -1844,6 +1888,7 @@ export class DurableAgentHost implements AgentProtocol {
     const { sessionId } = state.lane;
     const response = state.questions.ask(question, call);
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
+    this.reconcileScreenAwake();
     this.publish(sessionId, { type: 'question.updated', question: state.question });
     this.publishCurrentStatus(sessionId, state);
     this.updateBackgroundInteraction(sessionId);
@@ -1851,6 +1896,7 @@ export class DurableAgentHost implements AgentProtocol {
       return await response;
     } finally {
       state.question = null;
+      this.reconcileScreenAwake();
       this.updateBackgroundInteraction(sessionId);
       this.publish(sessionId, { type: 'question.updated', question: null });
       this.publishCurrentStatus(sessionId, state);
@@ -2125,6 +2171,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (state.active) this.present(state.active);
         installed = true;
         for (const event of pending) this.consume(state, event);
+        this.reconcileScreenAwake();
         return state;
       },
       this.controller.signal,
@@ -2139,6 +2186,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   private consume(state: LiveSession, event: RuntimeConversationEvent) {
     const { sessionId } = state.lane;
+    const isAttached = this.live.get(laneKey(state.lane)) === state;
+    const previousRequestId = state.active?.identity.requestId;
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
       this.updateQueue(state, event.snapshot.queue);
@@ -2166,6 +2215,8 @@ export class DurableAgentHost implements AgentProtocol {
           state.queue.filter((item) => item.identity.turnId !== turn.identity.turnId),
         );
       if (turn.status === 'running') state.active = turn;
+      if (isAttached && turn.status !== 'running' && turn.status !== 'queued')
+        this.screenSuppressedRequests.delete(turn.identity.requestId);
       this.present(turn);
       if (
         turn.status !== 'running' &&
@@ -2174,9 +2225,17 @@ export class DurableAgentHost implements AgentProtocol {
       )
         state.active = null;
     }
+    if (
+      isAttached &&
+      previousRequestId &&
+      state.active &&
+      state.active.identity.requestId !== previousRequestId
+    )
+      this.screenSuppressedRequests.delete(previousRequestId);
     if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
+    this.reconcileScreenAwake();
   }
 
   private timed(turn: RuntimeDurableTurn): RuntimeDurableTurn {

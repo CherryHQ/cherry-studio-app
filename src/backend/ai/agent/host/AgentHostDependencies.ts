@@ -36,6 +36,7 @@ import { createInternalEntryWithPreview } from '@/backend/services/file/filePrev
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
 import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -79,6 +80,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'TrashRuntime',
   'KeepAliveCoordinator',
   'SshRuntime',
+  'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   scriptSandbox() {
@@ -124,6 +126,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly usage = new AgentSessionUsageRecorder();
   readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
     this.keepAlive.acquire('agent.durable', onInterrupt);
+  readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
     size: () => agentDatabaseSize(),
@@ -166,6 +169,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
     private readonly ssh?: SshRuntime,
+    private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
+      acquire: () => ({ release() {} }),
+    },
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({

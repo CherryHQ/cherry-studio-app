@@ -14,6 +14,7 @@ import {
   createPaintingGenerateJobHandler,
   type PaintingAi,
 } from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 
 import type { JobType } from './jobRegistry';
 import type { JobHandler, JobHandlerFor } from './types';
@@ -31,7 +32,12 @@ export function jobHandlerEntry<K extends JobType>(
 /** Complete, immutable production handler registry assembled by the host. */
 @Injectable('JobHandlerRegistry')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AiService', 'BackgroundActivityManager', 'BackgroundActivityEnvironment'])
+@DependsOn([
+  'AiService',
+  'BackgroundActivityManager',
+  'BackgroundActivityEnvironment',
+  'ScreenAwakeRuntime',
+])
 @AppStatePolicy('not-applicable')
 export class JobHandlerRegistry extends BaseService {
   readonly entries: readonly JobHandlerEntry[];
@@ -40,6 +46,7 @@ export class JobHandlerRegistry extends BaseService {
     ai: PaintingAi,
     backgroundActivities: Pick<BackgroundActivityManager, 'startSession'>,
     environment: Pick<BackgroundActivityEnvironment, 'paintingPresenter' | 'translate'>,
+    screenAwake: ScreenAwakeRuntime,
   ) {
     super();
     this.entries = Object.freeze([
@@ -55,6 +62,7 @@ export class JobHandlerRegistry extends BaseService {
           },
           ai,
           paintings: paintingService,
+          screenAwake,
           storage: paintingFileStorage,
           translate: environment.translate,
         }),
