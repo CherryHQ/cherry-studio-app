@@ -1,7 +1,7 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import { estimateContextTokens, estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
+import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   createRegistry,
@@ -43,7 +43,7 @@ import {
   type RuntimeUsageOwner,
 } from '../durableTypes';
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
-import { toPiConversation } from './modelMessages';
+import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
@@ -102,7 +102,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         input: ['text', 'image'],
       },
     );
-    const estimate = estimateContextTokens(entries.flatMap((entry) => entry.model ?? []));
+    const estimate = estimatePiContextUsage(entries.flatMap((entry) => entry.model ?? []));
     // A measured prefix already includes its system prompt. Content-only recovery needs one.
     return (
       estimate.tokens +
@@ -435,12 +435,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const originalEntries = seed.history
       ? createWorkingPiEntries(
           {
-            turnId: 'history-import',
-            sessionId: seed.lane.sessionId,
             instructions: configuration.instructions,
-            model: configuration.model,
-            options: configuration.options,
-            tools: [],
             input: [],
             history: seed.history.history,
             contextCheckpoint: seed.history.contextCheckpoint,
@@ -518,14 +513,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const tools = configuration.tools.map((blueprint) => this.toolTemplate(blueprint));
     const assembled = toPiConversation(
       {
-        turnId: input.turnId,
-        sessionId: lane.sessionId,
         instructions: '',
-        model: configuration.model,
-        options: configuration.options,
         history: [],
-        contextCheckpoint: null,
-        tools: [],
         input: input.input,
         resume: input.resume,
       },

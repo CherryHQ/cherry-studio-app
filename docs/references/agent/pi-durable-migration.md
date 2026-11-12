@@ -294,8 +294,11 @@ At each committed transcript boundary, the observer reads Pi's public `Conversat
 passes its effective messages to pi-ai's `estimateContextTokens`. This includes measured input,
 cache and output plus estimates for the following messages; after compaction, reset or reply edits,
 the same read uses the newly retained context. Background compaction updates usage even when no
-answer is running. Reattachment restores the current count. Rebuilt normalized history adds an
-estimate of the retained answer to its persisted input-only measurement.
+answer is running. Reattachment restores the current count. For rebuilt normalized replies, the
+display estimate ignores synthetic input-only usage and counts retained content instead. A reply
+can merge several provider responses, so adding its full text to the final request's input would
+count earlier response text twice. Execution history keeps its existing input measurement;
+composer estimation does not rewrite usage or change execution's compaction thresholds.
 
 Each usage value names the answer of its newest placed input. The Host exposes current copies in
 `contextUsages` and replaces that list with `context.usage.updated`; the composer selects only the

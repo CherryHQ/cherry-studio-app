@@ -200,16 +200,20 @@ describe('Persistent Agent facade', () => {
           {
             turnId: 'earlier',
             messages: [
+              { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
               {
                 role: 'assistant',
-                parts: [{ type: 'text', text: 'Answer.' }],
+                parts: [
+                  { type: 'text', text: 'Searching. ' },
+                  { type: 'text', text: 'Cherries are red.' },
+                ],
                 contextTokens: 100,
               },
             ],
           },
         ],
       }),
-    ).toBe(102);
+    ).toBe(13);
     expect(
       runtime.estimateStoredContextUsage({
         model: reference,
@@ -227,7 +231,11 @@ describe('Persistent Agent facade', () => {
             turnId: 'tail',
             messages: [
               { role: 'user', parts: [{ type: 'text', text: 'Next...' }] },
-              { role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }] },
+              {
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'Answer.' }],
+                contextTokens: 100,
+              },
             ],
           },
         ],

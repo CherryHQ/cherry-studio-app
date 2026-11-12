@@ -10,7 +10,7 @@ import type {
   UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
-import { estimateMessageTokens } from '@earendil-works/pi-ai/utils/estimate';
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
 import type {
   RuntimeDocumentAttachmentPart,
@@ -54,6 +54,18 @@ export type PiConversationInput = Pick<
   RuntimeExecutionRequest,
   'instructions' | 'history' | 'input' | 'resume'
 >;
+
+/** Display only: rebuilt replies may merge responses already covered by their input measurement. */
+export function estimatePiContextUsage(messages: readonly PiMessage[]) {
+  return estimateContextTokens(
+    messages.map((message) =>
+      // The local cherry API identifies normalized replay; native responses keep their real API.
+      message.role === 'assistant' && message.api === 'cherry'
+        ? { ...message, usage: EMPTY_PI_USAGE }
+        : message,
+    ),
+  );
+}
 
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
@@ -315,15 +327,8 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
-  // Persisted measurements cover input only. Include the rebuilt answer's estimated output
-  // so Pi's full-context estimator does not treat an input count as input plus output.
+  // Keep execution's saved input measurement unchanged. Display estimates are computed separately.
   if (lastAssistant && contextTokens !== undefined) {
-    const output = estimateMessageTokens(lastAssistant);
-    lastAssistant.usage = {
-      ...EMPTY_PI_USAGE,
-      input: contextTokens,
-      output,
-      totalTokens: contextTokens + output,
-    };
+    lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
   }
 }

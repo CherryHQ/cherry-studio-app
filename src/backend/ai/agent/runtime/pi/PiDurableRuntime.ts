@@ -1,6 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import {
   configure,
   defineDoc,
@@ -28,6 +27,7 @@ import {
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { estimatePiContextUsage } from './modelMessages';
 import { PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { ToolInstructions } from './piToolInstructions';
 
@@ -698,7 +698,7 @@ export class PiDurableRuntime {
   async contextUsageEstimate(sessionId: string, at: EntryId) {
     const conversation = await this.requireSession(sessionId, BACKGROUND_CONTEXT);
     const view = await conversation.context(BACKGROUND_CONTEXT, { at });
-    const estimate = estimateContextTokens(view.messages);
+    const estimate = estimatePiContextUsage(view.messages);
     return {
       tokens: estimate.tokens,
       ...(estimate.lastUsageIndex === null || estimate.trailingTokens > 0

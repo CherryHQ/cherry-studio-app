@@ -22,6 +22,7 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from '../PiDurableRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { ToolInstructions } from '../piToolInstructions';
+import { createWorkingPiEntries } from '../piWorkingHistory';
 
 function options() {
   return {
@@ -72,6 +73,47 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('reports recovered content without writing display estimates into execution history', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const conversation = await runtime.ensureConversation({
+        ...seed,
+        entries: createWorkingPiEntries(
+          {
+            instructions: '',
+            input: [],
+            contextCheckpoint: null,
+            history: [
+              {
+                turnId: 'earlier',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+                  {
+                    role: 'assistant',
+                    parts: [{ type: 'text', text: 'Searching. Cherries are red.' }],
+                    contextTokens: 100,
+                  },
+                ],
+              },
+            ],
+          },
+          { api: 'cherry', id: 'model', provider: 'provider', input: ['text'] },
+        ),
+      });
+      const before = await conversation.context(BACKGROUND_CONTEXT);
+      expect(await runtime.contextUsageEstimate(seed.sessionId, before.entries.at(-1)!.id)).toEqual(
+        { tokens: 11, estimated: true },
+      );
+      const after = await conversation.context(BACKGROUND_CONTEXT);
+      expect(after.messages).toEqual(before.messages);
+      expect(after.messages.at(-1)).toMatchObject({
+        usage: { input: 100, output: 0, totalTokens: 100 },
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('counts measured input, cached input and output, then follows compaction and reset context', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
