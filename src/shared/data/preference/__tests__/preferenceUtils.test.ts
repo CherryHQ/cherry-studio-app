@@ -46,6 +46,15 @@ test('background audio needs a new device-local decision rather than prior guida
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.background_audio.consent');
 });
 
+test('screen awake is a known, device-local opt-in with a valid key shape', () => {
+  const key = 'app.keep_screen_on.enabled';
+  expect(isPreferenceKey(key)).toBe(true);
+  expect(getPreferenceKeys()).toContain(key);
+  expect(getDefaultValue(key)).toBe(false);
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain(key);
+  expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/);
+});
+
 test('dictation is opt-in and voice engine choices stay on the device', () => {
   expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
   expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();

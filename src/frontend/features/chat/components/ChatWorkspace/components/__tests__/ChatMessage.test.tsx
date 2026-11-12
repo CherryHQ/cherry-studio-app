@@ -9,8 +9,9 @@ import { ChatMessage } from '../ChatMessage';
 const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
-const mockShareMessage = jest.fn();
+const mockEditMessage = jest.fn();
 const mockSelectBranch = jest.fn();
+const mockShareMessage = jest.fn();
 const mockPreserveReadingPosition = jest.fn();
 jest.mock('../../../../quotes/MessageQuoteHighlight', () => ({
   MessageQuoteHighlight: () => null,
@@ -28,6 +29,8 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 
 let mockCanSelectBranch = false;
+let mockEditableMessageIds: ReadonlySet<string> = new Set();
+let mockIsEditDisabled = false;
 let mockAreCardsEnabled = true;
 
 jest.mock('@/frontend/data/hooks', () => ({
@@ -38,8 +41,13 @@ jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
+    editQuestion: mockEditMessage,
     shareAssistantMessage: mockShareMessage,
     ...(mockCanSelectBranch ? { selectBranch: mockSelectBranch } : {}),
+  }),
+  useAssistantMessageActionsState: () => ({
+    editableQuestionIds: mockEditableMessageIds,
+    isEditQuestionDisabled: mockIsEditDisabled,
   }),
 }));
 
@@ -77,6 +85,26 @@ jest.mock('../AssistantMessageToolbar', () => ({
 jest.mock('../MessageAnswerCards', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    AnswerDots: ({
+      count,
+      onSelect,
+      pageLabel,
+    }: {
+      count: number;
+      onSelect: (index: number) => void;
+      pageLabel?: (index: number) => string;
+    }) =>
+      createElement(
+        'AnswerDots',
+        null,
+        Array.from({ length: count }, (_, dot) =>
+          createElement('AnswerDot', {
+            accessibilityLabel: pageLabel?.(dot) ?? 'answer-dot',
+            key: dot,
+            onPress: () => onSelect(dot),
+          }),
+        ),
+      ),
     MessageAnswerCards: (props: object) => createElement('MessageAnswerCards', props),
     useAnswerGroup: (message: MessageListItem) => ({
       models: [],
@@ -96,6 +124,8 @@ describe('ChatMessage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanSelectBranch = false;
+    mockEditableMessageIds = new Set();
+    mockIsEditDisabled = false;
     mockAreCardsEnabled = true;
     mockSelectBranch.mockResolvedValue(true);
   });
@@ -161,6 +191,106 @@ describe('ChatMessage', () => {
     expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'My question' });
     act(() => menu.items[1].onPress());
     expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
+  });
+
+  test('labels the original continuation without dimming message content', () => {
+    act(() => {
+      renderer = create(
+        <ChatMessage
+          assistantPresentation={{ name: 'Assistant' }}
+          isMessageActionsEnabled={false}
+          message={createMessage('success')}
+          shouldShowTimestamp={false}
+          editingContext="continuation"
+          startsEditingContinuation
+        />,
+      );
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'editing-original-continuation' }).props.children,
+    ).toBe('chat.input.editing.continuation');
+    expect(
+      renderer!.root.findByProps({ testID: 'editing-continuation-edge' }).props.pointerEvents,
+    ).toBe('none');
+    expect(
+      renderer!.root.findByProps({ testID: 'chat-message-assistant-1' }).props.style,
+    ).toBeUndefined();
+  });
+
+  test('offers Edit on a settled question the transcript can edit', () => {
+    mockEditableMessageIds = new Set(['user-1']);
+    act(() => {
+      renderer = create(
+        renderMessage({
+          ...createMessage('success'),
+          data: { parts: [{ type: 'text', text: 'My question' }] },
+          id: 'user-1',
+          role: 'user',
+        }),
+      );
+    });
+
+    const menu = mockContextMenu.mock.lastCall![0];
+    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'edit', 'share']);
+    act(() => menu.items[1].onPress());
+    expect(mockEditMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
+  });
+
+  test('disables Edit while the Session cannot accept it', () => {
+    mockEditableMessageIds = new Set(['user-1']);
+    mockIsEditDisabled = true;
+    act(() => {
+      renderer = create(
+        renderMessage({
+          ...createMessage('success'),
+          data: { parts: [{ type: 'text', text: 'My question' }] },
+          id: 'user-1',
+          role: 'user',
+        }),
+      );
+    });
+
+    const edit = mockContextMenu.mock.lastCall![0].items.find((item) => item.id === 'edit');
+    expect(edit?.disabled).toBe(true);
+  });
+
+  test('switches between sibling questions from the question pager', () => {
+    mockCanSelectBranch = true;
+    act(() => {
+      renderer = create(
+        renderMessage({
+          ...createMessage('success'),
+          data: { parts: [{ type: 'text', text: 'Edited question' }] },
+          id: 'user-1',
+          questionBranch: { siblings: ['user-0', 'user-1'] },
+          role: 'user',
+        }),
+      );
+    });
+
+    const previous = renderer!.root
+      .findAllByType('Button')
+      .find((button) => button.props.testID === 'question-version-previous')!;
+    const next = renderer!.root
+      .findAllByType('Button')
+      .find((button) => button.props.testID === 'question-version-next')!;
+    expect(previous.props.disabled).toBe(false);
+    expect(next.props.disabled).toBe(true);
+    act(() => previous.props.onPress());
+    expect(mockPreserveReadingPosition).toHaveBeenCalledTimes(1);
+    expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'user-1', targetId: 'user-0' });
+  });
+
+  test('never offers Edit on an assistant answer', () => {
+    mockEditableMessageIds = new Set(['assistant-1']);
+    act(() => {
+      renderer = create(renderMessage(createMessage('success')));
+    });
+
+    expect(mockContextMenu.mock.lastCall![0].items.map((item) => item.id)).toEqual([
+      'copy',
+      'share',
+    ]);
   });
 
   test('disables copy when the message has no copyable text but still allows sharing', () => {

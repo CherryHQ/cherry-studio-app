@@ -27,6 +27,7 @@ const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime', hasPendingStorageWork: () => false };
+const mockScreenAwake = { acquire: jest.fn() };
 const mockMcpRuntime = { kind: 'mcp-runtime', hasPendingStorageWork: jest.fn(() => false) };
 const mockPreference = {
   kind: 'preference',
@@ -159,6 +160,7 @@ const createRuntime = () =>
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
+    ScreenAwakeRuntime: mockScreenAwake,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
     PreferenceService: mockPreference,
@@ -350,6 +352,7 @@ describe('createAppBootstrapRuntime', () => {
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
+      screenAwake: mockScreenAwake,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
       region: mockRegion,

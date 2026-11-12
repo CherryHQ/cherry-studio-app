@@ -1,5 +1,9 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
+import {
+  Composer,
+  type ComposerInputProps,
+  useComposerExpansion,
+} from '@cherrystudio/ui/components';
 import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
@@ -20,6 +24,8 @@ import { DictationCancelAction } from '../../voice/DictationCancelAction';
 import { DictationStatus } from '../../voice/DictationStatus';
 import { useDictation } from '../../voice/useDictation';
 import { useDictationAvailability } from '../../voice/useDictationAvailability';
+import { ContextUsageRing } from './components/ContextUsageRing';
+import type { ContextUsage } from './utils/contextUsage';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
@@ -37,6 +43,9 @@ export function ChatInputAccessories({ children }: PropsWithChildren) {
 }
 
 type ChatInputSurfaceProps = {
+  contextUsage?: ContextUsage;
+  contextUsageSessionId?: string;
+  contextUsageMessageId?: string;
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
   trailingAction?: ReactNode;
@@ -89,6 +98,9 @@ function DictationChatInputSurface(props: Omit<ChatInputSurfaceProps, 'dictation
 }
 
 function ChatInputLayout({
+  contextUsage,
+  contextUsageSessionId,
+  contextUsageMessageId,
   leadingAction,
   secondaryAction,
   trailingAction,
@@ -110,15 +122,25 @@ function ChatInputLayout({
   const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
+  const isExpanded = useComposerExpansion()?.state.isExpanded ?? false;
+  const active = isEditing || isExpanded || draft.length > 0 || attachments.length > 0;
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   const send = (
     <Composer.Send
       testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
     />
   );
+  const ring = contextUsage ? (
+    <ContextUsageRing
+      key={JSON.stringify([contextUsageSessionId, contextUsageMessageId])}
+      usage={contextUsage}
+      testID={isEditing ? 'chat-context-usage-editing' : 'chat-context-usage-compact'}
+    />
+  ) : null;
   return (
     <ComposerEditor
-      active={isEditing || draft.length > 0 || attachments.length > 0}
+      restingTrailingActionCount={contextUsage ? 2 : 1}
+      active={active}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
       onLinkPress={onLinkPress}
@@ -145,6 +167,7 @@ function ChatInputLayout({
         {trailingAction ? (
           <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
         ) : null}
+        {ring}
         {renderPrimary ? renderPrimary(send) : send}
       </View>
     </ComposerEditor>

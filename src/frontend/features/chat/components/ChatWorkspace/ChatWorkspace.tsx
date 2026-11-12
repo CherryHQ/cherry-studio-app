@@ -12,6 +12,7 @@ import type {
 import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
+import { useChatEditing } from '../../context/ChatEditingProvider';
 import { type PendingChatSend } from '../../runtime';
 import { useChatShareSelectionActions } from '../../share/chatShareSelection';
 import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
@@ -122,6 +123,7 @@ export function ChatWorkspace({
       onPendingSendDisplayed(pendingSend.messages[0].id);
     }
   }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
+  const { editing } = useChatEditing();
   const projectedMessages = useMemo(() => {
     const projected = mergedMessages
       .filter((message) => message.display.role !== 'system')
@@ -292,6 +294,7 @@ export function ChatWorkspace({
         >
           <ChatMessageRowProvider
             breakAfterMessageId={forkBoundary?.id}
+            editingMessageId={editing?.messageId}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
           >

@@ -210,16 +210,25 @@ export type RuntimeDurableTurn = {
   isPaused?: boolean;
 };
 
+/** Current retained model context, distinct from a turn's billed usage or measured input. */
+export type RuntimeContextUsage = Readonly<{
+  messageId: string;
+  tokens: number;
+  estimated?: boolean;
+}>;
+
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
   contextStatus?: 'compacting' | 'compaction-failed' | null;
+  contextUsage?: RuntimeContextUsage | null;
 };
 
 export type RuntimeConversationEvent =
   | { type: 'snapshot'; snapshot: RuntimeConversationSnapshot }
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | { type: 'context.usage.updated'; usage: RuntimeContextUsage | null }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
@@ -227,6 +236,13 @@ export interface DurableAgentRuntime {
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
+  /** Estimate a missing working copy from the same saved context a rebuild imports; no execution. */
+  estimateStoredContextUsage(input: {
+    model: RuntimeModel;
+    instructions: string;
+    history: RuntimeHistoryTurn[];
+    contextCheckpoint: RuntimeContextCheckpoint | null;
+  }): number;
   initialize(
     database: RuntimeSqlDatabase,
     ports: RuntimeExecutionPorts,

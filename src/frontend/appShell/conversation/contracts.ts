@@ -116,6 +116,8 @@ export type ConversationInteraction = {
   id: string;
   kind: 'decision' | 'question';
   title: string;
+  /** Known local tool identity for translated titles and operation-specific approval content. */
+  toolName?: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
@@ -162,10 +164,12 @@ export type ConversationMessage = {
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
     /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
-    edit?: { availability: Availability };
+    editAnswer?: { availability: Availability };
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
+    /** Sends the edited text as a sibling question of this message; the original stays. */
+    editQuestion?: ConversationAction<{ text: string }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */

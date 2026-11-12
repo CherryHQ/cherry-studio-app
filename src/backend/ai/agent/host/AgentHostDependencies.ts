@@ -37,6 +37,7 @@ import { createInternalEntryWithPreview } from '@/backend/services/file/filePrev
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
@@ -79,6 +80,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'TrashRuntime',
   'KeepAliveCoordinator',
   'BackgroundActivityEnvironment',
+  'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   scriptSandbox() {
@@ -156,6 +158,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
         }),
     };
   };
+  readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
     size: () => agentDatabaseSize(),
@@ -199,6 +202,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
     private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
       translate: (key) => key,
+    },
+    private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
+      acquire: () => ({ release() {} }),
     },
   ) {
     super();

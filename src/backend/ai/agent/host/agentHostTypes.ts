@@ -42,6 +42,8 @@ export type MobileAgentHostPorts = {
     onInterrupt: (reason: Error) => void | Promise<void>,
     sessionId?: string,
   ): KeepAliveLease;
+  /** Screen-awake demand for user-visible generation; independent of background execution. */
+  generationLease?(tag: string): { release(): void };
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;
