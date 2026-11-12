@@ -681,3 +681,17 @@ test('remote input explicitly rejects injected quote and orphan author metadata'
     remoteInput({ parts: [{ type: 'text', text: 'Request', quoteAuthor: fields.quoteAuthor }] }),
   ).toThrow();
 });
+
+test('remote input rejects local SSH display metadata instead of silently dropping it', () => {
+  expect(() =>
+    remoteInput({
+      parts: [
+        {
+          type: 'text',
+          text: 'SSH · guoxu',
+          sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 0 }],
+        },
+      ],
+    }),
+  ).toThrow();
+});

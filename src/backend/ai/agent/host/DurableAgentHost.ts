@@ -54,6 +54,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
+import type { SshTextReference } from '@/shared/data/types/ssh';
 import type { TraceContext } from '@/shared/data/types/trace';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
@@ -2717,6 +2718,7 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
           ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
+          ...(part.sshReferences ? { sshReferences: part.sshReferences } : {}),
         }),
       ];
     if (part.type === 'file')
@@ -2737,6 +2739,7 @@ type InlineReferenceEntry =
   | { kind: 'plugin'; reference: PluginTextReference }
   | { kind: 'skill'; reference: SkillTextReference }
   | { kind: 'selection'; reference: SelectionTextReference }
+  | { kind: 'ssh'; reference: SshTextReference }
   | {
       kind: 'quote';
       quote: MessageQuote;
@@ -2769,6 +2772,11 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       (reference): InlineReferenceEntry => ({ kind: 'selection', reference }),
     ),
   );
+  const sshEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.sshReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'ssh', reference }),
+    ),
+  );
   // A quote's inline label is a truncated excerpt; the stored quote carries
   // the full selected text, so surviving labels must remap the whole quote.
   const quoteEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
@@ -2785,9 +2793,13 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       .filter((quote) => !quote.reference)
       .map((quote) => ({ quote, author: part.quoteAuthor })),
   );
-  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries, ...quoteEntries].sort(
-    (left, right) => left.reference.offset - right.reference.offset,
-  );
+  const ordered = [
+    ...pluginEntries,
+    ...skillEntries,
+    ...selectionEntries,
+    ...sshEntries,
+    ...quoteEntries,
+  ].sort((left, right) => left.reference.offset - right.reference.offset);
   const kept: InlineReferenceEntry[] = [];
   const ranges: { start: number; end: number }[] = [];
   for (const entry of ordered) {
@@ -2811,6 +2823,9 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       case 'selection':
         kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
         break;
+      case 'ssh':
+        kept.push({ kind: 'ssh', reference: { ...entry.reference, offset } });
+        break;
       case 'quote':
         kept.push({
           kind: 'quote',
@@ -2831,6 +2846,7 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
   const selectionReferences = kept.flatMap((entry) =>
     entry.kind === 'selection' ? [entry.reference] : [],
   );
+  const sshReferences = kept.flatMap((entry) => (entry.kind === 'ssh' ? [entry.reference] : []));
   const quotes = [
     ...kept.flatMap((entry) =>
       entry.kind === 'quote' ? [{ ...entry.quote, reference: entry.reference }] : [],
@@ -2848,6 +2864,7 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       ...(pluginReferences.length ? { pluginReferences } : {}),
       ...(skillReferences.length ? { skillReferences } : {}),
       ...(selectionReferences.length ? { selectionReferences } : {}),
+      ...(sshReferences.length ? { sshReferences } : {}),
     }),
     ...parts.flatMap((part) =>
       part.type === 'file'

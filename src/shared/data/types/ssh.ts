@@ -24,6 +24,13 @@ export const SshProfileFieldsSchema = z.object({
 export type SshProfileFields = z.infer<typeof SshProfileFieldsSchema>;
 export const SshReferenceSchema = z.object({ id: z.uuid(), revision: z.uuid() });
 export type SshReference = z.infer<typeof SshReferenceSchema>;
+/** Display-only message span; connection selection and authorization remain session-owned. */
+export const SshTextReferenceSchema = z.strictObject({
+  type: z.literal('ssh'),
+  label: z.string().min(1),
+  offset: z.number().int().nonnegative(),
+});
+export type SshTextReference = z.infer<typeof SshTextReferenceSchema>;
 export type SshProfile = SshProfileFields &
   SshReference & {
     fingerprint: string | null;

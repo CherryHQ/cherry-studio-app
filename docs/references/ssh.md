@@ -8,6 +8,10 @@ host verification stays next to the saved fingerprint. Unchanged forms cannot be
 The chat composer's plus menu opens an anchored server picker and inserts the selected server as
 an inline mention. That picker only selects servers. Opening a draft or selecting a target does
 not send a message or run a command. There is no standalone command panel.
+Sent messages retain the mention's label and UTF-16 text offset so it keeps the composer's link
+color after loading history, editing, or retrying. This display snapshot carries no connection
+identity, credentials, or command grant; live target selection still owns execution. Older messages
+stored only as plain text have no SSH display snapshot to restore.
 
 ## Owners
 

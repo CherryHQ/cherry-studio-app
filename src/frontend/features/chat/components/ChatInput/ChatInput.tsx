@@ -494,7 +494,19 @@ function TextChatInput({
       const attempt = quoteActions?.capture(text);
       try {
         setOpenPicker(null);
-        const sshMentions = readSshMentions(text);
+        const plugins =
+          mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
+        // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
+        const {
+          skills,
+          skillAction,
+          skillReferences,
+          pluginReferences,
+          text: prompt,
+        } = mode === 'standard'
+          ? readSkillMentions(plugins.text, plugins.pluginReferences)
+          : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        const sshMentions = readSshMentions(prompt);
         const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
         if (
           sshMentions.references.some(
@@ -506,27 +518,13 @@ function TextChatInput({
           )
         )
           throw new SshError('changed');
-        const plugins =
-          mode === 'standard'
-            ? readPluginMentions(sshMentions.text)
-            : { pluginReferences: [], text };
-        // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
-        const {
-          skills,
-          skillAction,
-          skillReferences,
-          pluginReferences,
-          text: prompt,
-        } = mode === 'standard'
-          ? readSkillMentions(plugins.text, plugins.pluginReferences)
-          : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-        const selections = readSelectionMentions(prompt);
+        const selections = readSelectionMentions(sshMentions.text);
         const quoted = readQuoteMentions(selections.text, attempt?.fields.quotes);
         const shifted = <T extends { offset: number }>(references: T[]) =>
           references.map((reference) => ({
             ...reference,
-            offset: quoted.shift(selections.shift(reference.offset)),
+            offset: quoted.shift(selections.shift(sshMentions.shift(reference.offset))),
           }));
         const parts = attachMessageQuote(
           toAgentInputParts(
@@ -536,6 +534,10 @@ function TextChatInput({
             selections.selectionReferences.map((reference) => ({
               ...reference,
               offset: quoted.shift(reference.offset),
+            })),
+            sshMentions.sshReferences.map((reference) => ({
+              ...reference,
+              offset: quoted.shift(selections.shift(reference.offset)),
             })),
           ),
           quoted.quotes.length

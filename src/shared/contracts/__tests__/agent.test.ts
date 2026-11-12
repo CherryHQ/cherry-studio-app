@@ -288,6 +288,36 @@ describe('Agent tool and managed-file contracts', () => {
     ).toEqual({ type: 'text', text: '找技能', skillReferences: [action] });
   });
 
+  test('round-trips SSH display spans without accepting connection identities or invalid ranges', () => {
+    const reference = { type: 'ssh', label: 'SSH · guoxu', offset: 3 };
+    const input = {
+      type: 'text',
+      text: '📄 SSH · guoxu 这台机器有什么',
+      sshReferences: [reference],
+    };
+    expect(AgentInputPartSchema.parse(roundTrip(input))).toEqual(input);
+    const stored = { ...input, id: 'part-1', state: 'done' };
+    expect(AgentMessagePartSchema.parse(roundTrip(stored))).toEqual(stored);
+    for (const sshReferences of [
+      [{ ...reference, offset: 0 }],
+      [{ ...reference, offset: 100 }],
+      [reference, reference],
+      [{ ...reference, id: '11111111-1111-4111-8111-111111111111' }],
+      [{ ...reference, revision: '22222222-2222-4222-8222-222222222222' }],
+      [{ ...reference, password: 'not-transcript-data' }],
+    ]) {
+      expect(AgentInputPartSchema.safeParse({ ...input, sshReferences }).success).toBe(false);
+    }
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...input,
+        pluginReferences: [
+          { type: 'plugin', pluginId: 'feishu', label: reference.label, offset: 3 },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips explicit plugin references for initial and subsequent messages', () => {
     const input = {
       sessionId: 'session-1',

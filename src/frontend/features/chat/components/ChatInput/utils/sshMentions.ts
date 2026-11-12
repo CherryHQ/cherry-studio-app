@@ -1,4 +1,4 @@
-import type { SshReference } from '@/shared/data/types/ssh';
+import type { SshReference, SshTextReference } from '@/shared/data/types/ssh';
 
 import { isMentionEscaped, readMentionLabel } from './mentionLabels';
 
@@ -13,15 +13,37 @@ export function createSshMention(label: string, profile: SshReference): string {
   return `[${label.replace(/[\\[\]]/g, '\\$&')}](${createSshMentionUrl(profile)})`;
 }
 
-/** Parse before other mentions so their recorded offsets already refer to the final SSH labels. */
-export function readSshMentions(draft: string): { references: SshReference[]; text: string } {
+/** Keep display spans separate from the transient connection identities checked on send. */
+export function readSshMentions(draft: string): {
+  references: SshReference[];
+  sshReferences: SshTextReference[];
+  shift: (offset: number) => number;
+  text: string;
+} {
   const references: SshReference[] = [];
-  const text = draft.replace(SSH_MENTION_PATTERN, (source, label, id, revision, offset) => {
-    if (isMentionEscaped(draft, offset)) return source;
+  const sshReferences: SshTextReference[] = [];
+  const removed: { end: number; length: number }[] = [];
+  let text = '';
+  let cursor = 0;
+  for (const match of draft.matchAll(SSH_MENTION_PATTERN)) {
+    const [source, rawLabel, id, revision] = match;
+    if (isMentionEscaped(draft, match.index)) continue;
+    const label = readMentionLabel(rawLabel);
+    if (!label) continue;
+    text += draft.slice(cursor, match.index);
     references.push({ id: id.toLowerCase(), revision: revision.toLowerCase() });
-    return readMentionLabel(label);
-  });
-  return { references, text };
+    sshReferences.push({ type: 'ssh', label, offset: text.length });
+    text += label;
+    cursor = match.index + source.length;
+    removed.push({ end: cursor, length: source.length - label.length });
+  }
+  return {
+    references,
+    sshReferences,
+    shift: (offset) =>
+      offset - removed.reduce((sum, item) => sum + (item.end <= offset ? item.length : 0), 0),
+    text: text + draft.slice(cursor),
+  };
 }
 
 export function removeSshMentions(draft: string): string {

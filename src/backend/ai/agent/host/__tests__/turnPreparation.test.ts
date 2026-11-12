@@ -666,9 +666,12 @@ describe('turn preparation', () => {
       const pluginReferences = [
         { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
       ];
+      const sshReferences = [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 8 }];
       const selected = await prepare({
         ...textInput(),
-        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+        parts: [
+          { type: 'text', text: '飞书 查找文档 SSH · guoxu', pluginReferences, sshReferences },
+        ],
       });
       const unselected = await prepare(textInput());
       expect(selected.tools).toEqual([harness.configuredTool]);
@@ -677,7 +680,14 @@ describe('turn preparation', () => {
       expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
       expect(selected.agent).toEqual(AGENT);
       expect(selected.userParts).toEqual([
-        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+        {
+          id: 'input-0',
+          type: 'text',
+          text: '飞书 查找文档 SSH · guoxu',
+          pluginReferences,
+          sshReferences,
+          state: 'done',
+        },
       ]);
     },
   );

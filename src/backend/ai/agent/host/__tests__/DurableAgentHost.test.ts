@@ -1551,7 +1551,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
 
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();
-    const failed = await state.reserve('failed');
+    const sshReferences = [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }];
+    const failed = await state.reserve('failed', [
+      { id: 'question', type: 'text', text: 'SSH · guoxu Question', state: 'done', sshReferences },
+    ]);
     await state.host.initialize();
     try {
       await state.host.retryMessage({
@@ -1564,7 +1567,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         failed.assistantMessageId,
       ]);
       expect(messages[0].parts).toEqual([
-        { id: 'input-0', type: 'text', text: 'Question', state: 'done' },
+        { id: 'input-0', type: 'text', text: 'SSH · guoxu Question', state: 'done', sshReferences },
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
@@ -1990,11 +1993,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       {
         id: 'question',
         type: 'text',
-        text: 'Look at 飞书 @skill and @selection',
+        text: 'Look at 飞书 @skill and @selection SSH · guoxu',
         state: 'done',
         pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 8 }],
         skillReferences: [{ type: 'skill', skillId, label: '@skill', offset: 11 }],
         selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 22 }],
+        sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 33 }],
       },
     ]);
     await state.host.initialize();
@@ -2015,7 +2019,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       });
       const [question] = await state.store.listMessages(state.sessionId);
       // The text collapses into one part; surviving mentions move to their new offsets and
-      // the removed Skill mention is dropped.
+      // the removed Skill and SSH mentions are dropped.
       expect(question?.parts).toEqual([
         {
           id: 'input-0',
@@ -2043,11 +2047,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       {
         id: 'question',
         type: 'text',
-        text: 'Look at 飞书 @skill and @selection',
+        text: 'Look at 飞书 @skill and @selection SSH · guoxu',
         state: 'done',
         pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 8 }],
         skillReferences: [{ type: 'skill', skillId, label: '@skill', offset: 11 }],
         selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 22 }],
+        sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 33 }],
       },
     ]);
     await state.host.initialize();
@@ -2064,7 +2069,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.editUserMessage({
         sessionId: state.sessionId,
         messageId: original.userMessageId,
-        text: '@selection then 飞书',
+        text: 'SSH · guoxu @selection then 飞书',
       });
       const [question] = await state.store.listMessages(state.sessionId);
       // The text collapses into one part; surviving mentions move to their new offsets and
@@ -2073,10 +2078,11 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         {
           id: 'input-0',
           type: 'text',
-          text: '@selection then 飞书',
+          text: 'SSH · guoxu @selection then 飞书',
           state: 'done',
-          pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 16 }],
-          selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 0 }],
+          pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 28 }],
+          selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 12 }],
+          sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 0 }],
         },
       ]);
     } finally {
