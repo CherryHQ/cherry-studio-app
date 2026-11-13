@@ -9,6 +9,9 @@ sideEffectsCacheReadonly: true
 # fingerprint. See docs/guides/development.md#dependencies.
 verifyDepsBeforeRun: warn
 
+# Keep submitter and EAS fingerprints aligned, and avoid '=' in patched package paths (Prefab #187).
+virtualStoreDirMaxLength: 40
+
 minimumReleaseAge: 1440
 # First-party Cherry packages ship in lockstep with Desktop and are adopted on release.
 minimumReleaseAgeExclude:
