@@ -10,7 +10,7 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import type { FileModule, FilePreviewSource } from '@/shared/contracts/file';
+import type { FilePreviewSource } from '@/shared/contracts/file';
 import {
   getExportSignature,
   type ExportFile,
@@ -143,7 +143,6 @@ export async function prepareImageExport(
 export async function prepareFileExport(
   { entry, uri }: FilePreviewSource,
   watermark: ExportWatermark,
-  completeExportFile?: FileModule['completeExportFile'],
 ): Promise<ExportFile & { release(): void }> {
   const mediaType = entry.mediaType.split(';')[0].trim().toLowerCase();
   if (
@@ -152,37 +151,14 @@ export async function prepareFileExport(
     mediaType === 'image/svg+xml' ||
     watermark.kind === 'none'
   ) {
-    return {
-      uri,
-      filename: entry.filename,
-      mediaType: entry.mediaType,
-      release() {},
-    };
+    return { uri, filename: entry.filename, mediaType: entry.mediaType, release() {} };
   }
   const image = await prepareImageExport({ uri, mediaType: entry.mediaType }, watermark);
   if (image.uri === uri) {
-    return {
-      ...image,
-      filename: entry.filename,
-      mediaType: entry.mediaType,
-    };
+    return { ...image, filename: entry.filename, mediaType: entry.mediaType };
   }
   const stem = entry.filename.replace(/\.[^.]+$/, '');
-  const descriptor: ExportFile = {
-    uri: image.uri,
-    filename: `${stem.slice(0, 251)}.png`,
-    mediaType: 'image/png',
-  };
-  try {
-    if (completeExportFile) {
-      const completed = await completeExportFile({ ...descriptor, sourceFileEntryId: entry.id });
-      return { ...completed, release: image.release };
-    }
-    return { ...descriptor, release: image.release };
-  } catch (error) {
-    image.release();
-    throw error;
-  }
+  return { ...image, filename: `${stem.slice(0, 251)}.png`, mediaType: 'image/png' };
 }
 
 function createParagraph(

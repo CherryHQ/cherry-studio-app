@@ -6,7 +6,6 @@ import type {
   FileAttachmentReport,
   FileAttachmentTarget,
 } from './fileAttachment';
-import type { ExportFile } from './fileExport';
 import type { EditFileImageInput } from './fileImageEdit';
 
 export type ResolvedFile = {
@@ -59,11 +58,6 @@ export type FileOcrState =
   | { status: 'recognizing'; kind: 'pdf' | 'image'; completedPages: number; totalPages: number };
 
 export interface FileModule {
-  /** Finalize metadata on a caller-owned temporary export, before publication or delivery. */
-  completeExportFile(
-    input: ExportFile & { sourceFileEntryId?: FileEntryId },
-    signal?: AbortSignal,
-  ): Promise<ExportFile>;
   /**
    * Recognition of one file, keyed by its entry ID or by the running read_file call reading it.
    * Calls back immediately, then on change. Undefined when idle.

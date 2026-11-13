@@ -106,28 +106,6 @@ const signature: ExportSignature = {
 
 const watermark: ExportWatermark = { kind: 'cherry', signature };
 
-test('discards a branded AI derivative if its metadata cannot be restored, retaining the original', async () => {
-  const uri = 'file:///managed/ai.jpg';
-  const original = new Uint8Array([1, 2, 3]);
-  mockFiles.set(uri, original);
-  const entry = FileEntrySchema.parse({
-    id: '00000000-0000-7000-8000-000000000001',
-    filename: 'ai.jpg',
-    mediaType: 'image/jpeg',
-    provenance: 'generated',
-    size: original.length,
-    createdAt: 1,
-    updatedAt: 1,
-  });
-  await expect(
-    prepareFileExport({ entry, uri }, watermark, async () => {
-      throw new Error('Metadata write failed');
-    }),
-  ).rejects.toThrow('Metadata write failed');
-  expect([...mockFiles.keys()]).toEqual([uri]);
-  expect(mockFiles.get(uri)).toEqual(original);
-});
-
 test.each(['native', 'web'])(
   'prepares an ordinary image for sharing with a %s paragraph builder',
   async (platform) => {

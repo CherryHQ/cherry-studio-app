@@ -138,19 +138,6 @@ test('exports native citations and preserves the final answer before source meta
 
 test('disabling process includes the final answer and files but excludes earlier process text', () => {
   const document = toChatExportDocument([question, answer], options);
-  expect(document.aiGenerated).toBe(true);
-  expect(toChatExportDocument([question], options).aiGenerated).toBe(false);
-  expect(
-    toChatExportDocument(
-      [
-        message('only-process', 'assistant', [
-          { id: 'early', type: 'text', text: 'Process text', state: 'done' },
-          { id: 'still-thinking', type: 'reasoning', text: 'Private reasoning', state: 'done' },
-        ]),
-      ],
-      options,
-    ).aiGenerated,
-  ).toBe(false);
   expect(document.sections.map((section) => section.heading)).toEqual(['You', 'Assistant']);
   expect(document.sections[1].blocks).toEqual([
     { kind: 'markdown', source: 'Final answer' },

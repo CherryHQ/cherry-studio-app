@@ -135,15 +135,6 @@ export function toChatExportDocument(
   const createdAt = messages.find((message) => message.createdAt)?.createdAt;
   return {
     title: options.title,
-    aiGenerated: messages.some(
-      (message, index) =>
-        message.role === 'assistant' &&
-        sections[index].blocks.some(
-          (block) =>
-            (block.kind === 'markdown' && Boolean(block.source.trim())) ||
-            (block.kind === 'text' && Boolean(block.text.trim())),
-        ),
-    ),
     header: {
       title: options.labels.assistant,
       avatar: CHERRY_AGENT_AVATAR,

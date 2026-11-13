@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { File } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
@@ -9,7 +9,6 @@ import type {
   ResolvedFile,
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
-import type { ExportFile } from '@/shared/contracts/fileExport';
 import {
   AiContentLabelSchema,
   type AiContentOperation,
@@ -27,7 +26,6 @@ import {
 } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
-import { completeFileAiContent, readSourceAiContent } from './aiContentMetadata';
 import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
 import { FileHashError, hashLocalFile } from './fileHash';
@@ -95,31 +93,6 @@ async function resolveCreatedEntry(entry: FileEntry): Promise<ResolvedFile> {
  * factory to inject.
  */
 export const fileContent = {
-  async completeExportFile(
-    input: ExportFile & { sourceFileEntryId?: FileEntryId },
-    signal?: AbortSignal,
-  ): Promise<ExportFile> {
-    const uri = new File(input.uri).uri;
-    const cache = new Directory(Paths.cache).uri.replace(/\/$/, '') + '/';
-    if (!uri.startsWith(cache)) throw new Error('Only temporary exports may be labeled');
-    let label = input.aiContentLabel;
-    if (label === undefined && input.sourceFileEntryId) {
-      const source = await resolveFileEntry(
-        fileEntryService,
-        FileEntryIdSchema.parse(input.sourceFileEntryId),
-      );
-      if (!source) throw new Error('Export source is unavailable');
-      label = await readSourceAiContent(
-        { uri: source.uri, mediaType: source.entry.mediaType },
-        signal,
-      );
-    }
-    const aiContentLabel = await completeFileAiContent(
-      { uri, mediaType: input.mediaType, aiContentLabel: label },
-      signal,
-    );
-    return { uri, filename: input.filename, mediaType: input.mediaType, aiContentLabel };
-  },
   observeFileOcr,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(

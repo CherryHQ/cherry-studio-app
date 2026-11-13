@@ -1,4 +1,3 @@
-import type { AiContentLabel } from '@/shared/data/types/aiContent';
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ResolvedFile } from './file';
@@ -39,8 +38,6 @@ export type ExportBlock =
     };
 
 export type ExportDocument = {
-  /** Declared by the source adapter for selected model-authored content. */
-  aiGenerated?: boolean;
   title?: string;
   /** Source-owned author and already-formatted date for a message image's first row. */
   header?: { title: string; avatar?: string; date?: string };
@@ -143,7 +140,6 @@ export type CaptureHtmlPages = (input: {
   onPage(page: CapturedHtmlPage, index: number, total: number): Promise<void>;
 }) => Promise<void>;
 export type HtmlConversionInput = {
-  aiContentLabel?: AiContentLabel | null;
   title: string;
   format: HtmlConversionFormat;
   capture: CaptureHtmlPages;

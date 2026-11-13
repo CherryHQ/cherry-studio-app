@@ -1,32 +1,19 @@
-import { completeFileAiContent, readFileAiContent } from '@/backend/services/file';
-import type { CaptureExportHtml, DocumentExportTarget } from '@/shared/contracts/documentExport';
-import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
-import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
+import type { CaptureExportHtml } from '@/shared/contracts/documentExport';
+import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
-import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
 
 import { createDocumentExportSession } from '../createDocumentExportSession';
-import { renderHtml } from '../renderHtml';
 
 const mockFiles = new Map<string, string>();
-const mockBinaryFiles = new Map<string, Uint8Array>();
 const mockDirectories = new Set<string>();
 let mockNextId = 0;
 const mockCopy = jest.fn(async (source: string, destination: string) => {
-  const bytes = mockBinaryFiles.get(source);
-  if (bytes) {
-    mockBinaryFiles.set(destination, bytes.slice());
-    mockFiles.delete(destination);
-    return;
-  }
   const contents = mockFiles.get(source);
   if (contents === undefined) throw new Error('Missing source');
   mockFiles.set(destination, contents);
-  mockBinaryFiles.delete(destination);
 });
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => `export-${++mockNextId}` }));
-jest.mock('uuid', () => ({ v7: () => `label-${++mockNextId}`, v4: () => 'unused' }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('expo-file-system', () => {
   const uri = (parts: (string | { uri: string })[]) =>
@@ -42,23 +29,18 @@ jest.mock('expo-file-system', () => {
     get exists() {
       return (
         mockDirectories.has(this.uri) ||
-        [...mockFiles.keys(), ...mockBinaryFiles.keys()].some((path) =>
-          path.startsWith(`${this.uri}/`),
-        )
+        [...mockFiles.keys()].some((path) => path.startsWith(`${this.uri}/`))
       );
     }
     delete() {
       for (const path of mockFiles.keys())
         if (path.startsWith(`${this.uri}/`)) mockFiles.delete(path);
-      for (const path of mockBinaryFiles.keys())
-        if (path.startsWith(`${this.uri}/`)) mockBinaryFiles.delete(path);
       for (const path of mockDirectories)
         if (path === this.uri || path.startsWith(`${this.uri}/`)) mockDirectories.delete(path);
     }
   }
   return {
     Directory,
-    FileMode: { ReadOnly: 'r', WriteOnly: 'w' },
     File: class {
       uri: string;
       constructor(...parts: (string | { uri: string })[]) {
@@ -68,51 +50,7 @@ jest.mock('expo-file-system', () => {
         return new Directory(this.uri.slice(0, this.uri.lastIndexOf('/')));
       }
       get exists() {
-        return mockFiles.has(this.uri) || mockBinaryFiles.has(this.uri);
-      }
-      get size() {
-        return (
-          mockBinaryFiles.get(this.uri)?.length ??
-          new TextEncoder().encode(mockFiles.get(this.uri) ?? '').length
-        );
-      }
-      async text() {
-        return mockFiles.get(this.uri)!;
-      }
-      async bytes() {
-        return (
-          mockBinaryFiles.get(this.uri)?.slice() ??
-          new TextEncoder().encode(mockFiles.get(this.uri))
-        );
-      }
-      open() {
-        const path = this.uri;
-        return {
-          offset: 0,
-          readBytesSync(length: number) {
-            const bytes =
-              mockBinaryFiles.get(path) ?? new TextEncoder().encode(mockFiles.get(path));
-            const result = bytes.slice(this.offset, this.offset + length);
-            this.offset += result.length;
-            return result;
-          },
-          writeBytesSync(bytes: Uint8Array) {
-            const previous = mockBinaryFiles.get(path) ?? new Uint8Array();
-            const output = new Uint8Array(Math.max(previous.length, this.offset + bytes.length));
-            output.set(previous);
-            output.set(bytes, this.offset);
-            this.offset += bytes.length;
-            mockBinaryFiles.set(path, output);
-          },
-          close() {},
-        };
-      }
-      create() {
-        mockBinaryFiles.set(this.uri, new Uint8Array());
-      }
-      delete() {
-        mockFiles.delete(this.uri);
-        mockBinaryFiles.delete(this.uri);
+        return mockFiles.has(this.uri);
       }
       writeSync(text: string) {
         mockFiles.set(this.uri, text);
@@ -124,137 +62,8 @@ jest.mock('expo-file-system', () => {
     Paths: { cache: 'file:///cache' },
   };
 });
-
-test('exports AI text with an application declaration and retains it across retries and saves', async () => {
-  const saveFile = jest.fn(async (file: ExportFile) => {
-    mockFiles.set(savedFile.uri, mockFiles.get(file.uri)!);
-    return savedFile;
-  });
-  const session = createDocumentExportSession(
-    {
-      kind: 'document',
-      document: {
-        aiGenerated: true,
-        sections: [{ id: 'answer', blocks: [{ kind: 'text', text: 'Model answer' }] }],
-      },
-    },
-    { readManagedImage: jest.fn(), saveFile },
-    () => {},
-    () => {},
-  );
-  const artifact = await session.render({ format: 'markdown' });
-  if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(artifact.text).toBe('Model answer\n');
-  expect(artifact.file.aiContentLabel).toMatchObject({
-    Label: '1',
-    ContentProducer: 'CherryStudio',
-    ProduceID: expect.any(String),
-    ContentPropagator: 'CherryStudio',
-    PropagateID: artifact.file.aiContentLabel?.ProduceID,
-  });
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toEqual(
-    artifact.file.aiContentLabel,
-  );
-  const stored = mockFiles.get(artifact.file.uri)!;
-  expect(await session.render({ format: 'markdown' })).toBe(artifact);
-  expect(mockFiles.get(artifact.file.uri)).toBe(stored);
-  await session.save(artifact);
-  expect(saveFile.mock.calls[0]?.[0]).toMatchObject({
-    aiContentLabel: artifact.file.aiContentLabel,
-  });
-  await session.save(artifact);
-  expect(saveFile).toHaveBeenCalledTimes(1);
-  await session.dispose();
-});
-
-test('converts labeled Markdown without displaying its AIGC header or inventing another producer', async () => {
-  const label = AiContentLabelSchema.parse({
-    Label: '1',
-    ContentProducer: 'UpstreamExample',
-    ProduceID: 'upstream-1',
-    ReservedCode1: '',
-    ContentPropagator: 'RelayExample',
-    PropagateID: 'relay-1',
-    ReservedCode2: '',
-  });
-  const session = createDocumentExportSession(
-    { kind: 'markdown', source: writeAiContentText('Body', 'text/markdown', label) },
-    { readManagedImage: jest.fn(), saveFile: jest.fn() },
-    () => {},
-    () => {},
-  );
-  expect(session.markdown).toBe('Body\n');
-  const artifact = await session.render({ format: 'html', presentation });
-  if (artifact.format !== 'html') throw new Error('Expected HTML');
-  expect(artifact.html).not.toContain('ContentProducer');
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/html')).toEqual(label);
-  await session.dispose();
-});
-
-test('a model-authored metadata header is replaced with an application-service declaration', async () => {
-  const source = writeAiContentText('Model answer', 'text/markdown', {
-    Label: '1',
-    ContentProducer: 'UnconfirmedExample',
-    ProduceID: 'model-supplied',
-    ReservedCode1: '',
-    ContentPropagator: 'UnconfirmedExample',
-    PropagateID: 'model-supplied',
-    ReservedCode2: '',
-  });
-  const session = createDocumentExportSession(
-    {
-      kind: 'document',
-      document: {
-        aiGenerated: true,
-        sections: [{ id: 'answer', blocks: [{ kind: 'markdown', source }] }],
-      },
-    },
-    { readManagedImage: jest.fn(), saveFile: jest.fn() },
-    () => {},
-    () => {},
-  );
-  const artifact = await session.render({ format: 'markdown' });
-  if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toMatchObject({
-    Label: '1',
-    ContentProducer: 'CherryStudio',
-    ProduceID: expect.any(String),
-  });
-  expect(artifact.file.aiContentLabel?.ProduceID).not.toBe('model-supplied');
-  expect(mockFiles.get(artifact.file.uri)).not.toContain('UnconfirmedExample');
-  expect(writeAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown', null)).toBe(
-    'Model answer\n',
-  );
-  await session.dispose();
-});
-
-test('unused asset declarations do not label ordinary exported text as AI-generated', async () => {
-  const session = createDocumentExportSession(
-    {
-      kind: 'document',
-      document: {
-        sections: [{ id: 'user', blocks: [{ kind: 'text', text: 'User text' }] }],
-        assets: {
-          unused: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000001' },
-        },
-      },
-    },
-    { readManagedImage: jest.fn(), saveFile: jest.fn() },
-    () => {},
-    () => {},
-  );
-  const artifact = await session.render({ format: 'markdown' });
-  if (artifact.format !== 'markdown') throw new Error('Expected Markdown');
-  expect(artifact.file.aiContentLabel).toBeUndefined();
-  expect(readAiContentText(mockFiles.get(artifact.file.uri)!, 'text/markdown')).toBeNull();
-  await session.dispose();
-});
 jest.mock('../renderHtml', () => ({
-  renderHtml: jest.fn(async () => ({
-    html: '<main>Content</main>',
-    issues: [],
-    aiContentLabel: null,
-  })),
+  renderHtml: async () => ({ html: '<main>Content</main>', issues: [] }),
 }));
 
 const presentation = {
@@ -295,82 +104,9 @@ const savedFile = {
 
 beforeEach(() => {
   mockFiles.clear();
-  mockBinaryFiles.clear();
   mockDirectories.clear();
   mockCopy.mockClear();
 });
-
-test.each(['markdown', 'html', 'image'] as const)(
-  'image-only replies retain their source declaration in %s artifacts and cached reuse',
-  async (format) => {
-    const sourceLabel = AiContentLabelSchema.parse({
-      Label: '2',
-      ContentProducer: 'UpstreamExample',
-      ProduceID: 'image-1',
-      ReservedCode1: '',
-      ContentPropagator: 'RelayExample',
-      PropagateID: 'relay-1',
-      ReservedCode2: '',
-    });
-    const raw = new Uint8Array(
-      Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
-        'base64',
-      ),
-    );
-    const sourceUri = 'file:///input/ai.png';
-    mockBinaryFiles.set(sourceUri, raw);
-    await completeFileAiContent({
-      uri: sourceUri,
-      mediaType: 'image/png',
-      aiContentLabel: sourceLabel,
-    });
-    const session = createDocumentExportSession(
-      {
-        kind: 'document',
-        document: {
-          sections: [
-            { id: 'answer', blocks: [{ kind: 'image', assetId: 'image', alt: 'Generated image' }] },
-          ],
-          assets: {
-            image: { kind: 'managed-file', fileEntryId: '00000000-0000-4000-8000-000000000002' },
-          },
-        },
-      },
-      { readManagedImage: async () => mockBinaryFiles.get(sourceUri)!, saveFile: jest.fn() },
-      () => {},
-      () => {},
-    );
-    if (format !== 'markdown')
-      jest
-        .mocked(renderHtml)
-        .mockImplementationOnce(
-          jest.requireActual<typeof import('../renderHtml')>('../renderHtml').renderHtml,
-        );
-    const target: DocumentExportTarget =
-      format === 'markdown'
-        ? { format }
-        : format === 'html'
-          ? { format, presentation }
-          : {
-              format,
-              layout: 'single',
-              presentation,
-              capture: async ({ onPage }) => {
-                const uri = 'file:///native.png';
-                mockBinaryFiles.set(uri, raw);
-                await onPage({ uri, width: 1, height: 1, index: 0, total: 1 });
-                mockBinaryFiles.delete(uri);
-              },
-            };
-    const artifact = await session.render(target);
-    const file = artifact.format === 'image' ? artifact.pages[0].file : artifact.file;
-    expect(file.aiContentLabel).toEqual(sourceLabel);
-    expect(await readFileAiContent(file)).toEqual(sourceLabel);
-    expect(await session.render(target)).toBe(artifact);
-    await session.dispose();
-  },
-);
 
 test('Markdown preview stays in memory and repeated sharing reuses its persistent file', async () => {
   const saveFile = jest.fn(async (file: { uri: string }) => {

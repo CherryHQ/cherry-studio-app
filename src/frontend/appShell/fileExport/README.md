@@ -49,7 +49,7 @@ extension.
 The in-app preview and original image used for editing retain their bytes.
 
 The global preference is persisted; each export resolves its own watermark selection without adding
-upstream AIGC metadata. Managed bitmap files, including saved `document-export` images, follow the selected
+file metadata. Managed bitmap files, including saved `document-export` images, follow the selected
 style when shared. Local photo saving retains the supplied bytes. `none` does not remove a footer
 already baked into pixels or authored content.
 
@@ -92,11 +92,6 @@ OS-cache copy without applying another watermark or creating a managed entry. Do
 uses that copy before Photos starts, so the source request can be disposed safely. Raw temporary
 paths use SHA-256 identities; managed files keep their entry/revision cache keys.
 
-For a managed bitmap, `prepareFileExport` restores source-file AI metadata after brand composition
-through the injected `FileModule.completeExportFile`. The managed source reference lets the backend
-read its bytes without a database label snapshot. A completion failure removes the disposable
-derivative; the managed source remains intact. Byte-copy paths retain metadata directly.
-Temporary descriptors pass labels only while preparing outputs. Re-encoded shared copies include
-the metadata-format version in their cache keys.
-System opening injects metadata completion only for managed files; temporary preview ids refer to
-cache bytes and must never be resolved as database entries.
+Sharing and system opening do not invoke AI metadata writing. Branded copies are programmatic
+renders and do not acquire or restore AI declarations; unchanged copies retain their source bytes.
+Actual AI producers complete their own file declarations before publication.

@@ -16,7 +16,6 @@ import {
   type ChatTarget,
 } from '@/frontend/appShell/navigation/chat';
 import { useFilePane } from '@/frontend/appShell/pane/state';
-import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { FilePreviewSource, ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
@@ -36,7 +35,6 @@ export type FileEntryOpenTarget = 'pane' | 'route' | 'system';
 
 /** Shared by cards and the viewer's explicit system-open escape hatch. */
 export function useOpenFileEntry(options: FileExportOptions = {}) {
-  const fileModule = useBackendModule('file');
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams<ChatRouteParamsInput & { sourceChat?: string | string[] }>();
@@ -46,17 +44,9 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   const requestImageEdit = useImagePreviewEditRequest();
   const pane = useFilePane();
 
-  const openFileEntryWithSystem = async (
-    file: ResolvedFile | (FilePreviewSource & { kind: 'temporary' }),
-  ) => {
-    const { entry } = file;
+  const openFileEntryWithSystem = async ({ entry, uri }: FilePreviewSource) => {
     try {
-      const exported = await prepareSharedFile(file, {
-        watermark: createWatermark(),
-        // Temporary preview ids describe cache bytes, never managed-file authority.
-        completeExportFile:
-          'kind' in file && file.kind === 'temporary' ? undefined : fileModule.completeExportFile,
-      });
+      const exported = await prepareSharedFile({ entry, uri }, { watermark: createWatermark() });
       // The recipient may read after the chooser closes; the OS owns this cache copy's lifetime.
       await openFilePreview({
         file: toFilePreviewFile(

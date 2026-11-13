@@ -31,7 +31,6 @@ export function createDocumentExportDependencies(
           name: file.filename,
           mediaType: file.mediaType,
           provenance: 'document-export',
-          aiContentLabel: file.aiContentLabel,
         },
         signal,
       );

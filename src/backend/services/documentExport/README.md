@@ -11,7 +11,13 @@ signature: embedded images display without captions and remote references remain
 `session.previewDocument(presentation)` provides the structured image preview without resource reads.
 Markdown rendering applies the optional target watermark; reuse requires matching complete text.
 HTML and image rendering share the resolved watermark independently of the image-only frame.
-The `none` variant omits the brand footer. AI source declarations are independent of watermark options.
+The `none` variant omits the brand footer. Watermark options do not add file metadata.
+
+Sharing exports are programmatic rendering, not AI file-generation operations. Sessions do not
+infer AI origin from selected assistant messages or images, create AI declarations, or restore
+source declarations on rendered Markdown, HTML, PNG or PPTX outputs. Byte-for-byte original-file
+delivery retains the supplied bytes, including any existing metadata. AI producers label their
+own generated files before publication, independently of this module.
 
 Markdown/HTML artifacts contain one immutable file descriptor and source text. Image artifacts
 contain ordered immutable pages, each with its PNG file and dimensions. The frontend capture
@@ -55,18 +61,3 @@ Images fit columns to the page width and wrap cell content. HTML/Markdown previe
 column widths with horizontal scrolling for wide tables. Markdown keeps authored
 content and represents resources explicitly. The chat adapter excludes thinking and process blocks
 from every format.
-
-Selected model-authored text tells the export operation to replace obsolete or model-authored
-declarations with a fresh `CherryStudio` application-service label. Each completed artifact retains
-its label when reused or saved. Labeled Markdown input inherits its declaration without displaying the
-AIGC header. HTML conversion reads metadata from the source and restores it on final PNG/PPTX
-outputs and previews after encoding. Temporary descriptors carry labels only for that operation;
-managed storage keeps the resulting bytes, with no new database field or source-fact record.
-Image-only exports inherit a declaration from successfully resolved image bytes. A document's own
-declaration takes precedence; otherwise the first labeled image in document order supplies the
-inherited declaration, including its confidence and independent service identifiers. Unused,
-unavailable and unlabeled images do not establish AI origin. Asset and rendered-HTML caches retain
-this temporary declaration so format changes and repeated exports keep the same inheritance.
-Export artifacts remain reusable across retries. This adds no visible AI notice. Service identity
-policy and pending native acceptance are described in
-[AI Content Metadata](../../../../docs/references/ai-content-labeling-design.md).

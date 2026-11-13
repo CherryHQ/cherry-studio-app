@@ -630,10 +630,7 @@ test('four-column tables retain their rows, headers, alignment and media in imag
     '| Name | Link | Image | Note |\n| --- | :---: | --- | ---: |\n| Alpha | [Docs](https://example.com/docs) | ![Photo](https://example.com/photo.png) | **Keep me** |';
   const document = normalizeDocument({ kind: 'markdown', source });
   const cache = new Map([
-    [
-      'remote:https://example.com/photo.png',
-      { dataUrl: 'data:image/png;base64,AA==', aiContentLabel: null },
-    ],
+    ['remote:https://example.com/photo.png', { dataUrl: 'data:image/png;base64,AA==' }],
   ]);
   const read = jest.fn();
   const { html } = await renderHtml(

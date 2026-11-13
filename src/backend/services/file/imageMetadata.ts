@@ -407,14 +407,6 @@ function gif(source: ImageMetadataSource): Inventory {
   throw new Error('Missing GIF trailer');
 }
 
-/** Read declarations from an already loaded image without copying its codec payload. */
-export function readImageAiContent(bytes: Uint8Array, mediaType: string): AiContentLabel | null {
-  return imageMetadata(
-    { size: bytes.length, read: (offset, length) => bytes.subarray(offset, offset + length) },
-    mediaType,
-  ).label;
-}
-
 /** Returns a copy plan; original pixel ranges are passed through without decoding. */
 export function imageMetadata(
   source: ImageMetadataSource,

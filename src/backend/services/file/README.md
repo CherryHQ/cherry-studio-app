@@ -4,16 +4,17 @@
 `fileContent` supplies the host's `FileModule`, imports, workspace copies and upload snapshots.
 AI operations are declared by producing callers. Labels live in file metadata, with no added database fields.
 
-The module root exposes `completeFileAiContent`, `readFileAiContent` and `readSourceAiContent`
-for backend producers and transformations. Read source bytes before encoding and pass the captured
+`aiContentMetadata.ts` owns `completeFileAiContent`, `readFileAiContent` and `readSourceAiContent`
+for managed-file producers and transformations. Read source bytes before encoding and pass the captured
 label only for that operation. Only pending, caller-owned outputs may be completed; immutable
 managed files must not be edited through this capability.
-`readImageAiContent` inspects bytes already loaded by document export, without another file read
-or decoding pixels. HTML inspection streams the complete head, retaining only bounded metadata tags
+HTML inspection streams the complete head, retaining only bounded metadata tags
 and skipping script/style bodies; document-body bytes are not needed for label discovery.
-Frontend callers use `FileModule.completeExportFile`, which accepts only cache-directory outputs
-and an optional managed source reference for inherited declarations.
 The caller retains publication, cancellation and cleanup ownership.
+
+Programmatic sharing and document rendering do not use this metadata capability. They neither
+classify selected assistant content as a new AI file nor add or restore declarations on generated
+share artifacts. Original-file copies naturally retain their bytes and existing declarations.
 
 - `aiContentMetadata` validates inherited declarations, dispatches carriers,
   reads the completed bytes back, and returns the label extracted from the completed file.

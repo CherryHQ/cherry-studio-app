@@ -1,7 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { completeFileAiContent } from '@/backend/services/file';
 import {
   DocumentExportError,
   type DocumentExportArtifact,
@@ -13,9 +12,7 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportFile } from '@/shared/contracts/fileExport';
-import type { AiContentLabel } from '@/shared/data/types/aiContent';
 import { readableFilename } from '@/shared/data/types/file';
-import { aiContentMarkdownBody, readAiContentText } from '@/shared/utils/aiContentText';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
 import { normalizeDocument } from './normalizeDocument';
@@ -34,13 +31,7 @@ export function createDocumentExportSession(
   assertActive: () => void,
   onDisposed: () => void,
 ): DocumentExportSession & { cancel(): void } {
-  const inheritedLabel =
-    input.kind === 'markdown' ? readAiContentText(input.source, 'text/markdown') : null;
-  const document = normalizeDocument(
-    input.kind === 'markdown' && inheritedLabel
-      ? { ...input, source: aiContentMarkdownBody(input.source) }
-      : input,
-  );
+  const document = normalizeDocument(input);
   const markdown = renderMarkdown(document);
   const directory = new Directory(Paths.cache, 'DocumentExport', randomUUID());
   const assets = new Map<string, PreparedAsset>();
@@ -48,23 +39,6 @@ export function createDocumentExportSession(
   const artifacts = new Map<string, DocumentExportArtifact>();
   const html = new Map<string, Awaited<ReturnType<typeof renderDocumentHtml>>>();
   const saved = new Map<string, ResolvedFile>();
-  async function labelFile(
-    file: ExportFile,
-    signal: AbortSignal,
-    assetLabel: AiContentLabel | null,
-  ): Promise<ExportFile> {
-    const sourceLabel = inheritedLabel ?? assetLabel;
-    if (!sourceLabel && !document.aiGenerated) return file;
-    const aiContentLabel = await completeFileAiContent(
-      {
-        ...file,
-        aiContentLabel: sourceLabel,
-        aiOperation: document.aiGenerated ? 'generate' : undefined,
-      },
-      signal,
-    );
-    return { ...file, aiContentLabel };
-  }
   let disposed = false;
   let disposal: Promise<void> | undefined;
 
@@ -156,11 +130,7 @@ export function createDocumentExportSession(
           format: 'markdown',
           text: markdownText,
           issues: preparedMarkdown!.issues,
-          file: await labelFile(
-            { uri: file.uri, filename, mediaType: 'text/markdown' },
-            signal,
-            preparedMarkdown!.aiContentLabel,
-          ),
+          file: { uri: file.uri, filename, mediaType: 'text/markdown' },
         };
       } else {
         progress('resolving-assets');
@@ -194,11 +164,7 @@ export function createDocumentExportSession(
             format: 'html',
             html: result.html,
             issues: result.issues,
-            file: await labelFile(
-              { uri: file.uri, filename, mediaType: 'text/html' },
-              signal,
-              result.aiContentLabel,
-            ),
+            file: { uri: file.uri, filename, mediaType: 'text/html' },
           };
         } else {
           const pages: ExportImagePage[] = [];
@@ -237,17 +203,11 @@ export function createDocumentExportSession(
                 Object.freeze({
                   width: image.width,
                   height: image.height,
-                  file: Object.freeze(
-                    await labelFile(
-                      {
-                        filename: pageFilename,
-                        mediaType: 'image/png',
-                        uri: file.uri,
-                      },
-                      signal,
-                      result.aiContentLabel,
-                    ),
-                  ),
+                  file: Object.freeze({
+                    filename: pageFilename,
+                    mediaType: 'image/png',
+                    uri: file.uri,
+                  }),
                 }),
               );
             },

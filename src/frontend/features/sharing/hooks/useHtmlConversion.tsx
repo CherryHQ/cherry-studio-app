@@ -13,8 +13,6 @@ import {
 } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { ExportWatermark } from '@/shared/contracts/fileExport';
-import type { AiContentLabel } from '@/shared/data/types/aiContent';
-import { readAiContentText } from '@/shared/utils/aiContentText';
 
 import { htmlConversionCaptureSource } from '../utils/htmlConversionCaptureSource';
 
@@ -52,12 +50,6 @@ export function useHtmlConversion(requestId: string) {
           if (cached) return cached;
           const content = readFileText(file.uri);
           if (content.isTruncated) throw new DocumentExportError('size-limit');
-          let aiContentLabel: AiContentLabel | null = null;
-          try {
-            aiContentLabel = readAiContentText(content.text, 'text/html');
-          } catch {
-            /* An unknown source declaration does not change ordinary conversion. */
-          }
           const controller = new AbortController();
           const abort = () => controller.abort();
           signal.addEventListener('abort', abort, { once: true });
@@ -66,7 +58,6 @@ export function useHtmlConversion(requestId: string) {
             const artifact = await module.convertHtml(
               {
                 title: file.entry.filename,
-                aiContentLabel,
                 format,
                 capture: (input) =>
                   capture({

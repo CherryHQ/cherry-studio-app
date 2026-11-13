@@ -10,16 +10,11 @@ const mockPush = jest.fn();
 const mockOpen = jest.fn();
 const mockToast = jest.fn();
 const mockPrepareSharedFile = jest.fn();
-const mockCompleteExportFile = jest.fn();
 let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
 let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
 
 jest.mock('@/frontend/appShell/pane/state', () => ({ useFilePane: () => mockPane }));
-
-jest.mock('@/frontend/data', () => ({
-  useBackendModule: () => ({ completeExportFile: mockCompleteExportFile }),
-}));
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareSharedFile: (...args: unknown[]) => mockPrepareSharedFile(...args),
@@ -207,7 +202,6 @@ it('opens the branded image copy externally while retaining the original for in-
   await act(async () => actions.openFileEntryWithSystem(imageFile));
   expect(mockPrepareSharedFile).toHaveBeenCalledWith(imageFile, {
     watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
-    completeExportFile: mockCompleteExportFile,
   });
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -244,7 +238,6 @@ it('opens a temporary image through the cache without resolving its display id a
 
   expect(mockPrepareSharedFile).toHaveBeenCalledWith(temporaryFile, {
     watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
-    completeExportFile: undefined,
   });
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({

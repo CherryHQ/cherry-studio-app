@@ -5,9 +5,14 @@ Status: **implemented; native acceptance and store evidence pending**.
 The client reads and writes implicit AI-content declarations in file metadata. Known AI outputs
 without a usable upstream declaration automatically receive a `CherryStudio` application-service
 label and a new content identifier. New AI edits replace superseded declarations with a fresh
-application-service label. Valid original model-image declarations and unchanged or mechanically
-transformed content retain their inherited fields. Metadata completion and read-back precede
-publication of a changed file. No database field or separate source-fact record is added.
+application-service label. Valid original model-image declarations retain their inherited fields.
+Metadata completion and read-back precede publication of an AI-produced file. No database field
+or separate source-fact record is added.
+
+Only actual AI file-generation/editing operations create declarations. Sharing, chat screenshots,
+HTML/Markdown exports, HTML-to-image/PPTX conversions, brand composition and system-preview copies
+are programmatic outputs: these paths neither infer AI origin nor add or restore declarations.
+Sharing an original file without re-encoding retains its existing bytes; it does not label again.
 
 The scope is file metadata. Visible AI notices, clipboard changes, additional brand watermarks,
 and distribution restrictions are outside this design. Existing text, image pixels, document
@@ -52,8 +57,9 @@ upstream service identity.
 - A new AI edit replaces superseded AIGC declarations on its pending supported-format output with
   a new application-service content identifier; historical source bytes remain intact. It cannot
   keep an old producer's ID or signature for changed content.
-- Mechanical transformations preserve inherited declarations. They never turn an unlabeled source
-  into a complete label by assigning a local UUID or platform identity.
+- Managed-file import normalization and local image editing can retain declarations already read
+  from their source. They never label an ordinary file by assigning a local UUID or platform
+  identity. Programmatic sharing/rendering does not invoke this preservation capability.
 - Ordinary files and unlabeled mechanical conversions do not receive an AI classification merely
   because they pass through this module.
 - Cherry's managed entry IDs/revisions and temporary artifact IDs identify local files. The
@@ -69,22 +75,22 @@ for both inherited and automatically created labels.
 This capability reads and writes TC260 `AIGC` declarations. C2PA signed Content Credentials and
 model-level watermarks such as SynthID are separate provenance mechanisms. Unchanged file copies
 retain their bytes, but this client neither validates C2PA signatures nor issues replacement
-credentials after content changes. Restoring an AIGC declaration after re-encoding does not establish
+credentials after content changes. Preserving an AIGC declaration during managed-file editing does not establish
 that a C2PA credential remains valid or that a content watermark survives. Record those mechanisms
 separately in output evidence instead of counting them as AIGC metadata coverage.
 
 Implementation owners are `file/aiContentMetadata.ts`, `file/imageMetadata.ts`,
-`shared/utils/aiContentText.ts`, and `office/officeMetadata.ts`. Source declarations are explicit in
-Agent and painting producers and selected chat exports. Transformations inspect source-file metadata
-before encoding, without backfilling records or rewriting historical blobs. XMP, legacy PNG AIGC text, and EXIF
+`shared/utils/aiContentText.ts`, and `office/officeMetadata.ts`. AI operations are explicit in
+Agent and painting producers. Managed-file normalization inspects source metadata before encoding,
+without backfilling records or rewriting historical blobs. XMP, legacy PNG AIGC text, and EXIF
 ImageDescription/UserComment declarations are read before image normalization; canonical image
 writes use XMP. Metadata inspection is bounded, and image codec payloads are copied without decoding.
 
 Regression suites cover field validation, source-file inheritance, text carriers/projections, image
 containers/EXIF, Office custom properties and native-job lifetime, production/inheritance behavior,
-export retries, edit coordinates, and branding failure cleanup. These tests have been written but
-have not been executed for this change. Type checking, builds, device acceptance, independent
-extraction samples, and store evidence have not been performed. Container fixtures do not establish
+and edit coordinates. Verification and extracted samples belong to the exact source revision
+recorded in the evidence; earlier sharing-label samples do not establish the current sharing policy.
+Container fixtures do not establish
 native image decoding, Office rendering fidelity, Photos retention, or recipient behavior.
 
 ## Producing And Transforming Files
@@ -99,11 +105,9 @@ labels read from their bytes.
 | Agent `write_file` and `edit_file` | Write a fresh application-service label on supported-format AI outputs, replacing superseded declarations |
 | Office creation, editing, and script outputs | Write a fresh application-service AIGC property; read-only scripts create no file |
 | Agent image generation, image tools, and painting jobs | Retain a valid declaration from an original model response; otherwise write an application-service label |
-| Chat exports containing model answers | Replace obsolete or model-authored declarations with an application-service label; retain it on artifact reuse and saving |
-| Image-only document and chat exports | Inherit the document declaration or the first successfully used labeled image in document order; keep its confidence and service fields |
-| Labeled Markdown and HTML conversion | Read the source declaration and restore it in the output carrier after rendering |
+| Programmatic sharing, chat exports, screenshots, HTML conversion, brand composition, and system previews | Do not infer AI origin, inspect source declarations for inheritance, or write declarations on rendered outputs |
 | Imported files | Read existing labels before normalization or compression and restore them afterward |
-| Cropping, rotation, and brand composition | Capture source metadata before encoding and restore it afterward |
+| Managed-image cropping and rotation | Retain captured existing source metadata without creating a new AI classification |
 | Copies, workspace attachments, upload snapshots, and unchanged delivery | Keep original file bytes; no separate origin record is needed |
 | MCP results, desktop resources, downloads, and historical files | Keep existing metadata without guessing origin from filenames or provenance values |
 
@@ -177,9 +181,9 @@ do not establish that the original file carries metadata. Coverage reports must 
 ## Ownership
 
 Labels live in the files. No database column, migration, `FileEntry` property, backup field, or
-persistent manager is introduced. Unchanged byte copies preserve metadata directly. When an
-operation re-encodes content, read the source declaration before encoding and pass it temporarily
-until the output metadata is restored and read back.
+persistent manager is introduced. Unchanged byte copies preserve metadata directly. Managed-file
+normalization and image editing can capture an existing source declaration before encoding and
+restore it on their new managed version. Sharing/rendering remains outside metadata writing.
 
 | Existing owner | Responsibility |
 | --- | --- |
@@ -187,12 +191,12 @@ until the output metadata is restored and read back.
 | File service | Identify formats and dispatch metadata reads/writes |
 | File creation and draft rewriting | Complete metadata handling before publishing bytes and committing the final size |
 | Office service | Process custom properties in the existing compute sandbox |
-| Document export service | Restore inherited labels on temporary outputs; write application-service declarations on AI-authored outputs |
-| App-shell file export | Restore source metadata after brand composition; keep ordinary byte-copy delivery |
+| Document export service | Render programmatic share outputs without AI-origin inference or declaration writes |
+| App-shell file export | Apply existing brand treatment and deliver files without AI metadata writing |
 | File reading and text-editing tools | Preserve reading presentation and return coordinates matching final stored text |
 
-Frontend derivatives use `FileModule.completeExportFile`, which reads a referenced managed source
-and finalizes only caller-owned cache outputs. Cancellation and cleanup stay with existing owners.
+Frontend sharing exposes no AI metadata completion port. Actual AI producers own declarations on
+their published files; cancellation and cleanup stay with existing owners.
 Reuse existing ZIP, XML, UUID, digest and YAML capabilities. Large Office packages stay on disk and
 in the native compute sandbox without whole-package Base64 round trips through the main thread.
 
@@ -218,18 +222,20 @@ content, size, and `updatedAt` updates serialized by the existing write queue.
 Filesystem writes and SQLite commits are not one atomic transaction. No success flag is persisted;
 crash repair remains outside this change.
 
-Mechanical transformations first read metadata from the source version, then finish the last
-content encode before restoring that metadata on the output.
-Read back that completed output before publication. Import normalization reads source metadata
-before compression. Cropping, rotation, screenshots, chat exports, HTML conversion, and brand
-composition follow this rule wherever they produce new bytes. Mechanical transformations preserve
-production information; a new AI edit replaces the superseded declaration with a new application
-content identifier and records the new local version without inventing upstream production information.
+Managed-file normalization and local image editing can capture an existing declaration before
+encoding and restore it afterward. They do not create new application-service content identifiers.
+A new AI edit does replace the superseded declaration with a new application content identifier
+and records the new local version without inventing upstream production information.
+
+Sharing and document export do not perform this metadata processing. Selected assistant text or
+AI-generated images do not turn a program-rendered share artifact into a new AI file. Generated
+Markdown/HTML, screenshots, converted PNG/PPTX and branded/system-preview copies use the existing
+rendering pipeline without creating or restoring AIGC declarations. Byte-copy delivery retains
+the original file, including its existing metadata.
 
 Unchanged saves, copies, uploads, shares, and system opens carry the existing metadata without
 another labeling operation. Enterprise WeChat and other upload tools do not need to route files
-through the system share panel. A path that re-encodes content owns metadata preservation at that
-transformation step. Brand settings continue to control only the existing brand treatment.
+through the system share panel. Brand settings continue to control only the existing brand treatment.
 
 ## Reading, Final Files, And Caches
 
@@ -242,12 +248,12 @@ agree. After an AI edit adds or changes Markdown/HTML metadata, read the final p
 calculate the returned snippet and starting line. Preserve exact-text copying without
 adding a visible notice.
 
-Bind read-back to the actual published file. If a new artifact needs a stable copy, complete that
-copy and all processing before checking its metadata and handing it to existing lifetime
-management. Checking a source file does not establish that a separate cached output is complete.
+Bind AI-operation read-back to the actual published file. A pending AI file completes its content
+and metadata processing before publication. Sharing's stable-copy lifetime remains independent
+of AI metadata and does not require a label on program-rendered artifacts.
 
-Cache identity includes source revision, processing parameters, and metadata-format version.
-Metadata completion precedes artifact caching. Failed stable-copy operations remove their partial
+Share cache identity includes source revision and processing parameters, with no AI metadata
+version or completion callback. Failed stable-copy operations remove their partial
 outputs; recovery of a cache copy interrupted by process termination remains separate. Unchanged delivery of an already published file
 does not require parsing on every share.
 
@@ -264,9 +270,8 @@ established declaration. For inherited or automatically created labels, carrier 
 errors and cancellation use existing operation handling and must not publish an incomplete replacement.
 
 Do not rewrite historical bytes in bulk or require repair before ordinary opening, copying, or
-sharing. A later AI edit or transformation follows the corresponding new-output workflow. An
-export of historical model answers uses its current producing operation without backfilling message
-records.
+sharing. A later AI edit follows the new AI-output workflow. An export of historical model answers
+is programmatic rendering and neither labels the export nor backfills message records.
 
 Identify formats using structure and existing media-type rules. Bound metadata, XML, and
 decompression work on untrusted files; do not execute scripts or macros to read labels. Preserve
@@ -295,9 +300,9 @@ samples, extracted metadata, screenshots, recordings, a manifest, and the explan
 
 | Phase | Work | Completion evidence |
 | --- | --- | --- |
-| Metadata and common rules | Fields, application-service creation, upstream role separation, source-file inheritance, format capabilities, and error results | Known AI outputs are labeled; AI edits receive new application content identifiers; mechanical conversion restores source metadata; unchanged copies retain their bytes |
-| Text and Office files | HTML, Markdown, DOCX, XLSX, PPTX; creation, edits, scripts, and temporary exports | Final-file metadata is readable; body and unrelated package parts survive; Markdown edit coordinates match stored text |
-| Images and transformations | PNG, JPEG, WebP, GIF; generation, normalization, editing, capture, and brand composition | Metadata survives final encoding; metadata writes preserve pixels, animation, and transparency |
+| Metadata and common rules | Fields, application-service creation, upstream role separation, format capabilities, and error results | Known AI outputs are labeled; AI edits receive new application content identifiers; ordinary/program-rendered files get no new classification; unchanged copies retain their bytes |
+| Text and Office files | HTML, Markdown, DOCX, XLSX, PPTX; actual AI creation, edits and script outputs | Final-file metadata is readable; body and unrelated package parts survive; Markdown edit coordinates match stored text |
+| Images and managed versions | PNG, JPEG, WebP, GIF; AI generation and preservation during managed-file normalization/editing | AI outputs finish metadata before publication; metadata-only writes preserve pixels, animation, and transparency |
 | Actual evidence | Independent extraction, real samples, and technical explanation | Coverage matches the installation package, exposed paths, and final sample bytes |
 
 Acceptance should exercise first writes, inheritance, repeated writes, conflicts, new AI edits,

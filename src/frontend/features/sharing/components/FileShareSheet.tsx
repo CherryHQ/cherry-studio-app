@@ -15,7 +15,6 @@ import {
   fileEntryPreviewKind,
   LoadedFileEntryPreview,
 } from '@/frontend/components/FileEntryPreview';
-import { useBackendModule } from '@/frontend/data';
 import type { HtmlConversionArtifact } from '@/shared/contracts/documentExport';
 import { DocumentExportError, HTML_CONVERSION_MAX_PAGES } from '@/shared/contracts/documentExport';
 import type { ResolvedFile } from '@/shared/contracts/file';
@@ -29,7 +28,6 @@ type Request = Extract<NonNullable<ReturnType<typeof getShareRequest>>, { kind: 
 type Preview = { uri: string; name: string; original?: ResolvedFile };
 
 export function FileShareSheet({ request, onClose }: { request: Request; onClose(): void }) {
-  const fileModule = useBackendModule('file');
   const { t } = useTranslation();
   const { toast } = useToast();
   const [format, setFormat] = useState<ShareFormat>('original');
@@ -118,7 +116,6 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
               {
                 watermark: format === 'original' ? createWatermark() : { kind: 'none' },
                 signal: controller.signal,
-                completeExportFile: fileModule.completeExportFile,
               },
             );
           else if (format === 'original' || format === 'image')

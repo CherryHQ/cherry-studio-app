@@ -1,8 +1,4 @@
-import { crc32 } from 'node:zlib';
-
 import { fetch } from 'expo/fetch';
-
-import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
 
 import { inspectImage, resolveDocumentAssets } from '../resolveDocumentAssets';
 
@@ -63,54 +59,6 @@ test('zero image dimensions still produce a retryable placeholder', async () => 
   expect(result.issues).toHaveLength(1);
   expect(cache.size).toBe(0);
 });
-
-test.each(['1', '2', '3'] as const)(
-  'retains image declarations from used assets and cache entries (Label=%s)',
-  async (Label) => {
-    const label = AiContentLabelSchema.parse({
-      Label,
-      ContentProducer: 'ProviderExample',
-      ProduceID: 'image-1',
-      ReservedCode1: '',
-      ContentPropagator: 'RelayExample',
-      PropagateID: 'relay-1',
-      ReservedCode2: '',
-    });
-    const payload = Buffer.from('AIGC\0' + JSON.stringify(label));
-    const chunk = Buffer.alloc(payload.length + 12);
-    chunk.writeUInt32BE(payload.length);
-    chunk.write('tEXt', 4);
-    chunk.set(payload, 8);
-    chunk.writeUInt32BE(crc32(chunk.subarray(4, -4)), chunk.length - 4);
-    const raw = png();
-    const labeled = new Uint8Array(Buffer.concat([raw.subarray(0, -12), chunk, raw.subarray(-12)]));
-    const read = jest.fn(async (id: string) => {
-      if (id === 'missing') throw new Error('Image unavailable');
-      return id === 'ai' ? labeled : raw;
-    });
-    const sources = new Map([
-      ['answer:image', { kind: 'managed-file' as const, fileEntryId: 'ai' }],
-    ]);
-    const cache = new Map();
-    const signal = new AbortController().signal;
-    expect((await resolveDocumentAssets(sources, cache, read, signal)).aiContentLabel).toEqual(
-      label,
-    );
-    expect((await resolveDocumentAssets(sources, cache, read, signal)).aiContentLabel).toEqual(
-      label,
-    );
-    expect(read).toHaveBeenCalledTimes(1);
-    for (const id of ['ordinary', 'missing']) {
-      const other = await resolveDocumentAssets(
-        new Map([['other', { kind: 'managed-file', fileEntryId: id }]]),
-        cache,
-        read,
-        signal,
-      );
-      expect(other.aiContentLabel).toBeNull();
-    }
-  },
-);
 
 test('the same managed image at different transcript positions is read once and cached by source', async () => {
   const read = jest.fn(async () => png());
