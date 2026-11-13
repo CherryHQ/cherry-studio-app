@@ -17,8 +17,12 @@ import {
   type DiagnosticCheck,
   type DiagnosticReport,
   type DiagnosticAiReport,
+  type DiagnosticAiContext,
+  type DiagnosticConfiguration,
+  type DiagnosticEndpointCheck,
   type DiagnosticEvidence,
-  type DiagnosticToolId,
+  type DiagnosticPlugins,
+  type DiagnosticReadTool,
 } from '@/shared/contracts/diagnosticSession';
 import type { ModelsModule } from '@/shared/contracts/models';
 import type { PermissionStatuses } from '@/shared/contracts/permissions';
@@ -34,12 +38,8 @@ type Dependencies = {
   runAi(input: {
     model: Model;
     language: string;
-    context: unknown;
-    tools: {
-      id: DiagnosticToolId;
-      description: string;
-      read(signal: AbortSignal): Promise<unknown>;
-    }[];
+    context: DiagnosticAiContext;
+    tools: DiagnosticReadTool[];
     signal: AbortSignal;
     onEvidence?: (evidence: DiagnosticEvidence) => void;
   }): Promise<DiagnosticAiReport>;
@@ -50,12 +50,7 @@ type Dependencies = {
   defaultModel(): Promise<string | null>;
   language(): string;
   oauthSignedIn(provider: Provider): Promise<boolean>;
-  plugins(): Promise<{
-    enabledCount: number;
-    connectedCount: number;
-    truncated: boolean;
-    connections: { state: string }[];
-  }>;
+  plugins(): Promise<DiagnosticPlugins>;
   permissions(): Promise<PermissionStatuses>;
   applicationData(
     context: DiagnosticFeedbackContext | undefined,
@@ -105,26 +100,36 @@ function createSession(
   let running: { controller: AbortController; promise: Promise<unknown> } | undefined;
   let disposed = false;
 
-  async function loadTarget(id?: string): Promise<Target | undefined> {
+  async function loadTarget(signal: AbortSignal, id?: string): Promise<Target | undefined> {
+    signal.throwIfAborted();
     const selected =
       id ??
       (context
         ? context.providerId && context.modelId
           ? createUniqueModelId(context.providerId, context.modelId)
           : null
-        : await deps.defaultModel());
+        : await raceAbort(deps.defaultModel(), signal));
+    signal.throwIfAborted();
     if (!selected || context?.executionSource === 'desktop') return undefined;
-    const model = await deps.model.getById(selected);
+    const model = await raceAbort(deps.model.getById(selected), signal);
     if (!model) return undefined;
-    const provider = await deps.provider.getByProviderId(model.providerId);
-    const [{ keys }, auth, signedIn] = await Promise.all([
-      deps.provider.listApiKeys(provider.id),
-      deps.provider.getAuthConfig(provider.id),
-      deps.oauthSignedIn(provider),
-    ]);
+    signal.throwIfAborted();
+    const provider = await raceAbort(deps.provider.getByProviderId(model.providerId), signal);
+    signal.throwIfAborted();
+    const [{ keys }, auth, signedIn] = await raceAbort(
+      Promise.all([
+        deps.provider.listApiKeys(provider.id),
+        deps.provider.getAuthConfig(provider.id),
+        deps.oauthSignedIn(provider),
+      ]),
+      signal,
+    );
+    signal.throwIfAborted();
+    let connection = { baseUrl: '' };
     let endpoint: URL | undefined;
     try {
-      const parsed = new URL(deps.resolveConnection(provider, model).baseUrl);
+      connection = deps.resolveConnection(provider, model);
+      const parsed = new URL(connection.baseUrl);
       if (['https:', 'http:'].includes(parsed.protocol) && !parsed.username && !parsed.password)
         endpoint = parsed;
     } catch {
@@ -137,7 +142,7 @@ function createSession(
       fingerprint: JSON.stringify({ model, provider, keys, auth, signedIn }),
       issue: !provider.isEnabled
         ? 'disabled-provider'
-        : getProviderConfigurationIssue(provider, keys, auth, signedIn),
+        : getProviderConfigurationIssue(provider, keys, auth, signedIn, connection),
     };
   }
 
@@ -146,7 +151,7 @@ function createSession(
     if (report && Date.now() - Date.parse(report.checkedAt) > 5 * 60 * 1000)
       throw new DiagnosticSessionError('stale');
     if (bound) {
-      const current = await loadTarget(bound.model.id);
+      const current = await loadTarget(signal, bound.model.id);
       signal.throwIfAborted();
       if (!current || current.fingerprint !== bound.fingerprint)
         throw new DiagnosticSessionError('stale');
@@ -181,7 +186,7 @@ function createSession(
     return promise;
   }
 
-  async function endpointCheck(signal: AbortSignal): Promise<DiagnosticCheck> {
+  async function endpointCheck(signal: AbortSignal): Promise<DiagnosticEndpointCheck> {
     await assertCurrent(signal);
     if (!bound?.endpoint) return { id: 'endpoint', status: 'skipped', issue: 'configuration' };
     const start = performance.now();
@@ -261,7 +266,7 @@ function createSession(
           }
         };
         const configuration = inspect('model', async (checkSignal) => {
-          const target = await loadTarget();
+          const target = await loadTarget(checkSignal);
           checkSignal.throwIfAborted();
           bound = target;
           if (target)
@@ -378,10 +383,11 @@ function createSession(
       return operation(async (signal) => {
         if (!report) throw new DiagnosticSessionError('unavailable');
         await assertCurrent(signal);
-        const model = await deps.model.getById(modelId);
+        const model = await raceAbort(deps.model.getById(modelId), signal);
+        signal.throwIfAborted();
         if (!model || !isTextGenerationModel(model))
           throw new DiagnosticSessionError('unsupported_model');
-        const configuration = () => ({
+        const configuration = (): DiagnosticConfiguration => ({
           provider: diagnosticIdentifier(bound?.provider.id) ?? null,
           model: diagnosticIdentifier(bound?.model.modelId) ?? null,
           endpointHost: diagnosticIdentifier(bound?.endpoint?.hostname) ?? null,
@@ -395,8 +401,8 @@ function createSession(
           onEvidence,
           context: {
             configuration: configuration(),
-            checks: JSON.parse(JSON.stringify(report.checks)),
-            incident: JSON.parse(JSON.stringify(context?.error ?? null)),
+            checks: report.checks,
+            incident: context?.error ?? null,
           },
           tools: [
             {
@@ -412,8 +418,7 @@ function createSession(
               id: 'endpoint',
               description:
                 'Probe only the incident provider origin without credentials. Reports reachability, not authentication.',
-              read: async (toolSignal) =>
-                JSON.parse(JSON.stringify(await endpointCheck(toolSignal))),
+              read: endpointCheck,
             },
             {
               id: 'plugins',
@@ -428,8 +433,7 @@ function createSession(
               id: 'logs',
               description:
                 'Read at most 12 recent allowlisted technical log summaries. No raw logs or chat content.',
-              read: async (toolSignal) =>
-                JSON.parse(JSON.stringify(await readDiagnosticLogSummary(context, toolSignal))),
+              read: (toolSignal) => readDiagnosticLogSummary(context, toolSignal),
             },
           ],
         });

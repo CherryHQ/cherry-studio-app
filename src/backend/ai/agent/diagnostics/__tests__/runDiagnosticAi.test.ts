@@ -1,6 +1,11 @@
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
-import type { AgentRuntime, AgentRuntimeSession, RuntimeEvent } from '../../runtime';
+import {
+  RUNTIME_EXECUTION_LIMIT_CODE,
+  type AgentRuntime,
+  type AgentRuntimeSession,
+  type RuntimeEvent,
+} from '../../runtime';
 import { runDiagnosticAi } from '../runDiagnosticAi';
 
 const model = {
@@ -33,11 +38,25 @@ function fixture(execute: AgentRuntimeSession['execute']) {
     open: async () => session,
   };
   const controller = new AbortController();
-  const read = jest.fn(async () => ({ httpStatus: 401 }));
+  const read = jest.fn(async () => ({
+    id: 'endpoint' as const,
+    status: 'pass' as const,
+    facts: { httpStatus: 401 },
+  }));
   const input: Parameters<typeof runDiagnosticAi>[0] = {
     runtime,
     model,
-    context: { checks: [] },
+    context: {
+      configuration: {
+        provider: 'provider',
+        model: 'model',
+        endpointHost: 'provider.example',
+        configurationIssue: null,
+        remoteExecution: false,
+      },
+      checks: [],
+      incident: null,
+    },
     language: 'en-US',
     signal: controller.signal,
     tools: [{ id: 'endpoint', description: 'Read fixed endpoint.', read }],
@@ -88,27 +107,91 @@ test('uses only the final answer after tool calls and exposes the actual tool ev
   const result = await runDiagnosticAi(f.input);
   expect(result.cause).toBe('Authentication failed.');
   expect(result.evidence).toEqual([
-    { id: 'probe', tool: 'endpoint', facts: JSON.stringify({ httpStatus: 401 }, null, 2) },
+    {
+      id: 'probe',
+      tool: 'endpoint',
+      data: { id: 'endpoint', status: 'pass', facts: { httpStatus: 401 } },
+    },
   ]);
   expect(f.session.close).toHaveBeenCalledTimes(1);
 });
 
-test('a ninth tool call stops the run before executing another read', async () => {
-  const f = fixture(async function* (request) {
-    for (let call = 0; call < 9; call++) {
-      await request.tools[0]!.execute({
-        input: {},
-        signal: f.controller.signal,
-        toolCallId: `probe-${call}`,
-        turnId: request.turnId,
-      });
-    }
-    yield { type: 'completed' };
+test('presents an execution-layer limit as a diagnostic budget failure', async () => {
+  const f = fixture(async function* () {
+    yield {
+      type: 'failed',
+      error: {
+        code: RUNTIME_EXECUTION_LIMIT_CODE,
+        message: 'The isolated execution budget was exceeded.',
+        retryable: false,
+      },
+    };
   });
   await expect(runDiagnosticAi(f.input)).rejects.toMatchObject({ reason: 'budget' });
-  expect(f.read).toHaveBeenCalledTimes(8);
-  expect(f.session.cancel).toHaveBeenCalledTimes(1);
   expect(f.session.close).toHaveBeenCalledTimes(1);
+});
+
+test('rejects private context fields before opening a model session', async () => {
+  const f = fixture(async function* () {
+    yield { type: 'completed' };
+  });
+  const open = jest.spyOn(f.input.runtime, 'open');
+  Object.assign(f.input.context.configuration, { apiKey: 'sk-private' });
+  await expect(runDiagnosticAi(f.input)).rejects.toThrow();
+  expect(open).not.toHaveBeenCalled();
+});
+
+test('bounded evidence has an explicit unavailable result instead of untyped JSON', async () => {
+  const f = fixture(async function* (request) {
+    await request.tools[0]!.execute({
+      input: {},
+      signal: f.controller.signal,
+      toolCallId: 'logs',
+      turnId: request.turnId,
+    });
+    yield {
+      type: 'part.add',
+      index: 0,
+      part: {
+        id: 'answer',
+        type: 'text',
+        text: '{"cause":"Evidence is limited.","advice":["Submit feedback."]}',
+        state: 'done',
+      },
+    };
+    yield { type: 'completed' };
+  });
+  f.input.tools = [
+    {
+      id: 'logs',
+      description: 'Read bounded logs.',
+      read: async () =>
+        Array.from({ length: 12 }, () => ({
+          schemaVersion: 1 as const,
+          capture: 'metadata' as const,
+          timestamp: '2026-11-06T00:00:00Z',
+          level: 'error' as const,
+          module: 'Module',
+          message: 'Application error',
+          facts: Object.fromEntries(
+            [
+              'providerId',
+              'modelId',
+              'requestId',
+              'sessionId',
+              'turnId',
+              'assistantMessageId',
+              'serverId',
+              'toolCallId',
+              'taskKind',
+              'operation',
+            ].map((key) => [key, 'x'.repeat(160)]),
+          ),
+        })),
+    },
+  ];
+  const result = await runDiagnosticAi(f.input);
+  expect(result.evidence).toEqual([{ id: 'logs', tool: 'logs', unavailable: 'result_limit' }]);
 });
 
 test('invalid model output is never presented as a successful report', async () => {

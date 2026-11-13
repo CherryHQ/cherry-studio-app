@@ -1,1 +1,1 @@
-export { runDiagnosticAi, type DiagnosticAiTool } from './runDiagnosticAi';
+export { runDiagnosticAi } from './runDiagnosticAi';

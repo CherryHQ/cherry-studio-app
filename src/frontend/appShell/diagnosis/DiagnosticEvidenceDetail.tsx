@@ -1,26 +1,15 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { z } from 'zod';
 
 import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import {
-  DiagnosticCheckSchema,
   type DiagnosticEvidence,
   type DiagnosticReport,
 } from '@/shared/contracts/diagnosticSession';
 
 import { configurationIssueKeys, factKeys, issueKeys, statusKeys } from './diagnosticLabels';
 
-const configurationSchema = z.object({
-  configurationIssue: z.string().nullable(),
-  endpointHost: z.string().nullable(),
-  remoteExecution: z.boolean(),
-});
-const pluginSchema = z.object({
-  enabledCount: z.number().int().nonnegative(),
-  connectedCount: z.number().int().nonnegative(),
-});
 export function DiagnosticEvidenceDetail({
   evidence,
   target,
@@ -33,79 +22,81 @@ export function DiagnosticEvidenceDetail({
   const facts: { label: string; value: string }[] = [];
   let isEndpointReachable = false;
   let endpointIssue: string | undefined;
-  let data: unknown;
-  try {
-    data = JSON.parse(evidence.facts);
-  } catch {
-    // Keep an unexpected result available as raw data without inventing a summary.
-  }
-
-  if (evidence.tool === 'configuration') {
-    const result = configurationSchema.safeParse(data);
-    if (result.success) {
-      if (target) {
+  if (!('unavailable' in evidence)) {
+    switch (evidence.tool) {
+      case 'configuration': {
+        const data = evidence.data;
+        if (target) {
+          facts.push(
+            { label: t('chat.errorPart.detail.provider'), value: target.providerName },
+            { label: t('chat.errorPart.detail.model'), value: target.modelName },
+          );
+        }
+        const issueKey = data.configurationIssue
+          ? configurationIssueKeys[data.configurationIssue]
+          : undefined;
+        facts.push({
+          label: t('diagnosis.check.model'),
+          value: issueKey
+            ? t(issueKey)
+            : t(
+                !target
+                  ? 'diagnosis.issue.missing_model'
+                  : data.configurationIssue === null
+                    ? 'diagnosis.configurationReady'
+                    : 'diagnosis.issue.configuration',
+              ),
+        });
+        facts.push({
+          label: t('diagnosis.executionLocation'),
+          value: t(data.remoteExecution ? 'diagnosis.onDesktop' : 'diagnosis.onDevice'),
+        });
+        if (data.endpointHost)
+          facts.push({ label: t('diagnosis.endpointHost'), value: data.endpointHost });
+        break;
+      }
+      case 'endpoint': {
+        const data = evidence.data;
+        isEndpointReachable = data.status === 'pass';
+        endpointIssue = data.issue ? t(issueKeys[data.issue]) : undefined;
+        facts.push({
+          label: t('diagnosis.check.endpoint'),
+          value: t(isEndpointReachable ? 'diagnosis.endpointReachable' : statusKeys[data.status]),
+        });
+        if (target?.endpointHost)
+          facts.push({ label: t('diagnosis.endpointHost'), value: target.endpointHost });
+        for (const key of ['httpStatus', 'latencyMs'] as const) {
+          const value = data.facts?.[key];
+          if (value !== undefined)
+            facts.push({ label: t(factKeys[key]), value: numbers.format(value) });
+        }
+        break;
+      }
+      case 'plugins': {
+        const data = evidence.data;
         facts.push(
-          { label: t('chat.errorPart.detail.provider'), value: target.providerName },
-          { label: t('chat.errorPart.detail.model'), value: target.modelName },
+          {
+            label: t('diagnosis.fact.enabledCount'),
+            value: numbers.format(data.enabledCount),
+          },
+          {
+            label: t('diagnosis.fact.connectedCount'),
+            value: numbers.format(data.connectedCount),
+          },
         );
+        break;
       }
-      const issueKey = Object.entries(configurationIssueKeys).find(
-        ([issue]) => issue === result.data.configurationIssue,
-      )?.[1];
-      facts.push({
-        label: t('diagnosis.check.model'),
-        value: issueKey
-          ? t(issueKey)
-          : t(
-              !target
-                ? 'diagnosis.issue.missing_model'
-                : result.data.configurationIssue === null
-                  ? 'diagnosis.configurationReady'
-                  : 'diagnosis.issue.configuration',
-            ),
-      });
-      facts.push({
-        label: t('diagnosis.executionLocation'),
-        value: t(result.data.remoteExecution ? 'diagnosis.onDesktop' : 'diagnosis.onDevice'),
-      });
-      if (result.data.endpointHost)
-        facts.push({ label: t('diagnosis.endpointHost'), value: result.data.endpointHost });
-    }
-  } else if (evidence.tool === 'endpoint') {
-    const result = DiagnosticCheckSchema.safeParse(data);
-    if (result.success && result.data.id === 'endpoint') {
-      isEndpointReachable = result.data.status === 'pass';
-      endpointIssue = result.data.issue ? t(issueKeys[result.data.issue]) : undefined;
-      facts.push({
-        label: t('diagnosis.check.endpoint'),
-        value: t(
-          isEndpointReachable ? 'diagnosis.endpointReachable' : statusKeys[result.data.status],
-        ),
-      });
-      if (target?.endpointHost)
-        facts.push({ label: t('diagnosis.endpointHost'), value: target.endpointHost });
-      for (const key of ['httpStatus', 'latencyMs'] as const) {
-        const value = result.data.facts?.[key];
-        if (value !== undefined)
-          facts.push({ label: t(factKeys[key]), value: numbers.format(value) });
+      case 'logs':
+        facts.push({
+          label: t('diagnosis.fact.recordCount'),
+          value: numbers.format(evidence.data.length),
+        });
+        break;
+      default: {
+        const unexpected: never = evidence;
+        throw new Error(`Unsupported diagnostic evidence: ${unexpected}`);
       }
     }
-  } else if (evidence.tool === 'plugins') {
-    const result = pluginSchema.safeParse(data);
-    if (result.success) {
-      facts.push(
-        {
-          label: t('diagnosis.fact.enabledCount'),
-          value: numbers.format(result.data.enabledCount),
-        },
-        {
-          label: t('diagnosis.fact.connectedCount'),
-          value: numbers.format(result.data.connectedCount),
-        },
-      );
-    }
-  } else if (evidence.tool === 'logs' && Array.isArray(data)) {
-    facts.push({ label: t('diagnosis.fact.recordCount'), value: numbers.format(data.length) });
   }
 
   return (
@@ -138,7 +129,13 @@ export function DiagnosticEvidenceDetail({
         <MessageDetailText
           language="json"
           title={t('diagnosis.rawData')}
-          value={evidence.facts}
+          value={JSON.stringify(
+            'unavailable' in evidence
+              ? { status: 'unavailable', reason: evidence.unavailable }
+              : evidence.data,
+            null,
+            2,
+          )}
           variant="code"
         />
       </MessagePart.ToolGroup>

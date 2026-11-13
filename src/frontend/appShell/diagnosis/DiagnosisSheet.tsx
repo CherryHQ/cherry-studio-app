@@ -300,7 +300,14 @@ export function DiagnosisSheet({
           onAddProvider={() => void addProvider()}
           onSelect={setModel}
           selectedModelId={model?.modelId ?? null}
-          unavailableProviderId={configurationIssue ? target?.providerId : undefined}
+          unavailableModelId={
+            configurationIssue === 'invalid-endpoint' ? target?.uniqueModelId : undefined
+          }
+          unavailableProviderId={
+            configurationIssue && configurationIssue !== 'invalid-endpoint'
+              ? target?.providerId
+              : undefined
+          }
         />
       ) : (
         <ScrollView

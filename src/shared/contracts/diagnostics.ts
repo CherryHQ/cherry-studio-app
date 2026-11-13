@@ -2,8 +2,11 @@ import { z } from 'zod';
 
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
-import { AiFailureReasonSchema } from './aiFailure';
-import { DiagnosticFeedbackSummarySchema, type DiagnosticSession } from './diagnosticSession';
+import {
+  DiagnosticFailureSchema,
+  DiagnosticFeedbackSummarySchema,
+  type DiagnosticSession,
+} from './diagnosticSession';
 
 export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
@@ -98,14 +101,7 @@ export const DiagnosticFeedbackContextSchema = z.strictObject({
   paintingId: DiagnosticIdentifierSchema.optional(),
   providerId: DiagnosticIdentifierSchema.optional(),
   modelId: DiagnosticIdentifierSchema.optional(),
-  error: z
-    .strictObject({
-      code: DiagnosticIdentifierSchema.optional(),
-      sourceCode: DiagnosticIdentifierSchema.optional(),
-      reason: AiFailureReasonSchema.optional(),
-      statusCode: z.number().int().min(100).max(599).optional(),
-    })
-    .optional(),
+  error: DiagnosticFailureSchema.optional(),
 });
 export type DiagnosticFeedbackContext = z.infer<typeof DiagnosticFeedbackContextSchema>;
 

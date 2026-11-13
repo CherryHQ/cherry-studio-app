@@ -1,3 +1,5 @@
+import { resolveEffectiveEndpoint } from '@cherrystudio/ai-runtime/provider';
+
 import type { DiagnosticFeedbackContext } from '@/shared/contracts/diagnostics';
 import { DiagnosticSessionError } from '@/shared/contracts/diagnosticSession';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -128,6 +130,99 @@ test('a provider configuration change invalidates a previous report before anoth
   expect(f.checkChat).not.toHaveBeenCalled();
   expect(f.runAi).not.toHaveBeenCalled();
   await owner.dispose();
+});
+
+test('the incident model effective endpoint supplies both configuration and connection facts', async () => {
+  const f = fixture();
+  f.model.endpointTypes = ['anthropic-messages'];
+  f.provider.endpointConfigs = {
+    'openai-chat-completions': { baseUrl: 'file:///invalid-default' },
+    'anthropic-messages': { baseUrl: 'https://actual.example' },
+  };
+  f.deps.resolveConnection = resolveEffectiveEndpoint;
+  const owner = createDiagnosticsModule(f.deps);
+  const session = owner.module.createSession(f.context);
+  try {
+    const report = await session.check({ network: true });
+    expect(report.target).toMatchObject({ endpointHost: 'actual.example' });
+    expect(report.target?.configurationIssue).toBeUndefined();
+    expect(report.checks).toContainEqual({ id: 'model', status: 'pass', issue: undefined });
+
+    f.provider.endpointConfigs['openai-chat-completions']!.baseUrl = 'https://default.example';
+    f.provider.endpointConfigs['anthropic-messages']!.baseUrl = 'file:///invalid-actual';
+    const invalid = await session.check();
+    expect(invalid.target?.configurationIssue).toBe('invalid-endpoint');
+    expect(invalid.checks).toContainEqual({ id: 'model', status: 'fail', issue: 'configuration' });
+  } finally {
+    await owner.dispose();
+  }
+});
+
+test.each(['cancel', 'timeout'] as const)(
+  '%s releases an AI configuration recheck and lets the owner finish disposal',
+  async (ending) => {
+    const f = fixture();
+    const owner = createDiagnosticsModule(f.deps);
+    const session = owner.module.createSession(f.context);
+    await session.check();
+    let release!: (signedIn: boolean) => void;
+    let started!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    f.deps.oauthSignedIn = () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+        started();
+      });
+    if (ending === 'timeout') jest.useFakeTimers();
+    try {
+      const running = session.diagnose(f.model.id);
+      const stopped = expect(running).rejects.toMatchObject({
+        reason: ending === 'timeout' ? 'timeout' : 'cancelled',
+      });
+      await admitted;
+      if (ending === 'timeout') await jest.advanceTimersByTimeAsync(60000);
+      else session.cancel();
+      await stopped;
+      await owner.dispose();
+      release(false);
+      await Promise.resolve();
+      expect(f.runAi).not.toHaveBeenCalled();
+    } finally {
+      release?.(false);
+      await owner.dispose();
+      if (ending === 'timeout') jest.useRealTimers();
+    }
+  },
+);
+
+test('disposal cancels a diagnostic model lookup without admitting its late result', async () => {
+  const f = fixture();
+  const owner = createDiagnosticsModule(f.deps);
+  const session = owner.module.createSession(f.context);
+  await session.check();
+  const analysisModel = { ...f.model, id: createUniqueModelId('provider', 'analysis-model') };
+  let release!: (model: Model) => void;
+  let started!: () => void;
+  const admitted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  f.deps.model.getById = async (id) =>
+    id === f.model.id
+      ? f.model
+      : new Promise<Model>((resolve) => {
+          release = resolve;
+          started();
+        });
+  const running = session.diagnose(analysisModel.id);
+  const stopped = expect(running).rejects.toMatchObject({ reason: 'cancelled' });
+  await admitted;
+  await owner.dispose();
+  await stopped;
+  release(analysisModel);
+  await Promise.resolve();
+  expect(f.runAi).not.toHaveBeenCalled();
 });
 
 test('AI input and its fixed configuration tool never receive stored credentials', async () => {

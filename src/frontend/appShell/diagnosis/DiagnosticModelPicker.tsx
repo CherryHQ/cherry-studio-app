@@ -17,6 +17,7 @@ type DiagnosticModelPickerProps = {
   onSelect: (model: ModelPickerModelItem) => void;
   onAddProvider: () => void;
   unavailableProviderId?: string;
+  unavailableModelId?: string;
 };
 
 export function DiagnosticModelPicker(props: DiagnosticModelPickerProps) {
@@ -32,6 +33,7 @@ function DiagnosticModelList({
   onSelect,
   onAddProvider,
   unavailableProviderId,
+  unavailableModelId,
 }: DiagnosticModelPickerProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
@@ -45,13 +47,15 @@ function DiagnosticModelList({
       buildModelPickerListItems(
         groups.flatMap((group) => {
           if (group.provider.id === unavailableProviderId) return [];
-          const items = group.items.filter((item) =>
-            item.model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
+          const items = group.items.filter(
+            (item) =>
+              item.modelId !== unavailableModelId &&
+              item.model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
           );
           return items.length ? [{ ...group, items }] : [];
         }),
       ),
-    [groups, unavailableProviderId],
+    [groups, unavailableModelId, unavailableProviderId],
   );
 
   return (

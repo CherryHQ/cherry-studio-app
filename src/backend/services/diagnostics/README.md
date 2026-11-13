@@ -11,13 +11,24 @@ explicitly remote: phone checks do not claim to diagnose the desktop execution.
 `createDiagnosticsModule` extends `Backend.diagnostics` with a caller-owned `DiagnosticSession`.
 The sheet disposes it on exit; bootstrap cancels and joins every remaining session before stopping
 the host. Nothing is stored in ordinary Agent conversations or diagnostic history. Checks have a
-30-second deadline; AI self-check has 60 seconds, at most eight tool calls, 8 KiB per tool result,
+30-second deadline; AI self-check has 60 seconds, at most eight tool-call attempts and nine model
+requests, 8 KiB per tool result,
 and bounded model output. Reports expire after five minutes, and paid work or a new probe refuses
 changed target configuration. User cancellation reaches the model and tool callbacks. Individual
 checks run independently with eight-second bounds; a failed configuration read does not prevent
 data and runtime checks. Uninitialized runtime storage is skipped, and normal task waits are not
 failures. Data reads inspect the schema, one application row and the incident's local Session/Agent
 association; they do not perform an exhaustive integrity scan or repair.
+
+Configuration revalidation and diagnostic-model reads also release their wait on cancellation or
+timeout. Late storage/credential reads cannot publish a target or admit an AI run. Actual admitted
+AI execution and usage delivery are still joined before host resources stop.
+
+Configuration checks use the same resolved model connection as the endpoint probe, including
+per-model and gateway routing. Provider authentication checks keep their shared owner. An invalid
+model endpoint excludes that model from diagnostic selection; provider-wide authentication or
+disablement excludes the provider. Setup checks that do not supply a resolved connection retain
+their default-endpoint behavior.
 
 Connection checks probe the configured origin without credentials, reject redirects, cap response
 bodies and treat an HTTP response as evidence of reachability rather than successful authentication.
@@ -31,6 +42,18 @@ cached plugin states. They cannot select arbitrary URLs/files, read credentials 
 plugins, reconnect them, modify settings, or mount normal Agent tools. Technical log reads inspect
 at most two 32 KiB tails and return at most twelve allowlisted records from the last 24 hours.
 The UI presents the one-shot cause, tool evidence and suggested next steps; it offers no chat input.
+
+The probe counts all model-issued tool calls before validation, including unknown tools and invalid
+arguments. A response that would exceed the budget executes no tools. Execution and request-entry
+guards enforce the decision independently of Pi's observational hooks; ordinary model checks omit
+the optional budgets. Native model/tool looping remains Pi-owned.
+
+`diagnosticSession` owns the shared schemas for initial AI context and the four typed tool results.
+Tools bind their read result type to their identity; the AI adapter validates the closed result
+before returning it to the model or UI. Oversized results have an explicit `result_limit` state.
+The existing log projector remains the only owner of its metadata fact allowlist; the shared log
+contract validates its bounded envelope. UI formats typed facts and serializes only for the raw-data
+view, without maintaining a second parser or private schemas.
 
 Feedback can attach the structured check statuses and whether AI finished. This attachment has
 closed identifiers and numeric facts; AI-generated text, endpoint names and tool output are not

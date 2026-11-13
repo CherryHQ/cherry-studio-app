@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 
 import type { DiagnosticFeedbackContext } from '@/shared/contracts/diagnostics';
+import { DiagnosticLogsSchema, type DiagnosticLogs } from '@/shared/contracts/diagnosticSession';
 import { flushLogWriter } from '@/shared/core/logger/LoggerService';
 
 import { diagnosticDirectory, LOG_NAME } from './diagnosticFiles';
@@ -10,7 +11,7 @@ import { projectDiagnosticLog } from './diagnosticMetadata';
 export async function readDiagnosticLogSummary(
   context: DiagnosticFeedbackContext | undefined,
   signal: AbortSignal,
-) {
+): Promise<DiagnosticLogs> {
   signal.throwIfAborted();
   flushLogWriter();
   const directory = diagnosticDirectory('logs');
@@ -20,7 +21,7 @@ export async function readDiagnosticLogSummary(
     .filter((file): file is File => file instanceof File && LOG_NAME.test(file.name))
     .sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0))
     .slice(0, 2);
-  const records: NonNullable<ReturnType<typeof projectDiagnosticLog>>[] = [];
+  const records: DiagnosticLogs = [];
   const since = Date.now() - 24 * 60 * 60 * 1000;
   for (const file of files) {
     signal.throwIfAborted();
@@ -35,8 +36,10 @@ export async function readDiagnosticLogSummary(
       if (offset) lines.shift();
       for (const line of lines.toReversed()) {
         try {
-          const safe = projectDiagnosticLog(JSON.parse(line));
-          if (!safe || Date.parse(safe.timestamp) < since || safe.level === 'info') continue;
+          const projected = projectDiagnosticLog(JSON.parse(line));
+          if (!projected || projected.level === 'info') continue;
+          const safe = DiagnosticLogsSchema.element.parse(projected);
+          if (Date.parse(safe.timestamp) < since) continue;
           if (
             context?.providerId &&
             safe.facts.providerId &&

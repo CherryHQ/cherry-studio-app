@@ -4,7 +4,12 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 import { getCurrentSystemPrompt } from '@earendil-works/pi-ai/utils/transcript';
 import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
 
-import type { RuntimeEvent, RuntimeTool } from '../../types';
+import {
+  RUNTIME_EXECUTION_LIMIT_CODE,
+  type RuntimeEvent,
+  type RuntimeExecutionRequest,
+  type RuntimeTool,
+} from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
 import { PiDurableRuntime } from '../PiDurableRuntime';
 import { createPiDurableToolExtension } from '../piDurableTools';
@@ -60,7 +65,177 @@ function isolatedDiagnosticRuntime(
   });
 }
 
+async function runLimitedProbe(
+  response: (request: number) => AssistantMessage,
+  limits: NonNullable<RuntimeExecutionRequest['limits']> = { modelCalls: 9, toolCalls: 8 },
+) {
+  let requests = 0;
+  let reads = 0;
+  const runtime = isolatedDiagnosticRuntime(() => {
+    const message = response(++requests);
+    const stream = new AssistantMessageEventStream();
+    stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+    return stream;
+  });
+  const session = await runtime.open();
+  const events: RuntimeEvent[] = [];
+  try {
+    for await (const event of session.execute({
+      sessionId: 'bounded-probe',
+      turnId: 'bounded-turn',
+      model: reference,
+      instructions: 'Read bounded evidence and answer.',
+      input: [{ type: 'text', text: 'Diagnose.' }],
+      history: [],
+      contextCheckpoint: null,
+      options: {},
+      limits,
+      tools: [
+        {
+          ref: { source: 'builtin', capabilityId: 'diagnostic_configuration' },
+          providerName: 'diagnostic_configuration',
+          displayName: 'Configuration',
+          description: 'Read configuration.',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          approval: 'auto',
+          effect: 'read',
+          execute: async () => {
+            reads++;
+            return { value: { ready: true }, artifacts: [] };
+          },
+        },
+      ],
+    }))
+      events.push(event);
+  } finally {
+    await session.close();
+  }
+  return { requests, reads, events };
+}
+
 describe('Pi durable execution integration', () => {
+  test.each(['unknown-tool', 'invalid-arguments', 'valid-tool'] as const)(
+    'counts %s attempts before they can bypass the diagnostic tool budget',
+    async (kind) => {
+      const result = await runLimitedProbe((request) =>
+        request <= 9
+          ? {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'toolUse',
+              content: [
+                {
+                  type: 'toolCall',
+                  id: `call-${request}`,
+                  name: kind === 'unknown-tool' ? 'unknown_tool' : 'diagnostic_configuration',
+                  arguments: {},
+                  ...(kind === 'invalid-arguments'
+                    ? { argumentsError: 'Invalid JSON object.' }
+                    : {}),
+                },
+              ],
+            }
+          : {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'Finished.' }],
+            },
+      );
+      expect(result.requests).toBe(9);
+      expect(result.reads).toBe(kind === 'valid-tool' ? 8 : 0);
+      expect(result.events).toContainEqual(
+        expect.objectContaining({
+          type: 'failed',
+          error: expect.objectContaining({ code: RUNTIME_EXECUTION_LIMIT_CODE }),
+        }),
+      );
+      expect(result.events).not.toContainEqual({ type: 'completed' });
+    },
+  );
+
+  test('rejects an entire over-budget tool batch before any read can run', async () => {
+    const result = await runLimitedProbe((request) => ({
+      ...emptyAssistantMessage(wire),
+      stopReason: request === 1 ? 'toolUse' : 'stop',
+      content:
+        request === 1
+          ? Array.from({ length: 9 }, (_, index) => ({
+              type: 'toolCall' as const,
+              id: `call-${index}`,
+              name: 'diagnostic_configuration',
+              arguments: {},
+            }))
+          : [{ type: 'text', text: 'Finished.' }],
+    }));
+    expect(result.requests).toBe(1);
+    expect(result.reads).toBe(0);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: 'failed',
+        error: expect.objectContaining({ code: RUNTIME_EXECUTION_LIMIT_CODE }),
+      }),
+    );
+  });
+
+  test('allows eight reads and a final model answer within the declared limits', async () => {
+    const result = await runLimitedProbe((request) =>
+      request <= 8
+        ? {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'toolUse',
+            content: [
+              {
+                type: 'toolCall',
+                id: `call-${request}`,
+                name: 'diagnostic_configuration',
+                arguments: {},
+              },
+            ],
+          }
+        : {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Finished.' }],
+          },
+    );
+    expect(result.requests).toBe(9);
+    expect(result.reads).toBe(8);
+    expect(result.events).toContainEqual({ type: 'completed' });
+    expect(result.events.some((event) => event.type === 'failed')).toBe(false);
+  });
+
+  test('stops before dispatching a provider request beyond the model-call budget', async () => {
+    const result = await runLimitedProbe(
+      (request) =>
+        request <= 3
+          ? {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'toolUse',
+              content: [
+                {
+                  type: 'toolCall',
+                  id: `call-${request}`,
+                  name: 'diagnostic_configuration',
+                  arguments: {},
+                },
+              ],
+            }
+          : {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'Finished.' }],
+            },
+      { modelCalls: 2, toolCalls: 8 },
+    );
+    expect(result.requests).toBe(2);
+    expect(result.reads).toBe(2);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: 'failed',
+        error: expect.objectContaining({ code: RUNTIME_EXECUTION_LIMIT_CODE }),
+      }),
+    );
+  });
+
   test('an isolated diagnosis delivers one final report after reading tool evidence', async () => {
     const requests: TranscriptContext[] = [];
     const answer = JSON.stringify({

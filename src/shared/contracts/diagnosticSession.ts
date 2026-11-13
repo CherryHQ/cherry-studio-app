@@ -1,9 +1,22 @@
 import { z } from 'zod';
 
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
+import { AiFailureReasonSchema } from './aiFailure';
 import type { DiagnosticFeedbackContext } from './diagnostics';
-import type { ProviderConfigurationIssue } from './providers';
+import { ProviderConfigurationIssueSchema, type ProviderConfigurationIssue } from './providers';
+
+const DiagnosticIdentifierSchema = z
+  .string()
+  .refine((value) => diagnosticIdentifier(value) === value);
+
+export const DiagnosticFailureSchema = z.strictObject({
+  code: DiagnosticIdentifierSchema.optional(),
+  sourceCode: DiagnosticIdentifierSchema.optional(),
+  reason: AiFailureReasonSchema.optional(),
+  statusCode: z.number().int().min(100).max(599).optional(),
+});
 
 export const DiagnosticCheckIdSchema = z.enum([
   'data',
@@ -64,6 +77,11 @@ export const DiagnosticCheckSchema = z.strictObject({
 export type DiagnosticCheck = z.infer<typeof DiagnosticCheckSchema>;
 export type DiagnosticIssue = z.infer<typeof DiagnosticIssueSchema>;
 
+export const DiagnosticEndpointCheckSchema = DiagnosticCheckSchema.extend({
+  id: z.literal('endpoint'),
+});
+export type DiagnosticEndpointCheck = z.infer<typeof DiagnosticEndpointCheckSchema>;
+
 export const DiagnosticFeedbackSummarySchema = z.strictObject({
   checkedAt: z.iso.datetime({ offset: true }),
   checks: z.array(DiagnosticCheckSchema).max(DiagnosticCheckIdSchema.options.length),
@@ -86,12 +104,79 @@ export type DiagnosticReport = {
   checks: DiagnosticCheck[];
 };
 
-export type DiagnosticToolId = 'configuration' | 'logs' | 'endpoint' | 'plugins';
-export type DiagnosticEvidence = {
-  id: string;
-  tool: DiagnosticToolId;
-  facts: string;
-};
+export const DiagnosticConfigurationSchema = z.strictObject({
+  provider: DiagnosticIdentifierSchema.nullable(),
+  model: DiagnosticIdentifierSchema.nullable(),
+  endpointHost: DiagnosticIdentifierSchema.nullable(),
+  configurationIssue: z
+    .union([ProviderConfigurationIssueSchema, z.literal('disabled-provider')])
+    .nullable(),
+  remoteExecution: z.boolean(),
+});
+export type DiagnosticConfiguration = z.infer<typeof DiagnosticConfigurationSchema>;
+
+export const DiagnosticPluginsSchema = z.strictObject({
+  enabledCount: z.number().int().nonnegative(),
+  connectedCount: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  connections: z
+    .array(z.strictObject({ state: z.enum(['connected', 'connecting', 'disabled', 'error']) }))
+    .max(200),
+});
+export type DiagnosticPlugins = z.infer<typeof DiagnosticPluginsSchema>;
+
+/** The log projector owns the fact allowlist; this contract admits only its metadata envelope. */
+export const DiagnosticLogsSchema = z
+  .array(
+    z.strictObject({
+      schemaVersion: z.literal(1),
+      capture: z.literal('metadata'),
+      timestamp: z.iso.datetime({ offset: true }),
+      level: z.enum(['warn', 'error']),
+      module: DiagnosticIdentifierSchema,
+      message: z.string().max(160),
+      facts: z.record(
+        z.string(),
+        z.union([DiagnosticIdentifierSchema, z.number().finite(), z.boolean()]),
+      ),
+      repetition: z
+        .strictObject({
+          count: z.number().int().positive(),
+          firstSeenAt: z.iso.datetime({ offset: true }),
+          lastSeenAt: z.iso.datetime({ offset: true }),
+        })
+        .optional(),
+    }),
+  )
+  .max(12);
+export type DiagnosticLogs = z.infer<typeof DiagnosticLogsSchema>;
+
+export const DiagnosticToolResultSchema = z.discriminatedUnion('tool', [
+  z.strictObject({ tool: z.literal('configuration'), data: DiagnosticConfigurationSchema }),
+  z.strictObject({ tool: z.literal('endpoint'), data: DiagnosticEndpointCheckSchema }),
+  z.strictObject({ tool: z.literal('plugins'), data: DiagnosticPluginsSchema }),
+  z.strictObject({ tool: z.literal('logs'), data: DiagnosticLogsSchema }),
+]);
+export type DiagnosticToolResult = z.infer<typeof DiagnosticToolResultSchema>;
+export type DiagnosticToolId = DiagnosticToolResult['tool'];
+export type DiagnosticReadTool = {
+  [Tool in DiagnosticToolId]: {
+    id: Tool;
+    description: string;
+    read(signal: AbortSignal): Promise<Extract<DiagnosticToolResult, { tool: Tool }>['data']>;
+  };
+}[DiagnosticToolId];
+export type DiagnosticEvidence = { id: string } & (
+  | DiagnosticToolResult
+  | { tool: DiagnosticToolId; unavailable: 'result_limit' }
+);
+
+export const DiagnosticAiContextSchema = z.strictObject({
+  configuration: DiagnosticConfigurationSchema,
+  checks: z.array(DiagnosticCheckSchema).max(DiagnosticCheckIdSchema.options.length),
+  incident: DiagnosticFailureSchema.nullable(),
+});
+export type DiagnosticAiContext = z.infer<typeof DiagnosticAiContextSchema>;
 export type DiagnosticAiReport = {
   modelName: string;
   cause: string;

@@ -7,6 +7,14 @@ history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describe
 persistent contract, storage, tools, presentation, and backup. The baseline below explains the
 legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
 Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
+Isolated requests may set `limits` for provider requests and model-issued tool calls. The probe
+counts requests before dispatch and every tool call before argument validation, including unknown
+tools and invalid arguments. An over-budget response executes none of its tool calls and ends with
+`RUNTIME_EXECUTION_LIMIT`; cancellation still joins the memory runtime. Ordinary model checks omit
+these limits and keep their existing behavior.
+The generation hook observes calls; execution and provider-request guards enforce the budget,
+because an ordinary hook exception is only reported by the Harness. A derived turn ceiling bounds
+the same isolated run without changing durable-conversation policy.
 On-demand AI diagnosis uses that interface with explicitly supplied automatic read-only tools.
 The probe rejects write/approval capabilities, history, checkpoints and resume inputs; ordinary
 model health checks still pass an empty tool list. Neither path creates an application conversation.
@@ -248,6 +256,8 @@ type RuntimeToolCall = {
 type RuntimeExecutionRequest = {
   // Used only by isolated model probes; never persisted or included in traces or events.
   apiKeyOverride?: string
+  // Isolated-run budgets; rejected tool calls count too. Never a durable conversation policy.
+  limits?: { modelCalls: number; toolCalls: number }
   turnId: string
   // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
   instructions: string

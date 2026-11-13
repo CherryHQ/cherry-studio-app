@@ -12,3 +12,8 @@ structured check summary. Settings actions use overlay navigation before leaving
 The model step uses the shared compact model list and original brand avatars. A single primary
 footer action stays in place across steps; report feedback lives in the header, and the model step
 groups the fee notice with its expandable data scope.
+
+Evidence arrives as the shared `DiagnosticEvidence` union, with tool-specific validated data or
+an explicit size-limit outcome. The detail view formats these facts directly; its exhaustive tool
+switch makes a newly added evidence type require a presentation decision. Authentication problems
+exclude a provider from model selection, while a model-endpoint problem excludes only that model.
