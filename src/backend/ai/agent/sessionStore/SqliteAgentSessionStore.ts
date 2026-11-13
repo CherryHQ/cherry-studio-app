@@ -517,12 +517,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       assistantMessageId: string;
       parentMessageId: string | null;
     }[],
+    selection?: { from: string; to: string },
   ) {
     if (!inputs.length) return;
     await this.dbService.withWriteTx(async (tx) => {
       for (const input of inputs) {
-        // Withdrawal may already have repaired this row while native metadata still names
-        // the removed reservation. Never restore a dangling parent during recovery.
+        // A removed reservation may belong to a discarded working copy. Never restore a
+        // dangling parent while reconciling receipts during recovery.
         if (input.parentMessageId) {
           const [parent] = await tx
             .select({ id: agentSessionMessageTable.id })
@@ -547,19 +548,17 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             ),
           );
       }
-      const parents = new Set(inputs.map((input) => input.parentMessageId));
-      const tail = inputs.findLast((input) => !parents.has(input.assistantMessageId));
-      if (tail)
+      // A relationship repair never infers a user selection, particularly across model lanes.
+      if (selection)
         await tx
           .update(agentSessionTable)
-          .set({ activeNodeId: tail.assistantMessageId })
+          .set({ activeNodeId: selection.to })
           .where(
             and(
               eq(agentSessionTable.id, sessionId),
-              inArray(
-                agentSessionTable.activeNodeId,
-                inputs.map((input) => input.assistantMessageId),
-              ),
+              eq(agentSessionTable.activeNodeId, selection.from),
+              sql`EXISTS (SELECT 1 FROM agent_session_message AS target
+                WHERE target.id = ${selection.to} AND target.session_id = ${sessionId})`,
             ),
           );
     });

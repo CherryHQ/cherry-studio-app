@@ -244,7 +244,9 @@ describe('Persistent Agent facade', () => {
           });
         }
         for (let index = 1; index <= count; index++)
-          expect(await runtime.steer(lane, `guided-${index}`)).toBe('accepted');
+          expect(await runtime.steer(lane, `guided-${index}`)).toMatchObject({
+            status: 'accepted',
+          });
         release[0].resolve();
         await entered[1].promise;
         const order = [
@@ -385,7 +387,7 @@ describe('Persistent Agent facade', () => {
         ...input('second'),
         metadata: { parentMessageId: 'answer-first' },
       });
-      expect(await runtime.steer(lane, 'second')).toBe('accepted');
+      expect(await runtime.steer(lane, 'second')).toMatchObject({ status: 'accepted' });
       expect(state.requests).toHaveLength(1);
       expect((await runtime.message(lane, 'answer-second'))?.turn).toMatchObject({
         assistantMessageId: 'answer-second',

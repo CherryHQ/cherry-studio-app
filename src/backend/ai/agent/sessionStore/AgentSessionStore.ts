@@ -268,7 +268,7 @@ export interface AgentSessionStore {
    */
   discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
 
-  /** Reconcile engine admission order without changing message IDs or the working-copy revision. */
+  /** Reconcile confirmed predecessors; selection moves only by an explicit old-tail compare-and-set. */
   syncInputParents(
     sessionId: string,
     inputs: readonly {
@@ -276,6 +276,7 @@ export interface AgentSessionStore {
       assistantMessageId: string;
       parentMessageId: string | null;
     }[],
+    selection?: { from: string; to: string },
   ): Promise<void>;
 
   /** The ancestor chain ending at `through`, oldest first. */

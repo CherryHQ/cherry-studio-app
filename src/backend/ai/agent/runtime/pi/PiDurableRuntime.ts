@@ -26,6 +26,7 @@ import {
   type TaskGraph,
 } from '@earendil-works/pi-durable';
 
+import type { RuntimeInputParent, RuntimeQueueSelection } from '../durableTypes';
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
 import { estimatePiContextUsage } from './modelMessages';
@@ -647,27 +648,91 @@ export class PiDurableRuntime {
   /** Queued withdrawal never turns into cancellation of an already placed run. */
   async withdrawInput(sessionId: string, requestId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
-    const record = await this.harness.commit(
-      (tx) => tx.submissionByRequest(conversation.id, requestId),
-      context,
-    );
-    return record
-      ? this.harness.abortSubmission(record.id, context, conversation.id)
-      : ('not_found' as const);
+    return conversation.commit(async (tx) => {
+      const record = await tx.submissionByRequest(conversation.id, requestId);
+      if (!record) return 'not_found' as const;
+      if (record.status !== 'queued')
+        return record.status === 'placed' ? ('already_placed' as const) : ('settled' as const);
+      const removed = await tx.doc(SubmissionMetadata, metadataKey(conversation.id, requestId), {});
+      const parent = (removed.value.metadata as JsonObject | undefined)?.parentMessageId;
+      const inbox = await tx.doc(InboxDoc, conversation.id);
+      // Read and repair successors in the same native commit as withdrawal. A promotion may
+      // have moved this input since the UI/Host captured it; only this predecessor is authoritative.
+      for (const item of inbox.items) {
+        if (item.id === record.id || item.mode === 'write') continue;
+        const successor = await this.storage.submission(item.id, context);
+        if (!successor?.requestId) continue;
+        const document = await tx.doc(
+          SubmissionMetadata,
+          metadataKey(conversation.id, successor.requestId),
+          {},
+        );
+        const metadata = document.value.metadata as JsonObject | undefined;
+        if (metadata?.parentMessageId === removed.value.assistantMessageId && parent !== undefined)
+          document.value.metadata = { ...metadata, parentMessageId: parent };
+      }
+      inbox.items = inbox.items.filter((item) => item.id !== record.id);
+      tx.settleSubmission(record.id, { status: 'unanswered', reason: 'aborted' });
+      return 'aborted' as const;
+    }, context);
+  }
+
+  async inputParents(
+    sessionId: string,
+    userMessageIds: readonly string[],
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<RuntimeInputParent[]> {
+    const conversation = await this.requireSession(sessionId, context);
+    return conversation.commit(async (tx) => {
+      const result: RuntimeInputParent[] = [];
+      for (const id of userMessageIds) {
+        const binding = await tx.doc(MessageBinding, metadataKey(conversation.id, id), {
+          requestId: '',
+          role: 'user',
+        });
+        if (!binding.requestId) continue;
+        const document = await tx.doc(
+          SubmissionMetadata,
+          metadataKey(conversation.id, binding.requestId),
+          {},
+        );
+        const value = document.value;
+        const parent = (value.metadata as JsonObject | undefined)?.parentMessageId;
+        if (
+          typeof value.userMessageId === 'string' &&
+          typeof value.assistantMessageId === 'string' &&
+          (typeof parent === 'string' || parent === null)
+        )
+          result.push({
+            userMessageId: value.userMessageId,
+            assistantMessageId: value.assistantMessageId,
+            parentMessageId: parent,
+          });
+      }
+      return result;
+    }, context);
   }
 
   /** Replace a queued input atomically; native admission owns boundaries and request deduplication. */
-  async steerInput(sessionId: string, requestId: string, context: Context = BACKGROUND_CONTEXT) {
+  async steerInput(
+    sessionId: string,
+    requestId: string,
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<{
+    status: 'accepted' | 'already-started' | 'not-found';
+    selection?: RuntimeQueueSelection;
+  }> {
     const conversation = await this.requireSession(sessionId, context);
     return conversation.commit(async (tx) => {
       const original = await tx.submissionByRequest(conversation.id, requestId);
-      if (!original) return 'not-found' as const;
+      if (!original) return { status: 'not-found' as const };
       const replacementId = `${requestId}:steer`;
-      if (await tx.submissionByRequest(conversation.id, replacementId)) return 'accepted' as const;
-      if (original.status !== 'queued') return 'already-started' as const;
+      if (await tx.submissionByRequest(conversation.id, replacementId))
+        return { status: 'accepted' as const };
+      if (original.status !== 'queued') return { status: 'already-started' as const };
       const inbox = await tx.doc(InboxDoc, conversation.id);
       const item = inbox.items.find((candidate) => candidate.id === original.id);
-      if (!item || item.mode === 'write') return 'not-found' as const;
+      if (!item || item.mode === 'write') return { status: 'not-found' as const };
       const originalMetadata = await tx.doc(
         SubmissionMetadata,
         metadataKey(conversation.id, requestId),
@@ -708,6 +773,14 @@ export class PiDurableRuntime {
           }),
       );
       const live = await tx.doc(LiveDoc, conversation.id);
+      const oldParents = new Set(
+        queued.map(
+          ({ document }) => (document.value.metadata as JsonObject | undefined)?.parentMessageId,
+        ),
+      );
+      const oldTail = queued.find(
+        ({ document }) => !oldParents.has(document.value.assistantMessageId),
+      )?.document.value.assistantMessageId;
       const activeId = live.run?.inputs.at(-1);
       const active =
         activeId === undefined ? undefined : await this.storage.submission(activeId, context);
@@ -762,7 +835,12 @@ export class PiDurableRuntime {
       tx.settleSubmission(original.id, { status: 'unanswered', reason: 'aborted' });
       originalMetadata.value.supersededBy = replacementId;
       for (const alias of aliases) alias.requestId = replacementId;
-      return 'accepted' as const;
+      return {
+        status: 'accepted' as const,
+        ...(typeof oldTail === 'string' && typeof parent === 'string' && oldTail !== parent
+          ? { selection: { from: oldTail, to: parent } }
+          : {}),
+      };
     }, context);
   }
 

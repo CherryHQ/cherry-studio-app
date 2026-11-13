@@ -102,8 +102,14 @@ describe('SqliteAgentSessionStore conformance', () => {
         parentMessageId: original.assistantMessage.id,
       },
     ];
-    await store.syncInputParents(session.id, inputs);
-    await store.syncInputParents(session.id, inputs);
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
     const expected = [original, guided, waiting].flatMap((turn) => [
       turn.userMessage.id,
       turn.assistantMessage.id,
@@ -125,6 +131,44 @@ describe('SqliteAgentSessionStore conformance', () => {
         (await store.listMessages(session.id)).map((row) => row.parts),
       );
     }
+  });
+
+  test('relationship repair preserves selection unless the explicitly expected queue tail is still selected', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original');
+    const waiting = await settleTurn(store, session.id, 'Waiting');
+    const guided = await settleTurn(store, session.id, 'Guided');
+    const inputs = [
+      {
+        userMessageId: guided.userMessage.id,
+        assistantMessageId: guided.assistantMessage.id,
+        parentMessageId: original.assistantMessage.id,
+      },
+      {
+        userMessageId: waiting.userMessage.id,
+        assistantMessageId: waiting.assistantMessage.id,
+        parentMessageId: guided.assistantMessage.id,
+      },
+    ];
+    await store.syncInputParents(session.id, inputs);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(guided.assistantMessage.id);
+    // A user chooses another answer while native reconciliation is pending.
+    await harness.raw
+      .prepare('UPDATE agent_session SET active_node_id = ? WHERE id = ?')
+      .run(original.assistantMessage.id, session.id);
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(original.assistantMessage.id);
+    expect(
+      (await store.listMessages(session.id, waiting.assistantMessage.id)).map((row) => row.id),
+    ).toEqual(
+      [original, guided, waiting].flatMap((turn) => [
+        turn.userMessage.id,
+        turn.assistantMessage.id,
+      ]),
+    );
   });
 
   test('editing an answer commits text, search and revision together while clearing stale translation and context', async () => {

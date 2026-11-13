@@ -715,6 +715,19 @@ Live rendering, pagination, history reconstruction and forks use that order rath
 timestamps. Earlier output stays with its original question, and accepted steer questions remain
 visible across remounts while awaiting their execution boundary.
 
+Steering and confirmed withdrawal maintain predecessor metadata in the same Pi commit as the
+inbox mutation. Withdrawal resolves the current predecessor and repairs surviving successors;
+it does not reuse the parent captured before the operation. The Host reads these confirmed
+relationships directly, in per-lane ordered reconciliation, before writing Cherry history.
+Delayed observations cannot persist their older display parents. Display projection is not an
+authority for stored relationships, and recovery reconciles each execution chain independently.
+
+Relationship reconciliation does not infer or select a queue tail. A successful reorder may
+explicitly request an old-tail-to-new-tail selection change, applied with the relationship writes
+only if the old tail is still selected. Recovery and parallel model siblings preserve the user's
+selection. If Cherry persistence fails after native acceptance, the operation remains accepted;
+unsettled receipts allow subsequent reconciliation without submitting the input again.
+
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.
 

@@ -217,6 +217,14 @@ export type RuntimeContextUsage = Readonly<{
   estimated?: boolean;
 }>;
 
+export type RuntimeInputParent = {
+  userMessageId: string;
+  assistantMessageId: string;
+  parentMessageId: string | null;
+};
+
+export type RuntimeQueueSelection = { from: string; to: string };
+
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
@@ -308,7 +316,15 @@ export interface DurableAgentRuntime {
   steer(
     lane: RuntimeLane,
     requestId: string,
-  ): Promise<'accepted' | 'already-started' | 'not-found'>;
+  ): Promise<{
+    status: 'accepted' | 'already-started' | 'not-found';
+    selection?: RuntimeQueueSelection;
+  }>;
+  /** Confirmed predecessors read together from durable metadata, never from a display projection. */
+  inputParents(
+    lane: RuntimeLane,
+    userMessageIds: readonly string[],
+  ): Promise<readonly RuntimeInputParent[]>;
   observe(
     lane: RuntimeLane,
     listener: (event: RuntimeConversationEvent) => void,

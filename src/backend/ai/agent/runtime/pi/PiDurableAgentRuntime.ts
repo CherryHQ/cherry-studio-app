@@ -713,6 +713,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async steer(lane: RuntimeLane, requestId: string) {
     return this.requireRuntime().steerInput(laneKey(lane), requestId);
   }
+  async inputParents(lane: RuntimeLane, userMessageIds: readonly string[]) {
+    return this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+  }
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
     return state.tasks.length > 0 || state.submissions.length > 0;

@@ -124,11 +124,6 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  /**
-   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
-   * that row in their immutable metadata, so their live questions follow this map until idle.
-   */
-  withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
   contextUsage: RuntimeContextUsage | null;
   unsubscribe: () => Promise<void>;
@@ -186,6 +181,7 @@ export class DurableAgentHost implements AgentProtocol {
   /** Null awaits the fork's first input; an id identifies its leading answer for naming. */
   private readonly forksToName = new Map<string, string | null>();
   private readonly pendingWrites = new Set<Promise<unknown>>();
+  private readonly parentWrites = new Map<string, Promise<void>>();
   private readonly settlements = new Map<string, Promise<void>>();
   private readonly controller = new AbortController();
   private readonly naming: MobileAgentHostNaming;
@@ -1524,7 +1520,14 @@ export class DurableAgentHost implements AgentProtocol {
     if (result === 'already-placed') return 'already-started';
     // Another admission may have reserved its rows without reaching Pi yet. Only reconcile the
     // input whose withdrawal was confirmed; a session-wide recovery would interrupt that receipt.
-    if (result === 'aborted') await this.persistTurn({ ...queued, status: 'cancelled' });
+    if (result === 'aborted') {
+      try {
+        const confirmed = await this.conversations.message(owner.lane, queued.userMessageId);
+        await this.persistTurn({ ...(confirmed?.turn ?? queued), status: 'cancelled' });
+      } catch (error) {
+        logger.error('Could not persist confirmed withdrawal', error as Error);
+      }
+    }
     return result === 'aborted' ? 'withdrawn' : 'not-found';
   }
 
@@ -1542,19 +1545,15 @@ export class DurableAgentHost implements AgentProtocol {
       const queued = owner.queue.find((turn) => turn.identity.turnId === turnId)!;
       if (queued.metadata.steer === true) return 'accepted' as const;
       const pending = [...owner.queue];
+      const selectedBefore = (await this.requireSession(sessionId)).activeNodeId;
       const result = await this.conversations.steer(owner.lane, queued.identity.requestId);
-      if (result === 'accepted') {
+      if (result.status === 'accepted') {
         this.prepared.delete(executionKey(owner.lane, queued.identity.requestId));
         // Persist native parent changes before another send chooses the selected branch.
         try {
-          const updated = await Promise.all(
-            pending.map(
-              async (turn) =>
-                (await this.conversations.message(owner.lane, turn.userMessageId))?.turn,
-            ),
-          );
           await this.syncInputParents(
-            updated.filter((turn): turn is RuntimeDurableTurn => turn !== undefined),
+            pending,
+            result.selection?.from === selectedBefore ? result.selection : undefined,
           );
         } catch (error) {
           // Native acceptance is final. Reconciliation retries display persistence; reporting
@@ -1562,7 +1561,7 @@ export class DurableAgentHost implements AgentProtocol {
           logger.error('Could not persist accepted steer positions', error as Error);
         }
       }
-      return result;
+      return result.status;
     });
   }
 
@@ -2093,6 +2092,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
     signal?.throwIfAborted();
+    await this.syncInputParents([turn, ...(this.live.get(laneKey(turn.identity))?.queue ?? [])]);
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
       // invalidating the working copy; reconciliation retries this after a process interruption.
@@ -2103,10 +2103,6 @@ export class DurableAgentHost implements AgentProtocol {
       });
       signal?.throwIfAborted();
       if (messageIds.length) {
-        const state = this.live.get(laneKey(turn.identity));
-        const parent = DurableTurnMetadataSchema.parse(turn.metadata).parentMessageId;
-        if (state && parent !== undefined)
-          for (const id of messageIds) state.withdrawnParents.set(id, parent);
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
         this.publish(sessionId, {
           type: 'queue.updated',
@@ -2120,7 +2116,6 @@ export class DurableAgentHost implements AgentProtocol {
       this.prepared.delete(executionKey(turn.identity, turn.identity.requestId));
       return;
     }
-    await this.syncInputParents([turn]);
     const { assistant, turn: view } = projectDurableHostTurn(turn);
     const status = turn.status;
     if (!assistant || status === 'running' || status === 'queued') return;
@@ -2206,7 +2201,6 @@ export class DurableAgentHost implements AgentProtocol {
           assistant: null,
           active: null,
           queue: [],
-          withdrawnParents: new Map(),
           contextStatus: null,
           contextUsage: null,
           unsubscribe: async () => {},
@@ -2302,7 +2296,6 @@ export class DurableAgentHost implements AgentProtocol {
       state.active.identity.requestId !== previousRequestId
     )
       this.screenSuppressedRequests.delete(previousRequestId);
-    if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
     this.reconcileScreenAwake();
@@ -2751,10 +2744,7 @@ export class DurableAgentHost implements AgentProtocol {
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
     if (view.assistant) view.assistant = projectAgentMessageDisplay(view.assistant);
-    const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
-    let parentId = view.user.parentId;
-    while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);
-    return parentId === view.user.parentId ? view : { ...view, user: { ...view.user, parentId } };
+    return view;
   }
 
   private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
@@ -2792,27 +2782,52 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
-  private async syncInputParents(turns: readonly RuntimeDurableTurn[]) {
+  private async syncInputParents(
+    turns: readonly RuntimeDurableTurn[],
+    selection?: { from: string; to: string },
+  ) {
     if (!turns.length) return;
-    const inputs = turns.flatMap((turn) => {
-      const parent = this.projectTurn(turn).user.parentId;
-      return typeof parent === 'string' || parent === null
-        ? [
-            {
-              userMessageId: turn.userMessageId,
-              assistantMessageId: turn.assistantMessageId,
-              parentMessageId: parent,
-            },
-          ]
-        : [];
-    });
-    if (!inputs.length) return;
-    const { sessionId } = turns[0].identity;
-    await this.store.syncInputParents(sessionId, inputs);
-    // Promotion can move the selected leaf to a remaining follow-up. Live transcript filtering
-    // uses the protocol snapshot, so invalidating the database query alone leaves it stale.
-    const session = await this.store.getSession(sessionId);
-    if (session) this.publish(sessionId, { type: 'session.updated', session });
+    const lanes = new Map<string, RuntimeDurableTurn[]>();
+    for (const turn of turns) {
+      const key = laneKey(turn.identity);
+      lanes.set(key, [...(lanes.get(key) ?? []), turn]);
+    }
+    for (const [key, inputs] of lanes) {
+      const lane = inputs[0].identity;
+      // Read native metadata *inside* the ordered operation. A delayed observer may carry old
+      // turns, but must never overwrite a more recent queue mutation with those parents.
+      const write = (this.parentWrites.get(key) ?? Promise.resolve())
+        .catch(() => {})
+        .then(async () => {
+          const confirmed = await this.conversations.inputParents(lane, [
+            ...new Set(inputs.map((turn) => turn.userMessageId)),
+          ]);
+          if (!confirmed.length) return;
+          await this.store.syncInputParents(lane.sessionId, confirmed, selection);
+          const state = this.live.get(key);
+          if (state) {
+            const byId = new Map(
+              confirmed.map((input) => [input.userMessageId, input.parentMessageId]),
+            );
+            state.queue = state.queue.map((turn) =>
+              byId.has(turn.userMessageId)
+                ? {
+                    ...turn,
+                    metadata: { ...turn.metadata, parentMessageId: byId.get(turn.userMessageId)! },
+                  }
+                : turn,
+            );
+          }
+          const session = await this.store.getSession(lane.sessionId);
+          if (session) this.publish(lane.sessionId, { type: 'session.updated', session });
+        });
+      this.parentWrites.set(key, write);
+      try {
+        await write;
+      } finally {
+        if (this.parentWrites.get(key) === write) this.parentWrites.delete(key);
+      }
+    }
   }
 
   private async traceOperation<Value>(
