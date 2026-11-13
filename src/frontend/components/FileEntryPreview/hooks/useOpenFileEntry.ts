@@ -2,7 +2,7 @@ import { openFilePreview, useToast } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { prepareFileExport, useExportWatermark } from '@/frontend/appShell/fileExport';
+import { prepareSharedFile, useExportWatermark } from '@/frontend/appShell/fileExport';
 import {
   finishImagePreviewEditRequest,
   useImagePreviewEditRequest,
@@ -18,7 +18,7 @@ import {
 import { useFilePane } from '@/frontend/appShell/pane/state';
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { ResolvedFile } from '@/shared/contracts/file';
+import type { FilePreviewSource, ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -46,13 +46,17 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   const requestImageEdit = useImagePreviewEditRequest();
   const pane = useFilePane();
 
-  const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
+  const openFileEntryWithSystem = async (
+    file: ResolvedFile | (FilePreviewSource & { kind: 'temporary' }),
+  ) => {
+    const { entry } = file;
     try {
-      const exported = await prepareFileExport(
-        { entry, uri },
-        createWatermark(),
-        fileModule.completeExportFile,
-      );
+      const exported = await prepareSharedFile(file, {
+        watermark: createWatermark(),
+        // Temporary preview ids describe cache bytes, never managed-file authority.
+        completeExportFile:
+          'kind' in file && file.kind === 'temporary' ? undefined : fileModule.completeExportFile,
+      });
       // The recipient may read after the chooser closes; the OS owns this cache copy's lifetime.
       await openFilePreview({
         file: toFilePreviewFile(

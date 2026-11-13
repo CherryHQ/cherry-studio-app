@@ -78,7 +78,7 @@ supplied image bytes directly into Photos. They accept no watermark option and d
 sharing setting. After a system permission prompt, saving waits for the foreground event before
 generating images; unmount cancels that wait. Document and HTML callers prepare separate unwatermarked
 artifacts before local saving; a watermarked share preview is never reused for that save. System opening reuses
-`prepareFileExport`.
+`prepareSharedFile`, so external readers can outlive a temporary preview's cache lease.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the
 chooser closes. Shared copies use one path per entry revision and watermark treatment, so sharing
@@ -98,3 +98,5 @@ read its bytes without a database label snapshot. A completion failure removes t
 derivative; the managed source remains intact. Byte-copy paths retain metadata directly.
 Temporary descriptors pass labels only while preparing outputs. Re-encoded shared copies include
 the metadata-format version in their cache keys.
+System opening injects metadata completion only for managed files; temporary preview ids refer to
+cache bytes and must never be resolved as database entries.

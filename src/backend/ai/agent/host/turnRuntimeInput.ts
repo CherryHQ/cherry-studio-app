@@ -18,6 +18,7 @@ import {
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
+import type { SshTextReference } from '@/shared/data/types/ssh';
 
 import type { TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
@@ -192,6 +193,7 @@ export function runtimeUserText(part: {
   pluginReferences?: PluginTextReference[];
   selectionReferences?: SelectionTextReference[];
   skillReferences?: SkillTextReference[];
+  sshReferences?: SshTextReference[];
 }): string {
   AgentInputPartSchema.parse({
     type: 'text',
@@ -200,6 +202,7 @@ export function runtimeUserText(part: {
     ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
     ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
     ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
+    ...(part.sshReferences ? { sshReferences: part.sshReferences } : {}),
   });
   let text = part.text;
   // Expand recorded ranges from the end so quote and Office references cannot shift each other.

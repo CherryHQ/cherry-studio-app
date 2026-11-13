@@ -1,13 +1,13 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
-import type { FileModule, ResolvedFile } from '@/shared/contracts/file';
+import type { FileModule, FilePreviewSource } from '@/shared/contracts/file';
 import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { prepareFileExport } from './prepareImageExport';
 
-export type ShareableFile = ResolvedFile | ExportFile;
+export type ShareableFile = FilePreviewSource | ExportFile;
 
 export class FileSharingError extends Error {
   readonly code = 'unavailable';

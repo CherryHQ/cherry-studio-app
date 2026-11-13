@@ -9,15 +9,20 @@ import { useOpenFileEntry } from '../useOpenFileEntry';
 const mockPush = jest.fn();
 const mockOpen = jest.fn();
 const mockToast = jest.fn();
-const mockPrepareFileExport = jest.fn();
+const mockPrepareSharedFile = jest.fn();
+const mockCompleteExportFile = jest.fn();
 let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
 let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
 
 jest.mock('@/frontend/appShell/pane/state', () => ({ useFilePane: () => mockPane }));
 
+jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => ({ completeExportFile: mockCompleteExportFile }),
+}));
+
 jest.mock('@/frontend/appShell/fileExport', () => ({
-  prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
+  prepareSharedFile: (...args: unknown[]) => mockPrepareSharedFile(...args),
   useExportWatermark: () => () => ({ kind: 'cherry', signature: { brandName: 'Cherry Studio' } }),
 }));
 
@@ -62,7 +67,7 @@ beforeEach(() => {
   mockParams = {};
   mockPane = null;
   mockOpen.mockResolvedValue(undefined);
-  mockPrepareFileExport.mockImplementation(async ({ entry, uri }) => ({
+  mockPrepareSharedFile.mockImplementation(async ({ entry, uri }) => ({
     uri,
     filename: entry.filename,
     mediaType: entry.mediaType,
@@ -193,13 +198,17 @@ it('opens the branded image copy externally while retaining the original for in-
     entry: FileEntrySchema.parse({ ...entry, filename: 'drawing.jpg', mediaType: 'image/jpeg' }),
     uri: 'file:///managed/drawing.jpg',
   };
-  mockPrepareFileExport.mockResolvedValueOnce({
+  mockPrepareSharedFile.mockResolvedValueOnce({
     uri: 'file:///cache/drawing.png',
     filename: 'drawing.png',
     mediaType: 'image/png',
     release() {},
   });
   await act(async () => actions.openFileEntryWithSystem(imageFile));
+  expect(mockPrepareSharedFile).toHaveBeenCalledWith(imageFile, {
+    watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
+    completeExportFile: mockCompleteExportFile,
+  });
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
       file: expect.objectContaining({
@@ -210,4 +219,37 @@ it('opens the branded image copy externally while retaining the original for in-
     }),
   );
   expect(imageFile.uri).toBe('file:///managed/drawing.jpg');
+});
+
+it('opens a temporary image through the cache without resolving its display id as a managed file', async () => {
+  const temporaryFile = {
+    kind: 'temporary' as const,
+    entry: {
+      id: entry.id,
+      filename: 'remote.jpg',
+      mediaType: 'image/jpeg',
+      provenance: 'unknown' as const,
+      size: 10,
+      updatedAt: 2,
+    },
+    uri: 'file:///cache/preview.jpg',
+  };
+  mockPrepareSharedFile.mockResolvedValueOnce({
+    uri: 'file:///cache/FileExports/remote.png',
+    filename: 'remote.png',
+    mediaType: 'image/png',
+  });
+
+  await act(async () => actions.openFileEntryWithSystem(temporaryFile));
+
+  expect(mockPrepareSharedFile).toHaveBeenCalledWith(temporaryFile, {
+    watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
+    completeExportFile: undefined,
+  });
+  expect(mockOpen).toHaveBeenCalledWith(
+    expect.objectContaining({
+      file: expect.objectContaining({ uri: 'file:///cache/FileExports/remote.png' }),
+    }),
+  );
+  expect(mockToast).not.toHaveBeenCalled();
 });

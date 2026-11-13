@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
@@ -9,6 +10,7 @@ import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/C
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
 
 const logger = loggerService.withContext('ChatInputMenu');
@@ -19,17 +21,20 @@ export function ChatInputMenu({
   onPickPlugins,
   onPickPrompts,
   onPickSkills,
+  onPickSsh,
   triggerRef,
 }: {
   media?: 'all' | 'images';
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
   onPickSkills?: () => void;
+  onPickSsh?: () => void;
   triggerRef: RefObject<ViewInstance | null>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const mcpIcon = useMcpIcon();
+  const { editing } = useChatEditing();
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const openDocumentPicker = useComposerDocumentPicker();
 
@@ -46,6 +51,7 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu
+        attachmentsDisabled={editing != null}
         media={media}
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}
@@ -72,6 +78,14 @@ export function ChatInputMenu({
             label={t('skills.title')}
             onPress={onPickSkills}
             testID="chat-composer-skills"
+          />
+        ) : null}
+        {onPickSsh ? (
+          <Composer.Menu.Item
+            icon={<TerminalIcon className="size-5 text-foreground" />}
+            label={t('ssh.title')}
+            onPress={onPickSsh}
+            testID="chat-composer-ssh"
           />
         ) : null}
       </ComposerMenu>

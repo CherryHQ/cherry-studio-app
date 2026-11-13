@@ -28,6 +28,20 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('projects sibling questions as question versions, not answer branches', () => {
+    const item = toAgentMessageListItem(
+      message('q2', {
+        role: 'user',
+        status: 'success',
+        siblings: [
+          { id: 'q1', modelId: null, status: 'success', siblingsGroupId: 0 },
+          { id: 'q2', modelId: null, status: 'success', siblingsGroupId: 0 },
+        ],
+      }),
+    );
+    expect(item?.questionBranch).toEqual({ siblings: ['q1', 'q2'] });
+    expect(item?.branch).toBeUndefined();
+  });
   test('a stale history page cannot replace newer message-owned translations', () => {
     const older = {
       sourceHash: 'a'.repeat(64),
@@ -379,11 +393,18 @@ describe('agentMessageProjection', () => {
     expect(restored?.status).toBe('pending');
   });
 
-  test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
-    const pluginReferences = [
-      { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
-    ];
-    const input = { type: 'text' as const, text: '飞书 查找文档', pluginReferences };
+  test.each([
+    {
+      type: 'text' as const,
+      text: '飞书 查找文档',
+      pluginReferences: [{ type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 }],
+    },
+    {
+      type: 'text' as const,
+      text: 'SSH · guoxu 这台机器有什么',
+      sshReferences: [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }],
+    },
+  ])('keeps the inline display snapshot in pending and persisted user messages: $text', (input) => {
     const [pending] = createPendingChatMessages({
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -402,7 +423,7 @@ describe('agentMessageProjection', () => {
         type: 'text',
         text: input.text,
         state: 'done',
-        providerMetadata: { cherry: { references: pluginReferences } },
+        providerMetadata: { cherry: { references: input.pluginReferences ?? input.sshReferences } },
       },
     ]);
   });

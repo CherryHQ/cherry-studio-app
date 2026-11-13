@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
 import { useShareFile } from '@/frontend/appShell/sharing';
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import type { ResolvedFile } from '@/shared/contracts/file';
+
+import type { FileViewerSource } from '../fileViewerSource';
 
 const EMPTY_ITEMS: readonly MenuItem[] = [];
 
@@ -13,22 +14,26 @@ export function FileViewerHeader({
   file,
   items = EMPTY_ITEMS,
 }: {
-  file: ResolvedFile;
+  file: FileViewerSource;
   items?: readonly MenuItem[];
 }) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
-  const { isSharing, share } = useShareFile(file);
+  const { isSharing, share } = useShareFile(file.kind === 'managed' ? file : undefined);
 
   const menuItems: MenuItem[] = [
     ...items,
-    {
-      disabled: isSharing,
-      id: 'share',
-      label: t('fileViewer.share'),
-      onPress: () => void share(),
-    },
+    ...(file.kind === 'managed'
+      ? [
+          {
+            disabled: isSharing,
+            id: 'share',
+            label: t('fileViewer.share'),
+            onPress: () => void share(),
+          },
+        ]
+      : []),
     {
       id: 'open-with',
       label: t('filePreview.openWith'),

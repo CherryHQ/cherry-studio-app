@@ -14,6 +14,17 @@ export type ResolvedFile = {
   uri: string;
 };
 
+/** Read-only metadata and bytes; a preview source need not have a database or library entry. */
+export type FilePreviewSource = {
+  entry: Pick<FileEntry, 'id' | 'filename' | 'mediaType' | 'size' | 'updatedAt' | 'provenance'>;
+  uri: string;
+};
+
+/** The viewer owns these cache bytes until it closes. Never persist the URI or attach this id. */
+export type TemporaryFilePreview = FilePreviewSource & {
+  release(): void;
+};
+
 export type ResolvedFileUris = {
   /** Small image thumbnail when available; the original URI for other file kinds. */
   previewUri: string | undefined;

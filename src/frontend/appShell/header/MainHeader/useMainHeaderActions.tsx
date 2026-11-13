@@ -6,23 +6,27 @@ import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadin
 
 /** Resolves the platform-independent MainHeader action lists for both adapters. */
 export function useMainHeaderActions(
-  openNewSession: () => void,
+  openNewSession?: () => void,
   actions: readonly HeaderToolbarAction[] = [],
 ) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
-  // New chat stays in the header at every width, whatever the left column shows.
+  // Readers have no creation action; interactive chats retain it at every width.
   const rightActions: HeaderToolbarAction[] = [
     ...actions,
-    {
-      accessibilityLabel: t('navigation.newChat'),
-      icon: NewConversationIcon,
-      key: 'new-chat',
-      nativeIcon: require('@/assets/header-toolbar/new-chat.png'),
-      onPress: openNewSession,
-      testID: 'main-header-new-chat',
-      type: 'icon',
-    },
+    ...(openNewSession
+      ? [
+          {
+            accessibilityLabel: t('navigation.newChat'),
+            icon: NewConversationIcon,
+            key: 'new-chat',
+            nativeIcon: require('@/assets/header-toolbar/new-chat.png'),
+            onPress: openNewSession,
+            testID: 'main-header-new-chat',
+            type: 'icon' as const,
+          },
+        ]
+      : []),
   ];
 
   return { leadingAction, rightActions };

@@ -10,7 +10,7 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
-import type { FileModule, ResolvedFile } from '@/shared/contracts/file';
+import type { FileModule, FilePreviewSource } from '@/shared/contracts/file';
 import {
   getExportSignature,
   type ExportFile,
@@ -141,7 +141,7 @@ export async function prepareImageExport(
 
 /** Shared by the share sheet and the system-opening escape hatch. */
 export async function prepareFileExport(
-  { entry, uri }: ResolvedFile,
+  { entry, uri }: FilePreviewSource,
   watermark: ExportWatermark,
   completeExportFile?: FileModule['completeExportFile'],
 ): Promise<ExportFile & { release(): void }> {
