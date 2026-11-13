@@ -7,6 +7,10 @@ import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import type { AgentMessageHistoryWindow } from '../useAgentMessageHistoryWindow';
 import { useLocalConversation } from '../useLocalConversation';
 
+const mockSsh = { getTarget: () => null };
+jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockSsh }));
+jest.mock('@/frontend/hooks/ssh', () => ({ useSshTarget: () => null }));
+
 const mockReconcile = jest.fn();
 const mockClient = {
   getState: (): AgentSessionChatState => mockState,

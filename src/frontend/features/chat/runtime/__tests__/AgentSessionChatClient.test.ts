@@ -43,6 +43,44 @@ function snapshot(): AgentSessionSnapshot {
   };
 }
 
+test('restores context usage and applies idle compaction updates without message events', async () => {
+  let listener!: (event: AgentEvent) => void;
+  const protocol = protocolWithObservation(
+    jest.fn(async (_sessionId: string, next: typeof listener) => {
+      listener = next;
+      return {
+        snapshot: {
+          ...snapshot(),
+          contextUsages: [{ messageId: 'answer', tokens: 90_000 }],
+        },
+        unsubscribe() {},
+      };
+    }),
+  );
+  const client = new AgentSessionChatClient(protocol);
+  const unsubscribe = client.subscribe('session-1', () => {});
+  try {
+    await client.observe('session-1');
+    expect(client.getState('session-1').contextUsages).toEqual([
+      { messageId: 'answer', tokens: 90_000 },
+    ]);
+    listener({
+      type: 'context.usage.updated',
+      usages: [{ messageId: 'answer', tokens: 12_000 }],
+    });
+    expect(client.getState('session-1').contextUsages).toEqual([
+      { messageId: 'answer', tokens: 12_000 },
+    ]);
+    expect(client.getState('session-1').activeTurn).toBeNull();
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    listener({ type: 'runtime.failed' });
+    expect(client.getState('session-1').contextUsages).toEqual([]);
+  } finally {
+    unsubscribe();
+    client.dispose();
+  }
+});
+
 test('observes a removable queue without inventing an active execution and reconciles placement races', async () => {
   const queued = {
     turnId: 'waiting',

@@ -183,6 +183,7 @@ export function cleanupStorageAfterBoot(): void {
       ['user-avatar'],
       ['agent-avatars'],
       ['provider-avatars'],
+      ['ssh'],
     ]) {
       const directory = new Directory(Paths.document, ...parts);
       if (directory.exists) directory.delete();

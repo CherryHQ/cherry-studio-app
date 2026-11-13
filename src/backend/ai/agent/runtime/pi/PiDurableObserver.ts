@@ -19,6 +19,7 @@ import {
   laneKey,
   type RuntimeConversationEvent,
   type RuntimeConversationSnapshot,
+  type RuntimeContextUsage,
   type RuntimeLane,
 } from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
@@ -47,6 +48,8 @@ export class PiDurableObserver {
   /** Terminal IDs for this mount; a delayed view may still name an already settled input. */
   private readonly settled = new Set<SubmissionId>();
   private newest: EntryId | undefined;
+  private contextInput: { entry: EntryId; messageId: string } | undefined;
+  private contextUsage: RuntimeContextUsage | null = null;
   private live: Readonly<LiveState> = {};
   private retrying = false;
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
@@ -112,6 +115,8 @@ export class PiDurableObserver {
     this.toolStates.clear();
     this.nestedTools.clear();
     this.newest = undefined;
+    this.contextInput = undefined;
+    this.contextUsage = null;
     this.live = {};
     this.retrying = false;
   }
@@ -153,6 +158,7 @@ export class PiDurableObserver {
       const inbox = (view.docs['pi.inbox'] as Readonly<InboxState> | undefined)?.items ?? [];
       const visibleIds = new Set([...(live.run?.inputs ?? []), ...inbox.map((item) => item.id)]);
       const previousContext = this.contextStatus();
+      const previousUsage = this.contextUsage;
       const previousQueue = this.queueKey();
       const records = new Map(changes.map((record) => [record.id, record]));
       const missing = [...new Set([...visibleIds, ...records.keys()])].filter(
@@ -180,6 +186,36 @@ export class PiDurableObserver {
       }
 
       const through = view.entries.at(-1)?.id ?? view.before;
+      const previousInput = this.contextInput;
+      if (initial && through !== undefined) {
+        const latest = await this.runtime.latestInput(laneKey(this.lane), through);
+        if (latest?.record.entry !== undefined)
+          this.contextInput = {
+            entry: latest.record.entry,
+            messageId: readPiSubmission(latest.metadata).assistantMessageId,
+          };
+      }
+      // A terminal notification can precede its watch frame. Keep its anchor after the input
+      // leaves this.inputs, but publish a count only once the frame includes that input.
+      for (const input of this.inputs.values()) {
+        const entry = input.record.entry;
+        if (
+          entry !== undefined &&
+          (this.contextInput === undefined || entry > this.contextInput.entry)
+        )
+          this.contextInput = {
+            entry,
+            messageId: readPiSubmission(input.metadata).assistantMessageId,
+          };
+      }
+      if (initial || through !== this.newest || this.contextInput !== previousInput)
+        this.contextUsage =
+          this.contextInput && through !== undefined && this.contextInput.entry <= through
+            ? {
+                messageId: this.contextInput.messageId,
+                ...(await this.runtime.contextUsageEstimate(laneKey(this.lane), through)),
+              }
+            : null;
       const gap =
         view.before !== undefined && (this.newest === undefined || view.before > this.newest);
       for (const entry of view.entries) {
@@ -255,6 +291,12 @@ export class PiDurableObserver {
 
       if (this.contextStatus() !== previousContext)
         this.listener({ type: 'context.updated', status: this.contextStatus() });
+      if (
+        this.contextUsage?.messageId !== previousUsage?.messageId ||
+        this.contextUsage?.tokens !== previousUsage?.tokens ||
+        this.contextUsage?.estimated !== previousUsage?.estimated
+      )
+        this.listener({ type: 'context.usage.updated', usage: this.contextUsage });
       for (const input of this.inputs.values()) {
         // A placed record can outpace its run frame while the old inbox still names it.
         if (input.record.status === 'placed' && !live.run?.inputs.includes(input.record.id))
@@ -313,6 +355,7 @@ export class PiDurableObserver {
     return {
       activeTurn: active && !isTerminal(active.record) ? this.project(active) : null,
       contextStatus: this.contextStatus(),
+      contextUsage: this.contextUsage,
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
         .sort(

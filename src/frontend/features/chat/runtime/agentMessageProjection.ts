@@ -179,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
         part.selectionReferences?.length ||
+        part.sshReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction ||
         part.quotes
@@ -190,6 +191,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
                 ...(part.selectionReferences ?? []),
+                ...(part.sshReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',

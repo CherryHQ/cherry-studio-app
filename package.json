@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "engines": {
     "node": "24.x"
   },
@@ -119,8 +119,8 @@
     "@cherrystudio/mcp-app-webview": "workspace:*",
     "@cherrystudio/mermaid-webview": "workspace:*",
     "@cherrystudio/provider-registry": "0.4.0",
-    "@cherrystudio/remote-protocol": "0.7.0",
-    "@cherrystudio/remote-transport": "0.2.5",
+    "@cherrystudio/remote-protocol": "0.8.0",
+    "@cherrystudio/remote-transport": "0.2.6",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
     "@cherrystudio/web-search": "0.5.0",
@@ -179,6 +179,7 @@
     "expo-image-picker": "~58.0.10",
     "expo-insights": "~58.0.11",
     "expo-intent-launcher": "~58.0.3",
+    "expo-keep-awake": "~58.0.3",
     "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.15",
     "expo-localization": "~58.0.5",

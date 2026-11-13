@@ -8,16 +8,23 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
-`skills/<folder>/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
+`skills/<folder>/<digest>/<package path>` for every live Skill package, and an optional
+`ssh/profiles.json` containing SSH configuration without device credential references.
+The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
 New exports use format v3 so older readers reject inline-quote data before replacing their storage.
 The reader still accepts portable v1 backups; experimental paired-database v2 remains rejected.
-The ZIP layout is unchanged. This is a mobile format. Desktop physical backups are rejected. Compatibility requires an exact
-prefix of bundled SQLite migrations; different migration lineage and future formats are rejected.
-Export and import rebuild their private database copy from that prefix, then copy known tables and
-columns by name. Missing nullable/defaulted columns use the standard schema's defaults. Unknown
+The ZIP layout is unchanged. This is a mobile format. Desktop physical backups are rejected.
+Restore compatibility requires an exact prefix of bundled SQLite migrations; different migration
+lineage and future formats are rejected.
+Exports rebuild their private database copy from the running app's bundled migrations; imports use
+the validated backup prefix. Both copy known tables and columns by name. Missing nullable/defaulted
+columns use the standard schema's defaults, except message-tree columns required by the target
+version (`active_node_id`, `parent_id`, `siblings_group_id`). These must be present: defaults cannot
+replace the historical data backfill. Genuine pre-tree backups still normalize at their own version
+and run that migration during restore. Unknown
 tables, columns, indexes, views and triggers are omitted; indexes, triggers and search state are
 rebuilt from bundled definitions. Source SQL is never executed and its text is not compared.
 Missing required tables/columns, invalid records and broken references still fail rather than
@@ -31,6 +38,13 @@ System sharing presents save destinations; opening or dismissing the share sheet
 successful saving.
 
 ## Export
+
+The captured database's migration journal does not need to match the current bundle. Missing,
+partial, extra or modified journal entries are regenerated in the normalized copy, matching the
+export manifest. Required tables and columns, record constraints, references and managed files
+remain checked; the live database's journal is never repaired or rewritten by export.
+An incomplete message-tree schema fails export instead of being marked fully migrated with
+invisible conversation history.
 
 While a backup or restore runs, an app-wide progress dialog blocks every route; the user can only
 wait or cancel. Capture refuses active chat/job execution, and a freeze keeps new Agent turns and
@@ -69,7 +83,9 @@ selecting the backup again. Its database applies any remaining migrations to upg
 cancels unfinished jobs, marks partial replies interrupted, drops desktop pairing, rotates plugin credential references
 without copying their secret values, and retains the target device's identity/privacy/onboarding/
 background-notification preferences. Other settings and content come from the backup. Plugin rows
-and their tool bindings remain so users can reconnect them.
+and their tool bindings remain so users can reconnect them. SSH profiles are loaded into the new
+generation's dedicated MMKV store before activation commits. Their credential references and
+revisions are regenerated; users re-enter passwords or private keys even on the same device.
 
 After durable staging, Android restarts the native process automatically. iOS and Android clients
 without a working restart helper ask the user to completely close and reopen the application. The
@@ -84,6 +100,8 @@ WebDAV/S3, scheduled backups, encryption, partial restore and desktop interchang
 Focused suites cover mutation admission, runtime progress state, serialized paths and limits, a
 pack/unpack round trip, ZIP truncation/encryption (in the shared reader suite), native-process
 state transitions, standard-schema imports, rebuilt search indexes and SQLite normalization/rollback.
+Database regressions also cover exporting with missing or mismatched migration journals, preserving
+the live source, validating the regenerated journal, and retaining strict restore checks.
 Export regressions cover the two-pass payload scale, manifest exclusion, file-boundary hashing,
 chunk-level packing before a database-only entry finishes, monotonic counters and integer-percentage
 publication deduplication, source-size mismatches, and cancellation during a chunk yield.

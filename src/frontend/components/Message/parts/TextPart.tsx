@@ -90,6 +90,12 @@ function PlainTextWithMentions({
                 onOpen={(anchor, quoteText) => setPreview({ anchor, text: quoteText })}
               />
             );
+          if (segment.reference.type === 'ssh')
+            return (
+              <Text className="text-link" key={segment.reference.offset}>
+                {segment.text}
+              </Text>
+            );
           const icon =
             segment.reference.type === 'plugin'
               ? getPluginInlineIcon(segment.reference.pluginId, theme)

@@ -5,6 +5,16 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`FileBrowserRow` shares the library's file/folder presentation: a 40-point preview, single-line
+filename with middle truncation, optional secondary metadata, and a caller-composed trailing slot.
+It keeps the preview outside touch and accessibility handling so opening, selection and context-menu
+actions belong to the row. Callers own file data, translated descriptions, menus and loading.
+
+`Breadcrumbs` presents a caller-owned path with shared separators, ancestor press targets and
+current-location emphasis. It scrolls to the end as the path changes. Each item has a key, a label
+and an optional `onPress`; omit the action for the current location. `disabled` blocks ancestor
+navigation during operations. Local-library folders and SSH paths keep their own identities.
+
 `CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
 flat previous/current/next cards and page dots, with native horizontal fling recognition and
 accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;

@@ -1,5 +1,7 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button } from '@cherrystudio/ui/components';
+import { randomUUID } from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
@@ -29,13 +31,16 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
+import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
+import { SshError } from '@/shared/data/types/ssh';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
@@ -55,6 +60,7 @@ import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
+import { ChatInputSshPopover } from './components/ChatInputSsh';
 import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
@@ -71,8 +77,9 @@ import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
+import { readSshMentions } from './utils/sshMentions';
 
-type ChatInputPicker = 'plugin' | 'prompt' | 'skill';
+type ChatInputPicker = 'plugin' | 'prompt' | 'skill' | 'ssh';
 
 type ChatInputProps = {
   agentId?: string;
@@ -83,6 +90,7 @@ type ChatInputProps = {
   /** Replaces the default prompt, as when it names the answer the next message continues. */
   placeholder?: string;
   sessionId?: string;
+  sshDraftId?: string;
   selectionHandoff?: string;
 };
 
@@ -97,6 +105,7 @@ export function ChatInput({
   imageResult,
   placeholder,
   sessionId,
+  sshDraftId,
   selectionHandoff,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -299,6 +308,7 @@ export function ChatInput({
         ) : (
           <TextChatInput
             sessionId={sessionId}
+            sshDraftId={sshDraftId}
             mode={mode}
             contextUsage={contextUsage}
             canSendEdit={canSendEdit}
@@ -329,6 +339,7 @@ function TextChatInput({
   mode,
   agentId,
   contextUsage,
+  sshDraftId,
   canSendEdit,
   edit,
   agentModelAnswersInParallel,
@@ -366,6 +377,10 @@ function TextChatInput({
 }) {
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
+  const router = useRouter();
+  const ssh = useBackendModule('ssh');
+  const sshContextId = sessionId ?? (sshDraftId ? `draft:${sshDraftId}` : undefined);
+  const [sshPickerContext, setSshPickerContext] = useState<string | null>(null);
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
   const { beginEditSend, commitEdit, editing, settleEditSend } = edit;
   const mcpApps = useMcpAppConversation();
@@ -379,7 +394,11 @@ function TextChatInput({
     selectedModelItem.modelId === contextUsage.modelId &&
     selectedModelItem.model.providerId === contextUsage.providerId &&
     selectedModelItem.model.modelId === contextUsage.providerModelId
-      ? deriveContextUsage(selectedModelItem.model.contextWindow, contextUsage.stats)
+      ? deriveContextUsage(
+          selectedModelItem.model.contextWindow,
+          contextUsage.tokens,
+          contextUsage.estimated,
+        )
       : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   // One picker at a time; each closes only itself, so a late close never hides the next one.
@@ -404,11 +423,25 @@ function TextChatInput({
   const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
   const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
   const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
+  const closeSshPicker = useCallback(() => closePicker('ssh'), [closePicker]);
+  function openSshPicker() {
+    let contextId = sshContextId;
+    if (!contextId) {
+      const id = randomUUID();
+      router.setParams({ sshDraftId: id });
+      contextId = `draft:${id}`;
+    }
+    setSshPickerContext(contextId);
+    setOpenPicker('ssh');
+  }
   const isPickerAvailable = mode === 'standard' && !isApprovalPending && !editing;
+  const isSshAvailable = mode === 'standard' && ssh.isAvailable();
+  const isSshPickerVisible = isPickerAvailable && isSshAvailable && openPicker === 'ssh';
   const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
   const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
   const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
-  const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible;
+  const isPickerVisible =
+    isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible || isSshPickerVisible;
   if (openPicker && (!isPickerAvailable || (openPicker === 'prompt' && prompts.length === 0)))
     setOpenPicker(null);
   const { fontScale } = useWindowDimensions();
@@ -477,13 +510,25 @@ function TextChatInput({
         } = mode === 'standard'
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        const sshMentions = readSshMentions(prompt);
+        const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
+        if (
+          sshMentions.references.some(
+            (reference) =>
+              mode !== 'standard' ||
+              !selectedSsh ||
+              reference.id !== selectedSsh.profile.id ||
+              reference.revision !== selectedSsh.profile.revision,
+          )
+        )
+          throw new SshError('changed');
         // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-        const selections = readSelectionMentions(prompt);
+        const selections = readSelectionMentions(sshMentions.text);
         const quoted = readQuoteMentions(selections.text, attempt?.fields.quotes);
         const shifted = <T extends { offset: number }>(references: T[]) =>
           references.map((reference) => ({
             ...reference,
-            offset: quoted.shift(selections.shift(reference.offset)),
+            offset: quoted.shift(selections.shift(sshMentions.shift(reference.offset))),
           }));
         const parts = attachMessageQuote(
           toAgentInputParts(
@@ -493,6 +538,10 @@ function TextChatInput({
             selections.selectionReferences.map((reference) => ({
               ...reference,
               offset: quoted.shift(reference.offset),
+            })),
+            sshMentions.sshReferences.map((reference) => ({
+              ...reference,
+              offset: quoted.shift(selections.shift(reference.offset)),
             })),
           ),
           quoted.quotes.length
@@ -544,10 +593,14 @@ function TextChatInput({
       replyModels,
       selectedModelId,
       sendMessage,
+      ssh,
+      sshContextId,
+      sshPickerContext,
     ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
+      if (error instanceof SshError) return sshErrorLabel(error, t);
       const key = getSendErrorLabelKey(error);
       return key ? t(key) : undefined;
     },
@@ -556,37 +609,42 @@ function TextChatInput({
 
   return (
     <>
-      <ChatInputPromptPopover
-        agentId={mode === 'standard' ? agentId : undefined}
-        onClose={closePromptPicker}
-        open={isPromptPickerVisible}
-        prompts={prompts}
+      <ChatInputSshPopover
+        contextId={sshPickerContext ?? sshContextId}
+        open={isSshPickerVisible}
+        onClose={closeSshPicker}
         returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
       >
-        <ChatInputSkillPopover
-          agentId={agentId}
-          onClose={closeSkillPicker}
-          open={isSkillPickerVisible}
+        <ChatInputPromptPopover
+          agentId={mode === 'standard' ? agentId : undefined}
+          onClose={closePromptPicker}
+          open={isPromptPickerVisible}
+          prompts={prompts}
           returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
         >
-          <ChatInputPluginPopover
-            plugins={connectedPlugins}
-            onClose={closePluginPicker}
-            open={isPluginPickerVisible}
+          <ChatInputSkillPopover
+            agentId={agentId}
+            onClose={closeSkillPicker}
+            open={isSkillPickerVisible}
             returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
           >
-            <View
-              accessibilityElementsHidden={isApprovalPending}
-              importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
-              pointerEvents={isApprovalPending ? 'none' : 'auto'}
+            <ChatInputPluginPopover
+              plugins={connectedPlugins}
+              onClose={closePluginPicker}
+              open={isPluginPickerVisible}
+              returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
             >
-              <ChatInputEffortOverlay
-                onChange={selectReasoningEffort}
-                reasoningEffort={reasoningEffort}
-                reasoningEfforts={reasoningEfforts}
+              <View
+                accessibilityElementsHidden={isApprovalPending}
+                importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
+                pointerEvents={isApprovalPending ? 'none' : 'auto'}
               >
-                {(effortGauge) => (
-                  <>
+                <ChatInputEffortOverlay
+                  onChange={selectReasoningEffort}
+                  reasoningEffort={reasoningEffort}
+                  reasoningEfforts={reasoningEfforts}
+                >
+                  {(effortGauge) => (
                     <ChatInputComposer
                       canSend={
                         selectedModelItem &&
@@ -654,6 +712,7 @@ function TextChatInput({
                                   ? () => setOpenPicker('prompt')
                                   : undefined
                               }
+                              onPickSsh={isSshAvailable ? openSshPicker : undefined}
                               triggerRef={pluginMenuRef}
                             />
                           )
@@ -670,13 +729,13 @@ function TextChatInput({
                         dictation
                       />
                     </ChatInputComposer>
-                  </>
-                )}
-              </ChatInputEffortOverlay>
-            </View>
-          </ChatInputPluginPopover>
-        </ChatInputSkillPopover>
-      </ChatInputPromptPopover>
+                  )}
+                </ChatInputEffortOverlay>
+              </View>
+            </ChatInputPluginPopover>
+          </ChatInputSkillPopover>
+        </ChatInputPromptPopover>
+      </ChatInputSshPopover>
       {modelPicker.isOpen ? (
         <ModelPickerDrawer
           // Parallel answers refuse image generation, so several models are chosen among text ones.

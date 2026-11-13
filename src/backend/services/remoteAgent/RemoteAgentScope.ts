@@ -3,6 +3,8 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
+  type AgentParams,
+  type AgentResult,
   type AgentMessageListItem,
   type ContentRef,
   type AgentPart,
@@ -18,7 +20,10 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
-import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
+import type {
+  DesktopSession,
+  DesktopParams,
+} from '@/backend/services/desktopConnections/DesktopSession';
 import {
   DesktopUnreachableError,
   RemoteFailureError,
@@ -31,6 +36,7 @@ import type {
   RemoteSessionSnapshot,
   RemoteSourceState,
   RemoteResourceValue,
+  RemoteTaskQueries,
 } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentActions } from './RemoteAgentActions';
@@ -48,6 +54,7 @@ import { decodeContent, integrity, readContent, type AgentRequest } from './remo
 import { createAttachmentDownloader } from './remoteDownloads';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
+import { RemoteTaskCatalog } from './RemoteTaskCatalog';
 import {
   uploadAttachments,
   type RemoteUploadFiles,
@@ -108,7 +115,9 @@ const targetSchema = z.object({
 export class RemoteAgentScope implements RemoteAgentSource {
   readonly scope: string;
   readonly draftScope: string;
+  readonly tasks: RemoteTaskQueries;
   private readonly reads = new RemoteReadCoordinator();
+  private readonly taskCatalog: RemoteTaskCatalog;
   private state: RemoteSourceState;
   private readonly stateListeners = new Set<() => void>();
   private readonly observations = new Map<string, Observation>();
@@ -170,6 +179,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
     this.state = lease.getSnapshot();
+    this.taskCatalog = new RemoteTaskCatalog(this.reads, this.request);
+    this.tasks = this.taskCatalog;
     this.actions = new RemoteAgentActions(
       `${lease.connectionId}:${lease.scope}`,
       journal,
@@ -388,6 +399,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.releaseBackgroundProtection();
     if (this.state.status === 'ready') {
       this.backgroundBlocked = false;
+      this.taskCatalog.reset();
       this.reconcileCommandProtection();
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
       void this.actions.recover();
@@ -465,7 +477,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
       throw error;
     }
   }
-  private request: AgentRequest = async (method, params, caller) => {
+  private request = async <M extends AgentMethod>(
+    method: M,
+    params: AgentParams<M>,
+    caller?: AbortSignal,
+  ): Promise<AgentResult<M>> => {
     this.assertActive();
     const linked = caller ? linkAbortSignals([caller, this.lease.signal]) : undefined;
     const signal = linked?.signal ?? this.lease.signal;
@@ -481,7 +497,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
         method === 'agent.messages.list' && session.agentMessageSummariesVersion === 1
           ? { ...params, partsMode: 'paged' as const }
           : params;
-      return await this.call(session, method, negotiatedParams, signal);
+      return await this.call(session, method, negotiatedParams as AgentParams<M>, signal);
     } finally {
       linked?.dispose();
     }
@@ -489,13 +505,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private async call<M extends AgentMethod>(
     session: DesktopSession,
     method: M,
-    params: Parameters<AgentRequest>[1],
+    params: AgentParams<M>,
     signal: AbortSignal,
   ) {
     this.assertActive();
     signal.throwIfAborted();
     try {
-      const value = await this.track(session.request(method, params as never, signal));
+      const value = await this.track(session.request(method, params as DesktopParams<M>, signal));
       this.assertActive();
       signal.throwIfAborted();
       return value;
@@ -511,7 +527,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           typeof params.sessionId === 'string'
         )
           this.readCache.remove(this.cacheEntry(params.sessionId));
-        if (error.reason === 'UPGRADE_REQUIRED') {
+        if (error.reason === 'UPGRADE_REQUIRED' && method !== 'agent.tasks.list') {
           this.state = { ...this.state, reason: 'upgrade-required' };
           for (const listener of this.stateListeners) listener();
         }
@@ -548,8 +564,22 @@ export class RemoteAgentScope implements RemoteAgentSource {
     };
   }
   async listSessions(agentId: string | undefined, cursor: string | undefined, signal: AbortSignal) {
-    const page = await this.request('agent.sessions.list', { agentId, cursor }, signal);
-    return { items: page.items.map(projectSession), next: page.nextCursor ?? undefined };
+    const visited = new Set<string>();
+    while (true) {
+      if (cursor && visited.has(cursor)) throw new RemoteAgentError('PROTOCOL_ERROR');
+      if (cursor) visited.add(cursor);
+      const page = await this.request('agent.sessions.list', { agentId, cursor }, signal);
+      const tasks = await this.taskCatalog.identify(
+        agentId,
+        page.items.map((session) => session.sessionId),
+        signal,
+      );
+      const items = page.items
+        .filter((session) => !tasks.has(session.sessionId))
+        .map(projectSession);
+      if (items.length || !page.nextCursor) return { items, next: page.nextCursor ?? undefined };
+      cursor = page.nextCursor ?? undefined;
+    }
   }
   private cacheEntry(sessionId: string) {
     return this.readCache.entry(
@@ -1283,6 +1313,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   dispose() {
     if (this.stopped) return;
     this.stopped = true;
+    this.taskCatalog.reset();
     clearTimeout(this.recoveryTimer);
     this.unsubscribe();
     this.unoperations();

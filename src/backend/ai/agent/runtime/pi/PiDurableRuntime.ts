@@ -28,6 +28,7 @@ import {
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { estimatePiContextUsage } from './modelMessages';
 import { PI_REPLY_EDIT_KIND } from './piReplyEditing';
 import { ToolInstructions } from './piToolInstructions';
 
@@ -834,6 +835,35 @@ export class PiDurableRuntime {
   async watch(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     return conversation.watch(context);
+  }
+
+  /** Read the effective context, including compaction, reset and reply edits, at a watch frame. */
+  async contextUsageEstimate(sessionId: string, at: EntryId) {
+    const conversation = await this.requireSession(sessionId, BACKGROUND_CONTEXT);
+    const view = await conversation.context(BACKGROUND_CONTEXT, { at });
+    const estimate = estimatePiContextUsage(view.messages);
+    return {
+      tokens: estimate.tokens,
+      ...(estimate.lastUsageIndex === null || estimate.trailingTokens > 0
+        ? { estimated: true }
+        : {}),
+    };
+  }
+
+  /** Restore an idle observer's branch anchor, even when compaction removed the input from context. */
+  async latestInput(sessionId: string, through: EntryId) {
+    let cursor: Cursor | undefined;
+    do {
+      const page = await this.history(sessionId, 256, cursor, BACKGROUND_CONTEXT, {
+        maxEntryId: through,
+      });
+      const latest = page.submissions
+        .filter(({ record }) => record.type === 'input' && record.entry !== undefined)
+        .sort((a, b) => Number(b.record.entry) - Number(a.record.entry))[0];
+      if (latest) return latest;
+      cursor = page.next;
+    } while (cursor);
+    return undefined;
   }
 
   /** Register before attaching the view: a coalesced watch can miss a whole short run. */

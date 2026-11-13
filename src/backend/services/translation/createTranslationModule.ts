@@ -1,4 +1,5 @@
 import type { ModelService } from '@/backend/data/services/ModelService';
+import type { ScreenAwakePort } from '@/backend/services/screenAwake';
 import { TranslationError, type TranslationModule } from '@/shared/contracts/translation';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import { APP_LANGUAGES } from '@/shared/utils/languages';
@@ -7,6 +8,7 @@ export function createTranslationModule({
   ai,
   preference,
   models,
+  screenAwake,
 }: {
   ai: {
     generateText(
@@ -23,6 +25,7 @@ export function createTranslationModule({
     get(key: 'feature.translate.model_id' | 'agent.default_model_id'): Promise<string | null>;
   };
   models: Pick<ModelService, 'getById'>;
+  screenAwake?: ScreenAwakePort;
 }): TranslationModule {
   return {
     async translate({ text, language }, { signal, onText } = {}) {
@@ -41,6 +44,14 @@ export function createTranslationModule({
         );
       }
       signal?.throwIfAborted();
+      let lease = screenAwake?.acquire('translation');
+      const release = () => {
+        const activeLease = lease;
+        lease = undefined;
+        activeLease?.release();
+      };
+      signal?.addEventListener('abort', release, { once: true });
+      if (signal?.aborted) release();
       try {
         const result = await ai.generateText(
           {
@@ -70,6 +81,9 @@ export function createTranslationModule({
         signal?.throwIfAborted();
         if (error instanceof TranslationError) throw error;
         throw new TranslationError('failed', 'Translation generation failed.', { cause: error });
+      } finally {
+        signal?.removeEventListener('abort', release);
+        release();
       }
     },
   };

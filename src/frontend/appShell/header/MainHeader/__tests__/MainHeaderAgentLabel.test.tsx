@@ -1,11 +1,11 @@
 import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import type { Agent } from '@/shared/data/types/agent';
 
 import { MainHeader } from '../MainHeader';
 import { MainHeaderAgentLabel, useMainHeaderAgent } from '../MainHeaderAgentLabel';
-import { MainHeaderAgentPickerSheet } from '../MainHeaderAgentPickerSheet';
 
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
@@ -185,10 +185,10 @@ describe('MainHeaderAgentLabel', () => {
       ],
       hasNextPage: true,
       fetchNextPage,
-    } as unknown as React.ComponentProps<typeof MainHeaderAgentPickerSheet>['catalog'];
+    } as unknown as React.ComponentProps<typeof AgentPickerSheet>['catalog'];
     await act(async () => {
       renderer = create(
-        <MainHeaderAgentPickerSheet
+        <AgentPickerSheet
           catalog={catalog}
           currentAgentId="remote"
           open

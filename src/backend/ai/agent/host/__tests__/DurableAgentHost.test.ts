@@ -30,6 +30,7 @@ import {
   createSqliteStoreHarness,
   type SqliteStoreHarness,
 } from '../../sessionStore/__tests__/_sqliteStoreHarness';
+import { createAskUserQuestionTool } from '../../tools/askUserQuestionTool';
 import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
@@ -81,6 +82,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const conversations: DurableAgentRuntime = {
     steer: jest.fn(async () => 'not-found' as const),
     descriptor: new FakeRuntime().descriptor,
+    estimateStoredContextUsage: jest.fn(() => 100),
     preflightModel: async () => ({
       contextWindow: 32768,
       maxInputTokens: 28672,
@@ -312,7 +314,13 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     agentId,
     steps,
     copies,
+    listeners,
     emit,
+    emitContextUsage: (tokens: number, messageId: string) =>
+      listeners.get(sessionId)?.({
+        type: 'context.usage.updated',
+        usage: { messageId, tokens },
+      }),
     reserve,
     background,
     reply,
@@ -324,6 +332,477 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 async function settle() {
   for (let round = 0; round < 20; round++) await new Promise((resolve) => setImmediate(resolve));
 }
+
+describe.each([true, false])('screen-awake generation demand (port provided: %s)', (provided) => {
+  function screenFixture(overrides: Partial<MobileAgentHostPorts> = {}) {
+    const release = jest.fn();
+    const generationLease = jest.fn(() => ({ release }));
+    const state = fixture({
+      ...overrides,
+      generationLease: provided ? generationLease : undefined,
+    });
+    return {
+      ...state,
+      generationLease,
+      release,
+      expectLeases(acquired: number, released: number) {
+        expect(generationLease).toHaveBeenCalledTimes(provided ? acquired : 0);
+        expect(release).toHaveBeenCalledTimes(provided ? released : 0);
+      },
+    };
+  }
+
+  async function reserveNext(
+    state: ReturnType<typeof screenFixture>,
+    previous: RuntimeDurableTurn,
+    status: 'running' | 'queued',
+  ): Promise<RuntimeDurableTurn> {
+    const reserved = await state.store.reserveSubmission({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'next', type: 'text', text: 'Continue', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    return {
+      ...previous,
+      identity: { ...previous.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      status,
+      parts: [],
+    };
+  }
+
+  function requestApproval(state: ReturnType<typeof screenFixture>, turn: RuntimeDurableTurn) {
+    const approvalId = uuid();
+    const controller = new AbortController();
+    const response = state.execution()!.requestApproval(
+      turn.identity,
+      {
+        id: approvalId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'search',
+        toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+        displayName: 'Search',
+        input: {},
+        status: 'pending',
+      },
+      controller.signal,
+    );
+    const approve = () =>
+      state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        approvalId,
+        decision: 'approve',
+      });
+    return { response, approve };
+  }
+
+  test('new running answers share one lease across lanes until the last answer finishes', async () => {
+    const state = screenFixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    state.expectLeases(0, 0);
+    await state.host.submitMessage({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      parts: [{ type: 'text', text: 'Compare' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      additionalReplies: [
+        { modelId: createUniqueModelId('provider', 'second-model'), assistantMessageId: uuid() },
+      ],
+    });
+    const running = [...state.copies.values()].flatMap((copy) =>
+      copy.turns.filter((turn) => turn.status === 'running'),
+    );
+    expect(running).toHaveLength(2);
+    state.expectLeases(1, 0);
+    state.emit({ ...running[0]!, status: 'completed' });
+    state.expectLeases(1, 0);
+    state.emit({ ...running[1]!, status: 'completed' });
+    state.expectLeases(1, 1);
+    await state.host.close();
+    state.expectLeases(1, 1);
+  });
+
+  test.each(['completed', 'failed', 'cancelled', 'interrupted'] as const)(
+    'restored running turn acquires at initialize and releases once on %s',
+    async (status) => {
+      const state = screenFixture();
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      state.expectLeases(1, 0);
+      state.emit({ ...turn, status });
+      state.expectLeases(1, 1);
+      state.emit({ ...turn, status });
+      await state.host.close();
+      state.expectLeases(1, 1);
+    },
+  );
+
+  test('approval wait releases demand and resolving the last approval restores it', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const first = requestApproval(state, turn);
+    const second = requestApproval(state, turn);
+    await settle();
+    state.expectLeases(1, 1);
+    await first.approve();
+    await expect(first.response).resolves.toBe('approve');
+    state.expectLeases(1, 1);
+    await second.approve();
+    await expect(second.response).resolves.toBe('approve');
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('question wait releases demand and answering restores it', async () => {
+    const state = screenFixture({
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)] },
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const controller = new AbortController();
+    const tool = await state
+      .execution()!
+      .resolveTool(
+        turn.identity,
+        { source: 'builtin', capabilityId: 'ask_user_question' },
+        controller.signal,
+      );
+    const response = tool.execute({
+      turnId: turn.identity.turnId,
+      toolCallId: 'question',
+      signal: controller.signal,
+      input: {
+        questions: [{ id: 'choice', question: 'Which one?', selection: 'single', options: [] }],
+      },
+    });
+    state.expectLeases(1, 1);
+    await state.host.respondQuestion({
+      sessionId: state.sessionId,
+      turnId: turn.identity.turnId,
+      toolCallId: 'question',
+      answer: {
+        answers: [{ questionId: 'choice', selectedOptionIds: [], text: 'First', skipped: false }],
+      },
+    });
+    await response;
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('cancel suppresses late running deltas and a new successor restores demand', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.cancelTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
+    state.expectLeases(1, 1);
+    state.emit({ ...turn, parts: [] });
+    state.listeners.get(state.sessionId)!({
+      type: 'snapshot',
+      snapshot: { activeTurn: turn, queue: [] },
+    });
+    state.expectLeases(1, 1);
+    state.emit(await reserveNext(state, turn, 'running'));
+    state.expectLeases(2, 1);
+    state.emit({ ...turn, status: 'cancelled' });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('queued input behind approval holds no demand until it actually starts', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const approval = requestApproval(state, turn);
+    await settle();
+    state.expectLeases(1, 1);
+    const queued = await reserveNext(state, turn, 'queued');
+    state.emit(queued);
+    state.listeners.get(state.sessionId)!({ type: 'queue.updated', queue: [queued] });
+    state.expectLeases(1, 1);
+    const approved = approval.approve();
+    state.emit({ ...turn, status: 'completed' });
+    await approved;
+    await approval.response;
+    state.expectLeases(1, 1);
+    state.emit({ ...queued, status: 'running' });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('cancel suppression survives suspension and stale terminal callbacks after reopening', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.cancelTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    await state.host.resumeSuspended();
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn: { ...turn, status: 'cancelled' } });
+    state.expectLeases(1, 1);
+    state.emit(await reserveNext(state, turn, 'running'));
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('retry backoff releases execution protection while retaining screen demand', async () => {
+    const executionRelease = jest.fn();
+    const state = screenFixture({ executionLease: () => ({ release: executionRelease }) });
+    let watchWork!: (active: boolean) => void;
+    jest.spyOn(state.conversations, 'watchWork').mockImplementation(async (listener) => {
+      watchWork = listener;
+      return { active: true, unsubscribe: async () => {} };
+    });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    watchWork(false);
+    expect(executionRelease).toHaveBeenCalledTimes(1);
+    state.expectLeases(1, 0);
+    state.emit({ ...turn, updatedAt: turn.updatedAt + 1 });
+    state.expectLeases(1, 0);
+    state.emit({ ...turn, status: 'completed' });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+
+  test.each(['suspend', 'close'] as const)(
+    '%s releases before slow cleanup and stale callbacks cannot restore demand',
+    async (operation) => {
+      let interrupt!: (reason: Error) => void | Promise<void>;
+      const state = screenFixture({
+        executionLease: (onInterrupt) => {
+          interrupt = onInterrupt;
+          return { release() {} };
+        },
+      });
+      let finishCleanup!: () => void;
+      const cleanup = new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      });
+      const unsubscribe = jest.fn(async () => cleanup);
+      jest
+        .spyOn(state.conversations, 'watchWork')
+        .mockResolvedValueOnce({ active: true, unsubscribe });
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      const stale = state.listeners.get(state.sessionId)!;
+      state.expectLeases(1, 0);
+      const stopping =
+        operation === 'suspend' ? interrupt(new Error('Expired')) : state.host.close();
+      state.expectLeases(1, 1);
+      stale({ type: 'turn.updated', turn });
+      state.expectLeases(1, 1);
+      expect(state.conversations.close).not.toHaveBeenCalled();
+      finishCleanup();
+      await stopping;
+      stale({ type: 'turn.updated', turn });
+      state.expectLeases(1, 1);
+      if (operation === 'suspend') {
+        await state.host.resumeSuspended();
+        state.expectLeases(2, 1);
+        stale({ type: 'snapshot', snapshot: { activeTurn: null, queue: [] } });
+        state.expectLeases(2, 1);
+      }
+      await state.host.close();
+      state.expectLeases(operation === 'suspend' ? 2 : 1, operation === 'suspend' ? 2 : 1);
+    },
+  );
+
+  test('snapshot removal releases demand and restored snapshot reacquires it', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const listener = state.listeners.get(state.sessionId)!;
+    listener({ type: 'snapshot', snapshot: { activeTurn: null, queue: [] } });
+    state.expectLeases(1, 1);
+    listener({ type: 'snapshot', snapshot: { activeTurn: turn, queue: [] } });
+    state.expectLeases(2, 1);
+    await state.host.close();
+    state.expectLeases(2, 2);
+  });
+
+  test('resuming an idle copy does not reacquire from its previous running callback', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    state.expectLeases(1, 1);
+    state.copies.get(state.sessionId)!.turns = [{ ...turn, status: 'completed' }];
+    await state.host.resumeSuspended();
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+
+  test('detaching the last running lane releases demand even without a terminal delta', async () => {
+    const state = screenFixture();
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const stale = state.listeners.get(state.sessionId)!;
+    jest.spyOn(state.conversations, 'abort').mockResolvedValue(undefined);
+    await state.host.deleteSession({ sessionId: state.sessionId });
+    state.expectLeases(1, 1);
+    stale({ type: 'turn.updated', turn });
+    state.expectLeases(1, 1);
+    await state.host.close();
+  });
+});
+
+test('screen-awake port failures do not throw into generation transitions', async () => {
+  const release = jest.fn(() => {
+    throw new Error('Release failed');
+  });
+  const generationLease = jest
+    .fn(() => ({ release }))
+    .mockImplementationOnce(() => {
+      throw new Error('Acquire failed');
+    });
+  const state = fixture({ generationLease });
+  const turn = await state.reserve('running');
+  await expect(state.host.initialize()).resolves.toBeUndefined();
+  expect(() => state.emit(turn)).not.toThrow();
+  expect(generationLease).toHaveBeenCalledTimes(2);
+  expect(() => state.emit({ ...turn, status: 'completed' })).not.toThrow();
+  expect(release).toHaveBeenCalledTimes(1);
+  await state.host.close();
+  expect(release).toHaveBeenCalledTimes(1);
+});
+
+describe('durable context usage', () => {
+  test('publishes idle context changes and includes the latest count when observing again', async () => {
+    const f = fixture();
+    const turn = await f.reserve();
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observed = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      f.emitContextUsage(90_000, turn.assistantMessageId);
+      f.emitContextUsage(12_000, turn.assistantMessageId);
+      expect(events.filter((event) => event.type === 'context.usage.updated')).toEqual([
+        {
+          type: 'context.usage.updated',
+          usages: [{ messageId: turn.assistantMessageId, tokens: 90_000 }],
+        },
+        {
+          type: 'context.usage.updated',
+          usages: [{ messageId: turn.assistantMessageId, tokens: 12_000 }],
+        },
+      ]);
+      const reopened = await f.host.observeSession(f.sessionId, () => {});
+      try {
+        expect(reopened.snapshot.activeTurn).toBeNull();
+        expect(reopened.snapshot.contextUsages).toEqual([
+          { messageId: turn.assistantMessageId, tokens: 12_000 },
+        ]);
+      } finally {
+        reopened.unsubscribe();
+      }
+    } finally {
+      observed.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test.each([false, true])(
+    'estimates a missing copy from saved context (checkpoint: %s)',
+    async (compacted) => {
+      const f = fixture();
+      const turn = await f.reserve();
+      await f.host.initialize();
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: turn.identity.turnId,
+        payload: {
+          kind: 'pi-durable-context-v1',
+          messages: [{ role: 'user', content: 'Summary', timestamp: 1 }],
+        },
+      };
+      if (compacted)
+        await f.store.saveContextCheckpoint(
+          turn.assistantMessageId,
+          turn.identity.turnId,
+          checkpoint,
+        );
+      f.copies.clear();
+      const createCopy = jest.spyOn(f.conversations, 'ensureConversation');
+      const observed = await f.host.observeSession(f.sessionId, () => {});
+      try {
+        expect(observed.snapshot.contextUsages).toEqual([
+          { messageId: turn.assistantMessageId, tokens: 100, estimated: true },
+        ]);
+        expect(f.conversations.estimateStoredContextUsage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            contextCheckpoint: compacted ? checkpoint : null,
+            history: compacted
+              ? []
+              : expect.arrayContaining([expect.objectContaining({ turnId: turn.identity.turnId })]),
+          }),
+        );
+        expect(createCopy).not.toHaveBeenCalled();
+        expect(f.conversations.submit).not.toHaveBeenCalled();
+      } finally {
+        observed.unsubscribe();
+        await f.host.close();
+      }
+    },
+  );
+
+  test('replaces an already observed count with a stored estimate after clearing the working file', async () => {
+    const discard = jest.fn();
+    const f = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript() {},
+      },
+    });
+    const turn = await f.reserve();
+    discard.mockImplementation(() => f.copies.clear());
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observed = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    const createCopy = jest.spyOn(f.conversations, 'ensureConversation');
+    try {
+      f.emitContextUsage(90_000, turn.assistantMessageId);
+      await f.host.clearWorkingStorage();
+      expect(events.findLast((event) => event.type === 'context.usage.updated')).toEqual({
+        type: 'context.usage.updated',
+        usages: [{ messageId: turn.assistantMessageId, tokens: 100, estimated: true }],
+      });
+      expect(createCopy).not.toHaveBeenCalled();
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      observed.unsubscribe();
+      await f.host.close();
+    }
+  });
+});
 
 describe('durable tool diagnostics', () => {
   test('reads valid saved reasoning around an unsupported part without relaxing execution reads', async () => {
@@ -1738,7 +2217,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
 
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();
-    const failed = await state.reserve('failed');
+    const sshReferences = [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }];
+    const failed = await state.reserve('failed', [
+      { id: 'question', type: 'text', text: 'SSH · guoxu Question', state: 'done', sshReferences },
+    ]);
     await state.host.initialize();
     try {
       await state.host.retryMessage({
@@ -1751,7 +2233,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         failed.assistantMessageId,
       ]);
       expect(messages[0].parts).toEqual([
-        { id: 'input-0', type: 'text', text: 'Question', state: 'done' },
+        { id: 'input-0', type: 'text', text: 'SSH · guoxu Question', state: 'done', sshReferences },
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
@@ -2067,10 +2549,13 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         modelId: second,
       });
       const turns = await state.store.listTurnMessages(state.sessionId, question!.turnId!);
-      expect(turns.filter((row) => row.role === 'assistant').map((row) => row.modelId)).toEqual([
-        second,
-        inferenceSnapshot.model.uniqueModelId,
-      ]);
+      // Turn reads sort by creation time and ID, not by the selected model's priority.
+      expect(
+        turns
+          .filter((row) => row.role === 'assistant')
+          .map((row) => row.modelId)
+          .sort(),
+      ).toEqual([second, inferenceSnapshot.model.uniqueModelId].sort());
       expect(answer?.id).not.toBe(original.assistantMessageId);
       expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(answer?.id);
       for (const id of [
@@ -2190,11 +2675,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       {
         id: 'question',
         type: 'text',
-        text: 'Look at 飞书 @skill and @selection',
+        text: 'Look at 飞书 @skill and @selection SSH · guoxu',
         state: 'done',
         pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 8 }],
         skillReferences: [{ type: 'skill', skillId, label: '@skill', offset: 11 }],
         selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 22 }],
+        sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 33 }],
       },
     ]);
     await state.host.initialize();
@@ -2215,7 +2701,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       });
       const [question] = await state.store.listMessages(state.sessionId);
       // The text collapses into one part; surviving mentions move to their new offsets and
-      // the removed Skill mention is dropped.
+      // the removed Skill and SSH mentions are dropped.
       expect(question?.parts).toEqual([
         {
           id: 'input-0',
@@ -2243,11 +2729,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       {
         id: 'question',
         type: 'text',
-        text: 'Look at 飞书 @skill and @selection',
+        text: 'Look at 飞书 @skill and @selection SSH · guoxu',
         state: 'done',
         pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 8 }],
         skillReferences: [{ type: 'skill', skillId, label: '@skill', offset: 11 }],
         selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 22 }],
+        sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 33 }],
       },
     ]);
     await state.host.initialize();
@@ -2264,7 +2751,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.editUserMessage({
         sessionId: state.sessionId,
         messageId: original.userMessageId,
-        text: '@selection then 飞书',
+        text: 'SSH · guoxu @selection then 飞书',
       });
       const [question] = await state.store.listMessages(state.sessionId);
       // The text collapses into one part; surviving mentions move to their new offsets and
@@ -2273,10 +2760,11 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         {
           id: 'input-0',
           type: 'text',
-          text: '@selection then 飞书',
+          text: 'SSH · guoxu @selection then 飞书',
           state: 'done',
-          pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 16 }],
-          selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 0 }],
+          pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 28 }],
+          selectionReferences: [{ type: 'selection', selection, label: '@selection', offset: 12 }],
+          sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 0 }],
         },
       ]);
     } finally {

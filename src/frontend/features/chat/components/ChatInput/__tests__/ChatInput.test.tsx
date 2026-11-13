@@ -7,6 +7,10 @@ import type { QuoteFields } from '@/shared/contracts/agent';
 
 import { createQuoteMention, readQuoteMentions } from '../../../quotes/quoteMentions';
 import { ChatInput } from '../ChatInput';
+import { createPluginMentionUrl } from '../utils/pluginMentions';
+import { createSelectionMention } from '../utils/selectionMentions';
+import { createSkillMentionUrl } from '../utils/skillMentions';
+import { createSshMention } from '../utils/sshMentions';
 let mockEditing: { messageId: string; initialText: string; attachmentCount: number } | null = null;
 let mockDraft = '';
 const mockCommitEdit = jest.fn();
@@ -41,12 +45,21 @@ const mockControls = {
   cancel: mockNoop,
 };
 const mockModelItem = { modelId: 'p::m', model: { id: 'p::m' } };
+const mockSshProfile = {
+  id: '11111111-1111-4111-8111-111111111111',
+  revision: '22222222-2222-4222-8222-222222222222',
+};
+let mockSshTarget: { profile: typeof mockSshProfile } | null = null;
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => mockQuoteActions,
 }));
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
-jest.mock('@/frontend/data', () => ({ useApiClient: () => ({}) }));
+jest.mock('@/frontend/data', () => ({
+  useApiClient: () => ({}),
+  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => mockSshTarget }),
+}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -57,9 +70,11 @@ jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
   usePluginConnections: () => ({}),
 }));
+jest.mock('@/frontend/hooks/ssh', () => ({ sshErrorLabel: () => 'ssh.error.connection' }));
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerAttachments: () => null,
   useComposerActions: () => ({ setDraft: mockNoop }),
+  useComposerPresentationActions: () => ({ runInputReplacement: mockNoop }),
   useComposerState: () => ({ draft: mockDraft, attachments: [] }),
 }));
 jest.mock('@/frontend/components/McpApp', () => ({
@@ -96,6 +111,9 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
+jest.mock('../components/ChatInputSsh', () => ({
+  ChatInputSshPopover: ({ children }: { children: ReactNode }) => children,
+}));
 jest.mock('../components/ChatInputPluginPopover', () => ({
   ChatInputPluginPopover: ({ children, ...props }: { children: ReactNode }) =>
     jest.requireActual('react').createElement('PluginPopover', props, children),
@@ -137,6 +155,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockImageMode = false;
   mockEditing = null;
+  mockSshTarget = null;
   mockDraft = '';
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -184,6 +203,58 @@ test('text send captures one attempt, sends the primary quote, and clears only a
     await pending;
   });
   expect(mockFinish.mock.calls).toEqual([[true], [false]]);
+});
+
+test('sending mixed mentions preserves SSH labels and all ranges after removing link syntax', async () => {
+  mockSshTarget = { profile: mockSshProfile };
+  const skillId = '00000000-0000-4000-8000-000000000002';
+  const selection = {
+    file_entry_id: '00000000-0000-7000-8000-000000000003',
+    anchor: { format: 'docx' as const, paragraph: 0 },
+    excerpt: 'Selected paragraph',
+  };
+  const ssh = createSshMention('SSH · guoxu', mockSshProfile);
+  const draft = `📄 ${createQuoteMention(fields.quotes![0])} ${ssh} [飞书](${createPluginMentionUrl(mockSshProfile.id, 'feishu')}) [notes](${createSkillMentionUrl(skillId)}) ${createSelectionMention('a.docx · ¶1', selection)} ${ssh}`;
+  const text = '📄 “Original snapshot” SSH · guoxu 飞书 notes a.docx · ¶1 SSH · guoxu';
+  await mount();
+  await act(async () => {
+    await renderer.root
+      .findByType('TextComposer' as never)
+      .props.onSend({ text: draft, attachments: [] });
+  });
+  expect(mockSend.mock.calls[0][0].parts).toEqual([
+    {
+      type: 'text',
+      text,
+      quoteAuthor: fields.quoteAuthor,
+      quotes: [{ ...fields.quotes![0], reference: { label: '“Original snapshot”', offset: 3 } }],
+      pluginReferences: [
+        { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: text.indexOf('飞书') },
+      ],
+      skillReferences: [{ type: 'skill', skillId, label: 'notes', offset: text.indexOf('notes') }],
+      selectionReferences: [
+        { type: 'selection', selection, label: 'a.docx · ¶1', offset: text.indexOf('a.docx') },
+      ],
+      sshReferences: [
+        { type: 'ssh', label: 'SSH · guoxu', offset: text.indexOf('SSH · guoxu') },
+        { type: 'ssh', label: 'SSH · guoxu', offset: text.lastIndexOf('SSH · guoxu') },
+      ],
+    },
+  ]);
+});
+
+test('a stale SSH mention is rejected before sending its display snapshot', async () => {
+  mockSshTarget = {
+    profile: { ...mockSshProfile, revision: '33333333-3333-4333-8333-333333333333' },
+  };
+  await mount();
+  await expect(
+    renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: createSshMention('SSH · guoxu', mockSshProfile),
+      attachments: [],
+    }),
+  ).rejects.toThrow();
+  expect(mockSend).not.toHaveBeenCalled();
 });
 
 test('image send captures before attachment preparation and consumes that attempt after an await', async () => {

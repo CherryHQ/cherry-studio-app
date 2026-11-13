@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   createRegistry,
@@ -42,7 +43,7 @@ import {
   type RuntimeUsageOwner,
 } from '../durableTypes';
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
-import { toPiConversation } from './modelMessages';
+import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
@@ -89,6 +90,26 @@ const CURRENT_DATE_SECTION = section('current-date', () => {
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
+  estimateStoredContextUsage(
+    input: Parameters<DurableAgentRuntime['estimateStoredContextUsage']>[0],
+  ) {
+    const entries = createWorkingPiEntries(
+      { ...input, input: [] },
+      {
+        api: 'cherry',
+        id: input.model.modelId,
+        provider: input.model.providerId,
+        input: ['text', 'image'],
+      },
+    );
+    const estimate = estimatePiContextUsage(entries.flatMap((entry) => entry.model ?? []));
+    // A measured prefix already includes its system prompt. Content-only recovery needs one.
+    return (
+      estimate.tokens +
+      (estimate.lastUsageIndex === null ? estimateTextTokens(input.instructions) : 0)
+    );
+  }
+
   async drainUsage() {
     await this.delivery;
     await this.deliverUsage();
@@ -417,12 +438,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const originalEntries = seed.history
       ? createWorkingPiEntries(
           {
-            turnId: 'history-import',
-            sessionId: seed.lane.sessionId,
             instructions: configuration.instructions,
-            model: configuration.model,
-            options: configuration.options,
-            tools: [],
             input: [],
             history: seed.history.history,
             contextCheckpoint: seed.history.contextCheckpoint,
@@ -500,14 +516,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const tools = configuration.tools.map((blueprint) => this.toolTemplate(blueprint));
     const assembled = toPiConversation(
       {
-        turnId: input.turnId,
-        sessionId: lane.sessionId,
         instructions: '',
-        model: configuration.model,
-        options: configuration.options,
         history: [],
-        contextCheckpoint: null,
-        tools: [],
         input: input.input,
         resume: input.resume,
       },

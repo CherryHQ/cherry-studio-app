@@ -60,8 +60,11 @@ it already exists.
 | Private Agent working materials | Upstream `CodemodeStoreDoc` via Code Mode `store/load`; successful preparation calls precede execution/checking, never library files or backups |
 | Managed-file and library reader media/pagination instructions | `buildFileReadInstructions` in `src/backend/ai/agent/tools/readFileTool.ts`; each deferred reader includes the complete rules for its parser and model image support |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
+| SSH commands, remote files, authentication and pooled native connections | `SshRuntime` in `src/backend/services/ssh` and `modules/ssh`; `sshFileStorage` owns bounded transfer staging and exact-byte library imports |
+| Durable SSH connection configuration | `SshProfileService` in `src/backend/data/services`, with a dedicated MMKV store and a validated portable backup snapshot; credentials remain in SecureStore |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
+| Desktop scheduled-task metadata, conversation membership and association caching | `RemoteTaskCatalog` in `src/backend/services/remoteAgent`, exposed through the existing Agent source's read-only `tasks` capability |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
@@ -81,6 +84,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
 | Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
@@ -96,7 +100,9 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Anchored informational text | `InfoPopover` for a measured trigger, `AnchoredInfoPopover` for caller-measured text ranges, from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
+| SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
+| Temporary local-file previews without library records | `src/frontend/appShell/filePreview`, handing cache leases to the existing files viewer through opaque navigation identities |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |
 | Target-language menus for text translation | `useTranslationLanguageMenu` in `src/frontend/hooks/useTranslationLanguageMenu.ts`, rendered by CherryUI `ActionMenu` |
@@ -108,6 +114,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Logical folder, file lineage, and workspace metadata | `FileLibraryService` and `fileLibraryRows` in `src/backend/data/services` |
 | Choosing a new or existing conversation for an incoming share | `ConversationDestinationList` from `src/frontend/appShell/sidebar`, reusing the sidebar Agent groups; `systemEntry` owns the share handoff |
 | Choosing the Agent that receives a file or reference handed over from outside chat | `AgentMenu` in `src/frontend/components/AgentMenu`, rendered by CherryUI `ActionMenu` |
+| Agent choice sheets for local chat, desktop chat and SSH handoff | `AgentPickerSheet` in `src/frontend/components/AgentPicker`; callers own source catalogs, candidate filtering and navigation |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |

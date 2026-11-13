@@ -54,6 +54,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
+import type { SshTextReference } from '@/shared/data/types/ssh';
 import type { TraceContext } from '@/shared/data/types/trace';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
@@ -68,6 +69,7 @@ import {
   type RuntimeLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
+  type RuntimeContextUsage,
   type RuntimeDurableTurn,
   type RuntimeExecutionIdentity,
   type RuntimeExecutionPorts,
@@ -97,6 +99,7 @@ import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareDurableTurn,
+  loadTurnContext,
   prepareInitialTurn,
   prepareTurn,
   type TurnPlan,
@@ -127,6 +130,7 @@ type LiveSession = {
    */
   withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
+  contextUsage: RuntimeContextUsage | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
@@ -173,6 +177,8 @@ export class DurableAgentHost implements AgentProtocol {
   >();
   private readonly preparing = new Map<string, Promise<PreparedInput>>();
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  /** Read-side estimates for observed branches without a matching working copy. */
+  private readonly storedContextUsages = new Map<string, RuntimeContextUsage>();
   private readonly statuses = new Map<string, AgentSessionStatus>();
   private readonly statusListeners = new Map<string, Set<() => void>>();
   private readonly allStatusListeners = new Set<() => void>();
@@ -190,6 +196,9 @@ export class DurableAgentHost implements AgentProtocol {
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: { release(): void } | undefined;
+  private screenAwakeLease: { release(): void } | undefined;
+  /** Cancelling is published before Pi updates its stored running turn. */
+  private readonly screenSuppressedRequests = new Set<string>();
 
   private skillWorkflow: SkillsModule | undefined;
 
@@ -241,6 +250,13 @@ export class DurableAgentHost implements AgentProtocol {
       await this.suspension;
     } finally {
       await this.resumeSuspended();
+      for (const sessionId of [...this.listeners.keys()]) {
+        const session = await this.store.getSession(sessionId);
+        if (!session) continue;
+        await this.attachedLanes(sessionId);
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(sessionId);
+      }
     }
   }
   pendingTurns(sessionId: string) {
@@ -409,6 +425,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.accepting = true;
       initialized = true;
       this.conversations.resume();
+      this.reconcileScreenAwake();
       recovery?.end('ok');
     } catch (error) {
       recovery?.end('error', traceErrorAttributes(error));
@@ -428,6 +445,7 @@ export class DurableAgentHost implements AgentProtocol {
   private async closeGeneration() {
     this.accepting = false;
     this.controller.abort(new Error('The Agent Host generation is closing.'));
+    this.reconcileScreenAwake();
     for (const admission of this.admissions.values())
       admission.controller.abort(this.controller.signal.reason);
     await this.suspension?.catch((error) => logger.warn('Previous runtime cleanup failed', error));
@@ -444,6 +462,7 @@ export class DurableAgentHost implements AgentProtocol {
     } finally {
       for (const state of this.live.values()) state.background?.retire();
       this.live.clear();
+      this.storedContextUsages.clear();
       this.prepared.clear();
       this.preparing.clear();
       this.listeners.clear();
@@ -461,12 +480,38 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private reconcileScreenAwake(): void {
+    const screenDemand =
+      this.accepting &&
+      !this.suspended &&
+      !this.controller.signal.aborted &&
+      [...this.live.values()].some(
+        (state) =>
+          state.active?.status === 'running' &&
+          state.approvals.size === 0 &&
+          state.question === null &&
+          !this.screenSuppressedRequests.has(state.active.identity.requestId),
+      );
+    try {
+      if (screenDemand && !this.screenAwakeLease)
+        this.screenAwakeLease = this.ports.generationLease?.('agent.durable');
+      if (!screenDemand && this.screenAwakeLease) {
+        const lease = this.screenAwakeLease;
+        this.screenAwakeLease = undefined;
+        lease.release();
+      }
+    } catch (error) {
+      logger.warn('Failed to reconcile Agent screen-awake demand', { error });
+    }
+  }
+
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
   private suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
       this.suspended = true;
+      this.reconcileScreenAwake();
       for (const admission of this.admissions.values()) admission.controller.abort(reason);
       await Promise.allSettled([...this.admissions.values()].map((entry) => entry.promise));
       await this.workWatch?.unsubscribe();
@@ -505,6 +550,7 @@ export class DurableAgentHost implements AgentProtocol {
       }
     })().finally(() => {
       this.resuming = undefined;
+      this.reconcileScreenAwake();
     });
     return this.resuming;
   }
@@ -676,6 +722,78 @@ export class DurableAgentHost implements AgentProtocol {
 
   private liveStates(sessionId: string) {
     return [...this.live.values()].filter((state) => state.lane.sessionId === sessionId);
+  }
+
+  private publishContextUsages(sessionId: string) {
+    this.publish(sessionId, {
+      type: 'context.usage.updated',
+      usages: this.contextUsages(sessionId),
+    });
+  }
+
+  private contextUsages(sessionId: string) {
+    const usages = this.liveStates(sessionId).flatMap((state) => state.contextUsage ?? []);
+    const stored = this.storedContextUsages.get(sessionId);
+    if (stored && !usages.some((usage) => usage.messageId === stored.messageId))
+      usages.push(stored);
+    return usages;
+  }
+
+  private async refreshStoredContextUsage(session: AgentSessionView) {
+    this.storedContextUsages.delete(session.id);
+    if (
+      !this.listeners.has(session.id) ||
+      !session.activeNodeId ||
+      this.contextUsages(session.id).some((usage) => usage.messageId === session.activeNodeId)
+    )
+      return;
+    try {
+      const revision = await this.store.getRuntimeRevision(session.id);
+      const answer = await this.store.getMessage(session.id, session.activeNodeId);
+      const inference = answer?.inferenceSnapshot;
+      if (
+        !answer ||
+        answer.role !== 'assistant' ||
+        answer.status === 'pending' ||
+        answer.status === 'streaming' ||
+        inference?.status !== 'supported' ||
+        inference.snapshot.imageGeneration
+      )
+        return;
+      const agent = await this.ports.agents.getAgent(session.agentId);
+      if (!agent) return;
+      const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
+        this.preparation,
+        session.id,
+        this.controller.signal,
+        undefined,
+        answer.id,
+      );
+      const model = inference.snapshot.model;
+      const tokens = this.conversations.estimateStoredContextUsage({
+        model,
+        history: toRuntimeHistory(storedTurnContext.history, new Map(), model.uniqueModelId),
+        contextCheckpoint: runtimeContextCheckpoint,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: agent.instructions,
+          mode: agent.mode,
+          appLanguage: this.ports.appLanguage(),
+          tools: [],
+        }),
+      });
+      const current = await this.store.getSession(session.id);
+      if (
+        !this.controller.signal.aborted &&
+        this.listeners.has(session.id) &&
+        current?.activeNodeId === answer.id &&
+        revision === (await this.store.getRuntimeRevision(session.id))
+      )
+        this.storedContextUsages.set(session.id, { messageId: answer.id, tokens, estimated: true });
+    } catch (error) {
+      logger.warn('Could not estimate the saved Agent context', error as Error, {
+        sessionId: session.id,
+      });
+    }
   }
 
   /** Copies of a Session with an active or queued input. */
@@ -1211,8 +1329,11 @@ export class DurableAgentHost implements AgentProtocol {
           if (live.assistant?.id === message.id) live.assistant = result.message;
         this.publish(session.id, { type: 'message.edited', message: result.message });
         const updatedSession = await this.store.getSession(session.id);
-        if (updatedSession)
+        if (updatedSession) {
           this.publish(session.id, { type: 'session.updated', session: updatedSession });
+          await this.refreshStoredContextUsage(updatedSession);
+          this.publishContextUsages(session.id);
+        }
         this.ports.durableStorage?.notifyTranscript(session.id);
         return result.message;
       } catch (error) {
@@ -1235,6 +1356,8 @@ export class DurableAgentHost implements AgentProtocol {
     if (!session) fail('MESSAGE_NOT_FOUND', 'The message no longer exists.');
     this.publish(session.id, { type: 'session.updated', session });
     this.ports.durableStorage?.notifyTranscript(session.id);
+    await this.refreshStoredContextUsage(session);
+    this.publishContextUsages(session.id);
     return session;
   }
 
@@ -1267,7 +1390,11 @@ export class DurableAgentHost implements AgentProtocol {
       );
       // Deleting the selected branch moves the Session's active node.
       const session = await this.store.getSession(parsed.sessionId);
-      if (session) this.publish(parsed.sessionId, { type: 'session.updated', session });
+      if (session) {
+        this.publish(parsed.sessionId, { type: 'session.updated', session });
+        await this.refreshStoredContextUsage(session);
+        this.publishContextUsages(session.id);
+      }
       this.ports.durableStorage?.notifyTranscript(parsed.sessionId);
     });
   }
@@ -1320,6 +1447,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** Retires every working copy of a Session; Cherry history stays the source of truth. */
   private async detachConversation(sessionId: string) {
+    this.storedContextUsages.delete(sessionId);
+    this.publishContextUsages(sessionId);
     for (const lane of await this.sessionLanes(sessionId)) await this.detachLane(lane);
   }
 
@@ -1328,6 +1457,9 @@ export class DurableAgentHost implements AgentProtocol {
     await state?.unsubscribe();
     state?.background?.retire();
     this.live.delete(laneKey(lane));
+    this.reconcileScreenAwake();
+    this.storedContextUsages.delete(lane.sessionId);
+    this.publishContextUsages(lane.sessionId);
     if (await this.conversations.hasConversation(lane))
       await this.conversations.discardConversation(lane);
   }
@@ -1346,7 +1478,16 @@ export class DurableAgentHost implements AgentProtocol {
 
   async cancelTurn(input: Parameters<AgentProtocol['cancelTurn']>[0]) {
     const parsed = AgentCancelTurnInputSchema.parse(input);
-    for (const state of await this.attachedLanes(parsed.sessionId)) {
+    const states = await this.attachedLanes(parsed.sessionId);
+    // Suppress every affected answer before aborting any lane, which may take time.
+    for (const state of states)
+      if (
+        state.active?.identity.turnId === parsed.turnId &&
+        (!parsed.messageId || state.active.assistantMessageId === parsed.messageId)
+      )
+        this.screenSuppressedRequests.add(state.active.identity.requestId);
+    this.reconcileScreenAwake();
+    for (const state of states) {
       if (state.active?.identity.turnId !== parsed.turnId) {
         if (parsed.messageId) continue;
         const queued = state.queue.find((turn) => turn.identity.turnId === parsed.turnId);
@@ -1532,6 +1673,7 @@ export class DurableAgentHost implements AgentProtocol {
         : null,
       pendingQuestion: states.find((candidate) => candidate.question)?.question ?? null,
       contextStatus: state?.contextStatus ?? null,
+      contextUsages: this.contextUsages(sessionId),
       pendingApprovals: states.flatMap((candidate) =>
         [...candidate.approvals.values()].map((entry) => entry.view),
       ),
@@ -1541,9 +1683,14 @@ export class DurableAgentHost implements AgentProtocol {
     listeners.add(listener);
     const unsubscribe = () => {
       listeners.delete(listener);
-      if (!listeners.size) this.listeners.delete(sessionId);
+      if (!listeners.size) {
+        this.listeners.delete(sessionId);
+        this.storedContextUsages.delete(sessionId);
+      }
     };
     try {
+      await this.refreshStoredContextUsage(session);
+      snapshot.contextUsages = this.contextUsages(sessionId);
       // Settled history omits an entire turn while any answer runs. Restore its completed
       // siblings too. Subscribe before the read so terminal events during it cannot be lost.
       const turnIds = new Set(running.map((candidate) => candidate.active!.identity.turnId));
@@ -1710,6 +1857,7 @@ export class DurableAgentHost implements AgentProtocol {
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
+    this.reconcileScreenAwake();
     const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
@@ -1730,6 +1878,7 @@ export class DurableAgentHost implements AgentProtocol {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
+      this.reconcileScreenAwake();
       // Every pending request leaves the client projection, even when another answer keeps running.
       this.publish(identity.sessionId, {
         type: 'approval.resolved',
@@ -1755,7 +1904,10 @@ export class DurableAgentHost implements AgentProtocol {
         kind: 'approval',
         id: approval.id,
         title: approval.displayName,
-        requiresApp: isHealthToolRef(approval.toolRef),
+        requiresApp:
+          isHealthToolRef(approval.toolRef) ||
+          (approval.toolRef.source === 'builtin' &&
+            approval.toolRef.capabilityId.startsWith('ssh_')),
         respond: (decision) =>
           this.respondApproval({
             sessionId,
@@ -1793,6 +1945,7 @@ export class DurableAgentHost implements AgentProtocol {
     const { sessionId } = state.lane;
     const response = state.questions.ask(question, call);
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
+    this.reconcileScreenAwake();
     this.publish(sessionId, { type: 'question.updated', question: state.question });
     this.publishCurrentStatus(sessionId, state);
     this.updateBackgroundInteraction(sessionId);
@@ -1800,6 +1953,7 @@ export class DurableAgentHost implements AgentProtocol {
       return await response;
     } finally {
       state.question = null;
+      this.reconcileScreenAwake();
       this.updateBackgroundInteraction(sessionId);
       this.publish(sessionId, { type: 'question.updated', question: null });
       this.publishCurrentStatus(sessionId, state);
@@ -2054,6 +2208,7 @@ export class DurableAgentHost implements AgentProtocol {
           queue: [],
           withdrawnParents: new Map(),
           contextStatus: null,
+          contextUsage: null,
           unsubscribe: async () => {},
           background: null,
           backgroundRequestId: null,
@@ -2078,12 +2233,15 @@ export class DurableAgentHost implements AgentProtocol {
         }
         state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
         state.contextStatus = observed.snapshot.contextStatus ?? null;
+        state.contextUsage = observed.snapshot.contextUsage ?? null;
         state.unsubscribe = observed.unsubscribe;
         this.live.set(key, state);
+        if (state.contextUsage) this.publishContextUsages(lane.sessionId);
         this.updateQueue(state, observed.snapshot.queue);
         if (state.active) this.present(state.active);
         installed = true;
         for (const event of pending) this.consume(state, event);
+        this.reconcileScreenAwake();
         return state;
       },
       this.controller.signal,
@@ -2098,15 +2256,22 @@ export class DurableAgentHost implements AgentProtocol {
 
   private consume(state: LiveSession, event: RuntimeConversationEvent) {
     const { sessionId } = state.lane;
+    const isAttached = this.live.get(laneKey(state.lane)) === state;
+    const previousRequestId = state.active?.identity.requestId;
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
       this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
+      state.contextUsage = event.snapshot.contextUsage ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
+      this.publishContextUsages(sessionId);
       if (state.active) this.present(state.active);
     } else if (event.type === 'context.updated') {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
+    } else if (event.type === 'context.usage.updated') {
+      state.contextUsage = event.usage;
+      this.publishContextUsages(sessionId);
     } else if (event.type === 'queue.updated') {
       this.updateQueue(state, event.queue);
     } else {
@@ -2120,6 +2285,8 @@ export class DurableAgentHost implements AgentProtocol {
           state.queue.filter((item) => item.identity.turnId !== turn.identity.turnId),
         );
       if (turn.status === 'running') state.active = turn;
+      if (isAttached && turn.status !== 'running' && turn.status !== 'queued')
+        this.screenSuppressedRequests.delete(turn.identity.requestId);
       this.present(turn);
       if (
         turn.status !== 'running' &&
@@ -2128,9 +2295,17 @@ export class DurableAgentHost implements AgentProtocol {
       )
         state.active = null;
     }
+    if (
+      isAttached &&
+      previousRequestId &&
+      state.active &&
+      state.active.identity.requestId !== previousRequestId
+    )
+      this.screenSuppressedRequests.delete(previousRequestId);
     if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
+    this.reconcileScreenAwake();
   }
 
   private timed(turn: RuntimeDurableTurn): RuntimeDurableTurn {
@@ -2821,6 +2996,7 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
           ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
+          ...(part.sshReferences ? { sshReferences: part.sshReferences } : {}),
         }),
       ];
     if (part.type === 'file')
@@ -2841,6 +3017,7 @@ type InlineReferenceEntry =
   | { kind: 'plugin'; reference: PluginTextReference }
   | { kind: 'skill'; reference: SkillTextReference }
   | { kind: 'selection'; reference: SelectionTextReference }
+  | { kind: 'ssh'; reference: SshTextReference }
   | {
       kind: 'quote';
       quote: MessageQuote;
@@ -2873,6 +3050,11 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       (reference): InlineReferenceEntry => ({ kind: 'selection', reference }),
     ),
   );
+  const sshEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
+    (part.sshReferences ?? []).map(
+      (reference): InlineReferenceEntry => ({ kind: 'ssh', reference }),
+    ),
+  );
   // A quote's inline label is a truncated excerpt; the stored quote carries
   // the full selected text, so surviving labels must remap the whole quote.
   const quoteEntries: InlineReferenceEntry[] = texts.flatMap((part) =>
@@ -2889,9 +3071,13 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       .filter((quote) => !quote.reference)
       .map((quote) => ({ quote, author: part.quoteAuthor })),
   );
-  const ordered = [...pluginEntries, ...skillEntries, ...selectionEntries, ...quoteEntries].sort(
-    (left, right) => left.reference.offset - right.reference.offset,
-  );
+  const ordered = [
+    ...pluginEntries,
+    ...skillEntries,
+    ...selectionEntries,
+    ...sshEntries,
+    ...quoteEntries,
+  ].sort((left, right) => left.reference.offset - right.reference.offset);
   const kept: InlineReferenceEntry[] = [];
   const ranges: { start: number; end: number }[] = [];
   for (const entry of ordered) {
@@ -2915,6 +3101,9 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       case 'selection':
         kept.push({ kind: 'selection', reference: { ...entry.reference, offset } });
         break;
+      case 'ssh':
+        kept.push({ kind: 'ssh', reference: { ...entry.reference, offset } });
+        break;
       case 'quote':
         kept.push({
           kind: 'quote',
@@ -2935,6 +3124,7 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
   const selectionReferences = kept.flatMap((entry) =>
     entry.kind === 'selection' ? [entry.reference] : [],
   );
+  const sshReferences = kept.flatMap((entry) => (entry.kind === 'ssh' ? [entry.reference] : []));
   const quotes = [
     ...kept.flatMap((entry) =>
       entry.kind === 'quote' ? [{ ...entry.quote, reference: entry.reference }] : [],
@@ -2952,6 +3142,7 @@ function editedUserInput(parts: AgentMessageView['parts'], text: string): AgentI
       ...(pluginReferences.length ? { pluginReferences } : {}),
       ...(skillReferences.length ? { skillReferences } : {}),
       ...(selectionReferences.length ? { selectionReferences } : {}),
+      ...(sshReferences.length ? { sshReferences } : {}),
     }),
     ...parts.flatMap((part) =>
       part.type === 'file'

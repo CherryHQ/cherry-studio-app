@@ -100,6 +100,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
   its previous/next navigation and retained answers. Required fields gate submission; optional
   fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
+- In standard mode, the plus menu also offers SSH when the native runtime is available. Its
+  anchored picker preserves the keyboard and only selects saved servers, inserting an inline
+  mention without sending a message or executing a command. Saved connections, trust, credentials
+  and the remote file browser belong to Plugins > SSH. There is no separate target pill or
+  management/grant control in the picker. The one-hour diagnostics grant is offered when approving
+  a command and remains scoped to the current conversation and connection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or
@@ -159,4 +165,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 The chat-owned context usage action stays on the right of the composer at rest and while editing.
 Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
 percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
-its Session or measured answer changes, so an old measurement cannot reopen it.
+its Session or context answer changes, so an old measurement cannot reopen it. Usage comes from
+the selected branch's current Pi working context, including the retained answer and tool results.
+Committed background compaction updates the same value without waiting for another answer.
+Without a working copy, the Host estimates the saved checkpoint and normalized message tail in
+memory; estimated occupancy is prefixed with `≈`. It does not display a persisted input count or
+cumulative billing total as current occupancy. A new provider measurement calibrates the count.

@@ -15,7 +15,7 @@ import { useUniwind, withUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import type { ResolvedFile } from '@/shared/contracts/file';
+import type { FilePreviewSource } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { DocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
@@ -49,7 +49,7 @@ export function FileDocumentPreview({
   onSelection,
   bottomInset,
 }: {
-  file: ResolvedFile;
+  file: FilePreviewSource;
   page: DocumentPreviewPage;
   /** The package gave up on this document; the code distinguishes oversized files. */
   onDocumentError: (code: string) => void;

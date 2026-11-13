@@ -430,6 +430,63 @@ describe('Persistent Agent facade', () => {
     }
   });
 
+  test('estimates rebuild materials without opening storage or requesting a model', () => {
+    const state = fixture();
+    const runtime = state.create();
+    expect(
+      runtime.estimateStoredContextUsage({
+        model: reference,
+        instructions: 'Help.',
+        contextCheckpoint: null,
+        history: [
+          {
+            turnId: 'earlier',
+            messages: [
+              { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+              {
+                role: 'assistant',
+                parts: [
+                  { type: 'text', text: 'Searching. ' },
+                  { type: 'text', text: 'Cherries are red.' },
+                ],
+                contextTokens: 100,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(13);
+    expect(
+      runtime.estimateStoredContextUsage({
+        model: reference,
+        instructions: 'Help.',
+        contextCheckpoint: {
+          version: 1,
+          anchorTurnId: 'earlier',
+          payload: {
+            kind: 'pi-durable-context-v1',
+            messages: [{ role: 'user', content: 'Summary', timestamp: 1 }],
+          },
+        },
+        history: [
+          {
+            turnId: 'tail',
+            messages: [
+              { role: 'user', parts: [{ type: 'text', text: 'Next...' }] },
+              {
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'Answer.' }],
+                contextTokens: 100,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(8);
+    expect(state.requests).toHaveLength(0);
+    expect(state.ports.recordUsage).not.toHaveBeenCalled();
+  });
+
   test('retained-tool retry has one quoted historical question and a plain continuation after reopen', async () => {
     const f = fixture();
     let runtime = f.create();

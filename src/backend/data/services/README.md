@@ -9,6 +9,8 @@ Mobile data services migrated from the desktop `src/main/data/services` director
 - Mobile services receive the bootstrap-owned `DbService` through the constructor instead of using
   the desktop `application.get('DbService')` singleton.
 - Desktop logger calls are omitted here unless mobile has an equivalent logging service.
+- Mobile-only `SshProfileService` persists connection configuration in a dedicated MMKV store,
+  separate from disposable caches. Credentials belong to `SshRuntime` and SecureStore.
 - Keep the complete desktop business-service surface, including Agent, Knowledge, job, translate,
   mini-app, MCP, file, and painting persistence, even when mobile has no corresponding UI or
   execution runtime.
