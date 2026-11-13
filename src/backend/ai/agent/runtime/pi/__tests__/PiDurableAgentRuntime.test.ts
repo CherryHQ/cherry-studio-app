@@ -18,6 +18,7 @@ import {
   UserEntry,
   type JsonObject,
 } from '@earendil-works/pi-durable';
+import { ZodError } from 'zod';
 
 import {
   buildAgentSystemPrompt,
@@ -1325,6 +1326,55 @@ describe('Persistent Agent facade', () => {
       await runtime.close();
     }
   });
+  test('retains an unreadable usage receipt while delivering later receipts, then retries it after repair', async () => {
+    const state = fixture();
+    const delivered: (string | null)[] = [];
+    let unreadable = true;
+    state.ports.recordUsage = async (owner) => {
+      if (owner.requestId === 'unreadable' && unreadable)
+        throw new ZodError([
+          { code: 'custom', path: ['owner'], message: 'Invalid historical owner' },
+        ]);
+      delivered.push(owner.requestId);
+    };
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('unreadable'));
+      await runtime.drainUsage();
+      await submitAndWait(runtime, input('healthy'));
+      await runtime.drainUsage();
+      expect(delivered).toEqual(['healthy']);
+
+      await runtime.close();
+      unreadable = false;
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.drainUsage();
+      await runtime.drainUsage();
+      expect(delivered).toEqual(['healthy', 'unreadable']);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('does not swallow usage persistence errors', async () => {
+    const state = fixture();
+    state.ports.recordUsage = async () => {
+      throw Object.assign(new Error('Usage storage unavailable'), { code: 'SQLITE_FULL' });
+    };
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('pending-usage'));
+      await expect(runtime.drainUsage()).rejects.toThrow('Usage storage unavailable');
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('attributes generation to its invocation even when the request ID differs from message aliases', async () => {
     const state = fixture();
     const runtime = state.create();

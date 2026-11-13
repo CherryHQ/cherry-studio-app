@@ -1,5 +1,6 @@
 import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk';
 import { v7 as uuidv7 } from 'uuid';
+import { ZodError } from 'zod';
 
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
@@ -411,7 +412,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (!current) await this.conversations.discardConversation(lane);
       }
       // Working copies outlive the process: continuing a conversation reuses its native context.
-      await this.reconcileUnsettled(undefined, this.controller.signal);
+      await this.reconcileUnsettled(undefined, this.controller.signal, { isolateInvalid: true });
       this.controller.signal.throwIfAborted();
       await this.conversations.drainUsage();
       this.controller.signal.throwIfAborted();
@@ -1928,75 +1929,93 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   /** Each unsettled Cherry row is a durable receipt awaiting its full Pi result, with no cursor gaps. */
-  private async reconcileUnsettled(onlySessionId?: string, signal?: AbortSignal) {
+  private async reconcileUnsettled(
+    onlySessionId?: string,
+    signal?: AbortSignal,
+    options?: { isolateInvalid: boolean },
+  ) {
     signal?.throwIfAborted();
     const rows = await this.store.listUnsettledAssistantMessages();
     signal?.throwIfAborted();
     const sessionCopies = new Map<string, RuntimeLane[]>();
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
-      let copies = sessionCopies.get(row.sessionId);
-      if (!copies) {
-        const revision = await this.store.getRuntimeRevision(row.sessionId);
-        signal?.throwIfAborted();
-        copies = (await this.conversations.lanes(row.sessionId))
-          .filter((copy) => copy.revision === revision)
-          .map((copy) => copy.lane);
-        signal?.throwIfAborted();
-        sessionCopies.set(row.sessionId, copies);
-      }
-      // The answer ran on whichever current copy still holds it.
-      let selected: Awaited<ReturnType<DurableAgentRuntime['message']>>;
-      for (const lane of copies) {
-        selected = await this.conversations.message(lane, row.assistantMessageId);
-        signal?.throwIfAborted();
-        if (selected) break;
-      }
-      if (selected?.turn.identity.turnId === row.turnId) {
-        if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
-          const turn = this.timed(selected.turn);
-          await this.persistTurn(turn, signal);
+      try {
+        let copies = sessionCopies.get(row.sessionId);
+        if (!copies) {
+          const revision = await this.store.getRuntimeRevision(row.sessionId);
           signal?.throwIfAborted();
-          if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
+          copies = (await this.conversations.lanes(row.sessionId))
+            .filter((copy) => copy.revision === revision)
+            .map((copy) => copy.lane);
+          signal?.throwIfAborted();
+          sessionCopies.set(row.sessionId, copies);
         }
-        continue;
-      }
-      // Reservation committed, but admission did not. Preserve any recorded output as interrupted.
-      const message = await this.store.getMessage(row.sessionId, row.assistantMessageId);
-      signal?.throwIfAborted();
-      if (!message) continue;
-      // Administrative recovery is not conversation activity: settle at the reservation time.
-      const reservedAt = Date.parse(message.createdAt);
-      const error: AgentErrorView = {
-        code: 'INTERRUPTED',
-        message: 'The app stopped before this input was admitted.',
-        retryable: true,
-      };
-      await this.store.finalizeAssistantMessage({
-        assistantMessageId: row.assistantMessageId,
-        ...(row.turnId ? { turnId: row.turnId } : {}),
-        status: 'interrupted',
-        parts: settleInterruptedAssistantParts(
-          message.parts,
+        // The answer ran on whichever current copy still holds it.
+        let selected: Awaited<ReturnType<DurableAgentRuntime['message']>>;
+        for (const lane of copies) {
+          selected = await this.conversations.message(lane, row.assistantMessageId);
+          signal?.throwIfAborted();
+          if (selected) break;
+        }
+        if (selected?.turn.identity.turnId === row.turnId) {
+          if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
+            const turn = this.timed(selected.turn);
+            await this.persistTurn(turn, signal);
+            signal?.throwIfAborted();
+            if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
+          }
+          continue;
+        }
+        // Reservation committed, but admission did not. Preserve any recorded output as interrupted.
+        const message = await this.store.getMessage(row.sessionId, row.assistantMessageId);
+        signal?.throwIfAborted();
+        if (!message) continue;
+        // Administrative recovery is not conversation activity: settle at the reservation time.
+        const reservedAt = Date.parse(message.createdAt);
+        const error: AgentErrorView = {
+          code: 'INTERRUPTED',
+          message: 'The app stopped before this input was admitted.',
+          retryable: true,
+        };
+        await this.store.finalizeAssistantMessage({
+          assistantMessageId: row.assistantMessageId,
+          ...(row.turnId ? { turnId: row.turnId } : {}),
+          status: 'interrupted',
+          parts: settleInterruptedAssistantParts(
+            message.parts,
+            error,
+            `error-${row.turnId ?? row.assistantMessageId}`,
+          ),
+          usage: message.stats,
           error,
-          `error-${row.turnId ?? row.assistantMessageId}`,
-        ),
-        usage: message.stats,
-        error,
-        contextCheckpoint: null,
-        runtimeStats: {
-          runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
-        },
-      });
-      signal?.throwIfAborted();
-      this.ports.durableStorage?.notifyTranscript(row.sessionId);
-      logger.warn('Agent reservation recovered as interrupted', {
-        sessionId: row.sessionId,
-        turnId: row.turnId,
-        assistantMessageId: row.assistantMessageId,
-        operation: 'ai.reconcile',
-        reasonCode: 'not_admitted',
-      });
+          contextCheckpoint: null,
+          runtimeStats: {
+            runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
+          },
+        });
+        signal?.throwIfAborted();
+        this.ports.durableStorage?.notifyTranscript(row.sessionId);
+        logger.warn('Agent reservation recovered as interrupted', {
+          sessionId: row.sessionId,
+          turnId: row.turnId,
+          assistantMessageId: row.assistantMessageId,
+          operation: 'ai.reconcile',
+          reasonCode: 'not_admitted',
+        });
+      } catch (error) {
+        signal?.throwIfAborted();
+        // Startup must not let one unreadable reservation disable unrelated conversations.
+        // Keep it untouched; session commands and backup reconciliation still read strictly.
+        if (!options?.isolateInvalid || !(error instanceof ZodError)) throw error;
+        logger.error('Agent operation failed', {
+          error,
+          operation: 'ai.reconcile',
+          reasonCode: 'invalid_reservation',
+          sessionId: row.sessionId,
+          assistantMessageId: row.assistantMessageId,
+        });
+      }
     }
   }
 

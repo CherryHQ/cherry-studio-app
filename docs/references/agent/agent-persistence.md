@@ -356,6 +356,10 @@ projection:
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
   native admission is interrupted with its saved parts retained.
+  At startup only, a reservation whose stored parts or native terminal projection fails schema
+  validation is logged as `ai.reconcile / invalid_reservation` and left unchanged while other
+  reservations recover. Ordinary Session commands and backup reconciliation remain strict;
+  cancellation, database and other non-validation failures still abort startup.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a

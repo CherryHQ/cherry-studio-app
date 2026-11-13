@@ -1,4 +1,5 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
+import { ZodError } from 'zod';
 
 import type {
   AgentEvent,
@@ -1563,6 +1564,75 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test.each(['runtime-metadata', 'stored-parts'] as const)(
+    'isolates invalid %s at startup without rewriting it or relaxing backup reads',
+    async (source) => {
+      const state = fixture();
+      const unreadable = await state.reserve();
+      if (source === 'runtime-metadata') unreadable.metadata = {};
+      else {
+        state.copies.clear();
+        state.raw
+          .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+          .run(
+            JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
+            unreadable.assistantMessageId,
+          );
+      }
+      const readUnreadable = () =>
+        state.raw
+          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .get(unreadable.assistantMessageId);
+      const original = readUnreadable();
+      const healthy = await state.store.reserveInitialSubmission({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'healthy-question', type: 'text', text: 'Hello', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+
+      try {
+        await state.host.initialize();
+        expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+        expect(readUnreadable()).toEqual(original);
+        expect(
+          (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+        ).toBe('interrupted');
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await state.host.startSession({
+          sessionId: uuid(),
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'An unrelated conversation still works.' }],
+        });
+        expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('keeps storage failures fatal while reconciling startup reservations', async () => {
+    const state = fixture();
+    await state.reserve();
+    jest
+      .spyOn(state.conversations, 'message')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Storage unavailable'), { code: 'SQLITE_IOERR' }),
+      );
+
+    try {
+      await expect(state.host.initialize()).rejects.toThrow('Storage unavailable');
+      expect(state.conversations.resume).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('closes a database that opens after startup cancellation without opening the runtime', async () => {
     const close = jest.fn(async () => {});
     let finishOpen!: (database: RuntimeSqlDatabase) => void;

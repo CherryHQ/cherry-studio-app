@@ -21,6 +21,7 @@ import {
 } from '@earendil-works/pi-durable';
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
+import { ZodError } from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -1001,10 +1002,24 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       };
       if (!value.owner?.sessionId || value.report?.requestId !== delivery.id)
         throw new Error('The durable usage receipt has an invalid identity.');
-      await this.requirePorts().recordUsage(
-        { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
-        value.report,
-      );
+      try {
+        await this.requirePorts().recordUsage(
+          { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
+          value.report,
+        );
+      } catch (error) {
+        // A malformed historical owner must not block startup or later valid receipts.
+        // Leave this receipt pending so repairing its owner can deliver it on a later pass.
+        if (!(error instanceof ZodError)) throw error;
+        logger.warn('Pi durable usage delivery failed', {
+          error,
+          operation: 'pi.usage_delivery',
+          reasonCode: 'invalid_receipt',
+          sessionId: value.owner.sessionId,
+          requestId: delivery.id,
+        });
+        continue;
+      }
       await this.requireRuntime().acknowledgeUsage(delivery.id);
     }
   }
