@@ -13,6 +13,7 @@ import type { DesktopNotification } from '@/backend/services/desktopConnections/
 
 import { RemoteAgentError } from './RemoteAgentError';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
+import { isPresentationData } from './remotePresentation';
 
 type Connection = {
   readContent?: (ref: ContentRef, signal: AbortSignal) => Promise<Uint8Array>;
@@ -21,7 +22,7 @@ type Connection = {
 };
 
 type Notification = ReturnType<typeof agentNotificationSchema.parse>;
-type TextPart = Extract<AgentPart, { kind: 'text' | 'reasoning' }>;
+type ReadablePart = Extract<AgentPart, { kind: 'text' | 'reasoning' | 'data' }>;
 
 const PRESENT_INTERVAL_MS = 100;
 
@@ -40,7 +41,7 @@ export class SessionSync {
   private projection?: AgentProjection;
   private started?: Promise<void>;
   private readonly textCache = new Map<string, string>();
-  private readonly materializedParts = new WeakMap<TextPart, TextPart>();
+  private readonly materializedParts = new WeakMap<ReadablePart, ReadablePart>();
   private interactionRevision?: string;
   private persistedInteractions: AgentInteraction[] = [];
   constructor(
@@ -257,9 +258,12 @@ export class SessionSync {
       ),
     });
     const retained = new Set<string>();
-    const missing: { part: TextPart; ref: ContentRef; key: string }[] = [];
+    const missing: { part: ReadablePart; ref: ContentRef; key: string }[] = [];
     for (const part of Object.values(parts)) {
-      if ((part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content) {
+      if (
+        (part.kind === 'text' || part.kind === 'reasoning' || isPresentationData(part)) &&
+        'ref' in part.content
+      ) {
         const ref = part.content.ref;
         const key = `${ref.contentId}:${ref.revision}:${ref.sha256}`;
         retained.add(key);
@@ -303,7 +307,7 @@ export class SessionSync {
     this.publish(view(), current);
   }
   /** Unchanged parts keep one materialized object, so message views projected from them are reused. */
-  private materialized(part: TextPart, text: string): TextPart {
+  private materialized(part: ReadablePart, text: string): ReadablePart {
     let value = this.materializedParts.get(part);
     if (!value) {
       value = { ...part, content: { text } };

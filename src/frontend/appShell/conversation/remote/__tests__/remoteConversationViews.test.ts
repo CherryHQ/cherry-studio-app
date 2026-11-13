@@ -1,3 +1,4 @@
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
 import type { ResourceRead } from '../../contracts';
@@ -15,6 +16,36 @@ const resource = (id: string): ResourceRead => ({
   kind: 'deferred',
   key: id,
   read: async () => ({ kind: 'text', text: id, complete: true }),
+});
+
+test('native remote sources reach the common citation resolver without opening tool details', () => {
+  const message: RemoteMessageView = {
+    id: 'answer',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [
+      { id: 'text', kind: 'text', text: 'Claim [cite:s1]', complete: true, state: 'completed' },
+      {
+        id: 'source',
+        kind: 'presentation',
+        part: {
+          id: 'source',
+          type: 'source-url',
+          sourceId: 's1',
+          url: 'https://example.com/page',
+          title: 'Page',
+        },
+      },
+    ],
+  };
+  const row = remoteMessage(message, resource);
+  const citations = resolveMessageCitations(row.display.data.parts ?? []);
+  expect(citations.sourceNumberById.get('s1')).toBe(1);
+  expect(citations.textByPartIndex.get(0)?.markdown).toContain(
+    'cite:https%3A%2F%2Fexample.com%2Fpage',
+  );
+  expect(row.display.data.partKeys).toEqual(['answer:text:0', 'source']);
 });
 
 it.each(['no-location', 'discovery-unavailable', 'unreachable'] as const)(

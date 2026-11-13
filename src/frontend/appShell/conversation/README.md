@@ -61,6 +61,11 @@ results. `useConversation`, `useConversationHistory`, `useConversationDraft` and
 `useRemoteConversationSource` are exported from `remote/index.ts` for the remote chat page and the
 desktop share route and scheduled-task module.
 
+Known desktop supplemental parts are validated with the existing Agent content schemas before
+entering the common renderer. Native URL sources, search suggestions and compaction anchors keep
+their source part identity. Inline and revision-bound payloads use the same backend read cache;
+unknown or invalid data does not become an executable local capability.
+
 Task metadata is a separate `RemoteTaskCatalogQueries` contract in `remote/remoteTaskContracts.ts`,
 exposed as `RemoteConversationSource.tasks`. It is not part of `RemoteConversationCatalog`.
 Task hooks consume only these reads and own their visible-list polling policy. Both catalogs share
