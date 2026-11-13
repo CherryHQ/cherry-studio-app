@@ -10,9 +10,9 @@ import { useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
+import { getSidebarBranchLayout } from './sidebarBranchLayout';
 import { SIDEBAR_LEADING_SIZE, SIDEBAR_ROW_GAP, SIDEBAR_ROW_INSET } from './SidebarRowContent';
 
-const branchStep = 12;
 export type SidebarSessionBranchAncestor = { sessionId: string; continues: boolean };
 type BranchPosition = {
   depth: number;
@@ -29,7 +29,7 @@ export type SidebarSessionBranchAction = {
   toggle(): void;
 };
 
-/** Reserves only this node's indentation; the row owns its own 12pt text gap. */
+/** Reserves bounded indentation; the row owns its own 12pt text gap. */
 export function SidebarSessionBranchLeading({
   leading,
   depth,
@@ -37,7 +37,7 @@ export function SidebarSessionBranchLeading({
   leading?: ReactNode;
   depth: number;
 }) {
-  const rail = <View style={{ width: depth * branchStep }} />;
+  const rail = <View style={{ width: getSidebarBranchLayout(depth).indentation }} />;
   return leading ? (
     <View className="flex-row items-center" style={{ gap: SIDEBAR_ROW_GAP }}>
       {leading}
@@ -96,9 +96,10 @@ function SidebarSessionBranchRail({
     'muted-foreground',
     theme === 'dark' ? 'sidebar' : 'background',
   ]);
-  const x = SIDEBAR_ROW_INSET + position.depth * branchStep;
+  const layout = getSidebarBranchLayout(position.depth, position.ancestorContinuations);
+  const x = SIDEBAR_ROW_INSET + layout.indentation;
   const center = height / 2;
-  const parent = x - branchStep;
+  const parent = SIDEBAR_ROW_INSET + layout.parentIndentation;
   const onPath = position.kind === 'session' && position.onSelectedPath;
   return (
     <Svg
@@ -112,19 +113,17 @@ function SidebarSessionBranchRail({
         left: leading ? SIDEBAR_LEADING_SIZE + SIDEBAR_ROW_GAP : 0,
       }}
     >
-      {position.ancestorContinuations.map((ancestor, depth) =>
-        ancestor.continues ? (
-          <Line
-            key={ancestor.sessionId}
-            x1={SIDEBAR_ROW_INSET + depth * branchStep}
-            x2={SIDEBAR_ROW_INSET + depth * branchStep}
-            y1={0}
-            y2={height}
-            stroke={line}
-            strokeWidth={1.35}
-          />
-        ) : null,
-      )}
+      {layout.ancestorIndentations.map((indentation) => (
+        <Line
+          key={indentation}
+          x1={SIDEBAR_ROW_INSET + indentation}
+          x2={SIDEBAR_ROW_INSET + indentation}
+          y1={0}
+          y2={height}
+          stroke={line}
+          strokeWidth={1.35}
+        />
+      ))}
       {position.depth > 0 ? (
         position.kind === 'continuation' ? (
           <Line x1={parent} x2={parent} y1={0} y2={center} stroke={line} strokeWidth={1.35} />
@@ -133,12 +132,23 @@ function SidebarSessionBranchRail({
             {position.hasFollowingSibling ? (
               <Line x1={parent} x2={parent} y1={0} y2={height} stroke={line} strokeWidth={1.35} />
             ) : null}
-            <Path
-              d={`M ${parent} 0 V ${center - 8} Q ${parent} ${center} ${parent + 8} ${center} H ${x}`}
-              fill="none"
-              stroke={onPath ? foreground : line}
-              strokeWidth={onPath ? 1.8 : 1.35}
-            />
+            {parent === x ? (
+              <Line
+                x1={x}
+                x2={x}
+                y1={0}
+                y2={center}
+                stroke={onPath ? foreground : line}
+                strokeWidth={onPath ? 1.8 : 1.35}
+              />
+            ) : (
+              <Path
+                d={`M ${parent} 0 V ${center - 8} Q ${parent} ${center} ${parent + 8} ${center} H ${x}`}
+                fill="none"
+                stroke={onPath ? foreground : line}
+                strokeWidth={onPath ? 1.8 : 1.35}
+              />
+            )}
           </>
         )
       ) : null}

@@ -74,7 +74,9 @@ time and id so new replies do not move sibling nodes. Collapsing it releases the
 Root groups are paginated by the family's latest activity. A lightweight root-first path read
 restores the selected conversation's ancestors when the drawer opens, including ancestors outside
 the loaded pages. It never loads transcripts. Relationship rails use the ordinary row's measured
-height, with 12-point indentation per generation; titles follow their node without a fixed gutter.
+height, with 12-point indentation per generation capped at four indentation steps. Deeper rows
+coalesce ancestor rails in that same gutter so titles remain readable; the actual hierarchy,
+selected ancestry and per-node expansion/pagination are unchanged.
 Selection uses the existing whole-row surface, with no additional selected label or branch count.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query
