@@ -134,6 +134,35 @@ test.each([
   expect(call.body ? JSON.parse(call.body) : undefined).toEqual(scenario.body);
 });
 
+test.each([
+  [5, 5],
+  [100, 100],
+  [101, 100],
+  [200, 100],
+])(
+  'limits SerpKite requests for %i configured results to %i',
+  async (maxResults, expectedResults) => {
+    const configuration = providerConfig('serpkite');
+    configuration.apiKeys = ['search-key'];
+    const runtimeConfig = Object.freeze({ ...config, maxResults });
+    request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({ results: [] }),
+    });
+    const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), {
+      request,
+    });
+
+    await provider.searchKeywords!('query', runtimeConfig);
+
+    expect(request.mock.calls[0][0].url).toBe(
+      `https://api.serpkite.com/v1/search?q=query&num=${expectedResults}`,
+    );
+    expect(runtimeConfig.maxResults).toBe(maxResults);
+  },
+);
+
 test('never enables a protocol capability absent from the host configuration', async () => {
   const configuration = providerConfig('exa-mcp');
   configuration.capabilities = configuration.capabilities.filter(
