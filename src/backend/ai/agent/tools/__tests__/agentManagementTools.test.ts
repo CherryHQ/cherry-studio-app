@@ -47,6 +47,7 @@ function setup() {
   };
   const files = new Map<string, string>();
   const memory = createAgentMemory({
+    bootstrap: { read: async () => null, write: async () => {} },
     storage: {
       read: async (id, key) => files.get(`${id}/${key}`) ?? null,
       replace: async (id, key, text) => {

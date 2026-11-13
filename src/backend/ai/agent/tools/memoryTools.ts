@@ -38,6 +38,7 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
     tag: z.string().max(64).optional(),
     limit: z.int().min(1).max(50).optional(),
   });
+  const bootstrapSchema = z.strictObject({ action: z.enum(['complete', 'reset']) });
 
   function tool<T>(
     name: string,
@@ -53,7 +54,8 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
       description,
       inputSchema: toRuntimeInputSchema(schema),
       effect,
-      approval: effect === 'read' ? 'auto' : 'ask',
+      // Turning off optional onboarding must not require another confirmation.
+      approval: effect === 'read' || name === 'memory_bootstrap' ? 'auto' : 'ask',
       async execute(call) {
         const parsed = schema.safeParse(call.input);
         if (!parsed.success) return failure('invalid-input', toolValidationError(parsed.error));
@@ -79,6 +81,31 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
   }
   return [
     tool(
+      'memory_bootstrap',
+      'Control this Agent’s optional one-time persona and user setup. complete persists completion or the user’s request to skip, without changing identity files. reset re-enables setup for the next turn only when the user explicitly asks. Never mark a failed identity save complete.',
+      bootstrapSchema,
+      'write',
+      async ({ action }, signal) => {
+        const bootstrapCompleted = await memory.setBootstrapCompleted(
+          agentId,
+          action === 'complete',
+          signal,
+        );
+        const value = { bootstrapCompleted };
+        try {
+          return {
+            value,
+            artifacts: [],
+            // Completion removes old guidance now; reset starts on the next prepared turn.
+            instructions: memoryContext(await memory.snapshot(agentId, signal)),
+            instructionsFailureValue: { ...value, contextRefreshed: false },
+          };
+        } catch {
+          return { value: { ...value, contextRefreshed: false }, artifacts: [] };
+        }
+      },
+    ),
+    tool(
       'memory_read',
       'Read this Agent’s SOUL (persona), USER (user context) or FACT (durable facts), including its current write version.',
       readSchema,
@@ -99,7 +126,7 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
           signal,
         );
         try {
-          const instructions = memoryContext(await memory.snapshot(agentId, signal));
+          const instructions = memoryContext(await memory.snapshot(agentId, signal), true);
           return {
             value: file,
             artifacts: [],

@@ -1,4 +1,4 @@
-import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import {
   DEFAULT_AGENT_MODE,
@@ -33,6 +33,8 @@ export const agentTable = sqliteTable(
     name: text().notNull(),
     // Legacy migration source only. Active persona is stored in the Agent's SOUL.md.
     instructions: text().notNull().default(''),
+    // NULL uses Desktop's legacy SOUL-content check; false explicitly requests onboarding.
+    bootstrapCompleted: integer({ mode: 'boolean' }),
     mode: text({ enum: ['standard', 'minimal'] })
       .$type<AgentMode>()
       .notNull()

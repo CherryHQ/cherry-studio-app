@@ -26,6 +26,7 @@
   "agent.list.noResults": "マッチングエージェントがありません",
   "agent.list.title": "エージェント",
   "agent.memory.append": "イベントを記録",
+  "agent.memory.bootstrap": "エージェントの初期設定",
   "agent.memory.read": "メモリを読む",
   "agent.memory.search": "メモリを検索",
   "agent.memory.update": "メモリを更新",

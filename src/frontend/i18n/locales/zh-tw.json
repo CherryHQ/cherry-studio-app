@@ -26,6 +26,7 @@
   "agent.list.noResults": "沒有匹配的智能體",
   "agent.list.title": "Agent",
   "agent.memory.append": "記錄事件",
+  "agent.memory.bootstrap": "智能體引導",
   "agent.memory.read": "讀取記憶",
   "agent.memory.search": "搜尋記憶",
   "agent.memory.update": "更新記憶",

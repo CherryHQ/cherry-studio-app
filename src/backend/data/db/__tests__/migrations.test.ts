@@ -6,6 +6,40 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('preserves existing Agent data and persists nullable onboarding completion independently', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0015_agent_bootstrap',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, instructions, order_key, created_at, updated_at)
+        VALUES ('legacy', 'Writer', 'Preserve the original role', 'a0', 1, 2);
+      `);
+      const previous = database.prepare('SELECT * FROM agent').get();
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT * FROM agent').get()).toEqual({
+        ...previous,
+        bootstrap_completed: null,
+      });
+      for (const completed of [1, 0]) {
+        database.prepare('UPDATE agent SET bootstrap_completed = ?').run(completed);
+        expect(
+          database.prepare('SELECT name, instructions, bootstrap_completed FROM agent').get(),
+        ).toEqual({
+          name: 'Writer',
+          instructions: 'Preserve the original role',
+          bootstrap_completed: completed,
+        });
+      }
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds local device aliases without changing existing pairing data', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -924,6 +958,7 @@ describe('bundled SQLite migrations', () => {
         'deleted_at',
         'tool_approval_mode',
         'mode',
+        'bootstrap_completed',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',

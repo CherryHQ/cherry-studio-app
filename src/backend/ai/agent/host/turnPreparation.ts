@@ -101,7 +101,11 @@ export type TurnPreparationDependencies = {
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
   memory?: {
-    context(agentId: string, signal?: AbortSignal): Promise<{ key: string; text: string }>;
+    context(
+      agentId: string,
+      signal?: AbortSignal,
+      canBootstrap?: boolean,
+    ): Promise<{ key: string; text: string }>;
   };
   /** The Host keeps the engine binding; preparation consumes that local Runtime. */
   runtime: Pick<AgentRuntime, 'descriptor' | 'preflightModel'>;
@@ -746,7 +750,18 @@ export async function prepareResolvedTurn(
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,
     inferenceSnapshot,
-    memoryInstructions: await dependencies.memory?.context(agent.id, signal),
+    memoryInstructions: await dependencies.memory?.context(
+      agent.id,
+      signal,
+      ['memory_bootstrap', 'memory_update', 'agent_update'].every((name) =>
+        tools.some(
+          (tool) =>
+            tool.ref.source === 'builtin' &&
+            tool.ref.capabilityId === name &&
+            tool.approval !== 'deny',
+        ),
+      ),
+    ),
     inputParts: parts,
     modelPreflight,
     resources,

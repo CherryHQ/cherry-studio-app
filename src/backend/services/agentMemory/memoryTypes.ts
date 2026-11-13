@@ -14,7 +14,10 @@ export type AgentMemoryFile = {
   truncated: boolean;
 };
 
-export type AgentMemorySnapshot = Record<AgentMemoryDocumentKey, AgentMemoryFile>;
+export type AgentMemorySnapshot = Record<AgentMemoryDocumentKey, AgentMemoryFile> & {
+  /** Null preserves Desktop's legacy detection; false explicitly enables onboarding. */
+  bootstrapCompleted: boolean | null;
+};
 
 export type AgentMemoryJournalEntry = { ts: string; tags: string[]; text: string };
 

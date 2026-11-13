@@ -26,6 +26,7 @@
   "agent.list.noResults": "Eşleşen ajan yok",
   "agent.list.title": "Ajanlar",
   "agent.memory.append": "Olay kaydet",
+  "agent.memory.bootstrap": "Ajanı ayarla",
   "agent.memory.read": "Belleği oku",
   "agent.memory.search": "Bellekte ara",
   "agent.memory.update": "Belleği güncelle",

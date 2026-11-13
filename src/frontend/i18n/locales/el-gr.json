@@ -26,6 +26,7 @@
   "agent.list.noResults": "Δεν βρέθηκαν αντίστοιχοι πράκτορες",
   "agent.list.title": "Πράκτορες",
   "agent.memory.append": "Καταγραφή συμβάντος",
+  "agent.memory.bootstrap": "Ρύθμιση πράκτορα",
   "agent.memory.read": "Ανάγνωση μνήμης",
   "agent.memory.search": "Αναζήτηση μνήμης",
   "agent.memory.update": "Ενημέρωση μνήμης",

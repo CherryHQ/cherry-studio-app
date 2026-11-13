@@ -7,9 +7,16 @@ const B = '10000000-0000-4000-8000-000000000002';
 
 function fixture() {
   const files = new Map<string, string>();
+  const bootstrap = new Map<string, boolean>();
   let writable = true;
   let available = true;
   const memory = createAgentMemory({
+    bootstrap: {
+      read: async (id) => bootstrap.get(id) ?? null,
+      write: async (id, completed) => {
+        bootstrap.set(id, completed);
+      },
+    },
     storage: {
       read: async (id, key) => files.get(`${id}/${key}`) ?? null,
       replace: async (id, key, content) => {
@@ -66,6 +73,34 @@ test('rejects the second of two fact replacements based on the same revision', a
   expect(writes[0].status).toBe('fulfilled');
   expect(writes[1]).toMatchObject({ status: 'rejected', reason: { code: 'conflict' } });
   expect((await memory.snapshot(A)).fact.content).toBe('Keep decision A');
+});
+
+test('completion and reset persist per Agent without writing identity or journal files', async () => {
+  const { memory, files } = fixture();
+  expect((await memory.snapshot(A)).bootstrapCompleted).toBeNull();
+  await memory.setBootstrapCompleted(A, true);
+  expect((await memory.snapshot(A)).bootstrapCompleted).toBe(true);
+  expect((await memory.snapshot(B)).bootstrapCompleted).toBeNull();
+  await memory.setBootstrapCompleted(A, false);
+  expect((await memory.snapshot(A)).bootstrapCompleted).toBe(false);
+  expect(files.size).toBe(0);
+});
+
+test('setup-state writes respect backup freeze, deletion and service shutdown', async () => {
+  const frozen = fixture();
+  frozen.freeze();
+  expect(() => frozen.memory.setBootstrapCompleted(A, true)).toThrow();
+  expect((await frozen.memory.snapshot(A)).bootstrapCompleted).toBeNull();
+  const deleted = fixture();
+  deleted.removeAgent();
+  await expect(deleted.memory.setBootstrapCompleted(A, true)).rejects.toMatchObject({
+    code: 'agent-unavailable',
+  });
+  const closed = fixture();
+  await closed.memory.close();
+  await expect(closed.memory.setBootstrapCompleted(A, true)).rejects.toMatchObject({
+    code: 'unavailable',
+  });
 });
 
 test('serializes journal appends and searches recent matches without confusing facts with events', async () => {
@@ -147,6 +182,7 @@ test('refuses writes while storage is frozen, after deletion, and after its owne
 
 test('withdraws unreadable memory without preventing the next conversation turn', async () => {
   const memory = createAgentMemory({
+    bootstrap: { read: async () => null, write: async () => {} },
     storage: {
       read: async () => {
         throw new Error('Storage read failed');

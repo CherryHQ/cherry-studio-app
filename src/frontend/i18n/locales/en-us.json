@@ -26,6 +26,7 @@
   "agent.list.noResults": "No matching agents",
   "agent.list.title": "Agents",
   "agent.memory.append": "Record an event",
+  "agent.memory.bootstrap": "Agent setup",
   "agent.memory.read": "Read memory",
   "agent.memory.search": "Search memory",
   "agent.memory.update": "Update memory",

@@ -61,6 +61,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'memory_update',
   'memory_append',
   'memory_search',
+  'memory_bootstrap',
   'read_file',
   'read_office_content',
   'run_office_script',
@@ -131,6 +132,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('memory_search', 'auto', { effect: 'read' }),
   describe('memory_update', 'ask'),
   describe('memory_append', 'ask'),
+  describe('memory_bootstrap', 'auto'),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     permissionScopes: ['calendar.read'],

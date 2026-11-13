@@ -297,7 +297,7 @@ export function createAgentManagementTools(
           return {
             value,
             artifacts: [],
-            instructions: memoryContext(await memory.snapshot(id, signal)),
+            instructions: memoryContext(await memory.snapshot(id, signal), true),
             instructionsFailureValue: { ...value, contextRefreshed: false },
           };
         } catch {

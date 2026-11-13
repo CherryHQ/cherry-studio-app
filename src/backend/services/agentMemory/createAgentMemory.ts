@@ -22,12 +22,16 @@ export interface MemoryStorage {
 export type AgentMemory = ReturnType<typeof createAgentMemory>;
 export type AgentMemoryOperations = Pick<
   AgentMemory,
-  'read' | 'write' | 'snapshot' | 'append' | 'search' | 'withStorageWork'
+  'read' | 'write' | 'snapshot' | 'append' | 'search' | 'setBootstrapCompleted' | 'withStorageWork'
 >;
 
 /** Owns per-Agent ordering, revisions and limits independently of Expo and the model loop. */
 export function createAgentMemory(deps: {
   storage: MemoryStorage;
+  bootstrap: {
+    read(agentId: string): Promise<boolean | null>;
+    write(agentId: string, completed: boolean): Promise<void>;
+  };
   assertAgent(agentId: string): Promise<void>;
   assertWritable(): void;
 }) {
@@ -127,7 +131,15 @@ export function createAgentMemory(deps: {
             }
           }),
         );
-        return { soul, user, fact };
+        return { soul, user, fact, bootstrapCompleted: await deps.bootstrap.read(agentId) };
+      });
+    },
+    setBootstrapCompleted(agentId: string, completed: boolean, signal?: AbortSignal) {
+      deps.assertWritable();
+      return run(agentId, signal, async () => {
+        deps.assertWritable();
+        await deps.bootstrap.write(agentId, completed);
+        return completed;
       });
     },
     append(agentId: string, text: string, tags: string[], signal?: AbortSignal) {

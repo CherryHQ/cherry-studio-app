@@ -52,6 +52,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   memory_update: 'agent.memory.update',
   memory_append: 'agent.memory.append',
   memory_search: 'agent.memory.search',
+  memory_bootstrap: 'agent.memory.bootstrap',
   ask_user_question: 'chat.question.title',
   calendar_create_event: 'chat.builtinTool.calendar.createEvent',
   calendar_delete_event: 'chat.builtinTool.calendar.deleteEvent',

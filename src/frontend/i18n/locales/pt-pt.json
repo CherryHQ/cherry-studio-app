@@ -26,6 +26,7 @@
   "agent.list.noResults": "Nenhum agente correspondente",
   "agent.list.title": "Agentes",
   "agent.memory.append": "Registar um evento",
+  "agent.memory.bootstrap": "Configurar agente",
   "agent.memory.read": "Ler memória",
   "agent.memory.search": "Pesquisar memória",
   "agent.memory.update": "Atualizar memória",

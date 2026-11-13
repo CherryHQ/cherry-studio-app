@@ -26,6 +26,7 @@
   "agent.list.noResults": "Aucun agent correspondant",
   "agent.list.title": "Agents",
   "agent.memory.append": "Consigner un événement",
+  "agent.memory.bootstrap": "Configurer l’agent",
   "agent.memory.read": "Lire la mémoire",
   "agent.memory.search": "Rechercher dans la mémoire",
   "agent.memory.update": "Mettre à jour la mémoire",

@@ -26,6 +26,7 @@
   "agent.list.noResults": "没有匹配的智能体",
   "agent.list.title": "智能体",
   "agent.memory.append": "记录事件",
+  "agent.memory.bootstrap": "智能体引导",
   "agent.memory.read": "读取记忆",
   "agent.memory.search": "搜索记忆",
   "agent.memory.update": "更新记忆",

@@ -26,6 +26,7 @@
   "agent.list.noResults": "Niciun agent care se potrivește",
   "agent.list.title": "Agenți",
   "agent.memory.append": "Înregistrează un eveniment",
+  "agent.memory.bootstrap": "Configurare agent",
   "agent.memory.read": "Citește memoria",
   "agent.memory.search": "Caută în memorie",
   "agent.memory.update": "Actualizează memoria",

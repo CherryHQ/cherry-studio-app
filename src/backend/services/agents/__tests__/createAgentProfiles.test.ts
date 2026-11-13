@@ -26,6 +26,7 @@ function fixture() {
   let storageFailed = false;
   let row: Agent | null = null;
   const memory = createAgentMemory({
+    bootstrap: { read: async () => null, write: async () => {} },
     storage: {
       read: async (id, key) => files.get(`${id}/${key}`) ?? null,
       replace: async (id, key, text) => {

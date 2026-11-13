@@ -408,6 +408,7 @@ export class AgentService {
       agentTable,
       {
         ...metadata,
+        bootstrapCompleted: false,
         model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },

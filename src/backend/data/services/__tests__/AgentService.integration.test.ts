@@ -90,6 +90,9 @@ describe('AgentService persistence', () => {
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
+    expect(
+      sqlite.prepare('SELECT bootstrap_completed FROM agent WHERE id = ?').get(agent.id),
+    ).toEqual({ bootstrap_completed: 0 });
   });
 
   it('leaves persona persistence to the SOUL workflow instead of the legacy column', async () => {

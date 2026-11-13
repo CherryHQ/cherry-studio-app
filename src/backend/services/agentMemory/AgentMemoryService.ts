@@ -4,7 +4,7 @@ import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backe
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
-import { agentTable } from '@/backend/data/db/schemas/agent';
+import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 
 import { createAgentMemory, type AgentMemoryOperations } from './createAgentMemory';
 import { memoryContext } from './memoryContext';
@@ -28,6 +28,32 @@ export class AgentMemoryService extends BaseService {
           if (key === 'soul') publishDataApiChanges(['/agents', `/agents/${agentId}`]);
         },
       },
+      bootstrap: {
+        async read(agentId) {
+          const [agent] = await db
+            .getDb()
+            .select({ completed: agentTable.bootstrapCompleted })
+            .from(agentTable)
+            .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
+            .limit(1);
+          if (!agent) throw new AgentMemoryError('agent-unavailable');
+          return agent.completed;
+        },
+        async write(agentId, completed) {
+          await db.withWriteTx(async (tx) => {
+            const [agent] = await tx
+              .update(agentTable)
+              .set({
+                bootstrapCompleted: completed,
+                updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+              })
+              .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
+              .returning({ id: agentTable.id });
+            if (!agent) throw new AgentMemoryError('agent-unavailable');
+          });
+          publishDataApiChanges(['/agents', `/agents/${agentId}`]);
+        },
+      },
       assertAgent: async (id) => {
         const [agent] = await db
           .getDb()
@@ -45,8 +71,8 @@ export class AgentMemoryService extends BaseService {
     return this.memory;
   }
 
-  context = async (agentId: string, signal?: AbortSignal) =>
-    memoryContext(await this.memory.snapshot(agentId, signal));
+  context = async (agentId: string, signal?: AbortSignal, canBootstrap = false) =>
+    memoryContext(await this.memory.snapshot(agentId, signal), canBootstrap);
   soul = async (agentId: string, signal?: AbortSignal) =>
     (await this.memory.read(agentId, 'soul', signal)).content;
   hasPendingStorageWork = () => this.memory.hasPendingStorageWork();

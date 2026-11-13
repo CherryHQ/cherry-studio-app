@@ -71,6 +71,48 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 }));
 
 describe('turn preparation', () => {
+  test.each(['standard', 'minimal', 'parallel', 'missing-tools', 'denied', 'tool-free'] as const)(
+    'only offers memory onboarding when the %s turn can save it',
+    async (kind) => {
+      const harness = createHarness();
+      if (kind === 'minimal') harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+      if (kind === 'tool-free')
+        harness.preflightModel.mockResolvedValue({
+          contextWindow: 128_000,
+          inputModalities: ['text'],
+          maxInputTokens: 120_000,
+          maxOutputTokens: 8_000,
+          supportsTools: false,
+        });
+      harness.getSystemTools.mockResolvedValue(
+        (kind === 'missing-tools'
+          ? ['memory_update']
+          : ['memory_bootstrap', 'memory_update', 'agent_update']
+        ).map((name) => ({
+          ...tool(name, kind === 'denied' && name === 'agent_update' ? 'deny' : 'auto'),
+          effect: 'write' as const,
+        })),
+      );
+      const context = jest.fn(
+        async (_agentId: string, _signal?: AbortSignal, canBootstrap = false) => ({
+          key: 'agent-memory',
+          text: canBootstrap ? 'Onboarding enabled' : 'Memory only',
+        }),
+      );
+      harness.dependencies.memory = { context };
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+        undefined,
+        { readOnlyTools: kind === 'parallel' },
+      );
+      expect(plan.memoryInstructions?.text).toBe(
+        kind === 'standard' ? 'Onboarding enabled' : 'Memory only',
+      );
+    },
+  );
+
   test.each(['existing', 'initial', 'durable'] as const)(
     'standard %s chat remains available without function calling or tool discovery',
     async (kind) => {

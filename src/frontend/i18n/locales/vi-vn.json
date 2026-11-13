@@ -26,6 +26,7 @@
   "agent.list.noResults": "Không có tác nhân phù hợp",
   "agent.list.title": "Tác nhân",
   "agent.memory.append": "Ghi lại sự kiện",
+  "agent.memory.bootstrap": "Thiết lập tác nhân",
   "agent.memory.read": "Đọc bộ nhớ",
   "agent.memory.search": "Tìm trong bộ nhớ",
   "agent.memory.update": "Cập nhật bộ nhớ",
