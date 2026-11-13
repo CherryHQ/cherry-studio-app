@@ -44,7 +44,7 @@ function fakeChannel(handlers: Record<string, Handler>) {
             jsonrpc: '2.0',
             id: request.id,
             error: {
-              code: 1000,
+              code: (error as { code?: number }).code ?? 1000,
               message: (error as Error).message,
               data: (error as { data?: unknown }).data,
             },
@@ -84,6 +84,73 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
+  it('preserves the task filter when reading result conversations', async () => {
+    const list = jest.fn(() => ({
+      items: [
+        {
+          sessionId: 'result',
+          agentId: 'a',
+          workspaceId: 'w',
+          title: 'Report',
+          updatedAt: '2026-11-12T01:00:00.000Z',
+          historyRevision: '1',
+        },
+      ],
+      nextCursor: null,
+    }));
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+      'agent.sessions.list': list,
+      'agent.tasks.list': () => ({
+        items: [
+          {
+            taskId: 'task',
+            agentId: 'a',
+            name: 'Report',
+            status: 'active',
+            trigger: { kind: 'cron', expr: '0 9 * * *' },
+            nextRunAt: null,
+            createdAt: '2026-11-12T01:00:00.000Z',
+            updatedAt: '2026-11-12T01:00:00.000Z',
+          },
+        ],
+        nextCursor: null,
+      }),
+    });
+    const session = await DesktopSession.connect(options({ desktop: channel }));
+    try {
+      const tasks = await session.request('agent.tasks.list', { agentId: 'a' });
+      const results = await session.request('agent.sessions.list', {
+        agentId: 'a',
+        taskId: tasks.items[0].taskId,
+      });
+      expect(list).toHaveBeenCalledWith({ agentId: 'a', taskId: 'task' });
+      expect(results.items[0].sessionId).toBe('result');
+    } finally {
+      session.close();
+    }
+  });
+
+  it('reports an unavailable task catalog without closing an older desktop connection', async () => {
+    const channel = fakeChannel({
+      'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+      'agent.tasks.list': () => {
+        throw Object.assign(new Error('Method not found'), { code: -32601 });
+      },
+      'agent.agents.list': () => ({ items: [], nextCursor: null }),
+    });
+    const session = await DesktopSession.connect(options({ desktop: channel }));
+    try {
+      await expect(session.request('agent.tasks.list', {})).rejects.toMatchObject({
+        reason: 'UPGRADE_REQUIRED',
+      });
+      await expect(session.request('agent.agents.list', {})).resolves.toMatchObject({ items: [] });
+      expect(session.isOpen).toBe(true);
+    } finally {
+      session.close();
+    }
+  });
+
   it('keeps message-summary negotiation local to each connection', async () => {
     for (const version of [1, undefined]) {
       const channel = fakeChannel({

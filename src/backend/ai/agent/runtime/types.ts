@@ -293,6 +293,10 @@ export type RuntimeTool = {
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
+  /** Escalate an auto-approved tool to a user decision for this exact input. */
+  requiresApproval?: (input: RuntimeJsonValue) => boolean;
+  /** Include backend-bound execution context in the human approval payload. */
+  approvalInput?: (input: RuntimeJsonValue) => RuntimeJsonValue;
   /**
    * `read` for application-owned tools known not to change anything outside the
    * conversation, or a remote MCP tool its server annotates as read-only. `write`

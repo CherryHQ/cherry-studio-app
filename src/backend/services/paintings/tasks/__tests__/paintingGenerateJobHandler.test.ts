@@ -66,8 +66,25 @@ function fileEntry(id: FileEntryId): FileEntry {
   });
 }
 
-function createDependencies(): PaintingGenerateJobDependencies {
+function createScreenAwake() {
+  return { acquire: jest.fn((_tag: string) => ({ release: jest.fn() })) };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function createDependencies(): PaintingGenerateJobDependencies & {
+  screenAwake: ReturnType<typeof createScreenAwake>;
+} {
   return {
+    screenAwake: createScreenAwake(),
     ai: {
       generateImage: jest.fn(async () => ({
         images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }],
@@ -116,6 +133,79 @@ function createContext(
 }
 
 describe('createPaintingGenerateJobHandler', () => {
+  it.each(['success', 'rejection'])(
+    'holds one screen-awake lease during generation and releases on provider %s',
+    async (outcome) => {
+      const dependencies = createDependencies();
+      const started = deferred<void>();
+      const provider = deferred<Awaited<ReturnType<typeof dependencies.ai.generateImage>>>();
+      jest.mocked(dependencies.ai.generateImage).mockImplementationOnce(() => {
+        started.resolve();
+        return provider.promise;
+      });
+      expect(dependencies.screenAwake.acquire).not.toHaveBeenCalled();
+      jest.mocked(dependencies.paintings.getById).mockImplementationOnce(async (id) => {
+        expect(dependencies.screenAwake.acquire).toHaveBeenCalledTimes(1);
+        return painting(id);
+      });
+      const execution = createPaintingGenerateJobHandler(dependencies).execute(createContext());
+      await started.promise;
+      expect(dependencies.screenAwake.acquire).toHaveBeenCalledTimes(1);
+      expect(dependencies.screenAwake.acquire).toHaveBeenCalledWith('painting.generate');
+      const { release } = dependencies.screenAwake.acquire.mock.results[0]!.value;
+      expect(release).not.toHaveBeenCalled();
+
+      if (outcome === 'success') {
+        provider.resolve({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
+        await expect(execution).resolves.toHaveProperty('outputs');
+      } else {
+        provider.reject(new Error('provider down'));
+        await expect(execution).rejects.toThrow('provider down');
+      }
+      expect(release).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('releases on abort before an uncooperative provider settles and isolates a new attempt', async () => {
+    const dependencies = createDependencies();
+    const firstStarted = deferred<void>();
+    const nextStarted = deferred<void>();
+    const firstProvider = deferred<Awaited<ReturnType<typeof dependencies.ai.generateImage>>>();
+    const nextProvider = deferred<Awaited<ReturnType<typeof dependencies.ai.generateImage>>>();
+    jest
+      .mocked(dependencies.ai.generateImage)
+      .mockImplementationOnce(() => {
+        firstStarted.resolve();
+        return firstProvider.promise;
+      })
+      .mockImplementationOnce(() => {
+        nextStarted.resolve();
+        return nextProvider.promise;
+      });
+    const handler = createPaintingGenerateJobHandler(dependencies);
+    const controller = new AbortController();
+    const first = handler.execute(createContext({ signal: controller.signal }));
+    const firstRejection = expect(first).rejects.toThrow('cancelled');
+    await firstStarted.promise;
+    const firstLease = dependencies.screenAwake.acquire.mock.results[0]!.value;
+    controller.abort(new Error('cancelled'));
+    expect(firstLease.release).toHaveBeenCalledTimes(1);
+
+    const next = handler.execute(createContext({ attempt: 1 }));
+    await nextStarted.promise;
+    expect(dependencies.screenAwake.acquire).toHaveBeenCalledTimes(2);
+    const nextLease = dependencies.screenAwake.acquire.mock.results[1]!.value;
+    expect(nextLease).not.toBe(firstLease);
+    expect(nextLease.release).not.toHaveBeenCalled();
+    firstProvider.resolve({ images: [{ base64: 'late', mediaType: 'image/png' }] });
+    await firstRejection;
+    expect(firstLease.release).toHaveBeenCalledTimes(1);
+    expect(nextLease.release).not.toHaveBeenCalled();
+    nextProvider.resolve({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
+    await next;
+    expect(nextLease.release).toHaveBeenCalledTimes(1);
+  });
+
   it('generates, persists outputs onto the receipt, and returns the result', async () => {
     const dependencies = createDependencies();
     const handler = createPaintingGenerateJobHandler(dependencies);
@@ -267,6 +357,7 @@ describe('createPaintingGenerateJobHandler', () => {
       'Job cancelled: user',
     );
     expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
+    expect(dependencies.screenAwake.acquire).not.toHaveBeenCalled();
   });
 
   describe('background activity session', () => {
@@ -361,9 +452,12 @@ describe('createPaintingGenerateJobHandler', () => {
         await delivering;
         await Promise.resolve();
         expect(settled).not.toHaveBeenCalled();
+        const { release } = dependencies.screenAwake.acquire.mock.results[0]!.value;
+        expect(release).toHaveBeenCalledTimes(1);
         deliver();
         if (outcome === 'failed') await expect(execution).rejects.toThrow('provider down');
         else await expect(execution).resolves.toHaveProperty('outputs');
+        expect(release).toHaveBeenCalledTimes(1);
       },
     );
 
@@ -436,6 +530,7 @@ describe('createPaintingGenerateJobHandler', () => {
       expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
       expect(dependencies.storage.readDataUrl).not.toHaveBeenCalled();
       expect(dependencies.paintings.replaceOutputs).not.toHaveBeenCalled();
+      expect(dependencies.screenAwake.acquire).not.toHaveBeenCalled();
     });
 
     it('rejects an input trashed while its job waits for the painting queue', async () => {

@@ -69,6 +69,7 @@ import {
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
+import type { ScreenAwakePort } from '@/backend/services/screenAwake';
 import {
   createSkillMarketplace,
   createGithubSkillClients,
@@ -78,6 +79,7 @@ import {
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
@@ -120,10 +122,12 @@ export function createBackend(
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
     resourceScopes: ResourceScopeCoordinator;
+    screenAwake: ScreenAwakePort;
     providerAccounts: ProviderAccountRuntime;
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    ssh: SshRuntime;
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
     diagnostics: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
@@ -457,6 +461,7 @@ export function createBackend(
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
       uuRemote: uuRemote.module,
+      ssh: infrastructure.ssh,
       diagnostics: diagnostics.module,
       documentExport: infrastructure.documentExport,
       file: {
@@ -502,6 +507,7 @@ export function createBackend(
         },
         preference: services.preference,
         models: services.model,
+        screenAwake: infrastructure.screenAwake,
       }),
       webSearch: services.webSearch,
       voice: voice.module,

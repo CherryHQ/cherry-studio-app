@@ -455,19 +455,15 @@ checkpoint, the request carries complete Turn groups after the anchor. With no c
 invalid, incompatible, oversized, or orphaned candidate—the Host supplies the entire grouped
 history. Pi owns all later selection, formatting, and compaction policy.
 
-Pi estimates reconstructed history from a measured anchor. When a completed answer's final request
-reported its input, the Host stores that request's total as the message's `stats.contextTokens`:
-everything sent plus the answer. The newest replayed assistant message carries it when the turn uses
-the same model, and `pi-agent-core`'s estimator counts only the content replayed after it. A failed,
-cancelled, or retried answer, a model switch, or a provider that omits input counts leaves no
-anchor, and the whole history is estimated by content. Persisted assistant token counts in `stats` sum every
-request of a turn for analytics and is never a context-size measurement. The adapter adds system
-instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's flat image
-charge), and a fixed safety margin before calling Pi's `shouldCompact`; content already covered by
-the anchor is not added again. Historical image estimates follow the checkpoint-projected history;
-they are removable history costs, not part of the current input's fixed cost. A current input whose
-fixed costs exceed the hard budget fails before the first model call. Crossing the compaction
-trigger alone never proves that a request cannot be sent.
+The Host stores the latest positive measured request input in the completed answer's
+`stats.contextTokens`. It excludes the generated answer and is not necessarily the final request's
+size or a measurement after compaction. Other persisted token counts aggregate attributed calls for
+analytics and are not context-size measurements.
+
+The input-only `stats.contextTokens` is not the composer's current occupancy. The durable
+observation supplies a separate context usage value computed from Pi's effective `ContextView`
+with pi-ai's estimator, including the retained answer and changes after compaction. See
+[Rebuilding Model Context](./pi-durable-migration.md#rebuilding-model-context).
 
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;

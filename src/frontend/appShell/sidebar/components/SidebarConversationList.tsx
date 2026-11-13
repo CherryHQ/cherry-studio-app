@@ -380,7 +380,7 @@ function SidebarSessionList({
   const { t } = useTranslation();
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
-  const query = useConversationSessions(agentRef);
+  const query = useConversationSessions(agentRef, source.ref.kind !== 'desktop' || visible);
   const [showAll, setShowAll] = useState(false);
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;

@@ -59,7 +59,7 @@ export function canPreviewDocument(entry: Pick<FileEntry, 'mediaType'>): boolean
  * every caller classifies and labels files the same way.
  */
 export function toFilePreviewFile(
-  entry: FileEntry,
+  entry: Pick<FileEntry, 'id' | 'filename' | 'mediaType' | 'updatedAt'>,
   uri: string,
   previewUri?: string,
 ): FilePreviewFile {

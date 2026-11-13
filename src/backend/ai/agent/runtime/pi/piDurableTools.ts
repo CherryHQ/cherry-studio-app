@@ -312,9 +312,17 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             !(await hasToolInstructions(target.requiredInstructions.key, api, context))
           )
             return { block: target.requiredInstructions.refusal };
-          if (target.approval === 'auto') return;
           const input = RuntimeJsonValueSchema.parse(call.arguments);
-          if (!(await options.approve(target, input, call, api, context)))
+          if (target.approval === 'auto' && !target.requiresApproval?.(input)) return;
+          if (
+            !(await options.approve(
+              target,
+              target.approvalInput?.(input) ?? input,
+              call,
+              api,
+              context,
+            ))
+          )
             return { block: 'The user denied this tool call.' };
         },
         async afterTool(call, result, api, context) {

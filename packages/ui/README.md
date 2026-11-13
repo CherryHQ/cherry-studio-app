@@ -5,6 +5,16 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`FileBrowserRow` shares the library's file/folder presentation: a 40-point preview, single-line
+filename with middle truncation, optional secondary metadata, and a caller-composed trailing slot.
+It keeps the preview outside touch and accessibility handling so opening, selection and context-menu
+actions belong to the row. Callers own file data, translated descriptions, menus and loading.
+
+`Breadcrumbs` presents a caller-owned path with shared separators, ancestor press targets and
+current-location emphasis. It scrolls to the end as the path changes. Each item has a key, a label
+and an optional `onPress`; omit the action for the current location. `disabled` blocks ancestor
+navigation during operations. Local-library folders and SSH paths keep their own identities.
+
 `CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
 flat previous/current/next cards and page dots, with native horizontal fling recognition and
 accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;
@@ -671,7 +681,10 @@ taps, system back, and viewport changes dismiss it without changing the underlyi
 `AnchoredInfoPopover` accepts a caller-owned `InfoPopoverAnchor` in window coordinates instead of
 wrapping a trigger. Native editor links and inline transcript text use it when they measure their
 own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
-Its keyboard-preserving overlay shares the existing menu surface and bounded text reader.
+Its keyboard-preserving overlay shares the existing menu surface and bounded text reader. Optional
+children compose a visual readout while `text` supplies its accessible description; `width` requests
+a compact panel within the usual safe-area bounds, and `placement="above"` prefers the space above
+the anchor. The composed presentation remains stable through dismissal.
 
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
@@ -906,6 +919,9 @@ row and moving the caller-composed toolbar below the full-width field during edi
 state is caller-owned; an optional action-sized `compactAccessory` previews an attachment without
 activating editing. The `field` stays mounted, and `Composer.Input` automatically adapts its
 native layout and action inset to the editor frame, including through app-specific field wrappers.
+`Composer.Editor` accepts `restingTrailingActionCount` (default 1) to reserve the field space for
+visible action-sized slots at the end of the resting toolbar. The toolbar children stay mounted
+while editing changes. The existing leading `compactAccessory` remains independent.
 `Composer.EditorSecondary` reveals secondary toolbar tools, and
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
 The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it

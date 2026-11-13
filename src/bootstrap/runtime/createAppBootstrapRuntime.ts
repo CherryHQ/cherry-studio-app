@@ -45,6 +45,8 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import type { RegionService } from '@/backend/services/region';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
+import type { SshRuntime } from '@/backend/services/ssh';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -147,9 +149,11 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionManager',
   );
   const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
+  const ssh = host.container.get<SshRuntime>('SshRuntime');
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
+  const screenAwake = host.container.get<ScreenAwakeRuntime>('ScreenAwakeRuntime');
   const languageServing = host.container.get<
     LanguageServingSupport & AgentRuntime & RuntimeTextGenerator
   >('AgentRuntime');
@@ -195,10 +199,12 @@ export function createAppBootstrapRuntime(
     providerAccounts,
     documentExport,
     desktopConnections,
+    ssh,
     desktopConnectionManager,
     remoteAgent,
     diagnostics,
     languageServing,
+    screenAwake,
     providerRegistryUpdater,
     region,
     trash,
@@ -208,6 +214,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      ssh.hasPendingStorageWork() ||
       providerCatalog.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
@@ -231,6 +238,7 @@ export function createAppBootstrapRuntime(
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
       desktopConnections: services.desktopConnection,
+      sshProfiles: services.sshProfile,
       desktopConnectionEndpointsChanged: (id) => desktopConnectionManager.refreshEndpoints(id),
       desktopConnectionNameChanged: (id) => desktopConnectionManager.refreshName(id),
       entitySearch: services.entitySearch,
@@ -307,6 +315,7 @@ export function createAppBootstrapRuntime(
           resetFileTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
+        services.sshProfile.initialize();
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();
