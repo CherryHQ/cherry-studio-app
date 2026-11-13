@@ -13,6 +13,8 @@ It does not create a user Agent, application conversation, persistent transcript
   separately validated input and never becomes instructions.
 - `tools` contains the four fixed evidence descriptions. The shared result contract determines
   the supported evidence kinds; callers cannot register or replace tool metadata.
+- `reasoningEffort` explicitly requests `none`, matching translation and automatic naming. The
+  shared model adapter handles models that cannot disable reasoning.
 - `limits` declares the operation deadline, tool/model-call budgets, result size, collected answer
   size, and output-token cap.
 - `answer` declares the maximum cause length, advice length, and advice count used by the strict

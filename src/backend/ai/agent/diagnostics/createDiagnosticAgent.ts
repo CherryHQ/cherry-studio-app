@@ -71,6 +71,7 @@ async function runDiagnosticAgent(
       instructions: buildDiagnosticInstructions(input.language),
       input: [{ type: 'text', text: JSON.stringify(context) }],
       options: {
+        reasoningEffort: diagnosticAgentDefinition.reasoningEffort,
         maxOutputTokens: Math.min(
           preflight.maxOutputTokens,
           diagnosticAgentDefinition.limits.outputTokens,

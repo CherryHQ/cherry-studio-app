@@ -15,6 +15,7 @@
     "plugins": "Read cached plugin connection states without reconnecting or executing plugins.",
     "logs": "Read at most 12 recent allowlisted technical log summaries. No raw logs or chat content."
   },
+  "reasoningEffort": "none",
   "limits": {
     "timeoutMs": 60000,
     "toolCalls": 8,

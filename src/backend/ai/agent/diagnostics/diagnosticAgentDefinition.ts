@@ -1,3 +1,4 @@
+import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk';
 import { z } from 'zod';
 
 import type { DiagnosticToolId } from '@/shared/contracts/diagnosticSession';
@@ -5,7 +6,10 @@ import type { DiagnosticToolId } from '@/shared/contracts/diagnosticSession';
 import definition from './diagnosticAgent.json';
 
 /** The bundled resource is the single editable definition of this internal Agent. */
-export const diagnosticAgentDefinition = definition satisfies {
+export const diagnosticAgentDefinition = {
+  ...definition,
+  reasoningEffort: ReasoningEffortOptionSchema.parse(definition.reasoningEffort),
+} satisfies {
   tools: Record<DiagnosticToolId, string>;
 };
 
