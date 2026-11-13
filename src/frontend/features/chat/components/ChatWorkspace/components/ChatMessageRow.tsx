@@ -27,13 +27,17 @@ export const ChatMessageRow = memo(function ChatMessageRow({
 }: ChatMessageRowProps) {
   const row = useChatMessageRow(message.id);
   return (
-    <ConversationMessageContent messageState={row.messageState} tools={row.tools}>
+    <ConversationMessageContent
+      messageState={row.messageState}
+      tools={row.tools}
+      attachments={row.attachments}
+    >
       <ChatMessage
         assistantPresentation={assistantPresentation}
         editingContext={row.editingContext}
         startsEditingContinuation={row.startsEditingContinuation}
         attachments={
-          row.attachments?.length ? (
+          message.role === 'user' && row.attachments?.length ? (
             <ConversationAttachments attachments={row.attachments} />
           ) : undefined
         }
