@@ -42,6 +42,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
+import { useSidebarBranchLayoutRefresh } from './SidebarBranchScrollView';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
 import {
   SidebarSessionBranchFrame,
@@ -209,6 +210,7 @@ function SidebarAgentGroup({
   showLoading: boolean;
 }) {
   const { t } = useTranslation();
+  const refreshBranchLayout = useSidebarBranchLayoutRefresh();
   const [expanded, setExpanded] = useState(false);
   const status = useConversationAgentStatus(agent.ref, !expanded);
   const toggle = () => setExpanded((value) => !value);
@@ -218,7 +220,7 @@ function SidebarAgentGroup({
     <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
   );
   return (
-    <View testID={`sidebar-agent-group-${agent.id}`}>
+    <View onLayout={refreshBranchLayout} testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
         {onSelect ? (
           <View className="flex-row items-center">
@@ -378,6 +380,7 @@ function SidebarSessionList({
   visible?: boolean;
 } & SidebarSessionsProps) {
   const { t } = useTranslation();
+  const refreshBranchLayout = useSidebarBranchLayoutRefresh();
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
   const query = useConversationSessions(agentRef, source.ref.kind !== 'desktop' || visible);
@@ -426,7 +429,7 @@ function SidebarSessionList({
       </View>
     );
   return (
-    <View className="px-2">
+    <View className="px-2" onLayout={refreshBranchLayout}>
       {onSelect ? null : (
         <SidebarSessionSelectionRegistration
           agentRef={agentRef}
@@ -634,7 +637,7 @@ function SidebarSessionChildren({
           position={{ kind: 'continuation', depth, ancestorContinuations }}
           leading={leading}
         >
-          <View className="min-w-0 flex-1">{footer}</View>
+          <View className="min-w-0">{footer}</View>
         </SidebarSessionBranchFrame>
       ) : null}
     </>
@@ -686,8 +689,20 @@ function DestinationSessionRow({
   });
   return (
     <>
-      <SidebarSessionBranchFrame position={position} leading={leading}>
-        <View className="min-w-0 flex-1">
+      <SidebarSessionBranchFrame
+        position={position}
+        leading={leading}
+        disclosure={
+          branch ? (
+            <SidebarSessionBranchToggle
+              action={branch}
+              title={session.title}
+              sessionId={session.ref.sessionId}
+            />
+          ) : undefined
+        }
+      >
+        <View className="min-w-0">
           <Pressable
             accessibilityLabel={session.title || t('session.list.untitled')}
             accessibilityValue={
@@ -721,13 +736,6 @@ function DestinationSessionRow({
             )}
           </Pressable>
         </View>
-        {branch ? (
-          <SidebarSessionBranchToggle
-            action={branch}
-            title={session.title}
-            sessionId={session.ref.sessionId}
-          />
-        ) : null}
       </SidebarSessionBranchFrame>
       {children}
     </>
@@ -880,31 +888,33 @@ function SidebarSessionRow({
   );
   return (
     <>
-      <Animated.View layout={rowLayout} exiting={rowExit}>
-        <SidebarSessionBranchFrame
-          position={position}
-          leading={leading}
-          selected={!isSelecting && selected}
-        >
-          <View className="min-w-0 flex-1">
-            {isSelecting ? (
-              row
-            ) : (
-              <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
-                {row}
-              </ContextMenuLink>
-            )}
-          </View>
-          {branch ? (
+      <SidebarSessionBranchFrame
+        layout={rowLayout}
+        exiting={rowExit}
+        position={position}
+        leading={leading}
+        selected={!isSelecting && selected}
+        disclosure={
+          branch ? (
             <SidebarSessionBranchToggle
               action={branch}
               title={session.title}
               sessionId={session.ref.sessionId}
               disabled={isDeleting}
             />
-          ) : null}
-        </SidebarSessionBranchFrame>
-      </Animated.View>
+          ) : undefined
+        }
+      >
+        <View className="min-w-0">
+          {isSelecting ? (
+            row
+          ) : (
+            <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
+              {row}
+            </ContextMenuLink>
+          )}
+        </View>
+      </SidebarSessionBranchFrame>
       {children}
     </>
   );

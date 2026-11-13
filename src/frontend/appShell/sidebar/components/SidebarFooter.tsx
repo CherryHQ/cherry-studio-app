@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useUniwind } from 'uniwind';
 
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
@@ -21,6 +22,8 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
 // keep its final row reachable.
 export function SidebarFooter() {
   const { t } = useTranslation();
+  const { theme } = useUniwind();
+  const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const [userName] = usePreference('app.user.name');
   const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
@@ -45,8 +48,14 @@ export function SidebarFooter() {
   return (
     <View
       className="absolute right-0 bottom-0 left-0"
-      pointerEvents="box-none"
-      style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
+      pointerEvents="auto"
+      style={{
+        backgroundColor,
+        paddingBottom: bottomPadding,
+        paddingEnd: insetEnd,
+        paddingStart: insetStart,
+        zIndex: 2,
+      }}
     >
       {/* Rows scrolled under the dock blur toward the bottom edge, as they do under the title row,
           instead of showing in full below the buttons on a short window. */}

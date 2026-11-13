@@ -1,16 +1,18 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { cn } from '@cherrystudio/ui/utils';
-import { type ReactNode, useState } from 'react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { getSidebarBranchLayout } from './sidebarBranchLayout';
+import { useSidebarBranchRow } from './SidebarBranchScrollView';
 import { SIDEBAR_LEADING_SIZE, SIDEBAR_ROW_GAP, SIDEBAR_ROW_INSET } from './SidebarRowContent';
 
 export type SidebarSessionBranchAncestor = { sessionId: string; continues: boolean };
@@ -29,7 +31,7 @@ export type SidebarSessionBranchAction = {
   toggle(): void;
 };
 
-/** Reserves bounded indentation; the row owns its own 12pt text gap. */
+/** Reserves real tree indentation; the row owns its own 12pt text gap. */
 export function SidebarSessionBranchLeading({
   leading,
   depth,
@@ -54,28 +56,61 @@ export function SidebarSessionBranchFrame({
   position,
   leading,
   selected = false,
+  disclosure,
+  layout,
+  exiting,
 }: {
   children: ReactNode;
   position?: SidebarSessionBranchPosition;
   leading?: ReactNode;
   selected?: boolean;
-}) {
+  disclosure?: ReactNode;
+} & Pick<ComponentProps<typeof Animated.View>, 'layout' | 'exiting'>) {
   const [height, setHeight] = useState(44);
+  const { ref, viewport } = useSidebarBranchRow(position?.depth ?? 0);
+  const width = useSharedValue(0);
+  const offset = viewport?.offset;
+  const canvasStyle = useAnimatedStyle(() => {
+    const shift = offset?.get() ?? 0;
+    return {
+      // Keep the text/status trailing edge fixed while the real indentation moves left.
+      width: width.get() > 0 ? width.get() + shift : ('100%' as const),
+      transform: [{ translateX: -shift }],
+    };
+  });
   return (
-    <View
-      className={cn('relative flex-row items-stretch rounded-xl', selected && 'bg-secondary/70')}
-      onLayout={position ? (event) => setHeight(event.nativeEvent.layout.height) : undefined}
+    <Animated.View
+      ref={ref}
+      collapsable={false}
+      layout={layout}
+      exiting={exiting}
+      className={cn(
+        'relative min-h-11 flex-row items-stretch rounded-xl',
+        selected && 'bg-secondary/70',
+      )}
+      onLayout={(event) => {
+        setHeight(event.nativeEvent.layout.height);
+        viewport?.refresh();
+      }}
     >
-      {children}
-      {position ? (
-        <SidebarSessionBranchRail
-          position={position}
-          height={height}
-          leading={Boolean(leading)}
-          selected={selected}
-        />
-      ) : null}
-    </View>
+      <View
+        className="min-w-0 flex-1 overflow-hidden"
+        onLayout={(event) => width.set(event.nativeEvent.layout.width)}
+      >
+        <Animated.View className="relative" style={canvasStyle}>
+          {children}
+          {position ? (
+            <SidebarSessionBranchRail
+              position={position}
+              height={height}
+              leading={Boolean(leading)}
+              selected={selected}
+            />
+          ) : null}
+        </Animated.View>
+      </View>
+      {disclosure}
+    </Animated.View>
   );
 }
 
@@ -132,23 +167,12 @@ function SidebarSessionBranchRail({
             {position.hasFollowingSibling ? (
               <Line x1={parent} x2={parent} y1={0} y2={height} stroke={line} strokeWidth={1.35} />
             ) : null}
-            {parent === x ? (
-              <Line
-                x1={x}
-                x2={x}
-                y1={0}
-                y2={center}
-                stroke={onPath ? foreground : line}
-                strokeWidth={onPath ? 1.8 : 1.35}
-              />
-            ) : (
-              <Path
-                d={`M ${parent} 0 V ${center - 8} Q ${parent} ${center} ${parent + 8} ${center} H ${x}`}
-                fill="none"
-                stroke={onPath ? foreground : line}
-                strokeWidth={onPath ? 1.8 : 1.35}
-              />
-            )}
+            <Path
+              d={`M ${parent} 0 V ${center - 8} Q ${parent} ${center} ${parent + 8} ${center} H ${x}`}
+              fill="none"
+              stroke={onPath ? foreground : line}
+              strokeWidth={onPath ? 1.8 : 1.35}
+            />
           </>
         )
       ) : null}

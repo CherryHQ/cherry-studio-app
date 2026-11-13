@@ -127,6 +127,7 @@ jest.mock('react-native-reanimated', () => {
     ReduceMotion: { System: 'system' },
     cancelAnimation: jest.fn(),
     useSharedValue: () => mockProgress,
+    useAnimatedStyle: () => ({}),
     withTiming: (value: number) => value,
   };
 });
