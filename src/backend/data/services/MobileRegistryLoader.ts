@@ -124,6 +124,7 @@ const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set
   'ollama',
   'ovms',
   'new-api',
+  'rapid-mlx',
   // The chat runtime does not support these presets' optional authentication yet.
   'litellm',
   'omlx',

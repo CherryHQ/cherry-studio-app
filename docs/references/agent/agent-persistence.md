@@ -261,7 +261,7 @@ recency; no `orderKey`).
 
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
-| `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
+| `id` | text | PK, UUID v7 | Stable identity; transcript follows parent order, including queued inputs promoted to Steer |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
 | `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |
@@ -360,6 +360,10 @@ projection:
   validation is logged as `ai.reconcile / invalid_reservation` and left unchanged while other
   reservations recover. Ordinary Session commands and backup reconciliation remain strict;
   cancellation, database and other non-validation failures still abort startup.
+  Native results are resolved before promoted input parents are repaired as a batch. If a native
+  read or that repair fails validation, startup skips settlement for the affected Session rather
+  than exposing a partially repaired chain; other Sessions still recover. Output validation after
+  the parent repair continues to isolate individual reservations.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a

@@ -177,6 +177,13 @@ export class PiDurableObserver {
           metadata: input?.metadata ?? (await this.runtime.submissionMetadata(record)),
         });
       }
+      for (const [id, input] of this.inputs) {
+        input.metadata = await this.runtime.submissionMetadata(input.record);
+        if (input.metadata?.supersededBy) {
+          this.inputs.delete(id);
+          this.settled.add(id);
+        }
+      }
 
       const through = view.entries.at(-1)?.id ?? view.before;
       const previousInput = this.contextInput;
@@ -315,7 +322,10 @@ export class PiDurableObserver {
       if (this.queueKey() !== previousQueue)
         this.listener({ type: 'queue.updated', queue: this.snapshot().queue });
       for (const [id, input] of this.inputs)
-        if (isTerminal(input.record)) {
+        if (
+          isTerminal(input.record) ||
+          (this.live.run?.inputs.includes(id) && this.project(input).status === 'completed')
+        ) {
           this.settled.add(id);
           this.inputs.delete(id);
         }
@@ -335,12 +345,12 @@ export class PiDurableObserver {
   private queueKey() {
     return [...this.inputs.values()]
       .filter((input) => input.record.status === 'queued')
-      .map((input) => input.record.id)
+      .map((input) => `${input.record.id}:${JSON.stringify(input.metadata)}`)
       .join(',');
   }
 
   private snapshot(): RuntimeConversationSnapshot {
-    const id = this.live.run?.inputs[0];
+    const id = this.live.run?.inputs.at(-1);
     const active = id === undefined ? undefined : this.inputs.get(id);
     return {
       activeTurn: active && !isTerminal(active.record) ? this.project(active) : null,
@@ -348,6 +358,12 @@ export class PiDurableObserver {
       contextUsage: this.contextUsage,
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
+        .sort(
+          (a, b) =>
+            Number(readPiSubmission(b.metadata).metadata.steer === true) -
+              Number(readPiSubmission(a.metadata).metadata.steer === true) ||
+            a.record.id - b.record.id,
+        )
         .map((input) => this.project(input)),
     };
   }
@@ -390,7 +406,7 @@ export class PiDurableObserver {
   }
 
   private project(input: InputView, fullReasoning = false) {
-    const active =
+    const running =
       input.record.status === 'placed' && this.live.run?.inputs.includes(input.record.id) === true;
     const start = input.record.entry;
     const next = Math.min(
@@ -405,12 +421,24 @@ export class PiDurableObserver {
       [...this.entries.values()]
         .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
         .sort((a, b) => a.id - b.id);
+    const active = running && next === Infinity;
     const partial = this.live.generation?.message as AssistantMessage | undefined;
     const turn = projectPiTurn({
       lane: this.lane,
       ...input,
       entries,
       active,
+      continued:
+        next !== Infinity &&
+        (running ||
+          (input.record.type === 'input' &&
+            input.record.status === 'done' &&
+            next <= input.record.answer) ||
+          [...this.inputs.values()].some(
+            (candidate) =>
+              candidate.record.entry === next &&
+              readPiSubmission(candidate.metadata).metadata.steer === true,
+          )),
       fullReasoning,
       toolStates: this.toolStates,
       nestedTools: this.nestedTools,

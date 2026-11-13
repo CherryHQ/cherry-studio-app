@@ -115,6 +115,12 @@ export interface AgentProtocol {
     turnId: string;
   }): Promise<'withdrawn' | 'already-started' | 'not-found'>;
 
+  /** Promote a waiting input without interrupting tools or duplicating its message identities. */
+  steerQueuedInput(input: {
+    sessionId: string;
+    turnId: string;
+  }): Promise<'accepted' | 'already-started' | 'not-found'>;
+
   /**
    * Abandons a submission, retry, or Draft start that has not reserved its turn
    * yet; the pending call rejects with `CANCELLED`. A reserved turn is
