@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
-import { useUniwind } from 'uniwind';
 
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 import { usePreference } from '@/frontend/data/hooks';
@@ -22,8 +21,6 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
 // keep its final row reachable.
 export function SidebarFooter() {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
-  const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const [userName] = usePreference('app.user.name');
   const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
   const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
@@ -48,9 +45,8 @@ export function SidebarFooter() {
   return (
     <View
       className="absolute right-0 bottom-0 left-0"
-      pointerEvents="auto"
+      pointerEvents="box-none"
       style={{
-        backgroundColor,
         paddingBottom: bottomPadding,
         paddingEnd: insetEnd,
         paddingStart: insetStart,

@@ -107,9 +107,10 @@ target and disclosure are siblings: a tap on the disclosure only expands or coll
 on the conversation opens its existing native menu, and scrolling cancels those actions through
 the shared gesture owners. In selection mode, the main target toggles the checkbox while disclosure
 remains available for selecting descendants; all targets disable during deletion.
-The bottom dock has its own opaque surface and stacking order. Its full band owns touch handling,
-so scrolling rows and disclosure targets cannot paint over or receive taps through the profile
-avatar. The body's existing bottom padding keeps the final conversation reachable above the dock.
+The bottom dock retains its existing iOS progressive blur. Its explicit stacking order keeps
+scrolling rows and disclosure targets behind the controls. The container retains `box-none` touch
+handling: controls own their taps, while gaps keep the existing pass-through behavior. The body's
+existing bottom padding keeps the final conversation reachable above the dock.
 
 The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
 desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks
