@@ -100,6 +100,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
   its previous/next navigation and retained answers. Required fields gate submission; optional
   fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
+- In standard mode, the plus menu also offers SSH when the native runtime is available. Its
+  anchored picker preserves the keyboard and only selects saved servers, inserting an inline
+  mention without sending a message or executing a command. Saved connections, trust, credentials
+  and the remote file browser belong to Plugins > SSH. There is no separate target pill or
+  management/grant control in the picker. The one-hour diagnostics grant is offered when approving
+  a command and remains scoped to the current conversation and connection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or

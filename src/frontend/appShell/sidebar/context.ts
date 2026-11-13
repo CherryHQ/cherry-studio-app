@@ -11,6 +11,7 @@ export type SidebarActions = {
   openLibrary: () => void;
   openPlugins: () => void;
   openSkills: () => void;
+  openScheduledTasks: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   openSearch?: () => void;

@@ -32,6 +32,7 @@ import { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { RegionService } from '@/backend/services/region';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
+import { SshRuntime } from '@/backend/services/ssh';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -72,6 +73,7 @@ export const services = {
   AndroidBackgroundActivityRuntime,
   IosBackgroundExecutionSource,
   KeepAliveCoordinator,
+  SshRuntime,
   RemoteConnectionNotificationRuntime,
   BackgroundActivityManager,
   BackgroundReplyRuntime,

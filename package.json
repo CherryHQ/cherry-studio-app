@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "engines": {
     "node": "24.x"
   },
@@ -119,8 +119,8 @@
     "@cherrystudio/mcp-app-webview": "workspace:*",
     "@cherrystudio/mermaid-webview": "workspace:*",
     "@cherrystudio/provider-registry": "0.4.0",
-    "@cherrystudio/remote-protocol": "0.7.0",
-    "@cherrystudio/remote-transport": "0.2.5",
+    "@cherrystudio/remote-protocol": "0.8.0",
+    "@cherrystudio/remote-transport": "0.2.6",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
     "@cherrystudio/web-search": "0.5.0",

@@ -9,9 +9,9 @@ import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import type { FileEntryKind } from '@/frontend/components/FileEntryPreview';
 import { queryKeys } from '@/frontend/data';
 import { readFileText } from '@/frontend/utils/readFileText';
-import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { FileViewerSource } from '../fileViewerSource';
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { FileHtmlBody } from './FileHtmlBody';
 import { FileTextBody } from './FileTextBody';
@@ -25,11 +25,11 @@ export function FileTextViewer({
   kind,
   sourceChat,
 }: {
-  file: ResolvedFile;
+  file: FileViewerSource;
   kind: FileEntryKind;
   sourceChat?: ChatTarget;
 }) {
-  const addToChat = useAddFileToChat(file, sourceChat);
+  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isSourceVisible, setIsSourceVisible] = useState(false);

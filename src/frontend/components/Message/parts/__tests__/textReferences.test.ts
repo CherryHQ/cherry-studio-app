@@ -59,6 +59,24 @@ describe('message inline references', () => {
     ]);
   });
 
+  test('decorates only the recorded SSH label and leaves plain-text history unchanged', () => {
+    const reference = { type: 'ssh', label: 'SSH · guoxu', offset: 3 };
+    const text = '📄 SSH · guoxu 这台机器有什么 SSH · guoxu';
+    expect(splitTextReferences(text, [reference])).toEqual([
+      { text: '📄 ' },
+      { text: reference.label, reference },
+      { text: ' 这台机器有什么 SSH · guoxu' },
+    ]);
+    expect(splitTextReferences(text)).toEqual([{ text }]);
+    expect(
+      splitTextReferences(text, [
+        { ...reference, offset: 100 },
+        { ...reference, label: 'SSH · renamed' },
+        { ...reference, id: 'connection-identity' },
+      ]),
+    ).toEqual([{ text }]);
+  });
+
   test('ignores foreign, overlapping, out-of-range, and stale metadata', () => {
     expect(
       splitTextReferences('📄 用 飞书', [

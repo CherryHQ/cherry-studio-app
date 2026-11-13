@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/libssh2/libssh2",
+  "commit": "94629f16bb313e522276b53a50f8d89c6eee81b0",
+  "version": "1.11.2_DEV",
+  "archiveUrl": "https://api.github.com/repos/libssh2/libssh2/tarball/94629f16bb313e522276b53a50f8d89c6eee81b0",
+  "archiveSha256": "94fab8ba3800a90105af878002b9c56e37846b31037ed2dac13cc2e89f685800",
+  "patches": []
+}

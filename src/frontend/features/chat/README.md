@@ -11,6 +11,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
 ## Public Interface
 
 - `ChatScreen` is exported from `index.ts`.
+- `RemoteChatScreen` and `ReadOnlyTaskSessionScreen` are the desktop chat and scheduled-result
+  transcript route entries.
 
 ## Organization
 
@@ -97,6 +99,11 @@ block incompatible explicit images. The shared input strategy owns these rules. 
 are submitted as file parts and stay separate from the text draft; text controls do not attach them.
 
 ## Local and remote presentation
+
+`remote/ReadOnlyTaskSessionScreen` verifies membership in the selected scheduled task before
+opening the transcript. `ReadOnlyRemoteChat` shares message/history rendering and read actions,
+but has no composer, Agent picker or conversation-creation action. Its Session exposes no send,
+cancel, approval, upload or undelivered-message capability. The task list belongs to `remoteTask/`.
 
 `remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
 retains a desktop ConversationSource, opens a route Session through the remote-only hooks in

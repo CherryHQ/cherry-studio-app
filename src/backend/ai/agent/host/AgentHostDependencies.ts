@@ -39,6 +39,7 @@ import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
@@ -80,6 +81,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'TrashRuntime',
   'KeepAliveCoordinator',
   'BackgroundActivityEnvironment',
+  'SshRuntime',
   'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
@@ -203,6 +205,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
       translate: (key) => key,
     },
+    private readonly ssh?: SshRuntime,
     private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
       acquire: () => ({ release() {} }),
     },
@@ -257,6 +260,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      ssh: this.ssh,
     }));
   }
 

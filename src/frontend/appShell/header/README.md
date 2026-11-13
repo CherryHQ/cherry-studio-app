@@ -70,7 +70,8 @@ This module owns Expo Router header adapters used by the app screens.
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
   Long names truncate at the end. Both local and remote capsules open the same Agent picker, using the current
-  source catalog and the existing local layout. Local callers supply editing and creation shortcuts;
+  source catalog and `AgentPickerSheet` from `frontend/components/AgentPicker`, also reused by SSH.
+  Local callers supply editing and creation shortcuts;
   remote callers supply selection only. The sheet owns presentation and pagination controls, while
   callers own navigation and source observation. Unknown remote model metadata is not shown as an
   unconfigured model.
