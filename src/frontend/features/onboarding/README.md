@@ -40,8 +40,11 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   Login/profile switching remains in the account module; this feature supplies only its first-use
   entry and the private-deployment inputs required by that module.
 - `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.
-  A paid, active, effective entitlement enters automatic model preparation without showing model
-  configuration or issuing a paid chat probe. A loading or failed lookup never means no subscription.
+  A paid, active, effective entitlement skips provider configuration and opens account-model selection.
+  `OnboardingModelList` supplies the same search and single selection as the manual provider path.
+  Saved model rows supply their identities, while the current account catalog and entitlements decide
+  which account models can be offered. Selection is confirmed by the user, never automatically saved.
+  A loading or failed lookup never means no subscription.
   Organization profiles use their managed models; other accounts and skipped sign-ins configure a model.
 - Provider routes compose the original `ProviderCatalogContent` and `ProviderConfiguration` with
   the first-use header, step progress and continuation. Provider fields, account actions, connection
@@ -49,10 +52,10 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   Custom-provider navigation guards and creation still use the existing controllers. Model selection,
   scanner, pairing and computer import retain this feature's presentation. Shared connection view
   types live in `frontend/types/providerConfiguration.ts`. Credentials never travel in route parameters.
-- Model preparation keeps cancellable remote listing, saved-model fallback and manual IDs. A manual
-  setup completes only after the real conversation check, disclosed beside the completion action.
-  Completion reuses the seeded Agent, saves its default and opens draft chat. Cancellation/blur
-  stops the probe and prevents navigation; account-supplied catalogs remain read-only.
+- Model preparation keeps cancellable remote listing, saved-model fallback and manual IDs. Confirming
+  a model saves its default and binds the seeded Agent before opening draft chat, without sending a
+  chat probe. Provider credentials and model-list errors retain their original owners and recovery.
+  Cancellation/blur prevents unfinished setup from navigating; account-supplied catalogs remain read-only.
 - Computer import retains the chosen connection, unavailable-provider reasons, selected providers,
   credential notice and recoverable previews. Imported configuration still continues to model setup.
   Plugin connections and per-tool approvals retain their existing owners.

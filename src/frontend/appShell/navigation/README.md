@@ -19,7 +19,7 @@ domains.
   → subscription/model setup, inside the dedicated onboarding route.
   Existing enterprise profiles keep their normal entry; a newly switched organization profile
   inherits the completed preparation and finishes with organization-owned models. Community accounts
-  with active subscriptions automatically use the account catalog; other accounts and skipped
+  with active subscriptions select their default from the account catalog; other accounts and skipped
   sign-ins enter local model setup. A failed entitlement lookup stays retryable.
   `useFirstUseEligibility` also lets privacy presentation distinguish a first run from an existing
   installation. It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat

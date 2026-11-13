@@ -1,15 +1,11 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { cn } from '@cherrystudio/ui/utils';
 import { useQuery as useWorkflowQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Keyboard, Pressable, Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 
-import { useInlineSearch } from '@/frontend/components/InlineSearch';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { Model } from '@/shared/data/types/model';
 
 import {
   OnboardingButton,
@@ -17,6 +13,7 @@ import {
   OnboardingMessage,
   OnboardingPage,
 } from '../components/OnboardingPage';
+import { OnboardingModelList } from './OnboardingModelList';
 import { useCompleteOnboarding } from './useCompleteOnboarding';
 import { useOnboardingModels } from './useOnboardingModels';
 
@@ -57,18 +54,13 @@ function OnboardingModelSelection({
     staleTime: Infinity,
   });
   const data = useOnboardingModels(providerId);
-  const { complete, phase, cancel } = useCompleteOnboarding();
-  const isBusy = phase !== 'idle';
+  const { complete, isSaving: isBusy, cancel } = useCompleteOnboarding();
   const openProviderSetup = () => router.replace('/onboarding/provider');
   const syncAgain = () =>
     router.replace({ pathname: '/onboarding/provider-sync', params: { connectionId } });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState<'catalog' | 'manual'>('catalog');
   const [manualId, setManualId] = useState('');
-  const { query, results, setQuery } = useInlineSearch({
-    fields: (model: Model) => [model.name, model.modelId],
-    items: data.items,
-  });
   const selectedModel =
     data.items.find((model) => model.id === selectedId) ??
     (data.items.length === 1 ? data.items[0] : undefined);
@@ -109,7 +101,7 @@ function OnboardingModelSelection({
   const loading = (!registry.data && (registry.isPending || registry.isFetching)) || data.isLoading;
   return (
     <OnboardingPage
-      description={t('onboarding.model.checkHint')}
+      description={t('onboarding.model.description')}
       footer={
         <>
           {(selectionMode === 'manual' || data.items.length > 0) && !loading ? (
@@ -119,13 +111,7 @@ function OnboardingModelSelection({
               onPress={start}
               testID="onboarding-model-start"
             >
-              {t(
-                phase === 'checking'
-                  ? 'onboarding.check.checking'
-                  : phase === 'idle'
-                    ? 'onboarding.model.continue'
-                    : 'onboarding.check.saving',
-              )}
+              {t(isBusy ? 'onboarding.model.saving' : 'onboarding.model.continue')}
             </OnboardingButton>
           ) : null}
           {isBusy ? (
@@ -223,13 +209,13 @@ function OnboardingModelSelection({
           ) : null}
         </View>
       ) : (
-        <>
-          <OnboardingField
-            label={t('onboarding.search')}
-            onChangeText={setQuery}
-            testID="onboarding-model-search"
-            value={query}
-          />
+        <OnboardingModelList
+          disabled={isBusy}
+          models={data.items}
+          onSelect={(model) => setSelectedId(model.id)}
+          providers={providerId ? undefined : data.providers}
+          selectedId={selectedModel?.id}
+        >
           {data.pullError ? (
             <View className="gap-2">
               <Text className="text-sm text-muted-foreground">
@@ -245,52 +231,7 @@ function OnboardingModelSelection({
               </OnboardingButton>
             </View>
           ) : null}
-          <FlatList
-            data={results}
-            extraData={{ isBusy, selectedId: selectedModel?.id }}
-            keyExtractor={(model) => model.id}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <OnboardingMessage>{t('onboarding.model.noResults')}</OnboardingMessage>
-            }
-            renderItem={({ item }) => (
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ checked: item.id === selectedModel?.id, disabled: isBusy }}
-                className="min-h-20 flex-row items-center gap-4 border-b border-border-subtle py-4 active:opacity-70"
-                disabled={isBusy}
-                onPress={() => setSelectedId(item.id)}
-                testID={`onboarding-model-${item.id}`}
-              >
-                <View className="min-w-0 flex-1 gap-1">
-                  <Text className="font-medium text-base text-foreground">{item.name}</Text>
-                  <Text className="text-sm text-muted-foreground">
-                    {providerId
-                      ? item.modelId
-                      : (data.providers.find((provider) => provider.id === item.providerId)?.name ??
-                        item.providerId)}
-                  </Text>
-                </View>
-                <View
-                  className={cn(
-                    'size-6 items-center justify-center rounded-full border',
-                    item.id === selectedModel?.id
-                      ? 'border-foreground bg-foreground'
-                      : 'border-border-strong',
-                  )}
-                >
-                  {item.id === selectedModel?.id ? (
-                    <CheckIcon className="size-4 text-background" />
-                  ) : null}
-                </View>
-              </Pressable>
-            )}
-            showsVerticalScrollIndicator={false}
-            style={{ flex: 1 }}
-            testID="onboarding-model-list"
-          />
-        </>
+        </OnboardingModelList>
       )}
     </OnboardingPage>
   );

@@ -38,7 +38,7 @@ describe('onboarding account destination', () => {
     ).toBe('source');
   });
 
-  it('skips configuration for a paid entitlement even while its catalog is loading', () => {
+  it('skips provider setup but keeps model selection for a paid entitlement', () => {
     const subscribed: CloudState = {
       ...cloud,
       phase: 'ready',

@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -24,7 +24,7 @@ type OnboardingModelSelection =
 
 export function useCompleteOnboarding() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   const models = useBackendModule('models');
@@ -39,11 +39,11 @@ export function useCompleteOnboarding() {
   const createdAgentRef = useRef<Agent | undefined>(undefined);
   const preparedModelsRef = useRef(new Map<string, Model>());
   const requestRef = useRef<AbortController | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'preparing' | 'checking' | 'finishing'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      setPhase('idle');
+      setIsSaving(false);
       return () => {
         requestRef.current?.abort();
         requestRef.current = null;
@@ -56,7 +56,7 @@ export function useCompleteOnboarding() {
     const controller = new AbortController();
     requestRef.current = controller;
     const { signal } = controller;
-    setPhase('preparing');
+    setIsSaving(true);
     try {
       let modelId;
       let providerId;
@@ -89,19 +89,6 @@ export function useCompleteOnboarding() {
           await models.reconcile(providerId, { toAdd: [selection.model] });
       }
       signal.throwIfAborted();
-      if (selection.kind !== 'subscription') {
-        setPhase('checking');
-        const result = await models.checkChat({ modelId, signal });
-        signal.throwIfAborted();
-        if (result.status === 'failed') {
-          alert.show({
-            title: t('onboarding.check.failed'),
-            description: t(`onboarding.check.${result.reason}`),
-          });
-          return false;
-        }
-      }
-      setPhase('finishing');
       // Account models are already enabled by Cloud and reject user configuration writes.
       if (providerId !== CLOUD_PROVIDER_ID)
         await Promise.all([
@@ -136,16 +123,15 @@ export function useCompleteOnboarding() {
       router.replace(chatHref({ agentId: agent.id, kind: 'draft' }));
       return true;
     } catch {
-      if (!signal.aborted && selection.kind !== 'subscription')
-        alert.show({ title: t('onboarding.saveFailed'), description: t('onboarding.retryHint') });
+      if (!signal.aborted) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
       return false;
     } finally {
       if (requestRef.current === controller) {
         requestRef.current = null;
-        setPhase('idle');
+        setIsSaving(false);
       }
     }
   };
 
-  return { complete, phase, cancel: () => requestRef.current?.abort() };
+  return { complete, isSaving, cancel: () => requestRef.current?.abort() };
 }
