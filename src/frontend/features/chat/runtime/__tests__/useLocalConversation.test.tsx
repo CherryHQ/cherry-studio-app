@@ -8,7 +8,11 @@ import type { AgentMessageHistoryWindow } from '../useAgentMessageHistoryWindow'
 import { useLocalConversation } from '../useLocalConversation';
 
 const mockSsh = { getTarget: () => null };
-jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockSsh }));
+const mockApi = { get: jest.fn() };
+jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => mockSsh,
+  useApiClient: () => mockApi,
+}));
 jest.mock('@/frontend/hooks/ssh', () => ({ useSshTarget: () => null }));
 
 const mockReconcile = jest.fn();
@@ -123,4 +127,40 @@ it('excludes live rows from an older search window and projects nothing without 
   expect(result.messages).toEqual([]);
   expect(result.snapshot.liveMessages).toEqual([]);
   expect(mockReconcile).toHaveBeenCalledTimes(1);
+});
+
+it('reads earlier citation facts on the selected branch without changing the message window', async () => {
+  const tool = (id: string): AgentMessageView => ({
+    ...message(id),
+    parts: [
+      {
+        id: `${id}-tool`,
+        type: 'dynamic-tool',
+        toolName: 'web_search',
+        toolCallId: `${id}-call`,
+        toolRef: { source: 'builtin', capabilityId: 'web_search' },
+        input: { query: 'source' },
+        state: 'output-available',
+        output: {
+          value: [{ id: 'lookup-1', title: id, url: 'https://example.com', content: 'Source' }],
+          artifacts: [],
+        },
+      },
+    ],
+  });
+  mockApi.get.mockResolvedValueOnce({ items: [tool('later'), message('target'), tool('earlier')] });
+  act(() => {
+    renderer = create(<Probe sessionId="session" />);
+  });
+  const windowMessages = result.messageWindow.messages;
+  expect(
+    await result.messageWindow.readCitations!('target', ['lookup-1'], new AbortController().signal),
+  ).toEqual([{ id: 'lookup-1', title: 'earlier', url: 'https://example.com', content: 'Source' }]);
+  expect(mockApi.get).toHaveBeenCalledWith(
+    '/agent-sessions/session/messages',
+    expect.objectContaining({
+      query: { aroundMessageId: 'target', aroundMode: 'exact', limit: 200 },
+    }),
+  );
+  expect(result.messageWindow.messages).toBe(windowMessages);
 });

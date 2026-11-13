@@ -5,6 +5,7 @@ export type {
   CatalogCursor,
   ConversationAction,
   ConversationCatalog,
+  ConversationCitationReader,
   ConversationExecution,
   ConversationFailure,
   ConversationFreshness,

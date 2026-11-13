@@ -1,6 +1,10 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { resolveMessageCitations } from '../messageCitations';
+import {
+  citationIds,
+  conversationCitationSources,
+  resolveMessageCitations,
+} from '../messageCitations';
 
 describe('resolveMessageCitations', () => {
   test('makes native provider citations clickable while retaining plain-text numbering', () => {
@@ -174,5 +178,40 @@ describe('resolveMessageCitations', () => {
         ['bbbb2222-1', 1],
       ]),
     );
+  });
+});
+
+describe('conversation citation scope', () => {
+  test('uses earlier confirmed tool IDs without leaking future or native source IDs', () => {
+    const source = { id: 'lookup-1', title: 'Earlier', url: 'https://example.com' };
+    const registry = conversationCitationSources([
+      { id: 'early', parts: [{ type: 'text', text: '[cite:future-1]' }], sources: [source] },
+      {
+        id: 'native',
+        parts: [{ type: 'source-url', sourceId: 'native-1', url: 'https://native.example' }],
+        sources: [],
+      },
+      {
+        id: 'answer',
+        parts: [{ type: 'text', text: '[cite:lookup-1] [cite:native-1]' }],
+        sources: [{ ...source, id: 'future-1' }],
+      },
+    ]);
+    expect(registry.get('early')).toEqual([source]);
+    expect(registry.get('answer')?.map((item) => item.id)).toEqual(['future-1', 'lookup-1']);
+  });
+
+  test('resolves known provider and multi-ID marks, preserving code and unknown marks', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'turn0search0', url: 'https://example.com' },
+      {
+        type: 'text',
+        text: '[1] citeturn0search0 [cite:turn0search0, missing] `[1]` citeunknown',
+      },
+    ];
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)?.plainText).toBe(
+      '[1] [1] [1][cite:missing] `[1]` citeunknown',
+    );
+    expect(citationIds(parts)).toEqual(['turn0search0', 'missing', 'unknown']);
   });
 });
