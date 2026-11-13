@@ -38,7 +38,7 @@ export interface ImageGenerationTransport {
  * Provider-agnostic submit payload derived from the AI SDK call options.
  *
  * `providerParams` carries the provider-specific options bag
- * (`options.providerOptions[provider]`) by reference, so a non-JSON
+ * (`options.providerOptions[provider]`) in a shallow copy, so a non-JSON
  * `onProgress` callback nested in it survives to the transport.
  */
 export interface ImageGenerationSubmitInput {
@@ -52,6 +52,7 @@ export interface ImageGenerationSubmitInput {
   mask: ImageModelV3CallOptions['mask'];
   /** Per-model routing, derived in main from the registry (not a user param). */
   modelDescriptor?: ImageTransportDescriptor;
+  requestTimeoutMs?: number;
   providerParams: Record<string, unknown>;
   /**
    * Abort signal forwarded from `options.abortSignal`. Async providers
@@ -110,8 +111,9 @@ export function createImageGenerationModel(
         throw createAbortError('Image generation aborted');
       }
 
-      const providerParams =
+      const { requestTimeoutMs: timeout, ...providerParams } =
         (options.providerOptions?.[provider] as Record<string, unknown> | undefined) ?? {};
+      const requestTimeoutMs = typeof timeout === 'number' && timeout ? timeout : undefined;
       const modelDescriptor = readModelDescriptor(providerParams.modelDescriptor);
 
       const onProgress =
@@ -129,6 +131,7 @@ export function createImageGenerationModel(
         files: options.files,
         mask: options.mask,
         modelDescriptor,
+        requestTimeoutMs,
         providerParams,
         signal: abortSignal,
       });

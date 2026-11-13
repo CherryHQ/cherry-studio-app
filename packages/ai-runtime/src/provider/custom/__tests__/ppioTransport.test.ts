@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_TIMEOUT } from '../../../constants';
+import { DEFAULT_IMAGE_REQUEST_TIMEOUT_MS } from '../../../constants';
 import type { ImageGenerationSubmitInput } from '../imageGenerationModel';
 import { createPpioTransport, PpioApiError, PpioTaskFailedError } from '../ppio/ppioTransport';
 
@@ -198,13 +198,134 @@ describe('PpioTransport', () => {
       })
       .catch((error) => error);
 
-    await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT);
+    await vi.advanceTimersByTimeAsync(DEFAULT_IMAGE_REQUEST_TIMEOUT_MS);
 
     const error = await promise;
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(
-      `PPIO API request timeout after ${DEFAULT_TIMEOUT / 1000}s`,
+      `PPIO API request timeout after ${DEFAULT_IMAGE_REQUEST_TIMEOUT_MS / 1000}s`,
     );
+  });
+
+  it.each([
+    [false, undefined, 600_000],
+    [true, undefined, 600_000],
+    [false, 45_000, 45_000],
+    [true, 45_000, 45_000],
+    [false, 900_000, 900_000],
+  ])(
+    'aborts submit at its deadline (sync=%s, override=%s)',
+    async (isSync, requestTimeoutMs, deadline) => {
+      const started = Date.now();
+      let abortedAt: number | undefined;
+      let settled = false;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init!.signal!.addEventListener('abort', () => {
+              abortedAt = Date.now() - started;
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+            });
+          }),
+      );
+      const result = createPpioTransport({ apiKey: 'token' })
+        .submit({
+          modelId: 'seedream-4.5-draw',
+          prompt: 'a fox',
+          n: 1,
+          size: undefined,
+          seed: undefined,
+          files: undefined,
+          mask: undefined,
+          modelDescriptor: { id: 'seedream-4.5-draw', endpoint: '/v3/seedream-4.5', isSync },
+          providerParams: {},
+          requestTimeoutMs,
+        })
+        .catch((error) => error)
+        .then((value) => {
+          settled = true;
+          return value;
+        });
+      if (deadline > 120_000) {
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(abortedAt).toBeUndefined();
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(Math.min(deadline - 1, 600_000) - 120_000);
+        expect(abortedAt).toBeUndefined();
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(deadline - Math.min(deadline - 1, 600_000));
+      } else {
+        await vi.advanceTimersByTimeAsync(deadline - 1);
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+      }
+      expect(abortedAt).toBe(deadline);
+      expect(await result).toBeInstanceOf(Error);
+      expect(settled).toBe(true);
+    },
+  );
+
+  it('propagates parent cancellation promptly without classifying it as timeout', async () => {
+    const controller = new AbortController();
+    let abortedAt: number | undefined;
+    const started = Date.now();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => {
+            abortedAt = Date.now() - started;
+            reject(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+          });
+        }),
+    );
+    const result = createPpioTransport({ apiKey: 'token' })
+      .submit({
+        modelId: 'seedream-4.5-draw',
+        prompt: 'fox',
+        n: 1,
+        size: undefined,
+        seed: undefined,
+        files: undefined,
+        mask: undefined,
+        providerParams: {},
+        signal: controller.signal,
+        modelDescriptor: { id: 'seedream-4.5-draw', endpoint: '/v3/seedream-4.5', isSync: true },
+      })
+      .catch((error) => error);
+    await vi.advanceTimersByTimeAsync(1000);
+    controller.abort();
+    expect(abortedAt).toBe(1000);
+    expect(await result).toMatchObject({ name: 'AbortError', message: 'PPIO API request aborted' });
+  });
+
+  it('cleans up the deadline and parent listener after success', async () => {
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    let aborts = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      init!.signal!.addEventListener('abort', () => {
+        aborts++;
+      });
+      return new Response(JSON.stringify({ images: ['https://img/a.png'] }));
+    });
+    await createPpioTransport({ apiKey: 'token' }).submit({
+      modelId: 'seedream-4.5-draw',
+      prompt: 'fox',
+      n: 1,
+      size: undefined,
+      seed: undefined,
+      files: undefined,
+      mask: undefined,
+      providerParams: {},
+      signal: controller.signal,
+      modelDescriptor: { id: 'seedream-4.5-draw', endpoint: '/v3/seedream-4.5', isSync: true },
+      requestTimeoutMs: 45_000,
+    });
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(aborts).toBe(0);
   });
 
   it('supports official Seedream 5.0 Lite sync endpoint and object image results', async () => {

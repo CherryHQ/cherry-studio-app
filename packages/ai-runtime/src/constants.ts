@@ -1,2 +1,3 @@
 export const DEFAULT_MAX_TOKENS = 8192;
 export const DEFAULT_TIMEOUT = 30 * 60 * 1000;
+export const DEFAULT_IMAGE_REQUEST_TIMEOUT_MS = 10 * 60_000;

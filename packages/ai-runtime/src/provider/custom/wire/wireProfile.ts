@@ -12,7 +12,6 @@
  * {@link WireRegistration} (`dualOpenAI` / `passthrough`) + the adapter
  * (`buildVendorProviderOptions`).
  */
-import { wireName } from '@cherrystudio/provider-registry';
 import type { CanonicalParamKey } from '@cherrystudio/universal/data/types/model';
 import type { JSONValue } from 'ai';
 
@@ -61,7 +60,6 @@ export const DIFFUSION_WIRE_PROFILE: WireProfile = {
     'guidanceScale',
     'promptEnhancement',
     'quality',
-    'outputFormat',
   ],
 };
 
@@ -79,14 +77,6 @@ export const OPENAI_WIRE_PROFILE: WireProfile = {
   },
 };
 
-/** Compatible image models forward options directly to JSON or multipart fields. */
-const OPENAI_COMPATIBLE_WIRE_PROFILE: WireProfile = {
-  ...OPENAI_WIRE_PROFILE,
-  fields: {
-    outputFormat: { to: wireName('outputFormat') },
-  },
-};
-
 /**
  * aihubmix aggregator. Reproduces the `aihubmix` emitter: the OpenAI image body
  * PLUS `seed` (aihubmix's backends — Doubao Seedream / Qwen-Image / FLUX / iRAG /
@@ -94,7 +84,6 @@ const OPENAI_COMPATIBLE_WIRE_PROFILE: WireProfile = {
  * uses compatible field names for the primary body and this SDK shape under `openai`.
  */
 export const AIHUBMIX_WIRE_PROFILE: WireProfile = {
-  ...OPENAI_WIRE_PROFILE,
   forward: [...(OPENAI_WIRE_PROFILE.forward ?? []), 'seed'],
 };
 
@@ -276,9 +265,12 @@ export const WIRE_REGISTRY: Record<string, WireRegistration> = {
     key: 'cherryin',
     passthrough: true,
   },
+  // Mirrors desktop origin/main wireProfile.ts:263.
   newapi: {
-    profile: OPENAI_COMPATIBLE_WIRE_PROFILE,
-    also: [{ key: 'openai', profile: OPENAI_WIRE_PROFILE }],
+    profile: {
+      forward: [...(OPENAI_WIRE_PROFILE.forward ?? []), ...(DIFFUSION_WIRE_PROFILE.forward ?? [])],
+    },
+    passthrough: true,
   },
   google: { profile: GOOGLE_WIRE_PROFILE },
   // Vertex reuses the google body but delivers under `vertex` (the key the
@@ -291,22 +283,12 @@ export const WIRE_REGISTRY: Record<string, WireRegistration> = {
   // passthrough: forward the vendor bag (imageResolution / addWatermark /
   // sequentialImageGeneration / responseFormat …) under the `aihubmix` key, where
   // the per-backend custom model (Doubao Seedream / Qwen / Wan …) reads it.
-  // The primary body can also reach a generic compatible adapter through an imported
-  // image endpoint, which bypasses AiHubMix's own field-name conversion.
-  aihubmix: {
-    profile: {
-      ...AIHUBMIX_WIRE_PROFILE,
-      fields: OPENAI_COMPATIBLE_WIRE_PROFILE.fields,
-    },
-    passthrough: true,
-    also: [{ key: 'openai', profile: AIHUBMIX_WIRE_PROFILE }],
-  },
+  // Mirrors desktop origin/main wireProfile.ts:281.
+  aihubmix: { profile: AIHUBMIX_WIRE_PROFILE, dualOpenAI: true, passthrough: true },
+  // Mirrors desktop origin/main wireProfile.ts:282.
   dmxapi: {
     profile: DMXAPI_WIRE_PROFILE,
-    also: [
-      { key: 'google', profile: DMXAPI_GOOGLE_PROFILE },
-      { key: 'openai', profile: OPENAI_WIRE_PROFILE },
-    ],
+    also: [{ key: 'google', profile: DMXAPI_GOOGLE_PROFILE }],
   },
   ollama: { profile: OLLAMA_WIRE_PROFILE },
   minimax: { profile: MINIMAX_WIRE_PROFILE },

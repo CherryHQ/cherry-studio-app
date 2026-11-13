@@ -1,12 +1,16 @@
 import { APICallError, type ImageModelV3CallOptions } from '@ai-sdk/provider';
+import { ProviderExtension, extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { MockImageModelV3 } from 'ai/test';
+import { MockImageModelV3, MockProviderV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
+import * as providerConfig from '@/backend/ai/generation/providerConfig';
 import type { RecordAiInvocationInput } from '@/backend/data/services/AiUsageRecordService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 
+import { createImageGenerationModel } from '../../../../../packages/ai-runtime/src/provider/custom/imageGenerationModel';
+import { createModelscopeTransport } from '../../../../../packages/ai-runtime/src/provider/custom/modelscope/modelscopeTransport';
 import { projectContractValue, projectImageCall } from '../_harness/contracts';
 import { installMockProvider } from '../_harness/mockProvider';
 import { createContractFixture } from '../_harness/services';
@@ -276,6 +280,123 @@ describe('AiService.generateImage AI SDK contract', () => {
         },
       },
     });
+  });
+
+  test.each([45_000, 0, undefined])(
+    'hands custom transport timeout %s to the provider without serializing it',
+    async (requestTimeoutMs) => {
+      const fixture = createContractFixture({
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        modelId: 'contract-image',
+        modelOverrides: { endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION] },
+        providerOverrides: {
+          id: 'modelscope',
+          endpointConfigs: {
+            [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
+              adapterFamily: 'modelscope',
+              baseUrl: 'https://contract.invalid/v1',
+            },
+          },
+        },
+      });
+      fixture.services.providerRegistry.getImageGenerationSupport = jest.fn(() => ({
+        modes: {
+          generate: { supports: {}, vendorTransport: { endpoint: '/v1/images/generations' } },
+        },
+      }));
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ task_id: 'task-1' }),
+      } as Response);
+      const transport = createModelscopeTransport({ apiKey: 'contract-key' });
+      const submit = jest.fn(transport.submit.bind(transport));
+      const realModel = createImageGenerationModel(fixture.model.modelId, {
+        provider: 'modelscope',
+        transport: { submit, poll: async () => [] },
+      });
+      const doGenerate = jest.fn(async (options: ImageModelV3CallOptions) => {
+        await realModel.doGenerate(options);
+        return imageResult(1);
+      });
+      const originalResolve = providerConfig.resolveAiSdkServing;
+      jest.spyOn(providerConfig, 'resolveAiSdkServing').mockImplementation(async (...args) => {
+        const resolved = await originalResolve(...args);
+        return { ...resolved, sdkConfig: { ...resolved.sdkConfig, providerId: 'modelscope' } };
+      });
+      const original = extensionRegistry.get('modelscope');
+      extensionRegistry.unregister('modelscope');
+      extensionRegistry.register(
+        ProviderExtension.create({
+          name: 'modelscope',
+          supportsImageGeneration: true,
+          create: () =>
+            new MockProviderV3({
+              imageModels: {
+                [fixture.model.modelId]: new MockImageModelV3({
+                  doGenerate,
+                  modelId: fixture.model.modelId,
+                  provider: 'modelscope',
+                }),
+              },
+            }),
+        }),
+      );
+      restoreProvider = () => {
+        extensionRegistry.unregister('modelscope');
+        if (original) extensionRegistry.register(original);
+      };
+
+      await new AiService(fixture.services).generateImage({
+        mode: 'generate',
+        paramValues: { seed: 7 },
+        prompt: 'Timeout hand-off.',
+        requestTimeoutMs,
+        uniqueModelId: fixture.model.id,
+      });
+
+      expect(doGenerate).toHaveBeenCalledTimes(1);
+      const call = doGenerate.mock.calls[0][0];
+      const { providerOptions, ...canonical } = call;
+      expect(JSON.stringify(canonical)).not.toContain('requestTimeoutMs');
+      expect(Object.keys(providerOptions)).toEqual(['modelscope']);
+      if (requestTimeoutMs === undefined) {
+        expect(JSON.stringify(providerOptions)).not.toContain('requestTimeoutMs');
+      } else {
+        expect(providerOptions.modelscope).toHaveProperty('requestTimeoutMs', requestTimeoutMs);
+        const { requestTimeoutMs: _timeout, ...remaining } = providerOptions.modelscope;
+        expect(JSON.stringify(remaining)).not.toContain('requestTimeoutMs');
+      }
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(submit.mock.calls[0][0].requestTimeoutMs).toBe(requestTimeoutMs || undefined);
+      expect(submit.mock.calls[0][0].providerParams).not.toHaveProperty('requestTimeoutMs');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body).toEqual({ model: fixture.model.modelId, prompt: 'Timeout hand-off.', seed: 7 });
+      expect(JSON.stringify(body)).not.toContain('requestTimeoutMs');
+    },
+  );
+
+  test('does not hand a supplied timeout to a native image model', async () => {
+    const fixture = imageFixture();
+    const doGenerate = jest.fn(async (_options: ImageModelV3CallOptions) => imageResult(1));
+    restoreProvider = installMockProvider({
+      image: new MockImageModelV3({
+        doGenerate,
+        modelId: fixture.model.modelId,
+        provider: 'contract-provider',
+      }),
+    });
+    await new AiService(fixture.services).generateImage({
+      mode: 'generate',
+      paramValues: {},
+      prompt: 'Native timeout.',
+      requestTimeoutMs: 45_000,
+      uniqueModelId: fixture.model.id,
+    });
+    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(doGenerate.mock.calls[0][0].providerOptions)).not.toContain(
+      'requestTimeoutMs',
+    );
   });
 
   test('preserves status and provider facts while redacting image-model failure details', async () => {

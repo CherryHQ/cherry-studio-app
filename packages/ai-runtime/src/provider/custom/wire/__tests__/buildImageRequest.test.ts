@@ -115,7 +115,6 @@ describe('buildVendorProviderOptions — OpenAI image family (dual-keyed)', () =
     'azure-responses',
     'huggingface',
     'cherryin',
-    'newapi',
   ];
 
   it.each(OPENAI_FAMILY)(
@@ -340,5 +339,77 @@ describe('buildVendorProviderOptions — MiniMax image API', () => {
         aigc_watermark: true,
       },
     });
+  });
+});
+
+describe('desktop registry parity', () => {
+  it('passes output format only to aihubmix while delivering seed to both keys', () => {
+    expect(engine('aihubmix', { outputFormat: 'gif', seed: 9 })).toEqual({
+      aihubmix: { seed: 9, outputFormat: 'gif' },
+      openai: { seed: 9 },
+    });
+  });
+
+  it('delivers dmxapi options only to dmxapi and google', () => {
+    expect(engine('dmxapi', { outputFormat: 'gif', seed: 7, aspectRatio: '1:1' })).toEqual({
+      dmxapi: { seed: 7 },
+      google: { imageConfig: { aspectRatio: '1:1' } },
+    });
+  });
+
+  it('does not map output format to snake_case for an unlisted compatible provider', () => {
+    expect(engine('silicon', { outputFormat: 'gif', seed: 7 })).toEqual({
+      silicon: { seed: 7, outputFormat: 'gif' },
+    });
+  });
+});
+
+describe('newapi diffusion forwarding', () => {
+  it('maps canonical fields and forwards vendor extras under newapi only', () => {
+    const result = engine('newapi', {
+      outputFormat: 'gif',
+      complexity: 'high',
+      quality: 'high',
+      background: 'transparent',
+      moderation: 'low',
+      style: 'vivid',
+      seed: 0,
+      negativePrompt: 'blur',
+      numInferenceSteps: 20,
+      guidanceScale: 4,
+      promptEnhancement: false,
+      cfg: 6,
+      negative_prompt: 'collision',
+      numImages: 1,
+      size: '1024x1024',
+      aspectRatio: '1:1',
+    });
+    expect(result).toEqual({
+      newapi: {
+        outputFormat: 'gif',
+        complexity: 'high',
+        quality: 'high',
+        background: 'transparent',
+        moderation: 'low',
+        style: 'vivid',
+        seed: 0,
+        negative_prompt: 'blur',
+        num_inference_steps: 20,
+        guidance_scale: 4,
+        prompt_enhancement: false,
+        cfg: 6,
+      },
+    });
+    expect(result.newapi).not.toHaveProperty('size');
+  });
+  it('omits empty canonical values', () => {
+    expect(
+      engine('newapi', {
+        outputFormat: 'auto',
+        seed: null,
+        negativePrompt: '',
+        guidanceScale: undefined,
+      }),
+    ).toEqual({ newapi: { outputFormat: 'auto' } });
   });
 });

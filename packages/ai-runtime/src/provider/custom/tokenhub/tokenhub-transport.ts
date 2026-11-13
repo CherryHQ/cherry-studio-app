@@ -1,5 +1,6 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 
+import { DEFAULT_IMAGE_REQUEST_TIMEOUT_MS } from '../../../constants';
 import type {
   ImageGenerationSubmitInput,
   ImageGenerationTransport,
@@ -198,6 +199,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildHunyuanBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal,
           },
         );
@@ -209,6 +211,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildSeedreamBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal,
           },
         );
@@ -220,6 +223,7 @@ class TokenhubTransport implements ImageGenerationTransport {
           'POST',
           buildViduBody(input, bag),
           {
+            timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
             signal: input.signal,
           },
         );
