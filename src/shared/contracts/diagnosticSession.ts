@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { UniqueModelId } from '@/shared/data/types/model';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 import { AiFailureReasonSchema } from './aiFailure';
@@ -159,13 +159,11 @@ export const DiagnosticToolResultSchema = z.discriminatedUnion('tool', [
 ]);
 export type DiagnosticToolResult = z.infer<typeof DiagnosticToolResultSchema>;
 export type DiagnosticToolId = DiagnosticToolResult['tool'];
-export type DiagnosticReadTool = {
-  [Tool in DiagnosticToolId]: {
-    id: Tool;
-    description: string;
-    read(signal: AbortSignal): Promise<Extract<DiagnosticToolResult, { tool: Tool }>['data']>;
-  };
-}[DiagnosticToolId];
+export type DiagnosticFactReader = {
+  [Tool in DiagnosticToolId]: (
+    signal: AbortSignal,
+  ) => Promise<Extract<DiagnosticToolResult, { tool: Tool }>['data']>;
+};
 export type DiagnosticEvidence = { id: string } & (
   | DiagnosticToolResult
   | { tool: DiagnosticToolId; unavailable: 'result_limit' }
@@ -183,6 +181,21 @@ export type DiagnosticAiReport = {
   advice: string[];
   evidence: DiagnosticEvidence[];
 };
+
+export type DiagnosticAgentRequest = {
+  model: Model;
+  language: string;
+  context: DiagnosticAiContext;
+  facts: DiagnosticFactReader;
+  signal: AbortSignal;
+  onEvidence?: (evidence: DiagnosticEvidence) => void;
+};
+
+/** Bootstrap binds the implementation; the diagnostic session owns its deadline and cancellation. */
+export interface DiagnosticAgent {
+  readonly timeoutMs: number;
+  run(request: DiagnosticAgentRequest): Promise<DiagnosticAiReport>;
+}
 
 /** The diagnostic sheet owns this run; dispose cancels and joins admitted work. */
 export interface DiagnosticSession {

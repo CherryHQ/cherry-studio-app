@@ -37,9 +37,9 @@ function fixture() {
     providerId: 'provider',
     modelId: 'model',
   };
-  const runAi = jest.fn<
-    ReturnType<Parameters<typeof createDiagnosticsModule>[0]['runAi']>,
-    Parameters<Parameters<typeof createDiagnosticsModule>[0]['runAi']>
+  const runAgent = jest.fn<
+    ReturnType<Parameters<typeof createDiagnosticsModule>[0]['agent']['run']>,
+    Parameters<Parameters<typeof createDiagnosticsModule>[0]['agent']['run']>
   >(async () => ({
     cause: 'Check the address',
     advice: ['Open settings'],
@@ -77,9 +77,9 @@ function fixture() {
       connections: [],
     }),
     permissions: async () => ({}),
-    runAi,
+    agent: { timeoutMs: 60000, run: runAgent },
   };
-  return { model, provider, context, deps, runAi, defaultModel, checkChat };
+  return { model, provider, context, deps, runAgent, defaultModel, checkChat };
 }
 
 test('an incident without model identity never checks the current default model', async () => {
@@ -128,7 +128,7 @@ test('a provider configuration change invalidates a previous report before anoth
   await expect(session.checkConversation()).rejects.toMatchObject({ reason: 'stale' });
   await expect(session.diagnose(f.model.id)).rejects.toMatchObject({ reason: 'stale' });
   expect(f.checkChat).not.toHaveBeenCalled();
-  expect(f.runAi).not.toHaveBeenCalled();
+  expect(f.runAgent).not.toHaveBeenCalled();
   await owner.dispose();
 });
 
@@ -159,9 +159,10 @@ test('the incident model effective endpoint supplies both configuration and conn
 });
 
 test.each(['cancel', 'timeout'] as const)(
-  '%s releases an AI configuration recheck and lets the owner finish disposal',
+  '%s releases an AI configuration recheck using the Agent deadline and lets the owner finish disposal',
   async (ending) => {
     const f = fixture();
+    if (ending === 'timeout') f.deps.agent = { ...f.deps.agent, timeoutMs: 1234 };
     const owner = createDiagnosticsModule(f.deps);
     const session = owner.module.createSession(f.context);
     await session.check();
@@ -182,13 +183,13 @@ test.each(['cancel', 'timeout'] as const)(
         reason: ending === 'timeout' ? 'timeout' : 'cancelled',
       });
       await admitted;
-      if (ending === 'timeout') await jest.advanceTimersByTimeAsync(60000);
+      if (ending === 'timeout') await jest.advanceTimersByTimeAsync(f.deps.agent.timeoutMs);
       else session.cancel();
       await stopped;
       await owner.dispose();
       release(false);
       await Promise.resolve();
-      expect(f.runAi).not.toHaveBeenCalled();
+      expect(f.runAgent).not.toHaveBeenCalled();
     } finally {
       release?.(false);
       await owner.dispose();
@@ -222,7 +223,7 @@ test('disposal cancels a diagnostic model lookup without admitting its late resu
   await stopped;
   release(analysisModel);
   await Promise.resolve();
-  expect(f.runAi).not.toHaveBeenCalled();
+  expect(f.runAgent).not.toHaveBeenCalled();
 });
 
 test('AI input and its fixed configuration tool never receive stored credentials', async () => {
@@ -231,14 +232,8 @@ test('AI input and its fixed configuration tool never receive stored credentials
   const session = owner.module.createSession(f.context);
   await session.check();
   await session.diagnose(f.model.id);
-  const input = f.runAi.mock.calls[0]![0];
-  expect(input.tools.map((tool) => tool.id)).toEqual([
-    'configuration',
-    'endpoint',
-    'plugins',
-    'logs',
-  ]);
-  const configuration = await input.tools[0]!.read(new AbortController().signal);
+  const input = f.runAgent.mock.calls[0]![0];
+  const configuration = await input.facts.configuration(new AbortController().signal);
   expect(configuration).toMatchObject({
     provider: 'provider',
     model: 'model',
@@ -256,7 +251,7 @@ test('host disposal aborts and joins an admitted AI run and rejects later admiss
   const admitted = new Promise<void>((resolve) => {
     started = resolve;
   });
-  f.runAi.mockImplementation(
+  f.runAgent.mockImplementation(
     ({ signal }) =>
       new Promise((_, reject) => {
         signal.addEventListener('abort', () => reject(new DiagnosticSessionError('cancelled')), {
@@ -303,7 +298,7 @@ test('a stalled configuration lookup does not block local results or leave check
       ]),
     );
     expect(report.checks.every((check) => check.status !== 'pending')).toBe(true);
-    expect(f.runAi).not.toHaveBeenCalled();
+    expect(f.runAgent).not.toHaveBeenCalled();
     expect(f.checkChat).not.toHaveBeenCalled();
   } finally {
     await owner.dispose();

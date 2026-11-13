@@ -1,1 +1,1 @@
-export { runDiagnosticAi } from './runDiagnosticAi';
+export { createDiagnosticAgent } from './createDiagnosticAgent';

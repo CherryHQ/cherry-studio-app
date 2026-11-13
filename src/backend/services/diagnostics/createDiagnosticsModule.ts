@@ -16,13 +16,10 @@ import {
   type DiagnosticSession,
   type DiagnosticCheck,
   type DiagnosticReport,
-  type DiagnosticAiReport,
-  type DiagnosticAiContext,
+  type DiagnosticAgent,
   type DiagnosticConfiguration,
   type DiagnosticEndpointCheck,
-  type DiagnosticEvidence,
   type DiagnosticPlugins,
-  type DiagnosticReadTool,
 } from '@/shared/contracts/diagnosticSession';
 import type { ModelsModule } from '@/shared/contracts/models';
 import type { PermissionStatuses } from '@/shared/contracts/permissions';
@@ -35,14 +32,7 @@ import { readDiagnosticLogSummary } from './diagnosticLogSummary';
 
 type Dependencies = {
   bundle: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
-  runAi(input: {
-    model: Model;
-    language: string;
-    context: DiagnosticAiContext;
-    tools: DiagnosticReadTool[];
-    signal: AbortSignal;
-    onEvidence?: (evidence: DiagnosticEvidence) => void;
-  }): Promise<DiagnosticAiReport>;
+  agent: DiagnosticAgent;
   resolveConnection(provider: Provider, model: Model): { baseUrl: string };
   model: Pick<ModelService, 'getById'>;
   provider: Pick<ProviderService, 'getByProviderId' | 'listApiKeys' | 'getAuthConfig'>;
@@ -394,7 +384,7 @@ function createSession(
           configurationIssue: bound?.issue ?? null,
           remoteExecution: context?.executionSource === 'desktop',
         });
-        return deps.runAi({
+        return deps.agent.run({
           model,
           signal,
           language: deps.language(),
@@ -404,40 +394,20 @@ function createSession(
             checks: report.checks,
             incident: context?.error ?? null,
           },
-          tools: [
-            {
-              id: 'configuration',
-              description:
-                'Read the fixed incident model/provider configuration summary. No keys, headers, private paths or chat text.',
-              read: async (toolSignal) => {
-                await assertCurrent(toolSignal);
-                return configuration();
-              },
+          facts: {
+            configuration: async (toolSignal) => {
+              await assertCurrent(toolSignal);
+              return configuration();
             },
-            {
-              id: 'endpoint',
-              description:
-                'Probe only the incident provider origin without credentials. Reports reachability, not authentication.',
-              read: endpointCheck,
+            endpoint: endpointCheck,
+            plugins: async (toolSignal) => {
+              toolSignal.throwIfAborted();
+              return deps.plugins();
             },
-            {
-              id: 'plugins',
-              description:
-                'Read cached plugin connection states without reconnecting or executing plugins.',
-              read: async (toolSignal) => {
-                toolSignal.throwIfAborted();
-                return deps.plugins();
-              },
-            },
-            {
-              id: 'logs',
-              description:
-                'Read at most 12 recent allowlisted technical log summaries. No raw logs or chat content.',
-              read: (toolSignal) => readDiagnosticLogSummary(context, toolSignal),
-            },
-          ],
+            logs: (toolSignal) => readDiagnosticLogSummary(context, toolSignal),
+          },
         });
-      }, 60000);
+      }, deps.agent.timeoutMs);
     },
     cancel() {
       running?.controller.abort();

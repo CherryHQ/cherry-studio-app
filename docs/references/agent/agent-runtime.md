@@ -16,6 +16,9 @@ The generation hook observes calls; execution and provider-request guards enforc
 because an ordinary hook exception is only reported by the Harness. A derived turn ceiling bounds
 the same isolated run without changing durable-conversation policy.
 On-demand AI diagnosis uses that interface with explicitly supplied automatic read-only tools.
+The [internal diagnostic Agent](../../../src/backend/ai/agent/diagnostics/README.md) owns its bundled
+definition, tool adaptation and final-answer parsing; the workflow supplies scoped fact readers
+through the shared `DiagnosticAgent` contract. Bootstrap alone binds the concrete implementation.
 The probe rejects write/approval capabilities, history, checkpoints and resume inputs; ordinary
 model health checks still pass an empty tool list. Neither path creates an application conversation.
 Translation and automatic naming use the separate `RuntimeTextGenerator` capability on the bound

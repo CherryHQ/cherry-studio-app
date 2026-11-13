@@ -1,7 +1,7 @@
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
-import { runDiagnosticAi } from '@/backend/ai/agent/diagnostics';
+import { createDiagnosticAgent } from '@/backend/ai/agent/diagnostics';
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
@@ -263,24 +263,20 @@ export function createBackend(
         connections,
       };
     },
-    runAi: (input) =>
-      runDiagnosticAi({
-        ...input,
-        runtime: infrastructure.languageServing,
-        onUsage: async (report) => {
-          try {
-            await services.aiUsageRecord.recordInvocation({
-              ...report,
-              context: { ...report.context, source: null, messageRef: null },
-              modality: 'language',
-            });
-          } catch {
-            loggerService
-              .withContext('Diagnostics')
-              .warn('Failed to record diagnostic model usage');
-          }
-        },
-      }),
+    agent: createDiagnosticAgent({
+      runtime: infrastructure.languageServing,
+      onUsage: async (report) => {
+        try {
+          await services.aiUsageRecord.recordInvocation({
+            ...report,
+            context: { ...report.context, source: null, messageRef: null },
+            modality: 'language',
+          });
+        } catch {
+          loggerService.withContext('Diagnostics').warn('Failed to record diagnostic model usage');
+        }
+      },
+    }),
   });
   const paintings = createPaintingsModule({
     scopes: infrastructure.resourceScopes,

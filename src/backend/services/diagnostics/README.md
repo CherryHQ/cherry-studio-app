@@ -35,8 +35,13 @@ bodies and treat an HTTP response as evidence of reachability rather than succes
 Automatic checks do not list remote models or send a generation request. The retained explicit
 conversation-check capability requires separate caller confirmation and is not part of this panel.
 
-AI self-check uses an independently selected tool-capable text model and the existing Pi memory
-session. It receives the projected failure, check results and credential-free configuration summary.
+AI self-check uses an independently selected tool-capable text model and the
+[internal diagnostic Agent](../../ai/agent/diagnostics/README.md), injected by bootstrap through the
+pure `DiagnosticAgent` interface. The service supplies scoped `DiagnosticFactReader` callbacks;
+it does not assemble prompts, tool names/descriptions, model events, or answer parsing. The Agent's
+bundled definition owns its deadline and execution limits. The session enforces that declared deadline
+across configuration revalidation, model lookup and AI execution, keeping the same total time bound.
+The Agent receives the projected failure, check results and credential-free configuration summary.
 Four fixed-target read tools expose configuration, recent metadata logs, origin reachability and
 cached plugin states. They cannot select arbitrary URLs/files, read credentials or chat text, invoke
 plugins, reconnect them, modify settings, or mount normal Agent tools. Technical log reads inspect
@@ -49,7 +54,7 @@ guards enforce the decision independently of Pi's observational hooks; ordinary 
 the optional budgets. Native model/tool looping remains Pi-owned.
 
 `diagnosticSession` owns the shared schemas for initial AI context and the four typed tool results.
-Tools bind their read result type to their identity; the AI adapter validates the closed result
+Fact readers bind their result type to their evidence kind; the Agent validates the closed result
 before returning it to the model or UI. Oversized results have an explicit `result_limit` state.
 The existing log projector remains the only owner of its metadata fact allowlist; the shared log
 contract validates its bounded envelope. UI formats typed facts and serializes only for the raw-data

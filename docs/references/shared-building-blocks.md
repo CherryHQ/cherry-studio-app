@@ -68,7 +68,8 @@ it already exists.
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
-| Transient application checks and AI self-check | `Backend.diagnostics.createSession` in `src/backend/services/diagnostics`; bounded read tools run through the existing Pi memory session |
+| Transient application checks and AI self-check workflow | `Backend.diagnostics.createSession` in `src/backend/services/diagnostics`; owns incident binding, freshness, fact reads, cancellation, and the declared Agent deadline |
+| Internal diagnostic Agent definition and execution | [Internal Diagnostic Agent](../../src/backend/ai/agent/diagnostics/README.md); `createDiagnosticAgent` binds runtime and usage delivery, while its JSON resource owns prompts, tool descriptions, and policy |
 | Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |
 | Startup stage timing and milestones | `src/shared/core/logger/startupDiagnostics.ts`, exported through the diagnostic log allowlist |
 

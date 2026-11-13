@@ -30,6 +30,15 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/utils/probe.ts', "void import('../../backend/data/services/ModelService');"],
     ['src/frontend/utils/probe.ts', "require('../../backend/data/services/ModelService');"],
     ['src/backend/data/probe.ts', "import '../services/models/createModelsModule';"],
+    [
+      'src/bootstrap/composition/probe.ts',
+      "import '@/backend/ai/agent/diagnostics/createDiagnosticAgent';",
+    ],
+    ['src/backend/ai/agent/host/probe.ts', "import '../diagnostics/diagnosticAgentDefinition';"],
+    [
+      'src/bootstrap/composition/probe.ts',
+      "import definition from '@/backend/ai/agent/diagnostics/diagnosticAgent.json';",
+    ],
     ['src/frontend/features/chat/probe.ts', "import '../plugin';"],
     ['src/frontend/features/chat/probe.ts', "import type { PluginListScreen } from '../plugin';"],
     ['src/frontend/hooks/probe.ts', "import '../features/plugin';"],
@@ -129,6 +138,8 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/utils/probe.ts', 'void import(`@cherrystudio/universal/ai/builtinTools`);'],
     ['src/frontend/utils/probe.ts', 'require(`@cherrystudio/universal/ai/builtinTools`);'],
     ['src/backend/ai/generation/probe.ts', "void import('ai');"],
+    ['src/bootstrap/composition/probe.ts', "import '@/backend/ai/agent/diagnostics';"],
+    ['src/backend/ai/agent/diagnostics/probe.ts', "import './diagnosticAgentDefinition';"],
     [
       'src/backend/ai/agent/runtime/pi/probe.ts',
       "void import('@earendil-works/pi-ai/api/openai-completions');",
