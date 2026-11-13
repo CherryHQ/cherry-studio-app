@@ -386,6 +386,7 @@ describe('MobileRegistryLoader', () => {
       'ollama',
       'ovms',
       'new-api',
+      'rapid-mlx',
       'litellm',
       'omlx',
       'comfyui',
