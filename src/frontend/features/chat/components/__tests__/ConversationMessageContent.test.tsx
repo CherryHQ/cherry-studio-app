@@ -20,6 +20,14 @@ jest.mock('@/frontend/components/ArtifactPreview', () => {
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
 jest.mock('@/frontend/components/Message', () => ({
   getBuiltInToolDisplay: () => undefined,
+  ReadOnlyToolContent: ({ output }: { output: unknown }) => {
+    const { Text } = jest.requireActual('react-native');
+    return (
+      <Text testID="tool-content">
+        {typeof output === 'string' ? output : JSON.stringify(output)}
+      </Text>
+    );
+  },
   ToolRendererProvider: ({
     children,
     renderTool,

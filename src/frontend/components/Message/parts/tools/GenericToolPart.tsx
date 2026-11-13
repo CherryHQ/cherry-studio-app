@@ -49,7 +49,7 @@ export function GenericToolPart({ part, runningStatusText }: GenericToolPartProp
       }
     >
       {part.progress ? <ToolProgress progress={part.progress} /> : null}
-      {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
+      {part.state === 'output-available' ? <GenericToolContent output={part.output} /> : null}
       {part.state === 'output-error' && isSettledByApp ? (
         <Text className="text-muted-foreground text-sm" selectable>
           {t('chat.tool.unfinishedDetail')}
@@ -72,7 +72,7 @@ export function GenericToolPart({ part, runningStatusText }: GenericToolPartProp
   );
 }
 
-function ToolOutputSection({ output }: { output: unknown }) {
+export function GenericToolContent({ output }: { output: unknown }) {
   const { t } = useTranslation();
 
   if (!hasMessagePartValue(output)) {

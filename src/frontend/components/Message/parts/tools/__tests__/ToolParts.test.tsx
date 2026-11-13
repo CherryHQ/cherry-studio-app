@@ -8,15 +8,17 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { GenericToolPart } from '../GenericToolPart';
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPartRenderer } from '../metaTool/MetaToolPartRenderer';
+import { ReadOnlyToolContent } from '../ReadOnlyToolContent';
 import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
+const mockMcpAppLauncher = jest.fn(() => null);
 const mockSetStringAsync = jest.fn().mockResolvedValue(true);
 const mockToastShow = jest.fn();
 
 jest.mock('@/frontend/components/McpApp', () => ({
-  McpAppLauncher: () => null,
+  McpAppLauncher: () => mockMcpAppLauncher(),
   McpAppConversationBridge: ({ children }: { children: ReactNode }) => children,
   useMcpAppConversation: () => null,
 }));
@@ -858,3 +860,27 @@ function makeToolPart(overrides: Record<string, unknown>): ToolMessagePart {
     ...overrides,
   } as unknown as ToolMessagePart;
 }
+
+it('renders remote MCP text without activating local Apps from result metadata', async () => {
+  mockMcpAppLauncher.mockClear();
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      <ReadOnlyToolContent
+        name="mcp__other-server__read"
+        output={{
+          metadata: { type: 'mcp' },
+          content: { content: [{ type: 'text', text: 'Remote result' }] },
+          mcpApp: { resourceUri: 'ui://remote/app' },
+        }}
+      />,
+    );
+  });
+  expect(
+    renderer.root
+      .findAllByProps({ testID: 'mock-text-body' })
+      .some((node) => node.props.value === 'Remote result'),
+  ).toBe(true);
+  expect(mockMcpAppLauncher).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});

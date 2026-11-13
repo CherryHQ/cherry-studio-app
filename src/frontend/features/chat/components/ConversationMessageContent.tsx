@@ -11,11 +11,10 @@ import { useState, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
+import type { ConversationMessage, ResourceValue } from '@/frontend/appShell/conversation';
 import { ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
-import { ToolRendererProvider } from '@/frontend/components/Message';
-import { MessageDetailText } from '@/frontend/components/MessageDetail';
+import { ReadOnlyToolContent, ToolRendererProvider } from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
@@ -48,15 +47,7 @@ export function ConversationMessageContent({
             }
             statusTone={tool.state === 'failed' ? 'danger' : 'default'}
           >
-            {tool.output ? (
-              <ConversationResourceSection resource={tool.output} title={t('chat.tool.output')} />
-            ) : null}
-            {tool.input ? (
-              <ConversationResourceSection resource={tool.input} title={t('chat.tool.arguments')} />
-            ) : null}
-            {!tool.input && !tool.output ? (
-              <Text className="text-sm text-muted-foreground">{t('chat.tool.noOutput')}</Text>
-            ) : null}
+            <ConversationToolDetail tool={tool} />
           </MessagePart.Tool>
         ) : null;
       }}
@@ -65,47 +56,44 @@ export function ConversationMessageContent({
     </ToolRendererProvider>
   );
 }
-function ConversationResourceSection({
-  resource,
-  title,
+function toolValue(value: ResourceValue | undefined): unknown {
+  if (value?.kind === 'json') return value.value;
+  if (value?.kind !== 'text') return undefined;
+  try {
+    return JSON.parse(value.text);
+  } catch {
+    return value.text;
+  }
+}
+
+function ConversationToolDetail({
+  tool,
 }: {
-  resource: ResourceRead;
-  title: string;
+  tool: NonNullable<ConversationMessage['tools']>[number];
 }) {
   const { t } = useTranslation();
-  const result = useConversationResourceValue(resource);
-  if (result.isError)
+  const input = useConversationResourceValue(tool.input);
+  const output = useConversationResourceValue(tool.output);
+  if (input.isError || output.isError)
     return (
       <ContentState.Error
         title={t('remoteAgent.loadFailed')}
-        primaryAction={{ children: t('common.retry'), onPress: result.refetch }}
+        primaryAction={{
+          children: t('common.retry'),
+          onPress: () => {
+            if (input.isError) input.refetch();
+            if (output.isError) output.refetch();
+          },
+        }}
       />
     );
-  if (!result.data) return <ContentState.Loading title={t('remoteAgent.loading')} />;
-  const value =
-    result.data.kind === 'text'
-      ? result.data.text
-      : result.data.kind === 'json'
-        ? JSON.stringify(result.data.value, null, 2)
-        : result.data.kind === 'metadata' || result.data.kind === 'file'
-          ? result.data.name
-          : JSON.stringify(
-              result.data.kind === 'user-question' ? result.data.question : result.data.questions,
-              null,
-              2,
-            );
+  if (input.isPending || output.isPending)
+    return <ContentState.Loading title={t('remoteAgent.loading')} />;
   return (
-    <MessageDetailText
-      title={title}
-      value={value}
-      language="json"
-      variant={
-        result.data.kind === 'json' ||
-        result.data.kind === 'user-question' ||
-        result.data.kind === 'question'
-          ? 'code'
-          : 'body'
-      }
+    <ReadOnlyToolContent
+      name={tool.title}
+      input={toolValue(input.data)}
+      output={toolValue(output.data)}
     />
   );
 }
