@@ -112,6 +112,9 @@ jest.mock('@cherrystudio/ui/utils', () => ({
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: () => void) => callback(),
+}));
 jest.mock('react-native-reanimated', () => {
   const transition = {
     duration: () => transition,

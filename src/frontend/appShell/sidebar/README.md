@@ -83,6 +83,11 @@ scroll-driven UI-thread layout with no horizontal gesture, scrollbar, path toolb
 it does not change selection, hierarchy, expansion or pagination. The row canvas grows by the
 current offset so text truncation and status stay inside its fixed trailing edge. Native measurements
 publish as a complete batch; stale batches are discarded when rows change or unmount.
+A row stops moving left once its own indentation is consumed, so shallower siblings below a deep
+top row retain the beginning of their titles. Text and rails share this row-local boundary.
+The navigation and native menu targets stay outside that moving canvas at the viewport's width;
+their content callback places only row content and rails inside it. Native menu previews therefore
+use the visible row bounds, including at deep offsets.
 Selection uses the existing whole-row surface, with no additional selected label or branch count.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query

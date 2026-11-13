@@ -637,7 +637,7 @@ function SidebarSessionChildren({
           position={{ kind: 'continuation', depth, ancestorContinuations }}
           leading={leading}
         >
-          <View className="min-w-0">{footer}</View>
+          {(renderCanvas) => renderCanvas(<View className="min-w-0">{footer}</View>)}
         </SidebarSessionBranchFrame>
       ) : null}
     </>
@@ -702,40 +702,44 @@ function DestinationSessionRow({
           ) : undefined
         }
       >
-        <View className="min-w-0">
-          <Pressable
-            accessibilityLabel={session.title || t('session.list.untitled')}
-            accessibilityValue={
-              status
-                ? {
-                    text:
-                      branch?.expanded === false
-                        ? t('session.status.group', { status: t(statusLabelKeys[status]) })
-                        : t(statusLabelKeys[status]),
-                  }
-                : undefined
-            }
-            accessibilityRole="button"
-            onPress={() => onSelect({ kind: 'session', session })}
-            testID={`share-session-${session.ref.sessionId}`}
-          >
-            {({ pressed }) => (
-              <SidebarRowContent
-                trailingInset={branch ? 0 : undefined}
-                leading={
-                  position ? (
-                    <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
-                  ) : (
-                    leading
-                  )
-                }
-                className={cn('w-full', pressed && 'bg-sidebar-accent')}
-              >
-                <SidebarSessionContent title={session.title} status={status} />
-              </SidebarRowContent>
-            )}
-          </Pressable>
-        </View>
+        {(renderCanvas) => (
+          <View className="min-w-0">
+            <Pressable
+              accessibilityLabel={session.title || t('session.list.untitled')}
+              accessibilityValue={
+                status
+                  ? {
+                      text:
+                        branch?.expanded === false
+                          ? t('session.status.group', { status: t(statusLabelKeys[status]) })
+                          : t(statusLabelKeys[status]),
+                    }
+                  : undefined
+              }
+              accessibilityRole="button"
+              onPress={() => onSelect({ kind: 'session', session })}
+              testID={`share-session-${session.ref.sessionId}`}
+            >
+              {({ pressed }) =>
+                renderCanvas(
+                  <SidebarRowContent
+                    trailingInset={branch ? 0 : undefined}
+                    leading={
+                      position ? (
+                        <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
+                      ) : (
+                        leading
+                      )
+                    }
+                    className={cn('w-full', pressed && 'bg-sidebar-accent')}
+                  >
+                    <SidebarSessionContent title={session.title} status={status} />
+                  </SidebarRowContent>,
+                )
+              }
+            </Pressable>
+          </View>
+        )}
       </SidebarSessionBranchFrame>
       {children}
     </>
@@ -834,7 +838,7 @@ function SidebarSessionRow({
       },
     });
   }
-  const row = (
+  const renderRow = (renderCanvas: (content: ReactNode) => ReactNode) => (
     <ContextMenu.Trigger
       accessibilityLabel={session.title || t('session.list.untitled')}
       accessibilityValue={
@@ -857,33 +861,35 @@ function SidebarSessionRow({
       onPress={isSelecting ? () => selection.toggle(selectionKey) : closeDrawer}
       testID={`sidebar-session-${session.ref.sessionId}`}
     >
-      {({ pressed }) => (
-        <SidebarRowContent
-          trailingInset={branch ? 0 : undefined}
-          leading={
-            position ? (
-              <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
-            ) : (
-              leading
-            )
-          }
-          className={cn('w-full', pressed && 'bg-sidebar-accent')}
-        >
-          <SidebarSessionContent
-            title={session.title}
-            status={status}
-            isSelected={!isSelecting && selected}
-          />
-          {isSelecting ? (
-            <Animated.View entering={selectionEntrance} exiting={rowExit}>
-              <SelectionIndicator
-                disabled={isDeleting || remove?.availability.state !== 'enabled'}
-                selected={checked}
-              />
-            </Animated.View>
-          ) : null}
-        </SidebarRowContent>
-      )}
+      {({ pressed }) =>
+        renderCanvas(
+          <SidebarRowContent
+            trailingInset={branch ? 0 : undefined}
+            leading={
+              position ? (
+                <SidebarSessionBranchLeading leading={leading} depth={position.depth} />
+              ) : (
+                leading
+              )
+            }
+            className={cn('w-full', pressed && 'bg-sidebar-accent')}
+          >
+            <SidebarSessionContent
+              title={session.title}
+              status={status}
+              isSelected={!isSelecting && selected}
+            />
+            {isSelecting ? (
+              <Animated.View entering={selectionEntrance} exiting={rowExit}>
+                <SelectionIndicator
+                  disabled={isDeleting || remove?.availability.state !== 'enabled'}
+                  selected={checked}
+                />
+              </Animated.View>
+            ) : null}
+          </SidebarRowContent>,
+        )
+      }
     </ContextMenu.Trigger>
   );
   return (
@@ -905,15 +911,17 @@ function SidebarSessionRow({
           ) : undefined
         }
       >
-        <View className="min-w-0">
-          {isSelecting ? (
-            row
-          ) : (
-            <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
-              {row}
-            </ContextMenuLink>
-          )}
-        </View>
+        {(renderCanvas) => (
+          <View className="min-w-0">
+            {isSelecting ? (
+              renderRow(renderCanvas)
+            ) : (
+              <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
+                {renderRow(renderCanvas)}
+              </ContextMenuLink>
+            )}
+          </View>
+        )}
       </SidebarSessionBranchFrame>
       {children}
     </>

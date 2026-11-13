@@ -50,7 +50,7 @@ export function SidebarSessionBranchLeading({
   );
 }
 
-/** Selection covers the complete row, including its sibling disclosure target. */
+/** Selection covers the complete row; callers wrap its canvas in stationary interaction targets. */
 export function SidebarSessionBranchFrame({
   children,
   position,
@@ -60,7 +60,7 @@ export function SidebarSessionBranchFrame({
   layout,
   exiting,
 }: {
-  children: ReactNode;
+  children: (renderCanvas: (content: ReactNode) => ReactNode) => ReactNode;
   position?: SidebarSessionBranchPosition;
   leading?: ReactNode;
   selected?: boolean;
@@ -70,8 +70,10 @@ export function SidebarSessionBranchFrame({
   const { ref, viewport } = useSidebarBranchRow(position?.depth ?? 0);
   const width = useSharedValue(0);
   const offset = viewport?.offset;
+  const indentation = getSidebarBranchLayout(position?.depth ?? 0).indentation;
   const canvasStyle = useAnimatedStyle(() => {
-    const shift = offset?.get() ?? 0;
+    // A shallower sibling must not lose its title's beginning beyond the left viewport edge.
+    const shift = Math.min(indentation, offset?.get() ?? 0);
     return {
       // Keep the text/status trailing edge fixed while the real indentation moves left.
       width: width.get() > 0 ? width.get() + shift : ('100%' as const),
@@ -97,17 +99,19 @@ export function SidebarSessionBranchFrame({
         className="min-w-0 flex-1 overflow-hidden"
         onLayout={(event) => width.set(event.nativeEvent.layout.width)}
       >
-        <Animated.View className="relative" style={canvasStyle}>
-          {children}
-          {position ? (
-            <SidebarSessionBranchRail
-              position={position}
-              height={height}
-              leading={Boolean(leading)}
-              selected={selected}
-            />
-          ) : null}
-        </Animated.View>
+        {children((content) => (
+          <Animated.View className="relative" style={canvasStyle}>
+            {content}
+            {position ? (
+              <SidebarSessionBranchRail
+                position={position}
+                height={height}
+                leading={Boolean(leading)}
+                selected={selected}
+              />
+            ) : null}
+          </Animated.View>
+        ))}
       </View>
       {disclosure}
     </Animated.View>
