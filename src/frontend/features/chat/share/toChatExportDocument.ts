@@ -177,7 +177,12 @@ export function toChatExportDocument(
           (part) => part.type !== 'tool-summary' && part.type !== 'prepared-file',
         ),
       );
-    if (translation && source && sha256HexOfText(source) === translation.sourceHash)
+    if (
+      translation &&
+      source &&
+      sha256HexOfText(source) === translation.sourceHash &&
+      (translation.revision === undefined || translation.revision === message.revision)
+    )
       blocks.push({
         kind: 'markdown',
         source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, allSources, exportNumberById, presentation.parts)}`,

@@ -494,3 +494,18 @@ test('keeps exported translation citations aligned with original answer and sour
     },
   ]);
 });
+
+test('sharing a remote message omits translations from an older revision even when prose matches', () => {
+  const document = toChatExportDocument([{ ...answer, revision: '2' }], {
+    ...options,
+    translations: {
+      b: {
+        revision: '1',
+        sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+        language: 'zh-CN',
+        content: '旧版本译文',
+      },
+    },
+  });
+  expect(JSON.stringify(document)).not.toContain('旧版本译文');
+});

@@ -19,6 +19,8 @@ import { Text, View } from 'react-native';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
+import { collectCitationSources, resolveMessageCitations } from '@/frontend/utils/messageCitations';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 import { useMessageTranslation } from './MessageTranslationProvider';
@@ -41,9 +43,16 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
   });
   if (!translation?.state.visible) return null;
   const { state } = translation;
+  const parts: CherryMessagePart[] = [
+    ...(message.data.parts ?? []).filter((part) => part.type !== 'text'),
+    { type: 'text', text: state.content },
+  ];
+  const resolved = resolveMessageCitations(parts, [
+    ...collectCitationSources(message.data.parts ?? [], message.data.citationSources).values(),
+  ]).textByPartIndex.get(parts.length - 1);
   const copy = async () => {
     try {
-      await Clipboard.setStringAsync(state.content);
+      await Clipboard.setStringAsync(resolved?.plainText ?? state.content);
       toast.show({ label: t('chat.messageActions.copied'), variant: 'success' });
     } catch {
       toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
@@ -59,7 +68,10 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
             </Text>
           ) : null}
           {state.content ? (
-            <MarkdownText isStreaming={state.status === 'running'} markdown={state.content} />
+            <MarkdownText
+              isStreaming={state.status === 'running'}
+              markdown={resolved?.markdown ?? state.content}
+            />
           ) : null}
           {state.status === 'error' || state.status === 'cancelled' ? (
             <Text className="text-muted-foreground text-sm" accessibilityLiveRegion="polite">

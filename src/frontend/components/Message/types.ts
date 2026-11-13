@@ -13,6 +13,8 @@ import type { Model } from '@/shared/data/types/model';
 export type MessageListItem = Readonly<{
   /** Local Agent origin for on-demand reasoning reads; remote parts already own their text. */
   agentSessionId?: string;
+  /** Source-issued message revision; derived reading aids cannot cross revisions. */
+  revision?: string;
   /** Timeline position; synthetic rows inherit the adjacent persisted timestamp. */
   createdAt?: string;
   data: Readonly<{

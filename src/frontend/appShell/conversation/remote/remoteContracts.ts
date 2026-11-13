@@ -107,6 +107,8 @@ export interface ConversationHistory {
   prepareSelection(messageIds: readonly string[], signal: AbortSignal): Promise<TranscriptSnapshot>;
 }
 export interface RemoteConversationSession {
+  /** Stable desktop binding + Session namespace for phone-owned derived reading aids. */
+  readonly readingAidScope: string;
   readonly ref: ConversationRef;
   readonly scope: QueryScope;
   readonly state: Readable<RemoteConversationSnapshot>;
