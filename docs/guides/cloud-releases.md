@@ -295,6 +295,19 @@ A successful workflow means the upload completed. Apple processing, compliance q
 groups, invitations, and any external beta review remain in App Store Connect. The workflow does
 not configure groups or submit the app for an App Store public release.
 
+The production iOS profile also retains Fastlane's `ios/build/*.app.dSYM.zip` through
+[`buildArtifactPaths`](https://docs.expo.dev/eas/json/#buildartifactpaths). Download this additional
+build artifact from the exact EAS build and archive it beside that build's IPA and metadata. It is
+separate from the application download and contains the original main-app and extension debug
+symbols; another build cannot replace it when symbol uploads need recovery.
+
+The Xcode Sentry upload phase can finish before the main app's dSYM is generated. A successful
+build or symbol-upload exit therefore does not prove complete native symbols reached Sentry.
+Match the IPA's Mach-O UUIDs to remote records containing full debug information. If the main
+record contains only binary symbol-table/unwind data, recover and upload the matching dSYM from
+the retained archive, then repeat the UUID check. Artifact retention preserves recovery material;
+it does not retry Sentry uploads or confirm their completeness automatically.
+
 ## Failure Recovery
 
 - On failure, save the job ID, error, and logs. Retry unchanged only for a transient failure; if the
