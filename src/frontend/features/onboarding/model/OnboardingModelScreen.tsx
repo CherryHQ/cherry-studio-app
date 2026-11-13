@@ -1,19 +1,22 @@
-import { Button, ContentState, Input, Section, TextField } from '@cherrystudio/ui/components';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import { cn } from '@cherrystudio/ui/utils';
+import { useQuery as useWorkflowQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Keyboard, ScrollView, Text, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Keyboard, Pressable, Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/appShell/header';
-import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
-import { ModelPickerIcon } from '@/frontend/components/ModelPicker';
-import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { useInlineSearch } from '@/frontend/components/InlineSearch';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Model } from '@/shared/data/types/model';
 
+import {
+  OnboardingButton,
+  OnboardingField,
+  OnboardingMessage,
+  OnboardingPage,
+} from '../components/OnboardingPage';
 import { useCompleteOnboarding } from './useCompleteOnboarding';
 import { useOnboardingModels } from './useOnboardingModels';
 
@@ -43,8 +46,16 @@ function OnboardingModelSelection({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { bottom } = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const providers = useBackendModule('providers');
+  const registry = useWorkflowQuery({
+    queryKey: queryKeys.providers.registryReady(),
+    queryFn: async () => {
+      await providers.ensureRegistryReady();
+      return true;
+    },
+    retry: false,
+    staleTime: Infinity,
+  });
   const data = useOnboardingModels(providerId);
   const { complete, phase, cancel } = useCompleteOnboarding();
   const isBusy = phase !== 'idle';
@@ -95,230 +106,192 @@ function OnboardingModelSelection({
     }
   };
 
+  const loading = (!registry.data && (registry.isPending || registry.isFetching)) || data.isLoading;
   return (
-    <>
-      <RouteHeader
-        onBack={() => router.replace('/onboarding')}
-        title={t('onboarding.model.title')}
-        rightActions={
-          (providerId || (connectionId && selectedModel)) &&
-          !(isShowingLoadError && shouldEditConnection)
-            ? [
-                {
-                  key: 'edit-connection',
-                  type: 'label',
-                  label: t('onboarding.connection.edit'),
-                  onPress: editConnection,
-                  disabled: isBusy,
-                },
-              ]
-            : undefined
-        }
-      />
-      {/* Keep search beside the header; loading only replaces the content below. */}
-      {selectionMode === 'catalog' ? <InlineSearch onChangeText={setQuery} value={query} /> : null}
-      {providerId || connectionId ? (
-        <View className="px-4 pt-4 pb-2">
-          <Text className="text-xs text-muted-foreground">
-            {t('onboarding.step', { current: 3 })}
-          </Text>
-        </View>
-      ) : null}
-      <KeyboardAvoidingView
-        behavior="padding"
-        keyboardVerticalOffset={headerHeight}
-        style={{ flex: 1 }}
-        testID="onboarding-model"
-      >
-        {/* The catalog gate wraps content only: the native search bar has to register with the
-            header as the screen mounts, not after a catalog download resolves. */}
-        <ModelRegistryGate>
-          {selectionMode === 'manual' && data.provider ? (
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              contentContainerClassName="px-4 py-3"
+    <OnboardingPage
+      description={t('onboarding.model.checkHint')}
+      footer={
+        <>
+          {(selectionMode === 'manual' || data.items.length > 0) && !loading ? (
+            <OnboardingButton
+              disabled={!canStart || Boolean(data.error)}
+              loading={isBusy}
+              onPress={start}
+              testID="onboarding-model-start"
             >
-              <TextField disabled={isBusy}>
-                <TextField.Label>{t('onboarding.model.manualLabel')}</TextField.Label>
-                <Input
-                  accessibilityLabel={t('onboarding.model.manualLabel')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onChangeText={setManualId}
-                  placeholder={t('onboarding.model.manualPlaceholder')}
-                  returnKeyType="done"
-                  testID="onboarding-model-manual-input"
-                  value={manualId}
-                  onSubmitEditing={start}
-                />
-                <TextField.Description>
-                  {t('onboarding.model.manualDescription')}
-                </TextField.Description>
-              </TextField>
-            </ScrollView>
-          ) : data.isLoading ? (
-            <View className="flex-1 justify-center px-6">
-              <ContentState.Loading title={t('onboarding.model.loading')} />
+              {t(
+                phase === 'checking'
+                  ? 'onboarding.check.checking'
+                  : phase === 'idle'
+                    ? 'onboarding.model.continue'
+                    : 'onboarding.check.saving',
+              )}
+            </OnboardingButton>
+          ) : null}
+          {isBusy ? (
+            <OnboardingButton onPress={cancel} variant="text">
+              {t('common.cancel')}
+            </OnboardingButton>
+          ) : providerId && data.provider ? (
+            <OnboardingButton
+              onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
+              testID="onboarding-model-mode-toggle"
+              variant="text"
+            >
+              {t(
+                selectionMode === 'manual'
+                  ? 'onboarding.model.chooseFromList'
+                  : 'onboarding.model.manual',
+              )}
+            </OnboardingButton>
+          ) : null}
+          {!isBusy &&
+          (providerId || (connectionId && selectedModel)) &&
+          !(isShowingLoadError && shouldEditConnection) ? (
+            <OnboardingButton onPress={editConnection} variant="text">
+              {t('onboarding.connection.edit')}
+            </OnboardingButton>
+          ) : null}
+        </>
+      }
+      onBack={isBusy ? undefined : () => router.replace('/onboarding')}
+      step={
+        providerId || connectionId
+          ? { current: 3, total: 3, label: t('onboarding.step', { current: 3 }) }
+          : undefined
+      }
+      testID="onboarding-model"
+      title={t('onboarding.model.title')}
+      variant="list"
+    >
+      {!registry.data && registry.isError ? (
+        <View className="gap-4">
+          <OnboardingMessage>{t('models.registry.failed')}</OnboardingMessage>
+          <OnboardingButton onPress={() => void registry.refetch()}>
+            {t('common.retry')}
+          </OnboardingButton>
+        </View>
+      ) : selectionMode === 'manual' && data.provider ? (
+        <OnboardingField
+          editable={!isBusy}
+          label={t('onboarding.model.manualLabel')}
+          onChangeText={setManualId}
+          onSubmitEditing={start}
+          placeholder={t('onboarding.model.manualPlaceholder')}
+          testID="onboarding-model-manual-input"
+          value={manualId}
+        />
+      ) : loading ? (
+        <OnboardingMessage loading>{t('onboarding.model.loading')}</OnboardingMessage>
+      ) : data.loadError ? (
+        <View className="gap-4">
+          <OnboardingMessage>
+            {t(`onboarding.model.error.${data.loadError.reason}`)}
+          </OnboardingMessage>
+          <OnboardingButton onPress={shouldEditConnection ? editConnection : data.retry}>
+            {t(shouldEditConnection ? 'onboarding.connection.edit' : 'common.retry')}
+          </OnboardingButton>
+        </View>
+      ) : data.items.length === 0 ? (
+        <View className="gap-4">
+          <OnboardingMessage>
+            {t(
+              providerId || connectionId ? 'onboarding.model.empty' : 'onboarding.model.noProvider',
+            )}
+          </OnboardingMessage>
+          <OnboardingButton
+            onPress={
+              connectionId
+                ? syncAgain
+                : providerId
+                  ? () => setSelectionMode('manual')
+                  : openProviderSetup
+            }
+          >
+            {t(
+              connectionId
+                ? 'onboarding.device.syncAgain'
+                : providerId
+                  ? 'onboarding.model.manual'
+                  : 'onboarding.welcome.connect',
+            )}
+          </OnboardingButton>
+          {connectionId ? (
+            <OnboardingButton onPress={openProviderSetup} variant="text">
+              {t('onboarding.welcome.connect')}
+            </OnboardingButton>
+          ) : null}
+        </View>
+      ) : (
+        <>
+          <OnboardingField
+            label={t('onboarding.search')}
+            onChangeText={setQuery}
+            testID="onboarding-model-search"
+            value={query}
+          />
+          {data.pullError ? (
+            <View className="gap-2">
+              <Text className="text-sm text-muted-foreground">
+                {t('onboarding.model.savedFallback', {
+                  reason: t(`onboarding.model.error.${data.pullError.reason}`),
+                })}
+              </Text>
+              <OnboardingButton
+                onPress={data.pullError.action === 'editConnection' ? editConnection : data.retry}
+                variant="text"
+              >
+                {t('common.retry')}
+              </OnboardingButton>
             </View>
-          ) : data.loadError ? (
-            <View className="flex-1 justify-center px-6">
-              <ContentState.Error
-                accessibilityLiveRegion="polite"
-                title={t(`onboarding.model.error.${data.loadError.reason}`)}
-                primaryAction={{
-                  children: t(shouldEditConnection ? 'onboarding.connection.edit' : 'common.retry'),
-                  onPress: shouldEditConnection ? editConnection : data.retry,
-                }}
-              />
-            </View>
-          ) : data.items.length === 0 ? (
-            <View className="flex-1 justify-center px-6">
-              <ContentState.Empty
-                description={connectionId ? t('onboarding.device.noChatModels') : undefined}
-                title={t(
-                  providerId || connectionId
-                    ? 'onboarding.model.empty'
-                    : 'onboarding.model.noProvider',
-                )}
-                primaryAction={
-                  connectionId
-                    ? { children: t('onboarding.device.syncAgain'), onPress: syncAgain }
-                    : providerId
-                      ? {
-                          children: t('onboarding.model.manual'),
-                          onPress: () => setSelectionMode('manual'),
-                          disabled: !data.provider,
-                        }
-                      : { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
-                }
-                secondaryAction={
-                  connectionId
-                    ? { children: t('onboarding.welcome.connect'), onPress: openProviderSetup }
-                    : undefined
-                }
-              />
-            </View>
-          ) : (
-            <>
-              {data.isRefreshing || data.pullError ? (
-                <View className="px-4 pb-3" accessibilityLiveRegion="polite">
-                  {data.isRefreshing ? (
-                    <ContentState.Loading layout="row" title={t('onboarding.model.loading')} />
-                  ) : data.pullError ? (
-                    <View className="flex-row items-center gap-3">
-                      <Text className="flex-1 text-xs text-muted-foreground">
-                        {t('onboarding.model.savedFallback', {
-                          reason: t(`onboarding.model.error.${data.pullError.reason}`),
-                        })}
-                      </Text>
-                      <Button
-                        disabled={isBusy}
-                        onPress={
-                          data.pullError.action === 'editConnection' ? editConnection : data.retry
-                        }
-                        size="inline"
-                        variant="link"
-                      >
-                        {t(
-                          data.pullError.action === 'editConnection'
-                            ? 'onboarding.connection.edit'
-                            : 'common.retry',
-                        )}
-                      </Button>
-                    </View>
+          ) : null}
+          <FlatList
+            data={results}
+            extraData={{ isBusy, selectedId: selectedModel?.id }}
+            keyExtractor={(model) => model.id}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <OnboardingMessage>{t('onboarding.model.noResults')}</OnboardingMessage>
+            }
+            renderItem={({ item }) => (
+              <Pressable
+                accessibilityRole="radio"
+                accessibilityState={{ checked: item.id === selectedModel?.id, disabled: isBusy }}
+                className="min-h-20 flex-row items-center gap-4 border-b border-border-subtle py-4 active:opacity-70"
+                disabled={isBusy}
+                onPress={() => setSelectedId(item.id)}
+                testID={`onboarding-model-${item.id}`}
+              >
+                <View className="min-w-0 flex-1 gap-1">
+                  <Text className="font-medium text-base text-foreground">{item.name}</Text>
+                  <Text className="text-sm text-muted-foreground">
+                    {providerId
+                      ? item.modelId
+                      : (data.providers.find((provider) => provider.id === item.providerId)?.name ??
+                        item.providerId)}
+                  </Text>
+                </View>
+                <View
+                  className={cn(
+                    'size-6 items-center justify-center rounded-full border',
+                    item.id === selectedModel?.id
+                      ? 'border-foreground bg-foreground'
+                      : 'border-border-strong',
+                  )}
+                >
+                  {item.id === selectedModel?.id ? (
+                    <CheckIcon className="size-4 text-background" />
                   ) : null}
                 </View>
-              ) : null}
-              <FlatList
-                className="min-h-0 flex-1"
-                contentInsetAdjustmentBehavior="automatic"
-                data={results}
-                extraData={{ isBusy, selectedId: selectedModel?.id }}
-                keyExtractor={(model) => model.id}
-                keyboardDismissMode="on-drag"
-                keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={
-                  <View className="px-4 py-8">
-                    <ContentState.Empty title={t('onboarding.model.noResults')} />
-                  </View>
-                }
-                renderItem={({ item }) => (
-                  <Section.RadioItem
-                    disabled={isBusy}
-                    label={item.name}
-                    description={
-                      providerId
-                        ? item.modelId
-                        : (data.providers.find((provider) => provider.id === item.providerId)
-                            ?.name ?? item.providerId)
-                    }
-                    leading={
-                      <ModelPickerIcon
-                        model={item}
-                        provider={data.providers.find(
-                          (provider) => provider.id === item.providerId,
-                        )}
-                      />
-                    }
-                    onPress={() => setSelectedId(item.id)}
-                    selected={item.id === selectedModel?.id}
-                    testID={`onboarding-model-${item.id}`}
-                  />
-                )}
-                testID="onboarding-model-list"
-              />
-            </>
-          )}
-          <View className="gap-2 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-            {selectionMode === 'manual' || data.items.length > 0 ? (
-              <>
-                <Text className="text-center text-xs text-muted-foreground">
-                  {t('onboarding.model.checkHint')}
-                </Text>
-                <Button
-                  disabled={!canStart || data.isLoading || Boolean(data.error)}
-                  loading={isBusy}
-                  onPress={start}
-                  size="lg"
-                  testID="onboarding-model-start"
-                >
-                  {t(
-                    phase === 'checking'
-                      ? 'onboarding.check.checking'
-                      : phase === 'idle'
-                        ? 'onboarding.model.start'
-                        : 'onboarding.check.saving',
-                  )}
-                </Button>
-              </>
-            ) : null}
-            {isBusy ? (
-              <Button onPress={cancel} testID="onboarding-model-cancel" variant="ghost">
-                {t('common.cancel')}
-              </Button>
-            ) : providerId &&
-              (data.items.length > 0 || selectionMode === 'manual' || isShowingLoadError) ? (
-              <Button
-                disabled={!data.provider || Boolean(data.error)}
-                onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
-                testID="onboarding-model-mode-toggle"
-                variant="ghost"
-              >
-                {t(
-                  selectionMode === 'manual'
-                    ? 'onboarding.model.chooseFromList'
-                    : 'onboarding.model.manual',
-                )}
-              </Button>
-            ) : providerId && !data.isLoading && data.items.length === 0 ? (
-              <Button onPress={data.retry} testID="onboarding-model-reload" variant="ghost">
-                {t('onboarding.model.reload')}
-              </Button>
-            ) : null}
-          </View>
-        </ModelRegistryGate>
-      </KeyboardAvoidingView>
-    </>
+              </Pressable>
+            )}
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            testID="onboarding-model-list"
+          />
+        </>
+      )}
+    </OnboardingPage>
   );
 }

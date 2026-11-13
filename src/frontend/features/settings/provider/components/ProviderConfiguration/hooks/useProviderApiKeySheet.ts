@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import type { ProviderConfigurationActions } from '@/frontend/types/providerConfiguration';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 import {
@@ -8,7 +9,6 @@ import {
   normalizeApiKeyEntries,
 } from '../../../apiService/utils/providerApiServiceApiKeys';
 import type { ProviderApiKeySheetState } from '../components/ProviderApiKeySheet';
-import type { ProviderConfigurationActions } from '../types';
 
 /**
  * The key sheet edits a copy. Adding or saving writes once when the user confirms, so a

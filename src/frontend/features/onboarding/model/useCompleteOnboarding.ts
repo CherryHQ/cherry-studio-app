@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { useBackendModule, useMultiplePreferences, useMutation } from '@/frontend/data';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { type Agent, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { type Model, createUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -18,6 +19,7 @@ const ONBOARDING_PREFERENCES = {
 
 type OnboardingModelSelection =
   | { kind: 'catalog'; model: Model; isLocal: boolean }
+  | { kind: 'subscription'; model: Model }
   | { kind: 'manual'; modelId: string; provider: Provider };
 
 export function useCompleteOnboarding() {
@@ -50,7 +52,7 @@ export function useCompleteOnboarding() {
   );
 
   const complete = async (selection: OnboardingModelSelection) => {
-    if (requestRef.current) return;
+    if (requestRef.current) return false;
     const controller = new AbortController();
     requestRef.current = controller;
     const { signal } = controller;
@@ -79,26 +81,33 @@ export function useCompleteOnboarding() {
         modelId = model.id;
         providerId = model.providerId;
       } else {
+        if (selection.kind === 'subscription' && selection.model.providerId !== CLOUD_PROVIDER_ID)
+          throw new Error('Subscription setup requires an account model');
         modelId = selection.model.id;
         providerId = selection.model.providerId;
-        if (!selection.isLocal) await models.reconcile(providerId, { toAdd: [selection.model] });
+        if (selection.kind === 'catalog' && !selection.isLocal)
+          await models.reconcile(providerId, { toAdd: [selection.model] });
       }
       signal.throwIfAborted();
-      setPhase('checking');
-      const result = await models.checkChat({ modelId, signal });
-      signal.throwIfAborted();
-      if (result.status === 'failed') {
-        alert.show({
-          title: t('onboarding.check.failed'),
-          description: t(`onboarding.check.${result.reason}`),
-        });
-        return;
+      if (selection.kind !== 'subscription') {
+        setPhase('checking');
+        const result = await models.checkChat({ modelId, signal });
+        signal.throwIfAborted();
+        if (result.status === 'failed') {
+          alert.show({
+            title: t('onboarding.check.failed'),
+            description: t(`onboarding.check.${result.reason}`),
+          });
+          return false;
+        }
       }
       setPhase('finishing');
-      await Promise.all([
-        enableModel.trigger({ params: { uniqueModelId: modelId }, body: { isEnabled: true } }),
-        enableProvider.trigger({ params: { id: providerId }, body: { isEnabled: true } }),
-      ]);
+      // Account models are already enabled by Cloud and reject user configuration writes.
+      if (providerId !== CLOUD_PROVIDER_ID)
+        await Promise.all([
+          enableModel.trigger({ params: { uniqueModelId: modelId }, body: { isEnabled: true } }),
+          enableProvider.trigger({ params: { id: providerId }, body: { isEnabled: true } }),
+        ]);
       signal.throwIfAborted();
       const currentAgents = await agents.refetch();
       if (currentAgents.error) throw currentAgents.error;
@@ -125,9 +134,11 @@ export function useCompleteOnboarding() {
       await queryClient.invalidateQueries({ queryKey: ['/models'] });
       signal.throwIfAborted();
       router.replace(chatHref({ agentId: agent.id, kind: 'draft' }));
+      return true;
     } catch {
-      if (!signal.aborted)
+      if (!signal.aborted && selection.kind !== 'subscription')
         alert.show({ title: t('onboarding.saveFailed'), description: t('onboarding.retryHint') });
+      return false;
     } finally {
       if (requestRef.current === controller) {
         requestRef.current = null;

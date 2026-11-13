@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { withPolicy } from '@/frontend/components/Policy';
+import type { ProviderConfigurationValue } from '@/frontend/types/providerConfiguration';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
@@ -23,7 +24,6 @@ import {
   maskProviderApiKey,
 } from '../../../apiService/utils/providerApiServiceApiKeys';
 import { useProviderApiKeySheet } from '../hooks/useProviderApiKeySheet';
-import type { ProviderConfigurationValue } from '../types';
 import { ProviderApiKeySheet } from './ProviderApiKeySheet';
 
 /**

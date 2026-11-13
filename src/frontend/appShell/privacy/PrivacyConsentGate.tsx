@@ -1,6 +1,10 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { useFirstUseEligibility } from '@/frontend/appShell/navigation';
+import { usePreference } from '@/frontend/data';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
+
 import { PrivacyConsentDialog } from './PrivacyConsentDialog';
 import { usePrivacyConsent } from './usePrivacyConsent';
 
@@ -12,6 +16,20 @@ import { usePrivacyConsent } from './usePrivacyConsent';
  * has to cover whatever route it lands on.
  */
 export function PrivacyConsentGate() {
+  const [status] = usePreference('app.onboarding.status');
+  if (status === 'unseen' && editionCapabilities().providerOnboarding)
+    return <FirstRunPrivacyConsentGate />;
+  // First-use owns inline consent. Existing installations still see policy updates as a dialog.
+  if (status !== 'unseen' && status !== 'completed' && status !== 'skipped') return null;
+  return <ExistingPrivacyConsentGate />;
+}
+
+function FirstRunPrivacyConsentGate() {
+  const eligibility = useFirstUseEligibility();
+  return eligibility === 'existing' ? <ExistingPrivacyConsentGate /> : null;
+}
+
+function ExistingPrivacyConsentGate() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { accept, decline, isPending, isSaving } = usePrivacyConsent();

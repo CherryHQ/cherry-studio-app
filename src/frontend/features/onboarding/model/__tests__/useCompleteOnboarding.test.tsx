@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -87,7 +88,9 @@ describe('useCompleteOnboarding', () => {
 
   test('does not change defaults or navigate when a real chat check fails', async () => {
     mockCheckChat.mockResolvedValue({ status: 'failed', reason: 'authentication' });
-    await act(async () => onboarding.complete({ kind: 'catalog', model, isLocal: true }));
+    await act(async () => {
+      await onboarding.complete({ kind: 'catalog', model, isLocal: true });
+    });
     expect(mockSavePreferences).not.toHaveBeenCalled();
     expect(mockUpdateAgent).not.toHaveBeenCalled();
     expect(mockEnableModel).not.toHaveBeenCalled();
@@ -98,8 +101,10 @@ describe('useCompleteOnboarding', () => {
     });
   });
 
-  test('reuses the seeded Agent and writes completion only after the check succeeds', async () => {
-    await act(async () => onboarding.complete({ kind: 'catalog', model, isLocal: true }));
+  test('finishes setup with the seeded Agent after the model check succeeds', async () => {
+    await act(async () => {
+      await onboarding.complete({ kind: 'catalog', model, isLocal: true });
+    });
     expect(mockCreateAgent).not.toHaveBeenCalled();
     expect(mockUpdateAgent).toHaveBeenCalledWith('seed', { model: model.id });
     expect(mockSavePreferences).toHaveBeenCalledWith(
@@ -123,7 +128,7 @@ describe('useCompleteOnboarding', () => {
           resolveCheck = resolve;
         }),
     );
-    let pending!: Promise<void>;
+    let pending!: Promise<boolean>;
     act(() => {
       pending = onboarding.complete({ kind: 'catalog', model, isLocal: true });
       void onboarding.complete({ kind: 'catalog', model, isLocal: true });
@@ -140,6 +145,29 @@ describe('useCompleteOnboarding', () => {
     expect(mockShowAlert).not.toHaveBeenCalled();
   });
 
+  test('automatically prepares a subscription model without a paid probe or configuration writes', async () => {
+    const accountModel = {
+      ...model,
+      id: createUniqueModelId(CLOUD_PROVIDER_ID, 'chat'),
+      providerId: CLOUD_PROVIDER_ID,
+    };
+    mockUpdateAgent.mockResolvedValue({ id: 'seed', model: accountModel.id });
+    await act(async () => {
+      await onboarding.complete({ kind: 'subscription', model: accountModel });
+    });
+    expect(mockCheckChat).not.toHaveBeenCalled();
+    expect(mockEnableModel).not.toHaveBeenCalled();
+    expect(mockEnableProvider).not.toHaveBeenCalled();
+    expect(mockSavePreferences).toHaveBeenCalledWith(
+      { defaultModelId: accountModel.id, status: 'completed' },
+      { optimistic: false },
+    );
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/',
+      params: { agentId: 'seed', sessionId: undefined },
+    });
+  });
+
   test('retries a manually entered model without creating duplicate models or Agents', async () => {
     mockRefetchAgents.mockResolvedValue({ data: { items: [] } });
     mockSavePreferences.mockRejectedValueOnce(new Error('storage unavailable'));
@@ -148,8 +176,12 @@ describe('useCompleteOnboarding', () => {
       modelId: 'chat',
       provider: { id: 'provider' } as Provider,
     } as const;
-    await act(async () => onboarding.complete(selection));
-    await act(async () => onboarding.complete(selection));
+    await act(async () => {
+      await onboarding.complete(selection);
+    });
+    await act(async () => {
+      await onboarding.complete(selection);
+    });
     expect(mockCreateModels).toHaveBeenCalledTimes(1);
     expect(mockCreateAgent).toHaveBeenCalledTimes(1);
     expect(mockCreateAgent.mock.calls[0][0]).not.toHaveProperty('disabledCapabilities');

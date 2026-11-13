@@ -18,6 +18,8 @@ it, and the one place that decides how each platform draws it.
   header while the window fits the form column. When the safe window width exceeds that column's
   720-point limit, search becomes a content row aligned with its results. Android always draws a
   content row. The caller and its query stay mounted when this placement changes.
+- `layout="embedded"` always uses the content field, including on a narrow iOS window. Its caller
+  owns the content insets and header; embedding search must not mount another native navigation bar.
 - Mount search with the header, outside the list's loading, error, and empty branches. Data arriving
   or a query returning no matches must not add or remove the native search bar.
 - The query is controlled on both platforms. Parent updates, including an initial non-empty value

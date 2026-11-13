@@ -15,7 +15,7 @@ export default function OnboardingLayout() {
         screenOptions={{
           ...headerScreenOptions,
           headerTintColor: foregroundColor,
-          headerTransparent: false,
+          headerShown: false,
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />

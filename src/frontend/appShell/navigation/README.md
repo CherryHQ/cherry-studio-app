@@ -14,9 +14,15 @@ domains.
   These entry points always open regular provider settings. First-use routes opt into their
   setup presentation explicitly; URL parameters cannot activate it from ordinary settings.
 - `FirstUseGate` owns first-use admission before restoring a chat target. It preserves existing
-  installations and lets skipped/completed users enter chat normally. An enterprise profile always
-  enters chat, because the organization owns provider and default-model setup.
-  It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
+  installations and lets skipped/completed users enter chat normally. A new setup records progress
+  through welcome → inline privacy → permissions → notification/background settings → SDK sign-in
+  → subscription/model setup, inside the dedicated onboarding route.
+  Existing enterprise profiles keep their normal entry; a newly switched organization profile
+  inherits the completed preparation and finishes with organization-owned models. Community accounts
+  with active subscriptions automatically use the account catalog; other accounts and skipped
+  sign-ins enter local model setup. A failed entitlement lookup stays retryable.
+  `useFirstUseEligibility` also lets privacy presentation distinguish a first run from an existing
+  installation. It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
   destination. Background refreshes do not unmount the admitted chat.
 - Chat routes without an explicit target open a draft for the last-used local Agent, stored in
   the persistent UI cache. The focused, non-preview chat records its Agent for both drafts and

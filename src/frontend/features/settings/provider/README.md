@@ -62,6 +62,11 @@ item in the recommended section; preset rows keep their explicit Add action. Bot
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
 
+`catalog` also exports `ProviderCatalogContent` so an onboarding route can supply its own page
+frame while retaining this exact search, grouped list, import and selection flow. Onboarding's
+connection route mounts the original `ProviderConfiguration` through the `new` public entry.
+First-use selection starts at the recommended catalog entries, without a separate saved-services section.
+
 ## Desktop Provider Synchronization
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired

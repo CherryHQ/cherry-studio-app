@@ -287,6 +287,10 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('requests permission for decisions even when completion alerts are disabled', async () => {
+    permissions.mockResolvedValue({
+      status: 'undetermined',
+      granted: false,
+    } as NotificationPermissionsStatus);
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,
     });
@@ -298,6 +302,7 @@ describe('createReplyCompletionNotifier', () => {
     setAppState('active');
     enabled.mockReturnValue(false);
     notifier.requestPermissionOnce();
+    await Promise.resolve();
     expect(permissionRequest).toHaveBeenCalledTimes(1);
 
     enabled.mockReturnValue(true);
@@ -305,6 +310,23 @@ describe('createReplyCompletionNotifier', () => {
     notifier.requestPermissionOnce();
     expect(permissionRequest).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['denied', 'granted'] as const)(
+    'does not repeat a %s permission decision from setup',
+    async (status) => {
+      permissions.mockResolvedValue({
+        status,
+        granted: status === 'granted',
+      } as NotificationPermissionsStatus);
+      const notifier = createReplyCompletionNotifier({
+        isReplyCompletionNotificationEnabled: enabled,
+      });
+      setAppState('active');
+      notifier.requestPermissionOnce();
+      await Promise.resolve();
+      expect(permissionRequest).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('session attention delivery', () => {

@@ -44,7 +44,16 @@ export interface PreferenceSchema {
   'app.feedback.shake_enabled': boolean;
   'app.feedback.shake_hint_decision': 'unseen' | 'accepted' | 'ignored';
   'app.language': LanguageVarious | null;
-  'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
+  'app.onboarding.status':
+    | 'unseen'
+    | 'welcome'
+    | 'privacy'
+    | 'pending'
+    | 'permissions'
+    | 'notifications'
+    | 'login'
+    | 'skipped'
+    | 'completed';
   /** Opt-out switch for anonymous product analytics. Only honoured under the current policy. */
   'app.privacy.data_collection.enabled': boolean;
   /**
@@ -172,6 +181,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'app.feedback.shake_enabled',
   'app.feedback.shake_hint_decision',
   'app.language',
+  'app.onboarding.status',
   'app.privacy.data_collection.enabled',
   'app.privacy.policy_version',
   'chat.background_reply.enabled',

@@ -6,6 +6,7 @@ import { Keyboard } from 'react-native';
 
 import { useMutation } from '@/frontend/data';
 import { useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
+import type { ProviderConfigurationValue } from '@/frontend/types/providerConfiguration';
 
 import {
   getApiKeyValidationError,
@@ -16,7 +17,6 @@ import {
   findInvalidCustomProviderEndpointUrl,
   hasConfiguredCustomProviderTextEndpoint,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
-import type { ProviderConfigurationValue } from '../types';
 import {
   createEmptyProviderConfigurationValues,
   NEW_PROVIDER_ENDPOINT_TYPES,

@@ -406,10 +406,20 @@ export class AndroidBackgroundActivityRuntime
       // The permission sheet must not race admission or depend on its success.
       if (!this.disposed && !this.permissionRequested && AppState.currentState === 'active') {
         this.permissionRequested = true;
-        void this.notifications?.requestPermissionsAsync().catch((error: unknown) => {
-          this.permissionRequested = false;
-          logger.warn('Notification permission request failed', error as Error);
-        });
+        void this.notifications
+          ?.getPermissionsAsync()
+          .then((permission) => {
+            if (this.disposed || permission.status !== 'undetermined') return;
+            if (AppState.currentState !== 'active') {
+              this.permissionRequested = false;
+              return;
+            }
+            return this.notifications?.requestPermissionsAsync();
+          })
+          .catch((error: unknown) => {
+            this.permissionRequested = false;
+            logger.warn('Notification permission request failed', error as Error);
+          });
       }
     }
   }

@@ -8,9 +8,14 @@ jest.mock('@/frontend/appShell/layout', () => ({
   useIsFormContentConstrained: () => false,
 }));
 
-jest.mock('@cherrystudio/ui/components', () => ({
-  SearchField: () => null,
-}));
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    SearchField: (props: Record<string, unknown>) =>
+      React.createElement(View, { ...props, testID: 'content-search' }),
+  };
+});
 
 jest.mock('expo-router', () => {
   const React = jest.requireActual('react');
@@ -38,6 +43,22 @@ describe('InlineSearch.ios', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     jest.clearAllMocks();
+  });
+
+  it('keeps embedded search in content without adding a native header', () => {
+    const onChangeText = jest.fn();
+    act(() => {
+      renderer = create(<InlineSearch layout="embedded" onChangeText={onChangeText} value="abc" />);
+    });
+
+    expect(renderer!.root.findAllByProps({ testID: 'search-bar' })).toHaveLength(0);
+    const field = renderer!.root.findByProps({ testID: 'content-search' });
+    expect(field.props.value).toBe('abc');
+    act(() => field.props.onChangeText('typed'));
+    expect(onChangeText).toHaveBeenLastCalledWith('typed');
+    act(() => field.props.onClear());
+    expect(onChangeText).toHaveBeenLastCalledWith('');
+    expect(mockSetText).not.toHaveBeenCalled();
   });
 
   it('applies an initial non-empty value and later controlled updates', () => {
