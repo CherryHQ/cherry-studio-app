@@ -16,6 +16,8 @@ import type {
 } from './remoteContracts';
 import { useConversationSnapshot } from './useConversation';
 
+const emptyProjection = { subscribe: (_listener: () => void) => () => {}, getSnapshot: () => 0 };
+
 const RETIRED = new ConversationReadError({ code: 'retired', retry: 'none' });
 
 /** The shared window view plus the installed revision the presenter reconciles against. */
@@ -117,12 +119,26 @@ export function useConversationHistory(
         ? previous
         : undefined,
   });
-  const messages = useMemo(
+  const projection = session?.history.projection;
+  const projectionState = projection?.state ?? emptyProjection;
+  const projectionRevision = useSyncExternalStore(
+    projectionState.subscribe,
+    projectionState.getSnapshot,
+  );
+  const resolve = projection?.resolve;
+  const rawMessages = useMemo(
     () =>
       query.data
         ? flattenHistory(query.data.pages.map((value) => value.page))
         : (preview?.items ?? []),
     [query.data, preview],
+  );
+  const { messages } = useMemo(
+    () => ({
+      revision: projectionRevision,
+      messages: resolve ? rawMessages.map(resolve) : rawMessages,
+    }),
+    [rawMessages, resolve, projectionRevision],
   );
   const displays = useMemo(() => messages.map((message) => message.display), [messages]);
   const renderWindow = useMessageRenderWindow(displays);

@@ -1,3 +1,4 @@
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
@@ -80,7 +81,7 @@ describe('webSource', () => {
     ]);
   });
 
-  test('orders source cards by citation number and exposes their matching labels', () => {
+  test('keeps original source order and exposes shared citation numbers', () => {
     const parts = [
       {
         sourceId: 'result-1',
@@ -94,19 +95,12 @@ describe('webSource', () => {
         type: 'source-url',
         url: 'https://b.example',
       },
+      { type: 'text', text: '[cite:result-2] [cite:result-1]' },
     ] as CherryMessagePart[];
 
-    expect(
-      resolveCitationWebSources(
-        parts,
-        new Map([
-          ['result-1', 2],
-          ['result-2', 1],
-        ]),
-      ),
-    ).toEqual([
-      expect.objectContaining({ citationNumber: 1, id: 'result-2' }),
+    expect(resolveCitationWebSources(parts, resolveMessageCitations(parts))).toEqual([
       expect.objectContaining({ citationNumber: 2, id: 'result-1' }),
+      expect.objectContaining({ citationNumber: 1, id: 'result-2' }),
     ]);
   });
 
@@ -228,4 +222,48 @@ describe('webSource', () => {
       }),
     ]);
   });
+});
+
+test('tool-only sources share alias numbers, retain order and omit URL-less cards', () => {
+  const parts = [
+    {
+      type: 'tool-web_search',
+      state: 'output-available',
+      output: [
+        { id: 'a', title: 'A', url: 'https://a.example' },
+        { id: 'alias', title: 'Alias', url: 'https://a.example' },
+        { id: 'unused', title: 'Unused', url: 'https://unused.example' },
+        { id: 'kb', title: 'Knowledge', content: 'Local content' },
+      ],
+    },
+    { type: 'text', text: '[cite:kb] [cite:alias] [cite:a]' },
+  ] as CherryMessagePart[];
+  const citations = resolveMessageCitations(parts);
+  expect(citations.sourceNumberById.get('alias')).toBe(2);
+  expect(citations.sourceNumberById.get('a')).toBe(2);
+  const cards = resolveCitationWebSources(parts, citations);
+  expect(cards.map(({ id, citationNumber }) => [id, citationNumber])).toEqual([
+    ['a', 2],
+    ['unused', undefined],
+  ]);
+  expect(resolveCitationWebSources(parts, citations.sourceNumberById)).toEqual(cards);
+});
+
+test('legacy SourceGroup calls retain canonical numbers when an alias ID is reassigned', () => {
+  const parts = [
+    { type: 'source-url', sourceId: 'a', url: 'https://original.example' },
+    { type: 'source-url', sourceId: 'b', url: 'https://original.example' },
+    { type: 'source-url', sourceId: 'a', url: 'https://later.example' },
+    { type: 'text', text: '[cite:a] [cite:b]' },
+  ] satisfies CherryMessagePart[];
+  const citations = resolveMessageCitations(parts);
+  expect(
+    resolveCitationWebSources(parts, citations.sourceNumberById).map(({ url, citationNumber }) => [
+      url,
+      citationNumber,
+    ]),
+  ).toEqual([
+    ['https://original.example', 2],
+    ['https://later.example', 1],
+  ]);
 });

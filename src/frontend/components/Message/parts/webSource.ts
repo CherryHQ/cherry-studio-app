@@ -1,6 +1,8 @@
+import {
+  resolveMessageCitations,
+  type ResolvedMessageCitations,
+} from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
-
-type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
 
 const SOURCE_PREVIEW_LENGTH = 300;
 const SOURCE_CONTENT_SCAN_LIMIT = 8_000;
@@ -39,56 +41,25 @@ export function enrichWebSources(
 
 export function resolveCitationWebSources(
   messageParts: readonly CherryMessagePart[],
-  citationNumberBySourceId: ReadonlyMap<string, number> = new Map(),
+  citations:
+    | Pick<ResolvedMessageCitations, 'sources'>
+    | ReadonlyMap<string, number> = resolveMessageCitations(messageParts),
 ): WebSource[] {
+  // SourceGroup still supplies its shared number map; retain that public call shape.
+  const resolvedSources =
+    'sources' in citations ? citations.sources : resolveMessageCitations(messageParts).sources;
   const metadataByUrl = collectWebSourceMetadata(messageParts);
   const citationContextById = collectCitationContext(messageParts);
-  const sourceParts: SourceUrlPart[] = [];
-
-  for (const part of messageParts) {
-    if (part.type === 'source-url') {
-      sourceParts.push(part);
-    }
-  }
-
-  const sourcesByUrl = new Map<string, WebSource>();
-
-  sourceParts.forEach((part, index) => {
-    const citationNumber = citationNumberBySourceId.get(part.sourceId);
-    const existingSource = sourcesByUrl.get(part.url);
-    if (existingSource) {
-      if (
-        citationNumber !== undefined &&
-        (existingSource.citationNumber === undefined ||
-          citationNumber < existingSource.citationNumber)
-      ) {
-        sourcesByUrl.set(part.url, { ...existingSource, citationNumber });
-      }
-      return;
-    }
-
-    const source = toWebSource(part, part.sourceId || index + 1);
-    if (!source) return;
-
+  return resolvedSources.flatMap((item) => {
+    if (!item.url) return [];
+    const source = toWebSource(item, item.id);
+    if (!source) return [];
     const metadata = getWebSourceMetadata(metadataByUrl, source);
-    const titledSource = {
-      ...source,
-      title: getPageTitle(part.title, part.url) ?? source.title,
-    };
     const resolvedSource = withCitationContext(
-      metadata ? mergeWebSources(titledSource, metadata) : titledSource,
+      metadata ? mergeWebSources(source, metadata) : source,
       citationContextById,
     );
-    sourcesByUrl.set(
-      part.url,
-      citationNumber === undefined ? resolvedSource : { ...resolvedSource, citationNumber },
-    );
-  });
-
-  return [...sourcesByUrl.values()].sort((left, right) => {
-    if (left.citationNumber === undefined) return right.citationNumber === undefined ? 0 : 1;
-    if (right.citationNumber === undefined) return -1;
-    return left.citationNumber - right.citationNumber;
+    return [{ ...resolvedSource, citationNumber: item.number }];
   });
 }
 

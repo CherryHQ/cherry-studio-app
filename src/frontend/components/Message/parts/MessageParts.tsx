@@ -58,7 +58,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
     message.status === 'paused' &&
     body.length === 0 &&
     files.length === 0;
-  const showSources = isSettled && parts.some((part) => part.type === 'source-url');
+  const showSources = isSettled && citations.sources.length > 0;
   const initialImageAspectRatio = message.imageGeneration
     ? imageParamsAspectRatio(message.imageGeneration.paramValues)
     : undefined;

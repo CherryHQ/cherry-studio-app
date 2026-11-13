@@ -98,6 +98,10 @@ export type HistoryPreview = {
   complete: boolean;
 };
 export interface ConversationHistory {
+  projection?: {
+    state: Readable<number>;
+    resolve(row: ConversationMessage): ConversationMessage;
+  };
   peekLatest?: () => HistoryPreview | undefined;
   subscribePreview?: (listener: () => void) => () => void;
   openLatest(signal: AbortSignal): Promise<HistoryWindow>;

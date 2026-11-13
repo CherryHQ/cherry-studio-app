@@ -416,3 +416,57 @@ it('shows a preview while history is pending without acknowledging it as install
   expect(result.messages.map((message) => message.key)).toEqual(['fresh']);
   expect(result.installedVersion).toBe('1');
 });
+
+it('updates installed projections without fetching or reopening the fixed window', async () => {
+  const current = setup();
+  const listeners = new Set<() => void>();
+  let revision = 0;
+  const fixed = current.window('1');
+  const original = fixed.initial.items[0];
+  const unchanged = {
+    ...original,
+    key: 'unchanged',
+    display: { ...original.display, id: 'unchanged' },
+  };
+  fixed.initial.items = [original, unchanged];
+  const projected = {
+    ...original,
+    display: {
+      ...original.display,
+      data: { parts: [{ type: 'source-url' as const, sourceId: 's', url: 'https://example.com' }] },
+    },
+  };
+  current.session.history.projection = {
+    state: {
+      getSnapshot: () => revision,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+    resolve: (row) => (revision && row === original ? projected : row),
+  };
+  await render(current.session);
+  await act(async () => {
+    current.opens.at(-1)!.result.resolve(fixed);
+    await settle();
+  });
+  await act(settle);
+  expect(result.messages[0]).toBe(original);
+  const opens = current.open.mock.calls.length;
+  const query = queryClient.getQueryCache().findAll()[0];
+  const fetch = jest.spyOn(query, 'fetch');
+  await act(async () => {
+    revision++;
+    listeners.forEach((listener) => listener());
+    await settle();
+  });
+  expect(result.messages[0]).toBe(projected);
+  expect(result.messages[1]).toBe(unchanged);
+  expect(current.open).toHaveBeenCalledTimes(opens);
+  expect(fixed.read).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(result.installedVersion).toBe(version('1'));
+});

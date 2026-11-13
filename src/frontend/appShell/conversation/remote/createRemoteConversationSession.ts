@@ -39,6 +39,7 @@ import {
   remoteTranscriptMessage,
   undeliveredMessage,
 } from './remoteConversationViews';
+import { createRemoteMessageCitationMaterializer } from './remoteMessageCitations';
 
 export const REMOTE_INPUT_POLICY = {
   attachments: false,
@@ -145,22 +146,55 @@ export function createRemoteConversationSession(
   });
   // Unchanged messages keep their rows so the list re-renders only what moved. Live views keep
   // their identity until an event changes them; a history message is immutable per revision.
-  const liveRows = new WeakMap<RemoteMessageView, ConversationMessage>();
-  const historyRows = new Map<string, { version: string; row: ConversationMessage }>();
-  const projection = createRemoteMessageProjectionCache();
+  const materializer = createRemoteMessageCitationMaterializer({
+    resource,
+    onChange: () => publish(),
+  });
+  let projection = createRemoteMessageProjectionCache();
+  type CachedRow = {
+    message: RemoteMessageView;
+    row: ConversationMessage;
+    materialization: ReturnType<typeof materializer.peek>;
+  };
+  let liveRows = new WeakMap<RemoteMessageView, CachedRow>();
+  const historyRows = new Map<string, CachedRow>();
+  const bindings = new WeakMap<
+    ConversationMessage,
+    { messageId: string; version: string; generation: number }
+  >();
+  let generation = 0;
+  const previewOwner = {};
+  const liveOwner = {};
+  const resetMaterialization = () => {
+    generation++;
+    for (const dispose of windows) dispose();
+    materializer.reset({ dropFailures: true });
+    liveRows = new WeakMap();
+    historyRows.clear();
+    projection = createRemoteMessageProjectionCache();
+  };
+  const admitPreview = (owner = previewOwner) => {
+    const preview = source.peekSession(ref.sessionId)?.history;
+    if (preview) materializer.admit(preview.items, owner);
+  };
   const project = (message: RemoteMessageView) => {
-    let row = liveRows.get(message);
-    if (!row) {
-      row = remoteMessage(message, resource, projection);
-      liveRows.set(message, row);
-    }
+    const materialization = materializer.peek(message.id, message.version);
+    const cached = liveRows.get(message);
+    if (cached && cached.materialization === materialization) return cached.row;
+    const row = remoteMessage(message, resource, projection, materialization);
+    liveRows.set(message, { message, row, materialization });
     return row;
   };
   const projectHistory = (message: RemoteMessageView) => {
-    const cached = historyRows.get(message.id);
-    if (cached?.version === message.version) return cached.row;
-    const row = remoteMessage(message, resource);
-    historyRows.set(message.id, { version: message.version, row });
+    const key = JSON.stringify([message.id, message.version]);
+    const cached = historyRows.get(key);
+    const materialization = materializer.peek(message.id, message.version);
+    if (cached && cached.materialization === materialization) return cached.row;
+    // Keep the original immutable view even when another page returns an equivalent object.
+    const original = cached?.message ?? message;
+    const row = remoteMessage(original, resource, projection, materialization);
+    historyRows.set(key, { message: original, row, materialization });
+    bindings.set(row, { messageId: message.id, version: message.version, generation });
     return row;
   };
   // A failed execution stays in every later snapshot; its row changes only with the execution.
@@ -256,6 +290,8 @@ export function createRemoteConversationSession(
       : source
           .getCommands()
           .findLast((command) => command.kind === 'send' && command.sessionId === ref.sessionId);
+    const liveMessages = latest?.messages.map(project) ?? [];
+    if (latest) materializer.admit(latest.messages, liveOwner);
     return {
       title: session.title,
       agentId: session.agentId,
@@ -279,7 +315,7 @@ export function createRemoteConversationSession(
         'history',
         historyReset ? `${session.historyVersion}:${historyReset}` : session.historyVersion,
       ),
-      liveMessages: latest?.messages.map(project) ?? [],
+      liveMessages,
       executions:
         latest?.executions.map((execution) => ({
           id: execution.id,
@@ -379,6 +415,8 @@ export function createRemoteConversationSession(
     if (status === 'ready' && sourceStatus !== 'ready') {
       // Reopen failed or interrupted history reads even when the desktop epoch/revision is unchanged.
       historyReset++;
+      resetMaterialization();
+      if (observers) admitPreview();
       bootstrap = undefined;
     }
     sourceStatus = status;
@@ -398,6 +436,7 @@ export function createRemoteConversationSession(
           if (value.historyEpoch !== undefined) {
             if (historyEpoch !== undefined && historyEpoch !== value.historyEpoch) {
               historyReset++;
+              resetMaterialization();
               bootstrap = undefined;
             }
             historyEpoch = value.historyEpoch;
@@ -407,6 +446,7 @@ export function createRemoteConversationSession(
           session = value.session;
           publish();
         });
+      admitPreview();
       let released = false;
       return () => {
         if (released) return;
@@ -414,6 +454,8 @@ export function createRemoteConversationSession(
         if (--observers === 0) {
           unobserve?.();
           unobserve = undefined;
+          materializer.release(previewOwner);
+          materializer.release(liveOwner);
         }
       };
     },
@@ -422,6 +464,15 @@ export function createRemoteConversationSession(
       publish();
     },
     history: {
+      projection: {
+        state: materializer.revision,
+        resolve: (row) => {
+          const binding = bindings.get(row);
+          if (!binding || binding.generation !== generation || disposed) return row;
+          const cached = historyRows.get(JSON.stringify([binding.messageId, binding.version]));
+          return cached ? projectHistory(cached.message) : row;
+        },
+      },
       peekLatest: () => {
         assertCurrent();
         const preview = source.peekSession(ref.sessionId)?.history;
@@ -435,7 +486,18 @@ export function createRemoteConversationSession(
             }
           : undefined;
       },
-      subscribePreview: (listener) => source.subscribeReads(ref.sessionId, listener),
+      subscribePreview: (listener) => {
+        const owner = {};
+        const unsubscribe = source.subscribeReads(ref.sessionId, () => {
+          admitPreview(owner);
+          listener();
+        });
+        admitPreview(owner);
+        return () => {
+          unsubscribe();
+          materializer.release(owner);
+        };
+      },
       openLatest: async (signal) => {
         const verified = bootstrap;
         bootstrap = undefined;
@@ -445,7 +507,9 @@ export function createRemoteConversationSession(
         const controller = new AbortController();
         const version = refs.issue<HistoryVersion>('history', fixed.historyVersion);
         const cursors = createConversationReferences(scope, `${ref.sessionId}:${version}`);
+        const owner = {};
         const dispose = () => {
+          materializer.release(owner);
           controller.abort();
           windows.delete(dispose);
         };
@@ -454,6 +518,8 @@ export function createRemoteConversationSession(
           const value = await read(AbortSignal.any([signal, controller.signal]), (signal) =>
             source.history(ref.sessionId, fixed.historyVersion, cursor, signal),
           );
+          assertCurrent(controller.signal);
+          materializer.admit(value.items, owner);
           return {
             items: value.items.toReversed().map(projectHistory),
             ...(value.next ? { older: cursors.issue<HistoryCursor>('older', value.next) } : {}),
@@ -495,19 +561,29 @@ export function createRemoteConversationSession(
           selected.some((message) => message.state === 'streaming' || message.role === 'system')
         )
           throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+        const selectedGeneration = generation;
+        await materializer.materializeAll(selected, signal);
+        if (selectedGeneration !== generation)
+          throw new ConversationReadError({ code: 'version-expired', retry: 'read-again' });
         // Revalidate after the last page; metadata and selected bytes belong to this immutable revision.
         const current = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
         if (current.historyVersion !== fixed.historyVersion)
           throw new ConversationReadError({ code: 'version-expired', retry: 'read-again' });
         return {
           title: fixed.title,
-          messages: selected.toReversed().map(remoteTranscriptMessage),
+          messages: selected
+            .toReversed()
+            .map((message) =>
+              remoteTranscriptMessage(message, materializer.peek(message.id, message.version)),
+            ),
         };
       },
     },
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      generation++;
+      materializer.dispose();
       onDispose();
       lifetime.abort();
       unobserve?.();

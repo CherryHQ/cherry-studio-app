@@ -73,6 +73,40 @@ const answeredQuestion = {
 } as const;
 
 describe('MessageParts', () => {
+  test.each(['pending', 'success'] as const)(
+    'tool-only sources respect the settled gate: %s',
+    (status) => {
+      const parts = [
+        {
+          type: 'tool-web_search',
+          state: 'output-available',
+          output: [{ id: 'a', title: 'A', url: 'https://a.example' }],
+          toolCallId: 'search',
+          input: {},
+        },
+        { type: 'text', text: 'Answer [cite:a]' },
+      ] as NonNullable<MessageListItem['data']['parts']>;
+      const renderer = render(
+        <MessageParts message={{ ...makeMessage(status), data: { parts } }} />,
+      );
+      expect(renderer.root.findAllByType('SourceGroup')).toHaveLength(status === 'success' ? 1 : 0);
+      if (status === 'success')
+        expect(
+          renderer.root.findByType('SourceGroup').props.citationNumberBySourceId.get('a'),
+        ).toBe(1);
+    },
+  );
+
+  test('does not show sources when the shared result has none', () => {
+    const parts = [
+      { type: 'source-url', sourceId: 'bad', url: 'javascript:alert(1)' },
+    ] as NonNullable<MessageListItem['data']['parts']>;
+    const renderer = render(
+      <MessageParts message={{ ...makeMessage('success'), data: { parts } }} />,
+    );
+    expect(renderer.root.findAllByType('SourceGroup')).toHaveLength(0);
+  });
+
   test('shows waiting for an empty pending assistant message', () => {
     const renderer = render(
       <MessageParts message={{ ...makeMessage('pending'), data: { parts: [] } }} />,

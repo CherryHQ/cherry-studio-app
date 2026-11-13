@@ -1,14 +1,20 @@
+import {
+  remoteMessage,
+  remoteTranscriptMessage,
+} from '@/frontend/appShell/conversation/remote/remoteConversationViews';
+import { createRemoteMessageCitationMaterializer } from '@/frontend/appShell/conversation/remote/remoteMessageCitations';
+import { resolveCitationWebSources } from '@/frontend/components/Message/parts/webSource';
+import { copyAssistantMessageText } from '@/frontend/features/chat/components/ChatWorkspace/utils/copyAssistantMessageText';
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
+import { replaceCitationMarkers } from '@/frontend/utils/messageCitations';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
+import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { prepareChatExport } from '../prepareChatExport';
-import {
-  replaceChatCitations,
-  toChatExportDocument,
-  type ChatExportOptions,
-} from '../toChatExportDocument';
+import { toChatExportDocument, type ChatExportOptions } from '../toChatExportDocument';
 
 const options: ChatExportOptions = {
   title: 'Conversation',
@@ -345,10 +351,11 @@ test('a failed selected-ID read rejects the export', async () => {
 
 test('citations become portable links without rewriting fenced, inline or escaped code examples', () => {
   const source = '[cite:one]\n\n~~~md\n[cite:one]\n~~~\n\n`` `[cite:one]` `` and \\[cite:one]';
-  const result = replaceChatCitations(
-    source,
-    new Map([['one', { title: 'Source', url: 'https://example.com/' }]]),
-  );
+  const result = replaceCitationMarkers(source, {
+    format: 'export',
+    numbers: new Map([['one', 1]]),
+    sources: new Map([['one', { id: 'one', title: 'Source', url: 'https://example.com/' }]]),
+  });
   expect(result).toBe(
     '[1](<https://example.com/>)\n\n~~~md\n[cite:one]\n~~~\n\n`` `[cite:one]` `` and \\[cite:one]',
   );
@@ -357,10 +364,11 @@ test('citations become portable links without rewriting fenced, inline or escape
 test('multiline inline code and quoted fences retain citation examples', () => {
   const code = '`code\n[cite:one]`\n\n> ```md\n> [cite:one]\n> ```\n\n';
   expect(
-    replaceChatCitations(
-      `${code}[cite:one]`,
-      new Map([['one', { title: 'Source', url: 'https://example.com/' }]]),
-    ),
+    replaceCitationMarkers(`${code}[cite:one]`, {
+      format: 'export',
+      numbers: new Map([['one', 1]]),
+      sources: new Map([['one', { id: 'one', title: 'Source', url: 'https://example.com/' }]]),
+    }),
   ).toBe(`${code}[1](<https://example.com/>)`);
 });
 
@@ -383,3 +391,266 @@ async function loadChatExportMessages(
   );
   return snapshot.messages;
 }
+
+test('exports final answer and translations with full-message numbers and original source order', () => {
+  const value = message('numbered', 'assistant', [
+    { id: 'a-source', type: 'source-url', sourceId: 'a', title: 'A', url: 'https://a.example' },
+    { id: 'b-source', type: 'source-url', sourceId: 'b', title: 'B', url: 'https://b.example' },
+    { id: 'process', type: 'text', text: 'Process [cite:b]', state: 'done' },
+    { id: 'final', type: 'text', text: 'Answer [cite:a]', state: 'done' },
+  ]);
+  const blocks = toChatExportDocument([value], {
+    ...options,
+    translations: {
+      numbered: {
+        sourceHash: sha256HexOfText(messageTranslationText(value.parts)!),
+        language: 'zh-CN',
+        content: '译文 [cite:a] [cite:b]',
+      },
+    },
+  }).sections[0].blocks;
+  expect(blocks).toEqual([
+    { kind: 'markdown', source: 'Answer [2](<https://a.example>)' },
+    {
+      kind: 'links',
+      summary: '2 sources',
+      items: [
+        { label: '2. A', url: 'https://a.example' },
+        { label: '1. B', url: 'https://b.example' },
+      ],
+    },
+    {
+      kind: 'markdown',
+      source:
+        '---\n\n### Translation (zh-CN)\n\n译文 [2](<https://a.example>) [1](<https://b.example>)',
+    },
+  ]);
+});
+
+test('exports URL aliases once, leaves unused sources unnumbered and preserves URL-less content', () => {
+  const value = message('aliases', 'assistant', [
+    {
+      id: 'tool',
+      type: 'dynamic-tool',
+      toolName: 'kb_search',
+      title: 'Knowledge search',
+      toolRef: { source: 'builtin', capabilityId: 'kb_search' },
+      toolCallId: 'call',
+      state: 'output-available',
+      input: {},
+      output: {
+        value: [
+          { id: 'kb', title: 'Knowledge', content: 'Local excerpt' },
+          { id: 'a', title: 'A', url: 'https://a.example' },
+          { id: 'alias', title: 'Alias', url: 'https://a.example' },
+          { id: 'unused', title: 'Unused', url: 'https://unused.example' },
+        ],
+        artifacts: [],
+      },
+    },
+    { id: 'final', type: 'text', text: '[cite:kb] [cite:alias] [cite:a]', state: 'done' },
+  ]);
+  expect(toChatExportDocument([value], options).sections[0].blocks).toEqual([
+    { kind: 'markdown', source: '[1] [2](<https://a.example>) [2](<https://a.example>)' },
+    {
+      kind: 'links',
+      summary: '2 sources',
+      items: [
+        { label: '2. A', url: 'https://a.example' },
+        { label: 'Unused', url: 'https://unused.example' },
+      ],
+    },
+    { kind: 'text', text: '1. Knowledge\nLocal excerpt' },
+  ]);
+});
+
+test('source snapshots exclusively control exported links and numbers, including an empty snapshot', () => {
+  const value = message('snapshot', 'assistant', [
+    {
+      id: 'source',
+      type: 'source-url',
+      sourceId: 'a',
+      title: 'Parts source',
+      url: 'https://parts.example',
+    },
+    { id: 'final', type: 'text', text: 'Answer [cite:a]', state: 'done' },
+  ]);
+  const citationSources = [
+    { id: 'a', title: 'Snapshot', url: 'https://snapshot.example', number: 7 },
+  ];
+  expect(toChatExportDocument([{ ...value, citationSources }], options).sections[0].blocks).toEqual(
+    [
+      { kind: 'markdown', source: 'Answer [1](<https://snapshot.example>)' },
+      {
+        kind: 'links',
+        summary: '1 sources',
+        items: [{ label: '1. Snapshot', url: 'https://snapshot.example' }],
+      },
+    ],
+  );
+  expect(
+    toChatExportDocument([{ ...value, citationSources: [] }], options).sections[0].blocks,
+  ).toEqual([{ kind: 'markdown', source: 'Answer [cite:a]' }]);
+});
+
+it.each(['web', 'url-less', 'alias', 'empty'] as const)(
+  'numbers real unnumbered remote snapshots: %s',
+  (mode) => {
+    const a = { id: 'a', title: 'A', url: 'https://a.example' };
+    const b =
+      mode === 'url-less'
+        ? { id: 'b', title: 'B' }
+        : {
+            id: 'b',
+            title: 'B',
+            url: mode === 'alias' ? a.url : 'https://b.example',
+          };
+    const view: RemoteMessageView = {
+      id: 'remote',
+      version: '1',
+      role: 'assistant',
+      state: 'success',
+      parts: [
+        {
+          id: 'process',
+          kind: 'text',
+          state: 'completed',
+          complete: true,
+          text: 'Process [cite:b]',
+        },
+        {
+          id: 'tool',
+          kind: 'tool',
+          callId: 'call',
+          name: 'web_search',
+          state: 'completed',
+          output: 'out',
+        },
+        { id: 'answer', kind: 'text', state: 'completed', complete: true, text: 'Answer [cite:a]' },
+      ],
+    };
+    const snapshot = remoteTranscriptMessage(view, {
+      sourcesByPartId: new Map([['tool', mode === 'empty' ? [] : [b, a]]]),
+    });
+    expect(snapshot.citationSources?.every((source) => !('number' in source))).toBe(true);
+    const blocks = toChatExportDocument([snapshot], options).sections[0].blocks;
+    if (mode === 'empty') {
+      expect(blocks).toEqual([{ kind: 'markdown', source: 'Answer [cite:a]' }]);
+    } else {
+      const resolved = resolveMessageCitations(snapshot.parts as never, snapshot.citationSources);
+      expect(resolved.sourceNumberById.get('b')).toBe(1);
+      expect(resolved.sourceNumberById.get('a')).toBe(mode === 'alias' ? 1 : 2);
+      expect(blocks[0]).toEqual({
+        kind: 'markdown',
+        source: `Answer [${mode === 'alias' ? 1 : 2}](<https://a.example>)`,
+      });
+      if (mode === 'url-less') expect(blocks).toContainEqual({ kind: 'text', text: '1. B' });
+      if (mode === 'alias')
+        expect(blocks[1]).toMatchObject({ items: [{ label: '1. B', url: a.url }] });
+    }
+  },
+);
+
+it.each([false, true])(
+  'materializes single kb_read objects/envelopes for UI, copy and export (%s)',
+  async (envelope) => {
+    const kb = { id: 'kb', title: 'Knowledge', content: 'Local excerpt' };
+    const view: RemoteMessageView = {
+      id: 'kb-message',
+      version: '1',
+      role: 'assistant',
+      state: 'success',
+      parts: [
+        {
+          id: 'tool',
+          kind: 'tool',
+          callId: 'call',
+          name: 'kb_read',
+          state: 'completed',
+          output: 'kb',
+        },
+        {
+          id: 'answer',
+          kind: 'text',
+          state: 'completed',
+          complete: true,
+          text: 'Answer [cite:kb]',
+        },
+      ],
+    };
+    const materializer = createRemoteMessageCitationMaterializer({
+      resource: () => ({
+        kind: 'inline',
+        value: {
+          kind: 'json',
+          complete: true,
+          value: envelope ? { artifacts: [], value: kb } : kb,
+        },
+      }),
+    });
+    await materializer.materializeAll([view], new AbortController().signal);
+    const materialization = materializer.peek(view.id, view.version);
+    const parts = remoteMessage(
+      view,
+      () => ({ kind: 'inline', value: { kind: 'json', complete: true, value: null } }),
+      undefined,
+      materialization,
+    ).display.data.parts!;
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)?.plainText).toBe('Answer [1]');
+    expect(copyAssistantMessageText(parts)).toBe('Answer [1]');
+    expect(resolveCitationWebSources(parts)).toEqual([]);
+    expect(
+      toChatExportDocument([remoteTranscriptMessage(view, materialization)], options).sections[0]
+        .blocks,
+    ).toEqual([
+      { kind: 'markdown', source: 'Answer [1]' },
+      { kind: 'text', text: '1. Knowledge\nLocal excerpt' },
+    ]);
+  },
+);
+
+it('resolves interleaved native/tool ID conflicts and URL aliases consistently', () => {
+  const old = { id: 'a', title: 'Old', url: 'https://old.example' };
+  const winner = { id: 'a', title: 'New', url: 'https://new.example' };
+  const alias = { id: 'b', title: 'Alias', url: winner.url };
+  const view: RemoteMessageView = {
+    id: 'conflict',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [
+      { id: 'native', kind: 'data', name: 'source-url', resource: 'native' },
+      {
+        id: 'tool',
+        kind: 'tool',
+        callId: 'call',
+        name: 'web_search',
+        state: 'completed',
+        output: 'tool',
+      },
+      { id: 'alias', kind: 'data', name: 'source-url', resource: 'alias' },
+      { id: 'answer', kind: 'text', state: 'completed', complete: true, text: '[cite:a] [cite:b]' },
+    ],
+  };
+  const materialization = {
+    sourcesByPartId: new Map([
+      ['native', [old]],
+      ['tool', [winner]],
+      ['alias', [alias]],
+    ]),
+  };
+  const parts = remoteMessage(
+    view,
+    () => ({ kind: 'inline', value: { kind: 'json', complete: true, value: null } }),
+    undefined,
+    materialization,
+  ).display.data.parts!;
+  expect(resolveCitationWebSources(parts).map((s) => s.url)).toEqual([winner.url]);
+  expect(copyAssistantMessageText(parts)).toBe('[1] [1]');
+  const snapshot = remoteTranscriptMessage(view, materialization);
+  expect(snapshot.citationSources).toEqual([winner]);
+  expect(toChatExportDocument([snapshot], options).sections[0].blocks).toEqual([
+    { kind: 'markdown', source: '[1](<https://new.example>) [1](<https://new.example>)' },
+    { kind: 'links', summary: '1 sources', items: [{ label: '1. New', url: winner.url }] },
+  ]);
+});

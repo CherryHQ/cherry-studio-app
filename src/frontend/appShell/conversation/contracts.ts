@@ -1,4 +1,5 @@
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { MessageCitationSource } from '@/frontend/utils/messageCitations';
 import type {
   AgentMessageView,
   AgentUserQuestions,
@@ -131,6 +132,7 @@ export type ConversationInteraction = {
 };
 /** Pure export values, never a deferred remote resource or an executable tool. */
 export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' | 'stats'> & {
+  citationSources?: readonly MessageCitationSource[];
   parts: (
     | AgentMessageView['parts'][number]
     | { type: 'tool-summary'; id: string; displayName: string }

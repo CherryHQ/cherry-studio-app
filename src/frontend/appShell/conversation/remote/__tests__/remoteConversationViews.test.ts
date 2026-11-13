@@ -319,3 +319,90 @@ it('retains file-only failed input and rejects unmanaged file identifiers', asyn
   await failed?.resend.execute(undefined);
   expect(resent).toEqual(input);
 });
+
+it('projects native citations in place with independent keys and preserves existing part identities', () => {
+  const message: RemoteMessageView = {
+    id: 'm',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [
+      { id: 'a', kind: 'data', name: 'source-url', resource: 'a' },
+      { id: 'text', kind: 'text', text: '[cite:s]', complete: true, state: 'completed' },
+      { id: 'b', kind: 'data', name: 'source-url', resource: 'b' },
+      {
+        id: 'tool',
+        kind: 'tool',
+        callId: 'call',
+        name: 'web_search',
+        state: 'completed',
+        output: 'output',
+      },
+    ],
+  };
+  const cache = createRemoteMessageProjectionCache();
+  const before = remoteMessage(message, resource, cache);
+  const sources = [{ id: 's', title: 'Source', url: 'https://example.com' }];
+  const materialization = {
+    sourcesByPartId: new Map([
+      ['a', sources],
+      ['b', sources],
+      ['tool', sources],
+    ]),
+  };
+  const after = remoteMessage(message, resource, cache, materialization);
+  const again = remoteMessage(message, resource, cache, materialization);
+  expect(after.display.data.partKeys).toEqual([
+    JSON.stringify(['m', 'source-url', 's', 1]),
+    'm:text:0',
+    JSON.stringify(['m', 'source-url', 's', 2]),
+    'tool',
+  ]);
+  expect(after.display.data.parts?.[1]).toBe(before.display.data.parts?.[0]);
+  expect(after.display.data.parts?.[3]).toMatchObject({
+    type: 'dynamic-tool',
+    state: 'output-available',
+    output: sources,
+  });
+  expect(again.display.data.parts?.[3]).toBe(after.display.data.parts?.[3]);
+  expect(after.tools).toBe(before.tools);
+  expect(after.tools?.[0].output).toMatchObject({ kind: 'deferred', key: 'output' });
+  const transcript = remoteTranscriptMessage(message, materialization);
+  expect(transcript.parts.map((part) => part.type)).toEqual([
+    'source-url',
+    'text',
+    'source-url',
+    'tool-summary',
+  ]);
+  expect(transcript.citationSources).toEqual(sources);
+});
+
+it('keeps old revision tools and readers identical after interleaving and materialization', () => {
+  const cache = createRemoteMessageProjectionCache();
+  const old: RemoteMessageView = {
+    id: 'm',
+    version: '1',
+    role: 'assistant',
+    state: 'success',
+    parts: [
+      {
+        id: 'tool',
+        kind: 'tool',
+        callId: 'call',
+        name: 'web_search',
+        state: 'completed',
+        input: 'in',
+        output: 'out',
+      },
+    ],
+  };
+  const first = remoteMessage(old, resource, cache);
+  remoteMessage({ ...old, version: '2', parts: old.parts.map((p) => ({ ...p })) }, resource, cache);
+  const updated = remoteMessage(old, resource, cache, {
+    sourcesByPartId: new Map([['tool', [{ id: 's', title: 'S', url: 'https://example.com' }]]]),
+  });
+  expect(updated.tools).toBe(first.tools);
+  expect(updated.tools![0]).toBe(first.tools![0]);
+  expect(updated.tools![0].input).toBe(first.tools![0].input);
+  expect(updated.tools![0].output).toBe(first.tools![0].output);
+});

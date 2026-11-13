@@ -775,3 +775,125 @@ test('remote input rejects local SSH display metadata instead of silently droppi
     }),
   ).toThrow();
 });
+
+const citationMessage = () => ({
+  ...message('citations'),
+  parts: [
+    { ...message('citations').parts[0], text: 'Answer [cite:s]' },
+    { id: 'source', kind: 'data' as const, name: 'source-url', resource: 'resource' },
+  ],
+});
+const settleCitations = async () => {
+  for (let i = 0; i < 100; i++) await Promise.resolve();
+};
+const citationPayload = {
+  kind: 'text' as const,
+  text: JSON.stringify({ sourceId: 's', title: 'S', url: 'https://example.com' }),
+};
+
+it.each(['activate', 'subscribe'] as const)(
+  'materializes visible previews before openLatest completes via %s',
+  async (mode) => {
+    const test = fixture();
+    jest.mocked(test.remote.peekSession).mockReturnValue({
+      session,
+      history: {
+        items: [citationMessage()],
+        version: '1',
+        readAt: 1,
+        hasOlderMessages: false,
+        complete: true,
+      },
+    });
+    jest.mocked(test.remote.readSession).mockImplementation(() => new Promise(() => {}));
+    jest.mocked(test.remote.readResource).mockResolvedValue(citationPayload);
+    const handle = await test.source.openSession(address, signal());
+    const original = handle.history.peekLatest!()!.items[0];
+    expect(test.remote.readResource).not.toHaveBeenCalled();
+    const release =
+      mode === 'activate' ? handle.activate() : handle.history.subscribePreview!(() => {});
+    void handle.history.openLatest(signal());
+    await settleCitations();
+    expect(handle.history.projection!.resolve(original).display.data.parts).toContainEqual({
+      type: 'source-url',
+      sourceId: 's',
+      title: 'S',
+      url: 'https://example.com',
+    });
+    expect(test.remote.history).not.toHaveBeenCalled();
+    release();
+    handle.dispose();
+    test.source.dispose();
+  },
+);
+
+it('retries same-revision citation failures on reconnect and discards old epoch rows', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.history).mockResolvedValue({ items: [citationMessage()] });
+  jest
+    .mocked(test.remote.readResource)
+    .mockRejectedValueOnce(new Error('unavailable'))
+    .mockResolvedValue(citationPayload);
+  const handle = await test.source.openSession(address, signal());
+  const release = handle.activate();
+  test.publish({ ...test.snapshot, historyEpoch: 'first' });
+  const first = await handle.history.openLatest(signal());
+  await settleCitations();
+  expect(test.remote.readResource).toHaveBeenCalledTimes(1);
+  test.setState({ status: 'offline' });
+  test.setState({ status: 'ready' });
+  const second = await handle.history.openLatest(signal());
+  await settleCitations();
+  expect(test.remote.readResource).toHaveBeenCalledTimes(2);
+  expect(
+    handle.history.projection!.resolve(second.initial.items[0]).display.data.parts,
+  ).toHaveLength(2);
+  expect(handle.history.projection!.resolve(first.initial.items[0])).toBe(first.initial.items[0]);
+  test.publish({ ...test.snapshot, historyEpoch: 'second' });
+  expect(handle.history.projection!.resolve(second.initial.items[0])).toBe(second.initial.items[0]);
+  const third = await handle.history.openLatest(signal());
+  await settleCitations();
+  expect(third.initial.items[0]).not.toBe(second.initial.items[0]);
+  expect(test.remote.readResource).toHaveBeenCalledTimes(3);
+  release();
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('keeps shared window reads until the last window closes and rejects late epoch/window commits', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.history).mockResolvedValue({ items: [citationMessage()] });
+  const requests: { signal: AbortSignal; finish: (value: typeof citationPayload) => void }[] = [];
+  jest.mocked(test.remote.readResource).mockImplementation(
+    (_key, current) =>
+      new Promise((finish) => {
+        requests.push({ signal: current, finish });
+      }),
+  );
+  const handle = await test.source.openSession(address, signal());
+  const release = handle.activate();
+  test.publish({ ...test.snapshot, historyEpoch: 'first' });
+  const a = await handle.history.openLatest(signal());
+  const b = await handle.history.openLatest(signal());
+  await settleCitations();
+  expect(requests).toHaveLength(1);
+  a.dispose();
+  expect(requests[0].signal.aborted).toBe(false);
+  b.dispose();
+  expect(requests[0].signal.aborted).toBe(true);
+  const revision = handle.history.projection!.state.getSnapshot();
+  requests[0].finish(citationPayload);
+  await settleCitations();
+  expect(handle.history.projection!.state.getSnapshot()).toBe(revision);
+  const c = await handle.history.openLatest(signal());
+  await settleCitations();
+  test.publish({ ...test.snapshot, historyEpoch: 'second' });
+  expect(requests[1].signal.aborted).toBe(true);
+  requests[1].finish(citationPayload);
+  await settleCitations();
+  expect(handle.history.projection!.state.getSnapshot()).toBe(revision);
+  expect(handle.history.projection!.resolve(c.initial.items[0])).toBe(c.initial.items[0]);
+  release();
+  handle.dispose();
+  test.source.dispose();
+});

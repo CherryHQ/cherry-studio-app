@@ -1,3 +1,7 @@
+import {
+  resolveMessageCitations,
+  type MessageCitationSource,
+} from '@/frontend/utils/messageCitations';
 import type {
   RemoteCommand,
   RemoteMessagePart,
@@ -21,6 +25,7 @@ import type {
   Submission,
   UndeliveredMessage,
 } from './remoteContracts';
+import type { MessageCitationMaterialization } from './remoteMessageCitations';
 
 export function remoteConversationFailure(error: unknown): ConversationFailure {
   const failure = classifyRemoteFailure(error);
@@ -156,10 +161,15 @@ export type RemoteMessageProjectionCache = {
     { streaming: boolean; part: CherryMessagePart; tool?: ConversationTool }
   >;
   tools: Map<string, readonly ConversationTool[]>;
+  citations: WeakMap<
+    CherryMessagePart,
+    { sources: readonly MessageCitationSource[]; part: CherryMessagePart }
+  >;
 };
 export const createRemoteMessageProjectionCache = (): RemoteMessageProjectionCache => ({
   parts: new WeakMap(),
   tools: new Map(),
+  citations: new WeakMap(),
 });
 function projectRemotePart(
   part: Extract<RemoteMessagePart, { kind: 'text' | 'reasoning' | 'tool' }>,
@@ -197,11 +207,14 @@ export function remoteMessage(
   message: RemoteMessageView,
   resource: (value: string) => ResourceRead,
   cache?: RemoteMessageProjectionCache,
+  materialization?: MessageCitationMaterialization,
 ): ConversationMessage {
   const parts: CherryMessagePart[] = [];
   const keys: string[] = [];
   const tools: ConversationTool[] = [];
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
+  const occurrences = new Map<string, number>();
+  let contentPosition = 0;
   for (const part of message.parts) {
     if (part.kind === 'file') {
       attachments.push({
@@ -212,7 +225,22 @@ export function remoteMessage(
       });
       continue;
     }
-    if (part.kind === 'data') continue;
+    if (part.kind === 'data') {
+      if (part.name === 'source-url')
+        for (const source of materialization?.sourcesByPartId.get(part.id) ?? []) {
+          const occurrence = (occurrences.get(source.id) ?? 0) + 1;
+          occurrences.set(source.id, occurrence);
+          if (!source.url) continue;
+          parts.push({
+            type: 'source-url',
+            sourceId: source.id,
+            url: source.url,
+            title: source.title,
+          });
+          keys.push(JSON.stringify([message.id, 'source-url', source.id, occurrence]));
+        }
+      continue;
+    }
     // A text part leaves streaming mode once it completes, even while its message continues.
     const streaming =
       part.kind !== 'tool' && message.state === 'streaming' && part.state === 'streaming';
@@ -222,18 +250,34 @@ export function remoteMessage(
       cache?.parts.set(part, projected);
     }
     // The desktop renames text parts when history commits; position keeps the rendered part.
-    keys.push(part.kind === 'tool' ? part.id : `${message.id}:${part.kind}:${parts.length}`);
-    parts.push(projected.part);
+    keys.push(part.kind === 'tool' ? part.id : `${message.id}:${part.kind}:${contentPosition}`);
+    contentPosition++;
+    const sources = materialization?.sourcesByPartId.get(part.id);
+    if (part.kind === 'tool' && sources?.length) {
+      let citation = cache?.citations.get(projected.part);
+      if (citation?.sources !== sources) {
+        citation = {
+          sources,
+          part: {
+            ...projected.part,
+            state: 'output-available',
+            output: sources,
+          } as CherryMessagePart,
+        };
+        cache?.citations.set(projected.part, citation);
+      }
+      parts.push(citation.part);
+    } else parts.push(projected.part);
     if (projected.tool) tools.push(projected.tool);
   }
   let toolList: readonly ConversationTool[] = tools;
-  const previousTools = cache?.tools.get(message.id);
+  const previousTools = cache?.tools.get(JSON.stringify([message.id, message.version]));
   if (
     previousTools?.length === tools.length &&
     previousTools.every((tool, index) => tool === tools[index])
   )
     toolList = previousTools;
-  else cache?.tools.set(message.id, tools);
+  else cache?.tools.set(JSON.stringify([message.id, message.version]), tools);
   if (message.failure) {
     parts.push({
       type: 'data-error',
@@ -291,10 +335,39 @@ export function remoteMessage(
     attachments,
   };
 }
-export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptMessage {
+export function remoteTranscriptMessage(
+  message: RemoteMessageView,
+  materialization?: MessageCitationMaterialization,
+): TranscriptMessage {
   const parts: TranscriptMessage['parts'] = [];
   const attachments: NonNullable<TranscriptMessage['attachments']>[number][] = [];
+  const occurrences = new Map<string, number>();
+  const citationSources = message.parts.flatMap(
+    (part) => materialization?.sourcesByPartId.get(part.id) ?? [],
+  );
+  const resolved = resolveMessageCitations(
+    message.parts.flatMap((part) =>
+      part.kind === 'text' ? [{ type: 'text' as const, text: part.text }] : [],
+    ),
+    citationSources,
+  );
   for (const part of message.parts) {
+    for (const source of materialization?.sourcesByPartId.get(part.id) ?? []) {
+      if (
+        source.url &&
+        (part.kind === 'data' || resolved.sourceById.get(source.id)?.id !== source.id)
+      ) {
+        const occurrence = (occurrences.get(source.id) ?? 0) + 1;
+        occurrences.set(source.id, occurrence);
+        parts.push({
+          type: 'source-url',
+          id: JSON.stringify([message.id, 'source-url', source.id, occurrence]),
+          sourceId: source.id,
+          url: source.url,
+          title: source.title,
+        });
+      }
+    }
     if (part.kind === 'text' || part.kind === 'reasoning') {
       if (!part.complete) throw new Error('Incomplete transcript content');
       parts.push({ type: part.kind, id: part.id, text: part.text, state: 'done' });
@@ -315,5 +388,6 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
     parts,
     attachments,
     stats: null,
+    citationSources: resolved.sources.map(({ number: _number, ...source }) => source),
   };
 }
