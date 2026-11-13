@@ -118,7 +118,8 @@ export function createRemoteMessageCitationMaterializer(options: {
   const key = (handle: string) => JSON.stringify([null, null, generation, handle]);
   const messageKey = (id: string, version: string) => JSON.stringify([id, version]);
   const pump = () => {
-    while (!disposed && active < Math.max(1, options.limits?.concurrency ?? 4) && queue.length) {
+    while (active < Math.max(1, options.limits?.concurrency ?? 4) && queue.length) {
+      if (disposed) return;
       active++;
       void queue.shift()!().finally(() => {
         active--;

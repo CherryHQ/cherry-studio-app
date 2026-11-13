@@ -5,8 +5,7 @@ import {
 import { createRemoteMessageCitationMaterializer } from '@/frontend/appShell/conversation/remote/remoteMessageCitations';
 import { resolveCitationWebSources } from '@/frontend/components/Message/parts/webSource';
 import { copyAssistantMessageText } from '@/frontend/features/chat/components/ChatWorkspace/utils/copyAssistantMessageText';
-import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
-import { replaceCitationMarkers } from '@/frontend/utils/messageCitations';
+import { replaceCitationMarkers, resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';

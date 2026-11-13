@@ -1,13 +1,13 @@
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
-import { RemoteAgentScope } from '@/backend/services/remoteAgent/RemoteAgentScope';
-import { integrity } from '@/backend/services/remoteAgent/remoteContent';
-import { RemoteSessionReadCache } from '@/backend/services/remoteAgent/RemoteSessionReadCache';
-import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
+import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
-import { createRemoteConversationSource } from '../createRemoteConversationSource';
+import { RemoteAgentScope } from '../RemoteAgentScope';
+import { integrity } from '../remoteContent';
+import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
 
 it('reads real source-url content refs through backend integrity verification with revision and scope isolation', async () => {
+  const cache = new RemoteSessionReadCache();
   function fixture(scope: string, corrupt = false) {
     let revision = '1';
     const bytes = () =>
@@ -100,12 +100,10 @@ it('reads real source-url content refs through backend integrity verification wi
         subscribeInvalidation: () => () => {},
       } as unknown as DesktopConnections,
       journal,
-      new RemoteSessionReadCache(),
+      cache,
     );
-    const frontend = createRemoteConversationSource('pc', backend);
     return {
       backend,
-      frontend,
       request,
       setRevision: (value: string) => {
         revision = value;
@@ -116,45 +114,60 @@ it('reads real source-url content refs through backend integrity verification wi
   const b = fixture('second');
   const bad = fixture('corrupt', true);
   const signal = new AbortController().signal;
-  const address = {
-    source: { kind: 'desktop' as const, connectionId: 'pc' },
-    sessionId: 'session',
+  const resource = async (backend: RemoteAgentScope, revision: string) => {
+    const history = await backend.history('session', revision, undefined, signal);
+    const part = history.items[0].parts.find(
+      (part): part is Extract<RemoteMessageView['parts'][number], { kind: 'data' }> =>
+        part.kind === 'data' && part.name === 'source-url',
+    );
+    if (!part) throw new Error('Expected source-url resource');
+    return part.resource;
   };
-  const first = await a.frontend.openSession(address, signal);
-  const selection = await first.history.prepareSelection!(['m'], signal);
-  expect(selection.messages[0].citationSources).toEqual([
-    { id: 's', title: 'S', url: 'https://first-1.example' },
-  ]);
-  const window = await first.history.openLatest(signal);
-  for (let i = 0; i < 100; i++) await Promise.resolve();
-  const row = first.history.projection!.resolve(window.initial.items[0]);
-  expect(resolveMessageCitations(row.display.data.parts!).sourceNumberById.get('s')).toBe(1);
-  expect(a.request.mock.calls.filter(([method]) => method === 'agent.content.read')).toHaveLength(
-    1,
-  );
-  a.setRevision('2');
-  const next = await first.history.prepareSelection!(['m'], signal);
-  expect(next.messages[0].citationSources?.[0].url).toBe('https://first-2.example');
-  const old = await a.backend.history('session', '2', undefined, signal);
-  const handle = old.items[0].parts.find((part) => part.kind === 'data');
-  if (handle?.kind !== 'data') throw new Error('Expected data resource');
-  await expect(b.backend.readResource(handle.resource, signal)).rejects.toMatchObject({
-    code: 'RESOURCE_UNAVAILABLE',
+  const expected = (scope: string, revision: string) => ({
+    kind: 'text',
+    text: JSON.stringify({
+      sourceId: 's',
+      title: 'S',
+      url: `https://${scope}-${revision}.example`,
+    }),
   });
-  const second = await b.frontend.openSession(address, signal);
-  expect(
-    (await second.history.prepareSelection!(['m'], signal)).messages[0].citationSources?.[0].url,
-  ).toBe('https://second-1.example');
-  const invalid = await bad.frontend.openSession(address, signal);
-  expect(
-    (await invalid.history.prepareSelection!(['m'], signal)).messages[0].citationSources,
-  ).toEqual([]);
-  expect(bad.request.mock.calls.filter(([method]) => method === 'agent.content.read')).toHaveLength(
-    1,
-  );
-  for (const test of [a, b, bad]) {
-    test.frontend.dispose();
-    test.backend.dispose();
-    await test.backend.drain();
+  try {
+    const first = await resource(a.backend, '1');
+    await expect(a.backend.readResource(first, signal)).resolves.toEqual(expected('first', '1'));
+    await expect(a.backend.readResource(first, signal)).resolves.toEqual(expected('first', '1'));
+    expect(a.request.mock.calls.filter(([method]) => method === 'agent.content.read')).toHaveLength(
+      1,
+    );
+
+    a.setRevision('2');
+    const next = await resource(a.backend, '2');
+    expect(next).not.toBe(first);
+    await expect(a.backend.readResource(next, signal)).resolves.toEqual(expected('first', '2'));
+    expect(a.request.mock.calls.filter(([method]) => method === 'agent.content.read')).toHaveLength(
+      2,
+    );
+    await expect(a.backend.history('session', '1', undefined, signal)).rejects.toMatchObject({
+      code: 'REVISION_EXPIRED',
+    });
+
+    const second = await resource(b.backend, '1');
+    await expect(b.backend.readResource(next, signal)).rejects.toMatchObject({
+      code: 'RESOURCE_UNAVAILABLE',
+    });
+    await expect(b.backend.readResource(second, signal)).resolves.toEqual(expected('second', '1'));
+    expect(b.request.mock.calls.filter(([method]) => method === 'agent.content.read')).toHaveLength(
+      1,
+    );
+
+    const invalid = await resource(bad.backend, '1');
+    await expect(bad.backend.readResource(invalid, signal)).rejects.toMatchObject({
+      code: 'PROTOCOL_ERROR',
+    });
+    expect(
+      bad.request.mock.calls.filter(([method]) => method === 'agent.content.read'),
+    ).toHaveLength(1);
+  } finally {
+    for (const test of [a, b, bad]) test.backend.dispose();
+    await Promise.all([a, b, bad].map((test) => test.backend.drain()));
   }
 });
