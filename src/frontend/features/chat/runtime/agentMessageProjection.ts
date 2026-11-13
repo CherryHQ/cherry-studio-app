@@ -82,6 +82,9 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
   const result = AgentToolResultSchema.safeParse(part.output);
   const base = {
+    ...(part.toolRef.source === 'builtin'
+      ? { toolMetadata: { cherry: { tool: { type: 'builtin' as const } } } }
+      : {}),
     ...(part.toolRef.source === 'mcp'
       ? {
           toolMetadata: {

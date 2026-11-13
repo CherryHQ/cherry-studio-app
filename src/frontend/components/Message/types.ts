@@ -3,6 +3,7 @@ import type { ReactNode, Ref } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
@@ -19,6 +20,7 @@ export type MessageListItem = Readonly<{
     partKeys?: readonly string[];
     attachmentReports?: Readonly<Record<string, FileAttachmentReport>>;
     parts?: readonly CherryMessagePart[];
+    citationSources?: readonly CitationSource[];
     translations?: MessageTranslations;
   }>;
   id: string;

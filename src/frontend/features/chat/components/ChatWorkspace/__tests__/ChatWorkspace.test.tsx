@@ -13,6 +13,10 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('../../../hooks/useMessageCitationSources', () => ({
+  useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
+}));
+
 jest.mock('react-native-reanimated', () => ({
   useDerivedValue: (read: () => unknown) => ({ get: read }),
 }));

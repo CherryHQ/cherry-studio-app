@@ -66,6 +66,11 @@ entering the common renderer. Native URL sources, search suggestions and compact
 their source part identity. Inline and revision-bound payloads use the same backend read cache;
 unknown or invalid data does not become an executable local capability.
 
+`readToolCitations` reads only recognized, completed lookup results through their existing
+`ResourceRead` values. Chat prepares these source facts independently of history loading and
+passes them in `MessageListItem.data.citationSources`; public citation parsing and source cards
+consume the facts without treating a tool name as permission to execute a local capability.
+
 Task metadata is a separate `RemoteTaskCatalogQueries` contract in `remote/remoteTaskContracts.ts`,
 exposed as `RemoteConversationSource.tasks`. It is not part of `RemoteConversationCatalog`.
 Task hooks consume only these reads and own their visible-list polling policy. Both catalogs share

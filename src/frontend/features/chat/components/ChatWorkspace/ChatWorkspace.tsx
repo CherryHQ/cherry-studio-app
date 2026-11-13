@@ -13,6 +13,7 @@ import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/c
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { useChatEditing } from '../../context/ChatEditingProvider';
+import { useMessageCitationSources } from '../../hooks/useMessageCitationSources';
 import { type PendingChatSend } from '../../runtime';
 import { useChatShareSelectionActions } from '../../share/chatShareSelection';
 import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
@@ -70,7 +71,7 @@ export function ChatWorkspace({
   onQuoteWindowReady,
   onQuoteTakeover,
   snapshot: live,
-  messages: mergedMessages,
+  messages: sourceMessages,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -104,6 +105,10 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
+  const mergedMessages = useMessageCitationSources(
+    sourceMessages,
+    dataKey || `${executionSource}:${sessionId ?? 'draft'}`,
+  );
   useConversationFeedbackHint(
     messageWindow.dataKey || sessionId || 'draft',
     live,
