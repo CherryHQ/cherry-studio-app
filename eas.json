@@ -66,12 +66,6 @@
         "channel": "production-ios"
       }
     },
-    "production-ios-cloud": {
-      "extends": "production",
-      "ios": {
-        "buildArtifactPaths": ["ios/build/*.app.dSYM.zip"]
-      }
-    },
     "production-domestic-stores": {
       "extends": "production",
       "android": {

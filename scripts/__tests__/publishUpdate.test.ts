@@ -95,7 +95,7 @@ test.each([
   ['apk', 'production'],
   ['google-play', 'production-google-play'],
   ['domestic-stores', 'production-domestic-stores'],
-  ['ios', 'production-ios-cloud'],
+  ['ios', 'production'],
 ])('%s keeps native update configuration identical for build and OTA', (name, buildProfile) => {
   const originalEnv = process.env;
   const environment = { ...originalEnv };

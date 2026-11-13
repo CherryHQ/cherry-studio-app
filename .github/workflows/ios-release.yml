@@ -54,7 +54,7 @@ jobs:
       - name: Build iOS on EAS and wait for completion
         id: build
         run: |
-          eas build --platform ios --profile production-ios-cloud --non-interactive --wait --json > "$RUNNER_TEMP/ios-build.json"
+          eas build --platform ios --profile production --non-interactive --wait --json > "$RUNNER_TEMP/ios-build.json"
           jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "IOS"' "$RUNNER_TEMP/ios-build.json"
           build_id="$(jq -er '.[0].id' "$RUNNER_TEMP/ios-build.json")"
           echo "build_id=$build_id" >> "$GITHUB_OUTPUT"

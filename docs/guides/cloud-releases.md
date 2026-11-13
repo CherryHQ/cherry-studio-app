@@ -9,8 +9,7 @@ Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger
 and call the Android release workflow with `domestic: true` for the domestic APK. Prerelease tags
 do not build these store artifacts. Branch pushes do not publish.
 The tag's base version must match `expo.version` in `app.json`; update and commit the version before
-tagging. Public APK builds use the EAS `production` profile. Cloud iOS builds use
-`production-ios-cloud`, which inherits production settings and retains the original debug-symbol archive.
+tagging. Public APK and iOS builds use the existing EAS `production` profile.
 Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
 and automatic native build-number increments, but generates an AAB instead of an APK. The public APK and Google Play
 profiles retain the current ARM64-only device support. The domestic profile inherits production
@@ -295,25 +294,6 @@ waits for submission completion. The workflow does not attach the IPA to a publi
 A successful workflow means the upload completed. Apple processing, compliance questions, tester
 groups, invitations, and any external beta review remain in App Store Connect. The workflow does
 not configure groups or submit the app for an App Store public release.
-
-The `production-ios-cloud` profile retains Fastlane's `ios/build/*.app.dSYM.zip` through
-[`buildArtifactPaths`](https://docs.expo.dev/eas/json/#buildartifactpaths). Download this additional
-build artifact from the exact EAS build and archive it beside that build's IPA and metadata. It is
-separate from the application download and contains the original main-app and extension debug
-symbols; another build cannot replace it when symbol uploads need recovery.
-
-Local iOS production builds use `production`, which shares the same app identity, signing,
-environment, and update channel but has no additional artifact paths. The pinned local build
-plugin uses the same `--output` destination for the IPA and additional artifacts, so keeping
-symbol retention on the cloud profile prevents a symbol ZIP from overwriting the local IPA.
-The submission job still uses `submit.production` with the exact cloud build ID.
-
-The Xcode Sentry upload phase can finish before the main app's dSYM is generated. A successful
-build or symbol-upload exit therefore does not prove complete native symbols reached Sentry.
-Match the IPA's Mach-O UUIDs to remote records containing full debug information. If the main
-record contains only binary symbol-table/unwind data, recover and upload the matching dSYM from
-the retained archive, then repeat the UUID check. Artifact retention preserves recovery material;
-it does not retry Sentry uploads or confirm their completeness automatically.
 
 ## Failure Recovery
 
