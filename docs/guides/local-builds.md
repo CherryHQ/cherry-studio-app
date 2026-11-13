@@ -227,7 +227,11 @@ pnpm build:local --platform ios --profile preview
 
 Preview and development bundles do not report to Sentry, even when the native dependency and a DSN
 are present. Production profiles are never the wrapper's default. Use `--profile production` for
-production iOS builds. When a public APK release is explicitly requested, enable its update path:
+local production iOS builds. The `production-ios-cloud` profile is for cloud builds and adds
+debug-symbol artifact retention. Do not use it with local `--output`: the pinned local plugin
+writes additional artifacts to the same path as the IPA, allowing the symbol ZIP to overwrite it.
+To retain local symbols, preserve the original build working directory as described below.
+When a public APK release is explicitly requested, enable its update path:
 
 ```bash
 pnpm build:local --platform android --profile production --output /absolute/path/to/cherry-studio-0.1.0-android.apk

@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 
 test.each([
   { args: ['--platform', 'android'], profile: ['--profile', 'development'], customPlugin: false },
@@ -69,3 +70,67 @@ process.exit(plugin.status ?? 1);
     }
   },
 );
+
+test('local production iOS keeps the IPA output when debug symbols are present', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cherry-build-artifacts-'));
+  try {
+    const output = join(directory, 'app.ipa');
+    const original = join(directory, 'original.ipa');
+    const symbols = join(directory, 'ios/build/CherryStudio.app.dSYM.zip');
+    mkdirSync(dirname(symbols), { recursive: true });
+    writeFileSync(original, 'original IPA fixture');
+    writeFileSync(symbols, 'original dSYM fixture');
+
+    const requireFromEas = createRequire(require.resolve('eas-cli/package.json'));
+    const requireFromPlugin = createRequire(
+      require.resolve('eas-cli-local-build-plugin/package.json'),
+    );
+    const easJsonRoot = dirname(requireFromEas.resolve('@expo/eas-json/package.json'));
+    const buildToolsRoot = dirname(requireFromPlugin.resolve('@expo/build-tools/package.json'));
+    // Use the pinned tools' actual artifact collector and saver without invoking native builds.
+    const result = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        `const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const [configFile, resolverFile, collectorFile, saverFile, directory] = process.argv.slice(1);
+const { resolveBuildProfile } = require(resolverFile);
+const { maybeFindAndUploadBuildArtifacts } = require(collectorFile);
+const { prepareArtifacts } = require(saverFile);
+(async () => {
+  const profile = resolveBuildProfile({
+    easJson: JSON.parse(readFileSync(configFile, 'utf8')),
+    platform: 'ios',
+    profileName: 'production',
+  });
+  await prepareArtifacts([join(directory, 'original.ipa')]);
+  await maybeFindAndUploadBuildArtifacts({
+    job: profile,
+    getReactNativeProjectDirectory: () => directory,
+    uploadArtifact: ({ artifact }) => prepareArtifacts(artifact.paths),
+  }, { logger: { info() {}, error({ err }) { throw err; } } });
+})().catch(error => { console.error(error); process.exitCode = 1; });
+`,
+        resolve('eas.json'),
+        join(easJsonRoot, 'build/build/resolver.js'),
+        join(buildToolsRoot, 'dist/utils/artifacts.js'),
+        requireFromPlugin.resolve('./dist/artifacts.js'),
+        directory,
+      ],
+      {
+        env: {
+          ...process.env,
+          EAS_LOCAL_BUILD_WORKINGDIR: directory,
+          EAS_LOCAL_BUILD_ARTIFACT_PATH: output,
+        },
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    );
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+    expect(readFileSync(output)).toEqual(readFileSync(original));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

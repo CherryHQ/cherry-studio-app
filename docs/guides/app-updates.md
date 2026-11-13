@@ -47,11 +47,12 @@ OTA publication must comply with store review rules and cannot bypass review req
 | `production`, Android | `production-apk` | `production` | Enabled |
 | `production-google-play`, Android | `production-google-play` | `production` | Disabled |
 | `production-domestic-stores`, Android | `production-domestic-stores` | `production` | Disabled |
-| `production`, iOS | `production-ios` | `production` | Disabled |
+| `production` / `production-ios-cloud`, iOS | `production-ios` | `production` | Disabled |
 | `development` / `development-simulator` | None | `development` | Opt-in flag |
 
-Platform-specific channels in `eas.json` preserve existing build profile names and release
-workflows. GitHub and GitCode distribute the same APK and use `production-apk`. Channels separate
+The cloud iOS workflow and OTA target use `production-ios-cloud`; local iOS production builds use
+its parent `production`. Both use the same environment and `production-ios` channel.
+GitHub and GitCode distribute the same APK and use `production-apk`. Channels separate
 distribution configuration; matching runtime versions additionally enforce native compatibility.
 
 The shared package-update infrastructure uses the cached IP country to select GitCode APK upgrades
