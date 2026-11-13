@@ -90,6 +90,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   cancelTurn: AgentProtocol['cancelTurn'] = (input) => this.host.cancelTurn(input);
   cancelQueuedInput: AgentProtocol['cancelQueuedInput'] = (input) =>
     this.host.cancelQueuedInput(input);
+  steerQueuedInput: AgentProtocol['steerQueuedInput'] = (input) =>
+    this.host.steerQueuedInput(input);
   cancelSubmission: AgentProtocol['cancelSubmission'] = (input) =>
     this.host.cancelSubmission(input);
   respondApproval: AgentProtocol['respondApproval'] = (input) => this.host.respondApproval(input);

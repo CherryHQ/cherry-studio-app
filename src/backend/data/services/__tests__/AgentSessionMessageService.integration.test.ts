@@ -71,6 +71,75 @@ describe('AgentSessionMessageService persistence', () => {
     ).toEqual(['a2']);
   });
 
+  test('pages and reopens steered replies in parent order even when reservation times disagree', async () => {
+    for (const [index, id] of ['q1', 'a1', 'q2', 'a2', 'q3', 'a3'].entries()) {
+      insertMessage(sqlite, {
+        id,
+        createdAt: 100 + index,
+        text: id,
+        role: id.startsWith('q') ? 'user' : 'assistant',
+      });
+    }
+    sqlite.exec(`UPDATE agent_session_message SET parent_id = 'a1' WHERE id = 'q3';
+      UPDATE agent_session_message SET parent_id = 'a3' WHERE id = 'q2';
+      UPDATE agent_session SET active_node_id = 'a2' WHERE id = 'session-1';`);
+    const latest = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
+    expect(latest.items.map((message) => message.id)).toEqual(['a2', 'q2']);
+    const older = await agentSessionMessageService.listByCursor('session-1', {
+      limit: 2,
+      cursor: latest.nextCursor,
+    });
+    expect(older.items.map((message) => message.id)).toEqual(['a3', 'q3']);
+    const newer = await agentSessionMessageService.listByCursor('session-1', {
+      limit: 2,
+      cursor: older.previousCursor,
+      direction: 'newer',
+    });
+    expect(newer.items.map((message) => message.id)).toEqual(['a2', 'q2']);
+    const all = await agentSessionMessageService.listByCursor('session-1');
+    expect(all.items.map((message) => message.id)).toEqual(['a2', 'q2', 'a3', 'q3', 'a1', 'q1']);
+  });
+
+  test('reads a 3000-message branch in execution order across pages, selection and navigation', async () => {
+    const count = 3000;
+    const insert = sqlite.prepare(`INSERT INTO agent_session_message
+      (id, session_id, parent_id, role, data, status, created_at, updated_at)
+      VALUES (?, 'session-1', ?, 'assistant', '{"parts":[]}', 'success', ?, ?)`);
+    sqlite.exec('BEGIN');
+    for (let index = 1; index <= count; index++) {
+      insert.run(`m${index}`, index === 1 ? null : `m${index - 1}`, count - index, count - index);
+    }
+    // An unselected sibling must not displace the selected branch's cursor.
+    insert.run('alternative', 'm1500', count + 1, count + 1);
+    sqlite.exec("UPDATE agent_session SET active_node_id = 'm3000' WHERE id = 'session-1'; COMMIT");
+    const latest = await agentSessionMessageService.listByCursor('session-1', { limit: 20 });
+    expect(latest.items.map((row) => row.id)).toEqual(
+      Array.from({ length: 20 }, (_, index) => `m${count - index}`),
+    );
+    const older = await agentSessionMessageService.listByCursor('session-1', {
+      limit: 20,
+      cursor: latest.nextCursor,
+    });
+    expect(older.items[0].id).toBe('m2980');
+    const newer = await agentSessionMessageService.listByCursor('session-1', {
+      limit: 20,
+      cursor: older.previousCursor,
+      direction: 'newer',
+    });
+    expect(newer.items.map((row) => row.id)).toEqual(latest.items.map((row) => row.id));
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      limit: 3,
+      aroundMessageId: 'alternative',
+    });
+    expect(around.items.map((row) => row.id)).toEqual(['m1501', 'm1500', 'm1499']);
+    const selected = await agentSessionMessageService.readSelection('session-1', [
+      'm3000',
+      'm1',
+      'm1500',
+    ]);
+    expect(selected.messages.map((row) => row.id)).toEqual(['m1', 'm1500', 'm3000']);
+  });
+
   test('merges concurrent languages into message data and returns them with history and selection', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
     const original = sqlite

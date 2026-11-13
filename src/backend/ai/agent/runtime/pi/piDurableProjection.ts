@@ -285,6 +285,7 @@ export function projectPiTurn(options: {
   partial?: AssistantMessage;
   partialId?: string;
   active?: boolean;
+  continued?: boolean;
   /** Active observations carry reasoning status; explicit detail reads retain the full text. */
   fullReasoning?: boolean;
   inherited?: boolean;
@@ -591,10 +592,12 @@ export function projectPiTurn(options: {
   const hasAssistant =
     parts.length > 0 ||
     options.active === true ||
+    options.continued === true ||
     answerVisible ||
     (!options.inherited && (record.status === 'unanswered' || record.status === 'queued'));
   let status: RuntimeDurableTurn['status'];
-  if (options.active) status = 'running';
+  if (options.continued) status = error ? 'failed' : 'completed';
+  else if (options.active) status = 'running';
   else if (options.inherited && !answerVisible) {
     status = hasAssistant ? 'interrupted' : 'completed';
     error = null;
@@ -638,9 +641,11 @@ export function projectPiTurn(options: {
     assistantMessageId: stored.assistantMessageId,
     inputBoundary: record.entry !== undefined ? `pi:${record.entry}` : null,
     answerBoundary:
-      answerVisible && record.type === 'input' && record.status === 'done'
-        ? `pi:${entries.findLast((entry) => entry.kind === PI_REPLY_EDIT_KIND)?.id ?? record.answer}`
-        : null,
+      options.continued && entries.length
+        ? `pi:${entries.at(-1)!.id}`
+        : answerVisible && record.type === 'input' && record.status === 'done'
+          ? `pi:${entries.findLast((entry) => entry.kind === PI_REPLY_EDIT_KIND)?.id ?? record.answer}`
+          : null,
     metadata: stored.metadata,
     status,
     parts,

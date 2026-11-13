@@ -124,11 +124,6 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  /**
-   * A withdrawn input's rows hand their children to its own parent. Inputs reserved below it keep
-   * that row in their immutable metadata, so their live questions follow this map until idle.
-   */
-  withdrawnParents: Map<string, string | null>;
   contextStatus: 'compacting' | 'compaction-failed' | null;
   contextUsage: RuntimeContextUsage | null;
   unsubscribe: () => Promise<void>;
@@ -186,6 +181,7 @@ export class DurableAgentHost implements AgentProtocol {
   /** Null awaits the fork's first input; an id identifies its leading answer for naming. */
   private readonly forksToName = new Map<string, string | null>();
   private readonly pendingWrites = new Set<Promise<unknown>>();
+  private readonly parentWrites = new Map<string, Promise<void>>();
   private readonly settlements = new Map<string, Promise<void>>();
   private readonly controller = new AbortController();
   private readonly naming: MobileAgentHostNaming;
@@ -614,8 +610,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   private submitNative(parsed: AgentSubmitMessageInput) {
     return this.admit(parsed.sessionId, async (signal) => {
-      const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
+      const session = await this.requireSession(parsed.sessionId);
       return this.submitAdmitted(parsed, session.activeNodeId ?? null, current, signal);
     });
   }
@@ -898,6 +894,14 @@ export class DurableAgentHost implements AgentProtocol {
     if (selected) this.publish(sessionId, { type: 'session.updated', session: selected });
     // Cherry owns the identities before the engine can execute. Recovery reconciles each answer.
     try {
+      // A new answer temporarily removes its whole turn from settled history. Keep the existing
+      // versions and the new placeholder available together, including to an attached observer.
+      if (reserve)
+        for (const message of await this.store.listTurnMessages(sessionId, turnId))
+          this.publish(sessionId, {
+            type: 'message.created',
+            message: projectAgentMessageDisplay(this.withBranchSiblings(sessionId, message)),
+          });
       for (const [index, target] of targets.entries()) {
         const { plan } = target;
         const assistant = assistants[index];
@@ -1516,8 +1520,49 @@ export class DurableAgentHost implements AgentProtocol {
     if (result === 'already-placed') return 'already-started';
     // Another admission may have reserved its rows without reaching Pi yet. Only reconcile the
     // input whose withdrawal was confirmed; a session-wide recovery would interrupt that receipt.
-    if (result === 'aborted') await this.persistTurn({ ...queued, status: 'cancelled' });
+    if (result === 'aborted') {
+      try {
+        const confirmed = await this.conversations.message(owner.lane, queued.userMessageId);
+        await this.persistTurn({ ...(confirmed?.turn ?? queued), status: 'cancelled' });
+      } catch (error) {
+        logger.error('Could not persist confirmed withdrawal', error as Error);
+      }
+    }
     return result === 'aborted' ? 'withdrawn' : 'not-found';
+  }
+
+  async steerQueuedInput(input: Parameters<AgentProtocol['steerQueuedInput']>[0]) {
+    const { sessionId, turnId } = AgentCancelTurnInputSchema.parse(input);
+    return this.admit(sessionId, async () => {
+      const states = await this.attachedLanes(sessionId);
+      const owner = states.find((state) =>
+        state.queue.some((turn) => turn.identity.turnId === turnId),
+      );
+      if (!owner)
+        return states.some((state) => state.active?.identity.turnId === turnId)
+          ? ('already-started' as const)
+          : ('not-found' as const);
+      const queued = owner.queue.find((turn) => turn.identity.turnId === turnId)!;
+      if (queued.metadata.steer === true) return 'accepted' as const;
+      const pending = [...owner.queue];
+      const selectedBefore = (await this.requireSession(sessionId)).activeNodeId;
+      const result = await this.conversations.steer(owner.lane, queued.identity.requestId);
+      if (result.status === 'accepted') {
+        this.prepared.delete(executionKey(owner.lane, queued.identity.requestId));
+        // Persist native parent changes before another send chooses the selected branch.
+        try {
+          await this.syncInputParents(
+            pending,
+            result.selection?.from === selectedBefore ? result.selection : undefined,
+          );
+        } catch (error) {
+          // Native acceptance is final. Reconciliation retries display persistence; reporting
+          // rejection here would invite another send of input that is already executing.
+          logger.error('Could not persist accepted steer positions', error as Error);
+        }
+      }
+      return result.status;
+    });
   }
 
   async cancelSubmission(input: Parameters<AgentProtocol['cancelSubmission']>[0]) {
@@ -1590,11 +1635,11 @@ export class DurableAgentHost implements AgentProtocol {
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
     await this.resumeSuspended();
-    const session = await this.requireSession(sessionId);
-    const agent = await this.ports.agents.getAgent(session.agentId);
+    const initialSession = await this.requireSession(sessionId);
+    const agent = await this.ports.agents.getAgent(initialSession.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
     const states = this.accepting ? await this.attachedLanes(sessionId) : [];
-    await this.requireSession(sessionId);
+    const session = await this.requireSession(sessionId);
     // Several lanes run when one question has several answers; the first active one leads.
     const running = states.filter((state) => state.active);
     const state = running[0] ?? states[0];
@@ -1609,10 +1654,19 @@ export class DurableAgentHost implements AgentProtocol {
       streamingMessage: view?.assistant
         ? this.withBranchSiblings(session.id, view.assistant)
         : null,
-      additionalMessages: running
-        .slice(1)
-        .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? [])
-        .map((message) => this.withBranchSiblings(session.id, message)),
+      additionalMessages: [
+        ...states.flatMap((candidate) =>
+          candidate.queue
+            .filter((turn) => turn.metadata.steer === true)
+            .flatMap((turn) => {
+              const { user, assistant } = this.projectTurn(turn);
+              return assistant ? [user, assistant] : [user];
+            }),
+        ),
+        ...running
+          .slice(1)
+          .flatMap((candidate) => this.projectTurn(candidate.active!).assistant ?? []),
+      ],
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
@@ -1653,7 +1707,9 @@ export class DurableAgentHost implements AgentProtocol {
         };
         messages.delete(snapshot.streamingMessage.id);
       }
-      snapshot.additionalMessages = [...messages.values()].map(projectAgentMessageDisplay);
+      snapshot.additionalMessages = [...messages.values()].map((message) =>
+        projectAgentMessageDisplay(this.withBranchSiblings(sessionId, message)),
+      );
       return { snapshot, unsubscribe };
     } catch (error) {
       unsubscribe();
@@ -1933,6 +1989,7 @@ export class DurableAgentHost implements AgentProtocol {
     const rows = await this.store.listUnsettledAssistantMessages();
     signal?.throwIfAborted();
     const sessionCopies = new Map<string, RuntimeLane[]>();
+    const resolved = new Map<string, RuntimeDurableTurn>();
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
       let copies = sessionCopies.get(row.sessionId);
@@ -1952,9 +2009,20 @@ export class DurableAgentHost implements AgentProtocol {
         signal?.throwIfAborted();
         if (selected) break;
       }
-      if (selected?.turn.identity.turnId === row.turnId) {
-        if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
-          const turn = this.timed(selected.turn);
+      if (selected?.turn.identity.turnId === row.turnId)
+        resolved.set(row.assistantMessageId, selected.turn);
+    }
+    // Repair every promoted reservation together before settlement can expose a partial chain.
+    for (const sessionId of sessionCopies.keys())
+      await this.syncInputParents(
+        [...resolved.values()].filter((turn) => turn.identity.sessionId === sessionId),
+      );
+    for (const row of rows) {
+      if (onlySessionId && row.sessionId !== onlySessionId) continue;
+      const selected = resolved.get(row.assistantMessageId);
+      if (selected) {
+        if (selected.status !== 'running' && selected.status !== 'queued') {
+          const turn = this.timed(selected);
           await this.persistTurn(turn, signal);
           signal?.throwIfAborted();
           if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
@@ -2024,6 +2092,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
     signal?.throwIfAborted();
+    await this.syncInputParents([turn, ...(this.live.get(laneKey(turn.identity))?.queue ?? [])]);
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
       // invalidating the working copy; reconciliation retries this after a process interruption.
@@ -2034,10 +2103,6 @@ export class DurableAgentHost implements AgentProtocol {
       });
       signal?.throwIfAborted();
       if (messageIds.length) {
-        const state = this.live.get(laneKey(turn.identity));
-        const parent = DurableTurnMetadataSchema.parse(turn.metadata).parentMessageId;
-        if (state && parent !== undefined)
-          for (const id of messageIds) state.withdrawnParents.set(id, parent);
         this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
         this.publish(sessionId, {
           type: 'queue.updated',
@@ -2136,7 +2201,6 @@ export class DurableAgentHost implements AgentProtocol {
           assistant: null,
           active: null,
           queue: [],
-          withdrawnParents: new Map(),
           contextStatus: null,
           contextUsage: null,
           unsubscribe: async () => {},
@@ -2232,7 +2296,6 @@ export class DurableAgentHost implements AgentProtocol {
       state.active.identity.requestId !== previousRequestId
     )
       this.screenSuppressedRequests.delete(previousRequestId);
-    if (!state.active && !state.queue.length) state.withdrawnParents.clear();
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
     this.reconcileScreenAwake();
@@ -2256,6 +2319,10 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private presentSettled(turn: RuntimeDurableTurn) {
+    if (turn.status === 'queued' && turn.metadata.steer === true) {
+      this.publishRows(turn);
+      return;
+    }
     if (turn.status === 'queued' || (turn.status === 'cancelled' && turn.inputBoundary === null))
       return;
     const lane = turn.identity;
@@ -2677,35 +2744,90 @@ export class DurableAgentHost implements AgentProtocol {
   private projectTurn(turn: RuntimeDurableTurn) {
     const view = projectDurableHostTurn(turn);
     if (view.assistant) view.assistant = projectAgentMessageDisplay(view.assistant);
-    const withdrawn = this.live.get(laneKey(turn.identity))?.withdrawnParents;
-    let parentId = view.user.parentId;
-    while (parentId && withdrawn?.has(parentId)) parentId = withdrawn.get(parentId);
-    return parentId === view.user.parentId ? view : { ...view, user: { ...view.user, parentId } };
+    return view;
   }
 
   private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
-    return queue.map((turn) => ({
-      turnId: turn.identity.turnId,
-      userMessage: this.projectTurn(turn).user,
-      assistantMessageId: turn.assistantMessageId,
-    }));
+    return queue
+      .filter((turn) => turn.metadata.steer !== true)
+      .map((turn) => ({
+        turnId: turn.identity.turnId,
+        userMessage: this.projectTurn(turn).user,
+        assistantMessageId: turn.assistantMessageId,
+      }));
   }
 
   private updateQueue(state: LiveSession, queue: readonly RuntimeDurableTurn[]) {
     if (
       state.queue.length === queue.length &&
       state.queue.every(
-        (turn, index) => turn.identity.requestId === queue[index].identity.requestId,
+        (turn, index) =>
+          turn.identity.requestId === queue[index].identity.requestId &&
+          turn.metadata.parentMessageId === queue[index].metadata.parentMessageId,
       )
     )
       return;
     const { sessionId } = state.lane;
     this.recordQueue(sessionId, queue, state.queue);
     state.queue = queue;
+    const sync = this.syncInputParents(queue).catch((error) =>
+      logger.error('Could not reconcile queued message positions', error as Error),
+    );
+    this.pendingWrites.add(sync);
+    void sync.finally(() => this.pendingWrites.delete(sync));
+    for (const turn of queue) if (turn.metadata.steer === true) this.publishRows(turn);
     this.publish(sessionId, {
       type: 'queue.updated',
       inputs: this.queuedInputs(this.liveStates(sessionId).flatMap((candidate) => candidate.queue)),
     });
+  }
+
+  private async syncInputParents(
+    turns: readonly RuntimeDurableTurn[],
+    selection?: { from: string; to: string },
+  ) {
+    if (!turns.length) return;
+    const lanes = new Map<string, RuntimeDurableTurn[]>();
+    for (const turn of turns) {
+      const key = laneKey(turn.identity);
+      lanes.set(key, [...(lanes.get(key) ?? []), turn]);
+    }
+    for (const [key, inputs] of lanes) {
+      const lane = inputs[0].identity;
+      // Read native metadata *inside* the ordered operation. A delayed observer may carry old
+      // turns, but must never overwrite a more recent queue mutation with those parents.
+      const write = (this.parentWrites.get(key) ?? Promise.resolve())
+        .catch(() => {})
+        .then(async () => {
+          const confirmed = await this.conversations.inputParents(lane, [
+            ...new Set(inputs.map((turn) => turn.userMessageId)),
+          ]);
+          if (!confirmed.length) return;
+          await this.store.syncInputParents(lane.sessionId, confirmed, selection);
+          const state = this.live.get(key);
+          if (state) {
+            const byId = new Map(
+              confirmed.map((input) => [input.userMessageId, input.parentMessageId]),
+            );
+            state.queue = state.queue.map((turn) =>
+              byId.has(turn.userMessageId)
+                ? {
+                    ...turn,
+                    metadata: { ...turn.metadata, parentMessageId: byId.get(turn.userMessageId)! },
+                  }
+                : turn,
+            );
+          }
+          const session = await this.store.getSession(lane.sessionId);
+          if (session) this.publish(lane.sessionId, { type: 'session.updated', session });
+        });
+      this.parentWrites.set(key, write);
+      try {
+        await write;
+      } finally {
+        if (this.parentWrites.get(key) === write) this.parentWrites.delete(key);
+      }
+    }
   }
 
   private async traceOperation<Value>(
