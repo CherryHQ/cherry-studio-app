@@ -1116,7 +1116,6 @@
   "onboarding.provider.title": "选择服务商",
   "onboarding.retryHint": "已保存的连接配置会保留，请重试。",
   "onboarding.saveFailed": "暂时无法完成设置",
-  "onboarding.search": "搜索",
   "onboarding.source.desktopDescription": "同步电脑上已有的服务商和模型配置。",
   "onboarding.source.providerDescription": "使用你的 API 密钥连接 AI 服务。",
   "onboarding.source.title": "为 Cherry 连接 AI",

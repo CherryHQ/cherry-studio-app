@@ -1116,7 +1116,6 @@
   "onboarding.provider.title": "Chọn nhà cung cấp",
   "onboarding.retryHint": "Kết nối đã lưu của bạn vẫn còn ở đây. Vui lòng thử lại.",
   "onboarding.saveFailed": "Không thể hoàn tất thiết lập",
-  "onboarding.search": "Tìm kiếm",
   "onboarding.source.desktopDescription": "Đồng bộ nhà cung cấp và mô hình đã thiết lập trên máy tính.",
   "onboarding.source.providerDescription": "Kết nối dịch vụ AI bằng khóa API của bạn.",
   "onboarding.source.title": "Kết nối Cherry với AI",

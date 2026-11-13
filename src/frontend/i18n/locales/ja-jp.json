@@ -1116,7 +1116,6 @@
   "onboarding.provider.title": "プロバイダーを選択してください",
   "onboarding.retryHint": "保存した接続はまだここにあります。もう一度試してください。",
   "onboarding.saveFailed": "セットアップを完了できませんでした",
-  "onboarding.search": "検索",
   "onboarding.source.desktopDescription": "パソコンに設定済みのプロバイダーとモデルを同期します。",
   "onboarding.source.providerDescription": "APIキーでAIサービスに接続します。",
   "onboarding.source.title": "CherryをAIに接続",

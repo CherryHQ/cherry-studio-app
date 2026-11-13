@@ -1146,7 +1146,6 @@
   "onboarding.provider.title": "Выберите провайдера",
   "onboarding.retryHint": "Ваше сохраненное соединение все еще здесь. Пожалуйста, попробуйте еще раз.",
   "onboarding.saveFailed": "Не удалось завершить настройку.",
-  "onboarding.search": "Поиск",
   "onboarding.source.desktopDescription": "Синхронизируйте провайдеров и модели, уже настроенные на компьютере.",
   "onboarding.source.providerDescription": "Подключите ИИ-сервис с помощью своего API-ключа.",
   "onboarding.source.title": "Подключите Cherry к ИИ",

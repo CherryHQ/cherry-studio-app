@@ -29,6 +29,7 @@ import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 const modelPickerEstimatedItemSize = 48;
 
 type ModelPickerListProps = {
+  disabled?: boolean;
   emptyAction?: { label: string; onPress: () => void };
   emptyText?: string;
   isLoading?: boolean;
@@ -46,13 +47,15 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  disabled: boolean;
   selectedModelId: string | null;
   selectedModelIds?: readonly string[];
   isFull: boolean;
 };
 
-/** Every selectable model on the device, grouped by provider in the shared picker sheet. */
+/** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  disabled = false,
   emptyAction,
   emptyText,
   isLoading = false,
@@ -124,11 +127,12 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      disabled,
       selectedModelId,
       selectedModelIds,
       isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
     }),
-    [maxSelectedCount, selectedModelId, selectedModelIds],
+    [disabled, maxSelectedCount, selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -142,6 +146,7 @@ export function ModelPickerList({
       return (
         <ModelPickerRow
           isDisabled={
+            extraData.disabled ||
             Boolean(item.item.cloudUnavailable) ||
             (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected)
           }
@@ -204,7 +209,7 @@ export function ModelPickerList({
           {isLoading ? loadingText : emptyText}
         </Text>
         {!isLoading && emptyAction ? (
-          <Button onPress={emptyAction.onPress} size="sm" variant="secondary">
+          <Button disabled={disabled} onPress={emptyAction.onPress} size="sm" variant="secondary">
             {emptyAction.label}
           </Button>
         ) : null}

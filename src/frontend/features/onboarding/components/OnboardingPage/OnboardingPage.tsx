@@ -210,8 +210,8 @@ export function OnboardingPage({
               <View className="min-h-0 flex-1">{children}</View>
             </>
           ) : variant === 'list' ? (
-            <View className="min-h-0 flex-1 gap-6 px-6 pt-6">
-              {heading}
+            <View className="min-h-0 flex-1 gap-6 pt-6">
+              <View className="px-6">{heading}</View>
               {children}
             </View>
           ) : (

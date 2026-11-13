@@ -1136,7 +1136,6 @@
   "onboarding.provider.title": "Elija un proveedor",
   "onboarding.retryHint": "Tu conexión guardada todavía está aquí. Por favor inténtalo de nuevo.",
   "onboarding.saveFailed": "No se pudo finalizar la configuración",
-  "onboarding.search": "Buscar",
   "onboarding.source.desktopDescription": "Sincroniza los proveedores y modelos ya configurados en tu ordenador.",
   "onboarding.source.providerDescription": "Conecta un servicio de IA con tu clave API.",
   "onboarding.source.title": "Conecta Cherry con IA",

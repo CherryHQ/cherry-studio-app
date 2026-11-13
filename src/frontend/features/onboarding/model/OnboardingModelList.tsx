@@ -1,16 +1,18 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { cn } from '@cherrystudio/ui/utils';
+import { SearchField } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useInlineSearch } from '@/frontend/components/InlineSearch';
+import {
+  buildModelPickerListItems,
+  ModelPickerList,
+  type ModelPickerGroup,
+} from '@/frontend/components/ModelPicker';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { OnboardingField, OnboardingMessage } from '../components/OnboardingPage';
-
-/** The same search and single selection for configured providers and account models. */
+/** Adapt onboarding candidates to the existing model picker without enabling unsaved previews. */
 export function OnboardingModelList({
   children,
   disabled,
@@ -23,65 +25,49 @@ export function OnboardingModelList({
   disabled: boolean;
   models: Model[];
   onSelect: (model: Model) => void;
-  providers?: Pick<Provider, 'id' | 'name'>[];
+  providers: Provider[];
   selectedId?: string;
 }) {
   const { t } = useTranslation();
   const { query, results, setQuery } = useInlineSearch({
-    fields: (model: Model) => [model.name, model.modelId],
+    fields: (model: Model) => [
+      model.name,
+      model.modelId,
+      providers.find((provider) => provider.id === model.providerId)?.name,
+    ],
     items: models,
+  });
+  const groups = providers.flatMap<ModelPickerGroup>((provider) => {
+    const items = results
+      .filter((model) => model.providerId === provider.id)
+      .map((model) => ({ key: model.id, model, modelId: model.id, provider }));
+    return items.length > 0 ? [{ items, key: provider.id, provider, title: provider.name }] : [];
   });
 
   return (
-    <>
-      <OnboardingField
-        label={t('onboarding.search')}
-        onChangeText={setQuery}
-        testID="onboarding-model-search"
-        value={query}
+    <View className="min-h-0 flex-1 gap-2" testID="onboarding-model-list">
+      <View className="px-6">
+        <SearchField
+          accessibilityLabel={t('modelPicker.searchPlaceholder')}
+          clearAccessibilityLabel={t('common.clear')}
+          disabled={disabled}
+          onChangeText={setQuery}
+          onClear={() => setQuery('')}
+          placeholder={t('modelPicker.searchPlaceholder')}
+          testID="onboarding-model-search"
+          value={query}
+        />
+      </View>
+      {children ? <View className="px-6">{children}</View> : null}
+      <ModelPickerList
+        disabled={disabled}
+        emptyText={t('onboarding.model.noResults')}
+        isOpen
+        listItems={buildModelPickerListItems(groups)}
+        onSelect={(item) => onSelect(item.model)}
+        selectedModelId={selectedId ?? null}
+        showBadges
       />
-      {children}
-      <FlatList
-        data={results}
-        extraData={{ disabled, selectedId }}
-        keyExtractor={(model) => model.id}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          <OnboardingMessage>{t('onboarding.model.noResults')}</OnboardingMessage>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ checked: item.id === selectedId, disabled }}
-            className="min-h-20 flex-row items-center gap-4 border-b border-border-subtle py-4 active:opacity-70"
-            disabled={disabled}
-            onPress={() => onSelect(item)}
-            testID={`onboarding-model-${item.id}`}
-          >
-            <View className="min-w-0 flex-1 gap-1">
-              <Text className="font-medium text-base text-foreground">{item.name}</Text>
-              <Text className="text-sm text-muted-foreground">
-                {providers
-                  ? (providers.find((provider) => provider.id === item.providerId)?.name ??
-                    item.providerId)
-                  : item.modelId}
-              </Text>
-            </View>
-            <View
-              className={cn(
-                'size-6 items-center justify-center rounded-full border',
-                item.id === selectedId ? 'border-foreground bg-foreground' : 'border-border-strong',
-              )}
-            >
-              {item.id === selectedId ? <CheckIcon className="size-4 text-background" /> : null}
-            </View>
-          </Pressable>
-        )}
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        testID="onboarding-model-list"
-      />
-    </>
+    </View>
   );
 }

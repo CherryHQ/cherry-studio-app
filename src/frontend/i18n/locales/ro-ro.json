@@ -1136,7 +1136,6 @@
   "onboarding.provider.title": "Alegeți un furnizor",
   "onboarding.retryHint": "Conexiunea dvs. salvată este încă aici. Vă rugăm să încercați din nou.",
   "onboarding.saveFailed": "Nu s-a putut finaliza configurarea",
-  "onboarding.search": "Caută",
   "onboarding.source.desktopDescription": "Sincronizează furnizorii și modelele deja configurate pe computer.",
   "onboarding.source.providerDescription": "Conectează un serviciu AI cu cheia ta API.",
   "onboarding.source.title": "Conectează Cherry la AI",

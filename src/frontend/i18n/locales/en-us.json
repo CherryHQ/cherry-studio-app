@@ -1126,7 +1126,6 @@
   "onboarding.provider.title": "Choose a provider",
   "onboarding.retryHint": "Your saved connection is still here. Please try again.",
   "onboarding.saveFailed": "Could not finish setup",
-  "onboarding.search": "Search",
   "onboarding.source.desktopDescription": "Sync providers and models already configured on your computer.",
   "onboarding.source.providerDescription": "Connect an AI service with your API key.",
   "onboarding.source.title": "Connect Cherry to AI",

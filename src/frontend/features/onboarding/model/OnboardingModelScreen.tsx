@@ -151,26 +151,30 @@ function OnboardingModelSelection({
       variant="list"
     >
       {!registry.data && registry.isError ? (
-        <View className="gap-4">
+        <View className="gap-4 px-6">
           <OnboardingMessage>{t('models.registry.failed')}</OnboardingMessage>
           <OnboardingButton onPress={() => void registry.refetch()}>
             {t('common.retry')}
           </OnboardingButton>
         </View>
       ) : selectionMode === 'manual' && data.provider ? (
-        <OnboardingField
-          editable={!isBusy}
-          label={t('onboarding.model.manualLabel')}
-          onChangeText={setManualId}
-          onSubmitEditing={start}
-          placeholder={t('onboarding.model.manualPlaceholder')}
-          testID="onboarding-model-manual-input"
-          value={manualId}
-        />
+        <View className="px-6">
+          <OnboardingField
+            editable={!isBusy}
+            label={t('onboarding.model.manualLabel')}
+            onChangeText={setManualId}
+            onSubmitEditing={start}
+            placeholder={t('onboarding.model.manualPlaceholder')}
+            testID="onboarding-model-manual-input"
+            value={manualId}
+          />
+        </View>
       ) : loading ? (
-        <OnboardingMessage loading>{t('onboarding.model.loading')}</OnboardingMessage>
+        <View className="px-6">
+          <OnboardingMessage loading>{t('onboarding.model.loading')}</OnboardingMessage>
+        </View>
       ) : data.loadError ? (
-        <View className="gap-4">
+        <View className="gap-4 px-6">
           <OnboardingMessage>
             {t(`onboarding.model.error.${data.loadError.reason}`)}
           </OnboardingMessage>
@@ -179,7 +183,7 @@ function OnboardingModelSelection({
           </OnboardingButton>
         </View>
       ) : data.items.length === 0 ? (
-        <View className="gap-4">
+        <View className="gap-4 px-6">
           <OnboardingMessage>
             {t(
               providerId || connectionId ? 'onboarding.model.empty' : 'onboarding.model.noProvider',
@@ -213,7 +217,7 @@ function OnboardingModelSelection({
           disabled={isBusy}
           models={data.items}
           onSelect={(model) => setSelectedId(model.id)}
-          providers={providerId ? undefined : data.providers}
+          providers={data.providers}
           selectedId={selectedModel?.id}
         >
           {data.pullError ? (

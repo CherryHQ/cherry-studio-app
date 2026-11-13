@@ -41,7 +41,10 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   entry and the private-deployment inputs required by that module.
 - `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.
   A paid, active, effective entitlement skips provider configuration and opens account-model selection.
-  `OnboardingModelList` supplies the same search and single selection as the manual provider path.
+  `OnboardingModelList` adapts both paths to the existing `ModelPickerList` and CherryUI `SearchField`,
+  reusing provider groups, model avatars, chat badges, and selection marks rather than drawing rows.
+  Discovery candidates may be unsaved or disabled, so onboarding retains its own model data source
+  instead of using the picker's enabled-model query. Saving disables the shared list and search.
   Saved model rows supply their identities, while the current account catalog and entitlements decide
   which account models can be offered. Selection is confirmed by the user, never automatically saved.
   A loading or failed lookup never means no subscription.
