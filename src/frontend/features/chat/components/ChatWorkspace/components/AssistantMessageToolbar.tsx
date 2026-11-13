@@ -62,7 +62,10 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   const translation = useMessageTranslation(message);
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
-    () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
+    () =>
+      isSettled
+        ? copyAssistantMessageText(message.data.parts ?? [], message.data.citationSources)
+        : '',
     [isSettled, message],
   );
   const speechText = useMemo(

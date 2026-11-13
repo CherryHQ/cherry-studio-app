@@ -368,7 +368,9 @@ function ChatMessageContextMenu({
   const { editableQuestionIds, isEditQuestionDisabled } = useAssistantMessageActionsState();
   // These existing actions and the text projection accept either message role.
   const text =
-    message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
+    message.status === 'pending'
+      ? ''
+      : copyAssistantMessageText(message.data.parts ?? [], message.data.citationSources);
   // Non-destructive actions only. A long press competes with native text
   // selection and lands on whatever the finger happens to reach, which is not
   // a gesture that should be able to remove a turn.

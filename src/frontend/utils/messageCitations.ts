@@ -2,7 +2,6 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryToolMetadata } from '@/shared/data/types/uiParts';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
-const MARKDOWN_CODE_PATTERN = /```[\s\S]*?```|`[^`\n]*`/gm;
 const CIRCLED_CITATION_MARKERS = [
   '❶',
   '❷',
@@ -47,6 +46,7 @@ export type ResolvedMessageCitations = {
 export function resolveMessageCitations(
   parts: readonly CherryMessagePart[],
   additionalSources: readonly CitationSource[] = [],
+  format: 'display' | 'export' = 'display',
 ): ResolvedMessageCitations {
   const sourceById = collectCitationSources(parts, additionalSources);
   if (sourceById.size === 0) {
@@ -112,6 +112,7 @@ export function resolveMessageCitations(
 
             const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
             if (markdown && source.url) {
+              if (format === 'export') return `[${number}](<${new URL(source.url).href}>)`;
               // encodeURIComponent leaves parentheses unescaped; Markdown treats them as delimiters.
               const target = encodeURIComponent(source.url).replace(/[()]/g, (character) =>
                 character === '(' ? '%28' : '%29',
@@ -137,13 +138,15 @@ export function resolveMessageCitations(
   return { sourceNumberById, textByPartIndex };
 }
 
-function collectCitationSources(
+export function collectCitationSources(
   parts: readonly CherryMessagePart[],
-  additionalSources: readonly CitationSource[],
+  additionalSources: readonly CitationSource[] = [],
 ): Map<string, CitationSource> {
   const sourceById = new Map<string, CitationSource>();
   const sourceByUrl = new Map<string, CitationSource>();
-  for (const source of additionalSources) {
+  for (const candidate of additionalSources) {
+    const source = toCitationSource(candidate);
+    if (!source) continue;
     const existing = source.url ? sourceByUrl.get(source.url) : undefined;
     sourceById.set(source.id, existing ?? source);
     if (source.url && !existing) sourceByUrl.set(source.url, source);
@@ -151,11 +154,12 @@ function collectCitationSources(
 
   for (const part of parts) {
     if (part.type === 'source-url') {
-      const source = {
+      const source = toCitationSource({
         id: part.sourceId,
         title: part.title ?? part.url,
         url: part.url,
-      };
+      });
+      if (!source) continue;
       const existing = sourceByUrl.get(part.url);
       sourceById.set(part.sourceId, existing ?? source);
       if (!existing) sourceByUrl.set(part.url, source);
@@ -321,19 +325,71 @@ function toCitationSource(value: unknown): CitationSource | null {
   return { content, id: String(value.id), title, url };
 }
 
-function mapMarkdownOutsideCode(content: string, transform: (text: string) => string): string {
-  MARKDOWN_CODE_PATTERN.lastIndex = 0;
-  let cursor = 0;
-  let result = '';
-  let match: RegExpExecArray | null;
-
-  while ((match = MARKDOWN_CODE_PATTERN.exec(content)) !== null) {
-    result += transform(content.slice(cursor, match.index));
-    result += match[0];
-    cursor = match.index + match[0].length;
-  }
-
-  return result + transform(content.slice(cursor));
+function mapMarkdownOutsideCode(source: string, transform: (text: string) => string): string {
+  let fence: { character: string; count: number } | undefined;
+  let offset = 0;
+  let inlineEnd = -1;
+  return source
+    .split(/(?<=\n)/)
+    .map((line) => {
+      const start = offset;
+      offset += line.length;
+      if (inlineEnd <= start) {
+        const content = line
+          .replace(/^( {0,3}>[ \t]?)+/, '')
+          .replace(/^ {0,3}(?:[-+*]|\d+[.)])[ \t]+/, '');
+        const delimiter = /^ {0,3}(`{3,}|~{3,})/.exec(content);
+        if (fence) {
+          if (
+            delimiter &&
+            delimiter[1][0] === fence.character &&
+            delimiter[1].length >= fence.count &&
+            content.slice(delimiter[0].length).trim() === ''
+          )
+            fence = undefined;
+          return line;
+        }
+        if (delimiter) {
+          fence = { character: delimiter[1][0], count: delimiter[1].length };
+          return line;
+        }
+        if (/^( {4}|\t)/.test(content)) return line;
+      }
+      let position = Math.max(0, Math.min(line.length, inlineEnd - start));
+      let result = line.slice(0, position);
+      let plainStart = position;
+      while (position < line.length) {
+        if (line.charCodeAt(position) === 92) {
+          result +=
+            transform(line.slice(plainStart, position)) + line.slice(position, position + 2);
+          position += 2;
+          plainStart = position;
+          continue;
+        }
+        if (line[position] === '`') {
+          const run = /^`+/.exec(line.slice(position))![0];
+          const delimiters = /`+/g;
+          delimiters.lastIndex = start + position + run.length;
+          let closing: RegExpExecArray | null;
+          while ((closing = delimiters.exec(source)) && closing[0].length !== run.length) {
+            /* Only an equally long delimiter closes inline code. */
+          }
+          if (closing) {
+            inlineEnd = closing.index + run.length;
+            const end = Math.min(line.length, inlineEnd - start);
+            result += transform(line.slice(plainStart, position)) + line.slice(position, end);
+            position = end;
+            plainStart = position;
+            continue;
+          }
+          position += run.length;
+          continue;
+        }
+        position++;
+      }
+      return result + transform(line.slice(plainStart));
+    })
+    .join('');
 }
 
 function nativeSourceNumber(sourceId: string): number | undefined {

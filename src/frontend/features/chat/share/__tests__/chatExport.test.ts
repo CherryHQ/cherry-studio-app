@@ -383,3 +383,37 @@ async function loadChatExportMessages(
   );
   return snapshot.messages;
 }
+
+test('remote snapshots share confirmed citations and ordered image bytes without managed file IDs', () => {
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'remote-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [
+          {
+            type: 'prepared-file',
+            id: 'picture',
+            filename: 'Remote.png',
+            mediaType: 'image/png',
+            base64: 'aW1hZ2U=',
+          },
+          { type: 'text', id: 'final', state: 'done', text: 'Answer [cite:earlier]' },
+        ],
+        citationSources: [{ id: 'earlier', title: 'Earlier source', url: 'https://example.com' }],
+      },
+    ],
+    options,
+  );
+  expect(document.assets?.['remote-answer:picture']).toEqual({
+    kind: 'prepared-image',
+    base64: 'aW1hZ2U=',
+  });
+  expect(document.sections[0].blocks.slice(0, 2)).toEqual([
+    { kind: 'image', assetId: 'remote-answer:picture', alt: 'Remote.png' },
+    { kind: 'markdown', source: 'Answer [1](<https://example.com/>)' },
+  ]);
+  expect(JSON.stringify(document)).not.toContain('fileEntryId');
+});

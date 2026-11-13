@@ -762,3 +762,24 @@ test('localized resource fallbacks are frozen and never imply that a private att
     }),
   ).toThrow(DocumentExportError);
 });
+
+test('source-prepared images have independent byte admission while prose and asset shapes remain validated', () => {
+  const base64 = 'AAAA'.repeat(150_000);
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [{ id: 'reply', blocks: [{ kind: 'image', assetId: 'picture', alt: 'Picture' }] }],
+      assets: { picture: { kind: 'prepared-image', base64 } },
+    },
+  });
+  expect(document.assets?.picture).toEqual({ kind: 'prepared-image', base64 });
+  expect(() =>
+    normalizeDocument({
+      kind: 'document',
+      document: {
+        ...document,
+        assets: { picture: { kind: 'prepared-image', base64: '<script>' } },
+      },
+    }),
+  ).toThrow(DocumentExportError);
+});

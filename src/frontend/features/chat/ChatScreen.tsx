@@ -35,6 +35,7 @@ import { useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
+import { citationIds, collectCitationSources } from '@/frontend/utils/messageCitations';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
@@ -66,7 +67,7 @@ import {
   useAgentChatDraftHandoff,
   useLocalConversation,
 } from './runtime';
-import { resolveMessageModel } from './runtime/agentMessageProjection';
+import { resolveMessageModel, toAgentMessageDisplayParts } from './runtime/agentMessageProjection';
 import { ChatShareComposerGuard, ChatShareSelectionControls } from './share/ChatShareControls';
 import { ChatShareSelectionProvider } from './share/ChatShareSelectionProvider';
 import type { ChatShareTarget } from './share/chatShareTarget';
@@ -205,6 +206,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !messageWindow.hasNewerMessages &&
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
+  const readCitations = messageWindow.readCitations;
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -236,18 +238,29 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 query: { ids: [...ids] },
                 signal,
               });
+              const messages = await Promise.all(
+                snapshot.messages.map(async (message) => {
+                  const parts = toAgentMessageDisplayParts(message.parts).parts ?? [];
+                  const known = collectCitationSources(parts);
+                  const missing = citationIds(parts).filter((id) => !known.has(id));
+                  return {
+                    ...message,
+                    modelName: resolveMessageModel(message)?.name,
+                    citationSources: missing.length
+                      ? await readCitations?.(message.id, missing, signal)
+                      : undefined,
+                  };
+                }),
+              );
               return {
                 title: snapshot.session.name,
                 assistantName: snapshot.assistantName,
-                messages: snapshot.messages.map((message) => ({
-                  ...message,
-                  modelName: resolveMessageModel(message)?.name,
-                })),
+                messages,
               };
             },
           }
         : undefined,
-    [api, sessionId],
+    [api, sessionId, readCitations],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
