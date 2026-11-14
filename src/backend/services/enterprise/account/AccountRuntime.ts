@@ -48,8 +48,9 @@ type Portal = Pick<
 >;
 
 export interface AccountRuntimeOptions {
-  /** Null when the build carries no Accounts Portal configuration. */
+  /** Restored registration, if this installation has already opened a cloud login. */
   portal: Portal | null;
+  preparePortal(): Promise<Portal>;
   /** The SDK integration supplies app-owned context for this exact current or candidate session. */
   resolveSessionContext(session: AuthState): AccountSessionContext | null;
   /** The profile this runtime serves. */
@@ -93,6 +94,8 @@ export function isAuthenticationRejection(error: unknown): boolean {
  * registry and reloads; this object never swaps data stores in place.
  */
 export class AccountRuntime implements AccountModule {
+  private portal: Portal | null;
+  private unsubscribePortal?: () => void;
   private readonly changes = new Emitter<void>();
   private state: AccountState;
   private privateCredentials: Promise<PrivateCredentials> | undefined;
@@ -106,6 +109,7 @@ export class AccountRuntime implements AccountModule {
 
   constructor(private readonly options: AccountRuntimeOptions) {
     const { active, portal } = options;
+    this.portal = portal;
     const isCloudProfile = active.identity !== null && !('authentication' in active.identity);
     const isPrivateProfile = active.identity !== null && 'authentication' in active.identity;
     this.state = {
@@ -119,24 +123,29 @@ export class AccountRuntime implements AccountModule {
         active.identity && 'authentication' in active.identity ? active.address : undefined,
       organizationName: active.identity ? active.displayName : undefined,
     };
-    if (portal) {
-      portal.subscribe((session) => {
-        if (!this.state.isRestoringSession) this.updateCloudSession(session);
-      });
-      void portal.ready.then(
-        () => {
-          this.updateCloudSession(portal.getState());
-          if (!isPrivateProfile) this.update({ isRestoringSession: false });
-        },
-        () => {
-          if (!isPrivateProfile)
-            this.update({
-              isRestoringSession: false,
-              ...(isCloudProfile && { needsSignIn: true }),
-            });
-        },
-      );
-    }
+    if (portal) this.observePortal(portal);
+  }
+
+  private observePortal(portal: Portal): void {
+    this.unsubscribePortal?.();
+    this.portal = portal;
+    this.unsubscribePortal = portal.subscribe((session) => {
+      if (!this.state.isRestoringSession) this.updateCloudSession(session);
+    });
+    void portal.ready.then(
+      () => {
+        if (this.portal !== portal) return;
+        this.updateCloudSession(portal.getState());
+        if (!this.state.privateAddress) this.update({ isRestoringSession: false });
+      },
+      () => {
+        if (this.portal === portal && !this.state.privateAddress)
+          this.update({
+            isRestoringSession: false,
+            ...(this.state.isEnterprise && { needsSignIn: true }),
+          });
+      },
+    );
   }
 
   readonly getState = () => this.state;
@@ -154,7 +163,14 @@ export class AccountRuntime implements AccountModule {
   readonly switchSpace = async () => (await this.busy(() => this.openCloudSignIn(false))) ?? false;
 
   private async openCloudSignIn(changeAccount: boolean): Promise<boolean> {
-    const portal = this.requirePortal();
+    await this.portal?.ready;
+    const session = this.portal?.getState();
+    const identity = this.options.active.identity;
+    // A workspace switch or reauthentication belongs to the existing account even after a VPN change.
+    const pinned =
+      session?._tag === 'signedIn' || (identity && 'issuer' in identity && this.portal);
+    const portal = pinned ? this.requirePortal() : await this.options.preparePortal();
+    if (this.portal !== portal) this.observePortal(portal);
     this.callback = undefined;
     this.redirectRouted = false;
     const { url, redirectUri } = await portal.beginSignIn({
@@ -287,10 +303,8 @@ export class AccountRuntime implements AccountModule {
   private async endCloudSession(): Promise<void> {
     this.isCloudSessionClosing = true;
     this.update({ isSignedIn: false, name: undefined, maskedIdentifier: undefined });
-    const { loggedOut } = await this.requirePortal()
-      .signOut()
-      .catch(() => ({ loggedOut: false }));
-    if (!loggedOut) this.options.browserSession.setStale(true);
+    const logout = await this.portal?.signOut().catch(() => ({ loggedOut: false }));
+    if (!logout?.loggedOut) this.options.browserSession.setStale(true);
     this.isCloudSessionClosing = false;
   }
 
@@ -302,7 +316,7 @@ export class AccountRuntime implements AccountModule {
 
   /** Backend-only identity boundary for the device-bound community product session. */
   readonly getCommunityIdentity = () => {
-    const session = this.options.portal?.getState();
+    const session = this.portal?.getState();
     const context = session ? this.options.resolveSessionContext(session) : null;
     if (
       this.options.active.identity ||
@@ -379,8 +393,8 @@ export class AccountRuntime implements AccountModule {
       this.assertCloudSession(portal.getState());
       return token;
     } catch (error) {
-      if (revision === this.sessionRevision && isAuthenticationRejection(error))
-        this.reportRejected();
+      if (revision !== this.sessionRevision) throw new AccountError('rejected', { cause: error });
+      if (isAuthenticationRejection(error)) this.reportRejected();
       throw error;
     }
   };
@@ -436,7 +450,8 @@ export class AccountRuntime implements AccountModule {
    * an explicit rejection sends the user back to sign-in.
    */
   readonly verify = async (): Promise<void> => {
-    const { portal, active } = this.options;
+    const { active } = this.options;
+    const portal = this.portal;
     if (active.identity && 'authentication' in active.identity) {
       const revision = this.credentialRevision;
       try {
@@ -678,8 +693,8 @@ export class AccountRuntime implements AccountModule {
   }
 
   private requirePortal(): Portal {
-    if (!this.options.portal) throw new AccountError('unavailable');
-    return this.options.portal;
+    if (!this.portal) throw new AccountError('unavailable');
+    return this.portal;
   }
 
   private async busy<T>(work: () => Promise<T>): Promise<T | undefined> {
