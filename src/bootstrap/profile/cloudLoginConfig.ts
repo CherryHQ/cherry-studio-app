@@ -32,7 +32,7 @@ const registration = z.object({
   endpoints: z.object({
     issuer: endpoint,
     portal_url: endpoint,
-    api_base_url: endpoint,
+    api_base_url: endpoint.optional(),
     // Separate optional community-service metadata. Enterprise URLs cannot serve cloud tokens.
     cloud_api_origin: endpoint.refine((value) => Boolean(configOrigin(value))).optional(),
     cloud_web_url: endpoint.optional(),

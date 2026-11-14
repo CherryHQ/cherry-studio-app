@@ -152,8 +152,8 @@ function createRegionalPortal(config: CloudLoginConfig) {
     `${issuer}/oidc/v1/userinfo`,
     `${origin}/api/v1/logout`,
     `${origin}/api/v1/profiles`,
-    `${enterpriseApi}/accounts-portal/v1/enter`,
   ]);
+  if (enterpriseApi) allowed.add(`${enterpriseApi}/accounts-portal/v1/enter`);
   return createAccountsPortal({
     issuer,
     origin,

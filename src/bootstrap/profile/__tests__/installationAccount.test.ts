@@ -189,14 +189,19 @@ test('the enterprise web URL never becomes the community billing URL', async () 
     data: {
       ...data,
       endpoints: {
-        ...data.endpoints,
+        issuer: data.endpoints.issuer,
+        portal_url: data.endpoints.portal_url,
         cloud_api_origin: 'https://cloud.global.test',
         cloud_web_url: 'https://billing.global.test/account',
       },
     },
   });
   await runtime.preparePortal();
-  expect(runtime.resolveSessionContext(signedIn)).toMatchObject({
+  const validate = mockBridge.mock.lastCall![0].assertUrl;
+  expect(() => validate('https://api.global.test/v2/accounts-portal/v1/enter')).toThrow();
+  expect(runtime.resolveSessionContext(signedIn)).toEqual({
+    issuer: data.endpoints.issuer,
+    enterpriseApiBaseUrl: undefined,
     cloudApiOrigin: 'https://cloud.global.test',
     cloudWebUrl: 'https://billing.global.test/account',
   });
