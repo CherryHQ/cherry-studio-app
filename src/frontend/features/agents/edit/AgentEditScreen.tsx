@@ -50,6 +50,7 @@ import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
+import { ApplicationSystemRulesSection } from './components/ApplicationSystemRulesSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
 
 const agentFormAvatarSize = 96;
@@ -464,7 +465,14 @@ function AgentEditForm({
             ) : null}
           </View>
         </View>
-        <Section title={t('agent.form.instructions')}>
+        <Section
+          footer={
+            <View className="px-3">
+              <ApplicationSystemRulesSection mode={form.mode} />
+            </View>
+          }
+          title={t('agent.form.instructions')}
+        >
           <TextInput
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect

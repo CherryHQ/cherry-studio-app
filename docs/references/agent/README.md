@@ -83,12 +83,17 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 - The Host combines the shared system capability catalog and the current Agent's persisted MCP
   bindings, subject to model, platform, permission and service gates, into a frozen tool snapshot before each turn. An
   empty snapshot is ordinary conversation.
-- The Host builds the mobile-owned application prompt for every turn. Fixed Runtime rules define
-  truthful capability use, approval and permission behavior, untrusted-content handling, mobile
-  lifecycle, and result reporting. The Host also injects the App's effective language and requires
-  responses in that language unless the user explicitly requests another one; the user-configured
-  Agent instructions remain a separate role and style section. Capability guidance is included only
-  when its supporting tool is in the frozen snapshot. Runtime adapters do not append separate
+- The Host builds the mobile-owned application prompt for every turn. Standard/minimal Runtime
+  rules and response-language rules are application-owned, not editable Agent configuration.
+  The Agent editor's instructions footer links to a read-only viewer with full-text copy for the
+  current mode and App language. It shares `buildApplicationSystemRules` with the Host; per-turn
+  capability guidance and Agent instructions are separate additions, not part of this base-rule preview.
+  Fixed Runtime rules define truthful capability use, approval and permission behavior,
+  untrusted-content handling, and result reporting. Reply language follows an explicit user request,
+  then the Agent Instructions' language preference, then the user's message, with the App's
+  effective language as a fallback. User-configured Agent instructions remain a separate role,
+  goal and style section. Capability guidance is included only when its supporting tool is in the
+  frozen snapshot. Runtime adapters do not append separate
   application policy, but may add guidance for binding-specific mechanics such as Pi's deferred MCP
   catalog. Bundled plugin guides follow the same turn boundary: only sections supported by the
   Agent's executable plugin tools enter the prompt, with plugin/revision attribution and no history
