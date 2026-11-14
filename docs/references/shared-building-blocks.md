@@ -41,7 +41,7 @@ it already exists.
 | Image request deadline for an Agent turn | `withImageGenerationDeadline` in `src/backend/ai/agent/host/agentImageGeneration.ts` |
 | Recorded AI invocation speed | `getAiUsageRecordTokensPerSecond` in `src/shared/utils/aiUsage.ts`, shared by usage pagination and record presentation |
 | Model purpose (text, image, embedding, rerank, audio) | `src/shared/utils/modelPurpose.ts` |
-| Provider connection facts for language and image serving | `resolveProviderConnection` in `src/backend/ai/provider/providerConnection.ts` |
+| Provider connection facts for language and image serving, and credential-free service addresses | `resolveProviderConnection` and `resolveProviderServiceUrl` in `src/backend/ai/provider/providerConnection.ts`; service URLs reuse the serving path's Vertex project/location resolver without materializing credentials |
 | Whether a Provider is ready to use, and why not | `getProviderConfigurationIssue` in `src/backend/services/providers/providerConfiguration.ts` |
 | Whether a Provider may send requests without a key | `resolveAuthOptional` in `src/shared/utils/providerAuth.ts` |
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
@@ -69,6 +69,8 @@ it already exists.
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
+| Transient application checks and AI self-check workflow | `Backend.diagnostics.createSession` in `src/backend/services/diagnostics`; owns incident binding, freshness, fact reads, cancellation, and the declared Agent deadline |
+| Internal diagnostic Agent definition and execution | [Internal Diagnostic Agent](../../src/backend/ai/agent/diagnostics/README.md); `createDiagnosticAgent` binds runtime and usage delivery, while its JSON resource owns prompts, tool descriptions, and policy |
 | Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |
 | Startup stage timing and milestones | `src/shared/core/logger/startupDiagnostics.ts`, exported through the diagnostic log allowlist |
 

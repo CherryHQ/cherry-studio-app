@@ -1,5 +1,75 @@
 # Diagnostics
 
+## On-demand diagnosis
+
+Error Details → Diagnose this problem opens a shared full-height sheet and checks application
+data reads, the existing task-runtime storage, related configuration and endpoint reachability.
+It binds the producing model and incident metadata;
+it never substitutes the current default for a missing incident model. Desktop incidents remain
+explicitly remote: phone checks do not claim to diagnose the desktop execution.
+
+`createDiagnosticsModule` extends `Backend.diagnostics` with a caller-owned `DiagnosticSession`.
+The sheet disposes it on exit; bootstrap cancels and joins every remaining session before stopping
+the host. Nothing is stored in ordinary Agent conversations or diagnostic history. Checks have a
+30-second deadline; AI self-check has 60 seconds, at most eight tool-call attempts and nine model
+requests, 8 KiB per tool result,
+and bounded model output. Reports expire after five minutes, and paid work or a new probe refuses
+changed target configuration. User cancellation reaches the model and tool callbacks. Individual
+checks run independently with eight-second bounds; a failed configuration read does not prevent
+data and runtime checks. Uninitialized runtime storage is skipped, and normal task waits are not
+failures. Data reads inspect the schema, one application row and the incident's local Session/Agent
+association; they do not perform an exhaustive integrity scan or repair.
+
+Configuration revalidation and diagnostic-model reads also release their wait on cancellation or
+timeout. Late storage/credential reads cannot publish a target or admit an AI run. Actual admitted
+AI execution and usage delivery are still joined before host resources stop.
+The isolated runtime also releases a stalled model-registration preflight on cancellation;
+late configuration reads only finish populating its discarded in-memory model catalog.
+
+Configuration checks use the same resolved model connection as the endpoint probe, including
+per-model and gateway routing. Provider authentication checks keep their shared owner. An invalid
+model endpoint excludes that model from diagnostic selection; provider-wide authentication or
+disablement excludes the provider. Setup checks that do not supply a resolved connection retain
+their default-endpoint behavior.
+For Vertex, the probe address uses the same project/location URL resolver as model serving, including
+empty defaults and regional Google hosts. The original connection remains the input to configuration
+validation, so deriving the address cannot hide a malformed override or project mismatch.
+
+Connection checks probe the resolved service origin without credentials, reject redirects, cap response
+bodies and treat an HTTP response as evidence of reachability rather than successful authentication.
+Automatic checks do not list remote models or send a generation request. The retained explicit
+conversation-check capability requires separate caller confirmation and is not part of this panel.
+
+AI self-check uses an independently selected tool-capable text model and the
+[internal diagnostic Agent](../../ai/agent/diagnostics/README.md), injected by bootstrap through the
+pure `DiagnosticAgent` interface. The service supplies scoped `DiagnosticFactReader` callbacks;
+it does not assemble prompts, tool names/descriptions, model events, or answer parsing. The Agent's
+bundled definition owns its deadline and execution limits. The session enforces that declared deadline
+across configuration revalidation, model lookup and AI execution, keeping the same total time bound.
+The Agent receives the projected failure, check results and credential-free configuration summary.
+Four fixed-target read tools expose configuration, recent metadata logs, origin reachability and
+cached plugin states. They cannot select arbitrary URLs/files, read credentials or chat text, invoke
+plugins, reconnect them, modify settings, or mount normal Agent tools. Technical log reads inspect
+at most two 32 KiB tails and return at most twelve allowlisted records from the last 24 hours.
+The UI presents the one-shot cause, tool evidence and suggested next steps; it offers no chat input.
+
+The probe counts all model-issued tool calls before validation, including unknown tools and invalid
+arguments. A response that would exceed the budget executes no tools. Execution and request-entry
+guards enforce the decision independently of Pi's observational hooks; ordinary model checks omit
+the optional budgets. Native model/tool looping remains Pi-owned.
+
+`diagnosticSession` owns the shared schemas for initial AI context and the four typed tool results.
+Fact readers bind their result type to their evidence kind; the Agent validates the closed result
+before returning it to the model or UI. Oversized results have an explicit `result_limit` state.
+The existing log projector remains the only owner of its metadata fact allowlist; the shared log
+contract validates its bounded envelope. UI formats typed facts and serializes only for the raw-data
+view, without maintaining a second parser or private schemas.
+
+Feedback can attach the structured check statuses and whether AI finished. This attachment has
+closed identifiers and numeric facts; AI-generated text, endpoint names and tool output are not
+included in that upload field. The existing context switch controls both incident and check summary.
+The user's description and separately selected screenshot retain their existing consent rules.
+
 `DiagnosticBundleService` owns archive creation, submission, cancellation and cleanup. Frontend
 callers use `Backend.diagnostics`. Collection reads selected plugin configuration columns through `backend/data/services/diagnosticPluginState.ts`; it does not read chat tables or
 resolve credentials, refresh tokens, connect plugins or make discovery requests.

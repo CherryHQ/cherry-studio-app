@@ -307,6 +307,7 @@ The native Storybook exposes these states under the dedicated top-level `Message
 page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
+`MessagePart.Detail` also accepts the shared sheet's fixed `footer` slot for a caller-owned action.
 
 `MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
 marks the heading with an error indicator while keeping the content readable. `SectionBody` is the
@@ -447,6 +448,8 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+Use `inset="none"` when the containing surface already supplies the horizontal gutter; the default
+keeps the row's standard inset.
 
 `Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
 and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all

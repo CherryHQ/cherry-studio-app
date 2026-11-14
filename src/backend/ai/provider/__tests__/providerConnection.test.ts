@@ -3,7 +3,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
-import { resolveProviderConnection } from '../providerConnection';
+import { resolveProviderConnection, resolveProviderServiceUrl } from '../providerConnection';
 
 describe('resolveProviderConnection', () => {
   it('resolves shared endpoint, adapter, wire model, and request header facts', () => {
@@ -66,6 +66,49 @@ describe('resolveProviderConnection', () => {
       endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     });
   });
+});
+
+describe('resolveProviderServiceUrl', () => {
+  it('rejects a Vertex override that names a different project', () => {
+    expect(() =>
+      resolveProviderServiceUrl(
+        'https://aiplatform.googleapis.com/v1/projects/other/locations/global',
+        {
+          type: 'iam-gcp',
+          project: 'project-id',
+          location: 'global',
+        },
+      ),
+    ).toThrow();
+  });
+
+  it('keeps ordinary connection URLs unchanged', () => {
+    expect(resolveProviderServiceUrl('https://provider.example/gateway/v1', null)).toBe(
+      'https://provider.example/gateway/v1',
+    );
+  });
+
+  it.each([
+    ['', 'global', 'https://aiplatform.googleapis.com'],
+    ['', 'us-central1', 'https://us-central1-aiplatform.googleapis.com'],
+    [
+      'https://aiplatform.googleapis.com/v1',
+      'us-central1',
+      'https://us-central1-aiplatform.googleapis.com',
+    ],
+    ['https://gateway.example/vertex/v1', 'us-central1', 'https://gateway.example/vertex'],
+  ])(
+    'derives the Vertex service URL for %s in %s without credentials',
+    (baseUrl, location, expected) => {
+      expect(
+        resolveProviderServiceUrl(baseUrl, {
+          type: 'iam-gcp',
+          project: 'project-id',
+          location,
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 function createProvider(): Provider {

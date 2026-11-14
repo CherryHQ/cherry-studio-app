@@ -80,6 +80,7 @@ function SectionItem({
   description,
   destructive = false,
   disabled = false,
+  inset = 'default',
   label,
   leading,
   onAccessibilityAction,
@@ -99,7 +100,8 @@ function SectionItem({
     disabled: disabled || accessibilityState?.disabled,
   };
   const rowClassName = cn(
-    'min-h-10 flex-row items-center gap-3 px-4',
+    'min-h-10 flex-row items-center gap-3',
+    inset === 'none' ? 'px-0' : 'px-4',
     itemDensityStyles[density],
     disabled && 'opacity-40',
   );

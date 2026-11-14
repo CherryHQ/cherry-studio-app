@@ -1,9 +1,14 @@
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
+import { createDiagnosticAgent } from '@/backend/ai/agent/diagnostics';
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
+import {
+  resolveProviderConnection,
+  resolveProviderServiceUrl,
+} from '@/backend/ai/provider/providerConnection';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -22,6 +27,7 @@ import type {
 } from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { readDiagnosticDataState } from '@/backend/data/services/diagnosticDataState';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
@@ -39,6 +45,7 @@ import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import { createDiagnosticsModule } from '@/backend/services/diagnostics';
 import {
   createDocumentExportDependencies,
   type DocumentExportRuntime,
@@ -99,6 +106,7 @@ export type BackendComposition = {
   disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
   disposeUuRemote(): Promise<void>;
+  disposeDiagnostics(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -125,7 +133,7 @@ export function createBackend(
     ssh: SshRuntime;
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
-    diagnostics: DiagnosticsModule;
+    diagnostics: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
     region: { getCountry(): Promise<string | null> };
@@ -222,6 +230,57 @@ export function createBackend(
       keys: async (id) => (await services.provider.listApiKeys(id)).keys,
       auth: (id) => services.provider.getAuthConfig(id),
     },
+  });
+  const diagnostics = createDiagnosticsModule({
+    bundle: infrastructure.diagnostics,
+    resolveConnection: resolveProviderConnection,
+    resolveServiceUrl: resolveProviderServiceUrl,
+    model: services.model,
+    provider: services.provider,
+    models,
+    applicationData: (context, signal) => readDiagnosticDataState(dbService, context, signal),
+    runtimeStorage: async (signal) => {
+      const runtime = infrastructure.languageServing.conversations;
+      if (!runtime?.inspectStorage) throw new Error('Runtime storage inspection is unavailable');
+      return runtime.inspectStorage(signal);
+    },
+    defaultModel: () => services.preference.get('agent.default_model_id'),
+    language: () =>
+      resolveAppLanguage(
+        services.preference.readCached('app.language'),
+        getLocales().map((locale) => locale.languageTag),
+      ),
+    oauthSignedIn: async (provider) =>
+      infrastructure.providerAccounts.getCapabilities(provider).flow === 'interactive' &&
+      (await infrastructure.providerAccounts.getStatus(provider.id)).signedIn,
+    permissions: () =>
+      services.devicePermissions.getStatuses(['camera.read', 'photos.write', 'location.read']),
+    plugins: async () => {
+      const { items } = await services.mcpServer.list({ isEnabled: true });
+      const selected = items.slice(0, 200);
+      const states = services.mcpRuntime.getCachedConnectionStates(selected);
+      const connections = selected.map((server) => ({ state: states[server.id] ?? 'disabled' }));
+      return {
+        enabledCount: items.length,
+        connectedCount: connections.filter((entry) => entry.state === 'connected').length,
+        truncated: selected.length < items.length,
+        connections,
+      };
+    },
+    agent: createDiagnosticAgent({
+      runtime: infrastructure.languageServing,
+      onUsage: async (report) => {
+        try {
+          await services.aiUsageRecord.recordInvocation({
+            ...report,
+            context: { ...report.context, source: null, messageRef: null },
+            modality: 'language',
+          });
+        } catch {
+          loggerService.withContext('Diagnostics').warn('Failed to record diagnostic model usage');
+        }
+      },
+    }),
   });
   const paintings = createPaintingsModule({
     scopes: infrastructure.resourceScopes,
@@ -377,6 +436,7 @@ export function createBackend(
     disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
     disposeUuRemote: uuRemote.dispose,
+    disposeDiagnostics: diagnostics.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -402,7 +462,7 @@ export function createBackend(
       desktopConnections: infrastructure.desktopConnections,
       uuRemote: uuRemote.module,
       ssh: infrastructure.ssh,
-      diagnostics: infrastructure.diagnostics,
+      diagnostics: diagnostics.module,
       documentExport: infrastructure.documentExport,
       file: {
         observeFileOcr: services.fileContent.observeFileOcr,

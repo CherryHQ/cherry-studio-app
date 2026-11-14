@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { Provider } from '@/shared/data/types/provider';
 
 import type { ProviderAccountsModule } from './providerAccounts';
@@ -18,13 +20,15 @@ export type ProviderRegistryUpdateEvent = {
 
 export type ProviderRegistryUpdateResult = { status: 'current' | 'updated' };
 
-export type ProviderConfigurationIssue =
-  | 'missing-oauth'
-  | 'missing-api-key'
-  | 'disabled-api-keys'
-  | 'invalid-service-account'
-  | 'invalid-endpoint'
-  | 'unsupported-auth';
+export const ProviderConfigurationIssueSchema = z.enum([
+  'missing-oauth',
+  'missing-api-key',
+  'disabled-api-keys',
+  'invalid-service-account',
+  'invalid-endpoint',
+  'unsupported-auth',
+]);
+export type ProviderConfigurationIssue = z.infer<typeof ProviderConfigurationIssueSchema>;
 
 export type ProviderSetupStatus = {
   provider: Provider;

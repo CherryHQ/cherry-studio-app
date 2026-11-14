@@ -55,6 +55,7 @@ export type {
 } from './types';
 
 export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
+export { RUNTIME_EXECUTION_LIMIT_CODE } from './types';
 
 export type {
   FakeExecutionController,

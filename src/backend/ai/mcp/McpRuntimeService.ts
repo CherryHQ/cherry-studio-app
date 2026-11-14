@@ -466,6 +466,15 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
   }
 
+  /** Diagnostic reads never create clients or trigger discovery. */
+  getCachedConnectionStates(
+    servers: readonly McpServer[],
+  ): Record<string, McpServerRuntimeSummary['state']> {
+    return Object.fromEntries(
+      servers.map((server) => [server.id, this.getRuntimeSummary(server).state]),
+    );
+  }
+
   readonly subscribePromptCatalogs = (listener: () => void): (() => void) => {
     this.promptCatalogListeners.add(listener);
     return () => this.promptCatalogListeners.delete(listener);

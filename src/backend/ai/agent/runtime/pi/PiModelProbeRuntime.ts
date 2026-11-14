@@ -1,29 +1,32 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
+import { createRegistry, GenerationTask, hook, MemoryStorage } from '@earendil-works/pi-durable';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
+import { raceAbort } from '@/backend/utils/raceAbort';
 
 import { runtimeLane } from '../durableTypes';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
-import type {
-  AgentRuntime,
-  AgentRuntimeSession,
-  RuntimeExecutionRequest,
-  RuntimeOutputPart,
+import {
+  RUNTIME_EXECUTION_LIMIT_CODE,
+  type AgentRuntime,
+  type AgentRuntimeSession,
+  type RuntimeError,
+  type RuntimeExecutionRequest,
 } from '../types';
 import { toPiConversation } from './modelMessages';
 import { cherryClientIdentity, createPiDurableModels } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import { piSubmissionMetadata } from './piDurableProjection';
 import { PiDurableRuntime } from './PiDurableRuntime';
+import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 
-/** Provider health checks use the same upstream loop in isolated memory, never the production DB. */
+/** Isolated checks use the upstream loop in memory, with only explicitly supplied read tools. */
 export class PiModelProbeRuntime implements AgentRuntime {
   readonly descriptor = {
     id: 'pi-durable-probe',
     name: 'Pi Durable Model Probe',
-    capabilities: { reasoning: true, tools: false, approvals: false, attachments: false },
+    capabilities: { reasoning: true, tools: true, approvals: false, attachments: false },
   };
   constructor(private readonly dependencies: PiRuntimeDependencies) {}
   preflightModel(model: RuntimeExecutionRequest['model']) {
@@ -42,6 +45,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
   private request: RuntimeExecutionRequest | undefined;
   private operation: Promise<void> | undefined;
   private closing: Promise<void> | undefined;
+  private limitError: RuntimeError | undefined;
 
   constructor(private readonly dependencies: PiRuntimeDependencies) {}
 
@@ -50,9 +54,11 @@ class PiModelProbeSession implements AgentRuntimeSession {
     this.request = request;
     this.operation = this.run(request).catch((error: unknown) => {
       this.channel.push(
-        this.controller.signal.aborted
-          ? { type: 'cancelled' }
-          : { type: 'failed', error: { ...normalizeAiError(error), origin: 'runtime' } },
+        this.limitError
+          ? { type: 'failed', error: this.limitError }
+          : this.controller.signal.aborted
+            ? { type: 'cancelled' }
+            : { type: 'failed', error: { ...normalizeAiError(error), origin: 'runtime' } },
       );
       this.channel.end();
     });
@@ -61,30 +67,84 @@ class PiModelProbeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest) {
     if (
-      request.tools.length ||
+      request.tools.some((tool) => tool.effect !== 'read' || tool.approval !== 'auto') ||
       request.history.length ||
       request.contextCheckpoint ||
       request.resume
     )
-      throw new Error('Model probes accept a fresh input without history or capabilities.');
+      throw new Error('Isolated checks accept fresh input and automatic read-only capabilities.');
+    const limits = request.limits;
+    if (
+      limits &&
+      (!Number.isSafeInteger(limits.modelCalls) ||
+        limits.modelCalls < 1 ||
+        !Number.isSafeInteger(limits.toolCalls) ||
+        limits.toolCalls < 0)
+    )
+      throw new Error('Isolated execution limits must be nonnegative integers with a model call.');
+    let modelCalls = 0;
+    let toolCalls = 0;
+    const exceedLimit = () => {
+      this.limitError ??= {
+        code: RUNTIME_EXECUTION_LIMIT_CODE,
+        message: 'The isolated execution budget was exceeded.',
+        retryable: false,
+        origin: 'runtime',
+      };
+      return new Error(this.limitError.message);
+    };
+    const extension = createPiDurableToolExtension({
+      name: `cherry.probe:${request.sessionId}`,
+      tools: request.tools,
+      resolve: async (tool) => {
+        if (this.limitError) throw new Error(this.limitError.message);
+        return { tool, turnId: request.turnId };
+      },
+      approve: async () => false,
+    });
+    const registry = createRegistry();
+    const boundedExtension = {
+      ...extension,
+      hooks: [
+        ...(extension.hooks ?? []),
+        ...(limits
+          ? [
+              hook(GenerationTask, {
+                afterResponse: (message) => {
+                  // Hooks observe every call before validation; resolve also guards execution because
+                  // the Harness reports hook exceptions rather than treating them as admission policy.
+                  toolCalls += message.content.filter((part) => part.type === 'toolCall').length;
+                  if (toolCalls > limits.toolCalls) exceedLimit();
+                },
+              }),
+            ]
+          : []),
+      ],
+    };
+    registry.install(boundedExtension);
     const bridge = createPiDurableModels(
       {
         ...this.dependencies,
         resolveModel: (model, options, sessionId, _override, signal) =>
           this.dependencies.resolveModel(model, options, sessionId, request.apiKeyOverride, signal),
       },
-      async () => request.options,
+      async () => {
+        if (this.limitError) throw new Error(this.limitError.message);
+        if (limits && ++modelCalls > limits.modelCalls) throw exceedLimit();
+        return request.options;
+      },
       async () => async (report) => {
         this.channel.push({ type: 'usage', ...report });
       },
     );
-    await bridge.registerModel(request.model);
+    // Registration only fills this bridge's memory catalog; late reads cannot admit a run.
+    await raceAbort(bridge.registerModel(request.model), this.controller.signal);
     this.controller.signal.throwIfAborted();
     const model = bridge.models.getModel(request.model.providerId, request.model.modelId);
     if (!model) throw new Error('The probe model is unavailable.');
     this.runtime = await PiDurableRuntime.open(new MemoryStorage(), {
       models: bridge.models,
-      registry: createRegistry(),
+      registry,
       settings: { extensions: [], retry: { maxRetries: 0 }, compaction: { enabled: false } },
       identity: cherryClientIdentity(),
     });
@@ -96,19 +156,23 @@ class PiModelProbeSession implements AgentRuntimeSession {
       agent: {
         model: { provider: request.model.providerId, modelId: request.model.modelId },
         instructions: request.instructions,
+        extensions: [boundedExtension],
+        // Let the request guard report its closed limit code before the native round ceiling.
+        ...(limits ? { maxTurns: limits.modelCalls + 1 } : {}),
       },
     });
-    const previous = new Map<string, RuntimeOutputPart>();
     this.observer = new PiDurableObserver(this.runtime, runtimeLane(request.sessionId), (event) => {
       if (event.type !== 'turn.updated') return;
-      for (const [index, part] of event.turn.parts.entries()) {
-        const old = previous.get(part.id);
-        if (!old) this.channel.push({ type: 'part.add', index, part });
-        else if (JSON.stringify(old) !== JSON.stringify(part))
-          this.channel.push({ type: 'part.replace', part });
-        previous.set(part.id, part);
-      }
+      // Live parts change IDs on commit; probes publish only the terminal snapshot.
       if (event.turn.status === 'running' || event.turn.status === 'queued') return;
+      if (this.limitError) {
+        this.channel.push({ type: 'failed', error: this.limitError });
+        this.channel.end();
+        return;
+      }
+      for (const [index, part] of event.turn.parts.entries()) {
+        this.channel.push({ type: 'part.add', index, part });
+      }
       if (event.turn.status === 'completed') this.channel.push({ type: 'completed' });
       else if (event.turn.status === 'cancelled') this.channel.push({ type: 'cancelled' });
       else
@@ -137,7 +201,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
     const submission = await this.runtime.submit(
       request.sessionId,
       { type: 'input', requestId: request.turnId, content: prompt.content, whenBusy: 'reject' },
-      piSubmissionMetadata(input, []),
+      piSubmissionMetadata(input, request.tools),
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     if (this.controller.signal.aborted) await this.runtime.stop(request.sessionId);

@@ -25,8 +25,12 @@ import { ModelPickerBadge } from './ModelPickerBadge';
 import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 
 const modelPickerEstimatedItemSize = 60;
+type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  /** The containing surface can own the gutter when embedding the list. */
+  contentInset?: 'default' | 'none';
+  density?: ModelPickerDensity;
   emptyAction?: { label: string; onPress: () => void; variant?: 'secondary' | 'text' };
   emptyText?: string;
   isLoading?: boolean;
@@ -44,6 +48,8 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  contentInset: 'default' | 'none';
+  density: ModelPickerDensity;
   selectedModelId: string | null;
   selectedModelIds?: readonly string[];
   isFull: boolean;
@@ -51,6 +57,8 @@ type ModelPickerListExtraData = {
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
 export function ModelPickerList({
+  contentInset = 'default',
+  density = 'default',
   emptyAction,
   emptyText,
   isLoading = false,
@@ -122,16 +130,24 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      contentInset,
+      density,
       selectedModelId,
       selectedModelIds,
       isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
     }),
-    [maxSelectedCount, selectedModelId, selectedModelIds],
+    [contentInset, density, maxSelectedCount, selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
       if (item.type === 'groupHeader') {
-        return <ModelPickerGroupHeader isFirstGroup={item.isFirstGroup} title={item.title} />;
+        return (
+          <ModelPickerGroupHeader
+            contentInset={extraData.contentInset}
+            isFirstGroup={item.isFirstGroup}
+            title={item.title}
+          />
+        );
       }
 
       const isSelected = extraData.selectedModelIds
@@ -139,6 +155,8 @@ export function ModelPickerList({
         : item.item.modelId === extraData.selectedModelId;
       return (
         <ModelPickerRow
+          contentInset={extraData.contentInset}
+          density={extraData.density}
           isDisabled={Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected}
           isSelected={isSelected}
           item={item.item}
@@ -194,7 +212,12 @@ export function ModelPickerList({
   );
   if (listItems.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center gap-2 px-6 py-8">
+      <View
+        className={cn(
+          'flex-1 items-center justify-center gap-2 py-8',
+          contentInset === 'default' && 'px-6',
+        )}
+      >
         <Text className="text-center text-sm text-muted-foreground">
           {isLoading ? loadingText : emptyText}
         </Text>
@@ -218,7 +241,7 @@ export function ModelPickerList({
         contentContainerStyle={styles.listContentContainer}
         data={listItems}
         drawDistance={320}
-        estimatedItemSize={modelPickerEstimatedItemSize}
+        estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
         extraData={listExtraData}
         getItemType={getItemType}
         keyboardDismissMode="on-drag"
@@ -245,15 +268,27 @@ export function ModelPickerList({
   );
 }
 
-function ModelPickerGroupHeader({ isFirstGroup, title }: { isFirstGroup: boolean; title: string }) {
+function ModelPickerGroupHeader({
+  contentInset,
+  isFirstGroup,
+  title,
+}: {
+  contentInset: 'default' | 'none';
+  isFirstGroup: boolean;
+  title: string;
+}) {
   return (
-    <View className={cn('px-5 pb-1', isFirstGroup ? 'pt-1' : 'pt-3')}>
+    <View
+      className={cn('pb-1', contentInset === 'default' && 'px-5', isFirstGroup ? 'pt-1' : 'pt-3')}
+    >
       <Text className="font-medium text-muted-foreground text-xs">{title}</Text>
     </View>
   );
 }
 
 const ModelPickerRow = memo(function ModelPickerRow({
+  contentInset,
+  density,
   isDisabled,
   isSelected,
   item,
@@ -261,6 +296,8 @@ const ModelPickerRow = memo(function ModelPickerRow({
   onSelect,
   showBadges,
 }: {
+  contentInset: 'default' | 'none';
+  density: ModelPickerDensity;
   isDisabled: boolean;
   isSelected: boolean;
   item: ModelPickerModelItem;
@@ -285,19 +322,36 @@ const ModelPickerRow = memo(function ModelPickerRow({
         multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
       }
       className={cn(
-        'min-h-14 flex-row items-center gap-3 px-5 py-2.5 active:bg-secondary-active dark:active:bg-secondary-active/50',
+        'flex-row items-center gap-3 active:bg-secondary-active dark:active:bg-secondary-active/50',
+        density === 'compact' ? 'min-h-11 py-2' : 'min-h-14 py-2.5',
+        contentInset === 'default' && 'px-5',
         isSelected && 'bg-secondary dark:bg-secondary/40',
         isDisabled && 'opacity-40',
       )}
       disabled={isDisabled}
       onPress={handleSelect}
     >
-      <View className={cn('h-6 w-7 justify-center', badges.length > 0 && 'self-start')}>
-        <ModelAvatar model={item.model} provider={item.provider} size={28} />
+      <View
+        className={cn(
+          'h-6 justify-center',
+          density === 'compact' ? 'w-6' : 'w-7',
+          badges.length > 0 && 'self-start',
+        )}
+      >
+        <ModelAvatar
+          artwork={density === 'compact' ? 'brand' : 'model'}
+          model={item.model}
+          provider={item.provider}
+          size={density === 'compact' ? 24 : 28}
+        />
       </View>
       <View className="min-w-0 flex-1 gap-0.5">
         <Text
-          className={cn('text-base text-foreground', isSelected ? 'font-semibold' : 'font-medium')}
+          className={cn(
+            'text-foreground',
+            density === 'compact' ? 'text-sm' : 'text-base',
+            isSelected ? 'font-semibold' : 'font-medium',
+          )}
           ellipsizeMode="middle"
           numberOfLines={1}
         >
