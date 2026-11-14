@@ -92,6 +92,7 @@ import type { BackendServices } from '@/bootstrap/composition/createBackendServi
 import type { Backend } from '@/shared/contracts';
 import type { AccountModule } from '@/shared/contracts/account';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
+import type { CloudModule } from '@/shared/contracts/cloud';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { profileScopedName } from '@/shared/data/activeProfile';
@@ -141,6 +142,7 @@ export function createBackend(
     region: { getCountry(): Promise<string | null> };
     trash: Pick<TrashRuntime, 'trashFile'>;
     account: AccountModule;
+    cloud: CloudModule;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -461,6 +463,7 @@ export function createBackend(
     },
     backend: {
       account: infrastructure.account,
+      cloud: infrastructure.cloud,
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,

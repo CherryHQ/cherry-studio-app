@@ -1,0 +1,94 @@
+# Community Cloud subscriptions
+
+`CloudRuntime` owns community subscription state, device-bound Cloud sessions, the managed model
+catalog, and request admission. Bootstrap supplies its account identity source; this module does
+not import the enterprise implementation or read Accounts Portal's private storage keys.
+`Backend.cloud` exposes only status, subscription data, model metadata and refresh/subscription
+methods. Tokens and device secrets never reach the frontend or database.
+
+## Configuration
+
+The account identity source supplies the current session's concrete `apiOrigin` and `webUrl`.
+`CloudRuntime` validates both before account reads, model synchronization or inference. It does not
+read a regional address map or select a service from a region marker. Missing or invalid addresses
+make Cloud unavailable without changing ordinary provider use or reusing the previous session's
+service. API origins must be HTTPS and cannot contain a path, query, fragment or credentials;
+webpage URLs must be HTTPS and contain no credentials.
+
+Accounts Portal 0.2.1 does not expose session service metadata yet. Its installation adapter
+temporarily receives `CHERRY_CLOUD_API_ORIGIN_CN` and `CHERRY_CLOUD_WEB_URL_CN` through
+`extra.accountsPortal.cloudApiOrigin` and `extra.accountsPortal.cloudWebUrl`. Configure these in
+each EAS deployment environment (`development`, `preview`, `production`). The existing `_CN`
+variable names preserve deployment configuration; product code consumes only the resulting
+addresses. Once the SDK supplies service metadata, replace the installation mapping without
+changing this consumer. The app does not retrieve variables from EAS at runtime.
+
+Supply the Cloud product audience in `ACCOUNTS_PORTAL_SCOPES`, alongside any enterprise audience.
+Prices, SKUs and models come from the service. The subscription page opens the current session's
+configured webpage, and refreshes the current account when the browser returns or the app enters
+the foreground. Payment, purchase and renewal management stay on the webpage; closing it is never
+treated as proof of payment. No app credentials are added to its URL.
+
+Accounts Portal 0.2.1 provides `getIdentityTokens()` without a local patch. It returns a matched
+access/ID pair after refresh and checks the SDK's session, profile and sign-in generations.
+`AccountRuntime` also checks its community identity before and after the read. Its installed-SDK
+regressions for matched token refresh and sign-out isolation remain in
+`scripts/__tests__/accountsPortalIdentityTokens.test.ts`.
+
+The account layer owns the actual issuer, matched identity tokens and service addresses, as described
+in [Enterprise Edition](../../../../docs/references/enterprise.md#account). SDK fields and values
+are translated at the installation's account integration point. Account and address changes update
+the identity source atomically, including when the subject and product profile stay the same.
+
+## Session and transport
+
+`CloudSession` exchanges the IdP pair at `/accounts-portal/v1/enter`, then uses the returned
+Product Session and device ID for signed control-plane reads and inference. Product credentials
+stay in memory. Access-token expiry rotates the refresh token once; a lost rotation response
+clears the cached session so the next attempt enters afresh. HTTP 401 invalidates the cached
+product token. Requests are not automatically replayed.
+
+`cloudDevice` stores an Ed25519 seed separately from the device identifier in device-only secure
+storage. Android uses `ANDROID_ID`; iOS uses a Keychain UUID. Machine-code HMAC follows the mobile
+proposal in Cloud's device-signature protocol (application domain, platform, NUL, normalized ID).
+That proposal was marked pending Cloud-owner confirmation in the reviewed server revision;
+matching the deployed policy and mobile minimum-version configuration requires integration
+verification. Device signatures use the published v2 canonical bytes, raw body hash and a fresh
+nonce. Inference includes an idempotency key. Redirects and cookies are disabled.
+
+Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
+accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
+body model, strips caller credentials/control headers, signs the final body bytes, and uses
+`expo/fetch`. The account generation remains linked to cancellation until body completion or
+cancellation. Both Pi language serving and the AI SDK provider adapter use this boundary.
+
+## Entitlements and model ownership
+
+- `/api/v1/account` is the admission snapshot; `/api/v1/account/plans` supplies display details;
+  `/v1/models` supplies the catalog and features.
+- An active, currently effective entitlement and an available model feature are required. Every
+  window of a quota pool must have credit; any independent pool can admit the model. Reserved
+  units are already reflected in the server's remaining units. The gateway owns final admission,
+  reservations and charging when requests race.
+- Agent conversations use `agent`. One-shot text generation (including translation) uses
+  `general`, requiring both `chat` and `translate`. Picker callers can select the same purpose;
+  its default is `agent`, and translation model settings request `general`.
+- Rolling, calendar-day and paid-subscription-month windows retain their server timestamps.
+  Money quotas use 1,000,000 units per currency unit; price amounts use 100 minor units. Recovery
+  timestamps describe the earliest partial recovery, not a complete reset.
+- `cherryai-subscription` is a reserved, managed provider. The ordinary provider/model mutation
+  services reject edits to it. Projection writes no credentials. Revoked models are disabled and
+  hidden, keeping their IDs/names for history; user-configured providers and conversations remain.
+- State refreshes after sign-in/account replacement, foreground entry, subscription-page opening,
+  inference completion/cancellation, and periodically. Admission refreshes a stale snapshot.
+  Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
+- Account or service-address replacement clears the public snapshot synchronously, cancels old
+  requests and discards late results. Revocation uses the old session's service; the replacement's
+  queries, inference and webpage use the new one. Catalog withdrawal disables old rows without
+  writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
+  Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
+
+The source protocol reviewed for this implementation is Cloud API
+`5fbef215e3fc1309745fd754d963e5400923dc78`. Unit and database regressions cover quotas, signature
+bytes, token pairing/rotation, stale responses, sign-out and catalog retention. They were authored
+but not executed in this implementation session; no live Cloud or device acceptance was run.

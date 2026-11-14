@@ -10,6 +10,8 @@ import { useModelPickerData } from '../useModelPickerData';
 // `mock`-prefixed names are the only out-of-scope variables jest.mock factories
 // may reference (they're hoisted above the imports).
 const mockEmptyList = Object.freeze([]);
+const mockCloudState = { phase: 'signed_out', account: null, models: mockEmptyList };
+jest.mock('@/frontend/hooks/useCloud', () => ({ useCloud: () => ({ state: mockCloudState }) }));
 const mockModelQueries: unknown[] = [];
 
 jest.mock('@/frontend/hooks/chat', () => ({

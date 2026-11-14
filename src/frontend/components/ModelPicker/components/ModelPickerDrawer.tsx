@@ -14,6 +14,7 @@ import { Keyboard, View } from 'react-native';
 
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
+import type { CloudModelUse } from '@/shared/contracts/cloud';
 import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
@@ -33,6 +34,7 @@ export type ModelPickerDrawerVariant = 'default' | 'chat';
 const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
 
 type ModelPickerDrawerProps = {
+  cloudUse?: CloudModelUse;
   emptyText?: string;
   isModelVisible?: (item: ModelPickerModelItem) => boolean;
   modelType: ModelTypeFilter;
@@ -63,6 +65,7 @@ export type ModelPickerMultiSelect = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
+  cloudUse = 'agent',
   emptyText,
   isModelVisible,
   modelType,
@@ -130,6 +133,7 @@ export function ModelPickerDrawer({
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
+          cloudUse={cloudUse}
           allowedModelIds={allowedModelIds}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
@@ -154,6 +158,7 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
+  cloudUse,
   allowedModelIds,
   deferredSearchText,
   emptyText,
@@ -173,6 +178,7 @@ function ModelPickerDrawerContent({
   variant,
 }: Pick<
   ModelPickerDrawerProps,
+  | 'cloudUse'
   | 'isModelVisible'
   | 'emptyText'
   | 'modelType'
@@ -194,6 +200,7 @@ function ModelPickerDrawerContent({
 }) {
   const { t } = useTranslation();
   const { groups, isLoading } = useModelPickerData({
+    cloudUse,
     modelType,
     providerId,
     searchText: deferredSearchText,
@@ -204,7 +211,7 @@ function ModelPickerDrawerContent({
         ? groups
         : groups.flatMap((group) => {
             const items = group.items.filter((item) =>
-              matchesModelPickerBadges(item.model, [selectedBadge]),
+              matchesModelPickerBadges(item.model, [selectedBadge], item.isCloudFree),
             );
             return items.length > 0 ? [{ ...group, items }] : [];
           }),

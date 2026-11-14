@@ -12,6 +12,7 @@ import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { withCapability } from '@/frontend/components/Policy';
 import { SelectionToolbar } from '@/frontend/components/Selection';
 import { useBackendModule, useQuery } from '@/frontend/data';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -45,6 +46,7 @@ export default function ProviderDetailSettingsScreen() {
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
+  if (providerId === CLOUD_PROVIDER_ID) return <Redirect href="/settings/profile/subscription" />;
 
   return <ProviderDetail key={providerId} providerId={providerId} providerName={providerName} />;
 }

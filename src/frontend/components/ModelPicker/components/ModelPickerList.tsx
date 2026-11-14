@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
+import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
 
 import {
   getModelPickerBadges,
@@ -157,7 +158,10 @@ export function ModelPickerList({
         <ModelPickerRow
           contentInset={extraData.contentInset}
           density={extraData.density}
-          isDisabled={Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected}
+          isDisabled={
+            Boolean(item.item.cloudUnavailable) ||
+            (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected)
+          }
           isSelected={isSelected}
           item={item.item}
           multiple={Boolean(extraData.selectedModelIds)}
@@ -309,9 +313,13 @@ const ModelPickerRow = memo(function ModelPickerRow({
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
-  const badges = showBadges ? getModelPickerBadges(item.model) : [];
+  const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
+  const unavailable = item.cloudUnavailable
+    ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
+    : undefined;
   const accessibilityLabel = [
     item.model.name,
+    ...(unavailable ? [unavailable] : []),
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
   ].join(', ');
   return (
@@ -319,7 +327,9 @@ const ModelPickerRow = memo(function ModelPickerRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={multiple ? 'checkbox' : 'button'}
       accessibilityState={
-        multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
+        multiple
+          ? { checked: isSelected, disabled: isDisabled }
+          : { selected: isSelected, disabled: isDisabled }
       }
       className={cn(
         'flex-row items-center gap-3 active:bg-secondary-active dark:active:bg-secondary-active/50',
@@ -357,6 +367,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
         >
           {item.model.name}
         </Text>
+        {unavailable ? <Text className="text-xs text-muted-foreground">{unavailable}</Text> : null}
         {badges.length > 0 ? (
           <View className="h-4 flex-row items-center gap-1">
             {badges.map((badge) => (
