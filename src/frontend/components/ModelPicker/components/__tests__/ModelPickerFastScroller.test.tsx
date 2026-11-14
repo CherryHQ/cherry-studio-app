@@ -24,6 +24,7 @@ let mockTapHandlers: TapHandlers;
 let mockScrollHandlers: ScrollHandlers;
 
 jest.mock('@/frontend/components/Avatar', () => ({ ProviderAvatar: () => null }));
+jest.mock('../ModelPickerBackdrop', () => ({ ModelPickerBackdrop: () => null }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('react-native-gesture-handler', () => {
@@ -54,10 +55,12 @@ jest.mock('react-native-gesture-handler', () => {
 });
 jest.mock('react-native-reanimated', () => {
   const { useRef } = jest.requireActual('react');
-  const { ScrollView } = jest.requireActual('react-native');
+  const { ScrollView, View } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: { ScrollView },
+    default: { ScrollView, View },
+    FadeOut: { duration: () => ({ reduceMotion: () => undefined }) },
+    ReduceMotion: { System: 'system' },
     runOnJS: (callback: unknown) => callback,
     useSharedValue: (initial: unknown) => {
       const ref = useRef(initial);
@@ -101,7 +104,12 @@ describe('ModelPickerFastScroller interactions', () => {
     onNavigate = jest.fn();
     act(() => {
       renderer = create(
-        <ModelPickerFastScroller activeIndex={0} anchors={anchors} onNavigate={onNavigate} />,
+        <ModelPickerFastScroller
+          activeIndex={0}
+          anchors={anchors}
+          blurTarget={{ current: null }}
+          onNavigate={onNavigate}
+        />,
       );
     });
   });
