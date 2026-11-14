@@ -51,18 +51,30 @@ export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps
       testID="web-search-tool-part"
       title={actionTitle}
     >
-      {outputError !== undefined ? (
-        <MessageDetailText tone="danger" title={t('chat.tool.error')} value={outputError} />
-      ) : results.length === 0 ? (
-        <Text className="text-muted-foreground text-sm" selectable>
-          {statusText}
-        </Text>
-      ) : (
-        results.map((result) => (
-          <WebSourceCard key={`${result.id}-${result.url}`} source={result} />
-        ))
-      )}
+      <WebSearchToolContent results={results} error={outputError} emptyText={statusText} />
     </MessagePart.Tool>
+  );
+}
+
+/** Shared source cards; resource loading and the tool header belong to the caller. */
+export function WebSearchToolContent({
+  results,
+  error,
+  emptyText,
+}: {
+  results: ReturnType<typeof parseWebSources>;
+  error?: string;
+  emptyText: string;
+}) {
+  const { t } = useTranslation();
+  return error !== undefined ? (
+    <MessageDetailText tone="danger" title={t('chat.tool.error')} value={error} />
+  ) : results.length === 0 ? (
+    <Text className="text-muted-foreground text-sm" selectable>
+      {emptyText}
+    </Text>
+  ) : (
+    results.map((result) => <WebSourceCard key={`${result.id}-${result.url}`} source={result} />)
   );
 }
 

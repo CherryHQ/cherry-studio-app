@@ -20,6 +20,14 @@ jest.mock('@/frontend/components/ArtifactPreview', () => {
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
 jest.mock('@/frontend/components/Message', () => ({
   getBuiltInToolDisplay: () => undefined,
+  ReadOnlyToolContent: ({ output, failed }: { output: unknown; failed?: boolean }) => {
+    const { Text } = jest.requireActual('react-native');
+    return (
+      <Text testID="tool-content">
+        {`${failed ? 'failed:' : ''}${typeof output === 'string' ? output : JSON.stringify(output)}`}
+      </Text>
+    );
+  },
   ToolRendererProvider: ({
     children,
     renderTool,
@@ -260,6 +268,48 @@ it('shows a remote image thumbnail and opens the same downloaded image', async (
     expect(row.root.findByProps({ testID: 'image-viewer' }).props.source).toEqual({ uri });
   } finally {
     await act(async () => row?.unmount());
+    client.clear();
+  }
+});
+
+it('forwards failed state to read-only tool details', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const failedMessage = {
+    tools: [
+      {
+        key: 'call',
+        title: 'web_search',
+        state: 'failed',
+        output: {
+          kind: 'inline',
+          value: { kind: 'text', text: 'Search unavailable', complete: true },
+        },
+      },
+    ],
+  } as unknown as ConversationMessage;
+  let row!: ReactTestRenderer;
+  let sheet!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      row = create(
+        <QueryClientProvider client={client}>
+          <ConversationMessageContent messageState="error" tools={failedMessage.tools}>
+            <></>
+          </ConversationMessageContent>
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      sheet = create(<QueryClientProvider client={client}>{mockSheetContent}</QueryClientProvider>);
+    });
+    expect(sheet.root.findByProps({ testID: 'tool-content' }).props.children).toBe(
+      'failed:Search unavailable',
+    );
+  } finally {
+    await act(async () => {
+      sheet?.unmount();
+      row?.unmount();
+    });
     client.clear();
   }
 });
