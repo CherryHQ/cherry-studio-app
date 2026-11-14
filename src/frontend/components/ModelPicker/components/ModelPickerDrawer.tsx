@@ -1,8 +1,17 @@
+import EyeIcon from '@cherrystudio/app-icons/icons/eye';
+import GiftIcon from '@cherrystudio/app-icons/icons/gift';
 import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
-import { ActionMenu, BottomSheet, Button, SearchField } from '@cherrystudio/ui/components';
+import {
+  ActionMenu,
+  BottomSheet,
+  type BottomSheetSize,
+  type BottomSheetSizes,
+  Button,
+  SearchField,
+} from '@cherrystudio/ui/components';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 
@@ -18,6 +27,8 @@ import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerList } from './ModelPickerList';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat';
+
+const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
 
 type ModelPickerDrawerProps = {
   emptyText?: string;
@@ -64,13 +75,13 @@ export function ModelPickerDrawer({
   variant = 'default',
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('large');
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
-  const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
+  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
   const handleClose = useCallback(() => {
-    setIsSearchFocused(false);
+    setSheetSize('large');
     setSearchText('');
     setSelectedBadge(null);
     onClose();
@@ -78,6 +89,7 @@ export function ModelPickerDrawer({
 
   return (
     <BottomSheet
+      avoidKeyboard
       headerAction={
         // A mode entered and left like selecting photos, not a setting the sheet keeps.
         multiSelect ? (
@@ -88,18 +100,27 @@ export function ModelPickerDrawer({
             variant="ghost"
           >
             <Button.Label>
-              {t(multiSelect.enabled ? 'common.cancel' : 'modelPicker.multiSelect.label')}
+              {t(
+                multiSelect.enabled
+                  ? 'modelPicker.multiSelect.exit'
+                  : 'modelPicker.multiSelect.label',
+              )}
             </Button.Label>
           </Button>
         ) : undefined
       }
       onClose={handleClose}
+      onSizeChange={setSheetSize}
       open={open}
-      size={isSearchExpanded ? 'full' : 'large'}
+      size={sheetSize}
+      sizes={modelPickerSizes}
       testID="model-picker"
       title={
         multiSelect?.enabled
-          ? t('modelPicker.multiSelect.title', { selected: multiSelect.selectedModelIds.length })
+          ? t('modelPicker.multiSelect.title', {
+              max: multiSelect.maxCount,
+              selected: multiSelect.selectedModelIds.length,
+            })
           : (title ?? t('modelPicker.title'))
       }
     >
@@ -111,7 +132,7 @@ export function ModelPickerDrawer({
           modelType={modelType}
           onAddProvider={onAddProvider}
           onSelect={onSelect}
-          onSearchFocusChange={setIsSearchFocused}
+          onSearchFocus={handleSearchFocus}
           onSearchTextChange={setSearchText}
           open={open}
           providerId={providerId}
@@ -134,7 +155,7 @@ function ModelPickerDrawerContent({
   modelType,
   onAddProvider,
   onSelect,
-  onSearchFocusChange,
+  onSearchFocus,
   onSearchTextChange,
   open,
   providerId,
@@ -158,7 +179,7 @@ function ModelPickerDrawerContent({
   | 'variant'
 > & {
   deferredSearchText: string;
-  onSearchFocusChange: (isFocused: boolean) => void;
+  onSearchFocus: () => void;
   onSearchTextChange: (value: string) => void;
   searchText: string;
   selectedBadge: ModelPickerBadge | null;
@@ -196,9 +217,26 @@ function ModelPickerDrawerContent({
   const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
   const emptyAction =
-    !hasSearch && !hasActiveFilters && onAddProvider
-      ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
-      : undefined;
+    hasSearch || hasActiveFilters
+      ? {
+          label: t('modelPicker.clearConditions'),
+          onPress: () => {
+            onSearchTextChange('');
+            setSelectedBadge(null);
+          },
+          variant: 'text' as const,
+        }
+      : onAddProvider
+        ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
+        : undefined;
+  const filterIcon =
+    selectedBadge === 'vision' ? (
+      <EyeIcon className="text-tag-blue-foreground" />
+    ) : selectedBadge === 'free' ? (
+      <GiftIcon className="text-tag-green-foreground" />
+    ) : (
+      <ListFilterIcon />
+    );
 
   return (
     <View className="min-h-0 flex-1">
@@ -207,13 +245,14 @@ function ModelPickerDrawerContent({
           <SearchField
             accessibilityLabel={t('modelPicker.searchPlaceholder')}
             clearAccessibilityLabel={t('common.clear')}
-            onBlur={() => onSearchFocusChange(false)}
             onChangeText={onSearchTextChange}
             onClear={() => onSearchTextChange('')}
-            onFocus={() => onSearchFocusChange(true)}
+            onFocus={onSearchFocus}
+            onSubmitEditing={Keyboard.dismiss}
             placeholder={t('modelPicker.searchPlaceholder')}
             testID="model-picker-search"
             value={searchText}
+            variant="subtle"
           />
         </View>
         {variant === 'chat' ? (
@@ -235,8 +274,11 @@ function ModelPickerDrawerContent({
           >
             <Button
               accessibilityLabel={t('common.filter')}
-              icon={<ListFilterIcon />}
-              size="sm"
+              accessibilityState={{ selected: hasActiveFilters }}
+              accessibilityValue={
+                selectedBadge ? { text: t(modelPickerBadgeLabelKeys[selectedBadge]) } : undefined
+              }
+              icon={filterIcon}
               testID="model-picker-filter"
               variant="ghost"
             />
@@ -247,7 +289,7 @@ function ModelPickerDrawerContent({
         <ModelPickerList
           emptyAction={emptyAction}
           emptyText={
-            hasSearch
+            hasSearch || hasActiveFilters
               ? t('settings.provider.models.search.empty')
               : (emptyText ?? t('modelPicker.empty'))
           }

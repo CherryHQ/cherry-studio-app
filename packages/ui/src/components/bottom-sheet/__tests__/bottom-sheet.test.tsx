@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type ReactNode } from 'react';
-import { BackHandler, Dimensions, StyleSheet, Text } from 'react-native';
+import { BackHandler, Dimensions, Keyboard, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
@@ -359,6 +359,55 @@ describe('BottomSheet', () => {
     expect(mockBottomSheetProps.detents).toEqual([{ programmatic: true, value: 0 }, 'content']);
     expect(mockBottomSheetProps.animateContentHeight).toBe(false);
     expect(mockBottomSheetProps.index).toBe(1);
+  });
+
+  test('retains draggable heights while controlled size changes and reports only user resizing', () => {
+    const onClose = jest.fn();
+    const onSizeChange = jest.fn();
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    const sheet = (size: 'large' | 'full') => (
+      <BottomSheet
+        avoidKeyboard
+        onClose={onClose}
+        onSizeChange={onSizeChange}
+        open
+        size={size}
+        sizes={['large', 'full']}
+        title="Models"
+      >
+        <Text>Models</Text>
+      </BottomSheet>
+    );
+
+    try {
+      act(() => {
+        renderer = create(sheet('large'));
+      });
+      const detents = mockBottomSheetProps.detents as number[];
+      expect(detents).toHaveLength(3);
+      expect(mockBottomSheetProps.index).toBe(1);
+
+      act(() => renderer?.update(sheet('full')));
+      expect(mockBottomSheetProps.index).toBe(2);
+      expect(mockBottomSheetProps.detents).toEqual(detents);
+      expect(mockBottomSheetProps.animateContentHeight).toBe(true);
+
+      // A stale programmatic settlement must not undo a newer requested height.
+      act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(1));
+      expect(onSizeChange).not.toHaveBeenCalled();
+      expect(mockBottomSheetProps.index).toBe(2);
+
+      act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(1));
+      expect(onSizeChange).toHaveBeenCalledWith('large');
+      expect(dismiss).toHaveBeenCalledTimes(1);
+
+      act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(0));
+      act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
+      expect(onSizeChange).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      dismiss.mockRestore();
+    }
   });
 
   test('shows the drag handle only when a drag can close or resize the sheet', () => {
