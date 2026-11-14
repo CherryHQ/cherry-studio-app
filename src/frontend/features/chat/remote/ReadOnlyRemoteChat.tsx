@@ -110,6 +110,8 @@ function ReaderContent({
     <ChatShareSelectionProvider target={shareTarget} messages={messages}>
       <ChatWorkspace
         executionSource="desktop"
+        isTranslationEnabled
+        readingAidScope={session.readingAidScope}
         messages={messages}
         snapshot={snapshot}
         messageWindow={history}

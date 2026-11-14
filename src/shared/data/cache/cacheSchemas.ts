@@ -13,6 +13,7 @@
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import type { DiagnosticFeedbackRecord } from '@/shared/contracts/diagnostics';
+import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 
 // ============================================================================
 // Template Key Type Utilities
@@ -94,6 +95,8 @@ export type PersistCacheSchema = {
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
+  /** Bounded phone-owned remote reading aids, keyed by source/message/revision/content hash. */
+  'remote_agent.translations': Record<string, MessageTranslations>;
   // Last local chat Agent; cold starts open its greeting rather than a Session.
   'chat.last_agent_id': string | null;
   // Last composer effort per Agent; clearing the cache restores model defaults.
@@ -108,6 +111,7 @@ export const DefaultPersistCache: PersistCacheSchema = {
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
+  'remote_agent.translations': {},
   'chat.last_agent_id': null,
   'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,

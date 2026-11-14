@@ -5,6 +5,7 @@ import { sha256HexOfText } from '@/shared/utils/sha256';
 
 export type MessageTranslationSource = {
   messageId: string;
+  revision?: string;
   contentHash: string;
   text: string;
   translations?: MessageTranslations;
@@ -19,6 +20,7 @@ export function messageTranslationSource(
   if (!text) return undefined;
   return {
     messageId: message.id,
+    revision: message.revision,
     contentHash: sha256HexOfText(text),
     text,
     translations: message.data.translations,

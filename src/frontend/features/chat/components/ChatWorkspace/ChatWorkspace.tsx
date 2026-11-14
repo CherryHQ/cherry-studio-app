@@ -60,7 +60,9 @@ type ChatWorkspaceProps = {
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
   sessionId?: string;
-  /** Translation is available only for locally owned Agent messages. */
+  /** Remote reading aids use this stable source-owned namespace instead of local persistence. */
+  readingAidScope?: string;
+  /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
@@ -88,6 +90,7 @@ export function ChatWorkspace({
   isAssistantToolbarEnabled,
   sessionId,
   isTranslationEnabled = false,
+  readingAidScope,
   renderUsage,
 }: ChatWorkspaceProps) {
   const { beginSelection } = useChatShareSelectionActions();
@@ -288,6 +291,7 @@ export function ChatWorkspace({
     <View className="flex-1" onTouchStart={onQuoteTakeover}>
       <MessageTranslationProvider
         isEnabled={isTranslationEnabled}
+        readingAidScope={readingAidScope}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >

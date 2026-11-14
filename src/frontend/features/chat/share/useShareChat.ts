@@ -46,7 +46,7 @@ export function useShareChat(target: ChatShareTarget | undefined) {
           const { messages } = data;
           const options: ChatExportOptions = {
             title: data.title?.trim() || t('chat.share.documentTitle'),
-            translations: target.ref.source.kind === 'local' ? target.translations : undefined,
+            translations: target.translations,
             labels: {
               user: t('chat.share.user'),
               assistant: data.assistantName || t('chat.share.assistant'),

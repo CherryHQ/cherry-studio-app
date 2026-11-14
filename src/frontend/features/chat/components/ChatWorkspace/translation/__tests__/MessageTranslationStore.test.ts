@@ -8,6 +8,7 @@ import type { SaveAgentMessageTranslation } from '@/shared/data/api/schemas/agen
 import type { ApiClient } from '@/shared/data/api/types';
 import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 
+import { localMessageTranslationPersistence } from '../messageTranslationPersistence';
 import { messageTranslationSource } from '../messageTranslationSource';
 import { MessageTranslationStore } from '../MessageTranslationStore';
 
@@ -69,7 +70,10 @@ function setup() {
     async (_input: TranslationInput, _options?: TranslationOptions) => '译文',
   );
   const translation = { translate };
-  const store = new MessageTranslationStore(translation, data.api, 'session');
+  const store = new MessageTranslationStore(
+    translation,
+    localMessageTranslationPersistence(data.api, 'session'),
+  );
   return { ...data, translate, translation, store };
 }
 
@@ -100,7 +104,10 @@ test('does not translate until invoked, deduplicates clicks and notifies only it
 test('restores saved translation folded after reconstruction, isolated by Session and source', async () => {
   const { store, api, translate, translation, stored } = setup();
   await store.start(source, 'zh-CN');
-  const reopened = new MessageTranslationStore(translation, api, 'session');
+  const reopened = new MessageTranslationStore(
+    translation,
+    localMessageTranslationPersistence(api, 'session'),
+  );
   expect(reopened.get(stored())).toMatchObject({ status: 'success', visible: false });
   await reopened.start(stored(), 'zh-CN');
   expect(reopened.get(stored())).toMatchObject({ content: '译文', language: 'zh-CN' });
@@ -113,7 +120,10 @@ test('restores saved translation folded after reconstruction, isolated by Sessio
   await reopened.start(changed, 'zh-CN');
   expect(translate).toHaveBeenCalledTimes(2);
 
-  const otherSession = new MessageTranslationStore(translation, api, 'other');
+  const otherSession = new MessageTranslationStore(
+    translation,
+    localMessageTranslationPersistence(api, 'other'),
+  );
   await otherSession.start(source, 'zh-CN');
   expect(translate).toHaveBeenCalledTimes(3);
 });
@@ -168,7 +178,10 @@ test('reopens and switches among three restored languages without translating ag
   await store.start(source, 'zh-CN');
   await store.start(source, 'fr-FR');
   await store.start(source, 'ja-JP');
-  const reopened = new MessageTranslationStore(translation, api, 'session');
+  const reopened = new MessageTranslationStore(
+    translation,
+    localMessageTranslationPersistence(api, 'session'),
+  );
   expect(reopened.get(stored())).toMatchObject({ translations, language: 'ja-JP', visible: false });
   reopened.toggle(stored());
   expect(reopened.get(stored())).toMatchObject({ content: translations['ja-JP'], visible: true });
