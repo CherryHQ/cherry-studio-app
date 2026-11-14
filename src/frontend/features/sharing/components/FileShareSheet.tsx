@@ -219,51 +219,65 @@ export function FileShareSheet({ request, onClose }: { request: Request; onClose
         ) : undefined
       }
     >
-      <View className="min-h-0 flex-1">
-        <ScrollView
-          accessibilityElementsHidden
-          className="absolute inset-0"
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-          removeClippedSubviews={false}
-        >
-          {surface}
-        </ScrollView>
-        <View className="min-h-0 flex-1 pt-3.5 pb-2">
-          {current?.error ? (
-            <View className="flex-1 justify-center p-6">
-              <ContentState.Error
-                title={t(
-                  current.error instanceof DocumentExportError &&
-                    ['size-limit', 'image-size-limit'].includes(current.error.code)
-                    ? 'sharing.tooLarge'
-                    : 'fileViewer.conversion.failed',
-                )}
-                primaryAction={{
-                  children: t('common.retry'),
-                  onPress: () => setAttempt((value) => value + 1),
-                }}
-              />
-            </View>
-          ) : isConverting ? (
-            <View className="flex-1 justify-center">
-              <ContentState.Loading />
-            </View>
-          ) : (
-            <CardStack
-              items={previews}
-              index={index}
-              onIndexChange={setIndex}
-              renderItem={renderItem}
-              labels={{
-                previous: t('sharing.previous'),
-                next: t('sharing.next'),
-                page: (page, total) => t('documentExport.page', { page, total }),
-              }}
-            />
-          )}
+      {(bottomInset) => (
+        <View className="min-h-0 flex-1">
+          <ScrollView
+            accessibilityElementsHidden
+            className="absolute inset-0"
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            removeClippedSubviews={false}
+          >
+            {surface}
+          </ScrollView>
+          <View className="min-h-0 flex-1 pt-3.5 pb-2">
+            {current?.error ? (
+              <View className="flex-1 justify-center p-6">
+                <ContentState.Error
+                  title={t(
+                    current.error instanceof DocumentExportError &&
+                      ['size-limit', 'image-size-limit'].includes(current.error.code)
+                      ? 'sharing.tooLarge'
+                      : 'fileViewer.conversion.failed',
+                  )}
+                  primaryAction={{
+                    children: t('common.retry'),
+                    onPress: () => setAttempt((value) => value + 1),
+                  }}
+                />
+              </View>
+            ) : isConverting ? (
+              <View className="flex-1 justify-center">
+                <ContentState.Loading />
+              </View>
+            ) : (
+              <View
+                className="min-h-0 flex-1"
+                style={{ paddingBottom: previews.length > 1 ? bottomInset : 0 }}
+              >
+                <CardStack
+                  items={previews}
+                  index={index}
+                  onIndexChange={setIndex}
+                  renderItem={(item, frame) => (
+                    <View
+                      className="flex-1"
+                      style={{ paddingBottom: previews.length === 1 ? bottomInset : 0 }}
+                    >
+                      {renderItem(item, frame)}
+                    </View>
+                  )}
+                  labels={{
+                    previous: t('sharing.previous'),
+                    next: t('sharing.next'),
+                    page: (page, total) => t('documentExport.page', { page, total }),
+                  }}
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </ShareSheet>
   );
 }

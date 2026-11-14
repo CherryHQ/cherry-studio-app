@@ -2,8 +2,10 @@
 
 `/share` presents the shared CherryUI BottomSheet for documents, original files, image groups and
 HTML conversion. The preview-led sheet has no title row. A floating icon-and-label Tabs control
-switches applicable formats below the preview; images alone have no format control. The control
-occupies its own layout space with a 12-point gap, so the document footer remains visible. The fixed
+switches applicable formats over the preview; images alone have no format control. Progressive blur
+and a translucent gradient keep the floating controls readable while content extends underneath.
+The sheet measures the controls and supplies preview-only bottom clearance (at least 96 points),
+so scrolling can lift the document footer above them without adding space to exported files. The fixed
 footer pairs a tonal, labeled Save action with the primary Share action, using Button's `footer`
 size for Android's compact labels and minimum 48-point touch targets. Watermark selection stays
 in global settings, and the source still owns the selection.

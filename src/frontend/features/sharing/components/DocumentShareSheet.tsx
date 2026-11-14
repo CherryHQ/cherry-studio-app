@@ -158,89 +158,100 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
         />
       }
     >
-      <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
-        <ScrollView
-          accessibilityElementsHidden
-          className="absolute inset-0"
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-          removeClippedSubviews={false}
-        >
-          {surface}
-        </ScrollView>
-        <View className="min-h-0 flex-1 px-4 pt-2.5">
-          {preview.issues.length ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              className="px-2 pt-2 text-muted-foreground text-xs"
-            >
-              {t('documentExport.issues', { count: preview.issues.length })}
-            </Text>
-          ) : null}
-          {error ? (
-            <View className="flex-1 justify-center p-6">
-              <ContentState.Error
-                title={t(
-                  isSizeLimit
-                    ? 'sharing.tooLarge'
-                    : preview.isPaused
-                      ? 'documentExport.paused'
-                      : 'documentExport.deliveryFailed',
-                )}
-                primaryAction={{ children: t('common.retry'), onPress: preview.retry }}
-              />
-            </View>
-          ) : preview.isPreparing ? (
-            <View className="flex-1 justify-center p-6">
-              <ContentState.Loading />
-            </View>
-          ) : (
-            <CardStack
-              layout="fill"
-              items={preview.pages}
-              index={index}
-              onIndexChange={setIndex}
-              labels={{
-                previous: t('sharing.previous'),
-                next: t('sharing.next'),
-                page: (page, total) => t('documentExport.page', { page, total }),
-              }}
-              renderItem={(page, frame) => {
-                if (!frame.isFront) return <View className="flex-1 bg-card" />;
-                const content = (
-                  <DocumentPagePreview
-                    html={preview.html}
-                    page={page}
-                    width={frame.width}
-                    height={frame.height}
-                    isImage={format === 'image'}
-                    layout={presentation.imageFrame?.layout ?? 'pages'}
-                    onPages={preview.onPages}
-                    onError={preview.onPreviewError}
-                  />
-                );
-                return format === 'image' ? (
-                  content
-                ) : (
-                  <DocumentFilePreview
-                    filename={
-                      preview.filename ??
-                      `${request.session.document.title ?? t('documentExport.document')}.${format === 'markdown' ? 'md' : 'html'}`
-                    }
-                    messageCount={
-                      isMessageCard ? request.session.document.sections.length : undefined
-                    }
-                    source={format === 'markdown' ? preview.text : preview.html}
-                    format={format}
-                  >
-                    {content}
-                  </DocumentFilePreview>
-                );
-              }}
-            />
-          )}
+      {(bottomInset) => (
+        <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
+          <ScrollView
+            accessibilityElementsHidden
+            className="absolute inset-0"
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            removeClippedSubviews={false}
+          >
+            {surface}
+          </ScrollView>
+          <View className="min-h-0 flex-1 px-4 pt-2.5">
+            {preview.issues.length ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                className="px-2 pt-2 text-muted-foreground text-xs"
+              >
+                {t('documentExport.issues', { count: preview.issues.length })}
+              </Text>
+            ) : null}
+            {error ? (
+              <View className="flex-1 justify-center p-6">
+                <ContentState.Error
+                  title={t(
+                    isSizeLimit
+                      ? 'sharing.tooLarge'
+                      : preview.isPaused
+                        ? 'documentExport.paused'
+                        : 'documentExport.deliveryFailed',
+                  )}
+                  primaryAction={{ children: t('common.retry'), onPress: preview.retry }}
+                />
+              </View>
+            ) : preview.isPreparing ? (
+              <View className="flex-1 justify-center p-6">
+                <ContentState.Loading />
+              </View>
+            ) : (
+              <View
+                className="min-h-0 flex-1"
+                style={{ paddingBottom: preview.pages.length > 1 ? bottomInset : 0 }}
+              >
+                <CardStack
+                  layout="fill"
+                  items={preview.pages}
+                  index={index}
+                  onIndexChange={setIndex}
+                  labels={{
+                    previous: t('sharing.previous'),
+                    next: t('sharing.next'),
+                    page: (page, total) => t('documentExport.page', { page, total }),
+                  }}
+                  renderItem={(page, frame) => {
+                    if (!frame.isFront) return <View className="flex-1 bg-card" />;
+                    const content = (
+                      <DocumentPagePreview
+                        html={preview.html}
+                        page={page}
+                        width={frame.width}
+                        height={frame.height}
+                        bottomInset={
+                          format === 'image' && preview.pages.length > 1 ? 0 : bottomInset
+                        }
+                        isImage={format === 'image'}
+                        layout={presentation.imageFrame?.layout ?? 'pages'}
+                        onPages={preview.onPages}
+                        onError={preview.onPreviewError}
+                      />
+                    );
+                    return format === 'image' ? (
+                      content
+                    ) : (
+                      <DocumentFilePreview
+                        filename={
+                          preview.filename ??
+                          `${request.session.document.title ?? t('documentExport.document')}.${format === 'markdown' ? 'md' : 'html'}`
+                        }
+                        messageCount={
+                          isMessageCard ? request.session.document.sections.length : undefined
+                        }
+                        source={format === 'markdown' ? preview.text : preview.html}
+                        format={format}
+                        bottomInset={bottomInset}
+                      >
+                        {content}
+                      </DocumentFilePreview>
+                    );
+                  }}
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </ShareSheet>
   );
 }

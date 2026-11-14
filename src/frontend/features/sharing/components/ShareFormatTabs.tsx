@@ -17,7 +17,7 @@ const FORMAT_ICONS = {
   pptx: PresentationIcon,
 };
 
-/** Floating-style tabs; the caller owns their placement and format state. */
+/** Floats over the preview; the sheet owns clearance and the caller owns format state. */
 export function ShareFormatTabs({
   formats,
   format,

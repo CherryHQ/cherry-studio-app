@@ -13,11 +13,13 @@ export function DocumentFilePreview({
   messageCount,
   source,
   format,
+  bottomInset,
 }: PropsWithChildren<{
   filename: string;
   messageCount?: number;
   source: string;
   format: 'html' | 'markdown';
+  bottomInset: number;
 }>) {
   const { t, i18n } = useTranslation();
   const bytes = useMemo(() => new TextEncoder().encode(source).byteLength, [source]);
@@ -42,12 +44,16 @@ export function DocumentFilePreview({
           </Text>
         </View>
       </View>
-      {format === 'markdown' ? <MarkdownSourcePreview source={source} /> : children}
+      {format === 'markdown' ? (
+        <MarkdownSourcePreview source={source} bottomInset={bottomInset} />
+      ) : (
+        children
+      )}
     </View>
   );
 }
 
-function MarkdownSourcePreview({ source }: { source: string }) {
+function MarkdownSourcePreview({ source, bottomInset }: { source: string; bottomInset: number }) {
   const blocks = useMemo(() => splitTextBlocks(source), [source]);
   return (
     <LegendList
@@ -57,7 +63,7 @@ function MarkdownSourcePreview({ source }: { source: string }) {
       nestedScrollEnabled
       recycleItems={false}
       renderItem={renderSourceBlock}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: 20 + bottomInset }]}
       style={styles.list}
     />
   );
