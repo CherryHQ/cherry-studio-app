@@ -200,6 +200,9 @@ it('opens the branded image copy externally while retaining the original for in-
     release() {},
   });
   await act(async () => actions.openFileEntryWithSystem(imageFile));
+  expect(mockPrepareSharedFile).toHaveBeenCalledWith(imageFile, {
+    watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
+  });
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
       file: expect.objectContaining({
@@ -210,4 +213,40 @@ it('opens the branded image copy externally while retaining the original for in-
     }),
   );
   expect(imageFile.uri).toBe('file:///managed/drawing.jpg');
+});
+
+it('opens a temporary image through the cache without resolving its display id as a managed file', async () => {
+  const temporaryFile = {
+    kind: 'temporary' as const,
+    entry: {
+      id: entry.id,
+      filename: 'remote.jpg',
+      mediaType: 'image/jpeg',
+      provenance: 'unknown' as const,
+      size: 10,
+      updatedAt: 2,
+    },
+    uri: 'file:///cache/preview.jpg',
+  };
+  mockPrepareSharedFile.mockResolvedValueOnce({
+    uri: 'file:///cache/FileExports/remote.png',
+    filename: 'remote.png',
+    mediaType: 'image/png',
+  });
+
+  await act(async () => actions.openFileEntryWithSystem(temporaryFile));
+
+  const { entry: temporaryEntry, uri: temporaryUri } = temporaryFile;
+  expect(mockPrepareSharedFile).toHaveBeenCalledWith(
+    { entry: temporaryEntry, uri: temporaryUri },
+    {
+      watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
+    },
+  );
+  expect(mockOpen).toHaveBeenCalledWith(
+    expect.objectContaining({
+      file: expect.objectContaining({ uri: 'file:///cache/FileExports/remote.png' }),
+    }),
+  );
+  expect(mockToast).not.toHaveBeenCalled();
 });

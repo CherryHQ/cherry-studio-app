@@ -65,6 +65,10 @@ and HTML conversions prepare a separate clean artifact instead of reusing the si
 Original image groups can save their unchanged bytes to Photos. Permission handling stays in the
 existing file-export owner.
 
+Sharing, screenshots, HTML conversion and brand composition are programmatic operations. They do
+not create or restore AI declarations on their outputs. Original files keep their supplied bytes;
+only actual AI file-generation/editing workflows add declarations to their own new files.
+
 The request retains in-flight generation and copying before disposal. Each native captured page is
 copied and released before the next; the shared HtmlCapture executor owns the physical lease.
 Request closure cleans temporary conversion artifacts and document sessions, while OS-managed

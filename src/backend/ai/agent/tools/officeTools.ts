@@ -122,6 +122,7 @@ export function createOfficeTools(
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
+              aiOperation: 'generate',
               folderId: access.folderId,
               workspaceFolderId: access.folderId,
             },

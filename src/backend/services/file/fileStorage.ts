@@ -23,6 +23,11 @@ import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
+import {
+  completeFileAiContent,
+  readSourceAiContent,
+  type AiContentWrite,
+} from './aiContentMetadata';
 import { deleteFilePreview } from './filePreviewCache';
 import { deleteFileTextCache } from './fileTextCache';
 
@@ -30,7 +35,8 @@ const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 
-export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryProvenance } & (
+export type CreateInternalEntryInput = FilePlacement &
+  AiContentWrite & { provenance: FileEntryProvenance } & (
     | {
         /** Authoritative media type from the picker; extension inference is the fallback. */
         mediaType?: string;
@@ -118,7 +124,10 @@ function resolveMediaType(...candidates: (string | null | undefined)[]): string 
   return FALLBACK_MEDIA_TYPE;
 }
 
-async function writeInternalFile(input: CreateInternalEntryInput): Promise<WrittenInternalFile> {
+async function writeInternalFile(
+  input: CreateInternalEntryInput,
+  signal?: AbortSignal,
+): Promise<WrittenInternalFile> {
   const id = createOrderedUuid();
   let filename: string;
   let mediaType: string;
@@ -150,6 +159,18 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
 
   try {
     await write(destination);
+    signal?.throwIfAborted();
+    if (input.aiOperation || input.aiContentLabel) {
+      await completeFileAiContent(
+        {
+          uri: destination.uri,
+          mediaType,
+          aiContentLabel: input.aiContentLabel,
+          aiOperation: input.aiOperation,
+        },
+        signal,
+      );
+    }
 
     if (!destination.exists) {
       throw new Error(`Internal file does not exist after write: ${destination.uri}`);
@@ -186,7 +207,7 @@ export async function createInternalEntry(
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const written = await writeInternalFile(input);
+  const written = await writeInternalFile(input, signal);
   try {
     signal?.throwIfAborted();
     const entry = await entries.create(
@@ -255,6 +276,7 @@ export async function rewriteInternalTextEntry(
   input: {
     data: string;
     id: FileEntryId;
+    aiOperation?: AiContentWrite['aiOperation'];
     workspaceFolderId?: string | null;
     baseUpdatedAt?: number;
   },
@@ -277,7 +299,30 @@ export async function rewriteInternalTextEntry(
     signal?.throwIfAborted();
     // Availability, synchronous bytes and metadata share the deletion write queue.
     // Once bytes change, complete bookkeeping even if the caller cancels.
-    file.writeSync(input.data);
+    const aiContentLabel = input.aiOperation
+      ? null
+      : await readSourceAiContent({ uri: file.uri, mediaType: entry.mediaType }, signal);
+    const pending = new File(fileDirectory(), createOrderedUuid() + '.draft');
+    try {
+      pending.writeSync(input.data);
+      await completeFileAiContent(
+        {
+          uri: pending.uri,
+          mediaType: entry.mediaType,
+          aiContentLabel,
+          aiOperation: input.aiOperation,
+        },
+        signal,
+      );
+      signal?.throwIfAborted();
+      await pending.copy(file, { overwrite: true });
+    } finally {
+      try {
+        if (pending.exists) pending.delete();
+      } catch (error) {
+        logger.warn('Failed to discard draft preparation file', error as Error, { id: entry.id });
+      }
+    }
     const size = file.size;
     if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);

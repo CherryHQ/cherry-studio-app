@@ -23,6 +23,7 @@ export {
   type OfficeTransformRequest,
 } from './officeEditSpec';
 export { transformOfficeFile } from './transformOfficeFile';
+export { processOfficeMetadata } from './officeMetadata';
 export {
   OFFICE_SCRIPT_MAX_INPUT_BYTES,
   runOfficeScript,

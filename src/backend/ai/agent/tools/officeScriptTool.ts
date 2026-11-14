@@ -147,6 +147,7 @@ Up to ${OFFICE_MAX_IMAGES} inputs, together ${mebibytes(OFFICE_SCRIPT_MAX_INPUT_
             name: parsed.data.filename,
             mediaType: OFFICE_MEDIA_TYPES[format],
             provenance: 'generated',
+            aiOperation: 'generate',
             folderId: access.folderId,
             workspaceFolderId: access.folderId,
           },

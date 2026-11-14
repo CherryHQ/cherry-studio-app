@@ -77,6 +77,7 @@ describe('Office tools', () => {
           name: 'Report.docx',
           mediaType: OFFICE_MEDIA_TYPES.docx,
           provenance: 'generated',
+          aiOperation: 'generate',
           folderId,
           workspaceFolderId: folderId,
         },

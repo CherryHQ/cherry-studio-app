@@ -173,7 +173,6 @@ export function createOfficeEditTools(
               },
               artifacts: [],
             };
-          const sha256 = await files.hash(output!, signal);
           timing.stage('publish_file');
           const entry = await files.createFileEntry(
             {
@@ -181,11 +180,21 @@ export function createOfficeEditTools(
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
+              aiOperation: 'edit',
               folderId: access.folderId,
               workspaceFolderId: access.folderId,
             },
             signal,
           );
+          const publishedUri = files.localUri({
+            fileEntryId: entry.id,
+            name: entry.filename,
+            mediaType: entry.mediaType,
+            size: entry.size,
+            revision: entry.updatedAt,
+          });
+          if (!publishedUri) throw new Error('The edited Office file is unavailable after saving.');
+          const sha256 = await files.hash(publishedUri, signal);
           return {
             value: {
               status: 'created',

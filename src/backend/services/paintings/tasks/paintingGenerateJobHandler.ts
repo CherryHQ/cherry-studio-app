@@ -197,6 +197,7 @@ export function createPaintingGenerateJobHandler(
                   ordinal: index + 1,
                 }),
                 provenance: 'generated',
+                aiOperation: 'generate',
                 source: 'base64',
               }),
             );

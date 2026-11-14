@@ -93,7 +93,14 @@ export async function prepareSharedFile(
     );
     const exported = new File(directory, prepared.filename);
     directory.create({ idempotent: true, intermediates: true });
-    if (!exported.exists) await new File(prepared.uri).copy(exported, { overwrite: true });
+    if (!exported.exists) {
+      try {
+        await new File(prepared.uri).copy(exported, { overwrite: true });
+      } catch (error) {
+        if (exported.exists) exported.delete();
+        throw error;
+      }
+    }
     signal?.throwIfAborted();
     return { uri: exported.uri, filename: prepared.filename, mediaType: prepared.mediaType };
   } finally {

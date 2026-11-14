@@ -800,7 +800,13 @@ describe('createSystemCapabilitySource', () => {
     });
 
     expect(rewriteTextEntry).toHaveBeenCalledWith(
-      { data: 'new', id: draftId, baseUpdatedAt: undefined, workspaceFolderId: null },
+      {
+        aiOperation: 'edit',
+        data: 'new',
+        id: draftId,
+        baseUpdatedAt: undefined,
+        workspaceFolderId: null,
+      },
       expect.any(AbortSignal),
     );
     expect(createTextEntry).not.toHaveBeenCalled();

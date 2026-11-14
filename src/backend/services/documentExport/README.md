@@ -13,6 +13,12 @@ Markdown rendering applies the optional target watermark; reuse requires matchin
 HTML and image rendering share the resolved watermark independently of the image-only frame.
 The `none` variant omits the brand footer. Watermark options do not add file metadata.
 
+Sharing exports are programmatic rendering, not AI file-generation operations. Sessions do not
+infer AI origin from selected assistant messages or images, create AI declarations, or restore
+source declarations on rendered Markdown, HTML, PNG or PPTX outputs. Byte-for-byte original-file
+delivery retains the supplied bytes, including any existing metadata. AI producers label their
+own generated files before publication, independently of this module.
+
 Markdown/HTML artifacts contain one immutable file descriptor and source text. Image artifacts
 contain ordered immutable pages, each with its PNG file and dimensions. The frontend capture
 callback delivers pages sequentially and retains each native file until its backend copy settles.
