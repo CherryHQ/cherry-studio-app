@@ -165,3 +165,23 @@ it('reads earlier citation facts on the selected branch without changing the mes
   );
   expect(result.messageWindow.messages).toBe(windowMessages);
 });
+
+it('keeps readCitations identity stable while live streaming updates arrive', () => {
+  act(() => {
+    renderer = create(<Probe sessionId="session" />);
+  });
+  const firstReadCitations = result.messageWindow.readCitations;
+  mockState = {
+    ...mockState,
+    liveMessages: [
+      {
+        ...message('live', 'streaming'),
+        parts: [{ id: 'live-text', type: 'text', text: 'live delta', state: 'streaming' }],
+      },
+    ],
+  };
+  act(() => {
+    renderer.update(<Probe sessionId="session" />);
+  });
+  expect(result.messageWindow.readCitations).toBe(firstReadCitations);
+});

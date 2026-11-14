@@ -17,7 +17,10 @@ It does not own local execution or observation.
   Each source owns the hook that produces it.
 - `ConversationCatalog`, `ConversationPreview` and the summaries: sidebar and Agent picker rows,
   optional selected-session metadata, lightweight status subscriptions and bound rename/delete.
-- `TranscriptMessage`/`TranscriptSnapshot`: pure export values.
+- `TranscriptMessage`/`TranscriptSnapshot`: pure export values. A desktop selection resolves
+  citations and freezes image bytes as `prepared-file` parts before it returns; no deferred reader,
+  authenticated URL or fabricated local file ID enters document conversion. The desktop revision
+  is rechecked after resource preparation.
 - `ConversationSource`: a catalog owner with availability state. It never opens a transcript.
 
 `ConversationProvider` constructs the local catalog and the retained desktop sources

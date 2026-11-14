@@ -1,9 +1,13 @@
-import { webSearchOutputSchema } from '@cherrystudio/universal/ai/builtinTools';
 import dayjs from 'dayjs';
 
 import type { TranscriptMessage } from '@/frontend/appShell/conversation';
+import {
+  collectCitationSources,
+  conversationCitationSources,
+  resolveMessageCitations,
+} from '@/frontend/utils/messageCitations';
 import { omitGeneratedImageReferencesFromMarkdown } from '@/frontend/utils/omitGeneratedImageReferences';
-import { AgentToolResultSchema, type AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 import {
   DOCUMENT_EXPORT_MAX_SECTIONS,
   DocumentExportError,
@@ -12,10 +16,12 @@ import {
 } from '@/shared/contracts/documentExport';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
+import { toAgentMessageDisplayParts } from '../runtime/agentMessageProjection';
 import type { ChatShareTranslations } from './chatShareTarget';
 
 export type ChatExportOptions = {
@@ -51,10 +57,7 @@ export function toChatExportDocument(
   if (!messages.length || messages.some((message) => !isChatMessageExportable(message)))
     throw new Error('Invalid export selection');
   const assets: Record<string, NonNullable<ExportDocument['assets']>[string]> = {};
-  const sections = messages.map((message) => {
-    const sources = collectSources(message.parts);
-    const blocks: ExportBlock[] = [];
-    const attachments: ExportBlock[] = [];
+  const messageParts = messages.map((message) => {
     const imageIds = new Set(
       message.parts.flatMap((part) =>
         part.type === 'file' && part.mediaType.toLowerCase().startsWith('image/')
@@ -62,21 +65,59 @@ export function toChatExportDocument(
           : [],
       ),
     );
-    const parts = message.parts.map((part) => {
+    return message.parts.map((part) => {
       if (message.role === 'user' || part.type !== 'text') return part;
       const text = omitGeneratedImageReferencesFromMarkdown(part.text, imageIds);
       return text === part.text ? part : { ...part, text };
     });
+  });
+  const presentations = messageParts.map((parts) =>
+    toAgentMessageDisplayParts(
+      parts.filter((part) => part.type !== 'tool-summary' && part.type !== 'prepared-file'),
+    ),
+  );
+  const registry = conversationCitationSources(
+    messages.map((message, index) => ({
+      id: message.id,
+      parts: presentations[index].parts ?? [],
+      sources: message.citationSources ?? [],
+    })),
+  );
+  const sections = messages.map((message, messageIndex) => {
+    const presentation = presentations[messageIndex];
+    const citations = resolveMessageCitations(
+      presentation.parts ?? [],
+      registry.get(message.id),
+      'export',
+    );
+    const allSources = collectCitationSources(presentation.parts ?? [], registry.get(message.id));
+    const sources = new Map(
+      [...allSources].filter(
+        (entry): entry is [string, { id: string; title: string; url: string }] =>
+          Boolean(entry[1].url),
+      ),
+    );
+    const orderedSources = [...sources].sort(
+      ([left], [right]) =>
+        (citations.sourceNumberById.get(left) ?? Infinity) -
+        (citations.sourceNumberById.get(right) ?? Infinity),
+    );
+    const blocks: ExportBlock[] = [];
+    const attachments: ExportBlock[] = [];
+    const parts = messageParts[messageIndex];
     const resultIndex = finalTextIndex(parts);
     parts.forEach((part, index) => {
-      if (part.type === 'file') {
+      if (part.type === 'file' || part.type === 'prepared-file') {
         const name = part.filename || options.labels.file;
         if (part.mediaType.toLowerCase().startsWith('image/')) {
           const assetId = `${message.id}:${part.id}`;
-          assets[assetId] = {
-            kind: 'managed-file',
-            fileEntryId: FileEntryIdSchema.parse(part.fileEntryId),
-          };
+          if (part.type === 'file')
+            assets[assetId] = {
+              kind: 'managed-file',
+              fileEntryId: FileEntryIdSchema.parse(part.fileEntryId),
+            };
+          else if (part.base64 !== undefined)
+            assets[assetId] = { kind: 'prepared-image', base64: part.base64 };
           // Generated pictures belong beside the answer in transcript order.
           blocks.push({ kind: 'image', assetId, alt: name });
         } else attachments.push({ kind: 'attachment', name, mediaType: part.mediaType });
@@ -86,20 +127,43 @@ export function toChatExportDocument(
             ? { kind: 'text', text: part.text }
             : {
                 kind: 'markdown',
-                source: replaceChatCitations(part.text, sources),
+                source:
+                  citations.textByPartIndex.get(presentation.partKeys?.indexOf(part.id) ?? -1)
+                    ?.markdown ?? part.text,
               };
         if (message.role === 'user' || index === resultIndex) blocks.push(block);
       }
     });
     blocks.push(...attachments);
-    if (sources.size)
+    const seenUrls = new Set<string>();
+    const exportNumberById = new Map(citations.sourceNumberById);
+    const numberByUrl = new Map<string, number>();
+    for (const [id, source] of sources) {
+      const assigned = citations.sourceNumberById.get(id);
+      if (assigned !== undefined) numberByUrl.set(source.url, assigned);
+    }
+    let nextSourceNumber = Math.max(0, ...citations.sourceNumberById.values()) + 1;
+    const links = orderedSources.flatMap(([, source]) => {
+      if (seenUrls.has(source.url)) return [];
+      seenUrls.add(source.url);
+      const number = numberByUrl.get(source.url) ?? nextSourceNumber++;
+      numberByUrl.set(source.url, number);
+      return [
+        {
+          label: `${number}. ${source.title}`,
+          url: source.url,
+        },
+      ];
+    });
+    for (const [id, source] of sources) {
+      const number = numberByUrl.get(source.url);
+      if (number !== undefined && !exportNumberById.has(id)) exportNumberById.set(id, number);
+    }
+    if (links.length)
       blocks.push({
         kind: 'links',
-        summary: options.labels.sources(sources.size),
-        items: [...sources.values()].map((source, index) => ({
-          label: `${index + 1}. ${source.title}`,
-          url: source.url,
-        })),
+        summary: options.labels.sources(links.length),
+        items: links,
       });
     for (const attachment of message.attachments ?? [])
       blocks.push({ kind: 'attachment', ...attachment });
@@ -108,11 +172,15 @@ export function toChatExportDocument(
       translation &&
       message.role === 'assistant' &&
       message.status === 'success' &&
-      messageTranslationText(message.parts.filter((part) => part.type !== 'tool-summary'));
+      messageTranslationText(
+        message.parts.filter(
+          (part) => part.type !== 'tool-summary' && part.type !== 'prepared-file',
+        ),
+      );
     if (translation && source && sha256HexOfText(source) === translation.sourceHash)
       blocks.push({
         kind: 'markdown',
-        source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, sources)}`,
+        source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, allSources, exportNumberById, presentation.parts)}`,
       });
     const metadata: { label: string; value: string }[] = [];
     if (message.status !== 'success')
@@ -153,6 +221,7 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
     const part = parts[index];
     if (
       part.type === 'file' ||
+      part.type === 'prepared-file' ||
       part.type === 'data-error' ||
       part.type === 'source-url' ||
       part.type === 'data-search-suggestions' ||
@@ -165,118 +234,23 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
   return undefined;
 }
 
-type CitationSource = { title: string; url: string };
-function collectSources(parts: Readonly<TranscriptMessage['parts']>): Map<string, CitationSource> {
-  const sources = new Map<string, CitationSource>();
-  for (const part of parts) {
-    if (part.type === 'source-url') {
-      try {
-        const url = new URL(part.url);
-        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password)
-          sources.set(part.sourceId, { title: part.title ?? part.url, url: url.href });
-      } catch {
-        /* Invalid remote sources are not exported as links. */
-      }
-      continue;
-    }
-    if (
-      part.type !== 'dynamic-tool' ||
-      part.toolRef.source !== 'builtin' ||
-      !['web_search', 'web_fetch'].includes(part.toolRef.capabilityId)
-    )
-      continue;
-    const output = AgentToolResultSchema.safeParse(part.output);
-    if (!output.success) continue;
-    const value = output.data.value;
-    const details =
-      value && typeof value === 'object' && !Array.isArray(value) ? value.details : undefined;
-    const results =
-      details && typeof details === 'object' && !Array.isArray(details) ? details.results : value;
-    const parsed = webSearchOutputSchema.safeParse(results);
-    if (!parsed.success) continue;
-    for (const item of parsed.data) {
-      try {
-        const url = new URL(item.url);
-        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password)
-          sources.set(String(item.id), { title: item.title, url: url.href });
-      } catch {
-        /* Invalid references remain visible as their original citation markers. */
-      }
-    }
-  }
-  return sources;
-}
-
-/** Preserve code fences (including tilde/long fences), indented code and inline code verbatim. */
+/** Portable links use the same source validation, numbering and code exclusion as the message. */
 export function replaceChatCitations(
   source: string,
-  sources: ReadonlyMap<string, CitationSource>,
+  sources: ReadonlyMap<string, { title: string; url?: string }>,
+  preferredNumbers?: ReadonlyMap<string, number>,
+  parts: readonly CherryMessagePart[] = [],
 ): string {
-  const numbers = new Map([...sources.keys()].map((id, index) => [id, index + 1]));
-  let fence: { character: string; count: number } | undefined;
-  let offset = 0;
-  let inlineEnd = -1;
-  return source
-    .split(/(?<=\n)/)
-    .map((line) => {
-      const start = offset;
-      offset += line.length;
-      if (inlineEnd <= start) {
-        const content = line
-          .replace(/^( {0,3}>[ \t]?)+/, '')
-          .replace(/^ {0,3}(?:[-+*]|\d+[.)])[ \t]+/, '');
-        const delimiter = /^ {0,3}(`{3,}|~{3,})/.exec(content);
-        if (fence) {
-          if (
-            delimiter &&
-            delimiter[1][0] === fence.character &&
-            delimiter[1].length >= fence.count &&
-            content.slice(delimiter[0].length).trim() === ''
-          )
-            fence = undefined;
-          return line;
-        }
-        if (delimiter) {
-          fence = { character: delimiter[1][0], count: delimiter[1].length };
-          return line;
-        }
-        if (/^( {4}|\t)/.test(content)) return line;
-      }
-      let position = Math.max(0, Math.min(line.length, inlineEnd - start));
-      let result = line.slice(0, position);
-      while (position < line.length) {
-        if (line.charCodeAt(position) === 92) {
-          result += line.slice(position, position + 2);
-          position += 2;
-          continue;
-        }
-        if (line[position] === '`') {
-          const run = /^`+/.exec(line.slice(position))![0];
-          const delimiters = /`+/g;
-          delimiters.lastIndex = start + position + run.length;
-          let closing: RegExpExecArray | null;
-          while ((closing = delimiters.exec(source)) && closing[0].length !== run.length) {
-            /* Only an equally long delimiter closes inline code. */
-          }
-          if (closing) {
-            inlineEnd = closing.index + run.length;
-            const end = Math.min(line.length, inlineEnd - start);
-            result += line.slice(position, end);
-            position = end;
-            continue;
-          }
-          result += run;
-          position += run.length;
-          continue;
-        }
-        const marker = /^\[cite:([\w-]+)\]/.exec(line.slice(position));
-        const item = marker ? sources.get(marker[1]) : undefined;
-        if (marker && item) {
-          result += `[${numbers.get(marker[1])}](<${item.url}>)`;
-          position += marker[0].length;
-        } else result += line[position++];
-      }
-      return result;
-    })
-    .join('');
+  const translationParts: CherryMessagePart[] = [
+    ...parts.filter((part) => part.type !== 'text'),
+    { type: 'text', text: source },
+  ];
+  return (
+    resolveMessageCitations(
+      translationParts,
+      [...sources].map(([id, item]) => ({ ...item, id })),
+      'export',
+      preferredNumbers,
+    ).textByPartIndex.get(translationParts.length - 1)?.markdown ?? source
+  );
 }

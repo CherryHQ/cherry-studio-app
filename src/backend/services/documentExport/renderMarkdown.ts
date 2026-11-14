@@ -21,7 +21,7 @@ export async function renderMarkdownWithImages(
     for (const block of blocks) {
       if (block.kind === 'image') {
         const source = document.assets?.[block.assetId];
-        if (source?.kind === 'managed-file') sources.set(`asset:${block.assetId}`, source);
+        if (source && source.kind !== 'remote-image') sources.set(`asset:${block.assetId}`, source);
       } else if (block.kind === 'details') visit(block.blocks);
     }
   };
