@@ -1258,6 +1258,7 @@
   "onboarding.provider.title": "Επιλέξτε πάροχο",
   "onboarding.retryHint": "Η αποθηκευμένη σύνδεσή σας είναι ακόμα εδώ. Δοκιμάστε ξανά.",
   "onboarding.saveFailed": "Δεν ήταν δυνατή η ολοκλήρωση της ρύθμισης",
+  "onboarding.skip": "Παράλειψη προς το παρόν",
   "onboarding.source.desktopDescription": "Συγχρόνισε παρόχους και μοντέλα που έχουν ρυθμιστεί στον υπολογιστή σου.",
   "onboarding.source.providerDescription": "Σύνδεσε μια υπηρεσία AI με το κλειδί API σου.",
   "onboarding.source.title": "Σύνδεσε το Cherry με AI",

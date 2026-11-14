@@ -52,8 +52,10 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
     )
       void continueRestored();
   }, [destination, progress.isSaving, progress.saveFailed]);
-  if (destination === 'subscription') return <Redirect href="/onboarding/subscription" />;
-  if (destination === 'model') return <Redirect href="/onboarding/model" />;
+  if (!progress.isSaving) {
+    if (destination === 'subscription') return <Redirect href="/onboarding/subscription" />;
+    if (destination === 'model') return <Redirect href="/onboarding/model" />;
+  }
   const waiting =
     destination === 'loading' || destination === 'completed' || destination === 'permissions';
   const failed = destination === 'retry' || progress.saveFailed;
@@ -62,20 +64,33 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
     <OnboardingPage
       description={t('onboarding.welcome.description')}
       footer={
-        failed ? (
-          <OnboardingButton
-            onPress={() => {
-              if (waiting) {
-                void finish();
-                return;
-              }
-              void models.refetch();
-              void cloud.refresh().catch(() => {});
-            }}
-          >
-            {t('common.retry')}
-          </OnboardingButton>
-        ) : undefined
+        <>
+          {failed ? (
+            <OnboardingButton
+              disabled={progress.isSaving}
+              onPress={() => {
+                if (waiting) {
+                  void finish();
+                  return;
+                }
+                void models.refetch();
+                void cloud.refresh().catch(() => {});
+              }}
+            >
+              {t('common.retry')}
+            </OnboardingButton>
+          ) : null}
+          {destination !== 'permissions' && destination !== 'completed' ? (
+            <OnboardingButton
+              loading={progress.isSaving}
+              onPress={() => void progress.skip()}
+              testID="onboarding-model-source-skip"
+              variant="text"
+            >
+              {t('onboarding.skip')}
+            </OnboardingButton>
+          ) : null}
+        </>
       }
       testID="onboarding-model-source"
       title={t('onboarding.source.title')}
@@ -88,12 +103,14 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
         <View className="gap-4">
           <OnboardingOption
             description={t('onboarding.source.providerDescription')}
+            disabled={progress.isSaving}
             onPress={() => router.replace('/onboarding/provider')}
             testID="onboarding-connect"
             title={t('onboarding.welcome.connect')}
           />
           <OnboardingOption
             description={t('onboarding.source.desktopDescription')}
+            disabled={progress.isSaving}
             onPress={() => router.replace('/onboarding/device-connections')}
             testID="onboarding-desktop-sync"
             title={t('onboarding.welcome.desktopSync')}

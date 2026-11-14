@@ -1,5 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ const PREFERENCES = {
 export function useOnboardingProgress() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const router = useRouter();
   const [{ status }, save] = useMultiplePreferences(PREFERENCES);
   const [isSaving, setIsSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -50,7 +51,10 @@ export function useOnboardingProgress() {
       setIsSaving(false);
     }
   };
-  return { advance, isSaving, saveFailed, status };
+  const skip = async () => {
+    if (await advance('skipped')) router.replace('/');
+  };
+  return { advance, skip, isSaving, saveFailed, status };
 }
 
 export type OnboardingProgress = ReturnType<typeof useOnboardingProgress>;

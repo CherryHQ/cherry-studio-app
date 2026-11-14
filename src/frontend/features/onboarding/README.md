@@ -48,7 +48,10 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   Saved model rows supply their identities, while the current account catalog and entitlements decide
   which account models can be offered. Selection is confirmed by the user, never automatically saved.
   A loading or failed lookup never means no subscription.
-  Organization profiles use their managed models; other accounts and skipped sign-ins configure a model.
+  Organization profiles use their managed models; other accounts and skipped sign-ins can configure
+  a model or skip setup from the source/provider selection pages. Skipping commits the existing
+  `skipped` status before opening the main app, so an unconfigured model does not restart onboarding.
+  Provider and model configuration remains available in settings.
 - Provider routes compose the original `ProviderCatalogContent` and `ProviderConfiguration` with
   the first-use header, step progress and continuation. Provider fields, account actions, connection
   checks, catalog grouping and import behavior have one implementation in settings/provider.

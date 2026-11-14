@@ -1258,6 +1258,7 @@
   "onboarding.provider.title": "Bir sağlayıcı seçin",
   "onboarding.retryHint": "Kayıtlı bağlantınız hâlâ burada. Lütfen tekrar deneyin.",
   "onboarding.saveFailed": "Kurulum tamamlanamadı",
+  "onboarding.skip": "Şimdilik atla",
   "onboarding.source.desktopDescription": "Bilgisayarınızda ayarlanmış sağlayıcıları ve modelleri eşitleyin.",
   "onboarding.source.providerDescription": "API anahtarınızla bir AI hizmetine bağlanın.",
   "onboarding.source.title": "Cherry uygulamasını AI’a bağlayın",
