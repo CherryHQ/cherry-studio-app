@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.source = { git: '' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'Foundation', 'SwiftUI', 'UIKit', 'ActivityKit'
+  s.frameworks = 'Foundation', 'SwiftUI', 'UIKit', 'ActivityKit', 'AVFoundation', 'BackgroundTasks'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  s.source_files = 'Core/**/*.swift', 'SystemIntegrationModule.swift', 'BackgroundExecution.swift'
+  s.source_files = 'Core/**/*.swift', 'SystemIntegrationModule.swift', 'BackgroundExecution.swift', 'BackgroundAudio.swift', 'ContinuedProcessing.swift'
 end

@@ -14,6 +14,7 @@
 import type { LoggerService } from '@logger';
 
 import type { ResourceScope } from '@/backend/core/resources/types';
+import type { KeepAliveTask } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { JobError, JobSnapshot, JobStatus, RetryPolicy } from '@/shared/data/api/schemas/jobs';
 
 import type { JobPayloadOf, JobType } from './jobRegistry';
@@ -57,7 +58,7 @@ export interface JobContext<TPayload = unknown> {
    * surviving a restart (provider task IDs, cursors — the checkpoint channel).
    */
   patchMetadata(patch: Record<string, unknown>): Promise<void>;
-  /** Progress 0-100. No-op until a progress consumer exists. */
+  /** Actual progress 0-100, also forwarded to an admitted continued-processing task. */
   reportProgress(progress: number, detail?: unknown): void;
   /** Pre-bound to `{ jobId, type }`. */
   logger: LoggerService;
@@ -79,6 +80,8 @@ export interface JobSettledEvent<TPayload = unknown> {
 export interface JobHandler<TPayload = unknown> {
   /** Mobile-only: which execution window may run this job. */
   executionClass: JobExecutionClass;
+  /** Explicit user work only; used for new immediate enqueues, never recovery or retries. */
+  continuedProcessing?(input: TPayload): Pick<KeepAliveTask, 'title' | 'subtitle'>;
   recovery: RecoveryStrategy;
   /** Defaults to the job type string. */
   defaultQueue?: (input: TPayload) => string;

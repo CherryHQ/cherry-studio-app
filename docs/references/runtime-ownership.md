@@ -43,9 +43,11 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
-- Every admitted unfinished conversation holds execution demand in foreground and background,
-  including questions, approvals, persistence, and final delivery. Stored history does not.
-  Platform protection remains subject to OS limits and process death.
+- Local execution owns one stable Session lease from user submission through persistence and
+  final delivery. Awaiting input retains the decision and the same lease. iOS and Android retain
+  shared protection while work remains unfinished, including questions and approvals; the last
+  release stops protection immediately without an inactivity countdown. Stored history does not
+  acquire a lease. Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
   `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
@@ -270,7 +272,14 @@ user-owned verification policy.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, shared first downloads and request cancellation; the host stops it.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
-- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
+- `IosBackgroundExecutionSource` prefers task-scoped native continued processing for explicit
+  foreground user work, retains a finite UIKit window, and uses consented audio only as fallback.
+  `DurableAgentHost` owns stable Session leases; reply presentation never transfers them. Questions
+  and approvals retain protection on the same lease. The final release stops finite/audio protection
+  immediately. Official requests follow the owning work through final settlement.
+  New local painting enqueues carry process-local intent and real handler progress. Native continued-task
+  revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+  uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.

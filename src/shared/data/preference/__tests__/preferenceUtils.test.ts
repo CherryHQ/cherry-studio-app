@@ -41,6 +41,11 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });
 
+test('background audio needs a new device-local decision rather than prior guidance or backup consent', () => {
+  expect(getDefaultValue('app.background_audio.consent')).toBeNull();
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.background_audio.consent');
+});
+
 test('screen awake is a known, device-local opt-in with a valid key shape', () => {
   const key = 'app.keep_screen_on.enabled';
   expect(isPreferenceKey(key)).toBe(true);

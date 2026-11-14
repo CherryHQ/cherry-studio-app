@@ -285,7 +285,7 @@ function backgroundFixture() {
   const background: RemoteBackgroundExecution = {
     replies: {
       startTurn,
-      acquirePreparation: jest.fn(),
+      prepareSession: jest.fn(),
       clearSession: jest.fn(),
       updateSessionTitle: jest.fn(),
     },
