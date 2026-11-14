@@ -36,6 +36,11 @@ delivery, attachment limits, expiry cleanup, App Group provisioning, Agent switc
 draft, and sending. Run the focused system-entry and native-envelope suites when verification is
 authorized.
 
+Continued-processing acceptance must cover system cancellation after finite UIKit time is exhausted:
+confirm business cancellation is persisted before native completion, stalled acknowledgement ends
+the native task at its cleanup deadline, late progress/success cannot revive it, and disposal cancels
+the pending cleanup timer. These native scenarios require authorized device verification.
+
 ## iOS execution protection
 
 `beginBackgroundExecution` and `endBackgroundExecution` own one finite UIKit background assertion.
@@ -54,6 +59,11 @@ localized titles and real progress. The same execution lease and native request 
 questions and approvals; responding does not release or reacquire protection. Completion, cancellation,
 and module disposal release requests. The system can revoke a native task before the lease releases.
 Expiration includes system-UI cancellation and must stop the owning task, even in foreground.
+Revocation first emits `expired` and retains the native task for cancellation cleanup. The owner's
+lease release acknowledges business settlement through the existing `endContinuedProcessingTask`;
+native completion waits for that acknowledgement or a two-second cleanup deadline. Revoked tasks
+ignore progress and complete unsuccessfully even if a late acknowledgement reports success.
+Acknowledgement and module disposal cancel the deadline; stale timers cannot finish replacement owners.
 
 Only when continued processing is unavailable, explicit device-local consent permits a silent `AVAudioEngine` loop through
 `beginBackgroundAudioExecution` / `endBackgroundAudioExecution`. The iOS app declares the audio

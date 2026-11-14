@@ -18,6 +18,7 @@ final class ContinuedProcessing {
     let onChange: (String, String) -> Void
     var task: BGContinuedProcessingTask?
     var admissionTimeout: DispatchWorkItem?
+    var cancellationTimeout: DispatchWorkItem?
 
     init(identifier: String, progress: ContinuedProcessingProgress, onChange: @escaping (String, String) -> Void) {
       self.identifier = identifier
@@ -47,10 +48,8 @@ final class ContinuedProcessing {
       entry.task = continuedTask
       continuedTask.expirationHandler = { [weak self, weak entry] in
         DispatchQueue.main.async {
-          guard let self, let entry, self.entries[id] === entry else { return }
-          self.end(id: id, success: false)
-          // Expiration also represents user cancellation. Never fall back to audio for this task.
-          entry.onChange(id, "expired")
+          guard let self, let entry else { return }
+          self.expire(id: id, entry: entry)
         }
       }
       self.update(id: id, progress: entry.progress)
@@ -78,10 +77,13 @@ final class ContinuedProcessing {
             return
           }
           guard let error else { return }
-          let state = entry.task == nil ? "unavailable" : "expired"
           NSLog("Cherry continued processing submission failed: %@", String(describing: error))
-          self.end(id: id, success: false)
-          entry.onChange(id, state)
+          if entry.task == nil {
+            self.end(id: id, success: false)
+            entry.onChange(id, "unavailable")
+          } else {
+            self.expire(id: id, entry: entry)
+          }
         }
       }
       if #available(iOS 27.0, *) {
@@ -98,8 +100,22 @@ final class ContinuedProcessing {
     return true
   }
 
+  private func expire(id: String, entry: Entry) {
+    guard entries[id] === entry, entry.cancellationTimeout == nil else { return }
+    // Keep execution until the owner's cancellation/persistence releases its lease.
+    // Bound a stalled JS acknowledgement so an expired task cannot remain unfinished.
+    let timeout = DispatchWorkItem { [weak self, weak entry] in
+      guard let self, let entry, self.entries[id] === entry else { return }
+      self.end(id: id, success: false)
+    }
+    entry.cancellationTimeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: timeout)
+    // Expiration also represents user cancellation. Never fall back to audio for this task.
+    entry.onChange(id, "expired")
+  }
+
   func update(id: String, progress: ContinuedProcessingProgress) {
-    guard let entry = entries[id] else { return }
+    guard let entry = entries[id], entry.cancellationTimeout == nil else { return }
     entry.progress = progress
     guard let task = entry.task else { return }
     // Native callers cannot turn malformed or out-of-range progress into an Int64 trap.
@@ -112,10 +128,12 @@ final class ContinuedProcessing {
 
   func end(id: String, success: Bool) {
     guard let entry = entries.removeValue(forKey: id) else { return }
+    let completed = success && entry.cancellationTimeout == nil
     entry.admissionTimeout?.cancel()
+    entry.cancellationTimeout?.cancel()
     entry.task?.expirationHandler = nil
-    if success, let task = entry.task { task.progress.completedUnitCount = task.progress.totalUnitCount }
-    entry.task?.setTaskCompleted(success: success)
+    if completed, let task = entry.task { task.progress.completedUnitCount = task.progress.totalUnitCount }
+    entry.task?.setTaskCompleted(success: completed)
     BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: entry.identifier)
   }
 
