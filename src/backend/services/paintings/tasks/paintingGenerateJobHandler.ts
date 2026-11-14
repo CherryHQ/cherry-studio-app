@@ -10,6 +10,7 @@ import type {
 import { JobExecutionError } from '@/backend/services/jobs/JobExecutionError';
 import type { JobHandlerFor } from '@/backend/services/jobs/types';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
+import type { ScreenAwakeLease, ScreenAwakePort } from '@/backend/services/screenAwake';
 import type {
   PaintingActivityPhase,
   PaintingActivityProps,
@@ -91,6 +92,7 @@ export type PaintingGenerateJobDependencies = {
     ): Promise<Painting>;
   };
   storage: PaintingFileStorage;
+  screenAwake?: ScreenAwakePort;
   translate?: (key: string) => string;
 };
 
@@ -112,6 +114,12 @@ export function createPaintingGenerateJobHandler(
     // The class states the product promise ("keeps generating while you do
     // something else"); the dispatch loop honors it with a keep-alive lease.
     executionClass: 'user-continued',
+    continuedProcessing: (input) => ({
+      title: input.modelName,
+      subtitle: (dependencies.translate ?? ((key: string) => key))(
+        'painting.backgroundActivity.generating',
+      ),
+    }),
     recovery: 'abandon',
     // Deleting the receipt this job writes through must cancel it first. The
     // input already carries the id, so no `paintingId -> jobId` index is needed:
@@ -125,6 +133,12 @@ export function createPaintingGenerateJobHandler(
       const { ai, paintings, storage } = dependencies;
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
+      let screenAwakeLease: ScreenAwakeLease | undefined;
+      const release = () => {
+        const lease = screenAwakeLease;
+        screenAwakeLease = undefined;
+        lease?.release();
+      };
       const session = dependencies.activities?.startSession({
         deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'painting', paintingId }),
         // The dispatch loop already holds the user-continued keep-alive lease.
@@ -136,6 +150,9 @@ export function createPaintingGenerateJobHandler(
       try {
         // The in-memory fence does not survive restart. Recheck ownership before file/provider I/O.
         throwIfAborted(ctx.signal);
+        screenAwakeLease = dependencies.screenAwake?.acquire('painting.generate');
+        ctx.signal.addEventListener('abort', release, { once: true });
+        if (ctx.signal.aborted) release();
         const receipt = await paintings.getById(paintingId);
         if (receipt.boardId !== ctx.input.boardId) throw new Error('Painting board is unavailable');
         throwIfAborted(ctx.signal);
@@ -149,6 +166,7 @@ export function createPaintingGenerateJobHandler(
           }),
         );
         throwIfAborted(ctx.signal);
+        ctx.reportProgress(25);
         const result = await ai.generateImage({
           inputImages,
           mode,
@@ -162,6 +180,7 @@ export function createPaintingGenerateJobHandler(
         if (result.images.length === 0) {
           throw new Error('Image provider returned no image');
         }
+        ctx.reportProgress(50);
 
         const createdOutputs: FileEntry[] = [];
         let outputRefsCommitted = false;
@@ -183,6 +202,7 @@ export function createPaintingGenerateJobHandler(
             );
           }
           throwIfAborted(ctx.signal);
+          ctx.reportProgress(75);
           const painting = await paintings.replaceOutputs(
             paintingId,
             createdOutputs.map((entry) => entry.id),
@@ -190,6 +210,7 @@ export function createPaintingGenerateJobHandler(
           );
           outputRefsCommitted = true;
           throwIfAborted(ctx.signal);
+          ctx.reportProgress(100);
           const persistedOutputIds = new Set(painting.files.output);
           const outputs = createdOutputs.map((entry) => {
             if (!persistedOutputIds.has(entry.id)) {
@@ -208,6 +229,7 @@ export function createPaintingGenerateJobHandler(
             };
           });
 
+          release();
           await session?.finish(
             paintingActivityProps(translate, 'completed', modelName, prompt, startedAtEpochMs),
           );
@@ -225,6 +247,7 @@ export function createPaintingGenerateJobHandler(
           throw error;
         }
       } catch (error) {
+        release();
         const phase: PaintingActivityPhase =
           ctx.signal.aborted && !(ctx.signal.reason instanceof KeepAliveInterruptionError)
             ? 'cancelled'
@@ -241,6 +264,9 @@ export function createPaintingGenerateJobHandler(
           });
         }
         throw error;
+      } finally {
+        ctx.signal.removeEventListener('abort', release);
+        release();
       }
     },
   };

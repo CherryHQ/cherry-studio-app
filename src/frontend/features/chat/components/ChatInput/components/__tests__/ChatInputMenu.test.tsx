@@ -46,6 +46,10 @@ jest.mock('../ChatInputSkillSheet', () => ({
   ChatInputSkillSheet: (props: object) =>
     jest.requireActual('react').createElement('SkillSheet', props),
 }));
+jest.mock('../ChatInputSsh', () => ({
+  ChatInputSshSheet: (props: object) =>
+    jest.requireActual('react').createElement('SshSheet', props),
+}));
 jest.mock('../FilePickerBottomSheet', () => ({ FilePickerBottomSheet: () => null }));
 jest.mock('../../../FileWorkspaceSheet', () => ({
   FileWorkspaceSheet: (props: object) =>
@@ -100,6 +104,57 @@ test('keeps workspace selection available in the image-only tools menu', async (
   act(() => workspace.onClose());
   expect(menu().open).toBe(true);
   expect(renderer.root.findAllByType('WorkspaceSheet' as never)).toHaveLength(0);
+});
+
+test('closes an active tool panel when disabled and keeps it closed when enabled again', async () => {
+  await mount();
+  await act(async () => trigger().onPress());
+  act(() => renderer.root.findByProps({ testID: 'chat-composer-skills' }).props.onPress());
+  expect(renderer.root.findByType('SkillSheet' as never).props.open).toBe(true);
+  for (const enabled of [false, true]) {
+    act(() =>
+      renderer.update(
+        <ChatInputMenu
+          agentId="agent-b"
+          enabled={enabled}
+          media="all"
+          prompts={[]}
+          skillAgentId="agent-b"
+        />,
+      ),
+    );
+    expect(menu().open).toBe(false);
+    expect(renderer.root.findAllByType('SkillSheet' as never)).toHaveLength(0);
+  }
+});
+
+test('opens SSH as a child sheet and finishes selection after both sheets close', async () => {
+  const prepareSsh = jest.fn();
+  await act(async () => {
+    renderer = create(
+      <ChatInputMenu
+        enabled
+        media="all"
+        onPickSsh={prepareSsh}
+        prompts={[]}
+        sshContextId="draft:ssh-draft"
+      />,
+    );
+  });
+  await act(async () => trigger().onPress());
+  act(() => renderer.root.findByProps({ testID: 'chat-composer-ssh' }).props.onPress());
+  expect(prepareSsh).toHaveBeenCalledTimes(1);
+  const ssh = () => renderer.root.findByType('SshSheet' as never).props;
+  expect(ssh().contextId).toBe('draft:ssh-draft');
+  expect(ssh().open).toBe(true);
+  expect(menu().active).toBe(false);
+  act(() => ssh().onSelect());
+  expect(menu().open).toBe(false);
+  expect(ssh().open).toBe(false);
+  act(() => menu().onClosed());
+  expect(mockFocus).not.toHaveBeenCalled();
+  act(() => ssh().onClosed());
+  expect(mockFocus).toHaveBeenCalledTimes(1);
 });
 
 test('does not reverse a pending close or replay its media action on a later close', async () => {

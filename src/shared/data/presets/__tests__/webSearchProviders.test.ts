@@ -42,6 +42,28 @@ test('keeps Exa MCP available for both keyword search and page reading', () => {
   }
 });
 
+test.each(['stepfun', 'serpkite'] as const)(
+  'offers %s for keyword search and preserves its saved credentials',
+  (id) => {
+    expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id })]),
+    );
+    expect(getWebSearchProviderPresetsByCapability('fetchUrls')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id })]),
+    );
+    const saved = {
+      jina: { apiKeys: ['existing-key'] },
+      [id]: {
+        apiKeys: ['service-key'],
+        capabilities: { searchKeywords: { apiHost: 'https://search.example.com' } },
+      },
+    };
+    expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(saved)))).toEqual(
+      saved,
+    );
+  },
+);
+
 test('offers Yuanbao for keyword search and persists its service credentials', () => {
   expect(getWebSearchProviderPresetsByCapability('searchKeywords')).toContainEqual({
     id: 'yuanbao',

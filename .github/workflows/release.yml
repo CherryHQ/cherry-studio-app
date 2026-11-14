@@ -53,11 +53,11 @@ jobs:
     secrets:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-  domestic-stores:
-    needs: ci
-    if: ${{ !contains(github.ref_name, '-') }}
-    uses: ./.github/workflows/android-release.yml
-    with:
-      domestic: true
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  # domestic-stores:
+  #   needs: ci
+  #   if: ${{ !contains(github.ref_name, '-') }}
+  #   uses: ./.github/workflows/android-release.yml
+  #   with:
+  #     domestic: true
+  #   secrets:
+  #     EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

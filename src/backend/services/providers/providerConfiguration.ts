@@ -10,12 +10,16 @@ import { getPiOAuthProviderId } from '@/shared/data/providerOAuth';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import { VertexAuthFieldsSchema } from '@/shared/utils/vertexAuth';
 
-/** Validate stored connection facts without probing the network or rejecting configured cloud auth. */
+/**
+ * Validate stored facts without probing the network or rejecting configured cloud auth.
+ * A model-scoped caller supplies its resolved connection; setup callers retain default-endpoint checks.
+ */
 export function getProviderConfigurationIssue(
   provider: Provider,
   keys: readonly ApiKeyEntry[],
   auth?: AuthConfig | null,
   oauthSignedIn = false,
+  connection?: { baseUrl: string },
 ): ProviderConfigurationIssue | null {
   if (provider.id === CLOUD_PROVIDER_ID) return null;
   const supportsOAuth = Boolean(getPiOAuthProviderId(provider));
@@ -51,8 +55,13 @@ export function getProviderConfigurationIssue(
       if (!fields.success) return 'invalid-service-account';
       const { project, location } = fields.data;
       try {
-        for (const endpoint of Object.values(provider.endpointConfigs ?? {})) {
-          resolveVertexUrls(endpoint?.baseUrl ?? '', project, location);
+        const baseUrls = connection
+          ? [connection.baseUrl]
+          : Object.values(provider.endpointConfigs ?? {}).map(
+              (endpoint) => endpoint?.baseUrl ?? '',
+            );
+        for (const baseUrl of baseUrls) {
+          resolveVertexUrls(baseUrl, project, location);
         }
         resolveVertexUrls('', project, location);
         return null;
@@ -81,6 +90,10 @@ export function getProviderConfigurationIssue(
     (Object.keys(provider.endpointConfigs ?? {})[0] as
       | keyof NonNullable<Provider['endpointConfigs']>
       | undefined);
-  const baseUrl = endpoint ? provider.endpointConfigs?.[endpoint]?.baseUrl?.trim() : undefined;
+  const baseUrl = connection
+    ? connection.baseUrl.trim()
+    : endpoint
+      ? provider.endpointConfigs?.[endpoint]?.baseUrl?.trim()
+      : undefined;
   return !baseUrl || getProviderBaseUrlIssue(baseUrl) ? 'invalid-endpoint' : null;
 }

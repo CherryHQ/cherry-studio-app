@@ -179,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
         part.selectionReferences?.length ||
+        part.sshReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction ||
         part.quotes
@@ -190,6 +191,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
                 ...(part.selectionReferences ?? []),
+                ...(part.sshReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',
@@ -389,6 +391,10 @@ export function toAgentMessageListItem(
           },
         }
       : {}),
+    // Editing a sent question adds a sibling question; the row offers those versions.
+    ...(message.siblings && message.role === 'user'
+      ? { questionBranch: { siblings: message.siblings.map((sibling) => sibling.id) } }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
@@ -440,20 +446,20 @@ export function mergeAgentMessageViews(
   live: readonly AgentMessageView[],
 ): readonly AgentMessageView[] {
   if (live.length === 0) {
-    return persisted;
+    return orderMessageParents(persisted);
   }
   if (persisted.length === 0) {
-    return live;
+    return orderMessageParents(live);
   }
 
   const liveById = new Map(live.map((message) => [message.id, message]));
   const persistedIds = new Set(persisted.map((message) => message.id));
   const compareMessages = (left: AgentMessageView, right: AgentMessageView) =>
     Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
-    // Match the store's binary (createdAt, id) order, not locale collation.
+    // Use reservation order only to place detached live rows around a bounded history window.
     (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  // filter() already returns a fresh array, so sorting it in place is safe.
-  const newLive = live.filter((message) => !persistedIds.has(message.id)).sort(compareMessages);
+  // Arrival order also orders accepted steer questions whose intervening assistant has no output yet.
+  const newLive = live.filter((message) => !persistedIds.has(message.id));
   const merged: AgentMessageView[] = [];
   let liveIndex = 0;
 
@@ -474,7 +480,22 @@ export function mergeAgentMessageViews(
     );
   }
   merged.push(...newLive.slice(liveIndex));
-  return merged;
+  return orderMessageParents(merged);
+}
+
+function orderMessageParents(messages: readonly AgentMessageView[]): readonly AgentMessageView[] {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const visited = new Set<string>();
+  const ordered: AgentMessageView[] = [];
+  function visit(message: AgentMessageView) {
+    if (visited.has(message.id)) return;
+    visited.add(message.id);
+    const parent = message.parentId ? byId.get(message.parentId) : undefined;
+    if (parent) visit(parent);
+    ordered.push(message);
+  }
+  for (const message of messages) visit(message);
+  return ordered.every((message, index) => message === messages[index]) ? messages : ordered;
 }
 
 export function toAgentMessageListItems(

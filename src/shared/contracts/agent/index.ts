@@ -20,6 +20,8 @@
  */
 
 export {
+  AgentContextUsageSchema,
+  type AgentContextUsage,
   AgentMessageDeltaSchema,
   AgentEventSchema,
   AgentSessionSnapshotSchema,
@@ -37,6 +39,7 @@ export {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
+  AgentEditUserMessageInputSchema,
   AgentEditMessageInputSchema,
   AgentForkSessionInputSchema,
   AgentRetryMessageInputSchema,
@@ -49,6 +52,7 @@ export {
   MAX_PARALLEL_ANSWERS,
   type AgentAdditionalReply,
   type AgentDeleteTurnInput,
+  type AgentEditUserMessageInput,
   type AgentEditMessageInput,
   type AgentReplyPartEdit,
   type AgentReadReasoningInput,

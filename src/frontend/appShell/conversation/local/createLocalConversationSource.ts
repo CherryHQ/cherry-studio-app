@@ -71,7 +71,11 @@ export function createLocalConversationSource(input: {
     hasChildren: session.hasChildren,
   });
   const readSessions = async (
-    { agent, parent }: { agent?: AgentRef; parent?: ConversationRef },
+    {
+      agent,
+      parent,
+      includeBranches = false,
+    }: { agent?: AgentRef; parent?: ConversationRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ) => {
@@ -80,10 +84,16 @@ export function createLocalConversationSource(input: {
     if (parent && parent.source.kind !== 'local')
       throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
     const agentId = agent ? refs.resolve(agent, 'agent').id : undefined;
-    const key = parent ? `children:${parent.sessionId}` : `sessions:${agentId ?? ''}`;
+    const key = parent
+      ? `children:${parent.sessionId}`
+      : `sessions:${agentId ?? ''}:${includeBranches ? 'all' : 'roots'}`;
     const query: ListAgentSessionsQueryParams = {
       agentId,
-      ...(parent ? { parentSessionId: parent.sessionId } : { groupBy: 'root' }),
+      ...(parent
+        ? { parentSessionId: parent.sessionId }
+        : includeBranches
+          ? {}
+          : { groupBy: 'root' }),
       cursor: cursor ? refs.resolve(cursor, key).id : undefined,
     };
     const result = await input.api.get('/agent-sessions', { query, signal });

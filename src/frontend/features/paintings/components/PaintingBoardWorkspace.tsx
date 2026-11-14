@@ -465,7 +465,9 @@ function PaintingBoardContent({
             key={focusedNode.id}
             message={focusedNode.status.job?.error?.message}
             onRetry={canRetry ? retryFocused : undefined}
-            onReport={() => void openFeedback(paintingFeedbackContext(focusedNode))}
+            onReport={(destination) =>
+              void openFeedback(paintingFeedbackContext(focusedNode), { destination })
+            }
             prompt={focusedPainting?.brief ?? focusedPainting?.prompt}
             status={focusedNode.status.reason}
             width={loaderWidth}

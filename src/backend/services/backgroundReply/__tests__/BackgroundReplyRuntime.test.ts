@@ -2,6 +2,10 @@ import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 
@@ -44,8 +48,10 @@ describe('BackgroundReplyRuntime', () => {
   };
   const mockStartSession = jest.fn(createMockSession);
   const mockDismissTask = jest.fn();
-  const preparationRelease = jest.fn();
-  const acquire = jest.fn(() => ({ release: preparationRelease }));
+  const deliveryRelease = jest.fn();
+  const acquire = jest.fn<KeepAliveLease, Parameters<KeepAliveSource['acquire']>>(() => ({
+    release: deliveryRelease,
+  }));
 
   beforeEach(() => {
     mockSessions.length = 0;
@@ -57,20 +63,19 @@ describe('BackgroundReplyRuntime', () => {
     jest.restoreAllMocks();
   });
 
-  test('preparation acquires protection before turn admission', async () => {
+  test('preparation opens presentation without acquiring execution protection', async () => {
     const runtime = await createRuntime();
-    const interrupt = jest.fn();
-    const lease = runtime.acquirePreparation('session-1', interrupt);
-    expect(acquire).toHaveBeenCalledWith('chat.preparation', interrupt);
-    expect(mockStartSession).toHaveBeenCalledTimes(1);
-    lease.release();
-    expect(preparationRelease).toHaveBeenCalledTimes(1);
+    const cancel = runtime.prepareSession('session-1');
+    expect(mockSessions[0]?.input.keepAlive).toBe(false);
+    expect(acquire).not.toHaveBeenCalled();
+    cancel();
+    expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
 
   test('preparation opens the surface the turn then inherits', async () => {
     const runtime = await createRuntime();
-    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    const cancelPreparation = runtime.prepareSession('session-1');
 
     // The window to create a surface can close before the turn exists.
     expect(mockStartSession).toHaveBeenCalledTimes(1);
@@ -84,13 +89,13 @@ describe('BackgroundReplyRuntime', () => {
       sessionId: 'session-1',
       sessionTitle: 'First session',
     });
-    lease.release();
+    cancelPreparation();
 
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     expect(session!.cancel).not.toHaveBeenCalled();
     expect(session!.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ attribution: 'Alpha', title: 'First session' }),
-      expect.objectContaining({ keepAlive: true }),
+      expect.objectContaining({ keepAlive: false }),
     );
 
     turn.finish('completed');
@@ -101,15 +106,15 @@ describe('BackgroundReplyRuntime', () => {
 
   test('a preparation that never reaches a turn leaves no surface behind', async () => {
     const runtime = await createRuntime();
-    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    const cancelPreparation = runtime.prepareSession('session-1');
     expect(mockStartSession).toHaveBeenCalledTimes(1);
 
-    lease.release();
+    cancelPreparation();
     expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
     expect(mockDismissTask).toHaveBeenCalledWith('cherrystudio:///?sessionId=session-1');
 
     // The next submission starts from scratch rather than inheriting it.
-    runtime.acquirePreparation('session-1', jest.fn());
+    runtime.prepareSession('session-1');
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     await runtime._doStop();
   });
@@ -124,34 +129,21 @@ describe('BackgroundReplyRuntime', () => {
     });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
 
-    const lease = runtime.acquirePreparation('session-1', jest.fn());
-    lease.release();
+    const cancelPreparation = runtime.prepareSession('session-1');
+    cancelPreparation();
 
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     expect(mockSessions[0]!.cancel).not.toHaveBeenCalled();
     await runtime._doStop();
   });
 
-  test('releases pending preparation leases once when stopped', async () => {
+  test('stopping closes every preparation surface without owning an execution lease', async () => {
     const runtime = await createRuntime();
-    const interrupt = jest.fn();
-    const completed = runtime.acquirePreparation('session-1', interrupt);
-    const pending = [
-      runtime.acquirePreparation('session-2', interrupt),
-      runtime.acquirePreparation('session-3', interrupt),
-    ];
-    completed.release();
-    completed.release();
-    expect(preparationRelease).toHaveBeenCalledTimes(1);
-
+    runtime.prepareSession('session-1');
+    runtime.prepareSession('session-2');
     await runtime._doStop();
-    expect(preparationRelease).toHaveBeenCalledTimes(3);
-    expect(interrupt).not.toHaveBeenCalled();
-
-    for (const lease of pending) lease.release();
-    completed.release();
-    await runtime._doStop();
-    expect(preparationRelease).toHaveBeenCalledTimes(3);
+    expect(mockSessions.every((session) => session.cancel.mock.calls.length === 1)).toBe(true);
+    expect(acquire).not.toHaveBeenCalled();
   });
 
   test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
@@ -176,7 +168,7 @@ describe('BackgroundReplyRuntime', () => {
       expect(mockStartSession).toHaveBeenCalledTimes(2);
       expect(mockSessions[0]?.input).toMatchObject({
         deepLinkUrl: `${scheme}:///?sessionId=session-1`,
-        keepAlive: true,
+        keepAlive: false,
         props: expect.objectContaining({
           attribution: 'Alpha',
           compactIcon: 'bubble-ellipsis',
@@ -226,7 +218,7 @@ describe('BackgroundReplyRuntime', () => {
 
     expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ attribution: 'Alpha', title: 'Renamed session' }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     await runtime._doStop();
   });
@@ -341,27 +333,22 @@ describe('BackgroundReplyRuntime', () => {
       notifyAttention: jest.fn(async () => false),
       dismissAttention: jest.fn(),
     });
-    // The full notify-only lifecycle: preparation opens the logical turn, the
-    // turn starts, and the preparation lease is released right after — the
-    // generation interval must keep its own execution lease to ever reach the
-    // terminal event that schedules the notice.
-    const lease = runtime.acquirePreparation('session-1', jest.fn());
+    // Local execution owns protection independently of this notify-only presentation.
+    const cancelPreparation = runtime.prepareSession('session-1');
     const turn = runtime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
       sessionTitle: 'First session',
     });
-    lease.release();
+    cancelPreparation();
 
-    // Live Activities are off, so no surface presents, but the session exists
-    // and its generating keep-alive bit survives the preparation release. The
-    // destination's notice channel is engaged for the new reply.
+    // Live Activities are off. The local session still delivers completion without owning execution.
     expect(runtime.isReady).toBe(true);
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     expect(mockSessions[0]?.input).toMatchObject({
       deepLinkUrl: 'cherrystudio:///?sessionId=session-1',
-      keepAlive: true,
+      keepAlive: false,
       props: expect.objectContaining({ phase: 'preparing' }),
     });
     expect(mockSessions[0]?.cancel).not.toHaveBeenCalled();
@@ -370,11 +357,11 @@ describe('BackgroundReplyRuntime', () => {
     turn.finish('completed');
     await flushOperations();
 
-    // The terminal event drains the session's own lease and delivers the
+    // The terminal event finishes the local presentation and delivers the
     // notice the whole run was kept alive for.
     expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'completed' }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     expect(notifyTurnFinished).toHaveBeenCalledTimes(1);
     expect(notifyTurnFinished).toHaveBeenCalledWith(
@@ -383,7 +370,7 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('holds a delivery lease across the finish window', async () => {
+  test('remote replies retain delivery protection across the finish window', async () => {
     const release = jest.fn();
     const runtime = await createRuntime(undefined, {
       dismissDestination: jest.fn(),
@@ -394,6 +381,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     acquire.mockImplementationOnce(() => ({ release }));
     const turn = runtime.startTurn({
+      connectionId: 'desktop',
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
@@ -405,6 +393,37 @@ describe('BackgroundReplyRuntime', () => {
 
     expect(acquire).toHaveBeenCalledWith('chat.replyNotice');
     expect(release).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
+  });
+
+  test('local completion remains awaitable through notice delivery without acquiring another lease', async () => {
+    const delivered = createDeferred();
+    const runtime = await createRuntime(undefined, {
+      dismissDestination: jest.fn(),
+      requestPermissionOnce: jest.fn(),
+      notifyAttention: jest.fn(async () => false),
+      dismissAttention: jest.fn(),
+      notifyTurnFinished: async () => {
+        await delivered.promise;
+        return true;
+      },
+    });
+    const turn = runtime.startTurn({
+      agentId: 'agent',
+      agentName: 'Agent',
+      sessionId: 'local',
+      sessionTitle: 'Local',
+    });
+    let finished = false;
+    const completion = Promise.resolve(turn.finish('completed')).then(() => {
+      finished = true;
+    });
+    await flushOperations();
+    expect(finished).toBe(false);
+    expect(acquire).not.toHaveBeenCalled();
+    delivered.resolve();
+    await completion;
+    expect(finished).toBe(true);
     await runtime._doStop();
   });
 
@@ -423,7 +442,7 @@ describe('BackgroundReplyRuntime', () => {
 
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'completed' }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     await flushOperations();
     expect(session?.finish).not.toHaveBeenCalled();
@@ -461,7 +480,7 @@ describe('BackgroundReplyRuntime', () => {
     }
   });
 
-  test('marks phase changes urgent and keeps protection while approval is pending', async () => {
+  test('marks phase changes urgent without acquiring execution protection', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
       agentId: 'agent-1',
@@ -478,7 +497,7 @@ describe('BackgroundReplyRuntime', () => {
         phase: 'responding',
         preview: 'hello',
       }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
@@ -487,7 +506,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
-      { keepAlive: true, urgent: false },
+      { keepAlive: false, urgent: false },
     );
 
     turn.awaitApproval({ parts: [] });
@@ -497,7 +516,7 @@ describe('BackgroundReplyRuntime', () => {
         icon: 'bubble-exclamation',
         phase: 'awaiting-approval',
       }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
 
     turn.update({
@@ -505,7 +524,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
@@ -546,7 +565,7 @@ describe('BackgroundReplyRuntime', () => {
       expect(session?.update).toHaveBeenCalledTimes(1);
       expect(session?.update).toHaveBeenCalledWith(
         expect.objectContaining({ phase: 'responding', preview: 'hello latest' }),
-        { keepAlive: true, urgent: false },
+        { keepAlive: false, urgent: false },
       );
     } finally {
       jest.useRealTimers();
@@ -621,7 +640,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(session?.finish).not.toHaveBeenCalled();
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'preparing' }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
 
     second.finish('completed');
@@ -744,11 +763,12 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
-  test('execution interruption targets the superseding turn of a shared session', async () => {
+  test('remote execution interruption targets the superseding turn of a shared session', async () => {
     const runtime = await createRuntime();
     const firstInterrupted = jest.fn();
     const nextInterrupted = jest.fn();
     const input = {
+      connectionId: 'desktop',
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
@@ -794,7 +814,7 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('delivers each attention request once, retains execution, and invalidates retired requests', async () => {
+  test('delivers each attention request once and invalidates retired requests', async () => {
     const notifyAttention = jest.fn(async () => true);
     const dismissAttention = jest.fn();
     const runtime = await createRuntime(undefined, {
@@ -826,7 +846,7 @@ describe('BackgroundReplyRuntime', () => {
         attentionId: 'q2',
         icon: 'bubble-exclamation',
       }),
-      { keepAlive: true, urgent: true },
+      { keepAlive: false, urgent: true },
     );
     turn.retire();
     expect(dismissAttention).toHaveBeenCalled();

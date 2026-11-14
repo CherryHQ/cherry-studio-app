@@ -56,7 +56,12 @@ export function SidebarFooter() {
     <View
       className="absolute right-0 bottom-0 left-0"
       pointerEvents="box-none"
-      style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
+      style={{
+        paddingBottom: bottomPadding,
+        paddingEnd: insetEnd,
+        paddingStart: insetStart,
+        zIndex: 2,
+      }}
     >
       {/* Tint the profile row through the bottom safe area, with a soft leading edge above it. */}
       <View

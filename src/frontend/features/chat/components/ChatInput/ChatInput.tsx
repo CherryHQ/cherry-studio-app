@@ -1,6 +1,10 @@
+import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Button } from '@cherrystudio/ui/components';
+import { randomUUID } from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
@@ -26,24 +30,33 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
+import { sshErrorLabel } from '@/frontend/hooks/ssh';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
+import { SshError } from '@/shared/data/types/ssh';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
 import { attachMessageQuote } from '../../quotes/messageQuoteInput';
 import { readQuoteMentions } from '../../quotes/quoteMentions';
-import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
+import {
+  type ContextUsageSource,
+  type useAgentChatControls,
+  useAgentChatImageResult,
+} from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
 import { ChatInputQueue } from './components/ChatInputQueue';
+import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
@@ -53,19 +66,24 @@ import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
+import { deriveContextUsage } from './utils/contextUsage';
+import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
+import { readSshMentions } from './utils/sshMentions';
 
 type ChatInputProps = {
   agentId?: string;
+  contextUsage?: ContextUsageSource;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
   imageResult?: ConversationImageResult;
   /** Replaces the default prompt, as when it names the answer the next message continues. */
   placeholder?: string;
   sessionId?: string;
+  sshDraftId?: string;
   selectionHandoff?: string;
 };
 
@@ -73,13 +91,16 @@ const logger = loggerService.withContext('ChatInput');
 
 export function ChatInput({
   agentId,
+  contextUsage,
   controls,
   dismissKeyboardOnSend,
   imageResult,
   placeholder,
   sessionId,
+  sshDraftId,
   selectionHandoff,
 }: ChatInputProps) {
+  const { t } = useTranslation();
   const quoteActions = useChatQuoteActions();
   const imageAttempt = useRef<ReturnType<NonNullable<typeof quoteActions>['capture']> | undefined>(
     undefined,
@@ -104,7 +125,11 @@ export function ChatInput({
     previousAgentId.current = agentId;
     setDraft(removeSkillMentions);
   }, [agentId, setDraft]);
-  const { cancel, canSend, isBusy, sendMessage } = controls;
+  const { cancel, canSend, editMessage, isBusy, sendMessage } = controls;
+  const edit = useChatEditDraft();
+  const { beginEditSend, cancelEdit, commitEdit, editing, settleEditSend } = edit;
+  const canSendEdit =
+    !editing || (!isBusy && draft.trim().length > 0 && draft.trim() !== editing.initialText.trim());
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
   const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
@@ -160,6 +185,39 @@ export function ChatInput({
   );
   const generateImage = useCallback(
     async (input: PaintingInputSubmission) => {
+      // An edit submitted from the painting presentation still branches from
+      // the edited question; the current model and image settings go with it.
+      if (editing) {
+        if (!input.prompt.trim() || input.prompt.trim() === editing.initialText.trim() || isBusy)
+          throw new AgentProtocolError({
+            code: isBusy ? 'SESSION_BUSY' : 'MESSAGE_CONFLICT',
+            message: 'Question edit is unchanged or the Session is busy.',
+            retryable: false,
+          });
+        beginEditSend();
+        try {
+          await editMessage(
+            buildEditUserMessageInput({
+              sessionId,
+              messageId: editing.messageId,
+              text: input.prompt,
+              attachmentCount: input.attachments.length,
+              mode,
+              replyModels: null,
+              selectedModelId: input.modelId,
+              reasoningEfforts,
+              reasoningSelection,
+              imageGeneration: { mode: input.mode, paramValues: input.paramValues },
+            }),
+          );
+        } catch (error) {
+          // A cancel that won the race owns the buffer; its restore stands.
+          if (settleEditSend()) throw error;
+          return undefined;
+        }
+        if (settleEditSend()) commitEdit();
+        return undefined;
+      }
       const attempt = imageAttempt.current;
       try {
         const result = await sendMessage({
@@ -177,7 +235,19 @@ export function ChatInput({
         imageAttempt.current = undefined;
       }
     },
-    [sendMessage],
+    [
+      beginEditSend,
+      commitEdit,
+      editMessage,
+      editing,
+      isBusy,
+      mode,
+      reasoningEfforts,
+      reasoningSelection,
+      sendMessage,
+      sessionId,
+      settleEditSend,
+    ],
   );
   const cancelGeneration = useCallback(() => {
     void cancel();
@@ -187,6 +257,29 @@ export function ChatInput({
     <PaintingInputProvider result={latestImageResult}>
       <View className="gap-2">
         <ChatInputQueue sessionId={sessionId} />
+        {/* The edit banner owns the session above the text/image switch, so
+            it stays visible and cancellable in either presentation. */}
+        {editing ? (
+          <View className="flex-row items-center justify-between px-3 pb-1 pt-2">
+            <Text className="text-xs font-medium text-muted-foreground">
+              {t('chat.input.editing.title')}
+            </Text>
+            {(editing.attachmentCount ?? 0) > 0 ? (
+              <Text className="text-xs text-muted-foreground">
+                {t('chat.input.editing.attachments', {
+                  number: editing.attachmentCount,
+                })}
+              </Text>
+            ) : null}
+            <Button
+              accessibilityLabel={t('common.cancel')}
+              icon={<XIcon className="size-4 text-muted-foreground" />}
+              onPress={cancelEdit}
+              size="xs"
+              variant="ghost"
+            />
+          </View>
+        ) : null}
         {mode === 'standard' &&
         !replyModels &&
         selectedModelItem &&
@@ -194,7 +287,7 @@ export function ChatInput({
         !skillAction ? (
           <PaintingInput
             onLinkPress={quoteActions?.previewQuote}
-            canSend={canSend}
+            canSend={editing ? canSendEdit && canSend : canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             menu={
               <ChatInputMenu
@@ -210,11 +303,17 @@ export function ChatInput({
             onGenerate={generateImage}
             preparePrompt={prepareImagePrompt}
             onSubmissionSettled={finishImageAttempt}
+            attachmentsEnabled={!editing}
             status={isBusy ? 'generating' : 'idle'}
           />
         ) : (
           <TextChatInput
+            sessionId={sessionId}
+            sshDraftId={sshDraftId}
             mode={mode}
+            contextUsage={contextUsage}
+            canSendEdit={canSendEdit}
+            edit={edit}
             agentId={agentId}
             skillAction={skillAction}
             controls={controls}
@@ -237,8 +336,13 @@ export function ChatInput({
 }
 
 function TextChatInput({
+  sessionId,
   mode,
   agentId,
+  contextUsage,
+  sshDraftId,
+  canSendEdit,
+  edit,
   agentModelAnswersInParallel,
   skillAction,
   controls,
@@ -252,8 +356,11 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
   setReplyModels,
-}: Omit<ChatInputProps, 'sessionId'> & {
+}: ChatInputProps & {
   mode: AgentMode;
+  canSendEdit: boolean;
+  /** Edit-session ownership lifted above the text/image presentation switch. */
+  edit: ChatEditDraft;
   skillAction?: SkillAction;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
@@ -271,10 +378,29 @@ function TextChatInput({
 }) {
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
-  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const router = useRouter();
+  const ssh = useBackendModule('ssh');
+  const sshContextId = sessionId ?? (sshDraftId ? `draft:${sshDraftId}` : undefined);
+  const [sshPickerContext, setSshPickerContext] = useState<string | null>(null);
+  const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
+  const { beginEditSend, commitEdit, editing, settleEditSend } = edit;
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const isParallel = replyModels !== null;
+  const compatibleUsage =
+    !isParallel &&
+    selectedModelItem &&
+    contextUsage &&
+    !isImageGenerationModel(selectedModelItem.model) &&
+    selectedModelItem.modelId === contextUsage.modelId &&
+    selectedModelItem.model.providerId === contextUsage.providerId &&
+    selectedModelItem.model.modelId === contextUsage.providerModelId
+      ? deriveContextUsage(
+          selectedModelItem.model.contextWindow,
+          contextUsage.tokens,
+          contextUsage.estimated,
+        )
+      : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
   const pluginCatalog = usePluginCatalog();
@@ -283,6 +409,16 @@ function TextChatInput({
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
+  function prepareSshPicker() {
+    let contextId = sshContextId;
+    if (!contextId) {
+      const id = randomUUID();
+      router.setParams({ sshDraftId: id });
+      contextId = `draft:${id}`;
+    }
+    setSshPickerContext(contextId);
+  }
+  const isSshAvailable = mode === 'standard' && ssh.isAvailable();
   const modelPicker = useChatInputModelPicker({
     agentId,
     agentModelAnswersInParallel,
@@ -299,6 +435,36 @@ function TextChatInput({
   }, [closeModelPicker, openProviderSetup]);
   const handleSendPress = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
+      if (editing) {
+        if (!text.trim() || text.trim() === editing.initialText.trim() || isBusy)
+          throw new AgentProtocolError({
+            code: isBusy ? 'SESSION_BUSY' : 'MESSAGE_CONFLICT',
+            message: 'Question edit is unchanged or the Session is busy.',
+            retryable: false,
+          });
+        beginEditSend();
+        try {
+          await editMessage(
+            buildEditUserMessageInput({
+              sessionId,
+              messageId: editing.messageId,
+              text,
+              attachmentCount: attachments.length,
+              mode,
+              replyModels,
+              selectedModelId,
+              reasoningEfforts,
+              reasoningSelection,
+            }),
+          );
+        } catch (error) {
+          // A cancel that won the race owns the buffer; its restore stands.
+          if (settleEditSend()) throw error;
+          return;
+        }
+        if (settleEditSend()) commitEdit();
+        return;
+      }
       const attempt = quoteActions?.capture(text);
       try {
         const plugins =
@@ -313,13 +479,25 @@ function TextChatInput({
         } = mode === 'standard'
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        const sshMentions = readSshMentions(prompt);
+        const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
+        if (
+          sshMentions.references.some(
+            (reference) =>
+              mode !== 'standard' ||
+              !selectedSsh ||
+              reference.id !== selectedSsh.profile.id ||
+              reference.revision !== selectedSsh.profile.revision,
+          )
+        )
+          throw new SshError('changed');
         // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-        const selections = readSelectionMentions(prompt);
+        const selections = readSelectionMentions(sshMentions.text);
         const quoted = readQuoteMentions(selections.text, attempt?.fields.quotes);
         const shifted = <T extends { offset: number }>(references: T[]) =>
           references.map((reference) => ({
             ...reference,
-            offset: quoted.shift(selections.shift(reference.offset)),
+            offset: quoted.shift(selections.shift(sshMentions.shift(reference.offset))),
           }));
         const parts = attachMessageQuote(
           toAgentInputParts(
@@ -329,6 +507,10 @@ function TextChatInput({
             selections.selectionReferences.map((reference) => ({
               ...reference,
               offset: quoted.shift(reference.offset),
+            })),
+            sshMentions.sshReferences.map((reference) => ({
+              ...reference,
+              offset: quoted.shift(selections.shift(reference.offset)),
             })),
           ),
           quoted.quotes.length
@@ -363,7 +545,15 @@ function TextChatInput({
       }
     },
     [
+      beginEditSend,
+      editMessage,
+      editing,
+      isBusy,
+      commitEdit,
+      settleEditSend,
       quoteActions,
+      reasoningSelection,
+      sessionId,
       isReasoningEffortSelected,
       mcpApps,
       mode,
@@ -372,10 +562,14 @@ function TextChatInput({
       replyModels,
       selectedModelId,
       sendMessage,
+      ssh,
+      sshContextId,
+      sshPickerContext,
     ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
+      if (error instanceof SshError) return sshErrorLabel(error, t);
       const key = getSendErrorLabelKey(error);
       return key ? t(key) : undefined;
     },
@@ -399,7 +593,7 @@ function TextChatInput({
               canSend={
                 selectedModelItem &&
                 (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
-                  ? canSend
+                  ? canSendEdit && canSend
                   : false
               }
               dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -417,6 +611,10 @@ function TextChatInput({
                 </View>
               </ChatInputAccessories>
               <ChatInputSurface
+                attachmentMode={editing ? 'text-only' : undefined}
+                contextUsage={compatibleUsage}
+                contextUsageSessionId={sessionId}
+                contextUsageMessageId={contextUsage?.messageId}
                 onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={
@@ -426,15 +624,19 @@ function TextChatInput({
                 }
                 onStop={() => void cancel()}
                 leadingAction={
-                  <ChatInputMenu
-                    key={agentId}
-                    agentId={agentId}
-                    enabled={!isApprovalPending}
-                    media={mode === 'minimal' ? 'images' : 'all'}
-                    plugins={mode === 'standard' && !isParallel ? connectedPlugins : undefined}
-                    prompts={prompts}
-                    skillAgentId={mode === 'standard' && !isParallel ? agentId : undefined}
-                  />
+                  editing ? null : (
+                    <ChatInputMenu
+                      key={agentId}
+                      agentId={agentId}
+                      enabled={!isApprovalPending}
+                      onPickSsh={isSshAvailable ? prepareSshPicker : undefined}
+                      sshContextId={sshPickerContext ?? sshContextId}
+                      media={mode === 'minimal' ? 'images' : 'all'}
+                      plugins={mode === 'standard' && !isParallel ? connectedPlugins : undefined}
+                      prompts={prompts}
+                      skillAgentId={mode === 'standard' && !isParallel ? agentId : undefined}
+                    />
+                  )
                 }
                 secondaryAction={
                   <ChatInputModelPill

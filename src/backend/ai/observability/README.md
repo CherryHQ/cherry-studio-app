@@ -121,6 +121,10 @@ Pi's existing event observer records fixed failure metadata for failed tasks, au
 attempts and interrupted tool executions. Recovery inspection records blocked tasks and their
 closed reason codes; the Harness report callback records extension failures that do not fail the
 calling operation. Failed asynchronous usage delivery is logged while its receipt remains pending.
+If a receipt's historical owner fails schema validation, delivery records
+`pi.usage_delivery / invalid_receipt`, keeps that receipt pending and continues with later receipts.
+A later pass retries the retained receipt; successful deliveries are still acknowledged once.
+Database and other non-validation failures continue to reject the delivery pass.
 Task ids/kinds and available Session/turn/request/message ids are included, never event messages
 or event payloads. Task failures use current turn identities only for generation and tool tasks;
 compaction and extension task failures retain Session/task identity without borrowing the active

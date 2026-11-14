@@ -55,6 +55,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        BGTaskSchedulerPermittedIdentifiers: [
+          ...(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers ?? []),
+          `${bundleIdentifier}.continued-processing.*`,
+        ],
+      },
       entitlements: {
         ...config.ios?.entitlements,
         'com.apple.security.application-groups': [
@@ -133,18 +140,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
-      // Public Accounts Portal inputs are supplied by the environment for every build profile.
-      accountsPortal: {
-        origin: process.env.ACCOUNTS_PORTAL_ORIGIN ?? '',
-        issuer: process.env.ACCOUNTS_PORTAL_ISSUER ?? '',
-        clientId: process.env.ACCOUNTS_PORTAL_CLIENT_ID ?? '',
-        scopes: (process.env.ACCOUNTS_PORTAL_SCOPES ?? '').split(/\s+/).filter(Boolean),
-        // SDK 0.2.1 has one deployment and no session service metadata yet. These concrete
-        // addresses feed only its integration adapter until the SDK supplies them per session.
-        enterpriseApiBaseUrl: process.env.ACCOUNTS_PORTAL_ENTERPRISE_API_CN,
-        cloudApiOrigin: process.env.CHERRY_CLOUD_API_ORIGIN_CN,
-        cloudWebUrl: process.env.CHERRY_CLOUD_WEB_URL_CN,
-      },
+      configServiceOrigin: process.env.CONFIG_SERVICE_ORIGIN,
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Native APK installation capability is separately embedded by withAppUpdates.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',

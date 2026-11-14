@@ -1,5 +1,5 @@
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
-import { MessagePart } from '@cherrystudio/ui/components';
+import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -50,6 +50,15 @@ function SkillAdaptationPart({
   output: Record<string, unknown> | null;
 }) {
   const { t } = useTranslation();
+  if (output?.status === 'error')
+    return (
+      <ContextMenuExclusion className="w-full gap-2">
+        <Text accessibilityRole="alert" className="text-sm text-error">
+          {t('skills.adaptation.failed')}
+        </Text>
+        <GenericToolPart part={part} />
+      </ContextMenuExclusion>
+    );
   if (!output || !['adapted', 'unchanged'].includes(String(output.status)))
     return <GenericToolPart part={part} />;
   const saved = output.status === 'adapted';
@@ -63,62 +72,75 @@ function SkillAdaptationPart({
       )
     : [];
   return (
-    <MessagePart.Tool
-      icon={ToolCaseIcon}
-      title={t('skills.adaptation.title')}
-      state="complete"
-      statusText={t(saved ? 'skills.adaptation.saved' : 'skills.adaptation.unchanged')}
-      testID="skill-adaptation-receipt"
-    >
-      <View className="gap-4">
-        <View className="gap-1">
-          <Text className="font-semibold text-base text-foreground" selectable>
-            {typeof output.name === 'string' ? output.name : ''}
-          </Text>
-          {saved && output.instructionsLoaded !== true ? (
-            <Text className="text-sm text-muted-foreground">
-              {t('skills.adaptation.reloadFailed')}
-            </Text>
-          ) : null}
-        </View>
-        {changes.map((change) => (
-          <View key={change.before} className="gap-3">
-            <Text className="font-medium text-sm text-foreground" selectable>
+    <ContextMenuExclusion className="w-full gap-3" testID="skill-adaptation-receipt">
+      <View className="gap-1">
+        <Text className="font-medium text-base text-foreground" selectable>
+          {typeof output.name === 'string' ? output.name : t('skills.adaptation.title')}
+        </Text>
+        <Text className="text-sm text-muted-foreground">
+          {t(saved ? 'skills.adaptation.saved' : 'skills.adaptation.unchanged')}
+        </Text>
+      </View>
+      {saved && output.instructionsLoaded !== true ? (
+        <Text accessibilityRole="alert" className="text-sm text-warning">
+          {t('skills.adaptation.reloadFailed')}
+        </Text>
+      ) : null}
+      {saved ? (
+        <View className="gap-2">
+          {changes.map((change) => (
+            <Text key={change.before} className="text-sm text-foreground" selectable>
               {change.reason}
             </Text>
-            <View className="overflow-hidden rounded-xl border border-border-subtle">
-              <View className="gap-1.5 bg-secondary p-3">
-                <Text className="font-medium text-xs text-muted-foreground" selectable>
-                  {t('chat.question.before')}
-                </Text>
-                <Text className="text-sm text-foreground" selectable>
-                  {change.before}
-                </Text>
-              </View>
-              {change.after ? (
-                <View className="gap-1.5 border-t border-border-subtle bg-success-subtle p-3">
-                  <Text className="font-medium text-xs text-success-subtle-foreground" selectable>
-                    {t('chat.question.after')}
-                  </Text>
-                  <Text className="text-sm text-success-subtle-foreground" selectable>
-                    {change.after}
-                  </Text>
-                </View>
-              ) : (
-                <View className="flex-row flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-3 py-2.5">
+          ))}
+        </View>
+      ) : null}
+      <MessagePart.Tool
+        detailTitle={typeof output.name === 'string' ? output.name : t('skills.adaptation.title')}
+        state="complete"
+        title={t(saved ? 'skills.adaptation.viewChanges' : 'skills.adaptation.viewProposal')}
+        testID="skill-adaptation-changes"
+      >
+        <View className="gap-4">
+          {changes.map((change) => (
+            <View key={change.before} className="gap-3">
+              <Text className="font-medium text-sm text-foreground" selectable>
+                {change.reason}
+              </Text>
+              <View className="overflow-hidden rounded-xl border border-border-subtle">
+                <View className="gap-1.5 bg-secondary p-3">
                   <Text className="font-medium text-xs text-muted-foreground" selectable>
-                    {t('chat.question.after')}
+                    {t('chat.question.before')}
                   </Text>
-                  <Text className="font-medium text-sm text-foreground" selectable>
-                    {t('chat.question.removed')}
+                  <Text className="text-sm text-foreground" selectable>
+                    {change.before}
                   </Text>
                 </View>
-              )}
+                {change.after ? (
+                  <View className="gap-1.5 border-t border-border-subtle bg-success-subtle p-3">
+                    <Text className="font-medium text-xs text-success-subtle-foreground" selectable>
+                      {t('chat.question.after')}
+                    </Text>
+                    <Text className="text-sm text-success-subtle-foreground" selectable>
+                      {change.after}
+                    </Text>
+                  </View>
+                ) : (
+                  <View className="flex-row flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-3 py-2.5">
+                    <Text className="font-medium text-xs text-muted-foreground" selectable>
+                      {t('chat.question.after')}
+                    </Text>
+                    <Text className="font-medium text-sm text-foreground" selectable>
+                      {t('chat.question.removed')}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        ))}
-      </View>
-    </MessagePart.Tool>
+          ))}
+        </View>
+      </MessagePart.Tool>
+    </ContextMenuExclusion>
   );
 }
 

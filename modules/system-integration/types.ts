@@ -11,7 +11,19 @@ export type NativeSystemEntry = {
 type NativeSystemEvents = {
   onPending: () => void;
   onBackgroundExecutionExpired: (event: { id: string }) => void;
+  onBackgroundAudioStateChanged: (event: { id: string; active: boolean }) => void;
+  onContinuedProcessingStateChanged: (event: {
+    id: string;
+    state: 'active' | 'unavailable' | 'expired';
+  }) => void;
   onBackgroundTaskActionPending: () => void;
+};
+
+export type NativeContinuedProcessingTask = {
+  title: string;
+  subtitle: string;
+  completedUnitCount: number;
+  totalUnitCount: number;
 };
 
 /**
@@ -37,6 +49,16 @@ export interface SystemIntegrationNativeModule {
   /** iOS-only finite execution window; it does not enable a background mode. */
   beginBackgroundExecution?(id: string): Promise<boolean>;
   endBackgroundExecution?(id: string): Promise<void>;
+  /** iOS 26+, foreground user tasks. True means submitted, not proof of execution. */
+  beginContinuedProcessingTask?(id: string, task: NativeContinuedProcessingTask): Promise<boolean>;
+  updateContinuedProcessingTask?(id: string, task: NativeContinuedProcessingTask): Promise<void>;
+  endContinuedProcessingTask?(id: string, success: boolean): Promise<void>;
+  /** iOS-only, task-owned audio protection after the app records explicit consent. */
+  beginBackgroundAudioExecution?(id: string): Promise<boolean>;
+  endBackgroundAudioExecution?(id: string): Promise<void>;
+  /** Voice owns its profile; capture suspends the silent player, speech keeps its gaps covered. */
+  beginBackgroundAudioUse?(id: string, kind: 'speech' | 'capture'): Promise<void>;
+  endBackgroundAudioUse?(id: string): Promise<void>;
   /** Android-only notification transport, sharing IDs with the foreground service. */
   getBackgroundTaskNotificationId?(key: string): number;
   showBackgroundTaskNotification?(

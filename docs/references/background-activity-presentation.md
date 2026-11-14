@@ -1,10 +1,11 @@
 # Background Activity Presentation
 
-The shared activity manager owns task surfaces and their retirement. Execution demand stays with
-`KeepAliveCoordinator`; presentation preferences, notification permission, and app visibility never
-release an unfinished conversation's execution lease. “Conversation” here means an admitted round,
-including preparation, tool use, awaiting user input/approval, persistence, and final delivery.
-Stored history and an idle chat page do not keep execution alive.
+The shared activity manager owns task surfaces and their retirement. Local execution owns one
+stable `KeepAliveCoordinator` lease from user submission through persistence and final delivery;
+presentation never acquires or transfers it. Presentation preferences, notification permission,
+and app visibility do not determine execution lifetime. Waiting for input preserves the conversation
+and its execution lease until completion, cancellation, or platform revocation. Stored history and
+an idle chat page do not begin a new protection period.
 
 ## One Destination, One Surface
 
@@ -36,9 +37,17 @@ that preference. Completion preferences control completion alerts; they do not t
 
 ## Execution And Attention
 
-Preparation hands its lease to the round before releasing it. Awaiting a question or approval keeps
-that lease. Terminal content appears immediately, while bounded final metadata work and notification
-delivery retain protection. The lease releases after delivery settles, including delivery failure.
+`DurableAgentHost` acquires a Session's lease before preparation. The same lease covers all of its
+parallel answers and survives asynchronous presentation admission. Real execution tracks whether all
+answers have settled; model/tool work, approvals, and questions all retain the same lease.
+Answering continues under that lease without consulting a streamed message's waiting label.
+Terminal content appears immediately; persistence and awaitable final delivery settle before the
+execution owner releases its lease.
+
+Both platforms retain shared execution protection while any consumer holds a lease, including
+while awaiting input. There is no inactivity countdown. The last release stops protection
+immediately. Long model/tool requests do not lose protection because output or screen interaction
+stops. Platform limits and revocation still apply.
 
 Android uses persistent numeric notification IDs shared between its existing foreground service
 and the SystemIntegration notification bridge. One conversation anchors the service notification;
@@ -52,14 +61,15 @@ ongoing state before detachment. This prevents streaming text from repeatedly de
 the same island.
 
 iOS completion delivery checks permission and current generation, retires its settled Live Activity,
-then posts a deterministic completion notice for that destination. This replacement retains a short
-delivery lease. A superseded round cannot retire or post over its successor.
+then posts a deterministic completion notice for that destination. Local execution awaits this
+replacement; remote sessions retain their existing delivery lease. A superseded round cannot retire
+or post over its successor.
 
 Local and observed desktop sessions distinguish waiting for approval from waiting for an answer.
 The compact Live Activity replaces its timer with the translated waiting label and attention icon.
 Each request carries its approval, tool-call, or remote interaction identity: title/preview updates
 stay silent, while consecutive requests each receive an alert even without an intermediate running
-phase. Both waiting states retain execution demand.
+phase. Both waiting states retain their pending decisions and execution leases.
 
 On iOS, pending decisions also raise a local notification independently of the Live Activities and
 completion-notification preferences. Notification permission is requested once after a user starts a
@@ -121,7 +131,7 @@ turn-completion alerts from permission and question notifications.
 These are locally delivered alerts while the Mobile process can receive events. APNs/FCM device
 registration and a desktop/server push sender are not implemented; after iOS suspends Mobile,
 remote events cannot refresh its card or trigger an alert until execution resumes. A Live Activity
-does not extend the finite UIKit execution window. Reliable suspended-app delivery requires that
+does not itself grant execution time. Reliable suspended-app delivery requires that
 separate end-to-end push transport.
 
 ## Settled Surfaces
@@ -173,18 +183,42 @@ the card. This does not change stored task content.
 
 The frontend consumes the coordinator's public execution status rather than inferring protection
 from a visible card. Android reports active only after native foreground-service proof. Denied
-admission is limited; revocation is interrupted. iOS uses a finite UIKit background task and reports limited even after admission.
-The last lease release ends the assertion. Expiration ends it natively, then notifies held
-consumers to interrupt their work; no new assertion is requested in the same background stay.
-Returning to foreground permits a new window for remaining or newly started work. Late expiration
-callbacks cannot interrupt a replacement window. Suspension may delay JavaScript cleanup; cold
-startup still reconciles unfinished work. This does not promise a fixed duration or automatic replay.
+admission is limited; revocation is interrupted. iOS always reports limited: the system can revoke
+execution even when native admission succeeds. It retains finite UIKit time for admission and fallback.
+The existing first-use background guidance offers a short audio disclosure and Enable action.
+Only explicit confirmation stores `app.background_audio.consent: true`; showing or cancelling it
+leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
+target device's decision. No settings row or switch is added.
+
+Explicit foreground user work first requests iOS 26+ `BGContinuedProcessingTask`. The native
+launch callback, not submission success, confirms protection. iOS 27 uses asynchronous submission;
+iOS 26 retains its original API. Each request has a unique native identifier and real progress.
+The execution owner reports preparation/reply milestones on its stable Session lease. Official
+processing stays attached to that lease across questions and approvals until the Session settles
+or the system revokes the task. Answering does not release or reacquire protection. Observation,
+restoration, and foreground return alone never create official-task intent. Painting's immediate
+local enqueue carries process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
+do not inherit that intent. System-UI cancellation or expiration stops the owning conversation/job
+without silently restarting it through audio; ordinary finite-window loss still suspends the Agent
+Harness for later foreground recovery.
+
+If continued processing is unavailable, consenting unfinished work shares a task-owned silent audio
+loop alongside the finite window.
+Pending or running official tasks suppress silent playback. Admission failure or a five-second
+missing-launch deadline enables fallback; a stale launch cannot adopt a released request.
+Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
+expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
+finite allowance; when neither mechanism protects background work, each held consumer is interrupted
+once and audio cannot restart that work in the same background stay. The last consumer's release
+immediately stops finite/audio protection. Official requests complete when their owning work settles.
+Foreground return allows a fresh finite window only while execution demand remains. Late native
+events cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
+unfinished work. This does not promise a fixed duration or automatic replay.
 System low-power, battery-optimization, Live Activity, and notification settings are separate facts.
 Manufacturer-specific autostart/background restrictions require manual confirmation.
 
-iOS 26 continued-processing tasks are not integrated in this change. Their progress, expiration,
-and system-owned presentation require native feasibility acceptance before extending the finite
-UIKit window. Neither current platform mechanism promises survival of force-stop or process death.
+Continued processing displays system-owned progress and cancellation controls, independent of the
+app's optional task cards. No mechanism promises survival of force-stop or process death.
 
 ## Acceptance
 

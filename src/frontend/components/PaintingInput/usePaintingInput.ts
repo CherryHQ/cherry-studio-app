@@ -35,12 +35,15 @@ export function usePaintingInput({
   onGenerate,
   preparePrompt,
   onSubmissionSettled,
+  attachmentsEnabled = true,
 }: {
   model: Model | undefined;
   initialParamValues?: ImageParamDraft;
   onGenerate(input: PaintingInputSubmission): Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
   onSubmissionSettled?: () => void;
+  /** Question editing keeps the original attachments, so none may be added. */
+  attachmentsEnabled?: boolean;
 }) {
   const file = useBackendModule('file');
   const { attachments, draft, isSubmitting } = useComposerState();
@@ -66,7 +69,7 @@ export function usePaintingInput({
       (!resolvedReference.isLoading && (!referenceFact || !strategy.canReference(referenceFact)))),
   );
   const referenceAttachment: ComposerAttachmentReady | undefined =
-    selection && !isReferencePaused
+    attachmentsEnabled && selection && !isReferencePaused
       ? {
           ...selection.image,
           ...referenceFact,

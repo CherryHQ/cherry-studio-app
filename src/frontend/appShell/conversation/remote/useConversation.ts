@@ -14,11 +14,12 @@ import {
 export function useConversation(
   ref: ConversationRef | undefined,
   source?: RemoteConversationSource,
+  taskId?: string,
 ) {
   const sources = useConversationSources();
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
-  const key = JSON.stringify([ref ?? null, source?.scope, attempt]);
+  const key = JSON.stringify([ref ?? null, source?.scope, taskId, attempt]);
   const [resolved, setResolved] = useState<{
     key: string;
     session?: RemoteConversationSession;
@@ -53,7 +54,9 @@ export function useConversation(
           if (opening || session || lifetime.signal.aborted) return;
           opening = true;
           try {
-            const opened = await retained.source.openSession(ref, lifetime.signal);
+            const opened = taskId
+              ? await retained.source.openTaskSession(taskId, ref, lifetime.signal)
+              : await retained.source.openSession(ref, lifetime.signal);
             if (lifetime.signal.aborted) {
               opened.dispose();
               return;

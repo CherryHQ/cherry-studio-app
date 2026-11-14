@@ -5,6 +5,7 @@ import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
+import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { BottomSheet, Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,26 +35,31 @@ import type { ChatInputPlugin } from '../utils/chatInputPlugins';
 import { ChatInputPluginSheet } from './ChatInputPluginSheet';
 import { ChatInputPromptSheet } from './ChatInputPromptSheet';
 import { ChatInputSkillSheet } from './ChatInputSkillSheet';
+import { ChatInputSshSheet } from './ChatInputSsh';
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
 
 const logger = loggerService.withContext('ChatInputMenu');
-type ToolPanel = 'files' | 'workspace' | 'plugins' | 'skills' | 'prompts';
+type ToolPanel = 'files' | 'workspace' | 'plugins' | 'skills' | 'prompts' | 'ssh';
 
 /** The tool menu stays mounted beneath its independently dismissible child sheet. */
 export function ChatInputMenu({
   agentId,
   enabled,
   media,
+  onPickSsh,
   plugins,
   prompts,
   skillAgentId,
+  sshContextId,
 }: {
   agentId?: string;
   enabled: boolean;
   media: 'all' | 'images';
+  onPickSsh?: () => void;
   plugins?: readonly ChatInputPlugin[];
   prompts: readonly ChatInputMcpPrompt[];
   skillAgentId?: string;
+  sshContextId?: string;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -96,6 +102,7 @@ export function ChatInputMenu({
   const pluginRef = useRef<ViewInstance>(null);
   const skillRef = useRef<ViewInstance>(null);
   const promptRef = useRef<ViewInstance>(null);
+  const sshRef = useRef<ViewInstance>(null);
   const closePanel = useCallback(() => setPanel(null), []);
   const closingSurfaces = useRef(new Set<'menu' | 'panel'>());
   const closeMenu = useCallback(() => {
@@ -232,6 +239,18 @@ export function ChatInputMenu({
                 testID="chat-composer-prompts"
               />
             ) : null}
+            {onPickSsh ? (
+              <ToolRow
+                icon={<TerminalIcon className="size-5 text-muted-foreground" />}
+                label={t('ssh.title')}
+                onPress={() => {
+                  onPickSsh();
+                  setPanel('ssh');
+                }}
+                ref={sshRef}
+                testID="chat-composer-ssh"
+              />
+            ) : null}
           </View>
         </View>
       </BottomSheet>
@@ -299,6 +318,16 @@ export function ChatInputMenu({
           onSelect={completeSelection}
           open={open}
           returnFocusRef={promptRef}
+        />
+      ) : null}
+      {panel === 'ssh' ? (
+        <ChatInputSshSheet
+          contextId={sshContextId}
+          onClose={closePanel}
+          onClosed={() => surfaceClosed('panel')}
+          onSelect={completeSelection}
+          open={open}
+          returnFocusRef={sshRef}
         />
       ) : null}
     </>

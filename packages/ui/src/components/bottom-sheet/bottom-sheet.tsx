@@ -80,7 +80,7 @@ const SheetPresentationContext = createContext<{
 type BottomSheetBaseProps = {
   /** A sibling overlay may cover this sheet while its content and scroll state stay mounted. */
   active?: boolean;
-  /** Lift the sheet with the keyboard, frame by frame, so its inputs and footer stay above it. */
+  /** Keep content above the keyboard; resizable sheets retain their selected height. */
   avoidKeyboard?: boolean;
   backAction?: BottomSheetBackAction;
   children: ReactNode;
@@ -114,18 +114,23 @@ export type BottomSheetProps = BottomSheetBaseProps &
   (
     | {
         height: number;
+        onSizeChange?: never;
         size?: never;
         sizes?: never;
       }
     | {
         height?: never;
+        onSizeChange?: never;
         size: BottomSheetSize | 'content';
         sizes?: never;
       }
     | {
         height?: never;
-        size?: never;
+        /** Controls the active height while retaining the other draggable sizes. */
+        size?: BottomSheetSize;
         sizes: BottomSheetSizes;
+        /** Reports a user-driven change to an open height. */
+        onSizeChange?: (size: BottomSheetSize) => void;
       }
   );
 
@@ -180,7 +185,7 @@ export function BottomSheet(props: BottomSheetProps) {
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
-  const { height, size, sizes } = props;
+  const { height, onSizeChange, size, sizes } = props;
   const hasHeader = title != null || Boolean(backAction || closeAction || headerAction);
   const measuredHeight =
     size === 'content'
@@ -188,7 +193,7 @@ export function BottomSheet(props: BottomSheetProps) {
         (isOverlay ? OVERLAY_HANDLE_HEIGHT : hasHeader ? headerHeight + 16 : 22) +
         (footer ? footerHeight : insets.bottom)
       : height;
-  const { cardHeight, minimumCardHeight, detents } = useMemo(
+  const { cardHeight, minimumCardHeight, detents, openIndex, sizeByIndex } = useMemo(
     () =>
       resolveSheetHeights(
         availableCardHeight,
@@ -200,6 +205,9 @@ export function BottomSheet(props: BottomSheetProps) {
       ),
     [availableCardHeight, dismissible, measuredHeight, size, sizes, isOverlay, parent?.height],
   );
+  const isResizable = detents.length > 2;
+  // Resizable sheets keep their snap points; keyboard space only shrinks the body.
+  const followsKeyboardContentHeight = avoidKeyboard && !isResizable;
   const position = useSharedValue(0);
   const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
     (event) => {
@@ -208,23 +216,27 @@ export function BottomSheet(props: BottomSheetProps) {
     },
     ['onPositionChange'],
   );
-  const isResizable = !avoidKeyboard && detents.length > 2;
   const childPresentation = useMemo(
     () => (isOverlay ? { height: cardHeight, registerChild, returnFocusRef: headingRef } : null),
     [cardHeight, isOverlay, registerChild],
   );
   const hasFooter = footer != null;
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
-  const isDraggable = dismissible || (!avoidKeyboard && detents.length > 2);
+  const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
-  const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
+  const resolvedTitleAlign = titleAlign ?? (isCloseActionVisible ? 'center' : 'start');
+  const hasBalancedHeader =
+    isCloseActionVisible || Boolean(backAction && resolvedTitleAlign === 'center');
+  const [index, setIndex] = useState(open ? openIndex : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
+  const [previousOpenIndex, setPreviousOpenIndex] = useState(openIndex);
   const hasNotifiedCloseRef = useRef(false);
 
-  if (open !== previousOpen) {
+  if (open !== previousOpen || openIndex !== previousOpenIndex) {
     setPreviousOpen(open);
-    setIndex(open ? OPEN_INDEX : CLOSED_INDEX);
+    setPreviousOpenIndex(openIndex);
+    setIndex(open ? openIndex : CLOSED_INDEX);
     if (open) {
       setIsPresented(true);
       setHasOpened(true);
@@ -291,9 +303,21 @@ export function BottomSheet(props: BottomSheetProps) {
     };
   }, [open]);
 
-  const handleIndexChange = useCallback((nextIndex: number) => {
-    setIndex(nextIndex);
-  }, []);
+  const handleIndexChange = useCallback(
+    (nextIndex: number) => {
+      setIndex(nextIndex);
+      if (nextIndex > CLOSED_INDEX) {
+        if (avoidKeyboard && nextIndex < index) {
+          Keyboard.dismiss();
+        }
+        const nextSize = sizeByIndex[nextIndex];
+        if (nextSize) {
+          onSizeChange?.(nextSize);
+        }
+      }
+    },
+    [avoidKeyboard, index, onSizeChange, sizeByIndex],
+  );
   const handleSettle = useCallback(
     (nextIndex: number) => {
       if (nextIndex !== CLOSED_INDEX) {
@@ -342,9 +366,9 @@ export function BottomSheet(props: BottomSheetProps) {
     <ModalBottomSheet
       // UIKit menus need the presenting controller retained by the provider's view hierarchy.
       nativeOverlay={false}
-      // A keyboard-avoiding card animates its own height, which the content detent follows.
-      animateContentHeight={!avoidKeyboard}
-      detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
+      // Single-height keyboard avoidance animates the content height itself.
+      animateContentHeight={!followsKeyboardContentHeight}
+      detents={followsKeyboardContentHeight ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
       onPositionChange={isResizable ? handlePositionChange : undefined}
@@ -354,7 +378,7 @@ export function BottomSheet(props: BottomSheetProps) {
     >
       <SheetLayout
         availableCardHeight={availableCardHeight}
-        avoidKeyboard={avoidKeyboard}
+        avoidKeyboard={followsKeyboardContentHeight}
         bottomInset={bottomInset}
         cardHeight={cardHeight}
         minimumCardHeight={minimumCardHeight}
@@ -389,7 +413,7 @@ export function BottomSheet(props: BottomSheetProps) {
           pointerEvents={!active || childCount > 0 ? 'none' : 'auto'}
           style={[
             styles.card,
-            avoidKeyboard || isResizable
+            followsKeyboardContentHeight || isResizable
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
           ]}
@@ -417,15 +441,20 @@ export function BottomSheet(props: BottomSheetProps) {
               onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
             >
               {backAction ? (
-                <Pressable
-                  accessibilityLabel={backAction.accessibilityLabel}
-                  accessibilityRole="button"
-                  className="-ml-2 mr-2 size-11 items-center justify-center rounded-full active:bg-secondary"
-                  hitSlop={4}
-                  onPress={backAction.onPress}
-                >
-                  <ArrowLeftIcon className="size-6 text-foreground" />
-                </Pressable>
+                <View className={hasBalancedHeader ? 'min-w-11 flex-1 items-start' : undefined}>
+                  <Pressable
+                    accessibilityLabel={backAction.accessibilityLabel}
+                    accessibilityRole="button"
+                    className={cn(
+                      'size-11 items-center justify-center rounded-full active:bg-secondary',
+                      !hasBalancedHeader && '-ml-2 mr-2',
+                    )}
+                    hitSlop={4}
+                    onPress={backAction.onPress}
+                  >
+                    <ArrowLeftIcon className="size-6 text-foreground" />
+                  </Pressable>
+                </View>
               ) : closeAction ? (
                 <View className="min-w-11 flex-1 items-start">
                   <Pressable
@@ -446,15 +475,14 @@ export function BottomSheet(props: BottomSheetProps) {
                   'min-w-0 font-semibold text-foreground',
                   // Both variants fill the 44-point first line that the header controls centre on.
                   titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                  isCloseActionVisible ? 'shrink px-2' : 'flex-1',
-                  (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
-                    'text-center',
+                  hasBalancedHeader ? 'shrink px-2' : 'flex-1',
+                  resolvedTitleAlign === 'center' && 'text-center',
                 )}
                 numberOfLines={titleVariant === 'prompt' ? undefined : 2}
               >
                 {title}
               </Text>
-              {isCloseActionVisible ? (
+              {hasBalancedHeader ? (
                 <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
                   {headerAction}
                 </View>
@@ -577,23 +605,31 @@ function resolveSheetHeights(
 ) {
   const requestedCardHeights =
     height !== undefined
-      ? [height]
-      : size !== undefined
-        ? [Math.round(availableCardHeight * HEIGHT_RATIOS[size])]
-        : (sizes ?? []).map((sheetSize) =>
-            Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
-          );
+      ? [{ height, size: undefined }]
+      : (sizes ?? (size ? [size] : [])).map((sheetSize) => ({
+          height: Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
+          size: sheetSize,
+        }));
   const cardHeights = requestedCardHeights
-    .map((requestedHeight) =>
-      Math.min(availableCardHeight, Math.max(minimumHeight, requestedHeight)),
-    )
-    .sort((left, right) => left - right)
-    .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
-  const cardHeight = cardHeights.at(-1) ?? 0;
+    .map((item) => ({
+      ...item,
+      height: Math.min(availableCardHeight, Math.max(0, minimumHeight, item.height)),
+    }))
+    .sort((left, right) => left.height - right.height)
+    .filter((item, index, heights) => index === 0 || item.height !== heights[index - 1]?.height);
+  const cardHeight = cardHeights.at(-1)?.height ?? 0;
   const closedDetent = dismissible ? 0 : programmatic(0);
-  const detents: Detent[] = [closedDetent, ...cardHeights];
+  const detents: Detent[] = [closedDetent, ...cardHeights.map((item) => item.height)];
+  const openIndex = Math.max(OPEN_INDEX, cardHeights.findIndex((item) => item.size === size) + 1);
+  const sizeByIndex = [undefined, ...cardHeights.map((item) => item.size)];
 
-  return { cardHeight, minimumCardHeight: cardHeights[0] ?? 0, detents };
+  return {
+    cardHeight,
+    minimumCardHeight: cardHeights[0]?.height ?? 0,
+    detents,
+    openIndex,
+    sizeByIndex,
+  };
 }
 
 const styles = StyleSheet.create({

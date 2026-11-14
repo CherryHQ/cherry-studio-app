@@ -161,3 +161,5 @@ calls the client directly for the same operation.
 - Route unmount does not cancel a turn, and foreground refresh replaces stale live state.
 - Text, reasoning, tool, approval, error, and terminal status parts render through shared chat
   surfaces.
+
+Context usage reflects the latest measured request input, not the generated reply, unsent draft, or later compaction. Publication and history updates refresh the selected branch measurement. The newest terminal assistant and visible model determine ownership; incomplete history windows and model mismatches make it unavailable rather than reviving an older answer.

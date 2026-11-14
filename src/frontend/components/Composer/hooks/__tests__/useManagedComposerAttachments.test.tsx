@@ -415,6 +415,64 @@ describe('useManagedComposerAttachments', () => {
     ]);
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
+
+  it('restarts the import of a tile restored as still importing via setAttachments', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(resolvedFile('00000000-0000-7000-8000-000000000041', 'slow.pdf'));
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('slow.pdf')]));
+    const stashed = [...(snapshot?.attachments ?? [])];
+    expect(stashed).toEqual([expect.objectContaining({ name: 'slow.pdf', status: 'importing' })]);
+
+    // The edit stash clears attachments and their import tokens, then restores them.
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.setAttachments(stashed));
+
+    // The orphaned original completion is ignored; the restarted import resolves the tile.
+    await act(async () => {
+      first.resolve(resolvedFile('00000000-0000-7000-8000-000000000040', 'slow.pdf'));
+      await first.promise;
+    });
+    await act(flushPromises);
+
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(2);
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000041',
+        status: 'ready',
+      }),
+    ]);
+  });
+
+  it('restarts the import of a tile re-added as still importing via addAttachments', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(resolvedFile('00000000-0000-7000-8000-000000000043', 'slow.pdf'));
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('slow.pdf')]));
+    const stashed = [...(snapshot?.attachments ?? [])];
+    expect(stashed).toEqual([expect.objectContaining({ name: 'slow.pdf', status: 'importing' })]);
+
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.addAttachments(stashed));
+
+    await act(async () => {
+      first.resolve(resolvedFile('00000000-0000-7000-8000-000000000042', 'slow.pdf'));
+      await first.promise;
+    });
+    await act(flushPromises);
+
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(2);
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000043',
+        status: 'ready',
+      }),
+    ]);
+  });
 });
 
 function Probe({

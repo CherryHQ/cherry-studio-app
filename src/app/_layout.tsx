@@ -36,6 +36,7 @@ import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/obser
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
+import { SshAuthenticationDialog } from '@/frontend/appShell/ssh';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { UuRemoteCallbackBridge } from '@/frontend/appShell/uuRemote';
@@ -99,6 +100,7 @@ function RootLayout() {
                                         <RestoreOutcomeNotice />
                                         <BackupDialog />
                                         <McpInteractionDialog />
+                                        <SshAuthenticationDialog />
                                       </AppUpdateProvider>
                                     </RouteHeaderProvider>
                                   </BottomSheetProvider>
