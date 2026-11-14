@@ -1,7 +1,7 @@
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import { Image } from '@cherrystudio/ui/components';
 
-import type { PermissionKind } from '../../permissionConfig';
+import type { PermissionKind } from '@/frontend/hooks/devicePermission/permissionConfig';
 
 export const visiblePermissionKinds = [
   'location',

@@ -5,6 +5,10 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { useProviderAvatar, useProviderAvatarActions } from '@/frontend/hooks/useProviderAvatar';
+import type {
+  ProviderAddress,
+  ProviderConfigurationValue,
+} from '@/frontend/types/providerConfiguration';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
@@ -30,7 +34,6 @@ import {
   buildProviderTextEndpointUpdates,
   ProviderApiServiceSaveError,
 } from '../../../apiService/utils/providerApiServiceSave';
-import type { ProviderAddress, ProviderConfigurationValue } from '../types';
 import {
   createProviderConfigurationValues,
   providerDefaultEndpointNeedsRepair,

@@ -1,11 +1,12 @@
 import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { isPermissionSupported } from '@/frontend/hooks/devicePermission/permissionConfig';
+
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { visiblePermissionKinds } from './components/PermissionListPresentation/PermissionListPresentation';
 import { PermissionSettingsItem } from './components/PermissionSettingsItem';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
-import { isPermissionSupported } from './permissionConfig';
 
 export default function PermissionsSettingsScreen() {
   const { t } = useTranslation();

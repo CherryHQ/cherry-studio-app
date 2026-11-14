@@ -108,6 +108,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
+| Device permission actions and status presentation | `frontend/hooks/devicePermission`, shared by settings and onboarding; preserves the settings request scopes and per-item action, while the backend permission owner serializes native prompts |
 | Temporary local-file previews without library records | `src/frontend/appShell/filePreview`, handing cache leases to the existing files viewer through opaque navigation identities |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |

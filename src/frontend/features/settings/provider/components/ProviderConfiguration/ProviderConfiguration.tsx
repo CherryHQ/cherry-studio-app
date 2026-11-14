@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { PolicyEditable, PolicyGroup } from '@/frontend/components/Policy';
+import type { ProviderConfigurationValue } from '@/frontend/types/providerConfiguration';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
 import { ProviderAccountSection } from './components/ProviderAccountSection';
@@ -13,7 +14,6 @@ import { ProviderApiKeysSection } from './components/ProviderApiKeysSection';
 import { ProviderConnectionTestSection } from './components/ProviderConnectionTestSection';
 import { ProviderIdentitySection } from './components/ProviderIdentitySection';
 import { ProviderVertexAuthSection } from './components/ProviderVertexAuthSection';
-import type { ProviderConfigurationValue } from './types';
 import { isVertexAuthConfigured } from './utils/providerVertexAuth';
 
 /**

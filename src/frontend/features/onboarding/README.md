@@ -1,123 +1,70 @@
-# OnboardingScreen
+# First-use onboarding
 
-First-use setup lives in the `/onboarding` native stack. The welcome page offers manual provider
-setup, synchronization from a computer, and setup later. Manual setup continues through provider →
-connection → chat model. Computer setup continues through device selection → scan → pairing →
-provider selection/import → chat model. Entry, step changes, retries, and completion use `replace`;
-completed steps are absent from back history. The welcome page is headerless; subsequent headers
-exit to the welcome page. The complete welcome content scrolls when larger text or a smaller window
-needs more room.
+New installations enter a dedicated visual flow: welcome → inline privacy choice → device
+permissions → notifications/background guidance → account SDK → subscription/model preparation.
+`app.onboarding.status` persists the resume point. The welcome action is **Get started**; provider
+connection and computer synchronization appear after account admission, not on another welcome page.
+Previously completed/skipped users and installations with saved models or Sessions retain their entry.
 
-The welcome page opens with a logo-led intro owned by `hooks/useWelcomeIntro.ts`. The logo draws
-alone at 1.35× near the vertical center of the screen. As the check lands, it glides back to its
-layout position and scale over 550 ms. The heading, description, primary actions, and setup-later
-action then rise and fade in with small offsets, and the page is complete about 2.3 seconds after
-the intro starts. While the intro runs, a tap anywhere on the page skips to the final state instead
-of reaching a control that is still hidden. The intro waits until neither the startup cover nor the
-privacy consent dialog hides the page, so a relaunch into a pending setup does not spend it behind
-the cover. It does not replay while the page stays mounted. Reduce Motion and an active screen
-reader both start from the final state, because controls that are still fading in remain
-focusable.
+## Presentation
 
-## Setup Ownership
+`components/OnboardingPage` owns first-use headers, content insets, controls, fields, choices and
+footer actions. Privacy, permissions and the account entry use their dedicated first-use UI.
+Provider selection and connection mount the existing provider components inside this frame. The
+`content` variant leaves scrolling, content insets and keyboard handling with those components.
+Account/profile selection and system permission prompts still belong to their SDK/OS owners.
+Settings retain their ordinary presentation.
 
-- A new installation passes the App Shell sign-in page (`/login`) first when the build supports
-  accounts; signing in to the community account or skipping continues here.
-- App Shell's `FirstUseGate` checks `app.onboarding.status` before chat restoration. An unseen
-  installation with saved models or Sessions keeps its existing entry behavior. New users can
-  skip. Chat greetings and empty states contain no onboarding or provider-connection entry.
-  Later provider configuration stays in the regular settings flow, including its model import.
-- Provider catalog and connection routes reuse the provider page's saved entities and form
-  state through an explicit route-owned `setupIntent` prop, not a URL parameter. Presets show the
-  API key first and fold name/base URL into advanced settings. Custom services show one address
-  and a protocol picker; saved custom services remain selectable after leaving setup.
-- `deviceConnections/` lets users resume with a saved computer. Paired computers without configuration
-  permission are unavailable for synchronization; bindings needing repair continue to the scanner.
-  Dedicated onboarding routes reuse the settings scanner, pairing progress, and `DesktopProviderSyncScreen`
-  through the same route-owned `setupIntent="chat"` contract. They stay in the onboarding stack;
-  an ordinary settings URL cannot opt into first-use behavior. Scanning replaces the scanner with
-  pairing progress, and successful pairing continues to provider import. Import replaces the
-  selection page with the existing chat-model page. The paired connection ID follows the flow,
-  including connection editing, so multiple computers never change the chosen source.
-- Pairing and provider import keep onboarding pending. Leaving the sync flow returns to the welcome
-  page and keeps the saved pairing/configuration. Empty provider previews can be reloaded; unsupported
-  providers cannot be selected. If an import has no supported chat models, users can sync again or
-  connect a provider manually. A selected imported model exposes its provider's connection editor.
-  Credentials never travel in route parameters.
-- `model/` combines saved models and a cancellable remote preview, filters to supported chat
-  models, and accepts a manual model ID when listing is unavailable. Only the selected model
-  is imported. It calls `models.checkChat`; settings batch checks use the same bound conversation Runtime.
-  It mounts `InlineSearch` together with the page header, matching provider selection before model
-  data arrives; loading and empty results do not add or remove native search. Manual entry removes
-  search. Both selection pages place the step hint after search and before their content. The model
-  page keeps its header, search, and step hint outside the keyboard-avoiding content. The model list
-  adjusts its native content insets, while the start action stays in a separate bottom region from
-  search and scrolling results.
-  Listing failures are separate from successful empty results: the screen shows a translated
-  error category and recovery action, never raw provider errors. Saved models remain selectable.
-- Completion requires an actual response from the bound conversation Runtime. It then enables
-  the model/provider, reuses the seeded Agent when possible, saves `agent.default_model_id` and
-  the completed status, and replaces setup with a draft chat. Fast/translation defaults are unchanged.
-- Cancellation/blur stops the probe and prevents subsequent navigation. Failed checks keep
-  saved connection/model data for retry without completing onboarding or changing defaults.
-  The probe sends no history or tools and may incur a small provider charge, disclosed beside
-  the start button. Credentials stay in the existing provider storage flow, never route params.
+The supplied welcome artwork is reused as artwork. On **Get started**, the same rendered mark
+shrinks from its measured hero position to the measured upper-left slot while the inline privacy
+content appears. Only transform and opacity animate, on the UI thread. The transition is 250 ms,
+retargets the current value on interruption, and docks immediately with Reduce Motion. Returning
+from a later stage or restoring an interrupted setup starts with the mark already docked. All pages
+support light/dark tokens, scrolling text and safe areas. Provider/model catalogs keep virtualized lists.
 
-## LogoDraw
+## Behavior and boundaries
 
-`components/LogoDraw/` is the paint-on reveal of the brand logo: the two orange swirls
-draw first as one continuous gesture, then the green check lands with a
-spring. Its page-local surface (see `components/LogoDraw/index.ts`) is `LogoDrawAnimation`, whose
-ref can play, replay, or `finish` the draw, plus the `LOGO_ASPECT_RATIO` and `logoDrawTiming`
-constants the welcome intro lays out and times against.
+- `FirstUseGate` and the privacy gate share installation eligibility. A fresh installation sees the
+  welcome screen before consent; existing users still receive policy-update dialogs. Both privacy
+  choices record the policy version. Anonymous-data sharing is checked by default for new users;
+  returning users retain their saved choice. A failed write keeps the current step actionable.
+- Permissions use the shared permission gateway and real system states. Grants are optional;
+  unsupported capabilities stay hidden. HealthKit records that the system selection finished,
+  without claiming it disclosed read grants. Settings and onboarding share the original request
+  scopes, action decisions, management instructions and per-item pending state through
+  `frontend/hooks/devicePermission`; an individual request does not lock the entire onboarding page.
+  Camera and local-network preparation are retained for computer pairing, and previously granted
+  permissions are reused.
+- Notification access is settled before sign-in when completion notifications are enabled. Prior OS
+  decisions are not repeated. Background guidance is recorded before the SDK can change profiles.
+  Login/profile switching remains in the account module; this feature supplies only its first-use
+  entry and the private-deployment inputs required by that module.
+- `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.
+  A paid, active, effective entitlement skips provider configuration and opens account-model selection.
+  `OnboardingModelList` adapts both paths to the existing `ModelPickerList` and CherryUI `SearchField`,
+  reusing provider groups, model avatars, chat badges, and selection marks rather than drawing rows.
+  Discovery candidates may be unsaved or disabled, so onboarding retains its own model data source
+  instead of using the picker's enabled-model query. Saving disables the shared list and search.
+  Saved model rows supply their identities, while the current account catalog and entitlements decide
+  which account models can be offered. Selection is confirmed by the user, never automatically saved.
+  A loading or failed lookup never means no subscription.
+  Organization profiles use their managed models; other accounts and skipped sign-ins can configure
+  a model or skip setup from the source/provider selection pages. Skipping commits the existing
+  `skipped` status before opening the main app, so an unconfigured model does not restart onboarding.
+  Provider and model configuration remains available in settings.
+- Provider routes compose the original `ProviderCatalogContent` and `ProviderConfiguration` with
+  the first-use header, step progress and continuation. Provider fields, account actions, connection
+  checks, catalog grouping and import behavior have one implementation in settings/provider.
+  Custom-provider navigation guards and creation still use the existing controllers. Model selection,
+  scanner, pairing and computer import retain this feature's presentation. Shared connection view
+  types live in `frontend/types/providerConfiguration.ts`. Credentials never travel in route parameters.
+- Model preparation keeps cancellable remote listing, saved-model fallback and manual IDs. Confirming
+  a model saves its default and binds the seeded Agent before opening draft chat, without sending a
+  chat probe. Provider credentials and model-list errors retain their original owners and recovery.
+  Cancellation/blur prevents unfinished setup from navigating; account-supplied catalogs remain read-only.
+- Computer import retains the chosen connection, unavailable-provider reasons, selected providers,
+  credential notice and recoverable previews. Imported configuration still continues to model setup.
+  Plugin connections and per-tool approvals retain their existing owners.
 
-### How it works
-
-The logo SVG consists of *filled outlines*, not strokes, so a classic
-dash-offset trick cannot draw it. Instead each fill path renders inside an
-alpha `<Mask>` whose content is a thick round-cap stroke growing along a
-hand-reconstructed centerline of the original pen stroke (Skia `Path`
-`end`-trim). The visible pixels always come from the original fill path —
-the mask only controls how much is revealed — so `progress = 1` is
-pixel-identical to the brand SVG. After the internal timeline settles, the
-component swaps to unmasked fills (drops three saveLayers).
-
-A single master `progress` shared value drives everything through
-`useDerivedValue` sub-segment mappings (`LOGO_DRAW_SEGMENTS`), so all
-per-frame work stays on the UI thread via Skia's Reanimated integration.
-
-### Geometry reverse-engineering (logoPaths.ts)
-
-- Both swirls are ~12-unit-thick ring strokes: outer rim r≈17.05, inner
-  edge = an r≈4.94 circular *hole* concentric with each ring center (the
-  small circles are negative space — verified by ray casting, easy to
-  misread as filled discs).
-- Centerlines are radius-11.1 arcs around the ring centers plus a cubic
-  waist for the right swirl; stroke width 12.6 covers the radial band with
-  margin. Builders live in `logoDrawMath.ts` (pure, unit-tested).
-- Each ring is a near-closed hook with a ~6-unit *mouth* at its top (between
-  the interlock lip and the arch that leads to the waist). A round mask nib
-  (half-width 6.3) placed inside a mouth bridges it and reveals the far arch
-  as a sliver detached from the growing blob — it only rejoins ~0.3 later
-  when the sweep comes all the way around, so it reads as a floating extra
-  stroke. The right sweep therefore starts at 231° (`LOWER_RIM_FROM_DEG`),
-  just below the mouth: the start nib covers the interlock lip (and sits 3.6
-  units from the C's bottom lip, so the handoff still reads) yet stays 7.8
-  units from the arch, keeping every revealed frame a single connected blob.
-  There is no separate cap lead-in — that lead-in was what used to drag the
-  nib through the mouth. Verified by an offline rasteriser (flatten the fill
-  polygon, intersect with the trimmed thick stroke, count connected
-  components): 0 detached components across all trims.
-
-### Calibrating after geometry changes
-
-`LogoDrawAnimation` takes a controlled `progress` shared value, which is the
-scrubbing seam for recalibration — drive it from a temporary slider (or a
-grid of fixed-progress instances, one `useSharedValue(p)` per cell, for a
-single before/after screenshot) and step through ~0.05 increments. At every
-step no fill may appear outside the growing mask corridor's leading edge, and
-the corridor must fully cover each shape by its segment end. To see the
-corridor itself, temporarily render each centerline as a translucent
-`<Path style="stroke">` with the matching trim next to the masks. The
-deterministic check for detached slivers is the offline rasteriser described
-above (flatten fill polygon ∩ trimmed thick stroke → count components).
+`components/LogoDraw` retains the supplied source artwork and its isolated draw-animation utility;
+first-use navigation now owns its own mark-position transition instead of the retired auto-play intro.

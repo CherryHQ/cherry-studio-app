@@ -11,7 +11,10 @@ This module owns the model selection surface, model metadata UI, and model setti
   Focusing search expands the sheet from `large` to `full`. Clearing search, dismissing the keyboard,
   and changing filters retain that height; a downward drag can return to `large` without discarding
   the current conditions. A filtered empty state offers one action to clear search and filters.
-- `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
+- `ModelPickerList` renders the grouped selectable model rows inside that sheet and the onboarding
+  page. Onboarding supplies its own discovered or entitled candidates, including models not yet
+  saved or enabled; the list owns row visuals, avatars, capability badges, and selection marks.
+  Its `disabled` input prevents selection while a caller is saving. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order. The contact-style index
   floats in a narrow capsule centered in the model-list viewport, capped at 80% of that viewport's

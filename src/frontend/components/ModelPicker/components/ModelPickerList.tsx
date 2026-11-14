@@ -29,6 +29,7 @@ const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  disabled?: boolean;
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
   density?: ModelPickerDensity;
@@ -49,6 +50,7 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  disabled: boolean;
   contentInset: 'default' | 'none';
   density: ModelPickerDensity;
   selectedModelId: string | null;
@@ -56,8 +58,9 @@ type ModelPickerListExtraData = {
   isFull: boolean;
 };
 
-/** Every selectable model on the device, grouped by provider in the shared picker sheet. */
+/** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  disabled = false,
   contentInset = 'default',
   density = 'default',
   emptyAction,
@@ -131,13 +134,14 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      disabled,
       contentInset,
       density,
       selectedModelId,
       selectedModelIds,
       isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
     }),
-    [contentInset, density, maxSelectedCount, selectedModelId, selectedModelIds],
+    [contentInset, density, disabled, maxSelectedCount, selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -159,6 +163,7 @@ export function ModelPickerList({
           contentInset={extraData.contentInset}
           density={extraData.density}
           isDisabled={
+            extraData.disabled ||
             Boolean(item.item.cloudUnavailable) ||
             (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected)
           }
@@ -227,6 +232,7 @@ export function ModelPickerList({
         </Text>
         {!isLoading && emptyAction ? (
           <Button
+            disabled={disabled}
             onPress={emptyAction.onPress}
             size="sm"
             variant={emptyAction.variant ?? 'secondary'}

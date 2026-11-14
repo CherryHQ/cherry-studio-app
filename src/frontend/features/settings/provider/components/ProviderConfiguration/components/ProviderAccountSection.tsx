@@ -4,9 +4,10 @@ import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import type { ProviderConfigurationAccount } from '@/frontend/types/providerConfiguration';
+
 import { ProviderSignInPromptRow } from '../../ProviderAccount/ProviderSignInPromptRow';
 import { useProviderAccount } from '../../ProviderAccount/useProviderAccount';
-import type { ProviderConfigurationAccount } from '../types';
 
 /**
  * Signing in to the provider's account, shown as rows like the rest of the page. Signed

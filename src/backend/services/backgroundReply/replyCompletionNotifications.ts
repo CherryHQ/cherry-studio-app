@@ -97,7 +97,16 @@ export function createReplyCompletionNotifier(
     // Decisions must reach the user even when optional completion alerts are off.
     permissionRequested = true;
     void loadNotifications()
-      .requestPermissionsAsync()
+      .getPermissionsAsync()
+      .then((permission) => {
+        // Keep the decision made during setup; a later reply must not ask again.
+        if (permission.status !== 'undetermined') return;
+        if (AppState.currentState !== 'active') {
+          permissionRequested = false;
+          return;
+        }
+        return loadNotifications().requestPermissionsAsync();
+      })
       .catch((error: unknown) => {
         // A native request error permits a later attempt.
         permissionRequested = false;
