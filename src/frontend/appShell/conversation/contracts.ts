@@ -274,7 +274,7 @@ export interface ConversationCatalog {
     signal: AbortSignal,
   ): Promise<CatalogPage<AgentSummary>>;
   listSessions(
-    filter: { agent?: AgentRef },
+    filter: { agent?: AgentRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;

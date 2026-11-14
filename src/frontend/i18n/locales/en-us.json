@@ -2366,6 +2366,8 @@
   "settings.provider.vertex.project": "Project ID",
   "settings.provider.vertex.title": "Service account",
   "settings.select.placeholder": "Select",
+  "settings.sessionBranchTree.saveFailed": "Couldn’t save the conversation branch display. Please try again.",
+  "settings.sessionBranchTree.title": "Branch conversation tree view",
   "settings.title": "Settings",
   "settings.voice.defaultVoice": "System default",
   "settings.voice.dictation.settingsUnavailable": "Couldn’t open system settings.",

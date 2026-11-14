@@ -31,6 +31,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
     expect(getDefaultValue('ui.sidebar.recent_view_mode')).toBe('sessions');
+    expect(getDefaultValue('ui.sidebar.session_tree_enabled')).toBe(true);
   });
 });
 

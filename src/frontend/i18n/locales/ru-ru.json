@@ -2400,6 +2400,8 @@
   "settings.provider.vertex.project": "ID проекта",
   "settings.provider.vertex.title": "Сервисный аккаунт",
   "settings.select.placeholder": "Выбрать",
+  "settings.sessionBranchTree.saveFailed": "Не удалось сохранить настройку отображения веток диалогов. Повторите попытку.",
+  "settings.sessionBranchTree.title": "Дерево веток диалогов",
   "settings.title": "Настройки",
   "settings.voice.defaultVoice": "По умолчанию в системе",
   "settings.voice.dictation.settingsUnavailable": "Не удалось открыть системные настройки.",

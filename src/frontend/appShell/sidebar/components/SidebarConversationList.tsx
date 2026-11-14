@@ -36,6 +36,7 @@ import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/n
 import { conversationHref, useConversationTarget } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
+import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -353,9 +354,20 @@ function SidebarSessions(props: SidebarSessionsProps) {
 function SidebarCurrentSessionList(props: SidebarSessionsProps) {
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
+  const [isSessionTreeEnabled] = usePreference('ui.sidebar.session_tree_enabled');
   const visible = useSidebarPresence() !== 'closed';
-  const path = useConversationSessionPath(visible ? navigation.sessionId : undefined);
-  return <SidebarSessionList {...props} activePath={path.items} visible={visible} />;
+  const path = useConversationSessionPath(
+    visible && isSessionTreeEnabled ? navigation.sessionId : undefined,
+  );
+  return (
+    <SidebarSessionList
+      key={isSessionTreeEnabled ? 'tree' : 'flat'}
+      {...props}
+      activePath={path.items}
+      visible={visible}
+      isSessionTreeEnabled={isSessionTreeEnabled}
+    />
+  );
 }
 
 function includePathSession(
@@ -372,18 +384,22 @@ function SidebarSessionList({
   agentId,
   activePath = noSessionPath,
   visible = true,
+  isSessionTreeEnabled = true,
   onSelect,
   registerEndReachedHandler,
   showLoading,
 }: {
   activePath?: readonly ConversationSummary[];
   visible?: boolean;
+  isSessionTreeEnabled?: boolean;
 } & SidebarSessionsProps) {
   const { t } = useTranslation();
   const refreshBranchLayout = useSidebarBranchLayoutRefresh();
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
-  const query = useConversationSessions(agentRef, source.ref.kind !== 'desktop' || visible);
+  const query = useConversationSessions(agentRef, source.ref.kind !== 'desktop' || visible, {
+    includeBranches: !isSessionTreeEnabled,
+  });
   const [showAll, setShowAll] = useState(false);
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
@@ -394,7 +410,7 @@ function SidebarSessionList({
   const pathTarget = visible ? activePath.at(-1)?.ref.sessionId : undefined;
   const shownSessions = includePathSession(
     sessions.slice(0, limit),
-    !agentRef || root?.agentId === agentId ? root : undefined,
+    isSessionTreeEnabled && (!agentRef || root?.agentId === agentId) ? root : undefined,
   );
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;
@@ -438,7 +454,7 @@ function SidebarSessionList({
         />
       )}
       {shownSessions.map((session) =>
-        session.hasChildren && source.catalog.listSessionChildren ? (
+        isSessionTreeEnabled && session.hasChildren && source.catalog.listSessionChildren ? (
           <SidebarSessionTreeNode
             key={
               session.ref.sessionId === root?.ref.sessionId && pathTarget

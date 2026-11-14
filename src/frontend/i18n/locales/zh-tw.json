@@ -2349,6 +2349,8 @@
   "settings.provider.vertex.project": "專案 ID",
   "settings.provider.vertex.title": "服務帳號",
   "settings.select.placeholder": "選擇",
+  "settings.sessionBranchTree.saveFailed": "儲存會話分支顯示設定失敗，請重試。",
+  "settings.sessionBranchTree.title": "分支對話樹狀檢視",
   "settings.title": "設定",
   "settings.voice.defaultVoice": "系統預設",
   "settings.voice.dictation.settingsUnavailable": "無法開啟系統設定。",

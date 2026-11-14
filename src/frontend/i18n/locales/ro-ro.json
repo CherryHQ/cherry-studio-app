@@ -2383,6 +2383,8 @@
   "settings.provider.vertex.project": "ID proiect",
   "settings.provider.vertex.title": "Cont de serviciu",
   "settings.select.placeholder": "Selectează",
+  "settings.sessionBranchTree.saveFailed": "Nu s-a putut salva modul de afișare a ramurilor conversațiilor. Încearcă din nou.",
+  "settings.sessionBranchTree.title": "Vizualizare arborescentă a conversațiilor ramificate",
   "settings.title": "Setări",
   "settings.voice.defaultVoice": "Implicit sistem",
   "settings.voice.dictation.settingsUnavailable": "Nu s-au putut deschide setările sistemului.",

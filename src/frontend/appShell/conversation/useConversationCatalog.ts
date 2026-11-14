@@ -96,11 +96,15 @@ export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
   return useCatalog(['agents'], catalog.listAgents, enabled);
 }
-export function useConversationSessions(agent?: AgentRef, enabled = true) {
+export function useConversationSessions(
+  agent?: AgentRef,
+  enabled = true,
+  { includeBranches = false }: { includeBranches?: boolean } = {},
+) {
   const { catalog } = useConversationSource();
   return useCatalog(
-    ['sessions', agent ?? ''],
-    (cursor, signal) => catalog.listSessions({ agent }, cursor, signal),
+    ['sessions', agent ?? '', includeBranches ? 'all' : 'roots'],
+    (cursor, signal) => catalog.listSessions({ agent, includeBranches }, cursor, signal),
     enabled,
   );
 }

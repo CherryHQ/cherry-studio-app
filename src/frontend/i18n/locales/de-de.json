@@ -2366,6 +2366,8 @@
   "settings.provider.vertex.project": "Projekt-ID",
   "settings.provider.vertex.title": "Dienstkonto",
   "settings.select.placeholder": "Auswählen",
+  "settings.sessionBranchTree.saveFailed": "Die Anzeige der Gesprächsverzweigungen konnte nicht gespeichert werden. Bitte erneut versuchen.",
+  "settings.sessionBranchTree.title": "Baumansicht der Gesprächsverzweigungen",
   "settings.title": "Einstellungen",
   "settings.voice.defaultVoice": "Systemstandard",
   "settings.voice.dictation.settingsUnavailable": "Systemeinstellungen konnten nicht geöffnet werden.",

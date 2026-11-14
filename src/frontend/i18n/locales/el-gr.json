@@ -2366,6 +2366,8 @@
   "settings.provider.vertex.project": "Αναγνωριστικό έργου",
   "settings.provider.vertex.title": "Λογαριασμός υπηρεσίας",
   "settings.select.placeholder": "Επιλέξτε",
+  "settings.sessionBranchTree.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της εμφάνισης των κλάδων συνομιλιών. Δοκιμάστε ξανά.",
+  "settings.sessionBranchTree.title": "Προβολή δέντρου κλάδων συνομιλιών",
   "settings.title": "Ρυθμίσεις",
   "settings.voice.defaultVoice": "Προεπιλογή συστήματος",
   "settings.voice.dictation.settingsUnavailable": "Δεν ήταν δυνατό το άνοιγμα των ρυθμίσεων συστήματος.",
