@@ -1,11 +1,8 @@
 import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import MaskedView from '@react-native-masked-view/masked-view';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 export function ShareSheet({
   children,
@@ -28,7 +25,6 @@ export function ShareSheet({
   onShare(): void;
 }>) {
   const { t } = useTranslation();
-  const mask = useThemeColor('constant-black');
   return (
     <BottomSheet
       open
@@ -62,30 +58,11 @@ export function ShareSheet({
       }
     >
       <View className="min-h-0 flex-1">
-        {children}
+        <View className="min-h-0 flex-1">{children}</View>
         {formatControls ? (
-          <>
-            <View className="absolute right-0 bottom-0 left-0 h-[90px]" pointerEvents="none">
-              <MaskedView
-                style={{ flex: 1 }}
-                maskElement={
-                  <View
-                    className="flex-1"
-                    style={{
-                      experimental_backgroundImage: `linear-gradient(to bottom, transparent, ${mask} 80%)`,
-                    }}
-                  />
-                }
-              >
-                <View className="flex-1 bg-background dark:bg-popover">
-                  <View className="absolute inset-0 dark:bg-secondary" />
-                </View>
-              </MaskedView>
-            </View>
-            <View className="absolute right-0 bottom-3.5 left-0" pointerEvents="box-none">
-              {formatControls}
-            </View>
-          </>
+          <View className="pt-3 pb-3.5" pointerEvents="box-none">
+            {formatControls}
+          </View>
         ) : null}
       </View>
     </BottomSheet>

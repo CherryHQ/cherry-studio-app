@@ -282,3 +282,149 @@ test('cancelled delivery never starts image conversion', async () => {
   });
   expect(session.render).toHaveBeenCalledTimes(1);
 });
+
+test('the browser receives only prepared HTML, not a temporary document during asset loading', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  let finish!: (artifact: DocumentExportArtifact) => void;
+  session.render.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" />);
+  });
+  expect(ref.current!.isPreparing).toBe(true);
+  expect(ref.current!.html).toBe('');
+  await act(async () => {
+    finish({ ...htmlArtifact, html: '<main>Prepared assets</main>' });
+  });
+  expect(ref.current!.isPreparing).toBe(false);
+  expect(ref.current!.html).toBe('<main>Prepared assets</main>');
+});
+
+test('image → HTML → image isolates failures and page measurements even when HTML is identical', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" />);
+  });
+  const first = ref.current!;
+  act(() => first.onPreviewError());
+  expect(ref.current!.error).toBeInstanceOf(DocumentExportError);
+  await act(async () => {
+    renderer!.update(<Probe ref={ref} session={session} format="html" />);
+  });
+  const html = ref.current!;
+  expect(html.error).toBeUndefined();
+  await act(async () => {
+    renderer!.update(<Probe ref={ref} session={session} format="image" />);
+  });
+  expect(ref.current!.html).toBe(first.html);
+  expect(ref.current!.error).toBeUndefined();
+  const pages = [{ top: 0, height: 300 }];
+  act(() => ref.current!.onPages(pages));
+  act(() => {
+    first.onPreviewError(new Error('Late image error'));
+    html.onPreviewError(new Error('Late HTML error'));
+    first.onPages([{ top: 0, height: 999 }]);
+  });
+  expect(ref.current!.error).toBeUndefined();
+  expect(ref.current!.pages).toEqual(pages);
+});
+
+test('returning to image while HTML preparation is pending does not revive the earlier image result', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} session={session} format="image" />);
+  });
+  let finish!: (artifact: DocumentExportArtifact) => void;
+  session.render.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => {
+    renderer!.update(<Probe ref={ref} session={session} format="html" />);
+  });
+  await act(async () => {
+    renderer!.update(<Probe ref={ref} session={session} format="image" />);
+  });
+  expect(ref.current!.isPreparing).toBe(true);
+  expect(ref.current!.html).toBe('');
+  expect(session.render).toHaveBeenCalledTimes(2);
+  await act(async () => finish({ ...htmlArtifact, html: '<main>Obsolete HTML</main>' }));
+  expect(session.render).toHaveBeenCalledTimes(3);
+  expect(ref.current!.isPreparing).toBe(false);
+  expect(ref.current!.html).toBe(htmlArtifact.html);
+});
+
+test.each([true, false])(
+  'late measurements cannot clear a failed preview (batched: %s)',
+  async (batched) => {
+    const ref = createRef<Preview>();
+    const session = createSession();
+    await act(async () => {
+      renderer = create(<Probe ref={ref} session={session} format="image" />);
+    });
+    const failedPreview = ref.current!;
+    const error = new DocumentExportError('capture-failed');
+    const pages = [{ top: 0, height: 300 }];
+    if (batched) {
+      act(() => {
+        failedPreview.onPreviewError(error);
+        failedPreview.onPages(pages);
+      });
+    } else {
+      act(() => failedPreview.onPreviewError(error));
+      act(() => failedPreview.onPages(pages));
+    }
+    expect(ref.current!.error).toBe(error);
+
+    await act(async () => ref.current!.retry());
+    act(() => ref.current!.onPages(pages));
+    act(() => failedPreview.onPreviewError(error));
+    expect(ref.current!.error).toBeUndefined();
+    expect(ref.current!.pages).toEqual(pages);
+  },
+);
+
+test.each(['preparation', 'browser'] as const)(
+  'retry clears a %s failure before the replacement finishes',
+  async (failure) => {
+    const ref = createRef<Preview>();
+    const session = createSession();
+    const error = new DocumentExportError('capture-failed');
+    if (failure === 'preparation') session.render.mockRejectedValueOnce(error);
+    await act(async () => {
+      renderer = create(<Probe ref={ref} session={session} format="image" />);
+    });
+    const previous = ref.current!;
+    if (failure === 'browser') act(() => previous.onPreviewError(error));
+    expect(ref.current!.error).toBe(error);
+    let finish!: (artifact: DocumentExportArtifact) => void;
+    session.render.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await act(async () => ref.current!.retry());
+    expect(ref.current!.isPreparing).toBe(true);
+    expect(ref.current!.error).toBeUndefined();
+    act(() => previous.onPreviewError(error));
+    expect(ref.current!.error).toBeUndefined();
+    await act(async () => finish(htmlArtifact));
+    expect(ref.current!.isPreparing).toBe(false);
+    expect(ref.current!.html).toBe(htmlArtifact.html);
+    expect(ref.current!.error).toBeUndefined();
+    // A genuine failure from the new browser must still be reported.
+    const sizeError = new DocumentExportError('image-size-limit');
+    act(() => ref.current!.onPreviewError(sizeError));
+    expect(ref.current!.error).toBe(sizeError);
+  },
+);

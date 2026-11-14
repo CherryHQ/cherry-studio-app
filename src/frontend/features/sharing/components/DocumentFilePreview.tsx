@@ -77,6 +77,6 @@ function renderSourceBlock({ item }: LegendListRenderItemProps<string>) {
 
 const styles = StyleSheet.create({
   list: { flex: 1 },
-  content: { padding: 20, paddingBottom: 80 },
+  content: { padding: 20 },
   source: { fontSize: 12.5, lineHeight: 20 },
 });

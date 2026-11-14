@@ -1,5 +1,5 @@
 import { CardStack, ContentState, useToast } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -16,14 +16,12 @@ import { DocumentExportError } from '@/shared/contracts/documentExport';
 import { useDocumentExportHtmlCapture } from '../hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from '../hooks/useDocumentExportPreview';
 import { useExportPresentation } from '../hooks/useExportPresentation';
-import { IMAGE_PAGE_HEIGHT, type ImagePageSlice } from '../utils/imagePagePlan';
 import { DocumentFilePreview } from './DocumentFilePreview';
 import { DocumentPagePreview } from './DocumentPagePreview';
 import { ShareFormatTabs } from './ShareFormatTabs';
 import { ShareSheet } from './ShareSheet';
 
 type Request = Extract<NonNullable<ReturnType<typeof getShareRequest>>, { kind: 'document' }>;
-const FIRST_PAGE: readonly ImagePageSlice[] = [{ top: 0, height: IMAGE_PAGE_HEIGHT }];
 
 export function DocumentShareSheet({ request, onClose }: { request: Request; onClose(): void }) {
   const { t } = useTranslation();
@@ -42,21 +40,9 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   const presentation = deliveryPresentation ?? livePresentation;
   const { capture, surface, onCaptureLayout } = useDocumentExportHtmlCapture();
   const preview = useDocumentExportPreview(request.session, format, presentation, capture);
-  const [plan, setPlan] = useState<{ html: string; pages: readonly ImagePageSlice[] }>();
-  const [failure, setFailure] = useState<{ html: string; error?: unknown }>();
-  const failedHtml = failure?.html;
-  const error = preview.error ?? (failedHtml === preview.html ? failure?.error : undefined);
+  const error = preview.error;
   const isSizeLimit =
     error instanceof DocumentExportError && ['size-limit', 'image-size-limit'].includes(error.code);
-  const pages = format === 'image' && plan?.html === preview.html ? plan.pages : FIRST_PAGE;
-  const onPages = useCallback(
-    (pages: readonly ImagePageSlice[]) => setPlan({ html: preview.html, pages }),
-    [preview.html],
-  );
-  const onPreviewError = useCallback(
-    (error?: unknown) => setFailure({ html: preview.html, error }),
-    [preview.html],
-  );
   const [isPending, setIsPending] = useState(false);
   const pending = useRef<AbortController | undefined>(undefined);
   const savePhotos = useSaveImagesToPhotos();
@@ -109,10 +95,6 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
       })(),
     );
   };
-  const retry = () => {
-    setFailure(undefined);
-    preview.retry();
-  };
   const saveImages = () => {
     if (pending.current) return;
     void savePhotos((signal) =>
@@ -155,7 +137,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   return (
     <ShareSheet
       isPending={isPending}
-      canShare={!preview.error && failedHtml !== preview.html}
+      canShare={!preview.isPreparing && !error}
       onClose={() => {
         pending.current?.abort();
         onClose();
@@ -195,7 +177,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
               {t('documentExport.issues', { count: preview.issues.length })}
             </Text>
           ) : null}
-          {preview.error || failedHtml === preview.html ? (
+          {error ? (
             <View className="flex-1 justify-center p-6">
               <ContentState.Error
                 title={t(
@@ -205,13 +187,17 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
                       ? 'documentExport.paused'
                       : 'documentExport.deliveryFailed',
                 )}
-                primaryAction={{ children: t('common.retry'), onPress: retry }}
+                primaryAction={{ children: t('common.retry'), onPress: preview.retry }}
               />
+            </View>
+          ) : preview.isPreparing ? (
+            <View className="flex-1 justify-center p-6">
+              <ContentState.Loading />
             </View>
           ) : (
             <CardStack
               layout="fill"
-              items={pages}
+              items={preview.pages}
               index={index}
               onIndexChange={setIndex}
               labels={{
@@ -229,8 +215,8 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
                     height={frame.height}
                     isImage={format === 'image'}
                     layout={presentation.imageFrame?.layout ?? 'pages'}
-                    onPages={onPages}
-                    onError={onPreviewError}
+                    onPages={preview.onPages}
+                    onError={preview.onPreviewError}
                   />
                 );
                 return format === 'image' ? (
