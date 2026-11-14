@@ -3,3 +3,5 @@ export {
   openTemporaryFilePreview,
   retainTemporaryFilePreview,
 } from './temporaryFilePreview';
+
+export { prepareTemporaryFilePreview } from './prepareTemporaryFilePreview';
