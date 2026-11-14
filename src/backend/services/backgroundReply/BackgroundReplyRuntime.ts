@@ -15,10 +15,7 @@ import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
-import type {
-  KeepAliveLease,
-  KeepAliveSource,
-} from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundActivityActions,
   BackgroundActivityActionResponse,
@@ -67,6 +64,7 @@ type TurnRecord = {
   key: string;
   latestMessage?: BackgroundReplyMessage;
   onInterrupt?: (reason: Error) => void | Promise<void>;
+  keepAlive: boolean;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -94,7 +92,7 @@ type EnvironmentPort = {
 /**
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
- * messages, and holds execution until the turn and its final delivery settle.
+ * messages, and delivers the final result. Local execution owns its protection.
  * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
  * behind the injected session manager. Platform availability is a presenter
  * and lease-source concern; this runtime never branches on it.
@@ -107,7 +105,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
   private disposed = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
-  private readonly preparationLeases = new Set<KeepAliveLease>();
   private turns = new Map<string, TurnRecord>();
 
   constructor(
@@ -150,8 +147,6 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
   }
 
   private cancelSessions(): void {
-    for (const lease of this.preparationLeases) lease.release();
-    this.preparationLeases.clear();
     for (const record of this.turns.values()) {
       this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
       this.clearUpdateTimer(record);
@@ -160,28 +155,20 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     }
   }
 
-  acquirePreparation = (
-    sessionId: string,
-    onInterrupt: (reason: Error) => void,
-  ): KeepAliveLease => {
-    if (!this.isReady || this.disposed) return { release() {} };
-    const lease = this.keepAlive.acquire('chat.preparation', onInterrupt);
-    this.preparationLeases.add(lease);
+  prepareSession = (sessionId: string): (() => void) => {
+    if (!this.isReady || this.disposed) return () => {};
     const prepared = this.prepareTurn(sessionId);
-    return {
-      release: () => {
-        if (this.preparationLeases.delete(lease)) lease.release();
-        // A turn that started owns the record now. Nothing took it over means
-        // preparation ended without one, so its surface has nothing to say.
-        if (prepared && this.turns.get(sessionId) === prepared) this.clearTurn(sessionId);
-      },
+    if (prepared) {
+      this.beginReplyDestination(prepared);
+      this.ensureSession(prepared);
+    }
+    return () => {
+      if (prepared && this.turns.get(sessionId) === prepared) this.clearTurn(sessionId);
     };
   };
 
   /**
-   * Opens the Session's surface for the preparation stage. A surface can only
-   * be created while the user can still see the app, and preparation is the
-   * part of a submission they are most likely to walk away from.
+   * Prepares presentation only. The execution owner acquires protection before calling this.
    */
   private prepareTurn(sessionId: string): TurnRecord | undefined {
     if (this.turns.has(sessionId)) return undefined;
@@ -193,11 +180,10 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       deepLinkUrl: sessionTaskUrl(sessionId),
       generation: ++this.generation,
       key: sessionId,
+      keepAlive: false,
       startedAtEpochMs: Date.now(),
     };
     this.turns.set(sessionId, record);
-    this.beginReplyDestination(record);
-    this.ensureSession(record);
     return record;
   }
 
@@ -219,6 +205,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       generation,
       key: normalized.key,
       onInterrupt: input.onInterrupt,
+      keepAlive: input.connectionId !== undefined,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
@@ -260,7 +247,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           });
         }),
       finish: (outcome, options) => {
-        void this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
+        return this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
           (error: unknown) => {
             logger.error('Background reply failed to finish turn', error as Error, {
               key: record.key,
@@ -296,7 +283,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       if (!record || record.conversationTitle === title.trim()) return;
       record.conversationTitle = title.trim();
       record.session?.update(this.toActivityProps(record), {
-        keepAlive: true,
+        keepAlive: record.keepAlive,
         urgent: true,
       });
     });
@@ -374,7 +361,11 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     // A different answer may have owned the decision. Restore the local reply's latest content
     // now, without waiting for its owner to stream another update. Remote sources supply content.
     if (!interaction && record.latestMessage) this.refreshContent(record);
-    else record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+    else
+      record.session?.update(this.toActivityProps(record), {
+        keepAlive: record.keepAlive,
+        urgent: true,
+      });
     if (record.actions && record.content.attentionId === interaction?.id)
       this.deliverAttention(record, false);
   }
@@ -408,7 +399,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     const urgent = record.content.phase !== content.phase || previousAttention !== attention;
     record.content = content;
     record.session?.update(this.toActivityProps(record), {
-      keepAlive: true,
+      keepAlive: record.keepAlive,
       urgent,
     });
     const notifications = this.environment.replyNotifications;
@@ -492,14 +483,16 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       preview,
       this.environment.translate,
     );
-    // Keep the turn's lease through persistence and terminal delivery. A
-    // foreground/background transition or an attention phase never releases it.
-    record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
-    // iOS may replace the finished activity with a completion notification.
-    // Keep protection through that handoff even though finish ends the session.
-    const deliveryLease = this.environment.replyNotifications
-      ? this.keepAlive.acquire('chat.replyNotice')
-      : undefined;
+    // The local execution owner awaits delivery before completing its task.
+    record.session?.update(this.toActivityProps(record), {
+      keepAlive: record.keepAlive,
+      urgent: true,
+    });
+    // Remote sessions retain their existing notification handoff protection.
+    const deliveryLease =
+      record.keepAlive && this.environment.replyNotifications
+        ? this.keepAlive.acquire('chat.replyNotice')
+        : undefined;
     try {
       if (waitFor) await this.waitForFinishDependency(key, waitFor);
       await this.enqueue(async () => {
@@ -572,11 +565,11 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     if (timeout !== undefined) clearTimeout(timeout);
   }
 
-  /** The manager owns presentation; every unfinished turn owns execution. */
+  /** Local execution is independent of presentation; remote sessions retain their existing lease. */
   private ensureSession(record: TurnRecord): void {
     if (!this.isReady || this.disposed) return;
 
-    const keepAlive = true;
+    const keepAlive = record.keepAlive;
     if (record.session) {
       record.session.update(this.toActivityProps(record), { keepAlive, urgent: true });
       return;

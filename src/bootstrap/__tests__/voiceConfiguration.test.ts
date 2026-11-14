@@ -63,7 +63,7 @@ test('the combined camera, picker, audio and recognition plugins retain Android 
   expect(actions).toContain('android.speech.RecognitionService');
 });
 
-test('the combined plugins retain the voice microphone purpose on iOS without background audio', async () => {
+test('voice plugins retain microphone purposes and the app-owned audio/processing background modes on iOS', async () => {
   const config = voicePlugins();
   // Prebuild merges this static Info.plist config; running the mods below replaces it in memory.
   const staticInfoPlist = { ...config.ios?.infoPlist };
@@ -71,9 +71,11 @@ test('the combined plugins retain the voice microphone purpose on iOS without ba
     ...config,
     modRawConfig: config,
     modRequest: { ...request, platform: 'ios', modName: 'infoPlist' },
-    modResults: {},
+    modResults: { ...appConfig.expo.ios.infoPlist },
   });
   expect(result.modResults.NSMicrophoneUsageDescription).toContain('voice input');
   expect(staticInfoPlist.NSSpeechRecognitionUsageDescription).toContain('voice input');
-  expect(result.modResults.UIBackgroundModes ?? []).not.toContain('audio');
+  expect(result.modResults.UIBackgroundModes).toEqual(
+    expect.arrayContaining(['audio', 'processing']),
+  );
 });

@@ -196,8 +196,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
-library management, Office operations, Health, Reminders, Calendar, Location, image generation and Agent management) register as upstream `deferred`
+MCP capabilities and built-in tools marked `deferred` (managed-file read/write/edit, file-library and
+workspace tools, Skill creation/installation/adaptation, Office operations, Health, Reminders,
+Calendar, Location, image generation and Agent management) register as upstream `deferred`
 tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
 because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
@@ -227,8 +228,10 @@ The initial prompt retains plugin capability overviews, critical constraints, an
 rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
 connection's tools are refused before approval until its guide is present. Loading ends its tool
 round; dependent actions are planned only after the next request supplies the complete instructions.
-Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
-their full routing descriptions retain the existing catalog budget.
+Loaded guides remain for later turns of the Session. Questions and Skill readers remain directly
+exposed so clarification and workflow loading do not require a discovery round. Their concise
+descriptions preserve invocation and pagination rules; full Skill routing metadata retains the
+existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -275,7 +278,11 @@ Agent's approval mode decides whether a mutation waits for the user. A successfu
 permits editing that source into a workspace copy during this turn and leaves the source unchanged.
 It does not grant `read_file` future outside-library access.
 
-The six management tools are deferred; `library_search_files` names them for `tool_search`.
+Library search/read and the six management tools are deferred, alongside managed-file and workspace
+tools. The initial Tools On Demand section names them for `tool_search`; a loaded
+`library_search_files` also names the management tools.
+Both file readers carry their own complete parser, pagination and image-delivery instructions,
+composed from the same definition; `library_read_file` does not require loading `read_file` first.
 `library_list_folders` searches active folder names or lists direct children, returning stable ids
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
@@ -784,7 +791,9 @@ successive `text` windows until `nextOffset` is null recovers the complete origi
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Document assets remain `reference-only`; an explicit read of an authorized managed image is a
 separate operation.
-Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
+For text, PDF, AnyDoc, and OCR reads, mixed line/offset parameters are rejected before content is
+read, after schema validation, reference authorization, and source resolution succeed.
+The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
 
 The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
@@ -851,11 +860,14 @@ A client without the native module, or whose native module predates the interact
 no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
 `read_file` can explicitly read PNG, JPEG, WebP and GIF within its conversation or workspace access scope.
-It reuses native image normalization and the existing attachment byte limit. Vision-capable model
-calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
-details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
-When rebuilding from transcript alone, read the image again if its pixels are needed. Arbitrary
-paths and directory enumeration remain unavailable.
+It reuses native image normalization and the existing attachment byte limit. After schema validation,
+reference authorization, source resolution, and the attachment byte-limit check succeed, direct-pixel
+image reads reject any supplied paging parameter, including mixed line/offset groups, before reading or
+normalizing pixels, and instruct the caller to retry without start_line, limit, offset, or max_characters.
+Text-only models retain OCR text paging. Vision-capable model calls receive bounded pixels; scripts
+receive metadata. Visible Cherry transcript parts and tool details omit pixels, but a valid context
+checkpoint within the 256 KiB limit can retain them. When rebuilding from transcript alone, read the image
+again if its pixels are needed. Arbitrary paths and directory enumeration remain unavailable.
 
 ### Skill Boundary
 
@@ -957,7 +969,7 @@ approvals: leaving a route does not cancel the turn, but cancellation, host disp
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
 A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
-with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+with a question-specific label and retains its keep-alive lease until the turn settles. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
 

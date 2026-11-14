@@ -16,6 +16,12 @@ export type BuiltInToolTitleName = BuiltInToolCapabilityId | HostToolName;
 
 /** Title keys shared by the chat transcript and background activity surfaces. */
 export const BUILT_IN_TOOL_TITLE_KEYS = {
+  ssh_execute: 'ssh.command.run',
+  ssh_list_files: 'ssh.files.list',
+  ssh_read_file: 'ssh.files.read',
+  ssh_write_file: 'ssh.files.write',
+  ssh_download_file: 'ssh.files.download',
+  ssh_upload_file: 'ssh.files.upload',
   inspect_office_file: 'chat.builtinTool.office.inspect',
   read_office_content: 'chat.builtinTool.office.read',
   edit_document: 'chat.builtinTool.office.editDocument',

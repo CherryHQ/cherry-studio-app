@@ -11,7 +11,7 @@ export const AccountSessionContextSchema = z.object({
 export type AccountSessionContext = z.infer<typeof AccountSessionContextSchema>;
 
 export type AccountErrorCode =
-  /** The build carries no Accounts Portal configuration. */
+  /** Cloud login cannot obtain a registration for this installation. */
   | 'unavailable'
   | 'address'
   | 'connection'

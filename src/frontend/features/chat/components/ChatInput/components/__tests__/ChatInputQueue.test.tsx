@@ -18,6 +18,7 @@ import { ChatInputQueue } from '../ChatInputQueue';
 
 const mockToast = jest.fn();
 const mockCancel = jest.fn();
+const mockSteer = jest.fn();
 const mockSubmit = jest.fn();
 const mockStop = jest.fn();
 const mockOpenFile = jest.fn();
@@ -55,7 +56,9 @@ jest.mock('../../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteState: () => ({ fields: mockQuoteFields, isBusy: false }),
 }));
 jest.mock('../../../../runtime', () => ({
-  useAgentChatClient: () => ({ client: { cancelQueuedInput: mockCancel } }),
+  useAgentChatClient: () => ({
+    client: { cancelQueuedInput: mockCancel, steerQueuedInput: mockSteer },
+  }),
   useAgentQueuedInputs: () => mockInputs,
 }));
 jest.mock('@/frontend/components/Composer', () => {
@@ -302,8 +305,59 @@ beforeEach(() => {
     return 'withdrawn';
   });
 });
+
+it('shows the queue title and count as a button label and starts expanded', async () => {
+  render();
+  const toggle = tree.root.findByProps({ testID: 'chat-input-queue-toggle' });
+  expect(toggle.props.children).toBe('Queued (2)');
+  expect(queueCount()).toBe('2');
+  await press('chat-input-queue-toggle');
+  expect(queueCount()).toBe('0');
+  expect(tree.root.findByProps({ testID: 'chat-input-queue-toggle' }).props.children).toBe(
+    'Queued (2)',
+  );
+  await press('chat-input-queue-toggle');
+  expect(queueCount()).toBe('2');
+});
 afterEach(() => {
   act(() => tree?.unmount());
+});
+
+it('locks repeated steer clicks and retains the row until its accepted observation arrives', async () => {
+  let accept!: (value: string) => void;
+  mockSteer.mockImplementation(
+    () =>
+      new Promise<string>((resolve) => {
+        accept = resolve;
+      }),
+  );
+  render('Draft stays');
+  const button = tree.root.findByProps({ testID: 'chat-input-queue-steer-turn-1' });
+  act(() => {
+    button.props.onPress();
+    button.props.onPress();
+  });
+  expect(mockSteer).toHaveBeenCalledTimes(1);
+  expect(queueCount()).toBe('2');
+  await act(async () => accept('accepted'));
+  await press('chat-input-queue-steer-turn-1');
+  expect(mockSteer).toHaveBeenCalledTimes(1);
+  expect(composer.draft).toBe('Draft stays');
+  expect(mockCancel).not.toHaveBeenCalled();
+  mockInputs = [input('turn-2')];
+  refresh();
+  expect(queueCount()).toBe('1');
+});
+
+it('keeps a failed steer queued and allows retrying it', async () => {
+  mockSteer.mockRejectedValueOnce(new Error('Offline')).mockResolvedValue('accepted');
+  render();
+  await press('chat-input-queue-steer-turn-1');
+  expect(queueCount()).toBe('2');
+  expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'danger' }));
+  await press('chat-input-queue-steer-turn-1');
+  expect(mockSteer).toHaveBeenCalledTimes(2);
+  expect(mockCancel).not.toHaveBeenCalled();
 });
 
 it('opens all full text without changing count, positions or queue, and closing changes nothing', () => {

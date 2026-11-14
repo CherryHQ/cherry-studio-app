@@ -1,12 +1,13 @@
 import {
   ContextMenu,
+  FileBrowserRow,
   type MenuItem,
   SelectionIndicator,
   Skeleton,
 } from '@cherrystudio/ui/components';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import {
   fileEntryPreviewKind,
@@ -52,11 +53,12 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   // result list. Long press opens the row's menu, which also offers selection.
   return (
     <ContextMenu items={menuItems}>
-      <Pressable
+      <FileBrowserRow
         accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
         accessibilityRole={isEditing ? 'checkbox' : 'button'}
         accessibilityState={isEditing ? { checked: isSelected } : undefined}
-        className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
+        description={description}
+        name={item.libraryFile?.name ?? item.entry.filename}
         onPress={() => {
           if (isEditing) {
             onToggle(item.entry.id);
@@ -65,15 +67,8 @@ export const FileLibraryRow = memo(function FileLibraryRow({
           }
         }}
         testID={`file-library-entry-${item.entry.id}`}
-      >
-        {/* The row owns opening. Keep its thumbnail out of touch and accessibility
-          handling so a tap opens once and a drag yields to the parent list. */}
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-        >
-          {item.uri && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
+        preview={
+          item.uri && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
             <FileEntrySkeleton size={PREVIEW_SIZE} variant="icon" />
           ) : (
             <LoadedFileEntryPreview
@@ -83,19 +78,11 @@ export const FileLibraryRow = memo(function FileLibraryRow({
               uri={item.uri}
               variant="icon"
             />
-          )}
-        </View>
-        <View className="min-w-0 flex-1 gap-1">
-          {/* Like the iOS Files list: one line, truncated in the middle to keep the extension. */}
-          <Text className="text-base text-foreground" ellipsizeMode="middle" numberOfLines={1}>
-            {item.libraryFile?.name ?? item.entry.filename}
-          </Text>
-          <Text className="text-sm text-muted-foreground" ellipsizeMode="middle" numberOfLines={1}>
-            {description}
-          </Text>
-        </View>
+          )
+        }
+      >
         {isEditing ? <SelectionIndicator selected={isSelected} /> : null}
-      </Pressable>
+      </FileBrowserRow>
     </ContextMenu>
   );
 });

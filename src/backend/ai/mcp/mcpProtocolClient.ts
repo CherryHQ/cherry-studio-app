@@ -1,8 +1,11 @@
 import {
   Client,
+  InsufficientScopeError,
   ProtocolError,
   ProtocolErrorCode,
   SdkHttpError,
+  SdkError,
+  SdkErrorCode,
   StreamableHTTPClientTransport,
   type ListToolsResult,
   type McpSubscription,
@@ -15,6 +18,7 @@ import type { PluginClient } from '@/backend/services/builtInMcp';
 import type { McpOAuthRuntime } from '@/backend/services/mcp';
 import {
   McpAuthorizationError,
+  McpLegacyFallbackError,
   McpRedirectError,
   type McpConnectionConfig,
   type McpProtocolInfo,
@@ -123,7 +127,7 @@ export type McpRuntimeClient = Pick<
 };
 
 /** One SDK instance per connection/grant; no cache is shared across authorities. */
-export async function createRemoteMcpClient(input: {
+type RemoteMcpClientInput = {
   config: McpConnectionConfig;
   signal: AbortSignal;
   foreground: boolean;
@@ -133,15 +137,81 @@ export async function createRemoteMcpClient(input: {
   ) => Promise<import('@/shared/contracts/mcpInteraction').McpElicitationResponse>;
   authorization: Pick<McpOAuthRuntime, 'token' | 'rejected'>;
   onCatalogChanged?: () => void;
-}): Promise<
-  McpRuntimeClient & {
-    callTool: (input: {
-      name: string;
-      args: Record<string, unknown>;
-      options: { abortSignal: AbortSignal };
-    }) => Promise<unknown>;
+  shouldUseLegacyProtocol?: boolean;
+  onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
+};
+
+type RemoteMcpRuntimeClient = McpRuntimeClient & {
+  callTool: (input: {
+    name: string;
+    args: Record<string, unknown>;
+    options: { abortSignal: AbortSignal };
+  }) => Promise<unknown>;
+};
+
+export async function createRemoteMcpClient(
+  input: RemoteMcpClientInput,
+): Promise<RemoteMcpRuntimeClient> {
+  input.signal.throwIfAborted();
+  const shouldUseLegacyProtocol = input.shouldUseLegacyProtocol === true;
+  try {
+    return await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'legacy' : 'auto');
+  } catch (error) {
+    if (
+      isNonRetryableConnectionError(error, input.signal) ||
+      (!shouldUseLegacyProtocol &&
+        (!SdkError.isInstance(error) || error.code !== SdkErrorCode.EraNegotiationFailed))
+    )
+      throw error;
+    // Forget a failed preference even if the fresh negotiation also fails.
+    if (shouldUseLegacyProtocol) input.onLegacyPreferenceChanged?.(false);
+    let client: RemoteMcpRuntimeClient;
+    try {
+      client = await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'auto' : 'legacy');
+    } catch (retryError) {
+      if (isNonRetryableConnectionError(retryError, input.signal)) throw retryError;
+      throw new McpLegacyFallbackError(
+        shouldUseLegacyProtocol ? retryError : error,
+        shouldUseLegacyProtocol ? error : retryError,
+      );
+    }
+    if (input.signal.aborted) {
+      await client.close().catch(() => undefined);
+      input.signal.throwIfAborted();
+    }
+    try {
+      if (!shouldUseLegacyProtocol) input.onLegacyPreferenceChanged?.(true);
+    } catch (publicationError) {
+      await client.close().catch(() => undefined);
+      throw publicationError;
+    }
+    return client;
   }
-> {
+}
+
+function isNonRetryableConnectionError(error: unknown, signal: AbortSignal): boolean {
+  return (
+    signal.aborted ||
+    error instanceof McpAuthorizationError ||
+    error instanceof InsufficientScopeError ||
+    error instanceof McpRedirectError ||
+    (error instanceof Error && error.name === 'AbortError') ||
+    // Legacy handshakes use ClientHttpNotImplemented for ordinary 401/403 replies.
+    (SdkHttpError.isInstance(error) && (error.status === 401 || error.status === 403)) ||
+    (SdkError.isInstance(error) &&
+      [
+        SdkErrorCode.RequestTimeout,
+        SdkErrorCode.ClientHttpAuthentication,
+        SdkErrorCode.ClientHttpForbidden,
+      ].includes(error.code))
+  );
+}
+
+async function connectRemoteMcpClient(
+  input: RemoteMcpClientInput,
+  mode: 'auto' | 'legacy',
+): Promise<RemoteMcpRuntimeClient> {
+  input.signal.throwIfAborted();
   let foreground = input.foreground;
   let closed = false;
   let eventsAbort = new AbortController();
@@ -168,7 +238,10 @@ export async function createRemoteMcpClient(input: {
   const client = new Client(
     { name: 'Cherry Studio', version: Constants.expoConfig?.version ?? 'unknown' },
     {
-      versionNegotiation: { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } },
+      versionNegotiation:
+        mode === 'auto'
+          ? { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } }
+          : { mode: 'legacy' },
       capabilities: {
         extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } },
         ...(input.elicit ? { elicitation: { form: {}, url: {} } } : {}),
@@ -339,6 +412,7 @@ export async function createRemoteMcpClient(input: {
         if (subscription === opened) subscription = undefined;
       });
     if (!foreground) stopSubscription();
+    input.signal.throwIfAborted();
   } catch (error) {
     closed = true;
     connectionAbort.abort();

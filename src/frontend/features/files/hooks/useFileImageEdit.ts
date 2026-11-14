@@ -15,9 +15,11 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { FileViewerSource } from '../fileViewerSource';
+
 const logger = loggerService.withContext('useFileImageEdit');
 
-export function useFileImageEdit(initialFile: ResolvedFile, requestId?: string) {
+export function useFileImageEdit(initialFile: FileViewerSource, requestId?: string) {
   const files = useBackendModule('file');
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -26,7 +28,10 @@ export function useFileImageEdit(initialFile: ResolvedFile, requestId?: string) 
   const [isSaving, setIsSaving] = useState(false);
   const saving = useRef(false);
   const mounted = useRef(true);
-  const request = getImagePreviewEditRequest(requestId, initialFile.entry.id);
+  const request =
+    initialFile.kind === 'managed'
+      ? getImagePreviewEditRequest(requestId, initialFile.entry.id)
+      : undefined;
   const canEdit = Boolean(request && canEditFileImage(file.entry.mediaType));
 
   useEffect(() => {
@@ -60,7 +65,7 @@ export function useFileImageEdit(initialFile: ResolvedFile, requestId?: string) 
         throw new Error('The image no longer belongs to the source draft.');
       }
       adopted = true;
-      setFile(replacement);
+      setFile({ ...replacement, kind: 'managed' });
       setIsEditing(false);
     } catch (error) {
       if (mounted.current && !request.controller.signal.aborted) {

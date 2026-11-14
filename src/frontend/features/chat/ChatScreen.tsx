@@ -32,7 +32,7 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { PolicyScope } from '@/frontend/components/Policy';
-import { useApiClient } from '@/frontend/data';
+import { useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
@@ -43,6 +43,7 @@ import { agentPolicy } from '@/shared/data/managedPolicy';
 import { ChatInput } from './components/ChatInput';
 import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
+import { createSshMention } from './components/ChatInput/utils/sshMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import {
@@ -55,12 +56,14 @@ import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useComposerHandoffAppend } from './composer/useComposerHandoffAppend';
+import { ChatEditingProvider, useChatEditing } from './context/ChatEditingProvider';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import { ChatQuoteProvider } from './quotes/ChatQuoteProvider';
 import { useChatQuoteNavigation } from './quotes/useChatQuoteNavigation';
 import {
   latestConversationImageResult,
+  selectContextUsageSource,
   useAgentChatControls,
   useAgentChatDraftHandoff,
   useLocalConversation,
@@ -156,8 +159,21 @@ function ChatRouteContent() {
   return <ResolvedChatContent target={route.target} />;
 }
 
+/** Dropping files is an attachment handoff; editing keeps the original attachments. */
+function ChatComposerDropArea({
+  children,
+  enabled,
+}: {
+  children: React.ReactNode;
+  enabled: boolean;
+}) {
+  const { editing } = useChatEditing();
+  return <ComposerDropArea enabled={enabled && !editing}>{children}</ComposerDropArea>;
+}
+
 function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { t } = useTranslation();
+  const ssh = useBackendModule('ssh');
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
@@ -173,6 +189,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    sshDraftId: target.kind === 'draft' ? target.sshDraftId : undefined,
     workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
@@ -180,7 +197,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     sessionId,
     target.kind === 'session' ? target.messageRequestId : undefined,
   );
-  const { snapshot, messages, messageWindow } = useLocalConversation({
+  const { snapshot, messages, messageWindow, contextUsages } = useLocalConversation({
     sessionId,
     title: session.data?.name,
     navigation: quoteNavigation.navigation ?? (target.kind === 'session' ? target : undefined),
@@ -249,7 +266,15 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   );
   // Entry actions seed the rich draft; only the user's send creates a message.
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
-  const initialDraft = getHandoffDraft(composerHandoff, t);
+  const sshProfile =
+    target.kind === 'draft' && target.sshDraftId
+      ? ssh.getTarget(`draft:${target.sshDraftId}`)?.profile
+      : undefined;
+  const handoffDraft = getHandoffDraft(composerHandoff, t);
+  const initialDraft =
+    sshProfile && !composerHandoff?.skillAction && !composerHandoff?.selection
+      ? `${createSshMention(`SSH · ${sshProfile.name.replace(/\s+/g, ' ')}`, sshProfile)} ${handoffDraft ?? ''}`
+      : handoffDraft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
@@ -272,125 +297,142 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         initialAttachments={composerHandoff?.attachments}
         initialDraft={initialDraft}
       >
-        {composerSession.pendingAppend ? (
-          <ComposerHandoffAppend token={composerSession.pendingAppend} onApplied={completeAppend} />
-        ) : null}
-        <ChatQuoteProvider
-          sessionId={sessionId}
-          enabled={hasComposer}
-          authorName={agent.agent?.name}
-          openQuote={quoteNavigation.openQuote}
-          highlight={quoteNavigation.highlight}
-        >
-          <McpAppConversationProvider
-            enabled={hasComposer && agent.agent?.mode !== 'minimal'}
-            agentId={resolvedAgentId}
+        <ChatEditingProvider>
+          {composerSession.pendingAppend ? (
+            <ComposerHandoffAppend
+              token={composerSession.pendingAppend}
+              onApplied={completeAppend}
+            />
+          ) : null}
+          <ChatQuoteProvider
+            sessionId={sessionId}
+            enabled={hasComposer}
+            authorName={agent.agent?.name}
+            openQuote={quoteNavigation.openQuote}
+            highlight={quoteNavigation.highlight}
           >
-            {/* An organization Agent's composer and answer pickers follow its policy. */}
-            <PolicyScope policy={agentPolicy(agent.agent)}>
-              {/* A drop without a composer could import files with nothing to attach
-            them to, so the area refuses sessions in preview and error states. */}
-              <ComposerDropArea enabled={hasComposer}>
-                {!isPreview &&
-                sessionId &&
-                session.data &&
-                !session.error &&
-                !messageWindow.isLoadingInitial &&
-                !messageWindow.error ? (
-                  <SessionReadReceipt sessionId={sessionId} />
-                ) : null}
-                <FullScreenLayerHost>
-                  {/* Native background taps yield to scrolling and excluded message content. */}
-                  <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
-                    {sessionId && session.error ? (
-                      <ChatComposerClearance className="flex-1">
-                        <View className="flex-1 justify-center px-8 py-16">
-                          <ContentState.Error
-                            primaryAction={{
-                              children: t('agent.actions.retry'),
-                              onPress: () => void session.refetch(),
-                            }}
-                            prominence="prominent"
-                            title={t('navigation.chatsLoadFailed')}
-                          />
-                        </View>
-                      </ChatComposerClearance>
-                    ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-                      <ChatWorkspace
-                        executionSource="local"
-                        onQuoteTargetRestored={
-                          quoteNavigation.navigation ? quoteNavigation.onTargetRestored : undefined
-                        }
-                        onQuoteWindowReady={
-                          quoteNavigation.navigation ? quoteNavigation.onReady : undefined
-                        }
-                        onQuoteTakeover={quoteNavigation.cancel}
-                        feedbackHintBottomOffset={composerHeight}
-                        isTranslationEnabled
-                        renderUsage={renderLocalUsage}
-                        snapshot={snapshot}
-                        messages={messages}
-                        pendingSend={controls.pendingSend}
-                        enteringUserMessageId={controls.enteringUserMessageId}
-                        onPendingSendDisplayed={controls.completePendingSend}
-                        assistantAvatar={agent.agent?.avatar}
-                        assistantAvatarUri={agent.agent?.avatarUri}
-                        assistantName={agent.agent?.name}
-                        isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-                        contentBottomInset={contentBottomInset}
-                        forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-                        forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-                        keyboardOffset={keyboardOffset}
-                        messageWindow={messageWindow}
-                        sessionId={sessionId}
-                      />
-                    ) : (
-                      <ChatEmptyState contentBottomInset={contentBottomInset} />
-                    )}
-                  </ComposerDismissArea>
-                </FullScreenLayerHost>
-                {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
-                {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
-                {hasComposer ? (
-                  <ChatShareComposerGuard>
-                    <ComposerDock
-                      backgroundClassName="bg-chat-background"
-                      layoutMode="expandable-overlay"
-                      onHeightChange={setComposerHeight}
-                    >
-                      <View>
-                        {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
-                        <ChatInput
-                          agentId={resolvedAgentId}
-                          controls={controls}
-                          dismissKeyboardOnSend
-                          imageResult={
-                            messageWindow.hasNewerMessages
-                              ? undefined
-                              : latestConversationImageResult(
-                                  messageWindow.messages.map((message) => message.imageResult),
-                                )
+            <McpAppConversationProvider
+              enabled={hasComposer && agent.agent?.mode !== 'minimal'}
+              agentId={resolvedAgentId}
+            >
+              {/* An organization Agent's composer and answer pickers follow its policy. */}
+              <PolicyScope policy={agentPolicy(agent.agent)}>
+                {/* A drop without a composer could import files with nothing to attach
+                them to, so the area refuses sessions in preview and error states. */}
+                <ChatComposerDropArea enabled={hasComposer}>
+                  {!isPreview &&
+                  sessionId &&
+                  session.data &&
+                  !session.error &&
+                  !messageWindow.isLoadingInitial &&
+                  !messageWindow.error ? (
+                    <SessionReadReceipt sessionId={sessionId} />
+                  ) : null}
+                  <FullScreenLayerHost>
+                    {/* Native background taps yield to scrolling and excluded message content. */}
+                    <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+                      {sessionId && session.error ? (
+                        <ChatComposerClearance className="flex-1">
+                          <View className="flex-1 justify-center px-8 py-16">
+                            <ContentState.Error
+                              primaryAction={{
+                                children: t('agent.actions.retry'),
+                                onPress: () => void session.refetch(),
+                              }}
+                              prominence="prominent"
+                              title={t('navigation.chatsLoadFailed')}
+                            />
+                          </View>
+                        </ChatComposerClearance>
+                      ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+                        <ChatWorkspace
+                          executionSource="local"
+                          onQuoteTargetRestored={
+                            quoteNavigation.navigation
+                              ? quoteNavigation.onTargetRestored
+                              : undefined
                           }
-                          placeholder={
-                            continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
+                          onQuoteWindowReady={
+                            quoteNavigation.navigation ? quoteNavigation.onReady : undefined
                           }
+                          onQuoteTakeover={quoteNavigation.cancel}
+                          feedbackHintBottomOffset={composerHeight}
+                          isTranslationEnabled
+                          renderUsage={renderLocalUsage}
+                          snapshot={snapshot}
+                          messages={messages}
+                          pendingSend={controls.pendingSend}
+                          enteringUserMessageId={controls.enteringUserMessageId}
+                          onPendingSendDisplayed={controls.completePendingSend}
+                          assistantAvatar={agent.agent?.avatar}
+                          assistantAvatarUri={agent.agent?.avatarUri}
+                          assistantName={agent.agent?.name}
+                          isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                          contentBottomInset={contentBottomInset}
+                          forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+                          forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+                          keyboardOffset={keyboardOffset}
+                          messageWindow={messageWindow}
                           sessionId={sessionId}
-                          selectionHandoff={target.selectionHandoff}
                         />
-                        <ChatDockFooter>
-                          <Text className="text-center text-xs text-muted-foreground">
-                            {t('chat.input.disclaimer')}
-                          </Text>
-                        </ChatDockFooter>
-                      </View>
-                    </ComposerDock>
-                  </ChatShareComposerGuard>
-                ) : null}
-                <ChatShareSelectionControls />
-              </ComposerDropArea>
-            </PolicyScope>
-          </McpAppConversationProvider>
-        </ChatQuoteProvider>
+                      ) : (
+                        <ChatEmptyState contentBottomInset={contentBottomInset} />
+                      )}
+                    </ComposerDismissArea>
+                  </FullScreenLayerHost>
+                  {/* The transcript keeps its viewport; the keyboard adapter reserves the dock inset. */}
+                  {!hasComposer && sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+                  {hasComposer ? (
+                    <ChatShareComposerGuard>
+                      <ComposerDock
+                        backgroundClassName="bg-chat-background"
+                        layoutMode="expandable-overlay"
+                        onHeightChange={setComposerHeight}
+                      >
+                        <View>
+                          {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
+                          <ChatInput
+                            agentId={resolvedAgentId}
+                            controls={controls}
+                            contextUsage={selectContextUsageSource({
+                              sessionId,
+                              messages,
+                              usages: contextUsages,
+                              isCurrentWindow:
+                                !messageWindow.hasNewerMessages &&
+                                !messageWindow.isLoadingInitial &&
+                                !messageWindow.error,
+                            })}
+                            dismissKeyboardOnSend
+                            imageResult={
+                              messageWindow.hasNewerMessages
+                                ? undefined
+                                : latestConversationImageResult(
+                                    messageWindow.messages.map((message) => message.imageResult),
+                                  )
+                            }
+                            placeholder={
+                              continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
+                            }
+                            sessionId={sessionId}
+                            sshDraftId={target.kind === 'draft' ? target.sshDraftId : undefined}
+                            selectionHandoff={target.selectionHandoff}
+                          />
+                          <ChatDockFooter>
+                            <Text className="text-center text-xs text-muted-foreground">
+                              {t('chat.input.disclaimer')}
+                            </Text>
+                          </ChatDockFooter>
+                        </View>
+                      </ComposerDock>
+                    </ChatShareComposerGuard>
+                  ) : null}
+                  <ChatShareSelectionControls />
+                </ChatComposerDropArea>
+              </PolicyScope>
+            </McpAppConversationProvider>
+          </ChatQuoteProvider>
+        </ChatEditingProvider>
       </ComposerSessionProvider>
     </ChatShareSelectionProvider>
   );

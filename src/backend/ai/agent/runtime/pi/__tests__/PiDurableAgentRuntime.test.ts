@@ -18,6 +18,7 @@ import {
   UserEntry,
   type JsonObject,
 } from '@earendil-works/pi-durable';
+import { ZodError } from 'zod';
 
 import {
   buildAgentSystemPrompt,
@@ -188,6 +189,307 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test.each([1, 2])(
+    'a final boundary preserves the order of %s steers before a follow-up, including after reopening',
+    async (count) => {
+      const state = fixture();
+      const entered = [deferred<void>(), deferred<void>()];
+      const release = [deferred<void>(), deferred<void>()];
+      const completed = deferred<void>();
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => ({
+        ...(await resolveModel(...args)),
+        streamFn: (_model, context) => {
+          const index = state.requests.length;
+          state.requests.push(context);
+          const stream = new AssistantMessageEventStream();
+          entered[index]?.resolve();
+          void (release[index]?.promise ?? Promise.resolve()).then(() => {
+            stream.push({
+              type: 'done',
+              reason: 'stop',
+              message: {
+                ...emptyAssistantMessage(wire),
+                content: [{ type: 'text', text: `Response ${index + 1}` }],
+              },
+            });
+            stream.end();
+          });
+          return stream;
+        },
+      });
+      let runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      const observation = await runtime.observe(lane, (event) => {
+        if (
+          event.type === 'turn.updated' &&
+          event.turn.identity.requestId === 'waiting' &&
+          event.turn.status === 'completed'
+        )
+          completed.resolve();
+      });
+      try {
+        await runtime.submit(lane, input('first'));
+        await entered[0].promise;
+        await runtime.submit(lane, {
+          ...input('waiting'),
+          metadata: { parentMessageId: 'answer-first' },
+        });
+        for (let index = 1; index <= count; index++) {
+          await runtime.submit(lane, {
+            ...input(`guided-${index}`),
+            metadata: {
+              parentMessageId: index === 1 ? 'answer-waiting' : `answer-guided-${index - 1}`,
+            },
+          });
+        }
+        for (let index = 1; index <= count; index++)
+          expect(await runtime.steer(lane, `guided-${index}`)).toMatchObject({
+            status: 'accepted',
+          });
+        release[0].resolve();
+        await entered[1].promise;
+        const order = [
+          'first',
+          ...Array.from({ length: count }, (_, index) => `guided-${index + 1}`),
+          'waiting',
+        ];
+        expect(
+          state.requests[1]!.messages.filter((message) => message.role === 'user'),
+        ).toMatchObject(order.map((id) => ({ content: `Question ${id}` })));
+        for (let index = 1; index <= count; index++) {
+          expect((await runtime.message(lane, `answer-guided-${index}`))?.turn).toMatchObject({
+            hasAssistant: true,
+            status: 'completed',
+            parts: [],
+            metadata: { parentMessageId: `answer-${order[index - 1]}` },
+          });
+        }
+        expect((await runtime.message(lane, 'answer-waiting'))?.turn).toMatchObject({
+          hasAssistant: true,
+          status: 'running',
+          parts: [],
+          metadata: { parentMessageId: `answer-guided-${count}` },
+        });
+        release[1].resolve();
+        await completed.promise;
+        await observation.unsubscribe();
+        await runtime.close();
+        runtime = state.create();
+        await runtime.initialize(state.database, state.ports);
+        await runtime.configure(lane, seed.configuration);
+        for (let index = 1; index <= count; index++) {
+          expect((await runtime.message(lane, `answer-guided-${index}`))?.turn).toMatchObject({
+            hasAssistant: true,
+            status: 'completed',
+            parts: [],
+            metadata: { parentMessageId: `answer-${order[index - 1]}` },
+          });
+        }
+        expect((await runtime.message(lane, 'answer-waiting'))?.turn).toMatchObject({
+          hasAssistant: true,
+          status: 'completed',
+          parts: [{ type: 'text', text: 'Response 2' }],
+          metadata: { parentMessageId: `answer-guided-${count}` },
+        });
+        expect(state.requests).toHaveLength(2);
+      } finally {
+        for (const item of release) item.resolve();
+        await observation.unsubscribe();
+        await runtime.close();
+      }
+    },
+  );
+
+  test('steering waits for the running tool, changes subsequent ownership and survives reopening', async () => {
+    const state = fixture();
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const guidedModelEntered = deferred<void>();
+    const releaseGuidedModel = deferred<void>();
+    const completed = deferred<void>();
+    let calls = 0;
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'read_file' },
+      providerName: 'read_file',
+      displayName: 'Read file',
+      description: 'Read a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute: async () => {
+        calls += 1;
+        if (calls === 1) {
+          entered.resolve();
+          await release.promise;
+        }
+        return { value: `Read ${calls}`, artifacts: [] };
+      },
+    };
+    const owners: string[] = [];
+    state.ports.resolveTool = async (identity) => ({
+      ...tool,
+      execute: async (...args) => {
+        owners.push(identity.requestId);
+        return tool.execute(...args);
+      },
+    });
+    const resolveModel = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: (_model, context) => {
+        state.requests.push(context);
+        const count = state.requests.length;
+        const reason = count <= 2 ? 'toolUse' : 'stop';
+        const stream = new AssistantMessageEventStream();
+        const finish = () => {
+          stream.push({
+            type: 'done',
+            reason,
+            message: {
+              ...emptyAssistantMessage(wire),
+              stopReason: reason,
+              content:
+                count <= 2
+                  ? [
+                      { type: 'text', text: `Working ${count}` },
+                      { type: 'toolCall', id: `read-${count}`, name: 'read_file', arguments: {} },
+                    ]
+                  : [{ type: 'text', text: 'Guided answer' }],
+            },
+          });
+          stream.end();
+        };
+        if (count === 2) {
+          guidedModelEntered.resolve();
+          void releaseGuidedModel.promise.then(finish);
+        } else finish();
+        return stream;
+      },
+    });
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    const observation = await runtime.observe(lane, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'second:steer' &&
+        event.turn.status === 'completed'
+      )
+        completed.resolve();
+    });
+    try {
+      await runtime.submit(lane, input('first'));
+      await entered.promise;
+      await runtime.submit(lane, {
+        ...input('second'),
+        metadata: { parentMessageId: 'answer-first' },
+      });
+      expect(await runtime.steer(lane, 'second')).toMatchObject({ status: 'accepted' });
+      expect(state.requests).toHaveLength(1);
+      expect((await runtime.message(lane, 'answer-second'))?.turn).toMatchObject({
+        assistantMessageId: 'answer-second',
+        hasAssistant: true,
+        status: 'queued',
+        parts: [],
+      });
+      release.resolve();
+      await guidedModelEntered.promise;
+      expect((await runtime.message(lane, 'answer-second'))?.turn).toMatchObject({
+        assistantMessageId: 'answer-second',
+        hasAssistant: true,
+        status: 'running',
+        parts: [],
+      });
+      releaseGuidedModel.resolve();
+      await completed.promise;
+      expect(owners).toEqual(['first', 'second:steer']);
+      expect(JSON.stringify(state.requests[1])).toContain('Question second');
+      await observation.unsubscribe();
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.configure(lane, { ...seed.configuration, tools: [tool] });
+      const first = (await runtime.message(lane, 'answer-first'))!.turn;
+      const second = (await runtime.message(lane, 'answer-second'))!.turn;
+      expect(first.status).toBe('completed');
+      expect(first.parts.flatMap((part) => (part.type === 'text' ? [part.text] : []))).toEqual([
+        'Working 1',
+      ]);
+      expect(second.parts.flatMap((part) => (part.type === 'text' ? [part.text] : []))).toEqual([
+        'Working 2',
+        'Guided answer',
+      ]);
+      expect(second.userMessageId).toBe('user-second');
+      expect(second.assistantMessageId).toBe('answer-second');
+    } finally {
+      release.resolve();
+      releaseGuidedModel.resolve();
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('estimates rebuild materials without opening storage or requesting a model', () => {
+    const state = fixture();
+    const runtime = state.create();
+    expect(
+      runtime.estimateStoredContextUsage({
+        model: reference,
+        instructions: 'Help.',
+        contextCheckpoint: null,
+        history: [
+          {
+            turnId: 'earlier',
+            messages: [
+              { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+              {
+                role: 'assistant',
+                parts: [
+                  { type: 'text', text: 'Searching. ' },
+                  { type: 'text', text: 'Cherries are red.' },
+                ],
+                contextTokens: 100,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(13);
+    expect(
+      runtime.estimateStoredContextUsage({
+        model: reference,
+        instructions: 'Help.',
+        contextCheckpoint: {
+          version: 1,
+          anchorTurnId: 'earlier',
+          payload: {
+            kind: 'pi-durable-context-v1',
+            messages: [{ role: 'user', content: 'Summary', timestamp: 1 }],
+          },
+        },
+        history: [
+          {
+            turnId: 'tail',
+            messages: [
+              { role: 'user', parts: [{ type: 'text', text: 'Next...' }] },
+              {
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'Answer.' }],
+                contextTokens: 100,
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(8);
+    expect(state.requests).toHaveLength(0);
+    expect(state.ports.recordUsage).not.toHaveBeenCalled();
+  });
+
   test('retained-tool retry has one quoted historical question and a plain continuation after reopen', async () => {
     const f = fixture();
     let runtime = f.create();
@@ -1268,6 +1570,55 @@ describe('Persistent Agent facade', () => {
       await runtime.close();
     }
   });
+  test('retains an unreadable usage receipt while delivering later receipts, then retries it after repair', async () => {
+    const state = fixture();
+    const delivered: (string | null)[] = [];
+    let unreadable = true;
+    state.ports.recordUsage = async (owner) => {
+      if (owner.requestId === 'unreadable' && unreadable)
+        throw new ZodError([
+          { code: 'custom', path: ['owner'], message: 'Invalid historical owner' },
+        ]);
+      delivered.push(owner.requestId);
+    };
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('unreadable'));
+      await runtime.drainUsage();
+      await submitAndWait(runtime, input('healthy'));
+      await runtime.drainUsage();
+      expect(delivered).toEqual(['healthy']);
+
+      await runtime.close();
+      unreadable = false;
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.drainUsage();
+      await runtime.drainUsage();
+      expect(delivered).toEqual(['healthy', 'unreadable']);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('does not swallow usage persistence errors', async () => {
+    const state = fixture();
+    state.ports.recordUsage = async () => {
+      throw Object.assign(new Error('Usage storage unavailable'), { code: 'SQLITE_FULL' });
+    };
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('pending-usage'));
+      await expect(runtime.drainUsage()).rejects.toThrow('Usage storage unavailable');
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('attributes generation to its invocation even when the request ID differs from message aliases', async () => {
     const state = fixture();
     const runtime = state.create();

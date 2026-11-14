@@ -6,7 +6,7 @@ it to the app: bytes, PDF resources, theme, locale, diagnostics, structural sele
 system-open request.
 The app side lives in [`src/frontend/features/files`](../../src/frontend/features/files/README.md).
 
-> Status: uses the published npm package `@cherrystudio/file-preview@0.2.4`.
+> Status: uses the published npm package `@cherrystudio/file-preview@0.2.7`.
 > Install scripts were skipped for this upgrade; regenerating `dist/` and native acceptance remain
 > pending.
 

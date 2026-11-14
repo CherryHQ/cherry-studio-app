@@ -11,6 +11,7 @@ import {
   localConversationFailure,
 } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { SshModule } from '@/shared/contracts/ssh';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { editableReplyParts } from '@/shared/utils/assistantReply';
@@ -63,11 +64,13 @@ export function createLocalConversationProjector(input: {
     | 'respondApproval'
     | 'respondQuestion'
     | 'retryMessage'
+    | 'editUserMessage'
     | 'forkSession'
     | 'deleteTurn'
     | 'selectMessage'
   >;
   sessionId: string;
+  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>;
   onSessionChanged?: (sessionId: string) => void;
 }) {
   const { client, sessionId } = input;
@@ -135,10 +138,10 @@ export function createLocalConversationProjector(input: {
           ...(message.role === 'assistant' &&
           message.status === 'success' &&
           editableReplyParts(message.parts).length > 0
-            ? { edit: { availability: availability(state, true) } }
+            ? { editAnswer: { availability: availability(state, true) } }
             : {}),
           // Answers switch in place; switching only changes what is shown, so it never waits.
-          ...(message.siblings && message.role === 'assistant'
+          ...(message.siblings
             ? {
                 select: action<{ messageId: string }, void>(state, false, async ({ messageId }) => {
                   await client.selectMessage(sessionId, messageId);
@@ -149,6 +152,13 @@ export function createLocalConversationProjector(input: {
             ? {
                 remove: action<void, void>(state, true, () =>
                   client.deleteTurn(sessionId, message.turnId!, message.id),
+                ),
+              }
+            : {}),
+          ...(canModify && message.role === 'user'
+            ? {
+                editQuestion: action<{ text: string }, void>(state, true, ({ text }) =>
+                  client.editUserMessage({ sessionId, messageId: message.id, text }),
                 ),
               }
             : {}),
@@ -203,10 +213,28 @@ export function createLocalConversationProjector(input: {
         };
       return history.messages;
     },
-    snapshot(state: AgentSessionChatState, title: string | undefined): ConversationSnapshot {
+    snapshot(
+      state: AgentSessionChatState,
+      title: string | undefined,
+      currentSshTarget = input.ssh?.getTarget(sessionId),
+    ): ConversationSnapshot {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const sshCommand =
+          approval.toolRef.source === 'builtin' && approval.toolRef.capabilityId === 'ssh_execute';
+        const sshTarget = sshCommand ? currentSshTarget : null;
+        const boundInput =
+          approval.input && typeof approval.input === 'object' && !Array.isArray(approval.input)
+            ? approval.input
+            : null;
+        const canGrantSshDiagnostics = Boolean(
+          sshTarget &&
+          !sshTarget.grant &&
+          boundInput?.connection_id === sshTarget.profile.id &&
+          boundInput?.connection_revision === sshTarget.profile.revision &&
+          boundInput?.selection_id === sshTarget.selectionId,
+        );
         const isHealth = isHealthToolRef(approval.toolRef);
         const inference = isHealth
           ? state.liveMessages.find(
@@ -218,7 +246,11 @@ export function createLocalConversationProjector(input: {
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          toolName:
+            approval.toolRef.source === 'builtin' ? approval.toolRef.capabilityId : undefined,
           state: 'pending',
+          sshCommand,
+          canGrantSshDiagnostics,
           ...(isHealth
             ? {
                 healthDataSharing: {
@@ -244,6 +276,25 @@ export function createLocalConversationProjector(input: {
               JSON.stringify(current.input) !== inputKey
             )
               throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+            if (
+              decision.kind === 'approve' &&
+              'sshDiagnosticsGrant' in decision &&
+              decision.sshDiagnosticsGrant
+            ) {
+              if (!canGrantSshDiagnostics || !sshTarget || !input.ssh)
+                throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+              const grantedTarget = await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              try {
+                await client.respondApproval(sessionId, approval.id, decision.kind);
+              } catch (error) {
+                // A concurrent selection or grant replacement must not be revoked here.
+                await input.ssh
+                  .setCommandGrant(sessionId, grantedTarget, false)
+                  .catch(() => undefined);
+                throw error;
+              }
+              return;
+            }
             await client.respondApproval(sessionId, approval.id, decision.kind);
           }),
         };

@@ -93,7 +93,11 @@ export class RemoteWebSearchProvider extends BaseWebSearchProvider {
             capability,
             config: {
               apiHost,
-              maxResults: config.maxResults,
+              // SerpKite rejects requests above 100 results; keep the saved limit unchanged.
+              maxResults:
+                this.provider.id === 'serpkite'
+                  ? Math.min(config.maxResults, 100)
+                  : config.maxResults,
               ...(this.provider.id === 'searxng' ? { engines: this.provider.engines } : {}),
             },
           }

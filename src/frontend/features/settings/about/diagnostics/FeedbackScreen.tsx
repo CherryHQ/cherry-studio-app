@@ -24,7 +24,7 @@ import { useDiagnosticBundle } from './useDiagnosticBundle';
 /** Both manual feedback and shake capture enter this form. */
 export function FeedbackScreen() {
   const router = useRouter();
-  const { screenshot, captureFailed, context } = useFeedbackCapture();
+  const { screenshot, captureFailed, context, diagnosis } = useFeedbackCapture();
   const { t } = useTranslation();
   const [form, setForm] = useState<FeedbackFormValue>(() => ({
     description: '',
@@ -68,6 +68,7 @@ export function FeedbackScreen() {
     void workflow.submit(normalized, {
       feedback,
       context: form.includeContext ? context : undefined,
+      diagnosis: form.includeContext ? diagnosis : undefined,
     });
   }
 
@@ -89,6 +90,7 @@ export function FeedbackScreen() {
           {state.status === 'editing' ? (
             <>
               <FeedbackFormFields
+                diagnosis={diagnosis}
                 attempted={attempted}
                 captureFailed={captureFailed}
                 context={context}

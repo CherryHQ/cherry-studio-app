@@ -17,6 +17,8 @@ page.
 - `systemEntry/` retains incoming shares while the destination page chooses an Agent or conversation.
 - `pane/` owns the file pane beside chat in wide windows.
 - `search/` owns the cross-page request session that opens the transient search page.
+- [`ssh/`](./ssh/README.md) presents authentication questions directly to the user, outside Agent
+  inputs and transcript state; the SSH runtime owns the queue and cancellation.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.
 - `recovery/` owns the full-screen surfaces shown when the app fails to start or to render:

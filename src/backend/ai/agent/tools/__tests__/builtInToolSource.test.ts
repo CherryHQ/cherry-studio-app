@@ -2,8 +2,10 @@ import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import type { SshTarget } from '@/shared/data/types/ssh';
 
 import type { TurnToolResources } from '../../resources/managedFileResolver';
 import { managedFileResolver } from '../../resources/managedFileResolver';
@@ -74,9 +76,63 @@ describe('createSystemCapabilitySource', () => {
     ]);
   });
 
-  test('keeps file-library task tools available with their read/mutation approval', async () => {
+  test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
+    let target: SshTarget | null = null;
+    const ssh: NonNullable<SystemCapabilityServices['ssh']> = {
+      isAvailable: () => true,
+      resolveAgentTarget: async () => target,
+      executeForAgent: jest.fn(),
+      filesForAgent: jest.fn(),
+      downloadForAgent: jest.fn(),
+      uploadForAgent: jest.fn(),
+    };
+    const options = { ssh, sessionId: 'conversation' };
+    expect(capabilityIds(await resolve({}, options))).not.toContain('ssh_execute');
+    target = {
+      selectionId: 'selection',
+      profile: {
+        id: 'connection',
+        revision: 'revision',
+        name: 'Router',
+        host: 'router.local',
+        port: 22,
+        username: 'admin',
+        authMethod: 'password',
+        fingerprint: 'SHA256:key',
+        isEnabled: true,
+        remoteDirectory: '/srv/project',
+      },
+      grant: null,
+    };
+    const command = (tools: readonly RuntimeTool[]) =>
+      tools.find((tool) => tool.providerName === 'ssh_execute');
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: false,
+    });
+    target = { ...target, grant: { id: 'grant', expiresAt: Date.now() + 3600000 } };
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'auto',
+      autoApprovalEligible: false,
+    });
+    const fileTools = (await resolve({}, options)).filter(
+      (tool) => tool.providerName.startsWith('ssh_') && tool.providerName !== 'ssh_execute',
+    );
+    expect(fileTools).toHaveLength(5);
+    for (const tool of fileTools)
+      expect(tool).toMatchObject({ approval: 'ask', autoApprovalEligible: false });
+    expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
+  });
+
+  test('defers file tools without changing their read/mutation approval', async () => {
     const tools = await resolve({});
-    const reads = ['library_search_files', 'library_read_file'];
+    const files = [
+      'library_search_files',
+      'library_read_file',
+      'read_file',
+      'write_file',
+      'edit_file',
+    ];
     const management = {
       library_list_folders: 'auto',
       library_move_item: 'ask',
@@ -85,10 +141,13 @@ describe('createSystemCapabilitySource', () => {
       library_list_trash: 'auto',
       library_restore_item: 'ask',
     };
-    for (const name of reads) {
+    for (const name of files) {
       const tool = tools.find((item) => item.providerName === name);
-      expect(tool).toMatchObject({ approval: 'auto', autoApprovalEligible: true });
-      expect(tool?.deferred).toBeUndefined();
+      expect(tool).toMatchObject({
+        approval: 'auto',
+        autoApprovalEligible: true,
+        deferred: true,
+      });
     }
     for (const [name, approval] of Object.entries(management)) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
@@ -99,6 +158,56 @@ describe('createSystemCapabilitySource', () => {
     }
     expect(capabilityIds(tools)).toContain('read_file');
   });
+
+  test.each([
+    ['anydoc', true],
+    ['anydoc', false],
+    ['builtin', true],
+    ['builtin', false],
+  ] as const)(
+    'keeps each deferred reader self-contained for parser %s and image support %s',
+    async (documentParserMode, acceptsImages) => {
+      const tools = await resolve({}, { documentParserMode, acceptsImages });
+      for (const name of ['read_file', 'library_read_file']) {
+        const description = tools.find((tool) => tool.providerName === name)?.description;
+        expect(description).toContain(`This turn uses the ${documentParserMode} document parser`);
+        expect(description).toContain('startLine + lineCount');
+        expect(description).toContain('lineTruncated');
+        expect(description).toContain('offset set to nextOffset');
+        expect(description).toContain('never combine the two groups');
+        expect(description).toContain('sourceTruncated');
+        if (documentParserMode === 'anydoc') {
+          expect(description).toContain('never line parameters');
+          expect(description).toContain('concatenate text windows');
+          expect(description).toContain('Continue with nextOffset until complete');
+          expect(description).toContain('assets are references only');
+        } else {
+          expect(description).toContain('return built-in extracted text');
+          expect(description).toContain('unsupported by this parser');
+        }
+        if (acceptsImages) {
+          expect(description).toContain('omit paging parameters');
+          expect(description).toContain('Code Mode receives image metadata only');
+          expect(description).toContain('use this tool directly, outside Code Mode');
+        } else {
+          expect(description).toContain('OCR text from the first frame');
+          expect(description).toContain('No image pixels are sent');
+          expect(description).not.toContain('omit paging parameters');
+        }
+      }
+      expect(
+        tools.find((tool) => tool.providerName === 'library_read_file')?.inputSchema,
+      ).toMatchObject({
+        required: ['file_entry_id'],
+        properties: {
+          file_entry_id: expect.objectContaining({
+            type: 'string',
+            description: expect.any(String),
+          }),
+        },
+      });
+    },
+  );
 
   test('defers occasional device and Agent management tools while questions stay direct', async () => {
     const tools = await resolve({
@@ -143,6 +252,9 @@ describe('createSystemCapabilitySource', () => {
     expect(linked.find((tool) => tool.providerName === 'list_workspace')?.description).toContain(
       'file-library folder "项目资料"',
     );
+    for (const name of ['list_workspace', 'find_workspace_files', 'create_workspace_folder']) {
+      expect(linked.find((tool) => tool.providerName === name)?.deferred).toBe(true);
+    }
 
     folder.mockClear();
     const unlinked = await resolve({});
@@ -752,16 +864,27 @@ type Scenario = {
 
 async function resolve(
   scenario: Scenario,
-  options: { askUser?: AskUserQuestion; platform?: string } = {},
+  options: {
+    askUser?: AskUserQuestion;
+    platform?: string;
+    ssh?: SystemCapabilityServices['ssh'];
+    sessionId?: string;
+    documentParserMode?: DocumentParserMode;
+    acceptsImages?: boolean;
+  } = {},
 ): Promise<readonly RuntimeTool[]> {
-  const source = createSystemCapabilitySource(SERVICES, {
-    ...dependencies(scenario),
-    platform: options.platform ?? 'ios',
-  });
+  const source = createSystemCapabilitySource(
+    { ...SERVICES, ssh: options.ssh },
+    {
+      ...dependencies(scenario),
+      platform: options.platform ?? 'ios',
+    },
+  );
   return source.getTools({
-    acceptsImages: true,
+    sessionId: options.sessionId,
+    acceptsImages: options.acceptsImages ?? true,
     askUser: options.askUser ?? noAskUser,
-    documentParserMode: 'builtin',
+    documentParserMode: options.documentParserMode ?? 'builtin',
     model: MODEL,
     resources: TURN_RESOURCES,
     workspaceFolderId: scenario.workspaceFolderId,

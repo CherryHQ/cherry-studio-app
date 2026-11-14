@@ -20,6 +20,11 @@ jest.mock('@/backend/services/permissions', () => ({
   },
 }));
 
+jest.mock('expo-keep-awake', () => ({
+  activateKeepAwakeAsync: jest.fn(),
+  deactivateKeepAwake: jest.fn(),
+}));
+
 /**
  * Guards the registry itself rather than any one service.
  *
@@ -137,6 +142,7 @@ describe('service registry', () => {
   });
 
   test('declares the background policy of long-running and native-surface owners', () => {
+    expect(getAppStatePolicy(services.ScreenAwakeRuntime)).toBe('foreground-only');
     expect(getAppStatePolicy(services.TraceStorageService)).toBe('continue');
     expect(getAppStatePolicy(services.JobRuntime)).toBe('continue');
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
@@ -149,6 +155,29 @@ describe('service registry', () => {
       'background-presentation',
     );
     expect(getAppStatePolicy(services.ProviderRegistryUpdaterService)).toBe('not-applicable');
+  });
+
+  test('registers screen awake after preferences and before generation consumer layers', () => {
+    expect(services.ScreenAwakeRuntime).toBeDefined();
+    expect(getPhase(services.ScreenAwakeRuntime)).toBe(Phase.PostReady);
+    expect(getDependencies(services.ScreenAwakeRuntime)).toEqual(['PreferenceService']);
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.PostReady),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+    expect(getPhase(services.PreferenceService)).toBe(Phase.Gate);
+    expect(layerOf('ScreenAwakeRuntime')).toBeGreaterThanOrEqual(0);
+    expect(getDependencies(services.JobHandlerRegistry)).toContain('ScreenAwakeRuntime');
+    for (const consumer of [
+      'AgentHostDependencies',
+      'MobileAgentHost',
+      'JobHandlerRegistry',
+      'JobRuntime',
+    ]) {
+      expect(layerOf('ScreenAwakeRuntime')).toBeLessThan(layerOf(consumer));
+    }
   });
 
   test('keeps trace storage alive until its AI producers have stopped', () => {

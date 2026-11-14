@@ -12,7 +12,7 @@ import {
   normalizeModelId,
   supportsServerToolFunctionMixing,
 } from '@cherrystudio/provider-registry';
-import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
+import { getLowerBaseModelName, isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -256,7 +256,7 @@ export function createPiModelResolver(
                           }
                         : {}),
                       maxTokensField:
-                        connection.adapterFamily === 'openai'
+                        connection.adapterFamily === 'openai' || isOpenAIReasoningModelId(modelId)
                           ? 'max_completion_tokens'
                           : 'max_tokens',
                       supportsStore: connection.adapterFamily === 'openai',
@@ -611,6 +611,11 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
       /authorization|api[-_]key|token|secret/i.test(name) ? [value] : [],
     ),
   ];
+}
+
+/** Desktop Agent token-field rules, allowing gateway namespace prefixes. */
+function isOpenAIReasoningModelId(modelId: string): boolean {
+  return /^(?:[^:]+:)*(?:o1|o3|o4-mini|gpt-6|gpt-5(?!-chat))/.test(getLowerBaseModelName(modelId));
 }
 
 function isProviderHost(baseUrl: string, hostname: string): boolean {

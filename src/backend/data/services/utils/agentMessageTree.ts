@@ -1,5 +1,31 @@
 import { sql, type SQL } from 'drizzle-orm';
 
+import type { Database } from '@/backend/data/db/DbService';
+
+/** Parent order remains stable when a queued input overtakes an earlier reservation. */
+export function messageTreeDepthsSql(sessionId: string): SQL {
+  // Walk each edge once, rather than walking every message's ancestors separately.
+  return sql`WITH RECURSIVE tree_depth(id, depth) AS (
+    SELECT root.id, 0 FROM agent_session_message AS root
+    WHERE root.session_id = ${sessionId} AND root.parent_id IS NULL
+    UNION ALL
+    SELECT child.id, tree_depth.depth + 1 FROM agent_session_message AS child
+    JOIN tree_depth ON child.parent_id = tree_depth.id
+  ) SELECT id, depth FROM tree_depth`;
+}
+
+/** One reusable relation for ordering rows and resolving cursor/anchor positions. */
+export function messageTreeOrder(db: Pick<Database, '$with' | 'select'>, sessionId: string) {
+  return db.$with('message_order').as(
+    db
+      .select({
+        id: sql<string>`ordered.id`.as('message_order_id'),
+        depth: sql<number>`ordered.depth`.as('message_order_depth'),
+      })
+      .from(sql`(${messageTreeDepthsSql(sessionId)}) AS ordered`),
+  );
+}
+
 /**
  * SQL fragments over the Agent message tree (docs/references/agent/agent-persistence.md).
  * Every reader of a Session's visible or model-facing history walks `parent_id`
