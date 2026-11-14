@@ -45,6 +45,6 @@ export async function readToolCitations(tool: ConversationTool, signal: AbortSig
   )
     return [];
   const output = conversationJson(await readConversationValue(tool.output, signal));
-  const name = citableToolName(tool.title, input, isCherryCitationOutput(output));
+  const name = citableToolName(tool.title, input, wrapped || isCherryCitationOutput(output));
   return name ? toolCitationSources(name, output) : [];
 }
