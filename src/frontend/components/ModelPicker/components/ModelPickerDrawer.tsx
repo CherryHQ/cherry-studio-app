@@ -1,6 +1,5 @@
 import EyeIcon from '@cherrystudio/app-icons/icons/eye';
 import GiftIcon from '@cherrystudio/app-icons/icons/gift';
-import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
 import {
   ActionMenu,
   BottomSheet,
@@ -24,6 +23,7 @@ import {
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
+import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat';
@@ -235,7 +235,7 @@ function ModelPickerDrawerContent({
     ) : selectedBadge === 'free' ? (
       <GiftIcon className="text-tag-green-foreground" />
     ) : (
-      <ListFilterIcon />
+      <ModelPickerFilterIcon />
     );
 
   return (
