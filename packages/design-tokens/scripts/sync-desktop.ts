@@ -353,8 +353,8 @@ async function main() {
       path.join(mobileIcons, group),
       '.svg',
       check,
-      // Requesty is supplied by Mobile's provider catalog, not the desktop catalog.
-      group === 'providers' ? ['light/requesty.svg'] : [],
+      // Requesty and Standard Compute come from Mobile's provider catalog, not the desktop one.
+      group === 'providers' ? ['light/requesty.svg', 'light/standardcompute.svg'] : [],
     );
   }
 
