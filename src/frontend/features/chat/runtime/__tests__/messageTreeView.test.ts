@@ -1,5 +1,6 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
+import { mergeAgentMessageViews } from '../agentMessageProjection';
 import {
   type LiveSiblingViews,
   readQuestionAnswers,
@@ -59,6 +60,41 @@ describe('message tree view', () => {
     expect(answer?.siblings?.map((sibling) => sibling.id)).toEqual(['a2', 'b2']);
     expect(withLiveSiblings(persisted, [question, first], new Map())).toBe(persisted);
   });
+
+  test.each(['pending', 'streaming'] as const)(
+    "switches back from a completed steer branch to the original question's %s retry",
+    (status) => {
+      const [question, first] = persisted;
+      const guided = message('guided-question', first.id, 'user');
+      const guidedAnswer = message('guided-answer', guided.id);
+      const retry = message('retry', question.id, 'assistant', status);
+      const live = [question, first, retry];
+      // While retry runs, settled history omits its whole turn but retains the steer below it.
+      const history = [guided, guidedAnswer];
+      const read = readQuestionAnswers([...persisted, ...history]);
+      const selected = (leaf: string) =>
+        withLiveSiblings(
+          selectedBranchMessages(
+            mergeAgentMessageViews(history, selectedLiveMessages(live, history, leaf)),
+            leaf,
+          ),
+          live,
+          read,
+        );
+
+      const original = selected(guidedAnswer.id);
+      expect(original.map((row) => row.id)).toEqual([
+        question.id,
+        first.id,
+        guided.id,
+        guidedAnswer.id,
+      ]);
+      expect(original[1].siblings?.map((row) => row.id)).toEqual([first.id, retry.id]);
+      expect(original[1].siblings?.[1].status).toBe(status);
+      expect(selected(retry.id).map((row) => row.id)).toEqual([question.id, retry.id]);
+      expect(selected(guidedAnswer.id)).toEqual(original);
+    },
+  );
 
   test('restored answers retain their persisted groups without a previously read history page', () => {
     const question = message('q2', 'a1', 'user');

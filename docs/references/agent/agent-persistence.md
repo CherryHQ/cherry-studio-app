@@ -261,7 +261,7 @@ recency; no `orderKey`).
 
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
-| `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
+| `id` | text | PK, UUID v7 | Stable identity; transcript follows parent order, including queued inputs promoted to Steer |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
 | `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |
@@ -269,7 +269,7 @@ recency; no `orderKey`).
 | `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No virtual root: the first question has no parent |
 | `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and the latest positive measured request input in `contextTokens`, which need not be the final request or a post-compaction size |
 | `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
@@ -324,6 +324,17 @@ ledger totals remain intact. Preparation must finish before this operation; a re
 does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
 recorded prefix. Retry never creates a Session or inserts another user message.
 
+Editing a user question uses the normal `reserveSubmission` transaction with an explicit
+`parentMessageId` equal to the edited question's parent (`null` for a root question). The Host
+checks that the edited row is a user message and rejects busy Sessions before preparing the new
+submission. Shared reservation inserts the new sibling question and its pending answer or answers,
+then selects the new branch. The original question and descendants are untouched. The normal
+lane planner preserves native continuation or forks at the chosen parent, with its rebuild fallback;
+editing does not create another Session or advance `runtimeRevision`.
+
+This differs from `editMessage`, which edits assistant reply prose in place and has its own
+conflict check. Neither operation uses a dedicated edit-reservation method.
+
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:
 
@@ -345,11 +356,22 @@ projection:
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
   native admission is interrupted with its saved parts retained.
+  At startup only, a reservation whose stored parts or native terminal projection fails schema
+  validation is logged as `ai.reconcile / invalid_reservation` and left unchanged while other
+  reservations recover. Ordinary Session commands and backup reconciliation remain strict;
+  cancellation, database and other non-validation failures still abort startup.
+  Native results are resolved before promoted input parents are repaired as a batch. If a native
+  read or that repair fails validation, startup skips settlement for the affected Session rather
+  than exposing a partially repaired chain; other Sessions still recover. Output validation after
+  the parent repair continues to isolate individual reservations.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a
   multi-model question reserves every answer in one new sibling group. Regeneration, including
-  answering with another model, reserves a sibling answer to the same question. Selecting a message
+  answering with another model, reserves a sibling answer to the same question. Editing a settled
+  question reserves a sibling question under its parent plus its requested answers, and selects
+  the first answer;
+  the edited row and its answers stay in the tree. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
   wherever the branch passes a parent with several children. A search result is selected once when

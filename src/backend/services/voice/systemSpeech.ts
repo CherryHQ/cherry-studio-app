@@ -43,6 +43,7 @@ export function createSystemSpeechEngine({
         Speech.speak(text, {
           language,
           voice: voiceId,
+          useApplicationAudioSession: true,
           onDone: () => settle(),
           // A stop that reading did not request, such as an audio interruption, fails it.
           onStopped: () => settle(new Error('System speech was stopped.')),
@@ -90,10 +91,16 @@ export function createSystemSpeechEngine({
           'No installed speaking voice matches the selection and app language.',
         );
       }
-      await voiceAudioSession.playback();
-      for (const chunk of splitSpeechText(text, Speech.maxSpeechInputLength)) {
+      const release = await voiceAudioSession.acquire('speech');
+      try {
         signal.throwIfAborted();
-        await utter(chunk, language, selected.id, signal);
+        await voiceAudioSession.playback();
+        for (const chunk of splitSpeechText(text, Speech.maxSpeechInputLength)) {
+          signal.throwIfAborted();
+          await utter(chunk, language, selected.id, signal);
+        }
+      } finally {
+        await release();
       }
     },
   };

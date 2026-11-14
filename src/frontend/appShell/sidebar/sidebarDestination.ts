@@ -5,6 +5,7 @@ export type SidebarDestination =
   | 'paintings'
   | 'plugins'
   | 'settings'
+  | 'scheduled-tasks'
   | 'skills';
 
 const destinationRoots: readonly [string, SidebarDestination][] = [
@@ -16,6 +17,7 @@ const destinationRoots: readonly [string, SidebarDestination][] = [
   ['/library', 'library'],
   ['/trash', 'library'],
   ['/settings', 'settings'],
+  ['/scheduled-tasks', 'scheduled-tasks'],
 ];
 
 /** The entry whose page, or a page beneath it, fills the content region. */

@@ -1,8 +1,14 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import { ActionMenu, Button, ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
+import {
+  ActionMenu,
+  Button,
+  ContextMenu,
+  FileBrowserRow,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
@@ -25,27 +31,17 @@ export function FileLibraryFolderItem({
     <View className="flex-row items-center gap-2">
       <View className="min-w-0 flex-1">
         <ContextMenu items={menuItems}>
-          <Pressable
+          <FileBrowserRow
             accessibilityLabel={folder.name}
             accessibilityRole="button"
             accessibilityState={{ disabled }}
-            className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
+            description={t('library.modifiedAt', { date: modifiedDate })}
+            name={folder.name}
             onPress={() => onOpen(folder.id)}
             disabled={disabled}
             testID={`file-library-folder-${folder.id}`}
-          >
-            <View className="size-10 items-center justify-center">
-              <FolderIcon className="size-7 text-muted-foreground" />
-            </View>
-            <View className="min-w-0 flex-1 gap-1">
-              <Text className="text-base text-foreground" ellipsizeMode="middle" numberOfLines={1}>
-                {folder.name}
-              </Text>
-              <Text className="text-sm text-muted-foreground" numberOfLines={1}>
-                {t('library.modifiedAt', { date: modifiedDate })}
-              </Text>
-            </View>
-          </Pressable>
+            preview={<FolderIcon className="size-7 text-muted-foreground" />}
+          />
         </ContextMenu>
       </View>
       {menuItems.length > 0 ? (

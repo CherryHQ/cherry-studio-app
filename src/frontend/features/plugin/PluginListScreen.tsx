@@ -6,6 +6,7 @@ import { BuiltinToolGroup } from './components/BuiltinToolGroup';
 import { McpServerGroup } from './components/McpServerGroup';
 import { PluginCatalogGroup } from './components/PluginCatalogGroup';
 import { PluginPage } from './components/PluginPage';
+import { SshConnectionGroup } from './components/SshConnectionGroup';
 
 export function PluginListScreen() {
   const { t } = useTranslation();
@@ -15,6 +16,7 @@ export function PluginListScreen() {
       <PluginPage testID="plugins-list">
         <PluginCatalogGroup />
         <McpServerGroup />
+        <SshConnectionGroup />
         <BuiltinToolGroup />
       </PluginPage>
     </>

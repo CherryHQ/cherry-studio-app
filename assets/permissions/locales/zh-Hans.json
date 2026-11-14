@@ -3,6 +3,7 @@
     "NSCalendarsFullAccessUsageDescription": "Cherry Studio 根据你在聊天中的请求读取和管理日历日程，例如查看今天的安排或调整会议时间，并将相关日程信息发送给你选择的 AI 服务。",
     "NSCalendarsUsageDescription": "Cherry Studio 根据你在聊天中的请求读取和管理日历日程，例如查看今天的安排或调整会议时间，并将相关日程信息发送给你选择的 AI 服务。",
     "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio 使用你选择的 AI 服务提供的详情，添加你在聊天中请求创建的日程，例如明天上午 10 点的会议。",
+    "NSLocalNetworkUsageDescription": "允许 Cherry Studio 连接局域网中的 Cherry Studio 桌面端、AI 服务商、MCP 服务器，以及路由器、NAS 等 SSH 设备。",
     "NSLocationWhenInUseUsageDescription": "Cherry Studio 仅在你使用应用并提出请求时，将当前位置及按需获取的地址发送给你选择的 AI 服务，用于回答查找附近餐厅等问题。",
     "NSRemindersFullAccessUsageDescription": "Cherry Studio 根据你在聊天中的请求读取和管理提醒事项，例如列出今天的任务或添加购物提醒，并将相关提醒事项信息发送给你选择的 AI 服务。",
     "NSRemindersUsageDescription": "Cherry Studio 根据你在聊天中的请求读取和管理提醒事项，例如列出今天的任务或添加购物提醒，并将相关提醒事项信息发送给你选择的 AI 服务。"

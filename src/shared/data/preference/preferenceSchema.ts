@@ -43,6 +43,7 @@ export interface PreferenceSchema {
   /** Device-local opt-in to foreground shake detection and feedback screenshots. */
   'app.feedback.shake_enabled': boolean;
   'app.feedback.shake_hint_decision': 'unseen' | 'accepted' | 'ignored';
+  'app.keep_screen_on.enabled': boolean;
   'app.language': LanguageVarious | null;
   'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
   /** Opt-out switch for anonymous product analytics. Only honoured under the current policy. */
@@ -63,6 +64,8 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'app.background_run_guidance.seen': boolean;
+  /** Device-local audio opt-in; null means unseen, and only explicit confirmation stores true. */
+  'app.background_audio.consent': boolean | null;
 
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
@@ -107,12 +110,14 @@ export interface PreferenceSchema {
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
+  'ui.sidebar.session_tree_enabled': boolean;
   'ui.theme_mode': ThemeMode;
 }
 
 export const PreferenceDefaults = {
   'app.feedback.shake_enabled': false,
   'app.feedback.shake_hint_decision': 'unseen',
+  'app.keep_screen_on.enabled': false,
   'app.language': null,
   'app.onboarding.status': 'unseen',
   'app.privacy.data_collection.enabled': true,
@@ -125,6 +130,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'app.background_run_guidance.seen': false,
+  'app.background_audio.consent': null,
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
@@ -161,6 +167,7 @@ export const PreferenceDefaults = {
   'ui.library.view_mode': 'grid',
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
+  'ui.sidebar.session_tree_enabled': true,
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 
@@ -190,9 +197,11 @@ export const INHERITABLE_PREFERENCE_KEYS = [
  * Restoring a backup keeps the target device's values for these keys.
  */
 export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_audio.consent',
   'app.background_run_guidance.seen',
   'app.feedback.shake_enabled',
   'app.feedback.shake_hint_decision',
+  'app.keep_screen_on.enabled',
   'app.onboarding.status',
   'app.privacy.data_collection.enabled',
   'app.privacy.policy_version',

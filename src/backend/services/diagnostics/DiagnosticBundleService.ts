@@ -67,7 +67,10 @@ function cleanup(directory: Directory): void {
 @DependsOn(['DbService', 'TraceStorageService'])
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('continue')
-export class DiagnosticBundleService extends BaseService implements DiagnosticsModule {
+export class DiagnosticBundleService
+  extends BaseService
+  implements Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>
+{
   private inFlightOperation: Promise<unknown> | null = null;
   private readonly uploader = new CherryDiagnosticUploadClient();
   private disposed = false;
@@ -283,6 +286,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
         feedback: { file: 'feedback.txt', source: 'user', ...input.feedback },
         ...(input.context ? { incident: { source: 'app', ...input.context } } : {}),
+        ...(input.diagnosis ? { diagnosis: input.diagnosis } : {}),
         ...(screenshot
           ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
           : {}),

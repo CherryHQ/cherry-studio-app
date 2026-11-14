@@ -1,18 +1,20 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { cn } from '@cherrystudio/ui/utils';
-import { type ReactNode, useState } from 'react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useUniwind } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
+import { getSidebarBranchLayout } from './sidebarBranchLayout';
+import { useSidebarBranchRow } from './SidebarBranchScrollView';
 import { SIDEBAR_LEADING_SIZE, SIDEBAR_ROW_GAP, SIDEBAR_ROW_INSET } from './SidebarRowContent';
 
-const branchStep = 12;
 export type SidebarSessionBranchAncestor = { sessionId: string; continues: boolean };
 type BranchPosition = {
   depth: number;
@@ -29,7 +31,7 @@ export type SidebarSessionBranchAction = {
   toggle(): void;
 };
 
-/** Reserves only this node's indentation; the row owns its own 12pt text gap. */
+/** Reserves real tree indentation; the row owns its own 12pt text gap. */
 export function SidebarSessionBranchLeading({
   leading,
   depth,
@@ -37,7 +39,7 @@ export function SidebarSessionBranchLeading({
   leading?: ReactNode;
   depth: number;
 }) {
-  const rail = <View style={{ width: depth * branchStep }} />;
+  const rail = <View style={{ width: getSidebarBranchLayout(depth).indentation }} />;
   return leading ? (
     <View className="flex-row items-center" style={{ gap: SIDEBAR_ROW_GAP }}>
       {leading}
@@ -48,34 +50,71 @@ export function SidebarSessionBranchLeading({
   );
 }
 
-/** Selection covers the complete row, including its sibling disclosure target. */
+/** Selection covers the complete row; callers wrap its canvas in stationary interaction targets. */
 export function SidebarSessionBranchFrame({
   children,
   position,
   leading,
   selected = false,
+  disclosure,
+  layout,
+  exiting,
 }: {
-  children: ReactNode;
+  children: (renderCanvas: (content: ReactNode) => ReactNode) => ReactNode;
   position?: SidebarSessionBranchPosition;
   leading?: ReactNode;
   selected?: boolean;
-}) {
+  disclosure?: ReactNode;
+} & Pick<ComponentProps<typeof Animated.View>, 'layout' | 'exiting'>) {
   const [height, setHeight] = useState(44);
+  const { ref, viewport } = useSidebarBranchRow(position?.depth ?? 0);
+  const width = useSharedValue(0);
+  const offset = viewport?.offset;
+  const indentation = getSidebarBranchLayout(position?.depth ?? 0).indentation;
+  const canvasStyle = useAnimatedStyle(() => {
+    // A shallower sibling must not lose its title's beginning beyond the left viewport edge.
+    const shift = Math.min(indentation, offset?.get() ?? 0);
+    return {
+      // Keep the text/status trailing edge fixed while the real indentation moves left.
+      width: width.get() > 0 ? width.get() + shift : ('100%' as const),
+      transform: [{ translateX: -shift }],
+    };
+  });
   return (
-    <View
-      className={cn('relative flex-row items-stretch rounded-xl', selected && 'bg-secondary/70')}
-      onLayout={position ? (event) => setHeight(event.nativeEvent.layout.height) : undefined}
+    <Animated.View
+      ref={ref}
+      collapsable={false}
+      layout={layout}
+      exiting={exiting}
+      className={cn(
+        'relative min-h-11 flex-row items-stretch rounded-xl',
+        selected && 'bg-secondary/70',
+      )}
+      onLayout={(event) => {
+        setHeight(event.nativeEvent.layout.height);
+        viewport?.refresh();
+      }}
     >
-      {children}
-      {position ? (
-        <SidebarSessionBranchRail
-          position={position}
-          height={height}
-          leading={Boolean(leading)}
-          selected={selected}
-        />
-      ) : null}
-    </View>
+      <View
+        className="min-w-0 flex-1 overflow-hidden"
+        onLayout={(event) => width.set(event.nativeEvent.layout.width)}
+      >
+        {children((content) => (
+          <Animated.View className="relative" style={canvasStyle}>
+            {content}
+            {position ? (
+              <SidebarSessionBranchRail
+                position={position}
+                height={height}
+                leading={Boolean(leading)}
+                selected={selected}
+              />
+            ) : null}
+          </Animated.View>
+        ))}
+      </View>
+      {disclosure}
+    </Animated.View>
   );
 }
 
@@ -96,9 +135,10 @@ function SidebarSessionBranchRail({
     'muted-foreground',
     theme === 'dark' ? 'sidebar' : 'background',
   ]);
-  const x = SIDEBAR_ROW_INSET + position.depth * branchStep;
+  const layout = getSidebarBranchLayout(position.depth, position.ancestorContinuations);
+  const x = SIDEBAR_ROW_INSET + layout.indentation;
   const center = height / 2;
-  const parent = x - branchStep;
+  const parent = SIDEBAR_ROW_INSET + layout.parentIndentation;
   const onPath = position.kind === 'session' && position.onSelectedPath;
   return (
     <Svg
@@ -112,19 +152,17 @@ function SidebarSessionBranchRail({
         left: leading ? SIDEBAR_LEADING_SIZE + SIDEBAR_ROW_GAP : 0,
       }}
     >
-      {position.ancestorContinuations.map((ancestor, depth) =>
-        ancestor.continues ? (
-          <Line
-            key={ancestor.sessionId}
-            x1={SIDEBAR_ROW_INSET + depth * branchStep}
-            x2={SIDEBAR_ROW_INSET + depth * branchStep}
-            y1={0}
-            y2={height}
-            stroke={line}
-            strokeWidth={1.35}
-          />
-        ) : null,
-      )}
+      {layout.ancestorIndentations.map((indentation) => (
+        <Line
+          key={indentation}
+          x1={SIDEBAR_ROW_INSET + indentation}
+          x2={SIDEBAR_ROW_INSET + indentation}
+          y1={0}
+          y2={height}
+          stroke={line}
+          strokeWidth={1.35}
+        />
+      ))}
       {position.depth > 0 ? (
         position.kind === 'continuation' ? (
           <Line x1={parent} x2={parent} y1={0} y2={center} stroke={line} strokeWidth={1.35} />

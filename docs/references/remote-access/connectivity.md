@@ -139,6 +139,6 @@ opens a manager-owned channel against exactly the selected endpoint, authenticat
 pairing, and saves the manual route only after a successful capability-scoped query. It does not
 fall back to a different address or claim that other networks have been tested.
 
-Mobile consumes the published `@cherrystudio/remote-protocol@0.7.0` and
-`@cherrystudio/remote-transport@0.2.4` packages. Physical-device, light/dark UI, and real VPN
+Mobile consumes the published `@cherrystudio/remote-protocol@0.8.0` and
+`@cherrystudio/remote-transport@0.2.6` packages. Physical-device, light/dark UI, and real VPN
 switching acceptance of this Mobile build remain pending.

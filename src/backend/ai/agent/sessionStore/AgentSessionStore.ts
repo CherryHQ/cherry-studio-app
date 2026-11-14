@@ -3,6 +3,7 @@ import type {
   AgentEditMessageInput,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
+  AgentMessageSibling,
   AgentMessageView,
   AgentSessionView,
 } from '@/shared/contracts/agent';
@@ -204,6 +205,13 @@ export interface AgentSessionStore {
    */
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
+  /**
+   * Every child of `parentId` in creation order, as branch alternatives. The
+   * Host attaches them to live message projections so branch switching matches
+   * settled transcript reads while the new turn is still running.
+   */
+  listBranchSiblings(sessionId: string, parentId: string | null): Promise<AgentMessageSibling[]>;
+
   /** Atomically reserves a sibling answer to an existing question and selects it. */
   reserveAnswer(input: ReserveAnswerInput): Promise<ReserveSubmissionResult>;
 
@@ -259,6 +267,17 @@ export interface AgentSessionStore {
    * history, this cannot invalidate the current context or another input's execution.
    */
   discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
+
+  /** Reconcile confirmed predecessors; selection moves only by an explicit old-tail compare-and-set. */
+  syncInputParents(
+    sessionId: string,
+    inputs: readonly {
+      userMessageId: string;
+      assistantMessageId: string;
+      parentMessageId: string | null;
+    }[],
+    selection?: { from: string; to: string },
+  ): Promise<void>;
 
   /** The ancestor chain ending at `through`, oldest first. */
   listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]>;

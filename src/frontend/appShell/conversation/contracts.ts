@@ -110,15 +110,22 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
+  | { kind: 'approve'; sshDiagnosticsGrant: true }
   | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
   id: string;
   kind: 'decision' | 'question';
   title: string;
+  /** Known local tool identity for translated titles and operation-specific approval content. */
+  toolName?: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Identified from the local tool reference, never from model-authored arguments. */
+  sshCommand?: boolean;
+  /** Only a locally bound, still-current SSH target can offer this narrower future grant. */
+  canGrantSshDiagnostics?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
@@ -162,10 +169,12 @@ export type ConversationMessage = {
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
     /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
-    edit?: { availability: Availability };
+    editAnswer?: { availability: Availability };
     retry?: ConversationAction<void, ConversationRef | void>;
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
+    /** Sends the edited text as a sibling question of this message; the original stays. */
+    editQuestion?: ConversationAction<{ text: string }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */
@@ -267,7 +276,7 @@ export interface ConversationCatalog {
     signal: AbortSignal,
   ): Promise<CatalogPage<AgentSummary>>;
   listSessions(
-    filter: { agent?: AgentRef },
+    filter: { agent?: AgentRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;

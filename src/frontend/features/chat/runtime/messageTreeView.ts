@@ -2,9 +2,10 @@ import type { AgentMessageSibling, AgentMessageView } from '@/shared/contracts/a
 
 /**
  * Live rows on the selected branch. Persisted history is already the selected
- * branch; a live row is shown when the walk from the Session's selected leaf
- * reaches it before re-entering persisted history. Without a known or loaded
- * leaf every live row is shown, as before the message tree.
+ * branch; walk through both persisted and live rows from the Session's selected leaf. Also keep
+ * live ancestors of persisted rows so branch filtering can discard stale descendants after a
+ * switch. A settled descendant can follow a turn omitted from history while an alternative runs.
+ * Without a known or loaded leaf every live row is shown, as before the message tree.
  */
 export function selectedLiveMessages(
   live: readonly AgentMessageView[],
@@ -13,16 +14,18 @@ export function selectedLiveMessages(
 ): readonly AgentMessageView[] {
   if (!activeNodeId || live.length === 0) return live;
   const persistedIds = new Set(persisted.map((message) => message.id));
-  const liveById = new Map(live.map((message) => [message.id, message]));
+  const byId = new Map([...persisted, ...live].map((message) => [message.id, message]));
   // A queued answer is selected before it streams; until then the live rows are its ancestors.
-  if (!liveById.has(activeNodeId) && !persistedIds.has(activeNodeId)) return live;
+  if (!byId.has(activeNodeId)) return live;
   const visible = new Set<string>();
-  let id: string | null | undefined = activeNodeId;
-  while (id && !persistedIds.has(id) && !visible.has(id)) {
-    const message = liveById.get(id);
-    if (!message) break;
-    visible.add(id);
-    id = message.parentId;
+  for (const leaf of [activeNodeId, ...persisted.map((message) => message.id)]) {
+    let id: string | null | undefined = leaf;
+    while (id && !visible.has(id)) {
+      const message = byId.get(id);
+      if (!message) break;
+      visible.add(id);
+      id = message.parentId;
+    }
   }
   return live.filter((message) => persistedIds.has(message.id) || visible.has(message.id));
 }

@@ -2,33 +2,52 @@ import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { BottomSheet, Button, ContentState } from '@cherrystudio/ui/components';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/conversation';
+import type { AgentSummary } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { ManagedMark, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
-type MainHeaderAgentPickerSheetProps = {
+type AgentPickerItem = Omit<AgentSummary, 'ref'>;
+
+type AgentPickerCatalog = {
+  items: readonly AgentPickerItem[];
+  isError: boolean;
+  isLoading: boolean;
+  refetch: () => unknown;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => unknown;
+};
+
+export type AgentPickerSheetProps = {
   currentAgentId?: string;
-  catalog: ReturnType<typeof useConversationAgents>;
+  catalog: AgentPickerCatalog;
+  emptyState?: ReactNode;
   onSelect(agentId: string): void;
   onEdit?(agentId: string): void;
   onCreate?(): void;
   onClose: () => void;
   open: boolean;
+  testID?: string;
+  title?: string;
 };
 
-export function MainHeaderAgentPickerSheet({
+export function AgentPickerSheet({
   currentAgentId,
   catalog,
+  emptyState,
   onSelect,
   onEdit,
   onCreate,
   onClose,
   open,
-}: MainHeaderAgentPickerSheetProps) {
+  testID = 'agent-picker',
+  title,
+}: AgentPickerSheetProps) {
   const { t } = useTranslation();
   const { items: agents, isError, isLoading, refetch } = catalog;
   const selectAgent = (agentId: string) => {
@@ -61,8 +80,8 @@ export function MainHeaderAgentPickerSheet({
       onClose={onClose}
       open={open}
       size="medium"
-      testID="main-header-agent-picker"
-      title={t('agent.list.title')}
+      testID={testID}
+      title={title ?? t('agent.list.title')}
     >
       <ScrollView
         className="min-h-0 flex-1"
@@ -80,10 +99,12 @@ export function MainHeaderAgentPickerSheet({
             title={t('agent.list.loadFailed')}
           />
         ) : agents.length === 0 ? (
-          <ContentState.Empty
-            description={t('agent.list.emptyDescription')}
-            title={t('agent.list.emptyTitle')}
-          />
+          (emptyState ?? (
+            <ContentState.Empty
+              description={t('agent.list.emptyDescription')}
+              title={t('agent.list.emptyTitle')}
+            />
+          ))
         ) : (
           <View className="gap-1">
             {agents.map((agent) => (
@@ -97,11 +118,11 @@ export function MainHeaderAgentPickerSheet({
             ))}
           </View>
         )}
-        {catalog.hasNextPage ? (
+        {catalog.hasNextPage && catalog.fetchNextPage ? (
           <Button
             variant="ghost"
             loading={catalog.isFetchingNextPage}
-            onPress={() => void catalog.fetchNextPage()}
+            onPress={() => void catalog.fetchNextPage?.()}
           >
             {t('remoteAgent.loadMore')}
           </Button>
@@ -117,7 +138,7 @@ function AgentPickerRowView({
   onSelect,
   selected,
 }: {
-  agent: AgentSummary;
+  agent: AgentPickerItem;
   onEdit?: (agentId: string) => void;
   onSelect: (agentId: string) => void;
   selected: boolean;

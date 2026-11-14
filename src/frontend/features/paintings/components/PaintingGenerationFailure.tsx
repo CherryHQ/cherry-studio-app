@@ -25,7 +25,7 @@ export function PaintingGenerationFailure({
   height: number;
   message?: string;
   onRetry?: () => Promise<void>;
-  onReport: () => void;
+  onReport: (destination?: 'feedback' | 'diagnosis') => void;
   prompt: string | undefined;
   status: 'failed' | 'interrupted';
   width: number;
