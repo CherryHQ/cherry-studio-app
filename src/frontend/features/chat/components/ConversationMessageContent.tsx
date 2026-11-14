@@ -94,6 +94,7 @@ function ConversationToolDetail({
       name={tool.title}
       input={toolValue(input.data)}
       output={toolValue(output.data)}
+      failed={tool.state === 'failed'}
     />
   );
 }
