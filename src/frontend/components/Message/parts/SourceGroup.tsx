@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { resolveCitationWebSources } from './webSource';
@@ -15,14 +16,30 @@ import { WebSourceCard, WebSourceFavicon } from './WebSourceCard';
 type SourceGroupProps = {
   citationNumberBySourceId: ReadonlyMap<string, number>;
   parts: readonly CherryMessagePart[];
+  additionalSources?: readonly CitationSource[];
 };
 
-export function SourceGroup({ citationNumberBySourceId, parts }: SourceGroupProps) {
+export function SourceGroup({
+  citationNumberBySourceId,
+  parts,
+  additionalSources,
+}: SourceGroupProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const sources = useMemo(
-    () => resolveCitationWebSources(parts, citationNumberBySourceId),
-    [citationNumberBySourceId, parts],
+    () =>
+      resolveCitationWebSources(
+        [
+          ...parts,
+          ...(additionalSources ?? []).flatMap((source): CherryMessagePart[] =>
+            source.url
+              ? [{ type: 'source-url', sourceId: source.id, url: source.url, title: source.title }]
+              : [],
+          ),
+        ],
+        citationNumberBySourceId,
+      ),
+    [citationNumberBySourceId, parts, additionalSources],
   );
   const label = t('chat.sources.count', { count: sources.length });
 
