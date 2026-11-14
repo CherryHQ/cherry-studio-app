@@ -6,7 +6,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { type ComponentProps, useCallback, useMemo, useState } from 'react';
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -207,6 +207,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
   const readCitations = messageWindow.readCitations;
+  const readCitationsRef = useRef(readCitations);
+  useEffect(() => {
+    readCitationsRef.current = readCitations;
+  }, [readCitations]);
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -247,7 +251,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                     ...message,
                     modelName: resolveMessageModel(message)?.name,
                     citationSources: missing.length
-                      ? await readCitations?.(message.id, missing, signal)
+                      ? await readCitationsRef.current?.(message.id, missing, signal)
                       : undefined,
                   };
                 }),
@@ -260,7 +264,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             },
           }
         : undefined,
-    [api, sessionId, readCitations],
+    [api, sessionId],
   );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));

@@ -47,6 +47,7 @@ export function resolveMessageCitations(
   parts: readonly CherryMessagePart[],
   additionalSources: readonly CitationSource[] = [],
   format: 'display' | 'export' = 'display',
+  preferredNumbers?: ReadonlyMap<string, number>,
 ): ResolvedMessageCitations {
   const sourceById = collectCitationSources(parts, additionalSources);
   if (sourceById.size === 0) {
@@ -54,6 +55,10 @@ export function resolveMessageCitations(
   }
 
   const numberBySource = new Map<CitationSource, number>();
+  preferredNumbers?.forEach((number, id) => {
+    const source = sourceById.get(id);
+    if (source && !numberBySource.has(source)) numberBySource.set(source, number);
+  });
   const toolIds = new Set(collectToolCitationSources(parts).map((source) => source.id));
   const native = parts.filter(
     (part): part is Extract<CherryMessagePart, { type: 'source-url' }> =>
@@ -73,7 +78,7 @@ export function resolveMessageCitations(
     if (!nativeByNumber.has(item.index + 1)) nativeByNumber.set(item.index + 1, item.sourceId);
   }
   const textByPartIndex = new Map<number, ResolvedCitationText>();
-  let nextNumber = 1;
+  let nextNumber = Math.max(0, ...numberBySource.values()) + 1;
 
   parts.forEach((part, index) => {
     if (part.type !== 'text') return;

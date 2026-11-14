@@ -16,6 +16,7 @@ import {
 } from '@/shared/contracts/documentExport';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -89,8 +90,9 @@ export function toChatExportDocument(
       registry.get(message.id),
       'export',
     );
+    const allSources = collectCitationSources(presentation.parts ?? [], registry.get(message.id));
     const sources = new Map(
-      [...collectCitationSources(presentation.parts ?? [], registry.get(message.id))].filter(
+      [...allSources].filter(
         (entry): entry is [string, { id: string; title: string; url: string }] =>
           Boolean(entry[1].url),
       ),
@@ -134,17 +136,29 @@ export function toChatExportDocument(
     });
     blocks.push(...attachments);
     const seenUrls = new Set<string>();
+    const exportNumberById = new Map(citations.sourceNumberById);
+    const numberByUrl = new Map<string, number>();
+    for (const [id, source] of sources) {
+      const assigned = citations.sourceNumberById.get(id);
+      if (assigned !== undefined) numberByUrl.set(source.url, assigned);
+    }
     let nextSourceNumber = Math.max(0, ...citations.sourceNumberById.values()) + 1;
-    const links = orderedSources.flatMap(([id, source]) => {
+    const links = orderedSources.flatMap(([, source]) => {
       if (seenUrls.has(source.url)) return [];
       seenUrls.add(source.url);
+      const number = numberByUrl.get(source.url) ?? nextSourceNumber++;
+      numberByUrl.set(source.url, number);
       return [
         {
-          label: `${citations.sourceNumberById.get(id) ?? nextSourceNumber++}. ${source.title}`,
+          label: `${number}. ${source.title}`,
           url: source.url,
         },
       ];
     });
+    for (const [id, source] of sources) {
+      const number = numberByUrl.get(source.url);
+      if (number !== undefined && !exportNumberById.has(id)) exportNumberById.set(id, number);
+    }
     if (links.length)
       blocks.push({
         kind: 'links',
@@ -166,7 +180,7 @@ export function toChatExportDocument(
     if (translation && source && sha256HexOfText(source) === translation.sourceHash)
       blocks.push({
         kind: 'markdown',
-        source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, sources)}`,
+        source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, allSources, exportNumberById, presentation.parts)}`,
       });
     const metadata: { label: string; value: string }[] = [];
     if (message.status !== 'success')
@@ -223,13 +237,20 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
 /** Portable links use the same source validation, numbering and code exclusion as the message. */
 export function replaceChatCitations(
   source: string,
-  sources: ReadonlyMap<string, { title: string; url: string }>,
+  sources: ReadonlyMap<string, { title: string; url?: string }>,
+  preferredNumbers?: ReadonlyMap<string, number>,
+  parts: readonly CherryMessagePart[] = [],
 ): string {
+  const translationParts: CherryMessagePart[] = [
+    ...parts.filter((part) => part.type !== 'text'),
+    { type: 'text', text: source },
+  ];
   return (
     resolveMessageCitations(
-      [{ type: 'text', text: source }],
+      translationParts,
       [...sources].map(([id, item]) => ({ ...item, id })),
       'export',
-    ).textByPartIndex.get(0)?.markdown ?? source
+      preferredNumbers,
+    ).textByPartIndex.get(translationParts.length - 1)?.markdown ?? source
   );
 }

@@ -19,6 +19,7 @@ import type {
   OperationOutcome,
   QueryScope,
   ResourceRead,
+  ResourceValue,
 } from '../contracts';
 import {
   createConversationReferences,
@@ -560,15 +561,22 @@ export function createRemoteConversationSession(
               continue;
             const attachment = row.attachments?.find((item) => item.key === part.id);
             if (!attachment?.resource) continue;
-            const value =
-              attachment.resource.kind === 'inline'
-                ? attachment.resource.value
-                : await attachment.resource.read(signal);
-            if (value.kind !== 'file')
-              throw new ConversationReadError({
-                code: 'resource-unavailable',
-                retry: 'read-again',
-              });
+            let value: ResourceValue;
+            try {
+              value =
+                attachment.resource.kind === 'inline'
+                  ? attachment.resource.value
+                  : await attachment.resource.read(signal);
+            } catch (error) {
+              if (
+                error instanceof ConversationReadError &&
+                error.failure.code === 'resource-unavailable'
+              )
+                // Metadata-only or evicted remote images leave `base64` unset so export renders a placeholder.
+                continue;
+              throw error;
+            }
+            if (value.kind !== 'file') continue;
             part.base64 = await new File(value.uri).base64();
             signal.throwIfAborted();
           }

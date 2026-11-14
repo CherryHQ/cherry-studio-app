@@ -417,3 +417,80 @@ test('remote snapshots share confirmed citations and ordered image bytes without
   ]);
   expect(JSON.stringify(document)).not.toContain('fileEntryId');
 });
+
+test('retains an unavailable-image placeholder when a prepared image has no bytes', () => {
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'remote-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [
+          {
+            type: 'prepared-file',
+            id: 'picture',
+            filename: 'MetadataOnly.png',
+            mediaType: 'image/png',
+          },
+          { type: 'text', id: 'final', state: 'done', text: 'Answer text' },
+        ],
+      },
+    ],
+    options,
+  );
+  expect(document.assets).toEqual({});
+  expect(document.sections[0].blocks).toEqual([
+    { kind: 'image', assetId: 'remote-answer:picture', alt: 'MetadataOnly.png' },
+    { kind: 'markdown', source: 'Answer text' },
+  ]);
+});
+
+test('keeps exported translation citations aligned with original answer and sources numbering', () => {
+  const originalText = 'First [cite:src-a], then [cite:src-b].';
+  const translationText = '先出现 [cite:src-b]，再出现 [cite:src-a]。';
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'translated-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [{ type: 'text', id: 'final', state: 'done', text: originalText }],
+        citationSources: [
+          { id: 'src-a', title: 'Source A', url: 'https://a.example' },
+          { id: 'src-b', title: 'Source B', url: 'https://b.example' },
+        ],
+      },
+    ],
+    {
+      ...options,
+      translations: {
+        'translated-answer': {
+          language: 'zh-CN',
+          content: translationText,
+          sourceHash: sha256HexOfText(originalText),
+        },
+      },
+    },
+  );
+  expect(document.sections[0].blocks).toEqual([
+    {
+      kind: 'markdown',
+      source: 'First [1](<https://a.example/>), then [2](<https://b.example/>).',
+    },
+    {
+      kind: 'links',
+      summary: '2 sources',
+      items: [
+        { label: '1. Source A', url: 'https://a.example' },
+        { label: '2. Source B', url: 'https://b.example' },
+      ],
+    },
+    {
+      kind: 'markdown',
+      source:
+        '---\n\n### Translation (zh-CN)\n\n先出现 [2](<https://b.example/>)，再出现 [1](<https://a.example/>)。',
+    },
+  ]);
+});

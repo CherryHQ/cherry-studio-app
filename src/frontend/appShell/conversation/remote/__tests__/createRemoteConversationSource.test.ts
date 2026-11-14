@@ -809,3 +809,55 @@ it('finds earlier tool sources independently of the visible window and excludes 
   expect(test.remote.readResource).not.toHaveBeenCalledWith('later-output', expect.anything());
   test.source.dispose();
 });
+
+it('keeps prose and other messages exportable when a remote image returns metadata only or unavailable', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.history).mockResolvedValueOnce({
+    items: [
+      {
+        ...message('with-unavailable-image'),
+        parts: [
+          {
+            id: 'img-meta',
+            kind: 'file' as const,
+            name: 'Metadata.png',
+            mediaType: 'image/png',
+            resource: 'meta-res',
+          },
+          {
+            id: 'img-missing',
+            kind: 'file' as const,
+            name: 'Missing.png',
+            mediaType: 'image/png',
+            resource: 'missing-res',
+          },
+          {
+            id: 'body',
+            kind: 'text' as const,
+            text: 'Normal text remains exportable.',
+            complete: true,
+            state: 'completed' as const,
+          },
+        ],
+      },
+      message('other'),
+    ],
+  });
+  jest.mocked(test.remote.readResource).mockImplementation(async (key) => {
+    if (key === 'meta-res')
+      return { kind: 'metadata', name: 'Metadata.png', mediaType: 'image/png' };
+    throw Object.assign(new Error('Gone'), { code: 'RESOURCE_UNAVAILABLE' });
+  });
+  const handle = await test.source.openSession(address, signal());
+  const prepared = await handle.history.prepareSelection(
+    ['with-unavailable-image', 'other'],
+    signal(),
+  );
+  expect(prepared.messages.map((item) => item.id)).toEqual(['other', 'with-unavailable-image']);
+  expect(prepared.messages[1].parts).toEqual([
+    { type: 'prepared-file', id: 'img-meta', filename: 'Metadata.png', mediaType: 'image/png' },
+    { type: 'prepared-file', id: 'img-missing', filename: 'Missing.png', mediaType: 'image/png' },
+    { type: 'text', id: 'body', text: 'Normal text remains exportable.', state: 'done' },
+  ]);
+  test.source.dispose();
+});
