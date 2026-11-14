@@ -1,7 +1,11 @@
 import { File } from 'expo-file-system';
 
 import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
-import { readAiContentText, writeAiContentText } from '@/shared/utils/aiContentText';
+import {
+  aiContentMarkdownBody,
+  readAiContentText,
+  writeAiContentText,
+} from '@/shared/utils/aiContentText';
 
 import {
   completeFileAiContent,
@@ -97,11 +101,15 @@ beforeEach(() => {
 });
 
 test.each([
-  ['text/markdown', '\uFEFFBody\n'],
-  ['text/html', '<!DOCTYPE html><html><head></head><body>Body</body></html>'],
+  ['text/markdown', '\uFEFFBody\n', '\uFEFF---\nauthor: Cherry Studio\n---\nBody\n'],
+  [
+    'text/html',
+    '<!DOCTYPE html><html><head></head><body>Body</body></html>',
+    '<!DOCTYPE html><html><head><meta name="author" content="Cherry Studio"></head><body>Body</body></html>',
+  ],
 ])(
-  'AI generation adds an application-service label to %s and later copies retain it',
-  async (mediaType, text) => {
+  'AI generation adds an application-service label and author to %s and later copies retain them',
+  async (mediaType, text, withAuthor) => {
     const file = new File(uri);
     file.writeSync(text);
     const metadata = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
@@ -115,7 +123,7 @@ test.each([
       ReservedCode2: '',
     });
     expect(readAiContentText(await file.text(), mediaType)).toEqual(metadata);
-    expect(writeAiContentText(await file.text(), mediaType, null)).toBe(text);
+    expect(writeAiContentText(await file.text(), mediaType, null)).toBe(withAuthor);
     const completed = mockFiles.get(uri)!.slice();
     await expect(completeFileAiContent({ uri, mediaType })).resolves.toEqual(metadata);
     expect(mockFiles.get(uri)).toEqual(completed);
@@ -143,7 +151,9 @@ test.each(['script', 'style'])(
     });
     expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
     expect(await readFileAiContent({ uri, mediaType: 'text/html' })).toEqual(metadata);
-    expect(writeAiContentText(await file.text(), 'text/html', null)).toBe(text);
+    expect(writeAiContentText(await file.text(), 'text/html', null)).toBe(
+      text.replace('<head>', '<head><meta name="author" content="Cherry Studio">'),
+    );
 
     const meta = writeAiContentText('<head></head>', 'text/html', label).match(/<meta[^>]+>/)![0];
     file.writeSync(text.replace('</head>', meta + '</head>'));
@@ -166,21 +176,27 @@ test.each([
 });
 
 test.each([
-  ['text/markdown', '---\nAIGC: model-authored\ntitle: Report\n---\nBody\n'],
+  [
+    'text/markdown',
+    '---\nAIGC: model-authored\ntitle: Report\nauthor: Model\n---\nBody\n',
+    '---\ntitle: Report\nauthor: Cherry Studio\n---\nBody\n',
+  ],
   [
     'text/html',
-    '<!DOCTYPE html><html><head><meta name="AIGC" content="not-json"></head><body>Body</body></html>',
+    '<!DOCTYPE html><html><head><meta name="AIGC" content="not-json"><meta name="author" content="Model"></head><body>Body</body></html>',
+    '<!DOCTYPE html><html><head><meta name="author" content="Cherry Studio"></head><body>Body</body></html>',
   ],
-])('a new AI %s output replaces untrusted authored declarations', async (mediaType, text) => {
-  const file = new File(uri);
-  file.writeSync(text);
-  const metadata = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
-  expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
-  expect(readAiContentText(await file.text(), mediaType)).toEqual(metadata);
-  expect(writeAiContentText(await file.text(), mediaType, null)).toBe(
-    writeAiContentText(text, mediaType, null),
-  );
-});
+])(
+  'a new AI %s output replaces untrusted declarations and author',
+  async (mediaType, text, withAuthor) => {
+    const file = new File(uri);
+    file.writeSync(text);
+    const metadata = await completeFileAiContent({ uri, mediaType, aiOperation: 'generate' });
+    expect(metadata).toMatchObject({ Label: '1', ContentProducer: 'CherryStudio' });
+    expect(readAiContentText(await file.text(), mediaType)).toEqual(metadata);
+    expect(writeAiContentText(await file.text(), mediaType, null)).toBe(withAuthor);
+  },
+);
 
 test('each AI edit replaces old production identity without changing its historical source', async () => {
   const originalUri = 'file:///managed/original.md';
@@ -206,7 +222,8 @@ test('each AI edit replaces old production identity without changing its histori
   });
   expect(metadata?.ProduceID).not.toBe(previous?.ProduceID);
   expect(readAiContentText(await file.text(), 'text/markdown')).toEqual(metadata);
-  expect(writeAiContentText(await file.text(), 'text/markdown', null)).toBe('\uFEFFEdited\n');
+  expect(aiContentMarkdownBody(await file.text())).toBe('\uFEFFEdited\n');
+  expect(await file.text()).toContain('author: Cherry Studio');
   file.writeSync((await file.text()).replace('Edited', 'Edited again'));
   const next = await completeFileAiContent({
     uri,
@@ -221,7 +238,9 @@ test('each AI edit replaces old production identity without changing its histori
 });
 
 test('copies and mechanical transformations retain independently supplied producer and propagator fields', async () => {
-  new File(uri).writeSync(writeAiContentText('Original\n', 'text/markdown', label));
+  new File(uri).writeSync(
+    writeAiContentText('---\nauthor: Original\n---\nOriginal\n', 'text/markdown', label),
+  );
   const metadata = await readFileAiContent({ uri, mediaType: 'text/markdown' });
   expect(await readSourceAiContent({ uri, mediaType: 'text/markdown' })).toEqual(metadata);
   const original = mockFiles.get(uri)!.slice();
@@ -238,6 +257,7 @@ test('copies and mechanical transformations retain independently supplied produc
   });
   expect(derived).toEqual(label);
   expect(readAiContentText(await new File(htmlUri).text(), 'text/html')).toEqual(label);
+  expect(await new File(htmlUri).text()).not.toContain('name="author"');
 });
 
 test.each(['1', '2', '3'] as const)(

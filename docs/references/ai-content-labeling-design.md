@@ -86,6 +86,14 @@ without backfilling records or rewriting historical blobs. XMP, legacy PNG AIGC 
 ImageDescription/UserComment declarations are read before image normalization; canonical image
 writes use XMP. Metadata inspection is bounded, and image codec payloads are copied without decoding.
 
+AI-produced document outputs separately set their file-property author to `Cherry Studio` before
+publication. This author is not the AIGC `ContentProducer` field: its application-service value
+remains `CherryStudio`. DOCX/XLSX/PPTX use core `dc:creator`, Markdown uses front-matter `author`,
+and HTML uses a head `meta name="author"` property. The shared pending-output completion boundary
+covers fixed generators, Office scripts and AI edits without rewriting historical source files.
+Inherited labels and ordinary imports do not override authors. Raw formats such as TXT, JSON and
+CSV retain exact content without added author lines or sidecars.
+
 Regression suites cover field validation, source-file inheritance, text carriers/projections, image
 containers/EXIF, Office custom properties and native-job lifetime, production/inheritance behavior,
 and edit coordinates. Verification and extracted samples belong to the exact source revision

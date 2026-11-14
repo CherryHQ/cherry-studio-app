@@ -8,6 +8,7 @@ import {
   type AiContentLabel,
   type AiContentOperation,
 } from '@/shared/data/types/aiContent';
+import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
 import {
   readAiContentHtml,
   readAiContentText,
@@ -206,13 +207,21 @@ export async function completeFileAiContent(
         format: OFFICE[mediaType],
         output: temporary.uri,
         label,
+        author: input.aiOperation ? GENERATED_FILE_AUTHOR : undefined,
         signal,
       });
     } else {
       const { text, hasBom } = decodeManagedUtf8(await file.bytes(), file.size);
       let content = (hasBom ? '\uFEFF' : '') + text;
       if (input.aiOperation) content = writeAiContentText(content, mediaType, null);
-      temporary.writeSync(writeAiContentText(content, mediaType, label));
+      temporary.writeSync(
+        writeAiContentText(
+          content,
+          mediaType,
+          label,
+          input.aiOperation ? GENERATED_FILE_AUTHOR : undefined,
+        ),
+      );
     }
     signal?.throwIfAborted();
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);

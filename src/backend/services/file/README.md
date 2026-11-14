@@ -22,8 +22,17 @@ share artifacts. Original-file copies naturally retain their bytes and existing 
   metadata without decoding pixel payloads; `xmpMetadata` owns the TC260 namespace and preserves
   unrelated XMP. Legacy PNG and EXIF AIGC declarations can be inherited.
 - `shared/utils/aiContentText` owns Markdown front matter and HTML head metadata. The Markdown
-  reading projection hides only valid AIGC metadata; exact reads, copying and edits use stored text.
-- `office.processOfficeMetadata` owns OOXML custom properties in the existing native compute pool.
+  reading projection hides valid AIGC metadata and its `Cherry Studio` author; exact reads, copying
+  and edits use stored text. Other authors and unrelated front matter remain visible.
+- `office.processOfficeMetadata` owns OOXML custom and core properties in the existing native
+  compute pool.
+
+Actual AI document generation and editing also set the file-property author to `Cherry Studio`
+before publication, including Office script outputs. The shared `GENERATED_FILE_AUTHOR` identity
+is separate from the AIGC service name `CherryStudio`. DOCX/XLSX/PPTX use the core `dc:creator`
+property, Markdown uses front-matter `author`, and HTML uses a head `meta name="author"` property.
+Imported files and inherited declarations do not receive this author override. TXT, JSON, CSV and
+other raw formats keep their original content; no author line or sidecar is added.
 
 Metadata handling completes before publishing the managed file and committing its final size.
 Draft content and metadata are prepared before replacing existing bytes. New AI edits clear

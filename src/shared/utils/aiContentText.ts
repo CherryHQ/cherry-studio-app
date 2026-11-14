@@ -1,6 +1,7 @@
 import { isMap, isNode, parseDocument } from 'yaml';
 
 import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/aiContent';
+import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
 
 const MAX_METADATA_CHARACTERS = 256 * 1024;
 
@@ -24,13 +25,14 @@ function markdownHeader(text: string) {
   };
 }
 
-/** Only the reading projection omits AIGC; raw reads and exact edits keep stored coordinates. */
+/** Reading hides valid AIGC and the application author; raw reads and edits keep stored text. */
 export function aiContentMarkdownBody(text: string): string {
   const header = markdownHeader(text);
   if (!header?.document.has('AIGC')) return text;
   const node = header.document.get('AIGC', true);
   if (!isNode(node) || !AiContentLabelSchema.safeParse(node.toJSON()).success) return text;
   header.document.delete('AIGC');
+  if (header.document.get('author') === GENERATED_FILE_AUTHOR) header.document.delete('author');
   if (!isMap(header.document.contents) || !header.document.contents.items.length)
     return header.bom + header.body;
   return header.bom + '---\n' + header.document.toString() + '---\n' + header.body;
@@ -156,19 +158,18 @@ function decodeAttribute(value: string): string {
   });
 }
 
-function htmlMetadata(text: string) {
+function htmlMetadata(text: string, includeAuthor = false) {
   const tags = Array.from(htmlTags([text]));
   const head = tags.find((tag) => /^<head\b/i.test(tag.text));
   const end = head && tags.find((tag) => tag.start >= head.end && /^<\/head\b/i.test(tag.text));
   const metadata =
     head && end
-      ? tags.filter(
-          (tag) =>
-            tag.start >= head.end &&
-            tag.end <= end.start &&
-            /^<meta\b/i.test(tag.text) &&
-            attributes(tag.text).name?.toLowerCase() === 'aigc',
-        )
+      ? tags.filter((tag) => {
+          if (tag.start < head.end || tag.end > end.start || !/^<meta\b/i.test(tag.text))
+            return false;
+          const name = attributes(tag.text).name?.toLowerCase();
+          return name === 'aigc' || (includeAuthor && name === 'author');
+        })
       : [];
   return { tags, head, end, metadata };
 }
@@ -210,11 +211,12 @@ export function readAiContentText(text: string, mediaType: string): AiContentLab
   return null;
 }
 
-/** Null removes the AIGC declaration while preserving other metadata and content. */
+/** Null removes only AIGC. AI producers may also replace the file-property author. */
 export function writeAiContentText(
   text: string,
   mediaType: string,
   input: AiContentLabel | null,
+  author?: string,
 ): string {
   const label = input === null ? null : AiContentLabelSchema.parse(input);
   if (label) readAiContentText(text, mediaType);
@@ -228,19 +230,32 @@ export function writeAiContentText(
         : header.bom + '---\n' + header.document.toString() + '---\n' + header.body;
     }
     const document = header?.document ?? parseDocument('{}');
+    if (author !== undefined) {
+      document.set('author', author);
+      if (isMap(document.contents)) document.contents.flow = false;
+    }
     document.set('AIGC', label);
     const bom = header?.bom ?? (text.startsWith('\uFEFF') ? '\uFEFF' : '');
     const body = header?.body ?? text.slice(bom.length);
     return bom + '---\n' + document.toString() + '---\n' + body;
   }
   if (mediaType === 'text/html') {
-    const value = JSON.stringify(label)
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    const meta = label ? '<meta name="AIGC" content="' + value + '">' : '';
-    const { tags, head, end, metadata } = htmlMetadata(text);
+    const attribute = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const meta = label
+      ? '<meta name="AIGC" content="' +
+        attribute(JSON.stringify(label)) +
+        '">' +
+        (author === undefined ? '' : '<meta name="author" content="' + attribute(author) + '">')
+      : '';
+    const { tags, head, end, metadata } = htmlMetadata(
+      text,
+      label !== null && author !== undefined,
+    );
     if (!label && !metadata.length) return text;
     if (head && !end) throw new Error('Unclosed HTML head');
     if (head && end) {

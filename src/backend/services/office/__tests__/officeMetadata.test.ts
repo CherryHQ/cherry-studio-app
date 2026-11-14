@@ -208,6 +208,92 @@ test.each([true, false])(
   },
 );
 
+test.each(requests)(
+  'normalizes the AI-produced $format author while preserving unrelated properties and content',
+  async (request) => {
+    const generated = (await runOfficeJob(createOfficeCode(request, {}))).output!;
+    const original = unzipSync(generated);
+    original['docProps/core.xml'] = strToU8(
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+        '<dc:creator>Model</dc:creator><dc:creator>Other</dc:creator><dc:title>原文 😀</dc:title><cp:lastModifiedBy>Editor</cp:lastModifiedBy></cp:coreProperties>',
+    );
+    const input = zipSync(original);
+    const worker = sandboxFor(input);
+    await processOfficeMetadata({
+      uri: 'file:///input',
+      size: input.length,
+      format: request.format,
+      output: 'file:///output',
+      label,
+      author: 'Cherry Studio',
+      sandbox: worker.sandbox,
+    });
+    const parts = unzipSync(worker.output());
+    const core = strFromU8(parts['docProps/core.xml']);
+    expect(core).toContain('<dc:creator>Cherry Studio</dc:creator>');
+    expect(core.match(/<dc:creator>/g)).toHaveLength(1);
+    expect(core).toContain('<dc:title>原文 😀</dc:title>');
+    expect(core).toContain('<cp:lastModifiedBy>Editor</cp:lastModifiedBy>');
+    for (const [path, bytes] of Object.entries(original)) {
+      if (
+        ![
+          'docProps/core.xml',
+          'docProps/custom.xml',
+          '[Content_Types].xml',
+          '_rels/.rels',
+        ].includes(path)
+      )
+        expect(parts[path]).toEqual(bytes);
+    }
+    expect(strFromU8(original['docProps/core.xml'])).toContain('<dc:creator>Model</dc:creator>');
+  },
+);
+
+test.each(['missing', 'relocated'])(
+  'publishes the author when source core properties are %s',
+  async (mode) => {
+    const request = requests[0];
+    const generated = (await runOfficeJob(createOfficeCode(request, {}))).output!;
+    const parts = unzipSync(generated);
+    const corePath = mode === 'missing' ? 'docProps/core.xml' : 'metadata/author.xml';
+    const coreRelationship =
+      'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
+    if (mode === 'relocated') parts[corePath] = parts['docProps/core.xml'];
+    delete parts['docProps/core.xml'];
+    parts['_rels/.rels'] = strToU8(
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        (mode === 'relocated'
+          ? '<Relationship Id="rId2" Type="' + coreRelationship + '" Target="./' + corePath + '"/>'
+          : '') +
+        '</Relationships>',
+    );
+    const types = strFromU8(parts['[Content_Types].xml']);
+    parts['[Content_Types].xml'] = strToU8(
+      mode === 'relocated'
+        ? types.replace('/docProps/core.xml', '/' + corePath)
+        : types.replace(/<Override\b[^>]*PartName="\/docProps\/core.xml"[^>]*\/>/, ''),
+    );
+    const input = zipSync(parts);
+    const worker = sandboxFor(input);
+    await processOfficeMetadata({
+      uri: 'file:///script-output',
+      size: input.length,
+      format: request.format,
+      output: 'file:///output',
+      label,
+      author: 'Cherry Studio',
+      sandbox: worker.sandbox,
+    });
+    const updated = unzipSync(worker.output());
+    expect(strFromU8(updated[corePath])).toContain('<dc:creator>Cherry Studio</dc:creator>');
+    expect(strFromU8(updated['[Content_Types].xml'])).toContain('PartName="/' + corePath + '"');
+    expect(strFromU8(updated['_rels/.rels']).split(coreRelationship)).toHaveLength(2);
+    if (mode === 'relocated') expect(updated['docProps/core.xml']).toBeUndefined();
+    expect(updated['word/document.xml']).toEqual(parts['word/document.xml']);
+  },
+);
+
 test('retains file lifetime until a cancelled native metadata job has actually settled', async () => {
   let finish!: () => void;
   let started!: () => void;

@@ -47,31 +47,55 @@ if (incomingLabel !== null) {
   property.appendChild(value);
   properties.documentElement.appendChild(property);
   const types = document('[Content_Types].xml');
-  let contentType = Array.from(types.getElementsByTagNameNS(CT, 'Override'))
-    .find(element => element.getAttribute('PartName') === '/' + propertyPath);
-  if (!contentType) {
-    contentType = types.createElementNS(CT, 'Override');
-    contentType.setAttribute('PartName', '/' + propertyPath);
-    types.documentElement.appendChild(contentType);
-  }
-  contentType.setAttribute('ContentType', customType);
   const relationships = document('_rels/.rels', '<Relationships xmlns="' + REL + '"/>');
-  const relations = Array.from(relationships.getElementsByTagNameNS(REL, 'Relationship'));
-  const custom = relations.filter(element => element.getAttribute('Type') === customRelationship);
-  if (custom.length > 1 || custom.some(element =>
-    ![propertyPath, '/' + propertyPath].includes(element.getAttribute('Target'))
-    || element.getAttribute('TargetMode') === 'External'))
-    throw new Error('Unsupported custom-properties relationship.');
-  if (!custom.length) {
-    const relationship = relationships.createElementNS(REL, 'Relationship');
-    let index = 1;
-    while (relations.some(element => element.getAttribute('Id') === 'rIdAigc' + index)) index++;
-    relationship.setAttribute('Id', 'rIdAigc' + index);
-    relationship.setAttribute('Type', customRelationship);
-    relationship.setAttribute('Target', propertyPath);
-    relationships.documentElement.appendChild(relationship);
+  const metadataParts = [[propertyPath, properties, customType, customRelationship]];
+  if (incomingAuthor !== null) {
+    const CORE = 'http://schemas.openxmlformats.org/package/2006/metadata/core-properties';
+    const DC = 'http://purl.org/dc/elements/1.1/';
+    const coreRelationship = 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
+    const coreRelations = Array.from(relationships.getElementsByTagNameNS(REL, 'Relationship'))
+      .filter(element => element.getAttribute('Type') === coreRelationship);
+    if (coreRelations.length > 1 || coreRelations.some(element => element.getAttribute('TargetMode') === 'External'))
+      throw new Error('Unsupported core-properties relationship.');
+    const corePath = coreRelations.length
+      ? officePartTarget('', coreRelations[0].getAttribute('Target')) : 'docProps/core.xml';
+    const core = document(corePath, '<cp:coreProperties xmlns:cp="' + CORE + '" xmlns:dc="' + DC + '"/>');
+    if (core.documentElement.namespaceURI !== CORE || core.documentElement.localName !== 'coreProperties')
+      throw new Error('Invalid core-properties namespace.');
+    for (const creator of Array.from(core.getElementsByTagNameNS(DC, 'creator')))
+      creator.parentNode.removeChild(creator);
+    const creator = core.createElementNS(DC, 'dc:creator');
+    creator.appendChild(core.createTextNode(incomingAuthor));
+    core.documentElement.appendChild(creator);
+    metadataParts.push([corePath, core,
+      'application/vnd.openxmlformats-package.core-properties+xml', coreRelationship]);
   }
-  for (const [path, doc] of [[propertyPath, properties], ['[Content_Types].xml', types], ['_rels/.rels', relationships]]) {
+  for (const [path, , type, relationshipType] of metadataParts) {
+    let contentType = Array.from(types.getElementsByTagNameNS(CT, 'Override'))
+      .find(element => element.getAttribute('PartName') === '/' + path);
+    if (!contentType) {
+      contentType = types.createElementNS(CT, 'Override');
+      contentType.setAttribute('PartName', '/' + path);
+      types.documentElement.appendChild(contentType);
+    }
+    contentType.setAttribute('ContentType', type);
+    const relations = Array.from(relationships.getElementsByTagNameNS(REL, 'Relationship'));
+    const matches = relations.filter(element => element.getAttribute('Type') === relationshipType);
+    if (matches.length > 1 || matches.some(element =>
+      element.getAttribute('TargetMode') === 'External'
+      || officePartTarget('', element.getAttribute('Target')) !== path))
+      throw new Error('Unsupported metadata relationship for ' + path + '.');
+    if (!matches.length) {
+      const relationship = relationships.createElementNS(REL, 'Relationship');
+      let index = 1;
+      while (relations.some(element => element.getAttribute('Id') === 'rIdAigc' + index)) index++;
+      relationship.setAttribute('Id', 'rIdAigc' + index);
+      relationship.setAttribute('Type', relationshipType);
+      relationship.setAttribute('Target', path);
+      relationships.documentElement.appendChild(relationship);
+    }
+  }
+  for (const [path, doc] of [...metadataParts, ['[Content_Types].xml', types], ['_rels/.rels', relationships]]) {
     parts[path] = new TextEncoder().encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + serializer.serializeToString(doc.documentElement));
     if (parts[path].length > 262144) throw new Error('Oversized Office metadata part.');
   }
@@ -94,6 +118,8 @@ export async function processOfficeMetadata(input: {
   output?: string;
   /** Omit to inspect; null removes a superseded declaration from a new AI output. */
   label?: AiContentLabel | null;
+  /** Set only for AI-produced outputs; inherited declarations retain their original author. */
+  author?: string;
   signal?: AbortSignal;
   sandbox?: JsSandbox | null;
 }): Promise<{ label: AiContentLabel | null; size: number }> {
@@ -114,6 +140,8 @@ export async function processOfficeMetadata(input: {
         officePackageRuntimeCode +
         '\nconst incomingLabel = ' +
         JSON.stringify(label) +
+        ';\nconst incomingAuthor = ' +
+        JSON.stringify(input.author ?? null) +
         ';\nconst isWriting = ' +
         JSON.stringify(isWriting) +
         ';\nconst format = ' +

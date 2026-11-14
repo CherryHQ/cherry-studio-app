@@ -1,4 +1,5 @@
 import { AiContentLabelSchema } from '@/shared/data/types/aiContent';
+import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
 
 import {
   aiContentMarkdownBody,
@@ -61,6 +62,47 @@ test('does not treat examples as declarations or inject over ambiguous/oversized
       label,
     ),
   ).toThrow();
+});
+
+test('normalizes the generated Markdown author without changing body or unrelated metadata', () => {
+  const source = '\uFEFF---\r\nauthor: Model\r\ntitle: Report\r\n---\r\n# 原文 😀\r\nBody\r\n';
+  const stored = writeAiContentText(source, 'text/markdown', label, GENERATED_FILE_AUTHOR);
+  expect(stored.endsWith('# 原文 😀\r\nBody\r\n')).toBe(true);
+  expect(stored).toContain('author: Cherry Studio\n');
+  expect(stored).toContain('title: Report\n');
+  expect(aiContentMarkdownBody(stored)).toBe(
+    '\uFEFF---\ntitle: Report\n---\n# 原文 😀\r\nBody\r\n',
+  );
+  const rewritten = writeAiContentText(stored, 'text/markdown', edited, GENERATED_FILE_AUTHOR);
+  expect(rewritten.match(/^author:/gm)).toHaveLength(1);
+  expect(readAiContentText(rewritten, 'text/markdown')).toEqual(edited);
+  expect(aiContentMarkdownBody(writeAiContentText(source, 'text/markdown', label))).toContain(
+    'author: Model',
+  );
+  expect(
+    aiContentMarkdownBody(
+      writeAiContentText('Only body\n', 'text/markdown', label, GENERATED_FILE_AUTHOR),
+    ),
+  ).toBe('Only body\n');
+});
+
+test('replaces real HTML author tags while preserving examples and other head/body content', () => {
+  const content =
+    '<script>const sample = "<meta name=author content=Example>";</script>' +
+    '<template><meta name="author" content="Template"></template>' +
+    '<meta name="description" content="Keep"></head><body>原文 😀</body></html>';
+  const source =
+    '<!DOCTYPE html><html><head><meta name="author" content="Model">' +
+    '<META NAME="Author" content="Other">' +
+    content;
+  const stored = writeAiContentText(source, 'text/html', label, GENERATED_FILE_AUTHOR);
+  expect(stored.match(/<meta name="author" content="Cherry Studio">/g)).toHaveLength(1);
+  expect(stored).not.toContain('content="Model"');
+  expect(stored).not.toContain('content="Other"');
+  expect(stored.endsWith(content)).toBe(true);
+  const rewritten = writeAiContentText(stored, 'text/html', edited, GENERATED_FILE_AUTHOR);
+  expect(rewritten.match(/<meta name="author" content="Cherry Studio">/g)).toHaveLength(1);
+  expect(readAiContentText(rewritten, 'text/html')).toEqual(edited);
 });
 
 test('writes one real HTML head property without changing scripts, styles or body', () => {
