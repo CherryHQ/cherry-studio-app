@@ -59,12 +59,19 @@ export function resolveMessageCitations(
     (part): part is Extract<CherryMessagePart, { type: 'source-url' }> =>
       part.type === 'source-url' && !toolIds.has(part.sourceId),
   );
-  const nativeByNumber = new Map(
-    native.map((part, index) => [
-      Number(/^(?:source-)?([1-9]\d*)$/.exec(part.sourceId)?.[1] ?? index + 1),
-      part.sourceId,
-    ]),
-  );
+  const nativeByNumber = new Map<number, string>();
+  const unnumbered: { index: number; sourceId: string }[] = [];
+  native.forEach((part, index) => {
+    const number = nativeSourceNumber(part.sourceId);
+    if (number !== undefined) {
+      if (!nativeByNumber.has(number)) nativeByNumber.set(number, part.sourceId);
+    } else {
+      unnumbered.push({ index, sourceId: part.sourceId });
+    }
+  });
+  for (const item of unnumbered) {
+    if (!nativeByNumber.has(item.index + 1)) nativeByNumber.set(item.index + 1, item.sourceId);
+  }
   const textByPartIndex = new Map<number, ResolvedCitationText>();
   let nextNumber = 1;
 
@@ -74,10 +81,13 @@ export function resolveMessageCitations(
     const replace = (content: string, markdown: boolean) =>
       mapMarkdownOutsideCode(content, (text) =>
         text
-          .replace(/\[(\d{1,3})\](?![(:[])/g, (marker, number: string) => {
-            const id = nativeByNumber.get(Number(number));
-            return id ? `[cite:${id}]` : marker;
-          })
+          .replace(
+            /\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\](?![(:])|cite:))/g,
+            (marker, number: string) => {
+              const id = nativeByNumber.get(Number(number));
+              return id ? `[cite:${id}]` : marker;
+            },
+          )
           .replace(/cite([^]+)/g, (marker, value: string) => {
             const ids = value.split('');
             return ids.every((id) => sourceById.has(id))
@@ -324,6 +334,13 @@ function mapMarkdownOutsideCode(content: string, transform: (text: string) => st
   }
 
   return result + transform(content.slice(cursor));
+}
+
+function nativeSourceNumber(sourceId: string): number | undefined {
+  const citation = /^citation-(\d+)$/.exec(sourceId);
+  if (citation) return Number(citation[1]) + 1;
+  const source = /^(?:source-)?([1-9]\d*)$/.exec(sourceId);
+  return source ? Number(source[1]) : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

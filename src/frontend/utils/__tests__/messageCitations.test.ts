@@ -214,4 +214,33 @@ describe('conversation citation scope', () => {
     );
     expect(citationIds(parts)).toEqual(['turn0search0', 'missing', 'unknown']);
   });
+
+  test('maps 0-based provider citation IDs and consecutive numeric markers accurately', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'citation-2', url: 'https://third.example' },
+      { type: 'source-url', sourceId: 'citation-0', url: 'https://first.example' },
+      { type: 'source-url', sourceId: 'citation-1', url: 'https://second.example' },
+      {
+        type: 'text',
+        text: 'Claim [1][2] and [3], skip [4], [1](https://link.example), [1][ref].',
+      },
+    ];
+    const resolved = resolveMessageCitations(parts);
+    expect(resolved.textByPartIndex.get(3)).toEqual({
+      markdown:
+        'Claim [❶](cite:https%3A%2F%2Ffirst.example)[❷](cite:https%3A%2F%2Fsecond.example) and [❸](cite:https%3A%2F%2Fthird.example), skip [4], [1](https://link.example), [1][ref].',
+      plainText: 'Claim [1][2] and [3], skip [4], [1](https://link.example), [1][ref].',
+    });
+
+    const sparse: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'citation-0', url: 'https://first.example' },
+      { type: 'source-url', sourceId: 'citation-2', url: 'https://third.example' },
+      { type: 'text', text: 'Only [2] literal and [3] cited.' },
+    ];
+    const sparseResolved = resolveMessageCitations(sparse);
+    expect(sparseResolved.textByPartIndex.get(2)).toEqual({
+      markdown: 'Only [2] literal and [❶](cite:https%3A%2F%2Fthird.example) cited.',
+      plainText: 'Only [2] literal and [1] cited.',
+    });
+  });
 });
