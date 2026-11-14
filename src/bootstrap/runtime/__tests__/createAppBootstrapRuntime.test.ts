@@ -62,6 +62,7 @@ const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
 const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
+const mockDisposeAgentTemplates = jest.fn(async () => {});
 const mockDisposeUuRemote = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
@@ -73,6 +74,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   disposeSkills: mockDisposeSkills,
   disposeVoice: mockDisposeVoice,
   disposeAppUpdate: mockDisposeAppUpdate,
+  disposeAgentTemplates: mockDisposeAgentTemplates,
   disposeUuRemote: mockDisposeUuRemote,
 }));
 
@@ -423,6 +425,7 @@ describe('createAppBootstrapRuntime', () => {
 
     expect(mockDisposeSystemEntry).toHaveBeenCalledTimes(1);
     expect(mockDisposeUuRemote).toHaveBeenCalledTimes(1);
+    expect(mockDisposeAgentTemplates).toHaveBeenCalledTimes(1);
     // Native consumers stop before host-owned data and runtimes are disposed.
     expect(application.hasHost).toBe(false);
   });

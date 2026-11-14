@@ -1,0 +1,1 @@
+export { createAgentTemplatesModule } from './createAgentTemplatesModule';

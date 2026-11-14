@@ -11,6 +11,10 @@ surfaces.
 - The list header's plus action opens the create-Agent route.
 - Creating from the chat header's Agent picker opens a draft conversation with the saved Agent.
   Creating from the management list returns to that list.
+- Creating from the Marketplace seeds the existing form with the template's name, instructions
+  and emoji, inherits the normal default model and settings, and offers a fixed, keyboard-aware
+  Create and start chatting footer. Template identity and source language are retained through
+  provider setup; subsequent form edits are never reseeded by a cache or language refresh.
 - Tapping a list row opens that Agent's editor.
 - Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
@@ -47,7 +51,8 @@ surfaces.
 - Uploaded avatars are managed files with their own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
   returns an id. Picking one saves immediately when editing; on create, Save commits the draft.
-  An avatar can be set and replaced but not cleared. The preinstalled Cherry Agent stores `🍒`;
+  An avatar can be set and replaced but not cleared. Creation also accepts emoji avatars from
+  templates without a file write. The preinstalled Cherry Agent stores `🍒`;
   onboarding uses the same emoji when it creates an Agent. Renaming preserves the stored emoji,
   and choosing a photo replaces it. Unset avatars render the name's first character on the
   neutral fallback fill, which stays empty while the name is still blank.
@@ -58,6 +63,9 @@ surfaces.
   the editor page.
 - `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screen.
+- Template creation reads the shared remote/saved catalog before mounting the form. Once selected,
+  template content and source language belong to the draft; background refreshes or removals cannot
+  replace user edits. First-use failures offer Retry before the form opens.
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
   background. Create and edit render the same form — a centered
   avatar and underlined name, then instructions, mode/model and approval, and MCP

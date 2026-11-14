@@ -1,4 +1,5 @@
 export * from './agent';
+export type { AgentTemplatesModule } from './agentTemplates';
 export * from './backend';
 export * from './desktopConnections';
 export * from './diagnostics';

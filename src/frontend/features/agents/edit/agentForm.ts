@@ -6,6 +6,7 @@ import {
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   type AgentToolApprovalMode,
 } from '@/shared/data/types/agent';
+import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
@@ -27,13 +28,16 @@ type BuildAgentDtoOptions = {
   inheritDefaultModel?: boolean;
 };
 
-export function createAgentFormState(agent?: Agent): AgentFormState {
+export function createAgentFormState(
+  agent?: Agent,
+  template?: Pick<AgentTemplate, 'name' | 'prompt'>,
+): AgentFormState {
   return {
     avatarUri: agent?.avatarUri ?? null,
-    instructions: agent?.instructions ?? '',
+    instructions: agent?.instructions ?? template?.prompt ?? '',
     mode: agent?.mode ?? DEFAULT_AGENT_MODE,
     model: agent?.model ?? null,
-    name: agent?.name ?? '',
+    name: agent?.name ?? template?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
 }

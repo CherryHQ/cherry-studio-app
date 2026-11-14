@@ -1,4 +1,10 @@
+import type { MarketplaceText } from '@/shared/contracts/skillMarketplace';
+
 export const CHERRYIN_SKILLS_URL = 'https://skills.cherryin.ai';
+
+export function marketplaceText(text: MarketplaceText, language: string): string {
+  return language.toLowerCase().startsWith('zh') ? text.zh || text.en : text.en || text.zh || '';
+}
 
 /** An absent fragment opens a listing; a fragment identifies one package entry. */
 export function cherryinSkillUrl(id: string, entryPath?: string): string {

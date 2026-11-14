@@ -24,10 +24,10 @@ overlay in compact windows. Navigation state reports a permanent drawer as close
 receipts use it instead of the raw drawer status.
 
 In a wide window the sidebar stays beside every page in the content region, so its actions read the
-content stack when they run. Agents, Paintings, Plugins, Skills, and the avatar's Settings push above
+content stack when they run. Agents, Paintings, Plugins, Marketplace, and the avatar's Settings push above
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
 shows selected through `resolveSidebarDestination`. Conversation rows, New chat, device switching,
-and Files first pop the content region back to the chat. Plugins and Skills act for the chat beside
+and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills
 the content region. Files opens the [file pane](../pane/README.md) in place of the sidebar and stays
@@ -122,7 +122,7 @@ the common fallback.
 A connected PC is represented by a green status dot beside the list view heading, with the device
 name retained in its accessibility label. Connection problems keep their message and recovery
 action. Source switching stays inside the drawer chat stack. On a desktop, the drawer shows only
-what exists there: the search button and the Agents, Paintings, Plugins, Skills and Library rows are hidden
+what exists there: the search button and the Agents, Paintings, Plugins, Marketplace and Library rows are hidden
 because they manage this phone.
 
 Conversation source acquisition and loaded content share the same header frame, including a reserved status

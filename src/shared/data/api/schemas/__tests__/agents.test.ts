@@ -80,11 +80,19 @@ describe('agent api schemas', () => {
     },
   );
 
-  test('accepts the built-in Cherry avatar only at creation', () => {
+  test('accepts emoji avatars only at creation', () => {
     expect(CreateAgentSchema.parse({ avatar: '🍒', name: 'Cherry Agent' })).toMatchObject({
       avatar: '🍒',
     });
     expect(UpdateAgentSchema.safeParse({ avatar: '🍒' }).success).toBe(false);
+    for (const avatar of ['👨‍💼', '🧑🏽‍💻', '🏗️', '🧳']) {
+      expect(CreateAgentSchema.safeParse({ avatar, name: 'Template agent' }).success).toBe(true);
+      expect(UpdateAgentSchema.safeParse({ avatar }).success).toBe(false);
+    }
+    expect(CreateAgentSchema.safeParse({ avatar: 'avatar.webp', name: 'Agent' }).success).toBe(
+      false,
+    );
+    expect(CreateAgentSchema.safeParse({ avatar: '123', name: 'Agent' }).success).toBe(false);
     expect(
       CreateAgentSchema.safeParse({ avatar: 'file:///avatar.webp', name: 'Cherry Agent' }).success,
     ).toBe(false);
