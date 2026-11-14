@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -783,28 +783,23 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         await removeTurnRows(tx, input.sessionId, turnRows);
       }
 
-      // Deleting the newest turn must give the Session back its previous
-      // activity time; list ordering is recency, and a deleted turn is no
-      // longer activity. Deleting an older turn recomputes the same value.
-      const [newest] = await tx
+      // Creation order can differ from completion order for parallel or steered inputs.
+      // Only removing the latest surviving activity should rewind Session recency.
+      const [remaining] = await tx
         .select({
-          createdAt: agentSessionMessageTable.createdAt,
-          role: agentSessionMessageTable.role,
-          stats: agentSessionMessageTable.stats,
+          lastActivityAt: sql<number | null>`max(CASE
+            WHEN ${agentSessionMessageTable.role} = 'assistant' THEN
+              coalesce(json_extract(${agentSessionMessageTable.stats}, '$.runtimeTiming.completedAt'),
+                ${agentSessionMessageTable.createdAt})
+            ELSE ${agentSessionMessageTable.createdAt}
+          END)`,
         })
         .from(agentSessionMessageTable)
-        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
-        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
-        .limit(1);
-      if (newest) {
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId));
+      if (remaining && remaining.lastActivityAt !== null) {
         await tx
           .update(agentSessionTable)
-          .set({
-            lastActivityAt:
-              newest.role === 'assistant'
-                ? (newest.stats?.runtimeTiming?.completedAt ?? newest.createdAt)
-                : newest.createdAt,
-          })
+          .set({ lastActivityAt: remaining.lastActivityAt })
           .where(eq(agentSessionTable.id, input.sessionId));
       }
 

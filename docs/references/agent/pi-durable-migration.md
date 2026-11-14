@@ -434,12 +434,16 @@ working copies keep their native context, signatures and compaction state; conti
 after a restart never rebuilds it. Reconstruct dependencies for unfinished sessions, attach observers
 and only then resume scheduling.
 
-Ordinary shutdown and OS execution expiry close invocations without abort marks. Foreground startup
-reopens retained tasks. Explicit user stop invokes Pi abort. Unsafe tools do not automatically
-re-execute after interruption. Current accounts, tool implementations and approval policy are
-reconstructed; credentials are resolved at request time and never serialized. Native task demand,
-including background compaction, holds the KeepAlive lease. Usage has a durable idempotent outbox;
-compaction usage belongs to the session rather than an invented assistant turn.
+Ordinary shutdown closes invocations without abort marks. Finite UIKit window expiry does the same
+only when no continued-processing or audio protection remains. Foreground startup reopens retained
+tasks. Revocation of an iOS continued-processing task stops its owning work rather than suspending
+it for restart; see
+[Background Activity Presentation](../background-activity-presentation.md). Explicit user stop invokes
+Pi abort. Unsafe tools do not automatically re-execute after interruption. Current accounts, tool
+implementations and approval policy are reconstructed; credentials are resolved at request time and
+never serialized. Native task demand, including background compaction, holds the KeepAlive lease.
+Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
+invented assistant turn.
 
 ## Backup And Compatibility
 
