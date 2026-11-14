@@ -46,7 +46,12 @@ export function SidebarFooter() {
     <View
       className="absolute right-0 bottom-0 left-0"
       pointerEvents="box-none"
-      style={{ paddingBottom: bottomPadding, paddingEnd: insetEnd, paddingStart: insetStart }}
+      style={{
+        paddingBottom: bottomPadding,
+        paddingEnd: insetEnd,
+        paddingStart: insetStart,
+        zIndex: 2,
+      }}
     >
       {/* Rows scrolled under the dock blur toward the bottom edge, as they do under the title row,
           instead of showing in full below the buttons on a short window. */}

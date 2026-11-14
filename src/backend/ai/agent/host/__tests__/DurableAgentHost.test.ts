@@ -1,5 +1,9 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
+import { ZodError } from 'zod';
 
+import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import type {
   AgentEvent,
   AgentInferenceSnapshotV1,
@@ -59,6 +63,15 @@ afterEach(() => {
   for (const harness of harnesses.splice(0)) harness.cleanup();
 });
 
+function executionProtection() {
+  const lease = { release: jest.fn(), update: jest.fn() };
+  const acquire = jest.fn<
+    KeepAliveLease,
+    Parameters<NonNullable<MobileAgentHostPorts['executionLease']>>
+  >(() => lease);
+  return { lease, acquire };
+}
+
 function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const harness = createSqliteStoreHarness();
   harnesses.push(harness);
@@ -80,6 +93,20 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     listeners.get(laneKey(turn.identity))?.({ type: 'turn.updated', turn });
   };
   const conversations: DurableAgentRuntime = {
+    steer: jest.fn(async () => ({ status: 'not-found' as const })),
+    inputParents: async (lane, ids) =>
+      (copies.get(laneKey(lane))?.turns ?? []).flatMap((turn) => {
+        const parent = turn.metadata.parentMessageId;
+        return ids.includes(turn.userMessageId) && (typeof parent === 'string' || parent === null)
+          ? [
+              {
+                userMessageId: turn.userMessageId,
+                assistantMessageId: turn.assistantMessageId,
+                parentMessageId: parent,
+              },
+            ]
+          : [];
+      }),
     descriptor: new FakeRuntime().descriptor,
     estimateStoredContextUsage: jest.fn(() => 100),
     preflightModel: async () => ({
@@ -252,10 +279,10 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     update: jest.fn(),
   };
   const background = {
-    acquirePreparation: () => ({ release() {} }),
+    prepareSession: () => () => {},
     clearSession() {},
     updateSessionTitle() {},
-    startTurn: jest.fn(() => reply),
+    startTurn: jest.fn((_input: BackgroundReplyTurnInput) => reply),
   };
   const host = new DurableAgentHost(store, ports, background, conversations);
   const reserve = async (
@@ -1215,6 +1242,7 @@ describe('durable tool diagnostics', () => {
     const events: AgentEvent[] = [];
     const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
     jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      remaining.metadata = { ...remaining.metadata, parentMessageId: running.assistantMessageId };
       f.copies.get(f.sessionId)!.turns = [running, remaining];
       f.emit({ ...withdrawn, status: 'cancelled' });
       return 'aborted';
@@ -1240,6 +1268,485 @@ describe('durable tool diagnostics', () => {
       await f.host.close();
     }
   });
+
+  test('accepted steering survives a Cherry write failure and later repair preserves selection', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const follow = async (text: string): Promise<RuntimeDurableTurn> => {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      return {
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      };
+    };
+    const withdrawn = await follow('B');
+    const remaining = await follow('C');
+    f.copies.get(f.sessionId)!.turns = [running, withdrawn, remaining];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    jest.spyOn(f.conversations, 'steer').mockImplementation(async () => {
+      remaining.metadata = {
+        ...remaining.metadata,
+        steer: true,
+        parentMessageId: running.assistantMessageId,
+      };
+      withdrawn.metadata = { ...withdrawn.metadata, parentMessageId: remaining.assistantMessageId };
+      f.copies.get(f.sessionId)!.turns = [running, remaining, withdrawn];
+      return {
+        status: 'accepted',
+        selection: { from: remaining.assistantMessageId, to: withdrawn.assistantMessageId },
+      };
+    });
+    try {
+      const failure = jest
+        .spyOn(f.store, 'syncInputParents')
+        .mockRejectedValueOnce(new Error('disk full'));
+      await expect(
+        f.host.steerQueuedInput({ sessionId: f.sessionId, turnId: remaining.identity.turnId }),
+      ).resolves.toBe('accepted');
+      failure.mockRestore();
+      // Reconciliation is retryable, but must not guess a new user selection on retry.
+      f.listeners.get(f.sessionId)!({ type: 'queue.updated', queue: [remaining, withdrawn] });
+      await settle();
+      expect((await f.store.getSession(f.sessionId))?.activeNodeId).toBe(
+        remaining.assistantMessageId,
+      );
+      expect(
+        (await f.store.listMessages(f.sessionId, withdrawn.assistantMessageId)).map(
+          (row) => row.id,
+        ),
+      ).toEqual(
+        [running, remaining, withdrawn].flatMap((turn) => [
+          turn.userMessageId,
+          turn.assistantMessageId,
+        ]),
+      );
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('steering cannot move a tail selected by the user only after the operation began', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const follow = async (text: string): Promise<RuntimeDurableTurn> => {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      return {
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      };
+    };
+    const withdrawn = await follow('B');
+    const remaining = await follow('C');
+    f.copies.get(f.sessionId)!.turns = [running, withdrawn, remaining];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    f.raw
+      .prepare('UPDATE agent_session SET active_node_id = ? WHERE id = ?')
+      .run(running.assistantMessageId, f.sessionId);
+    jest.spyOn(f.conversations, 'steer').mockImplementation(async () => {
+      remaining.metadata = {
+        ...remaining.metadata,
+        steer: true,
+        parentMessageId: running.assistantMessageId,
+      };
+      withdrawn.metadata = { ...withdrawn.metadata, parentMessageId: remaining.assistantMessageId };
+      f.copies.get(f.sessionId)!.turns = [running, remaining, withdrawn];
+      await f.store.selectMessage(f.sessionId, remaining.assistantMessageId);
+      return {
+        status: 'accepted',
+        selection: { from: remaining.assistantMessageId, to: withdrawn.assistantMessageId },
+      };
+    });
+    try {
+      await expect(
+        f.host.steerQueuedInput({ sessionId: f.sessionId, turnId: remaining.identity.turnId }),
+      ).resolves.toBe('accepted');
+      // Reconciliation is retryable, but must not guess a new user selection on retry.
+      f.listeners.get(f.sessionId)!({ type: 'queue.updated', queue: [remaining, withdrawn] });
+      await settle();
+      expect((await f.store.getSession(f.sessionId))?.activeNodeId).toBe(
+        remaining.assistantMessageId,
+      );
+      expect(
+        (await f.store.listMessages(f.sessionId, withdrawn.assistantMessageId)).map(
+          (row) => row.id,
+        ),
+      ).toEqual(
+        [running, remaining, withdrawn].flatMap((turn) => [
+          turn.userMessageId,
+          turn.assistantMessageId,
+        ]),
+      );
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('withdrawal racing steering and a delayed queue event preserve the confirmed continuation', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const follow = async (text: string): Promise<RuntimeDurableTurn> => {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      return {
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      };
+    };
+    const withdrawn = await follow('B');
+    const guided = await follow('C');
+    const remaining = await follow('D');
+    f.copies.get(f.sessionId)!.turns = [running, withdrawn, guided, remaining];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const originalRemaining = { ...remaining, metadata: { ...remaining.metadata } };
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      entered.resolve();
+      await release.promise;
+      // Confirmed native withdrawal repairs D using B's new predecessor C.
+      remaining.metadata = { ...remaining.metadata, parentMessageId: guided.assistantMessageId };
+      const cancelled = { ...withdrawn, status: 'cancelled' as const };
+      f.copies.get(f.sessionId)!.turns = [running, guided, remaining, cancelled];
+      return 'aborted';
+    });
+    jest.spyOn(f.conversations, 'steer').mockImplementation(async () => {
+      guided.metadata = {
+        ...guided.metadata,
+        steer: true,
+        parentMessageId: running.assistantMessageId,
+      };
+      withdrawn.metadata = { ...withdrawn.metadata, parentMessageId: guided.assistantMessageId };
+      remaining.metadata = { ...remaining.metadata, parentMessageId: withdrawn.assistantMessageId };
+      f.copies.get(f.sessionId)!.turns = [running, guided, withdrawn, remaining];
+      f.listeners.get(f.sessionId)!({
+        type: 'queue.updated',
+        queue: [guided, withdrawn, remaining],
+      });
+      return { status: 'accepted' };
+    });
+    try {
+      const withdrawal = f.host.cancelQueuedInput({
+        sessionId: f.sessionId,
+        turnId: withdrawn.identity.turnId,
+      });
+      await entered.promise;
+      await expect(
+        f.host.steerQueuedInput({ sessionId: f.sessionId, turnId: guided.identity.turnId }),
+      ).resolves.toBe('accepted');
+      release.resolve();
+      await expect(withdrawal).resolves.toBe('withdrawn');
+      // A queued observer callback from before the promotion must not put old parents back.
+      f.listeners.get(f.sessionId)!({ type: 'queue.updated', queue: [guided, originalRemaining] });
+      await settle();
+      expect(
+        (await f.store.listMessages(f.sessionId, remaining.assistantMessageId)).map(
+          (row) => row.id,
+        ),
+      ).toEqual(
+        [running, guided, remaining].flatMap((turn) => [
+          turn.userMessageId,
+          turn.assistantMessageId,
+        ]),
+      );
+      const queue = [
+        { userMessage: { id: remaining.userMessageId, parentId: guided.assistantMessageId } },
+      ];
+      const refreshed = await f.host.observeSession(f.sessionId, () => {});
+      expect(refreshed.snapshot.queuedInputs).toMatchObject(queue);
+      refreshed.unsubscribe();
+      expect(await f.store.getMessage(f.sessionId, remaining.userMessageId)).toMatchObject({
+        parentId: guided.assistantMessageId,
+      });
+    } finally {
+      release.resolve();
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('recovery preserves the selected parallel answer across repeated reconciliation', async () => {
+    const f = fixture();
+    const first = await f.reserve('running');
+    first.metadata.parentMessageId = null;
+    const reserved = await f.store.reserveAnswer({
+      sessionId: f.sessionId,
+      userMessageId: first.userMessageId,
+      assistantMessageId: uuid(),
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    const second: RuntimeDurableTurn = {
+      ...first,
+      identity: { ...first.identity, slot: 1, requestId: reserved.assistantMessage.id },
+      assistantMessageId: reserved.assistantMessage.id,
+    };
+    f.copies.set(laneKey(second.identity), { revision: 0, turns: [second] });
+    await f.store.selectMessage(f.sessionId, first.assistantMessageId);
+    await f.host.initialize();
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const observation = await f.host.observeSession(f.sessionId, () => {});
+        expect(observation.snapshot.session.activeNodeId).toBe(first.assistantMessageId);
+        observation.unsubscribe();
+      }
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('recovery repairs promoted queue parents and shows the accepted question with its waiting reply', async () => {
+    const f = fixture();
+    const running = await f.reserve('running');
+    const queued: RuntimeDurableTurn[] = [];
+    for (const text of ['Waiting', 'Guided']) {
+      const reserved = await f.store.reserveSubmission({
+        sessionId: f.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: text, type: 'text', text, state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      queued.push({
+        ...running,
+        identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        inputBoundary: null,
+        answerBoundary: null,
+        status: 'queued',
+        parts: [],
+        metadata: {
+          ...running.metadata,
+          userParts: reserved.userMessage.parts as never,
+          parentMessageId: reserved.userMessage.parentId ?? null,
+        },
+      });
+    }
+    const [waiting, guided] = queued;
+    guided.identity.requestId += ':steer';
+    guided.metadata = {
+      ...guided.metadata,
+      steer: true,
+      parentMessageId: running.assistantMessageId,
+    };
+    waiting.metadata = { ...waiting.metadata, parentMessageId: guided.assistantMessageId };
+    // Native promotion committed, but the process died before Cherry persisted its parent changes.
+    f.copies.get(f.sessionId)!.turns = [running, guided, waiting];
+    await f.host.initialize();
+    try {
+      expect(
+        (await f.store.listMessages(f.sessionId, waiting.assistantMessageId)).map(
+          (message) => message.id,
+        ),
+      ).toEqual(
+        [running, guided, waiting].flatMap((turn) => [turn.userMessageId, turn.assistantMessageId]),
+      );
+      const events: AgentEvent[] = [];
+      const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+      expect(observation.snapshot.queuedInputs.map((input) => input.turnId)).toEqual([
+        waiting.identity.turnId,
+      ]);
+      expect(observation.snapshot.additionalMessages?.map((message) => message.id)).toEqual([
+        guided.userMessageId,
+        guided.assistantMessageId,
+      ]);
+      expect(observation.snapshot.additionalMessages?.[1]).toMatchObject({
+        parentId: guided.userMessageId,
+        role: 'assistant',
+        status: 'pending',
+        parts: [],
+      });
+      expect(observation.snapshot.streamingMessage?.id).toBe(running.assistantMessageId);
+      f.emit(guided);
+      expect(events).toContainEqual({
+        type: 'message.created',
+        message: expect.objectContaining({
+          id: guided.assistantMessageId,
+          parentId: guided.userMessageId,
+          status: 'pending',
+          parts: [],
+        }),
+      });
+      observation.unsubscribe();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test.each([0, 1])(
+    'steering queued item %s keeps the remaining task selected before it streams',
+    async (index) => {
+      const f = fixture();
+      const running = await f.reserve('running');
+      const queued: RuntimeDurableTurn[] = [];
+      for (const text of ['First', 'Second']) {
+        const reserved = await f.store.reserveSubmission({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          userParts: [{ id: text, type: 'text', text, state: 'done' }],
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          inferenceSnapshot,
+        });
+        queued.push({
+          ...running,
+          identity: { ...running.identity, turnId: reserved.turnId, requestId: reserved.turnId },
+          userMessageId: reserved.userMessage.id,
+          assistantMessageId: reserved.assistantMessage.id,
+          inputBoundary: null,
+          answerBoundary: null,
+          status: 'queued',
+          parts: [],
+          metadata: {
+            ...running.metadata,
+            userParts: reserved.userMessage.parts as never,
+            parentMessageId: reserved.userMessage.parentId ?? null,
+          },
+        });
+      }
+      f.copies.get(f.sessionId)!.turns = [running, ...queued];
+      const observe = jest.spyOn(f.conversations, 'observe');
+      await f.host.initialize();
+      const events: AgentEvent[] = [];
+      let selected: string | null | undefined;
+      const observation = await f.host.observeSession(f.sessionId, (event) => {
+        events.push(event);
+        if (event.type === 'session.updated') selected = event.session.activeNodeId;
+      });
+      selected = observation.snapshot.session.activeNodeId;
+      const guided: RuntimeDurableTurn = {
+        ...queued[index],
+        identity: {
+          ...queued[index].identity,
+          requestId: `${queued[index].identity.requestId}:steer`,
+        },
+        metadata: {
+          ...queued[index].metadata,
+          steer: true,
+          parentMessageId: running.assistantMessageId,
+        },
+      };
+      const waiting: RuntimeDurableTurn = {
+        ...queued[1 - index],
+        metadata: { ...queued[1 - index].metadata, parentMessageId: guided.assistantMessageId },
+      };
+      jest.spyOn(f.conversations, 'steer').mockImplementation(async () => {
+        f.copies.get(f.sessionId)!.turns = [running, guided, waiting];
+        observe.mock.calls.find(([lane]) => lane.slot === 0)![1]({
+          type: 'queue.updated',
+          queue: [guided, waiting],
+        });
+        return {
+          status: 'accepted',
+          selection: { from: queued[1].assistantMessageId, to: waiting.assistantMessageId },
+        };
+      });
+      try {
+        const readSession = f.store.getSession.bind(f.store);
+        jest.spyOn(f.store, 'getSession').mockImplementationOnce(async (...args) => {
+          const before = await readSession(...args);
+          // Promotion commits while a new screen observation is being assembled.
+          await expect(
+            f.host.steerQueuedInput({ sessionId: f.sessionId, turnId: guided.identity.turnId }),
+          ).resolves.toBe('accepted');
+          return before;
+        });
+        const mounted = await f.host.observeSession(f.sessionId, () => {});
+        expect(mounted.snapshot.session.activeNodeId).toBe(waiting.assistantMessageId);
+        mounted.unsubscribe();
+        expect((await f.store.getSession(f.sessionId))?.activeNodeId).toBe(
+          waiting.assistantMessageId,
+        );
+        expect(selected).toBe(waiting.assistantMessageId);
+        f.emit({ ...running, status: 'completed' });
+        f.emit({ ...guided, status: 'completed', inputBoundary: 'pi:3', answerBoundary: 'pi:4' });
+        await settle();
+        events.length = 0;
+        f.emit({ ...waiting, status: 'running', inputBoundary: 'pi:5' });
+        expect(selected).toBe(waiting.assistantMessageId);
+        expect(events).toContainEqual({
+          type: 'message.created',
+          message: expect.objectContaining({
+            id: waiting.userMessageId,
+            parentId: guided.assistantMessageId,
+          }),
+        });
+        expect(events).toContainEqual({
+          type: 'message.created',
+          message: expect.objectContaining({
+            id: waiting.assistantMessageId,
+            status: 'streaming',
+            parts: [],
+          }),
+        });
+      } finally {
+        observation.unsubscribe();
+        await f.host.close();
+      }
+    },
+  );
 
   test('a queued removal that loses the placement race never aborts the active run', async () => {
     const f = fixture();
@@ -1563,6 +2070,142 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test.each(['runtime-metadata', 'stored-parts'] as const)(
+    'isolates invalid %s at startup without rewriting it or relaxing backup reads',
+    async (source) => {
+      const state = fixture();
+      const unreadable = await state.reserve();
+      if (source === 'runtime-metadata') unreadable.metadata = {};
+      else {
+        state.copies.clear();
+        state.raw
+          .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+          .run(
+            JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
+            unreadable.assistantMessageId,
+          );
+      }
+      const readUnreadable = () =>
+        state.raw
+          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .get(unreadable.assistantMessageId);
+      const original = readUnreadable();
+      const healthy = await state.store.reserveInitialSubmission({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'healthy-question', type: 'text', text: 'Hello', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+
+      try {
+        await state.host.initialize();
+        expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+        expect(readUnreadable()).toEqual(original);
+        expect(
+          (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+        ).toBe('interrupted');
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await state.host.startSession({
+          sessionId: uuid(),
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'An unrelated conversation still works.' }],
+        });
+        expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['native-read', 'input-parents'] as const)(
+    'preserves a whole Session when %s validation prevents complete parent repair',
+    async (source) => {
+      const state = fixture();
+      const first = await state.reserve();
+      const next = await state.store.reserveSubmission({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'next', type: 'text', text: 'Continue', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      state.copies.get(state.sessionId)!.turns.push({
+        ...first,
+        identity: { ...first.identity, turnId: next.turnId, requestId: next.turnId },
+        userMessageId: next.userMessage.id,
+        assistantMessageId: next.assistantMessage.id,
+        metadata: {
+          ...first.metadata,
+          userParts: next.userMessage.parts as never,
+          parentMessageId: first.assistantMessageId,
+        },
+      });
+      const readAffected = () =>
+        Promise.all(
+          [first.assistantMessageId, next.assistantMessage.id].map((id) =>
+            state.store.getMessage(state.sessionId, id),
+          ),
+        );
+      const original = await readAffected();
+      const healthy = await state.store.reserveInitialSubmission({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'healthy', type: 'text', text: 'Hello', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      const failure = new ZodError([]);
+      if (source === 'native-read') {
+        const message = state.conversations.message;
+        jest.spyOn(state.conversations, 'message').mockImplementation(async (lane, id) => {
+          if (id === first.assistantMessageId) throw failure;
+          return message(lane, id);
+        });
+      } else {
+        const inputParents = state.conversations.inputParents;
+        jest.spyOn(state.conversations, 'inputParents').mockImplementation(async (lane, ids) => {
+          if (lane.sessionId === state.sessionId) throw failure;
+          return inputParents(lane, ids);
+        });
+      }
+
+      try {
+        await state.host.initialize();
+        expect(await readAffected()).toEqual(original);
+        expect(
+          (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+        ).toBe('interrupted');
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('keeps storage failures fatal while reconciling startup reservations', async () => {
+    const state = fixture();
+    await state.reserve();
+    jest
+      .spyOn(state.conversations, 'message')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Storage unavailable'), { code: 'SQLITE_IOERR' }),
+      );
+
+    try {
+      await expect(state.host.initialize()).rejects.toThrow('Storage unavailable');
+      expect(state.conversations.resume).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('closes a database that opens after startup cancellation without opening the runtime', async () => {
     const close = jest.fn(async () => {});
     let finishOpen!: (database: RuntimeSqlDatabase) => void;
@@ -2059,6 +2702,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const state = fixture();
     const original = await state.reserve('completed');
     await state.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
     try {
       await state.store.finalizeAssistantMessage({
         assistantMessageId: original.assistantMessageId,
@@ -2079,6 +2726,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(question?.id).toBe(original.userMessageId);
       expect(answer).toMatchObject({ parentId: original.userMessageId, status: 'pending' });
       expect(answer?.id).not.toBe(original.assistantMessageId);
+      expect(events).toContainEqual({
+        type: 'message.created',
+        message: expect.objectContaining({
+          id: original.assistantMessageId,
+          parentId: original.userMessageId,
+          status: 'success',
+        }),
+      });
       expect(
         await state.store.getMessage(state.sessionId, original.assistantMessageId),
       ).toMatchObject({ status: 'success' });
@@ -2087,6 +2742,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(lane).toEqual(runtimeLane(state.sessionId, 1));
       expect(state.copies.get(state.sessionId)?.turns).toHaveLength(1);
     } finally {
+      observation.unsubscribe();
       await state.host.close();
     }
   });
@@ -3143,6 +3799,258 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         turn: { assistantMessageId: running[1]!.assistantMessageId, isRetrying: true },
       });
       observation.unsubscribe();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('execution protection survives successful admission before asynchronous reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observe = state.conversations.observe.bind(state.conversations);
+    const pending: (() => void)[] = [];
+    let finishDelivery!: () => void;
+    state.reply.finish.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishDelivery = resolve;
+      }),
+    );
+    let deferEvents = true;
+    jest.spyOn(state.conversations, 'observe').mockImplementation((lane, listener) =>
+      observe(lane, (event) => {
+        if (deferEvents) pending.push(() => listener(event));
+        else listener(event);
+      }),
+    );
+    try {
+      await askTwoModels(state);
+      expect(state.background.startTurn).not.toHaveBeenCalled();
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      deferEvents = false;
+      pending.splice(0).forEach((deliver) => deliver());
+      await settle();
+      const running = runningTurns(state);
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      for (const turn of running)
+        state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(state.reply.finish).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      finishDelivery();
+      await settle();
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith('completed');
+    } finally {
+      finishDelivery();
+      await state.host.close();
+    }
+  });
+
+  test('failed native admission releases its preparation protection after reservation reconciliation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    jest.spyOn(state.conversations, 'submit').mockRejectedValueOnce(new Error('Admission failed'));
+    try {
+      await expect(
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Start' }],
+        }),
+      ).rejects.toThrow('Admission failed');
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalledWith('completed');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('parallel replies retain one execution lease while all answers await approvals and when one resumes', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    const controllers = [new AbortController(), new AbortController()];
+    const decisions: Promise<unknown>[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const approvalIds = running.map(() => uuid());
+      for (const [index, turn] of running.entries()) {
+        decisions.push(
+          state
+            .execution()!
+            .requestApproval(
+              turn.identity,
+              {
+                id: approvalIds[index]!,
+                turnId: turn.identity.turnId,
+                toolCallId: `read-${index}`,
+                toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'read' },
+                displayName: 'Read',
+                input: {},
+                status: 'pending',
+              },
+              controllers[index]!.signal,
+            )
+            .catch((error: unknown) => error),
+        );
+        await settle();
+        expect(protection.acquire).toHaveBeenCalledTimes(1);
+        expect(protection.lease.release).not.toHaveBeenCalled();
+      }
+      await state.host.respondApproval({
+        sessionId: state.sessionId,
+        turnId: running[0]!.identity.turnId,
+        approvalId: approvalIds[0]!,
+        decision: 'approve',
+      });
+      await decisions[0];
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+    } finally {
+      controllers.forEach((controller) => controller.abort());
+      await Promise.all(decisions);
+      await state.host.close();
+    }
+  });
+
+  test('a question retains protection after a parallel tool finishes and answering reuses it despite a stale tool message', async () => {
+    const protection = executionProtection();
+    let finishRead!: () => void;
+    const readGate = new Promise<void>((resolve) => {
+      finishRead = resolve;
+    });
+    const read: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'read_file' },
+      providerName: 'read_file',
+      displayName: 'Read',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        await readGate;
+        return { value: null, artifacts: [] };
+      },
+    };
+    const state = fixture({
+      executionLease: protection.acquire,
+      tools: { getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser), read] },
+    });
+    const controller = new AbortController();
+    let question: Promise<unknown> | undefined;
+    let reading: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Ask me' }],
+      });
+      await settle();
+      const turn = runningTurns(state)[0]!;
+      const readTool = await state
+        .execution()!
+        .resolveTool(turn.identity, read.ref, controller.signal);
+      reading = readTool.execute({
+        input: {},
+        turnId: turn.identity.turnId,
+        toolCallId: 'read-call',
+        signal: controller.signal,
+      });
+      const toolRef = { source: 'builtin', capabilityId: 'ask_user_question' } as const;
+      const tool = await state.execution()!.resolveTool(turn.identity, toolRef, controller.signal);
+      question = tool.execute({
+        turnId: turn.identity.turnId,
+        toolCallId: 'question-call',
+        signal: controller.signal,
+        input: {
+          questions: [
+            {
+              id: 'choice',
+              question: 'Choose',
+              selection: 'single',
+              options: [
+                { id: 'yes', label: 'Yes' },
+                { id: 'no', label: 'No' },
+              ],
+            },
+          ],
+        },
+      });
+      await settle();
+      state.emit({
+        ...turn,
+        parts: [
+          {
+            id: 'question',
+            type: 'tool',
+            toolCallId: 'question-call',
+            toolRef,
+            providerName: 'ask_user_question',
+            displayName: 'Ask user',
+            state: 'running',
+            input: {},
+          },
+        ],
+      });
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      finishRead();
+      await reading;
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      await state.host.respondQuestion({
+        sessionId: state.sessionId,
+        turnId: turn.identity.turnId,
+        toolCallId: 'question-call',
+        answer: {
+          answers: [{ questionId: 'choice', selectedOptionIds: ['yes'], text: '', skipped: false }],
+        },
+      });
+      await question;
+      expect(protection.acquire).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).not.toHaveBeenCalled();
+      state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith('completed');
+    } finally {
+      finishRead();
+      controller.abort();
+      await reading;
+      await question?.catch(() => {});
+      await state.host.close();
+    }
+  });
+
+  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const before = [...state.steps];
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      expect(runningTurns(state)).toHaveLength(0);
+      await state.host.resumeSuspended();
+      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
+        before.filter((step) => step === 'close' || step === 'open'),
+      );
     } finally {
       await state.host.close();
     }

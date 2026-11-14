@@ -16,9 +16,19 @@ import type {
 
 import { getSystemIntegration } from '../../../../modules/system-integration';
 
+/** A foreground user action with measurable work, never a restored or automatic workload. */
+export type KeepAliveTask = {
+  title: string;
+  subtitle: string;
+  completedUnitCount: number;
+  totalUnitCount: number;
+};
+
 export type KeepAliveLease = {
-  /** Idempotent; the last release across all holders stops the platform mechanism. */
-  release(): void;
+  /** Idempotent; the last release stops shared execution protection. */
+  release(outcome?: 'completed'): void;
+  /** Actual work milestones; platforms without task progress may omit this capability. */
+  update?(task: Partial<KeepAliveTask>): void;
 };
 
 export type KeepAliveSource = {
@@ -29,7 +39,11 @@ export type KeepAliveSource = {
    * platform revokes execution before release; sources that cannot be revoked
    * never call it.
    */
-  acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease;
+  acquire(
+    tag: string,
+    onInterrupt?: (reason: Error) => void | Promise<void>,
+    task?: KeepAliveTask,
+  ): KeepAliveLease;
 };
 
 /**
@@ -53,9 +67,15 @@ export class KeepAliveCoordinator extends BaseService implements BackgroundExecu
     this.source = selectSource({ android: androidForegroundService, ios: iosBackgroundExecution });
   }
 
-  acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease {
+  acquire(
+    tag: string,
+    onInterrupt?: (reason: Error) => void | Promise<void>,
+    task?: KeepAliveTask,
+  ): KeepAliveLease {
     if (this.disposed) return noOpLease;
-    return this.source.acquire(tag, onInterrupt);
+    return task
+      ? this.source.acquire(tag, onInterrupt, task)
+      : this.source.acquire(tag, onInterrupt);
   }
 
   getStatus = (): BackgroundExecutionStatus => this.source.getStatus?.() ?? 'idle';

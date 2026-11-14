@@ -29,9 +29,11 @@ suffix.
   feature-agnostic `JobRuntime`. The runtime itself depends only on the database, that registry,
   and the `KeepAliveSource` capability; it must not import paintings or background activity
   implementations directly.
-- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: a finite UIKit background
-  execution window on iOS and a foreground service on Android. Each consumer decides when to
-  acquire and how to handle expiry. `backgroundActivity` owns the feature-agnostic
+- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: official continued processing for
+  foreground user work on iOS 26+, finite UIKit time and consented audio fallback, and a foreground service on Android. Each consumer decides when to
+  acquire and how to handle expiry. Questions and approvals retain execution leases; the last
+  consumer's release stops shared protection immediately on both platforms. Local Agent execution owns stable
+  Session leases independently of reply presentation. `backgroundActivity` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state
   machine, content and icon derivation), and the painting job handler drives its own session.

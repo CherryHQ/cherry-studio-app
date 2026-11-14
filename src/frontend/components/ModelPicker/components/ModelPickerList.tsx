@@ -1,4 +1,3 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import { Button, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
@@ -25,14 +24,14 @@ import type { ModelPickerListItem } from '../utils/modelPickerListItems';
 import { ModelPickerBadge } from './ModelPickerBadge';
 import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 
-const modelPickerEstimatedItemSize = 48;
+const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
   density?: ModelPickerDensity;
-  emptyAction?: { label: string; onPress: () => void };
+  emptyAction?: { label: string; onPress: () => void; variant?: 'secondary' | 'text' };
   emptyText?: string;
   isLoading?: boolean;
   /** Whether the picker is on screen; it scrolls to the selection once per showing. */
@@ -145,7 +144,6 @@ export function ModelPickerList({
         return (
           <ModelPickerGroupHeader
             contentInset={extraData.contentInset}
-            density={extraData.density}
             isFirstGroup={item.isFirstGroup}
             title={item.title}
           />
@@ -216,15 +214,19 @@ export function ModelPickerList({
     return (
       <View
         className={cn(
-          'flex-1 items-center justify-center gap-4 py-8',
+          'flex-1 items-center justify-center gap-2 py-8',
           contentInset === 'default' && 'px-6',
         )}
       >
-        <Text className="text-center text-base text-muted-foreground">
+        <Text className="text-center text-sm text-muted-foreground">
           {isLoading ? loadingText : emptyText}
         </Text>
         {!isLoading && emptyAction ? (
-          <Button onPress={emptyAction.onPress} size="sm" variant="secondary">
+          <Button
+            onPress={emptyAction.onPress}
+            size="sm"
+            variant={emptyAction.variant ?? 'secondary'}
+          >
             {emptyAction.label}
           </Button>
         ) : null}
@@ -233,13 +235,10 @@ export function ModelPickerList({
   }
 
   return (
-    <View style={styles.list}>
+    <View style={styles.list} testID="model-picker-list">
       <LegendList
         ref={listRef}
-        contentContainerStyle={[
-          styles.listContentContainer,
-          isFastScrollerVisible ? styles.listContentContainerWithFastScroller : undefined,
-        ]}
+        contentContainerStyle={styles.listContentContainer}
         data={listItems}
         drawDistance={320}
         estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
@@ -271,25 +270,18 @@ export function ModelPickerList({
 
 function ModelPickerGroupHeader({
   contentInset,
-  density,
   isFirstGroup,
   title,
 }: {
   contentInset: 'default' | 'none';
-  density: ModelPickerDensity;
   isFirstGroup: boolean;
   title: string;
 }) {
   return (
-    <View className={cn(contentInset === 'default' && 'px-6', isFirstGroup ? 'mt-2' : 'mt-4')}>
-      <Text
-        className={cn(
-          'text-muted-foreground',
-          density === 'compact' ? 'text-xs font-medium' : 'text-base',
-        )}
-      >
-        {title}
-      </Text>
+    <View
+      className={cn('pb-1', contentInset === 'default' && 'px-5', isFirstGroup ? 'pt-1' : 'pt-3')}
+    >
+      <Text className="font-medium text-muted-foreground text-xs">{title}</Text>
     </View>
   );
 }
@@ -330,45 +322,61 @@ const ModelPickerRow = memo(function ModelPickerRow({
         multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
       }
       className={cn(
-        'flex-row items-center gap-3 active:opacity-60',
-        density === 'compact' ? 'min-h-11 py-2' : 'min-h-12',
-        contentInset === 'default' && 'px-6',
+        'flex-row items-center gap-3 active:bg-secondary-active dark:active:bg-secondary-active/50',
+        density === 'compact' ? 'min-h-11 py-2' : 'min-h-14 py-2.5',
+        contentInset === 'default' && 'px-5',
+        isSelected && 'bg-secondary dark:bg-secondary/40',
         isDisabled && 'opacity-40',
       )}
       disabled={isDisabled}
       onPress={handleSelect}
     >
-      <ModelAvatar
-        artwork={density === 'compact' ? 'brand' : 'model'}
-        model={item.model}
-        provider={item.provider}
-        size={density === 'compact' ? 24 : 32}
-      />
-      <View className="min-w-0 flex-1">
+      <View
+        className={cn(
+          'h-6 justify-center',
+          density === 'compact' ? 'w-6' : 'w-7',
+          badges.length > 0 && 'self-start',
+        )}
+      >
+        <ModelAvatar
+          artwork={density === 'compact' ? 'brand' : 'model'}
+          model={item.model}
+          provider={item.provider}
+          size={density === 'compact' ? 24 : 28}
+        />
+      </View>
+      <View className="min-w-0 flex-1 gap-0.5">
         <Text
           className={cn(
             'text-foreground',
-            density === 'compact' ? 'text-sm font-medium' : 'text-base',
+            density === 'compact' ? 'text-sm' : 'text-base',
+            isSelected ? 'font-semibold' : 'font-medium',
           )}
-          numberOfLines={2}
+          ellipsizeMode="middle"
+          numberOfLines={1}
         >
           {item.model.name}
         </Text>
+        {badges.length > 0 ? (
+          <View className="h-4 flex-row items-center gap-1">
+            {badges.map((badge) => (
+              <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} variant="icon" />
+            ))}
+          </View>
+        ) : null}
       </View>
-      {badges.length > 0 ? (
-        <View className="flex-row items-center gap-1">
-          {badges.map((badge) => (
-            <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} />
-          ))}
-        </View>
-      ) : null}
-      {multiple ? (
-        <SelectionIndicator selected={isSelected} />
-      ) : isSelected ? (
-        <CheckIcon
-          className={cn('shrink-0 text-foreground', density === 'compact' ? 'size-4' : 'size-5')}
-        />
-      ) : null}
+      <View
+        className={cn(
+          'size-6 shrink-0 items-center justify-center',
+          badges.length > 0 && 'self-start',
+        )}
+      >
+        {multiple ? (
+          <SelectionIndicator className="size-5" selected={isSelected} />
+        ) : isSelected ? (
+          <SelectionIndicator className="size-5" selected />
+        ) : null}
+      </View>
     </Pressable>
   );
 });
@@ -383,10 +391,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContentContainer: {
-    gap: 4,
     paddingBottom: 24,
-  },
-  listContentContainerWithFastScroller: {
-    paddingRight: 32,
   },
 });

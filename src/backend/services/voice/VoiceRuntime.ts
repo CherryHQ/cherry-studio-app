@@ -24,15 +24,20 @@ export type VoiceRuntimeDependencies = {
   dictationLanguage(): AppLanguage;
   /** Subscribes to the app entering the background. */
   onBackground(listener: () => void): () => void;
+  canSpeakInBackground?(): boolean;
 };
 
-type Activity = { activity: VoiceActivity; controller: AbortController };
+type Activity = {
+  activity: VoiceActivity;
+  controller: AbortController;
+  settled: Promise<void>;
+};
 
 const IDLE: VoiceActivity = { kind: 'idle' };
 
 /**
  * Chooses live voice engines and owns the single dictation, speech or transcription activity.
- * Callers cancel file work; capture/playback also end on backgrounding. Engines own native resources.
+ * Callers cancel file work; capture ends on backgrounding. Speech can continue after opt-in.
  */
 export function createVoiceRuntime({
   engines,
@@ -40,6 +45,7 @@ export function createVoiceRuntime({
   language,
   dictationLanguage,
   onBackground,
+  canSpeakInBackground = () => false,
 }: VoiceRuntimeDependencies): {
   module: Omit<VoiceModule, 'localModel'>;
   dispose(): Promise<void>;
@@ -61,16 +67,23 @@ export function createVoiceRuntime({
 
   function claim(activity: VoiceActivity, signal?: AbortSignal) {
     lifetime.signal.throwIfAborted();
-    current?.controller.abort();
+    const previous = current;
+    previous?.controller.abort();
     const controller = new AbortController();
     const linked = linkAbortSignals(
       signal ? [lifetime.signal, controller.signal, signal] : [lifetime.signal, controller.signal],
     );
-    const owner: Activity = { activity, controller };
+    let finish!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const owner: Activity = { activity, controller, settled };
     current = owner;
     listeners.forEach((listener) => listener());
     return {
       signal: linked.signal,
+      // A replacement waits for native stop/cleanup before it changes the audio session.
+      ready: previous?.settled ?? Promise.resolve(),
       update(next: VoiceActivity) {
         if (current !== owner || linked.signal.aborted) return;
         owner.activity = next;
@@ -78,6 +91,7 @@ export function createVoiceRuntime({
       },
       release() {
         linked.dispose();
+        finish();
         if (current !== owner) return;
         current = null;
         listeners.forEach((listener) => listener());
@@ -146,6 +160,7 @@ export function createVoiceRuntime({
   }
 
   const unsubscribeBackground = onBackground(() => {
+    if (current?.activity.kind === 'speaking' && canSpeakInBackground()) return;
     // File work has no capture/playback session. Its caller owns cancellation; an Agent turn
     // can keep working under the Host's existing background execution lease.
     if (current?.activity.kind !== 'transcribing') current?.controller.abort();
@@ -167,6 +182,8 @@ export function createVoiceRuntime({
       };
       const activity = claim(transcribing, options?.signal);
       try {
+        await activity.ready;
+        activity.signal.throwIfAborted();
         const transcription = await track(
           resolve<TranscriptionEngine>('transcription', activity.signal),
         );
@@ -204,6 +221,8 @@ export function createVoiceRuntime({
         throw new VoiceError('busy', 'Another voice operation is running.');
       const activity = claim({ kind: 'dictating' }, options?.signal);
       try {
+        await activity.ready;
+        activity.signal.throwIfAborted();
         const engine = await track(resolve<DictationEngine>('dictation', activity.signal));
         const session = await track(
           engine.start({
@@ -230,10 +249,12 @@ export function createVoiceRuntime({
       if (!prose) return;
       const activity = claim({ kind: 'speaking', key: options?.key ?? null }, options?.signal);
       try {
+        await activity.ready;
+        activity.signal.throwIfAborted();
         const engine = await track(resolve<SpeechEngine>('speech', activity.signal));
         await track(engine.speak({ text: prose, language: language(), signal: activity.signal }));
       } catch (error) {
-        // Stopping, replacement, backgrounding and caller cancellation all end reading normally.
+        // Stopping, replacement and caller cancellation all end reading normally.
         if (!activity.signal.aborted) throw error;
       } finally {
         activity.release();

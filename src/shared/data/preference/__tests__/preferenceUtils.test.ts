@@ -31,6 +31,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
     expect(getDefaultValue('ui.sidebar.recent_view_mode')).toBe('sessions');
+    expect(getDefaultValue('ui.sidebar.session_tree_enabled')).toBe(true);
   });
 });
 
@@ -39,6 +40,11 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(getDefaultValue('app.feedback.shake_hint_decision')).toBe('unseen');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
+});
+
+test('background audio needs a new device-local decision rather than prior guidance or backup consent', () => {
+  expect(getDefaultValue('app.background_audio.consent')).toBeNull();
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.background_audio.consent');
 });
 
 test('screen awake is a known, device-local opt-in with a valid key shape', () => {

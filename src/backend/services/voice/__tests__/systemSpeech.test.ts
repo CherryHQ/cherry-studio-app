@@ -3,6 +3,15 @@ import * as Speech from 'expo-speech';
 
 import { createSystemSpeechEngine } from '../systemSpeech';
 
+const mockBeginUse = jest.fn();
+const mockEndUse = jest.fn();
+jest.mock('../../../../../modules/system-integration', () => ({
+  getSystemIntegration: () => ({
+    beginBackgroundAudioUse: mockBeginUse,
+    endBackgroundAudioUse: mockEndUse,
+  }),
+}));
+
 jest.mock('expo-audio', () => ({ setAudioModeAsync: jest.fn(async () => undefined) }));
 jest.mock('expo-speech', () => ({
   getAvailableVoicesAsync: jest.fn(),
@@ -20,6 +29,8 @@ const voice = (identifier: string, name: string, language: string): Speech.Voice
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockBeginUse.mockResolvedValue(undefined);
+  mockEndUse.mockResolvedValue(undefined);
   jest.mocked(setAudioModeAsync).mockResolvedValue(undefined);
   jest.mocked(Speech.stop).mockResolvedValue(undefined);
   jest
@@ -59,6 +70,8 @@ test('reads in the playback session so the ring switch does not silence it', asy
   const engine = createSystemSpeechEngine({ voice: async () => '' });
   await engine.speak({ text: 'Hello.', language: 'en-US', signal: new AbortController().signal });
   expect(order).toEqual(['session:true', 'speak']);
+  expect(mockBeginUse).toHaveBeenCalledWith(expect.any(String), 'speech');
+  expect(mockEndUse).toHaveBeenCalledWith(mockBeginUse.mock.calls[0][0]);
 });
 
 test('the default supplies an installed voice for the app locale instead of the device language', async () => {
@@ -128,10 +141,22 @@ test('cancellation settles after native stop even if the utterance never emits o
   await Promise.resolve();
   expect(Speech.stop).toHaveBeenCalledTimes(1);
   expect(finished).toBe(false);
+  expect(mockEndUse).not.toHaveBeenCalled();
 
   stopped.resolve();
   await expect(speaking).rejects.toBe(controller.signal.reason);
   expect(finished).toBe(true);
+  expect(mockEndUse).toHaveBeenCalledTimes(1);
+});
+
+test('failed audio configuration releases the voice session without starting speech', async () => {
+  jest.mocked(setAudioModeAsync).mockRejectedValueOnce(new Error('Audio unavailable'));
+  const engine = createSystemSpeechEngine({ voice: async () => '' });
+  await expect(
+    engine.speak({ text: 'Hello.', language: 'en-US', signal: new AbortController().signal }),
+  ).rejects.toThrow('Audio unavailable');
+  expect(Speech.speak).not.toHaveBeenCalled();
+  expect(mockEndUse).toHaveBeenCalledTimes(1);
 });
 
 test('cancellation while loading voices cannot start playback when enumeration completes', async () => {

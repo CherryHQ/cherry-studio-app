@@ -113,7 +113,8 @@
         "NSBonjourServices": ["_cherry-remote._tcp"],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "UIBackgroundModes": ["audio", "processing"]
       }
     },
     "android": {

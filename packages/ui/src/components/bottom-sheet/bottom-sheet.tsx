@@ -55,7 +55,7 @@ export type BottomSheetBackAction = {
 };
 
 type BottomSheetBaseProps = {
-  /** Lift the sheet with the keyboard, frame by frame, so its inputs and footer stay above it. */
+  /** Keep content above the keyboard; resizable sheets retain their selected height. */
   avoidKeyboard?: boolean;
   backAction?: BottomSheetBackAction;
   children: ReactNode;
@@ -81,18 +81,23 @@ export type BottomSheetProps = BottomSheetBaseProps &
   (
     | {
         height: number;
+        onSizeChange?: never;
         size?: never;
         sizes?: never;
       }
     | {
         height?: never;
+        onSizeChange?: never;
         size: BottomSheetSize;
         sizes?: never;
       }
     | {
         height?: never;
-        size?: never;
+        /** Controls the active height while retaining the other draggable sizes. */
+        size?: BottomSheetSize;
         sizes: BottomSheetSizes;
+        /** Reports a user-driven change to an open height. */
+        onSizeChange?: (size: BottomSheetSize) => void;
       }
   );
 
@@ -128,12 +133,14 @@ export function BottomSheet(props: BottomSheetProps) {
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
-  const { height, size, sizes } = props;
-  const { cardHeight, minCardHeight, detents } = useMemo(
+  const { height, onSizeChange, size, sizes } = props;
+  const { cardHeight, minCardHeight, detents, openIndex, sizeByIndex } = useMemo(
     () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
     [availableCardHeight, dismissible, height, size, sizes],
   );
-  const isResizable = !avoidKeyboard && detents.length > 2;
+  const isResizable = detents.length > 2;
+  // Resizable sheets keep their snap points; keyboard space only shrinks the body.
+  const followsKeyboardContentHeight = avoidKeyboard && !isResizable;
   const position = useSharedValue(0);
   const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
     (event) => {
@@ -155,13 +162,15 @@ export function BottomSheet(props: BottomSheetProps) {
   const resolvedTitleAlign = titleAlign ?? (isCloseActionVisible ? 'center' : 'start');
   const hasBalancedHeader =
     isCloseActionVisible || Boolean(backAction && resolvedTitleAlign === 'center');
-  const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
+  const [index, setIndex] = useState(open ? openIndex : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
+  const [previousOpenIndex, setPreviousOpenIndex] = useState(openIndex);
   const hasNotifiedCloseRef = useRef(false);
 
-  if (open !== previousOpen) {
+  if (open !== previousOpen || openIndex !== previousOpenIndex) {
     setPreviousOpen(open);
-    setIndex(open ? OPEN_INDEX : CLOSED_INDEX);
+    setPreviousOpenIndex(openIndex);
+    setIndex(open ? openIndex : CLOSED_INDEX);
   }
 
   useEffect(() => {
@@ -201,9 +210,21 @@ export function BottomSheet(props: BottomSheetProps) {
     return () => subscription.remove();
   }, [handleHardwareBackPress, open]);
 
-  const handleIndexChange = useCallback((nextIndex: number) => {
-    setIndex(nextIndex);
-  }, []);
+  const handleIndexChange = useCallback(
+    (nextIndex: number) => {
+      setIndex(nextIndex);
+      if (nextIndex > CLOSED_INDEX) {
+        if (avoidKeyboard && nextIndex < index) {
+          Keyboard.dismiss();
+        }
+        const nextSize = sizeByIndex[nextIndex];
+        if (nextSize) {
+          onSizeChange?.(nextSize);
+        }
+      }
+    },
+    [avoidKeyboard, index, onSizeChange, sizeByIndex],
+  );
   const handleSettle = useCallback(
     (nextIndex: number) => {
       if (nextIndex !== CLOSED_INDEX || hasNotifiedCloseRef.current || !dismissible || !open) {
@@ -221,9 +242,9 @@ export function BottomSheet(props: BottomSheetProps) {
     <ModalBottomSheet
       // UIKit menus need the presenting controller retained by the provider's view hierarchy.
       nativeOverlay={false}
-      // A keyboard-avoiding card animates its own height, which the content detent follows.
-      animateContentHeight={!avoidKeyboard}
-      detents={avoidKeyboard ? [detents[CLOSED_INDEX], 'content'] : detents}
+      // Single-height keyboard avoidance animates the content height itself.
+      animateContentHeight={!followsKeyboardContentHeight}
+      detents={followsKeyboardContentHeight ? [detents[CLOSED_INDEX], 'content'] : detents}
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}
@@ -233,7 +254,7 @@ export function BottomSheet(props: BottomSheetProps) {
     >
       <SheetLayout
         availableCardHeight={availableCardHeight}
-        avoidKeyboard={avoidKeyboard}
+        avoidKeyboard={followsKeyboardContentHeight}
         bottomInset={bottomInset}
         cardHeight={cardHeight}
         style={[
@@ -259,7 +280,7 @@ export function BottomSheet(props: BottomSheetProps) {
           onAccessibilityEscape={dismissible ? requestClose : undefined}
           style={[
             styles.card,
-            avoidKeyboard
+            followsKeyboardContentHeight
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
             isResizable ? visibleCardStyle : undefined,
@@ -416,21 +437,28 @@ function resolveSheetHeights(
 ) {
   const requestedCardHeights =
     height !== undefined
-      ? [height]
-      : size !== undefined
-        ? [Math.round(availableCardHeight * HEIGHT_RATIOS[size])]
-        : (sizes ?? []).map((sheetSize) =>
-            Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
-          );
+      ? [{ height, size: undefined }]
+      : (sizes ?? (size ? [size] : [])).map((sheetSize) => ({
+          height: Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
+          size: sheetSize,
+        }));
   const cardHeights = requestedCardHeights
-    .map((requestedHeight) => Math.max(0, Math.min(requestedHeight, availableCardHeight)))
-    .sort((left, right) => left - right)
-    .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
-  const cardHeight = cardHeights.at(-1) ?? 0;
+    .map((item) => ({ ...item, height: Math.max(0, Math.min(item.height, availableCardHeight)) }))
+    .sort((left, right) => left.height - right.height)
+    .filter((item, index, heights) => index === 0 || item.height !== heights[index - 1]?.height);
+  const cardHeight = cardHeights.at(-1)?.height ?? 0;
   const closedDetent = dismissible ? 0 : programmatic(0);
-  const detents: Detent[] = [closedDetent, ...cardHeights];
+  const detents: Detent[] = [closedDetent, ...cardHeights.map((item) => item.height)];
+  const openIndex = Math.max(OPEN_INDEX, cardHeights.findIndex((item) => item.size === size) + 1);
+  const sizeByIndex = [undefined, ...cardHeights.map((item) => item.size)];
 
-  return { cardHeight, minCardHeight: cardHeights[0] ?? 0, detents };
+  return {
+    cardHeight,
+    minCardHeight: cardHeights[0]?.height ?? 0,
+    detents,
+    openIndex,
+    sizeByIndex,
+  };
 }
 
 const styles = StyleSheet.create({

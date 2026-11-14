@@ -969,7 +969,7 @@ approvals: leaving a route does not cancel the turn, but cancellation, host disp
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
 A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
-with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+with a question-specific label and retains its keep-alive lease until the turn settles. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
 

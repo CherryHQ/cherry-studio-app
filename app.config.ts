@@ -55,6 +55,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        BGTaskSchedulerPermittedIdentifiers: [
+          ...(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers ?? []),
+          `${bundleIdentifier}.continued-processing.*`,
+        ],
+      },
       entitlements: {
         ...config.ios?.entitlements,
         'com.apple.security.application-groups': [

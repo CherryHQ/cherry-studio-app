@@ -21,6 +21,7 @@ import {
 } from '@earendil-works/pi-durable';
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
+import { ZodError } from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -216,6 +217,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         models: this.models.models,
         registry: this.registry,
         settings: () => ({
+          // Accepted steers already appear before the remaining follow-ups in the transcript.
+          // Consume that whole prefix at a boundary, including one that also takes a follow-up.
+          steeringMode: 'all',
           followUpMode: 'one-at-a-time',
           afterFailedRun: 'continue',
           progress: { persistWithinMs: 0 },
@@ -593,7 +597,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       );
       const visible = new Set(page.entries.map((entry) => entry.id));
       for (const { record, metadata } of [...page.submissions].sort(
-        (a, b) => b.record.id - a.record.id,
+        (a, b) => (b.record.entry ?? 0) - (a.record.entry ?? 0),
       )) {
         if (record.type !== 'input' || record.entry === undefined || !visible.has(record.entry))
           continue;
@@ -623,7 +627,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
     if (!selected) return undefined;
     const turn = await this.project(lane, selected.record, selected.metadata, options);
-    if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
+    if (
+      selected.role === 'assistant' &&
+      !turn.hasAssistant &&
+      turn.status !== 'queued' &&
+      turn.status !== 'running'
+    )
+      return undefined;
     // Forking would drop that edit; Cherry rebuilds the edited history instead.
     if (
       turn.answerBoundary &&
@@ -722,6 +732,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         ? ('not-found' as const)
         : result;
   }
+  async steer(lane: RuntimeLane, requestId: string) {
+    return this.requireRuntime().steerInput(laneKey(lane), requestId);
+  }
+  async inputParents(lane: RuntimeLane, userMessageIds: readonly string[]) {
+    return this.requireRuntime().inputParents(laneKey(lane), userMessageIds);
+  }
   async hasUnfinishedWork() {
     const state = await this.requireRuntime().inspect();
     return state.tasks.length > 0 || state.submissions.length > 0;
@@ -736,13 +752,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     const conversation = await runtime.conversation(laneKey(lane));
     if (!conversation) throw new Error('The Pi conversation is missing.');
-    const active = record.conversationId === conversation.id && record.status === 'placed';
+    const next = await runtime.nextInput(laneKey(lane), record);
+    const continued =
+      next !== undefined &&
+      (record.status === 'placed' ||
+        readPiSubmission(next.metadata).metadata.steer === true ||
+        (record.type === 'input' &&
+          record.status === 'done' &&
+          next.record.entry! <= record.answer));
+    const active = !next && record.conversationId === conversation.id && record.status === 'placed';
     return projectPiTurn({
       lane,
       record,
       metadata,
       entries: await runtime.turnEntries(laneKey(lane), record),
       active,
+      continued,
       fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
@@ -822,12 +847,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       ),
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
+        const input = inputs.at(-1);
         const failures = await api.snapshot(PiToolBudget, api.conversationId, context);
-        return inputs[0]
+        return input
           ? [
-              ...(failures?.inputId === inputs[0].record.id ? failures.failedGroups : []),
+              ...(failures?.inputId === input.record.id ? failures.failedGroups : []),
               ...failedPiToolGroups(
-                await this.requireRuntime().turnEntries(key, inputs[0].record, context),
+                await this.requireRuntime().turnEntries(key, input.record, context),
               ),
             ]
           : [];
@@ -871,12 +897,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       onResult: async (tool, result, api, context) => {
         if (result.failure?.scope === 'tool' && tool.failureGroup) {
           const inputs = await this.requireRuntime().inputsForTask(api, context);
-          if (inputs.length !== 1)
-            throw new Error('Cherry capabilities require one owning input per Pi run.');
+          const input = inputs.at(-1);
+          if (!input) throw new Error('The Pi task has no owning input.');
           await api.commit(async (tx) => {
             const failures = await tx.doc(PiToolBudget, api.conversationId);
-            if (failures.inputId !== inputs[0]!.record.id) {
-              failures.inputId = inputs[0]!.record.id;
+            if (failures.inputId !== input.record.id) {
+              failures.inputId = input.record.id;
               failures.failedGroups = [];
             }
             if (!failures.failedGroups.includes(tool.failureGroup!))
@@ -954,8 +980,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   private async webLookupFailed(key: string, api: HookApi, context: Context) {
     const inputs = await this.requireRuntime().inputsForTask(api, context);
+    const input = inputs.at(-1);
+    if (!input) return false;
     return failedPiToolGroups(
-      await this.requireRuntime().turnEntries(key, inputs[0]!.record, context),
+      await this.requireRuntime().turnEntries(key, input.record, context),
     ).includes(PI_WEB_FAILURE_GROUP);
   }
 
@@ -976,9 +1004,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     context: Context,
   ): Promise<RuntimeExecutionIdentity> {
     const inputs = await this.requireRuntime().inputsForTask(api, context);
-    if (inputs.length !== 1)
-      throw new Error('Cherry capabilities require one owning input per Pi run.');
-    const stored = readPiSubmission(inputs[0]!.metadata);
+    const input = inputs.at(-1);
+    if (!input) throw new Error('The Pi task has no owning input.');
+    const stored = readPiSubmission(input.metadata);
     return { ...lane, turnId: stored.turnId, requestId: stored.requestId };
   }
 
@@ -1022,10 +1050,24 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       };
       if (!value.owner?.sessionId || value.report?.requestId !== delivery.id)
         throw new Error('The durable usage receipt has an invalid identity.');
-      await this.requirePorts().recordUsage(
-        { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
-        value.report,
-      );
+      try {
+        await this.requirePorts().recordUsage(
+          { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
+          value.report,
+        );
+      } catch (error) {
+        // A malformed historical owner must not block startup or later valid receipts.
+        // Leave this receipt pending so repairing its owner can deliver it on a later pass.
+        if (!(error instanceof ZodError)) throw error;
+        logger.warn('Pi durable usage delivery failed', {
+          error,
+          operation: 'pi.usage_delivery',
+          reasonCode: 'invalid_receipt',
+          sessionId: value.owner.sessionId,
+          requestId: delivery.id,
+        });
+        continue;
+      }
       await this.requireRuntime().acknowledgeUsage(delivery.id);
     }
   }

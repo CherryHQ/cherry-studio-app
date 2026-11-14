@@ -53,6 +53,8 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'app.background_run_guidance.seen': boolean;
+  /** Device-local audio opt-in; null means unseen, and only explicit confirmation stores true. */
+  'app.background_audio.consent': boolean | null;
 
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
@@ -97,6 +99,7 @@ export interface PreferenceSchema {
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
+  'ui.sidebar.session_tree_enabled': boolean;
   'ui.theme_mode': ThemeMode;
 }
 
@@ -116,6 +119,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'app.background_run_guidance.seen': false,
+  'app.background_audio.consent': null,
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
@@ -152,6 +156,7 @@ export const PreferenceDefaults = {
   'ui.library.view_mode': 'grid',
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
+  'ui.sidebar.session_tree_enabled': true,
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 
@@ -162,6 +167,7 @@ export type PreferenceKeyType = keyof PreferenceSchema;
  * Restoring a backup keeps the target device's values for these keys.
  */
 export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_audio.consent',
   'app.background_run_guidance.seen',
   'app.feedback.shake_enabled',
   'app.feedback.shake_hint_decision',

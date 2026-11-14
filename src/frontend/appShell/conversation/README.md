@@ -34,7 +34,9 @@ page (`features/chat/runtime`), which projects its own client state into the sha
 Local execution settles in-process, so the shared contract never needs pending or interrupted
 outcomes, revisioned history windows or deferred content from this source.
 
-The local Session catalog lists root conversations first. Its optional `listSessionChildren`
+The local Session catalog lists root groups by default. `listSessions({ includeBranches: true })`
+instead lists every conversation by its own latest activity, including branches. These two list
+modes have separate query caches and pagination cursor scopes. Its optional `listSessionChildren`
 capability reads a single parent's direct children in stable creation order, only while that node
 is expanded. Summaries retain `forkedFromSessionId`, `createdAt` and `hasChildren`; relationship
 geometry and disclosure state belong to the sidebar. `readSessionPath` returns root-first metadata
