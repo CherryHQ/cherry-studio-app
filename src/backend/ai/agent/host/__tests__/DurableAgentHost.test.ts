@@ -1,4 +1,5 @@
 import { v4 as uuidv4, v7 as uuid } from 'uuid';
+import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -2069,6 +2070,142 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test.each(['runtime-metadata', 'stored-parts'] as const)(
+    'isolates invalid %s at startup without rewriting it or relaxing backup reads',
+    async (source) => {
+      const state = fixture();
+      const unreadable = await state.reserve();
+      if (source === 'runtime-metadata') unreadable.metadata = {};
+      else {
+        state.copies.clear();
+        state.raw
+          .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+          .run(
+            JSON.stringify({ parts: [{ id: 'future', type: 'unsupported-part' }] }),
+            unreadable.assistantMessageId,
+          );
+      }
+      const readUnreadable = () =>
+        state.raw
+          .prepare('SELECT status, data FROM agent_session_message WHERE id = ?')
+          .get(unreadable.assistantMessageId);
+      const original = readUnreadable();
+      const healthy = await state.store.reserveInitialSubmission({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'healthy-question', type: 'text', text: 'Hello', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+
+      try {
+        await state.host.initialize();
+        expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+        expect(readUnreadable()).toEqual(original);
+        expect(
+          (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+        ).toBe('interrupted');
+        await expect(state.host.quiesce()).rejects.toBeInstanceOf(ZodError);
+        await state.host.startSession({
+          sessionId: uuid(),
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'An unrelated conversation still works.' }],
+        });
+        expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test.each(['native-read', 'input-parents'] as const)(
+    'preserves a whole Session when %s validation prevents complete parent repair',
+    async (source) => {
+      const state = fixture();
+      const first = await state.reserve();
+      const next = await state.store.reserveSubmission({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'next', type: 'text', text: 'Continue', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      state.copies.get(state.sessionId)!.turns.push({
+        ...first,
+        identity: { ...first.identity, turnId: next.turnId, requestId: next.turnId },
+        userMessageId: next.userMessage.id,
+        assistantMessageId: next.assistantMessage.id,
+        metadata: {
+          ...first.metadata,
+          userParts: next.userMessage.parts as never,
+          parentMessageId: first.assistantMessageId,
+        },
+      });
+      const readAffected = () =>
+        Promise.all(
+          [first.assistantMessageId, next.assistantMessage.id].map((id) =>
+            state.store.getMessage(state.sessionId, id),
+          ),
+        );
+      const original = await readAffected();
+      const healthy = await state.store.reserveInitialSubmission({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'healthy', type: 'text', text: 'Hello', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      const failure = new ZodError([]);
+      if (source === 'native-read') {
+        const message = state.conversations.message;
+        jest.spyOn(state.conversations, 'message').mockImplementation(async (lane, id) => {
+          if (id === first.assistantMessageId) throw failure;
+          return message(lane, id);
+        });
+      } else {
+        const inputParents = state.conversations.inputParents;
+        jest.spyOn(state.conversations, 'inputParents').mockImplementation(async (lane, ids) => {
+          if (lane.sessionId === state.sessionId) throw failure;
+          return inputParents(lane, ids);
+        });
+      }
+
+      try {
+        await state.host.initialize();
+        expect(await readAffected()).toEqual(original);
+        expect(
+          (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+        ).toBe('interrupted');
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('keeps storage failures fatal while reconciling startup reservations', async () => {
+    const state = fixture();
+    await state.reserve();
+    jest
+      .spyOn(state.conversations, 'message')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Storage unavailable'), { code: 'SQLITE_IOERR' }),
+      );
+
+    try {
+      await expect(state.host.initialize()).rejects.toThrow('Storage unavailable');
+      expect(state.conversations.resume).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('closes a database that opens after startup cancellation without opening the runtime', async () => {
     const close = jest.fn(async () => {});
     let finishOpen!: (database: RuntimeSqlDatabase) => void;

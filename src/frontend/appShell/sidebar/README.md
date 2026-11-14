@@ -74,7 +74,20 @@ time and id so new replies do not move sibling nodes. Collapsing it releases the
 Root groups are paginated by the family's latest activity. A lightweight root-first path read
 restores the selected conversation's ancestors when the drawer opens, including ancestors outside
 the loaded pages. It never loads transcripts. Relationship rails use the ordinary row's measured
-height, with 12-point indentation per generation; titles follow their node without a fixed gutter.
+height and retain 12-point indentation for every generation. `SidebarBranchScrollView` owns the
+vertical viewport and measures mounted rows against its native content view after layout changes;
+the catalog's actual depth supplies their horizontal coordinates. As a row crosses the visible top
+edge below the floating header, the common offset interpolates toward the next row's depth. Text,
+nodes and rails move together, returning to the ordinary gutter across headers and gaps. This is
+scroll-driven UI-thread layout with no horizontal gesture, scrollbar, path toolbar or extra easing;
+it does not change selection, hierarchy, expansion or pagination. The row canvas grows by the
+current offset so text truncation and status stay inside its fixed trailing edge. Native measurements
+publish as a complete batch; stale batches are discarded when rows change or unmount.
+A row stops moving left once its own indentation is consumed, so shallower siblings below a deep
+top row retain the beginning of their titles. Text and rails share this row-local boundary.
+The navigation and native menu targets stay outside that moving canvas at the viewport's width;
+their content callback places only row content and rails inside it. Native menu previews therefore
+use the visible row bounds, including at deep offsets.
 Selection uses the existing whole-row surface, with no additional selected label or branch count.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query
@@ -99,6 +112,10 @@ target and disclosure are siblings: a tap on the disclosure only expands or coll
 on the conversation opens its existing native menu, and scrolling cancels those actions through
 the shared gesture owners. In selection mode, the main target toggles the checkbox while disclosure
 remains available for selecting descendants; all targets disable during deletion.
+The bottom dock retains its existing iOS progressive blur. Its explicit stacking order keeps
+scrolling rows and disclosure targets behind the controls. The container retains `box-none` touch
+handling: controls own their taps, while gaps keep the existing pass-through behavior. The body's
+existing bottom padding keeps the final conversation reachable above the dock.
 
 The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
 desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks
@@ -148,3 +165,5 @@ summary to the caller without closing a drawer or mounting rename/delete/multise
 The ordinary sidebar retains its full-row expansion and management behavior. The name and
 arrow are sibling press targets; scroll cancellation remains with Gesture Handler and the shared
 scroll interaction boundary. The picker changes neither row typography nor the avatar/text columns.
+Its caller owns scrolling; without `SidebarBranchScrollView`, the shared row frames keep their
+ordinary static indentation and do not acquire the drawer's automatic horizontal following.
