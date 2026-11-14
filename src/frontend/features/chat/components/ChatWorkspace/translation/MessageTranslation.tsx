@@ -19,7 +19,7 @@ import { Text, View } from 'react-native';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
-import { collectCitationSources, resolveMessageCitations } from '@/frontend/utils/messageCitations';
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 
@@ -43,13 +43,21 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
   });
   if (!translation?.state.visible) return null;
   const { state } = translation;
+  const sourceParts = message.data.parts ?? [];
+  const originalNumbers = resolveMessageCitations(
+    sourceParts,
+    message.data.citationSources,
+  ).sourceNumberById;
   const parts: CherryMessagePart[] = [
-    ...(message.data.parts ?? []).filter((part) => part.type !== 'text'),
+    ...sourceParts.filter((part) => part.type !== 'text'),
     { type: 'text', text: state.content },
   ];
-  const resolved = resolveMessageCitations(parts, [
-    ...collectCitationSources(message.data.parts ?? [], message.data.citationSources).values(),
-  ]).textByPartIndex.get(parts.length - 1);
+  const resolved = resolveMessageCitations(
+    parts,
+    message.data.citationSources,
+    'display',
+    originalNumbers,
+  ).textByPartIndex.get(parts.length - 1);
   const copy = async () => {
     try {
       await Clipboard.setStringAsync(resolved?.plainText ?? state.content);
