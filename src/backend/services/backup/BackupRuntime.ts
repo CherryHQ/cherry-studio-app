@@ -6,11 +6,14 @@ import { Platform } from 'react-native';
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import {
+  assertBackupBelongsToActiveProfile,
   bundledBackupVersion,
   captureDatabase,
   normalizeBackupDatabase,
+  prepareEnterpriseBackup,
   prepareRestoredDatabase,
   readDevicePreferences,
+  withBackupDatabase,
 } from '@/backend/data/db/backupDatabase';
 import type { DbService } from '@/backend/data/db/DbService';
 import {
@@ -111,6 +114,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           await captureDatabase(this.dbService.getSqlite(), database);
           requireDiskSpace(database.size);
           await normalizeBackupDatabase(database, version, 'export');
+          await withBackupDatabase(database, prepareEnterpriseBackup);
           resources = await captureResources(storageDirectory(), work, signal);
         } finally {
           release();
@@ -226,6 +230,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
         const database = archiveFile(extracted, 'database/cherry.db');
         requireDiskSpace(database.size);
         await normalizeBackupDatabase(database, manifest);
+        await withBackupDatabase(database, assertBackupBelongsToActiveProfile);
         await validateResourceReferences(extracted, manifest);
         signal.throwIfAborted();
         this.candidate = { directory: work, manifest };

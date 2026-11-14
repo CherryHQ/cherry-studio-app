@@ -22,6 +22,9 @@ if (process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true') {
   // Install reporting before Expo Router evaluates route modules and the root layout.
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- ordering is intentional
   require('./src/frontend/appShell/observability/startup');
+  // Profile-owned stores open while route modules load, so the profile is chosen first.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- ordering is intentional
+  require('./src/bootstrap/profile/installationProfiles').selectActiveProfile();
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- import would hoist
   require('expo-router/entry');
 }

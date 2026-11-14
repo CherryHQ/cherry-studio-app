@@ -32,7 +32,11 @@ silently skipping data. The live source database and the user's selected archive
 Normalization scratch databases stay inside the operation directory, so normal cleanup and the
 existing startup sweep of previous processes' backup directories also remove interrupted copies.
 
-Archives are unencrypted and include database-held model keys and remote server headers. They exclude
+An enterprise profile's archive keeps conversations and Agents and leaves out the organization's
+keys, instructions and other delivered resources. Each archive restores only into the data it came
+from: local data into the local profile, an enterprise archive into the same identity; see
+[Enterprise Edition](../../../../docs/references/enterprise.md#backup). Archives are unencrypted and
+include the user's own database-held model keys and remote server headers. They exclude
 SecureStore values, desktop pairing tokens, device permissions, caches, logs and extracted documents.
 System sharing presents save destinations; opening or dismissing the share sheet is not proof of
 successful saving.

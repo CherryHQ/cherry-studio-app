@@ -1,4 +1,5 @@
 import type { DbService } from '@/backend/data/db/DbService';
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import { installLogWriter } from '@/shared/core/logger/LoggerService';
 
 import { DiagnosticBundleService } from '../DiagnosticBundleService';
@@ -11,6 +12,7 @@ const mockWriteZip = jest.fn(
   ) => {},
 );
 const mockUpload = jest.fn();
+const mockCleanup = jest.fn(async () => {});
 let mockUploadAvailable = true;
 const mockDeletedPaths: string[] = [];
 const mockCopy = jest.fn();
@@ -48,6 +50,12 @@ jest.mock('@/backend/data/services/diagnosticPluginState', () => ({
 }));
 jest.mock('../systemInfo', () => ({
   collectDiagnosticSystemInfo: () => ({ operatingSystem: { platform: 'ios' } }),
+}));
+jest.mock('@/backend/utils/diagnosticTemporaryFiles', () => ({
+  ...jest.requireActual<typeof import('@/backend/utils/diagnosticTemporaryFiles')>(
+    '@/backend/utils/diagnosticTemporaryFiles',
+  ),
+  cleanupDiagnosticTemporaryDirectories: () => mockCleanup(),
 }));
 jest.mock('../sourceCollector', () => ({
   collectDiagnosticSources: async () => ({ logs: [], traces: [], warnings: new Set() }),
@@ -97,8 +105,10 @@ const mockSnapshot = jest.fn(async () => snapshot);
 
 const input = { description: 'The app stopped responding.' };
 beforeEach(() => {
+  installDiagnosticContextReader(() => ({}));
   jest.clearAllMocks();
   mockUploadAvailable = true;
+  mockCleanup.mockReset().mockResolvedValue(undefined);
   mockCopy.mockReset();
   mockScreenshotSize = 123;
   mockWriteZip.mockReset();
@@ -116,6 +126,29 @@ function service() {
 function manifest(call = 0) {
   return JSON.parse(mockWriteZip.mock.calls[call][1][0].content);
 }
+
+test('startup cleanup failure does not prevent feedback submission', async () => {
+  mockCleanup.mockRejectedValueOnce(new Error('temporary files unavailable'));
+  const diagnostics = service();
+  await expect(diagnostics._doInit()).resolves.toBeUndefined();
+  await expect(diagnostics.uploadBundle(input)).resolves.toEqual({ status: 'submission_unknown' });
+  expect(mockCleanup).toHaveBeenCalledTimes(1);
+  expect(mockUpload).toHaveBeenCalledTimes(1);
+});
+
+test('captures the submitting account before asynchronous collection can observe an account change', async () => {
+  let subject = 'submitter';
+  installDiagnosticContextReader(() => ({ accountSubjectId: subject }));
+  mockSnapshot.mockImplementationOnce(async () => {
+    subject = 'next-account';
+    return snapshot;
+  });
+  await service().uploadBundle(input);
+  expect(manifest().submissionContext).toEqual({
+    capturedAt: manifest().range.to,
+    accountSubjectId: 'submitter',
+  });
+});
 
 test('flushes pending log summaries before taking a trace snapshot', async () => {
   const flush = jest.fn();

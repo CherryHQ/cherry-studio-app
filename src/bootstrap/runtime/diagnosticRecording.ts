@@ -3,12 +3,15 @@ import { AppState } from 'react-native';
 // Leaf import: the module root would evaluate the bundle service and its database schemas here,
 // at the app's first import.
 import { createDiagnosticLogWriter } from '@/backend/services/diagnostics/diagnosticRecording';
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import {
   flushLogWriter,
   installLogWriter,
   loggerService,
 } from '@/shared/core/logger/LoggerService';
 import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
+
+import { captureDiagnosticContext } from './diagnosticContext';
 
 type RejectionOptions = {
   allRejections: boolean;
@@ -25,6 +28,7 @@ type RuntimeGlobals = {
 // A process-level log sink must also survive a failed/replaced ApplicationHost.
 const logger = loggerService.withContext('CrashTelemetry');
 try {
+  installDiagnosticContextReader(captureDiagnosticContext);
   installLogWriter(createDiagnosticLogWriter());
   // This observer has the same app-entry process lifetime as the installed writer.
   AppState.addEventListener('change', (state) => {

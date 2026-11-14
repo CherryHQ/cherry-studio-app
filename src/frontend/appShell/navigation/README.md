@@ -14,7 +14,8 @@ domains.
   These entry points always open regular provider settings. First-use routes opt into their
   setup presentation explicitly; URL parameters cannot activate it from ordinary settings.
 - `FirstUseGate` owns first-use admission before restoring a chat target. It preserves existing
-  installations and lets skipped/completed users enter chat normally.
+  installations and lets skipped/completed users enter chat normally. An enterprise profile always
+  enters chat, because the organization owns provider and default-model setup.
   It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
   destination. Background refreshes do not unmount the admitted chat.
 - Chat routes without an explicit target open a draft for the last-used local Agent, stored in

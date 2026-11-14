@@ -1,3 +1,4 @@
+import { projectDiagnosticContext } from '@/backend/utils/diagnosticContext';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { AiFailureReasonSchema } from '@/shared/contracts/aiFailure';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
@@ -249,6 +250,7 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
           ? 'Application error'
           : 'Application warning',
     facts,
+    environment: projectDiagnosticContext(record.environment),
     repetition:
       record.capture === 'metadata'
         ? projectRepetition(record.repetition, record.timestamp)
@@ -275,6 +277,7 @@ export function projectDiagnosticTrace(value: unknown) {
   }
   return {
     ...record,
+    environment: projectDiagnosticContext(record.environment),
     processId: diagnosticIdentifier(record.processId) ?? 'unknown',
     context: Object.fromEntries(
       Object.entries(record.context).flatMap(([key, value]) => {

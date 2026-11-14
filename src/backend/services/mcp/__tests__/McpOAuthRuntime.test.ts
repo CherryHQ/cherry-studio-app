@@ -7,6 +7,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 
 import { createHttpClient, HttpError } from '@/backend/services/http';
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 
 import { McpOAuthRuntime } from '../McpOAuthRuntime';
 
@@ -46,6 +47,7 @@ const issuer = 'https://auth.example';
 const token = { access_token: 'test-access', refresh_token: 'test-refresh', token_type: 'Bearer' };
 const storage = new Map<string, string>();
 beforeEach(() => {
+  setActiveProfile(LOCAL_PROFILE);
   jest.clearAllMocks();
   mockExpoFetch.mockResolvedValue(new Response(null, { status: 401 }));
   storage.clear();
@@ -71,6 +73,7 @@ beforeEach(() => {
   });
   jest.mocked(exchangeAuthorization).mockResolvedValue(token);
 });
+afterEach(() => setActiveProfile(LOCAL_PROFILE));
 async function begin(runtime: McpOAuthRuntime) {
   const attempt = await runtime.begin({ name: 'Server', endpointUrl, clientId: 'public-client' });
   const callback = new URL(attempt.redirectUrl);
@@ -81,6 +84,48 @@ async function begin(runtime: McpOAuthRuntime) {
 }
 
 describe('native remote MCP authorization', () => {
+  it('isolates grants by profile while keeping previously published local keys reachable', async () => {
+    const local = new McpOAuthRuntime();
+    const started = await begin(local);
+    const grant = await local.complete(started.attempt.attemptId, started.callback.href);
+    const config = { endpointUrl, oauth: grant };
+    expect(storage.has(`mcp-oauth.${grant.authorizationId}`)).toBe(true);
+    await local.stop();
+
+    const enterpriseProfile = {
+      id: 'enterprise',
+      address: 'https://enterprise.example',
+      identity: { authentication: 'password' as const, deployment: 'server', subject: 'user' },
+    };
+    setActiveProfile(enterpriseProfile);
+    const enterprise = new McpOAuthRuntime();
+    await expect(enterprise.token(config, new AbortController().signal)).rejects.toMatchObject({
+      code: 'reauthorize',
+    });
+    jest.mocked(exchangeAuthorization).mockResolvedValue({ ...token, access_token: 'enterprise' });
+    const next = await begin(enterprise);
+    await enterprise.complete(next.attempt.attemptId, next.callback.href);
+    await expect(enterprise.token(config, new AbortController().signal)).resolves.toBe(
+      'enterprise',
+    );
+    await enterprise.stop();
+
+    setActiveProfile(LOCAL_PROFILE);
+    const reopenedLocal = new McpOAuthRuntime();
+    await expect(reopenedLocal.token(config, new AbortController().signal)).resolves.toBe(
+      'test-access',
+    );
+    await reopenedLocal.remove(grant.authorizationId);
+    await reopenedLocal.stop();
+
+    setActiveProfile(enterpriseProfile);
+    const reopenedEnterprise = new McpOAuthRuntime();
+    await expect(reopenedEnterprise.token(config, new AbortController().signal)).resolves.toBe(
+      'enterprise',
+    );
+    await reopenedEnterprise.stop();
+  });
+
   it('routes SDK discovery, registration, exchange and refresh through the shared HTTP transport', async () => {
     const discovery =
       await jest.mocked(discoverOAuthServerInfo).getMockImplementation()!(endpointUrl);

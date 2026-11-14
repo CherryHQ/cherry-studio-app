@@ -32,6 +32,11 @@ import {
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
 import {
+  assertEnterpriseSessionAdmitted,
+  guardMethods,
+  providerSettingsChecks,
+} from './managedResources';
+import {
   assertCustomProviderEndpointConfiguration,
   getRemovedConfiguredChatEndpoints,
 } from './providerModelEndpointIntegrity';
@@ -544,6 +549,7 @@ export class ProviderService {
 
   /** Select a serving key and capture its non-secret identity atomically. */
   async resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey> {
+    await assertEnterpriseSessionAdmitted();
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {
@@ -796,6 +802,19 @@ export class ProviderService {
     await this.dbService.withWriteTx((tx) => batchUpsertProviders(tx, inputs));
   }
 }
+
+// The organization supplies an enterprise profile's providers.
+guardMethods(
+  ProviderService,
+  providerSettingsChecks<ProviderService>('provider', [
+    'create',
+    'update',
+    'replaceApiKeys',
+    'updateApiKey',
+    'delete',
+    'batchUpsert',
+  ]),
+);
 
 export const providerService = new ProviderService();
 
