@@ -391,9 +391,10 @@ projection:
   straight branch with sibling groups reset; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
-  "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
-  ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
-  preserves order while stamping "now" on every row would be visibly wrong in the UI.
+  "never set timestamps by hand" rule: copies retain the original history times rather than
+  appearing newly created. Transcript order follows the source parent chain, including steered
+  inputs whose execution order differs from reservation time; the copied rows reconnect that chain
+  with their reissued IDs.
   `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
   the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
   multi-row statements with ids generated in transcript order.
@@ -408,9 +409,12 @@ projection:
   checkpoint that may have absorbed the deleted content cannot be replayed without putting that
   content back in front of the model. The cost is a full replay, and usually a fresh compaction,
   on the next turn. The Session's own `forkBoundaryMessageId` is cleared when it names a deleted
-  row, and `lastActivityAt` rewinds to the newest surviving message, since a deleted turn is no
-  longer activity to sort by. The FTS delete trigger keeps the index consistent with no extra
-  work; `ai_usage_record` rows are a separate ledger and deliberately survive.
+  row, and `lastActivityAt` is recomputed as the maximum surviving message activity: an assistant's
+  `stats.runtimeTiming.completedAt` when present, otherwise the message's `createdAt`. Parallel
+  answers may finish out of creation order, so deleting an older turn retains their latest
+  completion; deleting the latest activity allows recency to rewind. The FTS delete trigger keeps
+  the index consistent with no extra work; `ai_usage_record` rows are a separate ledger and
+  deliberately survive.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

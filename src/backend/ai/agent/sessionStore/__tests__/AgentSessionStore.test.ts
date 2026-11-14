@@ -2038,6 +2038,64 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(readActivity()).toBe(keptActivity);
   });
 
+  test('deletion uses surviving completion times when parallel answers finish out of order', async () => {
+    const { store } = harness;
+    const baseTime = 2_000_000_000_000;
+    jest.useFakeTimers({ now: baseTime });
+    try {
+      const session = await harness.createEmptySession({ agentId: await harness.makeAgentId() });
+      const older = await settleTurn(store, session.id, 'Earlier question');
+      jest.setSystemTime(baseTime + 100);
+      const parallel = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'question', type: 'text', text: 'Compare', state: 'done' }],
+        additionalReplies: [{ assistantMessageId: uuidv7(), ...RESERVATION_FACTS }],
+      });
+      const [second] = parallel.additionalAssistantMessages;
+      for (const { assistantMessageId, completedAt } of [
+        { assistantMessageId: second!.id, completedAt: baseTime + 200 },
+        { assistantMessageId: parallel.assistantMessage.id, completedAt: baseTime + 300 },
+      ]) {
+        jest.setSystemTime(completedAt);
+        await store.finalizeAssistantMessage({
+          assistantMessageId,
+          status: 'success',
+          parts: [],
+          usage: null,
+          error: null,
+          contextCheckpoint: null,
+          runtimeStats: { runtimeTiming: terminalTiming() },
+        });
+      }
+      const readActivity = () =>
+        (
+          harness.raw
+            .prepare('SELECT last_activity_at AS lastActivityAt FROM agent_session WHERE id = ?')
+            .get(session.id) as { lastActivityAt: number }
+        ).lastActivityAt;
+      expect(readActivity()).toBe(baseTime + 300);
+
+      await store.deleteTurn({ sessionId: session.id, turnId: older.turnId });
+
+      expect(readActivity()).toBe(baseTime + 300);
+      expect(
+        (await store.listTurnMessages(session.id, parallel.turnId)).map((row) => row.id),
+      ).toEqual([parallel.userMessage.id, parallel.assistantMessage.id, second!.id]);
+
+      await store.deleteTurn({
+        sessionId: session.id,
+        turnId: parallel.turnId,
+        messageId: parallel.assistantMessage.id,
+      });
+
+      expect(readActivity()).toBe(baseTime + 200);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('publishes the complete fork after commit and skips rejected forks', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
