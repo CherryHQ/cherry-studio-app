@@ -1,5 +1,4 @@
 import { type ReactNode, useLayoutEffect } from 'react';
-import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -284,9 +283,7 @@ it.each(['sessions', 'agents'] as const)(
       true,
       { includeBranches: true },
     );
-    const rows = renderer.root
-      .findAllByType(Pressable)
-      .filter((node) => node.props.accessibilityRole === 'link');
+    const rows = renderer.root.findAllByProps({ accessibilityRole: 'link' }, { deep: false });
     expect(rows.map((row) => row.props.testID)).toEqual([
       'sidebar-session-branch',
       'sidebar-session-session-1',
