@@ -137,6 +137,7 @@ it('reads earlier citation facts on the selected branch without changing the mes
         id: `${id}-tool`,
         type: 'dynamic-tool',
         toolName: 'web_search',
+        title: 'web_search',
         toolCallId: `${id}-call`,
         toolRef: { source: 'builtin', capabilityId: 'web_search' },
         input: { query: 'source' },

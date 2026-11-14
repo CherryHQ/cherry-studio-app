@@ -44,7 +44,10 @@ function Probe({
   }, [value]);
   return null;
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
 it('admits prose before deferred tool sources finish and resolves without opening a detail', async () => {
   let resolve!: (value: ResourceValue) => void;
@@ -105,18 +108,18 @@ it('does not reuse earlier lookup facts across a history revision or desktop sco
   );
   await act(async () => {
     row = create(render('desktop-a/session', '1'));
-    await settle();
   });
+  await act(settle);
   expect(current[0].display.data.citationSources?.[0].title).toBe('1');
   await act(async () => {
     row.update(render('desktop-a/session', '2'));
-    await settle();
   });
+  await act(settle);
   expect(current[0].display.data.citationSources?.[0].title).toBe('2');
   await act(async () => {
     row.update(render('desktop-b/session', '2'));
-    await settle();
   });
+  await act(settle);
   expect(current[0].display.data.citationSources?.[0].title).toBe('3');
   expect(reader).toHaveBeenCalledTimes(3);
   await act(async () => row.unmount());
