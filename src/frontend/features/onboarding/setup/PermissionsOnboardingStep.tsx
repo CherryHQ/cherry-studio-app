@@ -57,7 +57,7 @@ export function PermissionsOnboardingStep({ progress }: { progress: OnboardingPr
       testID="onboarding-permissions"
       title={t('onboarding.permissions.title')}
     >
-      <View className="flex-row flex-wrap gap-3">
+      <View className="gap-3">
         {permissionKinds
           .filter((kind) => isPermissionSupported(kind, statuses))
           .map((kind) => (
@@ -74,7 +74,7 @@ export function PermissionsOnboardingStep({ progress }: { progress: OnboardingPr
   );
 }
 
-/** The onboarding owns the tile; settings and onboarding use the same permission action. */
+/** The onboarding owns the row; settings and onboarding use the same permission action. */
 function PermissionOption({
   disabled,
   kind,
@@ -93,7 +93,6 @@ function PermissionOption({
     refresh,
   });
   const Icon = ICONS[kind];
-  const wide = kind === 'camera';
   const settled = status?.state === 'granted' || status?.state === 'requested';
   const label = t(`settings.permissions.type.${kind}`);
   const statusText = status
@@ -102,9 +101,9 @@ function PermissionOption({
   const actionLabel = action ? t(`settings.permissions.action.${action}`) : '';
   const blocked = disabled || pending || !action;
   const statusLabel = (
-    <View className="flex-row items-center gap-1">
-      {settled && !pending ? <CheckIcon className="size-3.5 text-foreground" /> : null}
-      <Text className="text-xs text-muted-foreground">
+    <View className="min-w-0 shrink flex-row items-center justify-end gap-1">
+      {settled && !pending ? <CheckIcon className="size-3.5 shrink-0 text-foreground" /> : null}
+      <Text className="shrink text-right text-xs text-muted-foreground">
         {pending ? t('onboarding.loading') : settled ? statusText : actionLabel || statusText}
       </Text>
     </View>
@@ -116,28 +115,21 @@ function PermissionOption({
       accessibilityRole="button"
       accessibilityState={{ disabled: blocked, busy: pending }}
       className={cn(
-        'gap-3 rounded-2xl border border-border p-4 active:opacity-70',
-        wide ? 'min-h-20 flex-row items-center gap-4' : 'min-h-32',
+        'min-h-20 flex-row items-center gap-4 rounded-2xl border border-border p-4 active:opacity-70',
         (pending || disabled) && 'opacity-50',
       )}
       disabled={blocked}
       onPress={() => void handlePress()}
-      style={{ flexBasis: wide ? '100%' : '45%', flexGrow: 1 }}
       testID={`onboarding-permission-${kind}`}
     >
-      {wide ? (
-        <Icon className="size-5 text-foreground" />
-      ) : (
-        <View className="flex-row items-center justify-between gap-2">
-          <Icon className="size-5 text-foreground" />
+      <Icon className="size-5 shrink-0 text-foreground" />
+      <View className="min-w-0 flex-1 gap-1">
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="shrink font-medium text-base text-foreground">{label}</Text>
           {statusLabel}
         </View>
-      )}
-      <View className={cn('gap-1', wide && 'min-w-0 flex-1')}>
-        <Text className="font-medium text-base text-foreground">{label}</Text>
         <Text className="text-sm text-muted-foreground">{t(`onboarding.permissions.${kind}`)}</Text>
       </View>
-      {wide ? statusLabel : null}
     </Pressable>
   );
 }

@@ -148,7 +148,11 @@ export function OnboardingPage({
   );
 
   return (
-    <KeyboardAvoidingView behavior="padding" enabled={variant !== 'content'} style={{ flex: 1 }}>
+    <KeyboardAvoidingView
+      behavior="padding"
+      enabled={variant !== 'content' && variant !== 'list'}
+      style={{ flex: 1 }}
+    >
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }} testID={testID}>
         <View ref={root} className="flex-1" onLayout={measure}>
           <View
@@ -210,10 +214,17 @@ export function OnboardingPage({
               <View className="min-h-0 flex-1">{children}</View>
             </>
           ) : variant === 'list' ? (
-            <View className="min-h-0 flex-1 gap-6 pt-6">
-              <View className="px-6">{heading}</View>
-              {children}
-            </View>
+            // Keep list actions at the page bottom while the keyboard resizes only the content.
+            <KeyboardAvoidingView
+              automaticOffset
+              behavior="padding"
+              style={{ flex: 1, minHeight: 0 }}
+            >
+              <View className="min-h-0 flex-1 gap-6 pt-6">
+                <View className="px-6">{heading}</View>
+                {children}
+              </View>
+            </KeyboardAvoidingView>
           ) : (
             <ScrollView
               automaticallyAdjustKeyboardInsets={false}
