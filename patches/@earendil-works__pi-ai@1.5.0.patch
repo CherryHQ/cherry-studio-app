@@ -1,4 +1,5 @@
 diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index de2b2d8c209f5576c18b020de297d4ef5fad5960..8a963c5704073df0f54ef806d05fe9a1f4ca2f2d 100644
 --- a/dist/api/anthropic-messages.js
 +++ b/dist/api/anthropic-messages.js
 @@ -1,7 +1,8 @@
@@ -11,7 +12,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { getIdentityHeaders } from "../utils/identity.js";
-@@ -351,7 +352,14 @@
+@@ -351,7 +352,14 @@ async function* iterateAnthropicEvents(response, signal) {
      let sawMessageEnd = false;
      for await (const sse of iterateSseMessages(response.body, signal)) {
          if (sse.event === "error") {
@@ -27,7 +28,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -701,7 +709,13 @@
+@@ -701,7 +709,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -42,6 +43,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
              stream.end();
          }
 diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
+index e6a50f20ab31a3f3de0d2a71190dd98b6f1d401d..fadb936ab37c7a3ac345511c042c892fe94652e5 100644
 --- a/dist/api/azure-openai-responses.js
 +++ b/dist/api/azure-openai-responses.js
 @@ -1,5 +1,6 @@
@@ -51,7 +53,7 @@ diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-response
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
-@@ -86,7 +87,13 @@
+@@ -86,7 +87,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -66,6 +68,7 @@ diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-response
              stream.end();
          }
 diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
+index feb37cc3b55ab8011b12e316ee41203194d84fa6..748c13458c74fc47abab21730fe1d5af1a6c1202 100644
 --- a/dist/api/google-generative-ai.js
 +++ b/dist/api/google-generative-ai.js
 @@ -1,5 +1,6 @@
@@ -75,7 +78,7 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -33,14 +34,11 @@
+@@ -33,14 +34,11 @@ export const stream = (model, context, options) => {
              timestamp: Date.now(),
          };
          try {
@@ -91,7 +94,7 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
              let params = buildParams(model, normalizedContext, options);
              const nextParams = await options?.onPayload?.(params, model);
              if (nextParams !== undefined) {
-@@ -220,7 +218,13 @@
+@@ -220,7 +218,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -106,7 +109,7 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -261,8 +265,11 @@
+@@ -261,8 +265,11 @@ export const streamSimple = (model, context, options) => {
          },
      });
  };
@@ -120,6 +123,7 @@ diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
          httpOptions.baseUrl = model.baseUrl;
          httpOptions.apiVersion = ""; // baseUrl already includes version path, don't append
 diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
+index 9ef58caf6a76cdece4643120045ba995307ce0f2..abb54348969c2f1ace298366a48506d47872a8c0 100644
 --- a/dist/api/google-vertex.d.ts
 +++ b/dist/api/google-vertex.d.ts
 @@ -1,6 +1,8 @@
@@ -131,7 +135,7 @@ diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
      toolChoice?: "auto" | "none" | "any";
      thinking?: {
          enabled: boolean;
-@@ -11,5 +13,5 @@
+@@ -11,5 +13,5 @@ export interface GoogleVertexOptions extends StreamOptions {
      location?: string;
  }
  export declare const stream: StreamFunction<"google-vertex", GoogleVertexOptions>;
@@ -140,6 +144,7 @@ diff --git a/dist/api/google-vertex.d.ts b/dist/api/google-vertex.d.ts
  //# sourceMappingURL=google-vertex.d.ts.map
 \ No newline at end of file
 diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
+index 1b7cb58ec7ad745938a5684014867601454acdcb..9f262e41a5293a0358c651768920354a9744426b 100644
 --- a/dist/api/google-vertex.js
 +++ b/dist/api/google-vertex.js
 @@ -1,5 +1,6 @@
@@ -149,7 +154,7 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { providerHeadersToRecord } from "../utils/headers.js";
-@@ -36,14 +37,15 @@
+@@ -36,14 +37,15 @@ export const stream = (model, context, options) => {
              timestamp: Date.now(),
          };
          try {
@@ -171,7 +176,7 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
              let params = buildParams(model, normalizedContext, options);
              const nextParams = await options?.onPayload?.(params, model);
              if (nextParams !== undefined) {
-@@ -222,7 +224,13 @@
+@@ -222,7 +224,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -186,7 +191,7 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -233,6 +241,7 @@
+@@ -233,6 +241,7 @@ export const streamSimple = (model, context, options) => {
      const base = {
          ...buildBaseOptions(model, context, options, undefined),
          toolChoice: options?.toolChoice,
@@ -194,7 +199,7 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
      };
      if (!options?.reasoning) {
          return stream(model, context, {
-@@ -265,6 +274,21 @@
+@@ -265,6 +274,21 @@ export const streamSimple = (model, context, options) => {
          },
      });
  };
@@ -217,9 +222,10 @@ diff --git a/dist/api/google-vertex.js b/dist/api/google-vertex.js
      const googleAuthOptions = buildGoogleAuthOptions(env);
      return new GoogleGenAI({
 diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
+index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20f9d92ba8 100644
 --- a/dist/api/openai-codex-responses.js
 +++ b/dist/api/openai-codex-responses.js
-@@ -302,7 +302,12 @@
+@@ -302,7 +302,12 @@ export const stream = (model, context, options) => {
                          statusText: response.statusText,
                      });
                      const info = await parseErrorResponse(fakeResponse);
@@ -233,7 +239,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
                  }
                  catch (error) {
                      if (error instanceof Error) {
-@@ -342,7 +347,13 @@
+@@ -342,7 +347,13 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -248,7 +254,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1243,12 +1254,13 @@
+@@ -1243,12 +1254,13 @@ async function parseErrorResponse(response) {
      const raw = await response.text();
      let message = raw || response.statusText || "Request failed";
      let friendlyMessage;
@@ -264,7 +270,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
                  const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";
                  const mins = err.resets_at
                      ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
-@@ -1260,7 +1272,7 @@
+@@ -1260,7 +1272,7 @@ async function parseErrorResponse(response) {
          }
      }
      catch { }
@@ -274,6 +280,7 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
  // ============================================================================
  // Auth & Headers
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb594dd805e9 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,5 +1,6 @@
@@ -283,7 +290,55 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { shortHash } from "../utils/hash.js";
-@@ -427,6 +428,10 @@
+@@ -412,8 +413,7 @@ export const stream = (model, context, options) => {
+                             appendOpenAIReasoningDetail(streamedReasoningDetails, detail);
+                         }
+                     }
+-                    if (choice.delta.content !== null &&
+-                        choice.delta.content !== undefined &&
++                    if (typeof choice.delta.content === "string" &&
+                         choice.delta.content.length > 0) {
+                         const block = ensureTextBlock();
+                         block.text += choice.delta.content;
+@@ -424,9 +424,48 @@ export const stream = (model, context, options) => {
+                             partial: output,
+                         });
+                     }
++                    else if (Array.isArray(choice.delta.content)) {
++                        for (const chunk of choice.delta.content) {
++                            if (!chunk || typeof chunk !== "object" || Array.isArray(chunk))
++                                continue;
++                            if (chunk.type === "text" && typeof chunk.text === "string" && chunk.text.length > 0) {
++                                const block = ensureTextBlock();
++                                block.text += chunk.text;
++                                stream.push({
++                                    type: "text_delta",
++                                    contentIndex: getContentIndex(block),
++                                    delta: chunk.text,
++                                    partial: output,
++                                });
++                            }
++                            else if (!foundReasoningField && chunk.type === "thinking" && Array.isArray(chunk.thinking)) {
++                                let delta = "";
++                                for (const child of chunk.thinking) {
++                                    if (child && typeof child === "object" && !Array.isArray(child) &&
++                                        child.type === "text" && typeof child.text === "string") {
++                                        delta += child.text;
++                                    }
++                                }
++                                if (delta.length > 0) {
++                                    const block = ensureThinkingBlock(undefined);
++                                    block.thinking += delta;
++                                    stream.push({
++                                        type: "thinking_delta",
++                                        contentIndex: getContentIndex(block),
++                                        delta,
++                                        partial: output,
++                                    });
++                                }
++                            }
++                        }
++                    }
                      if (choice?.delta?.tool_calls) {
                          for (const toolCall of choice.delta.tool_calls) {
                              const { block, state } = ensureToolCallBlock(toolCall);
@@ -294,7 +349,7 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
                              if (!block.id && toolCall.id) {
                                  block.id = toolCall.id;
                                  toolCallBlocksById.set(toolCall.id, block);
-@@ -484,7 +489,13 @@
+@@ -484,7 +523,13 @@ export const stream = (model, context, options) => {
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -309,7 +364,7 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
              // Some providers via OpenRouter give additional information in this field.
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
-@@ -1021,6 +1032,9 @@
+@@ -1021,6 +1066,9 @@ export function convertMessages(model, context, compat, options) {
                              },
                          };
                      }
@@ -319,7 +374,7 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
                      return {
                          id: tc.id,
                          type: "function",
-@@ -1028,6 +1042,9 @@
+@@ -1028,6 +1076,9 @@ export function convertMessages(model, context, compat, options) {
                              name: tc.name,
                              arguments: JSON.stringify(tc.arguments),
                          },
@@ -330,9 +385,10 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
                  });
              }
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index 3901bfc4bc6dee0eb45a209dbcbdb59d6c55d054..e9ab0623ae51a68856b0a6a7cddaf7ff9b94bbc6 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
-@@ -685,7 +685,10 @@
+@@ -685,7 +685,10 @@ export async function processResponsesStream(openaiStream, output, stream, model
              finalizeResponse(event.response);
          }
          else if (event.type === "error") {
@@ -344,7 +400,7 @@ diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-sha
          }
          else if (event.type === "response.failed") {
              sawTerminalResponseEvent = true;
-@@ -697,7 +700,7 @@
+@@ -697,7 +700,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
                  : details?.reason
                      ? `incomplete: ${details.reason}`
                      : "Unknown error (no error details in response)";
@@ -354,6 +410,7 @@ diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-sha
      }
      if (!sawTerminalResponseEvent) {
 diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+index 7b3b0d733c3495fd0815f563212acac457224dc0..7e115d8ece2144a3db487b91d0f07d5c3ceba56b 100644
 --- a/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
 @@ -1,6 +1,7 @@
@@ -364,7 +421,7 @@ diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { getIdentityHeaders } from "../utils/identity.js";
-@@ -173,7 +174,8 @@
+@@ -173,7 +174,8 @@ export const stream = (model, context, options) => {
          }
          catch (error) {
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -374,7 +431,7 @@ diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
              // Sign in with ChatGPT shares the subscription's usage limit with other apps.
              // On ChatGPT Business plans, the workspace admin also sets a per-user limit.
              if (errorMessage.includes("subscription_sharing_usage_limit_exceeded")) {
-@@ -185,6 +187,11 @@
+@@ -185,6 +187,11 @@ export const stream = (model, context, options) => {
              else {
                  output.errorMessage = errorMessage;
              }
@@ -386,8 +443,9 @@ diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-diff --git a/dist/auth/context.native.js b/dist/auth/context.native.js
+diff --git adist/auth/context.native.js b/dist/auth/context.native.js
 new file mode 100644
+index 0000000000000000000000000000000000000000..d6566ebc672b228de917c0643811734b89cea4ef
 --- /dev/null
 +++ b/dist/auth/context.native.js
 @@ -0,0 +1,7 @@
@@ -398,8 +456,9 @@ new file mode 100644
 +        fileExists: async () => false,
 +    };
 +}
-diff --git a/dist/auth/oauth/callback-server.native.js b/dist/auth/oauth/callback-server.native.js
+diff --git adist/auth/oauth/callback-server.native.js b/dist/auth/oauth/callback-server.native.js
 new file mode 100644
+index 0000000000000000000000000000000000000000..c19117c951d82e6a9a5c3479b8845c327e0e0fa9
 --- /dev/null
 +++ b/dist/auth/oauth/callback-server.native.js
 @@ -0,0 +1,50 @@
@@ -454,6 +513,7 @@ new file mode 100644
 +    }
 +}
 diff --git a/dist/auth/oauth/github-copilot.js b/dist/auth/oauth/github-copilot.js
+index 0f94684f4bde2caabad70f5d1f22e8cd742d1e77..3b6296b698c2adf1ad9b3e2f558d7a96db86bacd 100644
 --- a/dist/auth/oauth/github-copilot.js
 +++ b/dist/auth/oauth/github-copilot.js
 @@ -1,6 +1,7 @@
@@ -465,6 +525,7 @@ diff --git a/dist/auth/oauth/github-copilot.js b/dist/auth/oauth/github-copilot.
  import { sleep } from "../../utils/sleep.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
 diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
+index 6e99a8c61f2fdafaea0b8c2aeec5719a70ae69fa..f9b5c23c1677b1294c9079e6e7ac1e6ee4f10b0b 100644
 --- a/dist/auth/oauth/kimi-coding.js
 +++ b/dist/auth/oauth/kimi-coding.js
 @@ -5,6 +5,7 @@
@@ -475,7 +536,8 @@ diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
  import { getProviderEnvValue } from "../../utils/provider-env.js";
  import { sleep } from "../../utils/sleep.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
-@@ -181,6 +182,9 @@
+@@ -180,6 +181,9 @@ async function refreshToken(oauthHost, refreshTokenValue, signal) {
+             });
          }
          catch (error) {
 +            // Native fetch bindings preserve terminal OAuth rejection metadata.
@@ -484,8 +546,8 @@ diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
              lastError = error instanceof Error ? error : new Error(String(error));
              continue;
          }
-         const json = await readJson(response);
 diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
+index b543b9381352951833aeeaa1fc27ebdddda570bf..b87d3f5724a4f9c6604ea7f70bec245e905b30f6 100644
 --- a/dist/auth/oauth/openai-codex.js
 +++ b/dist/auth/oauth/openai-codex.js
 @@ -1,16 +1,10 @@
@@ -506,7 +568,7 @@ diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
  import { getProviderEnvValue } from "../../utils/provider-env.js";
  import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.js";
  import { pollOAuthDeviceCodeFlow } from "./device-code.js";
-@@ -33,10 +27,7 @@
+@@ -33,10 +27,7 @@ function getCallbackHost() {
      return getProviderEnvValue("PI_OAUTH_CALLBACK_HOST") || "127.0.0.1";
  }
  function createState() {
@@ -518,7 +580,8 @@ diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
  }
  function parseAuthorizationInput(input) {
      const value = input.trim();
-@@ -136,7 +127,7 @@
+@@ -135,7 +126,7 @@ async function refreshAccessToken(refreshToken, signal) {
+         });
      }
      catch (error) {
 -        throw new Error(`OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`);
@@ -526,8 +589,8 @@ diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
      }
      return readTokenResponse(response, "refresh");
  }
- async function startOpenAICodexDeviceAuth(signal) {
 diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
+index b9587c246449505a6f0e6e5bed96f050a05f48ef..e18bba567da8cd3c6ea8c518ab32d822bd234574 100644
 --- a/dist/auth/oauth/openrouter.js
 +++ b/dist/auth/oauth/openrouter.js
 @@ -10,6 +10,7 @@
@@ -539,6 +602,7 @@ diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
  import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.js";
  import { generatePKCE } from "./pkce.js";
 diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
+index d69bf462dfddde17f048f705f99f8c11c4ecfd07..bf24d3e5bcf0502d6e24f20670d75f27d9013f90 100644
 --- a/dist/auth/oauth/pkce.js
 +++ b/dist/auth/oauth/pkce.js
 @@ -1,3 +1,4 @@
@@ -546,7 +610,7 @@ diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
  /**
   * PKCE utilities using Web Crypto API.
   * Works in both Node.js 20+ and browsers.
-@@ -17,6 +18,8 @@
+@@ -17,6 +18,8 @@ function base64urlEncode(bytes) {
   * Uses Web Crypto API for cross-platform compatibility.
   */
  export async function generatePKCE() {
@@ -555,8 +619,9 @@ diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
      // Generate random verifier
      const verifierBytes = new Uint8Array(32);
      crypto.getRandomValues(verifierBytes);
-diff --git a/dist/auth/oauth/platform.d.ts b/dist/auth/oauth/platform.d.ts
+diff --git adist/auth/oauth/platform.d.ts b/dist/auth/oauth/platform.d.ts
 new file mode 100644
+index 0000000000000000000000000000000000000000..5693ef42314206ca8d348f0e3ad1676d3403304f
 --- /dev/null
 +++ b/dist/auth/oauth/platform.d.ts
 @@ -0,0 +1,6 @@
@@ -566,8 +631,9 @@ new file mode 100644
 +}): void;
 +export declare function oauthFetch(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): ReturnType<typeof fetch>;
 +export declare function platformPKCE(): Promise<{ verifier: string; challenge: string }> | undefined;
-diff --git a/dist/auth/oauth/platform.js b/dist/auth/oauth/platform.js
+diff --git adist/auth/oauth/platform.js b/dist/auth/oauth/platform.js
 new file mode 100644
+index 0000000000000000000000000000000000000000..01e9e24a043d89e4e58e6d6242ad7d03e2e97789
 --- /dev/null
 +++ b/dist/auth/oauth/platform.js
 @@ -0,0 +1,4 @@
@@ -576,6 +642,7 @@ new file mode 100644
 +export function oauthFetch(input, init) { return (platform?.fetch ?? globalThis.fetch)(input, init); }
 +export function platformPKCE() { return platform?.generatePKCE?.(); }
 diff --git a/dist/auth/oauth/xai.js b/dist/auth/oauth/xai.js
+index f70a3beaf50222a12006d8f4ffc951397d1a9b62..29bab79ba6ea19ef305e7f33798e1bc74b3c9462 100644
 --- a/dist/auth/oauth/xai.js
 +++ b/dist/auth/oauth/xai.js
 @@ -1,6 +1,7 @@
@@ -587,9 +654,10 @@ diff --git a/dist/auth/oauth/xai.js b/dist/auth/oauth/xai.js
  const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
  const XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access";
 diff --git a/dist/env-api-keys.js b/dist/env-api-keys.js
+index e27cf6f1015a5d0d0058df808b5737879eeb90c4..4c3d66faa784f16f1d604c6cac71eea1b523aba2 100644
 --- a/dist/env-api-keys.js
 +++ b/dist/env-api-keys.js
-@@ -10,7 +10,8 @@
+@@ -10,7 +10,8 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
  let _existsSync = null;
  let _homedir = null;
  let _join = null;
@@ -599,8 +667,9 @@ diff --git a/dist/env-api-keys.js b/dist/env-api-keys.js
  const NODE_FS_SPECIFIER = "node:" + "fs";
  const NODE_OS_SPECIFIER = "node:" + "os";
  const NODE_PATH_SPECIFIER = "node:" + "path";
-diff --git a/dist/native-oauth.d.ts b/dist/native-oauth.d.ts
+diff --git adist/native-oauth.d.ts b/dist/native-oauth.d.ts
 new file mode 100644
+index 0000000000000000000000000000000000000000..99aab2e56915d82cf23f7a7a1e502a1a0f96961c
 --- /dev/null
 +++ b/dist/native-oauth.d.ts
 @@ -0,0 +1,9 @@
@@ -613,8 +682,9 @@ new file mode 100644
 +export { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
 +export { openRouterOAuth } from "./auth/oauth/openrouter.ts";
 +export type * from "./auth/types.ts";
-diff --git a/dist/native-oauth.js b/dist/native-oauth.js
+diff --git adist/native-oauth.js b/dist/native-oauth.js
 new file mode 100644
+index 0000000000000000000000000000000000000000..84dd2ccd027d5ce91854ee1d4fc7932ca0c83134
 --- /dev/null
 +++ b/dist/native-oauth.js
 @@ -0,0 +1,8 @@
@@ -627,9 +697,10 @@ new file mode 100644
 +export { openaiCodexOAuth } from "./auth/oauth/openai-codex.js";
 +export { openRouterOAuth } from "./auth/oauth/openrouter.js";
 diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
+index 4c207b278438337ff61736ca388c317719ad2203..743e40b63705852397de5c994d5b6b8d2505a268 100644
 --- a/dist/utils/diagnostics.js
 +++ b/dist/utils/diagnostics.js
-@@ -8,7 +8,7 @@
+@@ -8,7 +8,7 @@ export function formatThrownValue(value) {
  export function extractDiagnosticError(error) {
      if (!(error instanceof Error))
          return { name: "ThrownValue", message: formatThrownValue(error) };
@@ -639,9 +710,10 @@ diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
          name: error.name || undefined,
          message: error.message || error.name,
 diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
+index 60c2521b69b3cb5ddfabbaa4c5aded9b37f8f64a..de01ff9b61b06e1d961152fd5ba99bbaf1aba003 100644
 --- a/dist/utils/error-body.js
 +++ b/dist/utils/error-body.js
-@@ -21,13 +21,22 @@
+@@ -21,14 +21,23 @@ export function normalizeProviderError(error) {
      const sdkError = error;
      const status = extractStatus(sdkError);
      const body = extractBody(sdkError);
@@ -654,20 +726,22 @@ diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
          message: error.message,
          messageCarriesBody,
      };
-+}
+ }
 +function extractRetryable(error) {
 +    if (typeof error.isRetryable === "boolean")
 +        return error.isRetryable;
 +    if (typeof error.retryable === "boolean")
 +        return error.retryable;
 +    return undefined;
- }
++}
  /**
   * Probe the HTTP status, first numeric hit wins, in SDK-field order:
+  * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
 diff --git a/dist/utils/retry.js b/dist/utils/retry.js
+index d33b8069b80bc454b0db59a221aba9332d522bf3..5a4378f5d671632fc94102d35181a6939619fb09 100644
 --- a/dist/utils/retry.js
 +++ b/dist/utils/retry.js
-@@ -203,11 +203,21 @@
+@@ -203,11 +203,21 @@ export async function retryAssistantCall(produce, policy, signal, callbacks) {
   * before restarting the assistant turn.
   */
  export function isRetryableAssistantError(message) {
@@ -693,6 +767,7 @@ diff --git a/dist/utils/retry.js b/dist/utils/retry.js
  //# sourceMappingURL=retry.js.map
 \ No newline at end of file
 diff --git a/package.json b/package.json
+index 57e8f262c954d7c9277adea1e49348e0bcb2212a..b7ed6c42077589fa80abe3528f8b9b1155d0540a 100644
 --- a/package.json
 +++ b/package.json
 @@ -46,6 +46,10 @@
