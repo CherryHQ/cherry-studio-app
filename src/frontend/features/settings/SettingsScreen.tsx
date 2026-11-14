@@ -63,6 +63,11 @@ export default function SettingsScreen() {
               onPress={() => router.push('/home/ai-usage')}
               testID="settings-ai-usage"
             />
+            <Section.Item
+              label={t('deepseek.title')}
+              onPress={() => router.push('/settings/deepseek')}
+              testID="settings-deepseek"
+            />
           </Section>
           <Section>
             <Section.Item

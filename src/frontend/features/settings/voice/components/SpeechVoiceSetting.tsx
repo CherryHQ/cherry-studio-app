@@ -13,24 +13,30 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
-  const [selected, setSelected] = usePreference('feature.voice.system_voice');
+  const [systemVoice, setSystemVoice] = usePreference('feature.voice.system_voice');
+  const [deepseek, setDeepseek] = usePreference('feature.deepseek.services');
+  const selected = engine === 'deepseek' ? deepseek.voice : systemVoice;
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const status = useQuery({
     queryKey: ['voice', 'engine-status', 'speech', engine],
     queryFn: ({ signal }) => voice.getEngineStatus('speech', engine, { signal }),
   });
-  const unavailable = status.data === 'unsupported';
+  const unavailable = status.data === 'unsupported' || status.data === 'needs-service';
   const voices = useQuery({
     queryKey: ['voice', 'voices', engine, i18n.resolvedLanguage],
     queryFn: ({ signal }) => voice.listVoices(engine, { signal }),
     enabled: status.data === 'ready',
   });
   const options = [
-    { value: '', label: t('settings.voice.defaultVoice') },
+    ...(engine === 'deepseek' ? [] : [{ value: '', label: t('settings.voice.defaultVoice') }]),
     ...speechVoiceOptions(voices.data ?? []),
   ];
   const change = (value: string) => {
-    void setSelected(value).catch(() => {
+    const save =
+      engine === 'deepseek' && (value === 'stella' || value === 'tide')
+        ? setDeepseek({ ...deepseek, voice: value })
+        : setSystemVoice(value);
+    void save.catch(() => {
       toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
     });
   };
@@ -42,13 +48,15 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
       <Section.SelectItem
         label={t('settings.voice.voice')}
         description={
-          unavailable
-            ? t('settings.voice.speech.systemUnavailable')
-            : status.isError || voices.isError
-              ? t('settings.voice.loadVoicesFailed')
-              : invalid
-                ? t('voice.error.invalidVoice')
-                : undefined
+          status.data === 'needs-service'
+            ? t('deepseek.setupRequired')
+            : unavailable
+              ? t('settings.voice.speech.systemUnavailable')
+              : status.isError || voices.isError
+                ? t('settings.voice.loadVoicesFailed')
+                : invalid
+                  ? t('voice.error.invalidVoice')
+                  : undefined
         }
         disabled={status.isPending || voices.isLoading || unavailable}
         onPress={() => {

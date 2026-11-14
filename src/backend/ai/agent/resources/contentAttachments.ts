@@ -38,6 +38,7 @@ export async function resolveManagedContentAttachments(
         ...metadata,
         type: 'text-attachment',
         text: content.text,
+        ...(file.revision !== undefined ? { revision: file.revision } : {}),
         truncated: report.sourceTruncated || report.requestTruncated,
       });
     } else {

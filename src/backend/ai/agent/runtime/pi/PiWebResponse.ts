@@ -30,6 +30,11 @@ const PiWebResultSchema = z.object({
   openaiItems: z.array(z.object({ after: z.string(), item: RuntimeJsonObjectSchema })).optional(),
   /** Complete Anthropic blocks, including signed thinking and pending server tools. */
   anthropicContent: z.array(RuntimeJsonObjectSchema).optional(),
+  deepseekCalls: z.array(RuntimeJsonObjectSchema).optional(),
+  deepseekReasoning: z.string().optional(),
+  deepseekItems: z
+    .array(z.object({ before: z.string().optional(), item: RuntimeJsonObjectSchema }))
+    .optional(),
   /** Gemini server-side tool parts, each before the content block at `before`. */
   googleParts: z
     .array(
@@ -61,11 +66,92 @@ export function applyPiWebReplay(
   const body = record(payload);
   if (!body) return payload;
   if (model.api === 'openai-responses' || model.api === 'azure-openai-responses')
-    return replayOpenAIItems(body, messages);
+    return replayDeepseekItems(replayOpenAIItems(body, messages), model, messages);
   if (model.api === 'google-generative-ai' || model.api === 'google-vertex')
     return replayGoogleParts(body, model, messages);
   if (model.api === 'anthropic-messages') return replayAnthropicContent(body, model, messages);
+  if (model.api === 'openai-completions') return replayDeepseekCalls(body, model, messages);
   return payload;
+}
+
+function replayDeepseekItems(
+  body: Record<string, unknown>,
+  model: Model<Api>,
+  messages: readonly Message[],
+): Record<string, unknown> {
+  if (!Array.isArray(body.input)) return body;
+  const input = [...body.input];
+  for (const message of messages) {
+    if (
+      message.role !== 'assistant' ||
+      message.provider !== model.provider ||
+      message.model !== model.id ||
+      message.api !== model.api
+    )
+      continue;
+    const web = readPiWebResult(message);
+    if (!web?.id || !web.deepseekItems?.length) continue;
+    const anchor = replayAnchor(web.id);
+    const isAnchor = (value: unknown) => {
+      const entry = record(value);
+      return (
+        entry?.role === 'assistant' &&
+        array(entry.content).some((part) => {
+          const text = record(part)?.text;
+          return typeof text === 'string' && text.includes(anchor);
+        })
+      );
+    };
+    const anchorIndex = input.findIndex(isAnchor);
+    if (anchorIndex < 0) continue;
+    for (const { before, item } of web.deepseekItems) {
+      const nextIndex = before ? input.findIndex((value) => record(value)?.id === before) : -1;
+      const index = nextIndex >= 0 ? nextIndex : input.findIndex(isAnchor);
+      input.splice(index, 0, item);
+    }
+  }
+  return { ...body, input };
+}
+
+function replayDeepseekCalls(
+  body: Record<string, unknown>,
+  model: Model<Api>,
+  messages: readonly Message[],
+): Record<string, unknown> {
+  if (!Array.isArray(body.messages)) return body;
+  const replayed = [...body.messages];
+  for (const message of messages) {
+    if (
+      message.role !== 'assistant' ||
+      message.provider !== model.provider ||
+      message.model !== model.id ||
+      message.api !== model.api
+    )
+      continue;
+    const web = readPiWebResult(message);
+    if (!web?.id || !web.deepseekCalls?.length) continue;
+    const anchor = replayAnchor(web.id);
+    const index = replayed.findIndex((value) => {
+      const entry = record(value);
+      return (
+        entry?.role === 'assistant' &&
+        (typeof entry.content === 'string'
+          ? entry.content.includes(anchor)
+          : array(entry.content).some(
+              (part) =>
+                typeof record(part)?.text === 'string' &&
+                String(record(part)?.text).includes(anchor),
+            ))
+      );
+    });
+    if (index < 0) continue;
+    replayed[index] = {
+      ...record(replayed[index]),
+      server_tool_calls: web.deepseekCalls,
+      ...(web.deepseekReasoning !== undefined ? { reasoning_content: web.deepseekReasoning } : {}),
+    };
+  }
+  return { ...body, messages: replayed };
 }
 
 function replayAnthropicContent(
@@ -147,7 +233,7 @@ function withoutStrandedAnthropicCalls(
             return (
               tool?.name === block.name &&
               typeof tool?.type === 'string' &&
-              tool.type.startsWith(`${String(block.name)}_`)
+              (tool.type === block.name || tool.type.startsWith(`${String(block.name)}_`))
             );
           }))
       );
@@ -313,11 +399,19 @@ export class PiWebResponse {
   /** Sources by the number the model writes in its own `[n]` markers. */
   private readonly numberedSources: (string | undefined)[] = [];
   private failed = false;
+  private deepseekCalls: RuntimeJsonObject[] = [];
+  private deepseekAnnotations: RuntimeJsonObject[] = [];
+  private deepseekReasoning: string | undefined;
+  private refused = false;
 
   constructor(
     private readonly sourcePrefix: string,
     private readonly dialect: PiWebDialect,
   ) {}
+
+  get contentFiltered(): boolean {
+    return this.refused;
+  }
 
   reset(): void {
     this.sourcesByUrl.clear();
@@ -342,6 +436,10 @@ export class PiWebResponse {
     this.answerCitations.length = 0;
     this.numberedSources.length = 0;
     this.failed = false;
+    this.deepseekCalls = [];
+    this.deepseekAnnotations = [];
+    this.deepseekReasoning = undefined;
+    this.refused = false;
   }
 
   /** A paused response continues as-is; keep earlier sources and their display offsets. */
@@ -357,8 +455,17 @@ export class PiWebResponse {
   observe(value: unknown): void {
     const event = record(value);
     if (!event) return;
+    if (this.dialect.startsWith('deepseek-')) {
+      const choice = record(array(event.choices)[0]);
+      const response = record(event.response);
+      this.refused ||=
+        choice?.finish_reason === 'content_filter' ||
+        record(event.delta)?.stop_reason === 'refusal' ||
+        record(response?.incomplete_details)?.reason === 'content_filter';
+    }
     switch (this.dialect) {
       case 'openai-responses':
+      case 'deepseek-responses':
       case 'openai-preview':
       case 'xai':
         return this.responsesEvent(event);
@@ -368,8 +475,11 @@ export class PiWebResponse {
         return;
       }
       case 'anthropic':
+      case 'deepseek-messages':
       case 'qwen-anthropic':
         return this.anthropicEvent(event);
+      case 'deepseek-chat':
+        return this.deepseekEvent(event);
       case 'openrouter':
         for (const value of array(record(record(array(event.choices)[0])?.delta)?.annotations)) {
           const citation = this.urlCitation(record(record(value)?.url_citation), 0);
@@ -396,8 +506,50 @@ export class PiWebResponse {
     }
   }
 
+  private deepseekEvent(event: Record<string, unknown>): void {
+    const choice = record(array(event.choices)[0]);
+    const delta = record(choice?.delta);
+    if (typeof delta?.reasoning_content === 'string')
+      this.deepseekReasoning = (this.deepseekReasoning ?? '') + delta.reasoning_content;
+    const progress = record(choice?.server_tool_event);
+    if (progress?.type === 'step_reasoning_done') this.deepseekReasoning = '';
+    const call = record(progress?.call);
+    if (call) this.deepseekSources(call);
+    if (Array.isArray(delta?.server_tool_calls)) {
+      this.deepseekCalls = delta.server_tool_calls.map((step) =>
+        RuntimeJsonObjectSchema.parse(step),
+      );
+      for (const step of this.deepseekCalls)
+        for (const value of array(step.calls)) {
+          const call = record(value);
+          if (call) this.deepseekSources(call);
+        }
+    }
+    if (Array.isArray(delta?.annotations))
+      this.deepseekAnnotations = delta.annotations.map((value) =>
+        RuntimeJsonObjectSchema.parse(value),
+      );
+  }
+
+  private deepseekSources(call: Record<string, unknown>): void {
+    if (call.status === 'failed') this.failed = true;
+    const page = record(call.page);
+    if (page) this.addSource(page.url, page.title);
+    for (const value of array(call.sources)) {
+      const source = record(value);
+      this.addSource(source?.url, source?.title);
+    }
+  }
+
   private responsesEvent(event: Record<string, unknown>): void {
     const item = record(event.item);
+    if (this.dialect === 'deepseek-responses' && item) {
+      this.deepseekSources(item);
+      for (const value of array(record(item.action)?.sources)) {
+        const source = record(value);
+        this.addSource(source?.url, source?.title);
+      }
+    }
     if (
       event.type === 'response.web_search_call.failed' ||
       event.type === 'response.x_search_call.failed'
@@ -431,6 +583,12 @@ export class PiWebResponse {
         const message = record(output);
         if (message?.type === 'message') this.openaiMessage(message);
         if (isSearchCall(message) && message.status === 'failed') this.failed = true;
+      }
+      if (this.dialect === 'deepseek-responses') {
+        array(record(event.response)?.output).forEach((value, index) => {
+          const item = record(value);
+          if (item) this.openaiItems.set(index, item);
+        });
       }
     }
   }
@@ -505,7 +663,59 @@ export class PiWebResponse {
 
   /** The terminal message Pi persists: signed text intact, display and replay facts attached. */
   settle(message: AssistantMessage): AssistantMessage {
-    const openaiItems = this.openaiReplayItems();
+    if (this.refused)
+      return {
+        ...message,
+        content: [],
+        stopReason: 'error',
+        rawStopReason: 'content_filter',
+        errorMessage: 'DeepSeek withheld this response after its content safety check.',
+      };
+    if (this.dialect === 'deepseek-chat') {
+      const text = message.content
+        .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+        .join('');
+      const characters = [...text];
+      for (const annotation of this.deepseekAnnotations) {
+        const source = record(annotation.url_citation);
+        if (
+          !source ||
+          !isOffset(source.start_index) ||
+          !isOffset(source.end_index) ||
+          source.end_index > characters.length
+        )
+          continue;
+        const citation = this.urlCitation(
+          {
+            ...source,
+            start_index: characters.slice(0, source.start_index).join('').length,
+            end_index: characters.slice(0, source.end_index).join('').length,
+          },
+          0,
+        );
+        if (citation) this.answerCitations.push(citation);
+      }
+    }
+    const openaiItems = this.dialect === 'deepseek-responses' ? [] : this.openaiReplayItems();
+    const output =
+      this.dialect === 'deepseek-responses'
+        ? [...this.openaiItems].sort(([left], [right]) => left - right).map(([, item]) => item)
+        : [];
+    const deepseekItems =
+      this.dialect === 'deepseek-responses'
+        ? output.flatMap((item, index) => {
+            if (!isSearchCall(item)) return [];
+            const next = output
+              .slice(index + 1)
+              .find((item) => !isSearchCall(item) && typeof item.id === 'string');
+            return [
+              {
+                ...(next ? { before: String(next.id) } : {}),
+                item: RuntimeJsonObjectSchema.parse(item),
+              },
+            ];
+          })
+        : [];
     const capturedAnthropicContent = [
       ...this.previousAnthropicContent,
       ...this.anthropicContent.values(),
@@ -526,13 +736,17 @@ export class PiWebResponse {
       !this.googleSearchSuggestions &&
       !openaiItems.length &&
       !this.googleParts.length &&
-      !anthropicContent.length
+      !anthropicContent.length &&
+      !this.deepseekCalls.length &&
+      !deepseekItems.length
     )
       return message;
     // Source facts precede the tool calls, so no provider sees text after a pending call.
     const firstCall = message.content.findIndex((block) => block.type === 'toolCall');
     const replayIndex = firstCall < 0 ? message.content.length : firstCall;
-    const replay = this.replayText(anthropicContent.length > 0);
+    const replay = this.replayText(
+      anthropicContent.length > 0 || this.deepseekCalls.length > 0 || deepseekItems.length > 0,
+    );
     const moved = (index: number) => (replay && index >= replayIndex ? index + 1 : index);
     const result: PiWebResult = {
       version: 1,
@@ -547,6 +761,11 @@ export class PiWebResponse {
       failed: this.failed,
       ...(openaiItems.length ? { openaiItems } : {}),
       ...(anthropicContent.length ? { anthropicContent } : {}),
+      ...(this.deepseekCalls.length ? { deepseekCalls: this.deepseekCalls } : {}),
+      ...(deepseekItems.length ? { deepseekItems } : {}),
+      ...(this.deepseekReasoning !== undefined
+        ? { deepseekReasoning: this.deepseekReasoning }
+        : {}),
       ...(this.googleParts.length
         ? {
             googleParts: this.googleParts.map(({ before, ...part }) => ({
@@ -599,6 +818,16 @@ export class PiWebResponse {
         citations.push({ start: text.length, end: text.length, sourceIds: blockSources });
       // A host that annotates one answer reports offsets into its only text.
       if (texts.length === 1) citations.push(...this.answerCitations);
+      else if (this.dialect === 'deepseek-chat') {
+        for (const citation of this.answerCitations) {
+          if (citation.end > combinedOffset && citation.end <= combinedOffset + text.length)
+            citations.push({
+              ...citation,
+              start: Math.max(0, citation.start - combinedOffset),
+              end: citation.end - combinedOffset,
+            });
+        }
+      }
       combinedOffset += text.length;
       const formatted = insertCitations(text, citations).replace(
         /\[(\d{1,3})\]/g,
@@ -690,7 +919,21 @@ export class PiWebResponse {
       }
       if (part?.type !== 'output_text' || typeof part.text !== 'string') continue;
       for (const annotation of array(part.annotations)) {
-        const citation = this.openaiCitation(record(annotation), result.text.length);
+        let metadata = record(annotation);
+        if (
+          this.dialect === 'deepseek-responses' &&
+          metadata &&
+          isOffset(metadata.start_index) &&
+          isOffset(metadata.end_index)
+        ) {
+          const characters = [...part.text];
+          metadata = {
+            ...metadata,
+            start_index: characters.slice(0, metadata.start_index).join('').length,
+            end_index: characters.slice(0, metadata.end_index).join('').length,
+          };
+        }
+        const citation = this.openaiCitation(metadata, result.text.length);
         if (citation) result.citations.push(citation);
       }
       result.text += part.text;

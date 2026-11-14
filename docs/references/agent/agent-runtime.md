@@ -290,11 +290,14 @@ type RuntimeInputPart =
   | { type: 'text'; text: string }
   | {
       type: 'text-attachment'
+      fileEntryId: string
+      revision?: number // confirmed managed source revision for a deferred provider upload
       mediaType: string
       name: string
       text: string
       truncated: boolean
       trust: 'untrusted-user-content'
+      attachmentReport?: FileAttachmentReport // includes an explicit provider-document route
     }
   | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
@@ -342,8 +345,13 @@ File input is resolved by the Host before it reaches a Runtime: attachments ente
 file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates the
 live entry and managed blob before message reservation. The Host authorizes tools from managed ids
 referenced by the current input and complete Session transcript, while it resolves attachment
-content only for the current input and checkpoint-visible history. A Runtime never reads the device
-filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
+content only for the current input and checkpoint-visible history. Runtime protocol code never
+opens arbitrary device paths. DeepSeek's explicit native-document route retains a Host-prepared
+managed ID and revision in private Pi text-part metadata; at the actual credential boundary its
+adapter delegates to the file module for bounded upload and source checks. The file module owns
+all local reads, snapshots and remote-reference caching. User-authored text cannot produce that
+metadata or expand resource authority. See [DeepSeek Services](../deepseek-services.md).
+For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
 10 MiB per file. There is no request-level image count or byte ceiling: every request replays the
 checkpoint-visible history with its images, and Pi prices each image into the context window by the
 endpoint's documented formula (Anthropic, OpenAI, or Gemini) over the dimensions read from the

@@ -1,8 +1,9 @@
-import { Section } from '@cherrystudio/ui/components';
+import { Button, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePreference } from '@/frontend/data';
 import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
@@ -48,6 +49,8 @@ export function WebSearchApiManagementSection({
   const providerOverride = providerOverrides[provider.id];
   const providerCapability = getWebSearchProviderCapability(provider, capability);
   const { isChecking, startCheck } = useWebSearchProviderCheck(provider.id, capability);
+  const [deepseek] = usePreference('feature.deepseek.services');
+  const linkedDeepseek = provider.id === 'deepseek' && deepseek.search && deepseek.providerId;
 
   const openZhipuApiKeySettings = useCallback(() => {
     router.push({
@@ -105,9 +108,29 @@ export function WebSearchApiManagementSection({
         }
       >
         {children}
-        {getWebSearchProviderDetailSections(provider, capability).map((section) => (
-          <WebSearchApiServiceFieldGroup key={section.type} section={section} />
-        ))}
+        {linkedDeepseek
+          ? [
+              <Section.Item
+                key="deepseek-services"
+                description={t('deepseek.searchLinked')}
+                label={t('deepseek.title')}
+                onPress={() => router.push('/settings/deepseek')}
+              />,
+              <Section.Item key="deepseek-check">
+                <Button
+                  loading={isChecking}
+                  onPress={() => {
+                    void startCheck({});
+                  }}
+                  variant="secondary"
+                >
+                  {t('settings.websearch.provider.check')}
+                </Button>
+              </Section.Item>,
+            ]
+          : getWebSearchProviderDetailSections(provider, capability).map((section) => (
+              <WebSearchApiServiceFieldGroup key={section.type} section={section} />
+            ))}
       </Section>
     </WebSearchApiManagementContext>
   );

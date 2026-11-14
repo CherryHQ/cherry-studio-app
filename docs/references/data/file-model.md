@@ -155,7 +155,8 @@ never created.
 the imported entry. Painting still admits images only.
 
 `readAttachmentContent` is the common controlled reader for attachments and file tools. Its
-document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
+document parser setting is supplied by the caller, with AnyDoc as the default. Without the explicit
+[DeepSeek cloud OCR opt-in](../deepseek-services.md), PDF uses
 the native text extractor with on-device OCR for pages without usable text and image pages whose text is sparse. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
 accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
 CSV stays on the text path. Format admission follows the published mobile entry point's
@@ -282,10 +283,15 @@ source or request truncation, naming the file when there are several. Reports st
 deferred IR delivery, and image omission reasons; older messages without those facts remain
 unspecified rather than inferred from today's preference.
 
-Image attachments reach vision providers as inlined base64 data URLs and text-only models as OCR text; documents send text or raw
-JSON and also work with text-only models, with embedded pixels explicitly marked unsent. The provider upload cache is deferred
-until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
-not to `file_entry`.
+Image attachments reach vision providers as inlined base64 data URLs and text-only models as OCR
+text; local documents send text or raw JSON, with embedded pixels explicitly marked unsent.
+The explicit DeepSeek document-input opt-in instead prepares a `provider-document` report for
+supported attachments to this Provider's `deepseek-flash`. The Pi wire adapter delegates the
+managed reference to the file upload owner using the credential serving that attempt, then emits
+a native document reference. The local original remains canonical; the remote mapping is a
+bounded disposable disk cache with hash, credential scope and expiry, not a `file_entry` column or
+an AI SDK conversation path. See [DeepSeek Services](../deepseek-services.md) for revision checks,
+temporary snapshots, expiry and recovery. Other providers keep their existing document path.
 
 ## Lifecycle
 
@@ -410,5 +416,5 @@ inspection and read tools can also consume it by id. See
 Saving or sharing a managed artifact to the system copies its bytes to a user-selected destination.
 The managed entry remains canonical, and Cherry never persists the exported path as file authority.
 
-**Provider upload cache.** A separate table keyed by content hash, added when the AI SDK's Files
-Upload API stabilizes.
+**General provider upload cache.** Remains deferred. DeepSeek has a capability-specific disposable
+mapping described above; it does not establish a shared upload table or replace local originals.

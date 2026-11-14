@@ -1,5 +1,5 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,6 +33,7 @@ export function useDictation() {
   const voice = useBackendModule('voice');
   const permissions = useBackendModule('permissions');
   const showDictationSetup = useDictationSetup();
+  const router = useRouter();
   const { draft } = useComposerState();
   const { setDraft, subscribeDraftEdits } = useComposerActions();
   const active = useRef<ActiveDictation | null>(null);
@@ -56,6 +57,10 @@ export function useDictation() {
 
   const report = useCallback(
     (error: unknown) => {
+      if (error instanceof VoiceError && error.code === 'service-not-configured') {
+        router.push('/settings/deepseek');
+        return;
+      }
       if (error instanceof VoiceError && error.code === 'recognition-not-configured') {
         showDictationSetup('needs-setup');
         return;
@@ -74,7 +79,7 @@ export function useDictation() {
       }
       toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
     },
-    [alert, permissions, showDictationSetup, t, toast],
+    [alert, permissions, router, showDictationSetup, t, toast],
   );
 
   const start = useCallback(async () => {

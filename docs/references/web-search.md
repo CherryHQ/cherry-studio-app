@@ -52,7 +52,8 @@ Adapters, by the endpoint the model is actually requested on:
 | Azure OpenAI, Poe / Responses | `web_search_preview` | External service | URL annotations | No minimal reasoning; Poe for OpenAI models only |
 | Grok / Responses | `web_search` and `x_search` | External service | URL annotations | |
 | Anthropic / Messages | `web_search_20250305` | `web_fetch_20250910` | Result blocks and citations | Five uses per request |
-| DeepSeek / Anthropic Messages | `web_search_20250305` | External service | Result blocks and citations | Its Responses endpoint ignores the tool |
+| DeepSeek legacy default / Anthropic Messages | `web_search_20250305` | External service | Result blocks and citations | Existing declaration, separate from the new opt-in suite |
+| Explicitly bound DeepSeek `deepseek-flash` / Messages, Responses, Chat Completions | `deepseek_web_search` | `deepseek_read_url` | Result blocks or URL annotations | Enable built-in web tools in DeepSeek services; live acceptance pending |
 | Gemini / Generate Content | `googleSearch` | `urlContext` | Grounding metadata | Beside functions from Gemini 3 only |
 | Zhipu / Chat Completions | `web_search` tool entry | External service | Result list, no inline markers | |
 | Qwen AI Platform / Chat Completions | `enable_search` | External service | Result list when returned, no inline markers | |
@@ -65,7 +66,8 @@ Adapters, by the endpoint the model is actually requested on:
 | Kimi | External service | External service | | See below |
 | Every other endpoint | External service | External service | | |
 
-A model is eligible only when the trusted bundled catalog lists it for that provider. A sign-in
+A model is eligible when the trusted bundled catalog lists it for that provider, or through the
+explicit Mobile-only `deepseek-flash` service opt-in. A sign-in
 uses native tools only when it authenticates the provider's ordinary API (xAI, OpenRouter);
 subscription sign-ins keep the external services. Vertex AI, Bedrock, and Azure Chat Completions
 are not served by Pi on Mobile and have no adapter.
@@ -75,12 +77,20 @@ provider credential and return its encrypted output to the model verbatim, and t
 `$web_search` round trip is scheduled for removal. Neither fits the native route, so Kimi keeps the
 external service.
 
-DeepSeek support differs by endpoint. As checked on 2026-10-12, its
+DeepSeek's preserved legacy default differs by endpoint. As checked on 2026-10-12, its
 [Responses compatibility contract](https://api-docs.deepseek.com/guides/responses_api/)
 lists `web_search` as ignored, while its
 [Claude Code integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)
 documents native web search through the Anthropic-compatible API. The published declaration names
 the Responses endpoint, which conflicts with that contract; Mobile declares the Anthropic endpoint.
+
+The 2026-11-13 suite adds different tool types on all three protocols. Mobile's explicit service
+binding adapts those types locally without changing the published registry or web-search package.
+It captures original server-call state/signatures, converts citation indices, and clears late
+refusals. External Search/Fetch can separately bind to the selected Provider's current keys and
+service address; the built-in tool page then links to that binding instead of editing independent
+keys that no longer serve requests. Disabling key sharing restores the existing independent
+configuration. See [DeepSeek Services](./deepseek-services.md) for ownership and recovery.
 
 The published `@cherrystudio/provider-registry` package owns the `serverTools` declarations, the
 per-provider model eligibility, and the models that accept functions beside a native tool; Mobile

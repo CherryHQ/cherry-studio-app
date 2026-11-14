@@ -1,4 +1,5 @@
 import { providerService } from '@/backend/data/services/ProviderService';
+import { DeepseekServicesSchema } from '@/shared/contracts/deepseek';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import {
@@ -136,8 +137,8 @@ export async function getRuntimeConfig(
 }
 
 /**
- * `override` replaces the stored settings of this provider only, so unsaved settings can be checked
- * through the same resolution a real lookup uses.
+ * `override` replaces independent settings so unsaved fields use the same lookup path.
+ * An explicit live DeepSeek binding remains authoritative for its credentials and address.
  */
 export async function getProviderById<TProviderId extends WebSearchProvider['id']>(
   providerId: TProviderId,
@@ -147,6 +148,25 @@ export async function getProviderById<TProviderId extends WebSearchProvider['id'
   const providerOverrides = await getProviderOverrides(preferences);
   const preset = getWebSearchProviderPresetById(providerId);
   const provider = mergeWebSearchProviderPreset(preset, override ?? providerOverrides[providerId]);
+
+  const deepseek =
+    providerId === 'deepseek' ? await preferences.get('feature.deepseek.services') : undefined;
+  if (deepseek?.search && deepseek.providerId) {
+    const linked = await providerService.getByProviderId(deepseek.providerId);
+    const { keys } = await providerService.listApiKeys(deepseek.providerId, { enabled: true });
+    return {
+      ...provider,
+      credentialsProviderId: deepseek.providerId,
+      apiKeys:
+        linked.isEnabled && linked.authType === 'api-key'
+          ? trimStringList(keys.map((entry) => entry.key))
+          : [],
+      capabilities: provider.capabilities.map((capability) => ({
+        ...capability,
+        apiHost: DeepseekServicesSchema.shape.apiHost.parse(deepseek.apiHost),
+      })),
+    } as WebSearchProvider & { id: TProviderId };
+  }
 
   return (await inheritZhipuModelProviderApiKeys(
     inheritExaMcpApiKeys(provider, providerOverrides),

@@ -6,6 +6,7 @@ import {
   type WebSearchTransport,
 } from '@cherrystudio/web-search';
 
+import { providerService } from '@/backend/data/services/ProviderService';
 import type {
   WebSearchCapability,
   WebSearchExecutionConfig,
@@ -77,10 +78,19 @@ export class RemoteWebSearchProvider extends BaseWebSearchProvider {
   ): Promise<WebSearchResponse> {
     this.validateConfiguration(capability);
     if (capability === 'fetchUrls') input = input.trim();
+    const credentials =
+      overrides.credentials ??
+      (this.provider.credentialsProviderId
+        ? {
+            apiKey: (await providerService.resolveApiKey(this.provider.credentialsProviderId))
+              .value,
+          }
+        : this.credentials(capability));
+    options?.signal?.throwIfAborted();
     const common = {
       providerId: this.protocol.metadata.id,
       input,
-      credentials: overrides.credentials ?? this.credentials(capability),
+      credentials,
       signal: options?.signal ?? undefined,
       timeoutMs:
         capability === 'fetchUrls' ? 60_000 : this.provider.id === 'exa-mcp' ? 25_000 : undefined,

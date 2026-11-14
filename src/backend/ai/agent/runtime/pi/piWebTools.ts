@@ -2,6 +2,9 @@ import type { RuntimeTool, RuntimeWebTools } from '../types';
 
 /** The wire protocol of a provider's native web tools: request shape, metadata and replay. */
 export type PiWebDialect =
+  | 'deepseek-chat'
+  | 'deepseek-messages'
+  | 'deepseek-responses'
   | 'openai-responses'
   | 'openai-preview'
   | 'xai'
@@ -145,6 +148,27 @@ export function applyPiWebTools(
     tools: [...(Array.isArray(body.tools) ? body.tools : []), ...tools],
   });
   switch (dialect) {
+    case 'deepseek-chat':
+    case 'deepseek-responses':
+    case 'deepseek-messages':
+      return withTools(
+        ...(search
+          ? [
+              {
+                type: 'deepseek_web_search',
+                ...(dialect === 'deepseek-messages' ? { name: 'deepseek_web_search' } : {}),
+              },
+            ]
+          : []),
+        ...(fetch
+          ? [
+              {
+                type: 'deepseek_read_url',
+                ...(dialect === 'deepseek-messages' ? { name: 'deepseek_read_url' } : {}),
+              },
+            ]
+          : []),
+      );
     case 'openai-responses':
       return search ? withTools({ type: 'web_search' }) : payload;
     case 'openai-preview':
@@ -257,6 +281,18 @@ export function applyPiWebTools(
 export function isPiNativeWebActivity(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const event = value as Record<string, unknown>;
+  const choice = (Array.isArray(event.choices) ? event.choices[0] : undefined) as
+    | {
+        server_tool_event?: { type?: string };
+        delta?: { server_tool_calls?: unknown[] };
+      }
+    | undefined;
+  if (
+    choice?.server_tool_event?.type === 'call_started' ||
+    choice?.server_tool_event?.type === 'call_completed' ||
+    choice?.delta?.server_tool_calls?.length
+  )
+    return true;
   if (typeof event.type === 'string' && /^response\.(?:web|x)_search_call\./.test(event.type))
     return true;
   const item = (event.item ?? event.content_block) as { type?: string } | undefined;

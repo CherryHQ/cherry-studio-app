@@ -75,6 +75,8 @@ export type WebSearchProviderOverrides = Partial<
  * Generated at runtime by merging preset with user overrides
  */
 export interface WebSearchProvider {
+  /** Explicit mobile service binding; execution selects its key through ProviderService. */
+  credentialsProviderId?: string;
   /** Unique provider identifier */
   id: WebSearchProviderId;
   /** Display name (from preset) */

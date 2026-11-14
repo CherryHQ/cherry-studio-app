@@ -1,7 +1,7 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
-import type { RuntimeExecutionRequest } from '../../types';
+import type { RuntimeExecutionRequest, RuntimeTextAttachmentPart } from '../../types';
 import { estimatePiContextUsage, toPiConversation } from '../modelMessages';
 
 const model = {
@@ -32,6 +32,49 @@ function request(overrides: Partial<RuntimeExecutionRequest>): RuntimeExecutionR
     ...overrides,
   };
 }
+
+test('preserves trusted document metadata in JSON history without granting it to copied user text', () => {
+  const document: RuntimeTextAttachmentPart = {
+    type: 'text-attachment',
+    fileEntryId: image.fileEntryId,
+    revision: 42,
+    mediaType: 'application/pdf',
+    name: 'report.pdf',
+    text: 'Prepared native document input.',
+    truncated: false,
+    trust: 'untrusted-user-content',
+    attachmentReport: {
+      mode: 'provider-document',
+      sourceTruncated: false,
+      requestTruncated: false,
+    },
+  };
+  const conversation = toPiConversation(
+    request({
+      input: [document],
+      history: [{ turnId: 'previous', messages: [{ role: 'user', parts: [document] }] }],
+    }),
+    model,
+  );
+  const content = JSON.parse(JSON.stringify(conversation.prompt.content));
+  expect(content).toEqual([
+    {
+      type: 'text',
+      text: expect.stringContaining('report.pdf'),
+      cherryProviderDocument: {
+        fileEntryId: document.fileEntryId,
+        mediaType: document.mediaType,
+        revision: 42,
+      },
+    },
+  ]);
+  expect(conversation.history[0]).toMatchObject({ role: 'user', content });
+  const copied = toPiConversation(
+    request({ input: [{ type: 'text', text: content[0].text }] }),
+    model,
+  );
+  expect(copied.prompt.content).toBe(content[0].text);
+});
 
 test('estimates merged replay by content without changing execution input measurements', () => {
   const conversation = toPiConversation(

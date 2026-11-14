@@ -1,7 +1,7 @@
 # Voice Input And Speech
 
 > Status: system dictation, system speech, downloadable SenseVoice dictation and offline audio-file
-> transcription are implemented in source.
+> transcription, and opt-in DeepSeek cloud voice are implemented in source.
 > The offline native integration and current settings layout still need builds and iOS/Android
 > device acceptance. Source implementation does not establish device behavior.
 
@@ -9,13 +9,13 @@
 
 | Capability | Default | Engine |
 | --- | --- | --- |
-| Dictation into the composer draft | Off until enabled | System speech recognition or downloaded SenseVoiceSmall |
-| Reading an assistant reply aloud | Enabled | System text-to-speech |
-| Transcribing an audio file into a text document | Explicit file action or Agent tool; SenseVoice by default | Downloaded SenseVoiceSmall or system on-device recognition |
+| Dictation into the composer draft | Off until enabled | System speech recognition, downloaded SenseVoiceSmall, or opt-in DeepSeek ASR |
+| Reading an assistant reply aloud | Enabled with system voice | System text-to-speech or opt-in DeepSeek TTS |
+| Transcribing an audio file into a text document | Explicit file action or Agent tool; SenseVoice by default | Downloaded SenseVoiceSmall, system on-device recognition, or opt-in DeepSeek ASR |
 
-Voice needs no Cherry provider account. Users select system dictation or download the optional
-SenseVoiceSmall model for offline dictation and file transcription. Cloud voice adapters remain
-outside this implementation.
+System and offline voice need no Cherry provider account. Users can also bind an existing
+Provider in **Settings → DeepSeek services**, then explicitly select DeepSeek for each voice
+capability. See [DeepSeek Services](./deepseek-services.md) for credentials, uploads and limits.
 
 System engines do not guarantee offline execution: the configured recognition service, installed
 voices and language support determine whether the platform uses a network. The current adapters do
@@ -44,15 +44,19 @@ conversation ends reading, including when another route covers a still-mounted c
 
 `Backend.voice` (`VoiceModule` in `src/shared/contracts/voice.ts`) is the only surface callers use.
 Callers start dictation, read text, transcribe managed audio files and observe activity; the runtime
-resolves live voice engines from preferences. File transcription has an independent engine preference, defaults to SenseVoice, and never falls back between engines or to online recognition. The module has no dependency on `AiService`, provider accounts or model catalogs.
+resolves live voice engines from preferences. File transcription has an independent engine preference,
+defaults to SenseVoice, and never falls back between engines. The cloud adapters resolve an explicit
+Provider binding through the DeepSeek service connection owner; the module does not use `AiService`
+or model catalogs.
 
 `src/backend/services/voice` owns the implementation:
 
 - `engines.ts` declares the `DictationEngine` and `SpeechEngine` ports. An engine may serve only one
   capability; a missing entry is unsupported.
 - `VoiceRuntime.ts` chooses the engine from the registered `VOICE_ENGINES` IDs. With no valid
-  selection, dictation is off and speech uses the first supported entry. `system` and `sensevoice`
-  are registered for dictation; only `system` reads aloud. The runtime allows one activity at a time:
+  selection, dictation is off and speech uses the first supported local entry. `system`, `sensevoice`
+  and `deepseek` serve recognition; `system` and `deepseek` read aloud. Cloud engines are never an
+  automatic fallback. The runtime allows one activity at a time:
   dictation stops reading, reading replaces
   reading, and reading cannot start during dictation or file transcription. Replacement waits for
   the previous native operation to settle before configuring another audio use. Backgrounding aborts
@@ -71,11 +75,17 @@ resolves live voice engines from preferences. File transcription has an independ
   Actual background reading does not require a silent loop while official processing protects tasks.
   The native app includes iOS background audio without enabling
   Android's media-playback service or background microphone capture.
-- `senseVoiceDictation.ts` owns local recording and cleanup. `senseVoiceRecognition.ts` shares lazy
+- `recordedDictation.ts` owns WAV recording and cleanup for SenseVoice and DeepSeek.
+  `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
   recognizes bounded file windows. `transcribeAudioFile.ts` validates managed sources and publishes
-  the generated text through the existing file commit boundary.
+the generated text through the existing file commit boundary.
   `voiceModel.ts` owns the optional model's download, integrity and deletion through `localModel`.
+- `deepseekRecognition.ts` consumes recorded/decoded WAV windows through ASR.
+  `deepseekSpeech.ts` synthesizes bounded utterances, plays temporary WAV files through the shared
+  audio session, and releases player/files on completion, error or cancellation. Missing cloud
+  configuration reports `needs-service` and links to its settings. See
+  [DeepSeek Services](./deepseek-services.md) for batch recognition and settled-answer boundaries.
 - `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.
 
@@ -123,7 +133,7 @@ resolved ID also avoids `expo-speech` 58's Android language-tag parsing fallback
 language. A speech error or an unexpected stop, such as an audio interruption, fails reading.
 Cancellation also settles when native stop completes, even if no utterance callback arrives.
 
-Settings exposes the installed voice selection directly, without a single-option engine picker.
+Settings offers system and DeepSeek speech engines, then the selected engine's voice choices.
 System voices are filtered by the app language and deduplicated by their native selection ID.
 Different IDs with the same display name remain selectable with language/ID details. The voice
 list refreshes when the app language changes and when returning to voice settings.

@@ -9,6 +9,7 @@ import { fileContent } from '@/backend/services/file/fileContent';
 import { configureFileOcrLanguage } from '@/backend/services/file/fileTextExtraction';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { devicePermissions } from '@/backend/services/permissions';
+import { configureDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
@@ -42,6 +43,7 @@ export function createBackendServices({
   webSearch,
 }: BackendInfrastructure) {
   const data = createDataServices({ cache, preference });
+  configureDeepseekServices(() => preference.readCached('feature.deepseek.services'));
   configureFileOcrLanguage(() =>
     resolveAppLanguage(
       preference.readCached('app.language'),

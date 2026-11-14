@@ -24,6 +24,7 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
@@ -39,6 +40,7 @@ import type { RuntimeModel, RuntimeModelPreflight, RuntimeOptions, RuntimeUsageC
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
+import { withPiDeepseekFiles } from './piDeepseekFiles';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './piModelTypes';
 import {
@@ -192,6 +194,21 @@ export function createPiModelResolver(
         provider.presetProviderId === 'openrouter' ||
         isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
+      const deepseek = getDeepseekServices();
+      const deepseekFiles =
+        provider.authType === 'api-key' &&
+        deepseek.providerId === provider.id &&
+        modelId === 'deepseek-flash';
+      if (deepseekFiles && deepseek.files && adapter.api === 'anthropic-messages') {
+        const existing = Object.keys(headers).find(
+          (name) => name.toLowerCase() === 'anthropic-beta',
+        );
+        const betas = existing ? headers[existing] : '';
+        if (existing) delete headers[existing];
+        headers['anthropic-beta'] = [
+          ...new Set([...betas.split(',').filter(Boolean), 'files-api-2025-04-14']),
+        ].join(',');
+      }
       if (vertex) {
         for (const name of Object.keys(headers)) {
           if (adapter.authHeaderNames.includes(name.toLowerCase())) delete headers[name];
@@ -332,7 +349,29 @@ export function createPiModelResolver(
           adapter.api === 'openai-codex-responses' ? undefined : runtimeOptions.temperature,
         azureApiVersion,
       };
-      const primaryStream = await bindPiStream(adapter, streamBinding);
+      const bindDocuments = (stream: Awaited<ReturnType<typeof bindPiStream>>, apiKey: string) => {
+        if (!deepseekFiles) return stream;
+        const auth = Object.entries(headers).find(
+          ([name]) => name.toLowerCase() === 'authorization',
+        );
+        const nativeKey =
+          adapter.api === 'anthropic-messages'
+            ? (Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-api-key')?.[1] ??
+              apiKey)
+            : undefined;
+        const bearerKey = auth ? /^Bearer\s+(.+)$/i.exec(auth[1])?.[1] : undefined;
+        // Two different authentication headers do not prove which remote account owns files.
+        const servingKey = auth
+          ? bearerKey && (!nativeKey || nativeKey === bearerKey)
+            ? bearerKey
+            : ''
+          : (nativeKey ?? apiKey);
+        return withPiDeepseekFiles(stream, provider.id, servingKey);
+      };
+      const primaryStream = bindDocuments(
+        await bindPiStream(adapter, streamBinding),
+        selectedApiKey.value,
+      );
       const hasAuthHeader = Object.keys(headers).some((name) =>
         adapter.authHeaderNames.includes(name.toLowerCase()),
       );
@@ -389,7 +428,7 @@ export function createPiModelResolver(
                   apiKey: selected.value,
                 });
                 usageContext.credentialReceipt = selected.apiKeySelection;
-                return stream;
+                return bindDocuments(stream, selected.value);
               }),
             ]);
 
@@ -457,6 +496,23 @@ function resolveNativeWebTools({
   runtimeOptions: RuntimeOptions;
 }): PiNativeWebTools {
   if (!connection.endpointType) return NO_NATIVE_WEB_TOOLS;
+  const deepseek = getDeepseekServices();
+  if (
+    deepseek.nativeTools &&
+    provider.authType === 'api-key' &&
+    deepseek.providerId === provider.id &&
+    connection.wireModelId === 'deepseek-flash'
+  ) {
+    const dialect =
+      api === 'anthropic-messages'
+        ? 'deepseek-messages'
+        : api === 'openai-responses'
+          ? 'deepseek-responses'
+          : api === 'openai-completions'
+            ? 'deepseek-chat'
+            : undefined;
+    if (dialect) return { dialect, search: true, fetch: true, functionToolMixing: true };
+  }
   const serverTools = providerRegistryService.resolveServerTools(
     provider,
     connection.wireModelId,

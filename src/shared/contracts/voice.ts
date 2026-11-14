@@ -1,7 +1,7 @@
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 /** Engines a capability can run on. Each engine is one adapter under `backend/services/voice`. */
-export const VOICE_ENGINES = ['system', 'sensevoice'] as const;
+export const VOICE_ENGINES = ['system', 'sensevoice', 'deepseek'] as const;
 export type VoiceEngineId = (typeof VOICE_ENGINES)[number];
 
 /** Dictation captures speech; transcription reads audio files; speech reads text aloud. */
@@ -14,8 +14,13 @@ export const VOICE_ENGINE_PREFERENCE = {
   transcription: 'feature.voice.transcription_engine',
 } as const satisfies Record<VoiceCapability, string>;
 
-/** `needs-setup` requires device configuration; `unsupported` cannot run on this device. */
-export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'needs-model' | 'unsupported';
+/** `needs-setup` requires device configuration; `needs-service` needs cloud credentials. */
+export type VoiceEngineStatus =
+  | 'ready'
+  | 'needs-setup'
+  | 'needs-model'
+  | 'needs-service'
+  | 'unsupported';
 
 export type VoiceModelState = {
   status:
@@ -94,6 +99,7 @@ export type VoiceActivity =
 export type VoiceErrorCode =
   | 'unsupported'
   | 'not-configured'
+  | 'service-not-configured'
   | 'recognition-not-configured'
   | 'offline-recognition-unavailable'
   | 'model-not-downloaded'
@@ -127,7 +133,7 @@ export class VoiceError extends Error {
 export interface VoiceModule {
   readonly localModel: VoiceModelModule;
   getTranscriptionStatus(options?: VoiceRequestOptions): Promise<VoiceEngineStatus>;
-  /** Creates a managed text document without changing or uploading the source recording. */
+  /** Creates a managed text document; an explicitly selected cloud engine uploads audio windows. */
   transcribeAudio(
     input: AudioTranscriptionInput,
     options?: AudioTranscriptionOptions,
