@@ -11,16 +11,23 @@ export function buildImageProviderOptions({
   paramValues,
   provider,
   vendorBag,
+  requestTimeoutMs,
 }: {
   aiSdkProviderId: string;
   modelId: string;
   paramValues: Record<string, unknown>;
   provider: Provider;
   vendorBag: Record<string, unknown>;
+  requestTimeoutMs?: number;
 }): Record<string, Record<string, JSONValue>> {
   // Custom transports own the final wire format and consume canonical parameters.
   if (hasImageTransport(aiSdkProviderId, modelId)) {
-    return { [aiSdkProviderId]: vendorBag as Record<string, JSONValue> };
+    return {
+      [aiSdkProviderId]: {
+        ...vendorBag,
+        ...(requestTimeoutMs !== undefined && { requestTimeoutMs }),
+      } as Record<string, JSONValue>,
+    };
   }
   const providerIdentity = provider.presetProviderId ?? provider.id;
   const registration =

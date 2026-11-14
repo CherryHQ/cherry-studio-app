@@ -38,6 +38,21 @@ function build(
 }
 
 describe('image provider option routing', () => {
+  it('routes timeout metadata only to custom transports', () => {
+    for (const id of ['dashscope', 'modelscope', 'ppio', 'tokenhub', 'openai', 'newapi']) {
+      const options = buildImageProviderOptions({
+        aiSdkProviderId: id,
+        modelId: 'test-image',
+        paramValues: {},
+        provider: provider(id),
+        vendorBag: {},
+        requestTimeoutMs: 45000,
+      });
+      if (['dashscope', 'modelscope', 'ppio', 'tokenhub'].includes(id))
+        expect(options[id]).toEqual({ requestTimeoutMs: 45000 });
+      else expect(JSON.stringify(options)).not.toContain('requestTimeoutMs');
+    }
+  });
   it('delivers CherryIN chat-variant image options to the key its image wrapper reads', () => {
     expect(
       build(
@@ -189,7 +204,7 @@ describe('image provider option routing', () => {
   });
 
   it.each(['aihubmix', 'openai-compatible'])(
-    'keeps compatible AiHubMix format fields and native OpenAI options separate via %s',
+    'passes AiHubMix format fields through via %s',
     (aiSdkProviderId) => {
       expect(
         build(

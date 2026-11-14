@@ -1,6 +1,6 @@
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 
-import { DEFAULT_TIMEOUT } from '../../../constants';
+import { DEFAULT_IMAGE_REQUEST_TIMEOUT_MS, DEFAULT_TIMEOUT } from '../../../constants';
 import type {
   ImageGenerationSubmitInput,
   ImageGenerationTransport,
@@ -457,7 +457,7 @@ class DashScopeTransport implements ImageGenerationTransport {
       : { 'X-DashScope-Async': 'enable' };
 
     const response = await this.request<DashScopeTaskResult>(descriptor.endpoint, 'POST', body, {
-      timeout: 120000,
+      timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
       signal: input.signal,
       extraHeaders,
     });
