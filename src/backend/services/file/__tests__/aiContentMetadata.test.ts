@@ -237,6 +237,20 @@ test('each AI edit replaces old production identity without changing its histori
   expect([...mockFiles.keys()]).toEqual([originalUri, uri]);
 });
 
+test('an AI edit of an iOS Markdown file replaces its old label and keeps the user author', async () => {
+  const file = new File(uri);
+  file.writeSync(writeAiContentText('---\nauthor: 张三\n---\nEdited\n', 'text/markdown', label));
+  const metadata = await completeFileAiContent({
+    uri,
+    mediaType: 'text/x-markdown',
+    aiOperation: 'edit',
+  });
+  expect(metadata).toMatchObject({ ContentProducer: 'CherryStudio' });
+  expect(readAiContentText(await file.text(), 'text/x-markdown')).toEqual(metadata);
+  expect(await file.text()).toContain('author: 张三');
+  expect(await file.text()).not.toContain('Cherry Studio');
+});
+
 test('copies and mechanical transformations retain independently supplied producer and propagator fields', async () => {
   new File(uri).writeSync(
     writeAiContentText('---\nauthor: Original\n---\nOriginal\n', 'text/markdown', label),

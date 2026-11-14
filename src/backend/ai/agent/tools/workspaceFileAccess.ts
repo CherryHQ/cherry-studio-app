@@ -4,6 +4,7 @@ import {
 } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { AiContentOperation } from '@/shared/data/types/aiContent';
 import { FileEntryIdSchema, type FileEntry, type FileEntryId } from '@/shared/data/types/file';
 
 import type { TurnToolResources } from '../resources/managedFileResolver';
@@ -100,7 +101,12 @@ export class WorkspaceFileAccess {
         );
       if (this.resources.draftFileEntryIds.has(target.file.currentEntryId))
         return this.rewrite(
-          { data: input.data, id: target.file.currentEntryId, baseUpdatedAt: input.baseUpdatedAt },
+          {
+            data: input.data,
+            id: target.file.currentEntryId,
+            baseUpdatedAt: input.baseUpdatedAt,
+            aiOperation: 'generate',
+          },
           signal,
         );
     } else if (input.baseFileEntryId) {
@@ -149,7 +155,13 @@ export class WorkspaceFileAccess {
   }
 
   async rewrite(
-    input: { data: string; id: FileEntryId; baseUpdatedAt?: number },
+    input: {
+      data: string;
+      id: FileEntryId;
+      baseUpdatedAt?: number;
+      /** A write_file replacement generates; edit_file edits. */
+      aiOperation?: AiContentOperation;
+    },
     signal: AbortSignal,
   ): Promise<FileEntry> {
     const file = await this.library.fileForEntry(input.id);
@@ -163,7 +175,7 @@ export class WorkspaceFileAccess {
         'This draft moved outside the workspace. Read it again and create a new file.',
       );
     return this.content.rewriteTextEntry(
-      { ...input, workspaceFolderId: this.folderId, aiOperation: 'edit' },
+      { aiOperation: 'edit', ...input, workspaceFolderId: this.folderId },
       signal,
     );
   }

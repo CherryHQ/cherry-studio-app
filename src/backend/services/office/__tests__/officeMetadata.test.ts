@@ -225,7 +225,7 @@ test.each(requests)(
       format: request.format,
       output: 'file:///output',
       label,
-      author: 'Cherry Studio',
+      author: { name: 'Cherry Studio', replace: true },
       sandbox: worker.sandbox,
     });
     const parts = unzipSync(worker.output());
@@ -248,6 +248,28 @@ test.each(requests)(
     expect(strFromU8(original['docProps/core.xml'])).toContain('<dc:creator>Model</dc:creator>');
   },
 );
+
+test('an AI edit keeps an existing creator in the core properties', async () => {
+  const request = requests[0];
+  const parts = unzipSync((await runOfficeJob(createOfficeCode(request, {}))).output!);
+  parts['docProps/core.xml'] = strToU8(
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+      '<dc:creator>张三</dc:creator></cp:coreProperties>',
+  );
+  const input = zipSync(parts);
+  const worker = sandboxFor(input);
+  await processOfficeMetadata({
+    uri: 'file:///input',
+    size: input.length,
+    format: request.format,
+    output: 'file:///output',
+    label,
+    author: { name: 'Cherry Studio', replace: false },
+    sandbox: worker.sandbox,
+  });
+  const updated = unzipSync(worker.output());
+  expect(updated['docProps/core.xml']).toEqual(parts['docProps/core.xml']);
+});
 
 test.each(['missing', 'relocated'])(
   'publishes the author when source core properties are %s',
@@ -282,7 +304,7 @@ test.each(['missing', 'relocated'])(
       format: request.format,
       output: 'file:///output',
       label,
-      author: 'Cherry Studio',
+      author: { name: 'Cherry Studio', replace: true },
       sandbox: worker.sandbox,
     });
     const updated = unzipSync(worker.output());

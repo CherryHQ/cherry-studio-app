@@ -130,13 +130,15 @@ describe('editFileTool', () => {
   });
 
   test.each([
-    [false, false],
-    [false, true],
-    [true, false],
-    [true, true],
+    [false, false, 'text/markdown'],
+    [false, true, 'text/markdown'],
+    [true, false, 'text/markdown'],
+    [true, true, 'text/markdown'],
+    [false, false, 'text/markdown;charset=utf-8'],
+    [true, false, 'text/x-markdown'],
   ])(
-    'returns stored coordinates after labeling (draft=%s, previousLabel=%s)',
-    async (draft, labeled) => {
+    'returns stored coordinates after labeling (draft=%s, previousLabel=%s, %s)',
+    async (draft, labeled, mediaType) => {
       const previousLabel = AiContentLabelSchema.parse({
         Label: '1',
         ContentProducer: 'ProviderExample',
@@ -148,7 +150,7 @@ describe('editFileTool', () => {
       });
       const body = 'l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n';
       const original = labeled ? writeAiContentText(body, 'text/markdown', previousLabel) : body;
-      const files = createFiles(original, undefined, APPLICATION_LABEL);
+      const files = createFiles(original, undefined, APPLICATION_LABEL, mediaType);
       const output = await execute(createEditFileTool(files, draft ? SOURCE_IS_DRAFT : NO_DRAFTS), {
         file_entry_id: SOURCE_ID,
         old_string: 'old',
@@ -714,11 +716,12 @@ function createFiles(
   content: string | Uint8Array,
   declaredSize?: number,
   producedLabel: AiContentLabel | null = null,
+  mediaType = 'text/markdown',
 ) {
   const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content;
   const source: ManagedFileFact = {
     fileEntryId: SOURCE_ID,
-    mediaType: 'text/markdown',
+    mediaType,
     name: 'notes.md',
     size: declaredSize ?? bytes.byteLength,
   };

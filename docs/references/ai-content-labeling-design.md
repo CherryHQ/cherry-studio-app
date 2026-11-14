@@ -86,8 +86,9 @@ without backfilling records or rewriting historical blobs. XMP, legacy PNG AIGC 
 ImageDescription/UserComment declarations are read before image normalization; canonical image
 writes use XMP. Metadata inspection is bounded, and image codec payloads are copied without decoding.
 
-AI-produced document outputs separately set their file-property author to `Cherry Studio` before
-publication. This author is not the AIGC `ContentProducer` field: its application-service value
+AI-generated document outputs separately set their file-property author to `Cherry Studio` before
+publication; AI edits keep an author already present in the edited file and add it only when
+missing, so a user's own document keeps its author. This author is not the AIGC `ContentProducer` field: its application-service value
 remains `CherryStudio`. DOCX/XLSX/PPTX use core `dc:creator`, Markdown uses front-matter `author`,
 and HTML uses a head `meta name="author"` property. The shared pending-output completion boundary
 covers fixed generators, Office scripts and AI edits without rewriting historical source files.

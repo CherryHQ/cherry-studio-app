@@ -20,6 +20,7 @@ import {
 import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { FilePlacement } from '@/shared/data/types/fileLibrary';
+import { aiContentTextType } from '@/shared/utils/aiContentText';
 
 import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -229,7 +230,7 @@ export function createEditFileTool(
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
     const labeledSnippet = async (entry: FileEntry) => {
-      if (!['text/markdown', 'text/html'].includes(entry.mediaType)) return snippet;
+      if (!aiContentTextType(entry.mediaType)) return snippet;
       const finalBytes = await files.readAsBytes(
         {
           fileEntryId: entry.id,

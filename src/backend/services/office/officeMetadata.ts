@@ -1,5 +1,6 @@
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/aiContent';
+import type { AiContentAuthor } from '@/shared/utils/aiContentText';
 
 import { officeLimits } from './generateOfficeFile';
 import { officePackageRuntimeCode } from './officePackageCode';
@@ -9,7 +10,8 @@ const metadataCode = String.raw`
 const filePort = globalThis.__files;
 delete globalThis.__files;
 const source = new Uint8Array(filePort.read(0));
-const { parts } = readOfficePackage(source);
+// Inspection reads XML parts only; media stays compressed.
+const { parts } = readOfficePackage(source, !isWriting);
 const CUSTOM = 'http://schemas.openxmlformats.org/officeDocument/2006/custom-properties';
 const VT = 'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -62,13 +64,15 @@ if (incomingLabel !== null) {
     const core = document(corePath, '<cp:coreProperties xmlns:cp="' + CORE + '" xmlns:dc="' + DC + '"/>');
     if (core.documentElement.namespaceURI !== CORE || core.documentElement.localName !== 'coreProperties')
       throw new Error('Invalid core-properties namespace.');
-    for (const creator of Array.from(core.getElementsByTagNameNS(DC, 'creator')))
-      creator.parentNode.removeChild(creator);
-    const creator = core.createElementNS(DC, 'dc:creator');
-    creator.appendChild(core.createTextNode(incomingAuthor));
-    core.documentElement.appendChild(creator);
-    metadataParts.push([corePath, core,
-      'application/vnd.openxmlformats-package.core-properties+xml', coreRelationship]);
+    const creators = Array.from(core.getElementsByTagNameNS(DC, 'creator'));
+    if (incomingAuthor.replace || !creators.some(creator => creator.textContent.trim())) {
+      for (const creator of creators) creator.parentNode.removeChild(creator);
+      const creator = core.createElementNS(DC, 'dc:creator');
+      creator.appendChild(core.createTextNode(incomingAuthor.name));
+      core.documentElement.appendChild(creator);
+      metadataParts.push([corePath, core,
+        'application/vnd.openxmlformats-package.core-properties+xml', coreRelationship]);
+    }
   }
   for (const [path, , type, relationshipType] of metadataParts) {
     let contentType = Array.from(types.getElementsByTagNameNS(CT, 'Override'))
@@ -119,7 +123,7 @@ export async function processOfficeMetadata(input: {
   /** Omit to inspect; null removes a superseded declaration from a new AI output. */
   label?: AiContentLabel | null;
   /** Set only for AI-produced outputs; inherited declarations retain their original author. */
-  author?: string;
+  author?: AiContentAuthor;
   signal?: AbortSignal;
   sandbox?: JsSandbox | null;
 }): Promise<{ label: AiContentLabel | null; size: number }> {

@@ -236,9 +236,13 @@ it('opens a temporary image through the cache without resolving its display id a
 
   await act(async () => actions.openFileEntryWithSystem(temporaryFile));
 
-  expect(mockPrepareSharedFile).toHaveBeenCalledWith(temporaryFile, {
-    watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
-  });
+  const { entry: temporaryEntry, uri: temporaryUri } = temporaryFile;
+  expect(mockPrepareSharedFile).toHaveBeenCalledWith(
+    { entry: temporaryEntry, uri: temporaryUri },
+    {
+      watermark: { kind: 'cherry', signature: { brandName: 'Cherry Studio' } },
+    },
+  );
   expect(mockOpen).toHaveBeenCalledWith(
     expect.objectContaining({
       file: expect.objectContaining({ uri: 'file:///cache/FileExports/remote.png' }),

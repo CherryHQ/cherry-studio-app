@@ -19,19 +19,22 @@ export async function importManagedFile(
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const source = new File(input.uri);
-  const aiContentLabel = await readSourceAiContent(
-    {
-      uri: input.uri,
-      mediaType:
-        input.mediaType ||
-        source.type ||
-        imageMediaTypeFromExtension(source.extension?.replace(/^\./, '')),
-    },
-    signal,
-  );
   const normalized = await normalizeImportedImage(input);
   try {
+    // Only a re-encoded image loses its source declaration; other imports copy their bytes.
+    const source = new File(input.uri);
+    const aiContentLabel = normalized
+      ? await readSourceAiContent(
+          {
+            uri: input.uri,
+            mediaType:
+              input.mediaType ||
+              source.type ||
+              imageMediaTypeFromExtension(source.extension?.replace(/^\./, '')),
+          },
+          signal,
+        )
+      : undefined;
     signal?.throwIfAborted();
     return await createInternalEntryWithPreview(
       entries,

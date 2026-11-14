@@ -21,18 +21,22 @@ share artifacts. Original-file copies naturally retain their bytes and existing 
 - `imageMetadata` builds random-access copy plans for PNG, JPEG, WebP and GIF containers. It changes
   metadata without decoding pixel payloads; `xmpMetadata` owns the TC260 namespace and preserves
   unrelated XMP. Legacy PNG and EXIF AIGC declarations can be inherited.
-- `shared/utils/aiContentText` owns Markdown front matter and HTML head metadata. The Markdown
+- `shared/utils/aiContentText` owns Markdown front matter and HTML head metadata, including the
+  iOS `text/x-markdown` type and heads closed implicitly by their first body element. The Markdown
   reading projection hides valid AIGC metadata and its `Cherry Studio` author; exact reads, copying
   and edits use stored text. Other authors and unrelated front matter remain visible.
 - `office.processOfficeMetadata` owns OOXML custom and core properties in the existing native
   compute pool.
 
-Actual AI document generation and editing also set the file-property author to `Cherry Studio`
-before publication, including Office script outputs. The shared `GENERATED_FILE_AUTHOR` identity
+Actual AI document generation sets the file-property author to `Cherry Studio` before
+publication, including Office script outputs; an AI edit keeps an author already present and adds
+`Cherry Studio` only when none exists. The shared `GENERATED_FILE_AUTHOR` identity
 is separate from the AIGC service name `CherryStudio`. DOCX/XLSX/PPTX use the core `dc:creator`
 property, Markdown uses front-matter `author`, and HTML uses a head `meta name="author"` property.
-Imported files and inherited declarations do not receive this author override. TXT, JSON, CSV and
-other raw formats keep their original content; no author line or sidecar is added.
+Imported files and inherited declarations do not receive this author override. Invalid Markdown
+front matter fails the AI write with a correction the model can apply. TXT, JSON, CSV and other
+raw formats keep their original content; no author line or sidecar is added. Import reads a source
+declaration only when image normalization re-encodes the file; other imports copy their bytes.
 
 Metadata handling completes before publishing the managed file and committing its final size.
 Draft content and metadata are prepared before replacing existing bytes. New AI edits clear

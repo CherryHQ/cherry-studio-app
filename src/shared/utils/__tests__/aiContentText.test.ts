@@ -18,6 +18,8 @@ const label = AiContentLabelSchema.parse({
   ReservedCode2: '',
 });
 const edited = { ...label, ProduceID: 'content-2', PropagateID: 'relay-2' };
+const generatedAuthor = { name: GENERATED_FILE_AUTHOR, replace: true };
+const editAuthor = { name: GENERATED_FILE_AUTHOR, replace: false };
 
 test('clears only superseded AIGC declarations, keeping content and unrelated metadata', () => {
   const source = '\uFEFF---\ntitle: Report\n---\nBody\r\n';
@@ -66,14 +68,14 @@ test('does not treat examples as declarations or inject over ambiguous/oversized
 
 test('normalizes the generated Markdown author without changing body or unrelated metadata', () => {
   const source = '\uFEFF---\r\nauthor: Model\r\ntitle: Report\r\n---\r\n# 原文 😀\r\nBody\r\n';
-  const stored = writeAiContentText(source, 'text/markdown', label, GENERATED_FILE_AUTHOR);
+  const stored = writeAiContentText(source, 'text/markdown', label, generatedAuthor);
   expect(stored.endsWith('# 原文 😀\r\nBody\r\n')).toBe(true);
   expect(stored).toContain('author: Cherry Studio\n');
   expect(stored).toContain('title: Report\n');
   expect(aiContentMarkdownBody(stored)).toBe(
     '\uFEFF---\ntitle: Report\n---\n# 原文 😀\r\nBody\r\n',
   );
-  const rewritten = writeAiContentText(stored, 'text/markdown', edited, GENERATED_FILE_AUTHOR);
+  const rewritten = writeAiContentText(stored, 'text/markdown', edited, generatedAuthor);
   expect(rewritten.match(/^author:/gm)).toHaveLength(1);
   expect(readAiContentText(rewritten, 'text/markdown')).toEqual(edited);
   expect(aiContentMarkdownBody(writeAiContentText(source, 'text/markdown', label))).toContain(
@@ -81,7 +83,7 @@ test('normalizes the generated Markdown author without changing body or unrelate
   );
   expect(
     aiContentMarkdownBody(
-      writeAiContentText('Only body\n', 'text/markdown', label, GENERATED_FILE_AUTHOR),
+      writeAiContentText('Only body\n', 'text/markdown', label, generatedAuthor),
     ),
   ).toBe('Only body\n');
 });
@@ -95,12 +97,12 @@ test('replaces real HTML author tags while preserving examples and other head/bo
     '<!DOCTYPE html><html><head><meta name="author" content="Model">' +
     '<META NAME="Author" content="Other">' +
     content;
-  const stored = writeAiContentText(source, 'text/html', label, GENERATED_FILE_AUTHOR);
+  const stored = writeAiContentText(source, 'text/html', label, generatedAuthor);
   expect(stored.match(/<meta name="author" content="Cherry Studio">/g)).toHaveLength(1);
   expect(stored).not.toContain('content="Model"');
   expect(stored).not.toContain('content="Other"');
   expect(stored.endsWith(content)).toBe(true);
-  const rewritten = writeAiContentText(stored, 'text/html', edited, GENERATED_FILE_AUTHOR);
+  const rewritten = writeAiContentText(stored, 'text/html', edited, generatedAuthor);
   expect(rewritten.match(/<meta name="author" content="Cherry Studio">/g)).toHaveLength(1);
   expect(readAiContentText(rewritten, 'text/html')).toEqual(edited);
 });
@@ -173,4 +175,62 @@ test('scans past a large script but still rejects a conflicting declaration at t
   expect(() =>
     readAiContentHtml(['<head><meta name="AIGC" content="', 'x'.repeat(256 * 1024), '"></head>']),
   ).toThrow('Oversized HTML metadata');
+});
+
+test('an AI edit keeps an existing author and adds the application author only when missing', () => {
+  const markdown = '---\nauthor: 张三\ntitle: Report\n---\nBody\n';
+  const storedMarkdown = writeAiContentText(markdown, 'text/markdown', label, editAuthor);
+  expect(storedMarkdown).toContain('author: 张三\n');
+  expect(storedMarkdown).not.toContain(GENERATED_FILE_AUTHOR);
+  expect(writeAiContentText('Body\n', 'text/markdown', label, editAuthor)).toContain(
+    'author: Cherry Studio\n',
+  );
+  const html = '<html><head><meta name="author" content="张三"></head><body>Body</body></html>';
+  const storedHtml = writeAiContentText(html, 'text/html', label, editAuthor);
+  expect(storedHtml).toContain('<meta name="author" content="张三">');
+  expect(storedHtml).not.toContain(GENERATED_FILE_AUTHOR);
+  expect(readAiContentText(storedHtml, 'text/html')).toEqual(label);
+  expect(
+    writeAiContentText(
+      '<html><head></head><body>Body</body></html>',
+      'text/html',
+      label,
+      editAuthor,
+    ),
+  ).toContain('<meta name="author" content="Cherry Studio">');
+});
+
+test('treats the iOS Markdown type and parameterized types as Markdown carriers', () => {
+  for (const mediaType of ['text/x-markdown', 'Text/Markdown; charset=utf-8']) {
+    const stored = writeAiContentText('Body\n', mediaType, label);
+    expect(stored.startsWith('---\n')).toBe(true);
+    expect(readAiContentText(stored, mediaType)).toEqual(label);
+  }
+});
+
+test('labels HTML whose head closes implicitly at the next body element', () => {
+  for (const source of [
+    '<!doctype html><html><head><title>Report</title><body>Body</body></html>',
+    '<!doctype html><html><head><title>Report</title><p>Body</p></html>',
+  ]) {
+    const stored = writeAiContentText(source, 'text/html', label, generatedAuthor);
+    expect(readAiContentText(stored, 'text/html')).toEqual(label);
+    expect(readAiContentHtml([stored])).toEqual(label);
+    expect(writeAiContentText(stored, 'text/html', null)).toBe(
+      source.replace('<title>', '<meta name="author" content="Cherry Studio"><title>'),
+    );
+  }
+  expect(
+    readAiContentText('<head><title>R</title><body><meta name="AIGC" content="bad">', 'text/html'),
+  ).toBeNull();
+});
+
+test('reports invalid Markdown front matter with an actionable error', () => {
+  for (const source of [
+    '---\ntitle: Q3 Report: Summary\n---\nBody\n',
+    '---\ntags: a\ntags: b\n---\nBody\n',
+  ])
+    expect(() => writeAiContentText(source, 'text/markdown', label)).toThrow(
+      /front matter is not valid YAML .*Quote values/,
+    );
 });

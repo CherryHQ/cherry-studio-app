@@ -10,6 +10,7 @@ import {
 } from '@/shared/data/types/aiContent';
 import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
 import {
+  aiContentTextType,
   readAiContentHtml,
   readAiContentText,
   writeAiContentText,
@@ -67,6 +68,7 @@ export async function readFileAiContent(
   signal?.throwIfAborted();
   const source = new File(file.uri);
   const mediaType = file.mediaType.split(';')[0].trim().toLowerCase();
+  const textType = aiContentTextType(mediaType);
   let label: AiContentLabel | null = null;
   if (IMAGES.has(mediaType)) {
     const reader = imageSource(source);
@@ -75,18 +77,18 @@ export async function readFileAiContent(
     } finally {
       reader.close();
     }
-  } else if (mediaType === 'text/markdown') {
+  } else if (textType === 'text/markdown') {
     const handle = source.open(FileMode.ReadOnly);
     try {
       // Only header carriers are inspected; importing a large text file never loads its body.
       label = readAiContentText(
         strFromU8(handle.readBytesSync(Math.min(source.size, MAX_AI_METADATA_BYTES))),
-        mediaType,
+        textType,
       );
     } finally {
       handle.close();
     }
-  } else if (mediaType === 'text/html') {
+  } else if (textType === 'text/html') {
     const handle = source.open(FileMode.ReadOnly);
     function* chunks() {
       let remaining = source.size;
@@ -143,11 +145,8 @@ export async function completeFileAiContent(
 ): Promise<AiContentLabel | null> {
   signal?.throwIfAborted();
   const mediaType = input.mediaType.split(';')[0].trim().toLowerCase();
-  const supported =
-    IMAGES.has(mediaType) ||
-    Boolean(OFFICE[mediaType]) ||
-    mediaType === 'text/markdown' ||
-    mediaType === 'text/html';
+  const textType = aiContentTextType(mediaType);
+  const supported = IMAGES.has(mediaType) || Boolean(OFFICE[mediaType]) || Boolean(textType);
   let label = input.aiContentLabel ? AiContentLabelSchema.parse(input.aiContentLabel) : null;
   if (!supported) return label;
   const file = new File(input.uri);
@@ -167,6 +166,9 @@ export async function completeFileAiContent(
   } else if (input.aiContentLabel === undefined) label = existing;
   if (!label) return null;
   if (JSON.stringify(existing) === JSON.stringify(label)) return label;
+  const author = input.aiOperation
+    ? { name: GENERATED_FILE_AUTHOR, replace: input.aiOperation === 'generate' }
+    : undefined;
   const temporary = new File(
     new Directory(file.parentDirectory.uri),
     createOrderedUuid() + '.metadata',
@@ -207,21 +209,14 @@ export async function completeFileAiContent(
         format: OFFICE[mediaType],
         output: temporary.uri,
         label,
-        author: input.aiOperation ? GENERATED_FILE_AUTHOR : undefined,
+        author,
         signal,
       });
     } else {
       const { text, hasBom } = decodeManagedUtf8(await file.bytes(), file.size);
       let content = (hasBom ? '\uFEFF' : '') + text;
       if (input.aiOperation) content = writeAiContentText(content, mediaType, null);
-      temporary.writeSync(
-        writeAiContentText(
-          content,
-          mediaType,
-          label,
-          input.aiOperation ? GENERATED_FILE_AUTHOR : undefined,
-        ),
-      );
+      temporary.writeSync(writeAiContentText(content, mediaType, label, author));
     }
     signal?.throwIfAborted();
     const extracted = await readFileAiContent({ uri: temporary.uri, mediaType }, signal);

@@ -4,6 +4,28 @@ import { AiContentLabelSchema, type AiContentLabel } from '@/shared/data/types/a
 import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
 
 const MAX_METADATA_CHARACTERS = 256 * 1024;
+/** Elements that may appear in a head; any other element implicitly ends it. */
+const HEAD_CONTENT = new Set([
+  'base',
+  'link',
+  'meta',
+  'noscript',
+  'script',
+  'style',
+  'template',
+  'title',
+]);
+
+/** An AI generation sets the application author; an AI edit keeps an author already present. */
+export type AiContentAuthor = { name: string; replace: boolean };
+
+/** The text carrier for a media type. iOS reports Markdown from Files as `text/x-markdown`. */
+export function aiContentTextType(mediaType: string): 'text/markdown' | 'text/html' | undefined {
+  const type = mediaType.split(';')[0].trim().toLowerCase();
+  if (type === 'text/markdown' || type === 'text/x-markdown') return 'text/markdown';
+  if (type === 'text/html') return 'text/html';
+  return undefined;
+}
 
 function markdownHeader(text: string) {
   const opening = /^\uFEFF?---[ \t]*\r?\n/.exec(text);
@@ -15,7 +37,11 @@ function markdownHeader(text: string) {
   if (!closing) return undefined;
   const document = parseDocument(tail.slice(0, closing.index), { uniqueKeys: true });
   if (document.errors.length && isMap(document.contents))
-    throw new Error('Conflicting or invalid Markdown metadata');
+    throw new Error(
+      `The Markdown front matter is not valid YAML (${document.errors[0].message.split('\n')[0]}). ` +
+        'Quote values that contain ": " or " #", remove duplicate keys, or start the file with ' +
+        'a non-"---" line if it has no front matter, then save again.',
+    );
   if (document.errors.length || (document.contents && !isMap(document.contents))) return undefined;
   const end = opening[0].length + closing.index + closing[0].length;
   return {
@@ -158,20 +184,25 @@ function decodeAttribute(value: string): string {
   });
 }
 
-function htmlMetadata(text: string, includeAuthor = false) {
+function endsHead(tag: { text: string }) {
+  const name = /^<\/?([a-z0-9:-]+)/i.exec(tag.text)?.[1].toLowerCase() ?? '';
+  return name === 'head' ? tag.text.startsWith('</') : !HEAD_CONTENT.has(name);
+}
+
+function htmlMetadata(text: string) {
   const tags = Array.from(htmlTags([text]));
   const head = tags.find((tag) => /^<head\b/i.test(tag.text));
-  const end = head && tags.find((tag) => tag.start >= head.end && /^<\/head\b/i.test(tag.text));
-  const metadata =
-    head && end
-      ? tags.filter((tag) => {
-          if (tag.start < head.end || tag.end > end.start || !/^<meta\b/i.test(tag.text))
-            return false;
+  // `</head>` may be omitted; the first non-head element (usually `<body>`) then closes it.
+  const end = head && tags.find((tag) => tag.start >= head.end && endsHead(tag))?.start;
+  const metas =
+    head && end !== undefined
+      ? tags.flatMap((tag) => {
+          if (tag.start < head.end || tag.end > end || !/^<meta\b/i.test(tag.text)) return [];
           const name = attributes(tag.text).name?.toLowerCase();
-          return name === 'aigc' || (includeAuthor && name === 'author');
+          return name === 'aigc' || name === 'author' ? [{ ...tag, name }] : [];
         })
       : [];
-  return { tags, head, end, metadata };
+  return { tags, head, end, metas };
 }
 
 /** Inspect the complete head without retaining script/style bodies or loading the document body. */
@@ -184,7 +215,7 @@ export function readAiContentHtml(chunks: Iterable<string>): AiContentLabel | nu
       else if (/^<body\b/i.test(tag.text)) return null;
       continue;
     }
-    if (/^<\/head\b/i.test(tag.text)) return label;
+    if (endsHead(tag)) return label;
     if (!/^<meta\b/i.test(tag.text)) continue;
     const values = attributes(tag.text);
     if (values.name?.toLowerCase() !== 'aigc') continue;
@@ -200,27 +231,29 @@ export function readAiContentHtml(chunks: Iterable<string>): AiContentLabel | nu
 
 /** Read the declared carrier, never labels embedded in prose, scripts, or arbitrary JSON. */
 export function readAiContentText(text: string, mediaType: string): AiContentLabel | null {
-  if (mediaType === 'text/markdown') {
+  const type = aiContentTextType(mediaType);
+  if (type === 'text/markdown') {
     const header = markdownHeader(text);
     const node = header?.document.get('AIGC', true);
     if (node === undefined) return null;
     if (!isNode(node)) throw new Error('Invalid AIGC Markdown metadata');
     return AiContentLabelSchema.parse(node.toJSON());
   }
-  if (mediaType === 'text/html') return readAiContentHtml([text]);
+  if (type === 'text/html') return readAiContentHtml([text]);
   return null;
 }
 
-/** Null removes only AIGC. AI producers may also replace the file-property author. */
+/** Null removes only AIGC. AI producers may also set the file-property author. */
 export function writeAiContentText(
   text: string,
   mediaType: string,
   input: AiContentLabel | null,
-  author?: string,
+  author?: AiContentAuthor,
 ): string {
   const label = input === null ? null : AiContentLabelSchema.parse(input);
+  const type = aiContentTextType(mediaType);
   if (label) readAiContentText(text, mediaType);
-  if (mediaType === 'text/markdown') {
+  if (type === 'text/markdown') {
     const header = markdownHeader(text);
     if (!label) {
       if (!header?.document.has('AIGC')) return text;
@@ -230,8 +263,8 @@ export function writeAiContentText(
         : header.bom + '---\n' + header.document.toString() + '---\n' + header.body;
     }
     const document = header?.document ?? parseDocument('{}');
-    if (author !== undefined) {
-      document.set('author', author);
+    if (author && (author.replace || !document.has('author'))) {
+      document.set('author', author.name);
       if (isMap(document.contents)) document.contents.flow = false;
     }
     document.set('AIGC', label);
@@ -239,32 +272,32 @@ export function writeAiContentText(
     const body = header?.body ?? text.slice(bom.length);
     return bom + '---\n' + document.toString() + '---\n' + body;
   }
-  if (mediaType === 'text/html') {
+  if (type === 'text/html') {
     const attribute = (value: string) =>
       value
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    const { tags, head, end, metas } = htmlMetadata(text);
+    const writeAuthor =
+      label !== null && author && (author.replace || !metas.some((tag) => tag.name === 'author'));
+    const removed = metas.filter((tag) => tag.name === 'aigc' || writeAuthor);
     const meta = label
       ? '<meta name="AIGC" content="' +
         attribute(JSON.stringify(label)) +
         '">' +
-        (author === undefined ? '' : '<meta name="author" content="' + attribute(author) + '">')
+        (writeAuthor ? '<meta name="author" content="' + attribute(author.name) + '">' : '')
       : '';
-    const { tags, head, end, metadata } = htmlMetadata(
-      text,
-      label !== null && author !== undefined,
-    );
-    if (!label && !metadata.length) return text;
-    if (head && !end) throw new Error('Unclosed HTML head');
-    if (head && end) {
-      let body = text.slice(head.end, end.start);
-      for (const tag of metadata.toReversed()) {
+    if (!label && !removed.length) return text;
+    if (head && end === undefined) throw new Error('Unclosed HTML head');
+    if (head && end !== undefined) {
+      let body = text.slice(head.end, end);
+      for (const tag of removed.toReversed()) {
         const start = tag.start - head.end;
         body = body.slice(0, start) + body.slice(tag.end - head.end);
       }
-      return text.slice(0, head.end) + meta + body + text.slice(end.start);
+      return text.slice(0, head.end) + meta + body + text.slice(end);
     }
     const html = tags.find((tag) => /^<html\b/i.test(tag.text));
     if (html) return text.slice(0, html.end) + '<head>' + meta + '</head>' + text.slice(html.end);
