@@ -20,6 +20,8 @@ export type SectionHeaderProps = Omit<ViewProps, 'children' | 'className' | 'sty
 type SectionItemBaseProps = AccessibilityProps &
   Pick<ViewProps, 'onAccessibilityAction'> & {
     density?: SectionItemDensity;
+    /** Omit row insets when the containing surface already owns the content gutter. */
+    inset?: 'default' | 'none';
     destructive?: boolean;
     disabled?: boolean;
     /**

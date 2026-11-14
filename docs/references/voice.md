@@ -54,8 +54,10 @@ resolves live voice engines from preferences. File transcription has an independ
   selection, dictation is off and speech uses the first supported entry. `system` and `sensevoice`
   are registered for dictation; only `system` reads aloud. The runtime allows one activity at a time:
   dictation stops reading, reading replaces
-  reading, and reading cannot start during dictation or file transcription. Backgrounding aborts
-  capture/playback; file transcription follows its caller’s cancellation signal so Agent work can
+  reading, and reading cannot start during dictation or file transcription. Replacement waits for
+  the previous native operation to settle before configuring another audio use. Backgrounding aborts
+  capture; iOS reading can continue after background-audio consent, while other reading still stops.
+  File transcription follows its caller’s cancellation signal so Agent work can
   use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
 - `speechText.ts` turns Markdown into prose and splits speech into utterances within the system's
@@ -63,7 +65,12 @@ resolves live voice engines from preferences. File transcription has an independ
 - `systemDictation.ts` owns `expo-speech-recognition`, permissions, native listeners and cleanup.
   `systemSpeech.ts` owns `expo-speech`, installed voice selection and speech cancellation.
   `audioSession.ts` configures the shared audio session through `expo-audio` so reading aloud plays
-  with the iOS ring switch silenced.
+  with the iOS ring switch silenced. Token-owned capture suspends the silent background loop until
+  cleanup; speech owns its audio profile while the loop covers utterance gaps. Only the backend iOS execution source can
+  start that loop after consent, only as fallback when official continued processing is unavailable.
+  Actual background reading does not require a silent loop while official processing protects tasks.
+  The native app includes iOS background audio without enabling
+  Android's media-playback service or background microphone capture.
 - `senseVoiceDictation.ts` owns local recording and cleanup. `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
   recognizes bounded file windows. `transcribeAudioFile.ts` validates managed sources and publishes

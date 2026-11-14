@@ -48,8 +48,10 @@ const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockSsh = { kind: 'ssh', hasPendingStorageWork: () => false };
 const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime', hasPendingStorageWork: () => false };
+const mockScreenAwake = { acquire: jest.fn() };
 const mockMcpRuntime = { kind: 'mcp-runtime', hasPendingStorageWork: jest.fn(() => false) };
 const mockPreference = {
   kind: 'preference',
@@ -75,6 +77,7 @@ const mockServices = {
   jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
   preference: mockPreference,
+  sshProfile: { initialize: jest.fn() },
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
@@ -83,6 +86,7 @@ const mockDisposeSkills = jest.fn(async () => {});
 const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockDisposeUuRemote = jest.fn(async () => {});
+const mockDisposeDiagnostics = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -94,6 +98,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   disposeVoice: mockDisposeVoice,
   disposeAppUpdate: mockDisposeAppUpdate,
   disposeUuRemote: mockDisposeUuRemote,
+  disposeDiagnostics: mockDisposeDiagnostics,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -180,12 +185,14 @@ const createRuntime = () =>
     BackupRuntime: mockBackup,
     TrashRuntime: mockTrash,
     DesktopConnectionRuntime: mockDesktopConnections,
+    SshRuntime: mockSsh,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     EnterpriseSyncService: mockEnterpriseSync,
     JobRuntime: mockJobRuntime,
+    ScreenAwakeRuntime: mockScreenAwake,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
     PreferenceService: mockPreference,
@@ -333,6 +340,7 @@ describe('createAppBootstrapRuntime', () => {
     await Promise.race([initializing, boot]);
     expect(mockValidateRestoringStorage).toHaveBeenCalledTimes(1);
     expect(mockCache.resetForRestore).toHaveBeenCalledTimes(1);
+    expect(mockServices.sshProfile.initialize).toHaveBeenCalledTimes(1);
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     initialized();
     await boot;
@@ -364,6 +372,18 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     expect(mockRejectStorageCandidate).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  test('does not commit a restored generation when its SSH configuration cannot initialize', async () => {
+    mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
+    mockServices.sshProfile.initialize.mockImplementationOnce(() => {
+      throw new Error('SSH configuration storage failed');
+    });
+    const runtime = createRuntime();
+    await expect(runtime.initialize()).rejects.toMatchObject({ code: 'restart-required' });
+    expect(mockCommitStorageBoot).not.toHaveBeenCalled();
+    expect(mockFailStorageBoot).toHaveBeenCalledTimes(1);
     await runtime.dispose();
   });
 
@@ -409,12 +429,14 @@ describe('createAppBootstrapRuntime', () => {
       backup: mockBackup,
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      ssh: mockSsh,
       remoteAgent: mockRemoteAgent,
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       account: mockEnterpriseAccount,
       languageServing: mockAgentRuntime,
+      screenAwake: mockScreenAwake,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
       region: mockRegion,

@@ -12,10 +12,10 @@ import {
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
 import { AgentEditor } from '@/frontend/components/AgentEditor';
+import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useMainHeaderAgent } from './MainHeaderAgentLabel';
-import { MainHeaderAgentPickerSheet } from './MainHeaderAgentPickerSheet';
 import { MainHeaderView } from './MainHeaderView/MainHeaderView';
 
 export function MainHeader({
@@ -85,7 +85,8 @@ function LocalAgentPicker({
       ? route.target.workspaceDraftId
       : undefined;
   return (
-    <MainHeaderAgentPickerSheet
+    <AgentPickerSheet
+      testID="main-header-agent-picker"
       currentAgentId={currentAgentId}
       catalog={catalog}
       open={open}

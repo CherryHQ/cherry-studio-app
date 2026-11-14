@@ -10,13 +10,14 @@
 
 import * as z from 'zod';
 
-import type { ParsedDocument } from '@/backend/services/file/documentParser';
+import type { ParsedAnydocDocument, ParsedDocument } from '@/backend/services/file/documentParser';
 import { linkFileOcr } from '@/backend/services/file/fileTextExtraction';
 import {
   readAttachmentContent,
   type ReadAttachmentContent,
 } from '@/backend/services/file/readAttachmentContent';
 import { countCodePoints } from '@/backend/services/file/utf8Text';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   FileAttachmentError,
@@ -54,6 +55,8 @@ export const READ_FILE_MAX_CHARACTERS = 100_000;
  * room for the other fields, so `nextOffset` never skips text the model was cut off from.
  */
 export const READ_FILE_MAX_TEXT_BYTES = 40 * 1024;
+/** Retained text and serialized metadata, budgeted at two bytes per UTF-16 code unit. */
+export const READ_FILE_MAX_CACHED_BYTES = 8 * 1024 * 1024;
 
 export const readFileInputSchema = z.strictObject({
   file_entry_id: z
@@ -103,7 +106,21 @@ export type ReadFileFiles = {
 
 type ReadContent =
   | Extract<ReadAttachmentContent, { kind: 'text' }>
-  | (Extract<ReadAttachmentContent, { kind: 'document' }> & { json: string });
+  | {
+      kind: 'document';
+      json: string;
+      metadata: {
+        parser: 'anydoc';
+        parserVersion: string;
+        warnings: ParsedAnydocDocument['output']['warnings'];
+        assets: {
+          assetRef: string;
+          contentType: ParsedAnydocDocument['output']['assets'][number]['contentType'];
+          size: number;
+          delivery: 'reference-only';
+        }[];
+      };
+    };
 
 const NEEDS_VISION =
   'The current model cannot receive image pixels; tell the user that a vision-capable model is needed to inspect it.';
@@ -116,28 +133,34 @@ const MODEL_FACING_READ_ERRORS: Partial<Record<FileAttachmentIssue['code'], stri
   'image-ocr-unsupported': `On-device OCR does not support the current app language. ${NEEDS_VISION}`,
 };
 
-export function createReadFileTool(
-  files: ReadFileFiles,
-  scope: TurnFileScope,
-  documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
-  access?: WorkspaceFileAccess,
-  acceptsImages = true,
-): RuntimeTool {
-  /**
-   * The last document this turn parsed, so paging a large document parses it
-   * once rather than once per window. A document id always names the same
-   * content — only UTF-8 drafts are rewritten in place — so it never goes stale.
-   */
-  let lastDocument: { id: FileEntryId; content: ReadContent } | undefined;
+/** Each deferred reader must describe its media rules without loading another tool. */
+export function buildFileReadInstructions(
+  documentParserMode: DocumentParserMode,
+  acceptsImages: boolean,
+): string {
+  return `This turn uses the ${documentParserMode} document parser. ${
+    documentParserMode === 'anydoc'
+      ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
+      : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
+  } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. Use either start_line/limit or offset/max_characters; never combine the two groups. sourceTruncated means the extractor reached its own limit. ${
+    acceptsImages
+      ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use this tool directly, outside Code Mode, to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
+      : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
+  }`;
+}
 
-  const read = async (
-    source: ManagedFileFact,
-    signal: AbortSignal,
-    toolCallId: string,
-  ): Promise<ReadContent> => {
-    if (lastDocument?.id === source.fileEntryId) return lastDocument.content;
-    // The tool row observes recognition by call ID, including reads by workspace path.
-    const unlinkOcr = linkFileOcr(toolCallId, source.fileEntryId);
+/** Shared only by this turn's readers; authorization and availability stay with each tool call. */
+export function createReadFileContentReader(
+  files: ReadFileFiles,
+  documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+) {
+  let lastDocument: { key: string; content: ReadContent } | undefined;
+  const pending = new Map<
+    string,
+    { controller: AbortController; consumers: number; result: Promise<ReadContent> }
+  >();
+
+  const load = async (source: ManagedFileFact, signal: AbortSignal): Promise<ReadContent> => {
     const content = await readAttachmentContent(
       source,
       {
@@ -148,33 +171,101 @@ export function createReadFileTool(
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
       documentParserMode,
-    ).finally(unlinkOcr);
-    const result: ReadContent =
-      content.kind === 'document'
-        ? { ...content, json: JSON.stringify(content.parsed.output.ir) }
-        : content;
-    if (
-      documentFileTypeFromMediaType(source.mediaType) ||
-      isAiSupportedImageMediaType(source.mediaType)
-    ) {
-      lastDocument = { id: source.fileEntryId, content: result };
-    }
-    return result;
+    );
+    signal.throwIfAborted();
+    if (content.kind === 'text') return content;
+    const { parsed } = content;
+    // Paging only needs JSON and output metadata, not another copy of the IR or embedded bytes.
+    return {
+      kind: 'document',
+      json: JSON.stringify(parsed.output.ir),
+      metadata: {
+        parser: parsed.parser,
+        parserVersion: parsed.parserVersion,
+        warnings: parsed.output.warnings,
+        assets: parsed.output.assets.map((asset) => ({
+          assetRef: asset.assetRef,
+          contentType: asset.contentType,
+          size: asset.bytes.byteLength,
+          delivery: 'reference-only',
+        })),
+      },
+    };
   };
 
+  return async (
+    source: ManagedFileFact,
+    signal: AbortSignal,
+    toolCallId: string,
+  ): Promise<ReadContent> => {
+    signal.throwIfAborted();
+    // Documents and images are immutable versions. Plain text may be a rewritten turn draft.
+    const isCacheable = !!(
+      documentFileTypeFromMediaType(source.mediaType) ||
+      isAiSupportedImageMediaType(source.mediaType)
+    );
+    const key = `${source.fileEntryId}:${source.revision ?? ''}`;
+    if (isCacheable && lastDocument?.key === key) return lastDocument.content;
+    // The tool row observes recognition by call ID, including reads by workspace path.
+    const unlinkOcr = linkFileOcr(toolCallId, source.fileEntryId);
+    try {
+      if (!isCacheable) return await load(source, signal);
+      let operation = pending.get(key);
+      if (!operation) {
+        const controller = new AbortController();
+        operation = {
+          controller,
+          consumers: 0,
+          result: load(source, controller.signal).then((content) => {
+            controller.signal.throwIfAborted();
+            const bytes =
+              content.kind === 'document'
+                ? 2 * (content.json.length + JSON.stringify(content.metadata).length)
+                : 2 * content.text.length + 8 * (content.unrecognizedPages?.length ?? 0);
+            lastDocument = bytes <= READ_FILE_MAX_CACHED_BYTES ? { key, content } : undefined;
+            return content;
+          }),
+        };
+        pending.set(key, operation);
+        const owner = operation;
+        const remove = () => {
+          if (pending.get(key) === owner) pending.delete(key);
+        };
+        void operation.result.then(remove, remove);
+      }
+      const owner = operation;
+      owner.consumers += 1;
+      try {
+        const content = await raceAbort(owner.result, signal);
+        signal.throwIfAborted();
+        return content;
+      } finally {
+        owner.consumers -= 1;
+        if (owner.consumers === 0 && pending.get(key) === owner) {
+          pending.delete(key);
+          owner.controller.abort(signal.reason);
+        }
+      }
+    } finally {
+      unlinkOcr();
+    }
+  };
+}
+
+export function createReadFileTool(
+  files: ReadFileFiles,
+  scope: TurnFileScope,
+  documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+  access?: WorkspaceFileAccess,
+  acceptsImages = true,
+  readContent = createReadFileContentReader(files, documentParserMode),
+): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: READ_FILE_TOOL_NAME },
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
-    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. This turn uses the ${documentParserMode} document parser. ${
-      documentParserMode === 'anydoc'
-        ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
-        : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. ${
-      acceptsImages
-        ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
-        : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
-    }`,
+    deferred: true,
+    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. ${buildFileReadInstructions(documentParserMode, acceptsImages)}`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
@@ -193,8 +284,6 @@ export function createReadFileTool(
         parsed.data.start_line !== undefined || parsed.data.limit !== undefined;
       const hasJsonParameters =
         parsed.data.offset !== undefined || parsed.data.max_characters !== undefined;
-      if (hasLineParameters && hasJsonParameters)
-        return invalid('Line parameters and offset parameters cannot be combined.');
       if (!access && (!file_entry_id || parsed.data.path))
         return invalid('Provide a managed file_entry_id.');
       const fileEntryId = access
@@ -206,9 +295,16 @@ export function createReadFileTool(
 
       signal.throwIfAborted();
       const source = (await files.resolveAvailable([fileEntryId])).get(fileEntryId);
+      signal.throwIfAborted();
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
+      if (
+        hasLineParameters &&
+        hasJsonParameters &&
+        !(isAiSupportedImageMediaType(source.mediaType) && acceptsImages)
+      )
+        return invalid('Line parameters and offset parameters cannot be combined.');
       if (isAudioMediaType(source.mediaType))
         return invalid(
           'Audio has no readable text yet. Use transcribe_audio first, then read_file on its generated transcript. If that tool is unavailable, ask the user to transcribe the recording from the file menu.',
@@ -217,7 +313,9 @@ export function createReadFileTool(
         if (source.size > MAX_IMAGE_ATTACHMENT_BYTES)
           return invalid('The image exceeds the attachment byte limit.');
         if (hasLineParameters || hasJsonParameters)
-          return invalid('Images do not support paging parameters.');
+          return invalid(
+            'Images do not support paging parameters. Retry this read_file call without start_line, limit, offset, or max_characters.',
+          );
         try {
           const image = await files.readImage?.(source, signal);
           signal.throwIfAborted();
@@ -245,11 +343,11 @@ export function createReadFileTool(
       let unrecognizedPages: number[] | undefined;
       let parser: 'builtin' | 'native-pdf' | 'native-image-ocr' | undefined;
       try {
-        const content = await read(source, signal, toolCallId);
+        const content = await readContent(source, signal, toolCallId);
+        signal.throwIfAborted();
         if (content.kind === 'document') {
           if (hasLineParameters)
             return invalid('AnyDoc JSON requires offset/max_characters, not start_line/limit.');
-          const { parsed: document } = content;
           const window = characterWindow(content.json, offset, max_characters);
           return {
             value: {
@@ -258,17 +356,9 @@ export function createReadFileTool(
               ...(source.revision !== undefined ? { revision: source.revision } : {}),
               filename: source.name,
               size: source.size,
-              parser: document.parser,
-              parserVersion: document.parserVersion,
+              ...content.metadata,
               format: 'json-fragment',
               ...window,
-              warnings: document.output.warnings,
-              assets: document.output.assets.map((asset) => ({
-                assetRef: asset.assetRef,
-                contentType: asset.contentType,
-                size: asset.bytes.byteLength,
-                delivery: 'reference-only',
-              })),
             },
             artifacts: [],
           };

@@ -1,4 +1,3 @@
-import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
@@ -57,8 +56,11 @@ export type BackgroundReplyTurn = {
     reason?: 'question',
     requestId?: string,
   ) => void;
-  /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
-  finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
+  /** Shows terminal content immediately; resolves when final surface/notice delivery settles. */
+  finish: (
+    outcome: BackgroundReplyOutcome,
+    options?: { waitFor?: Promise<unknown> },
+  ) => void | Promise<void>;
   /** Removes the surface without terminal content or a notice; the work continues elsewhere. */
   retire: () => void;
   update: (message: BackgroundReplyMessage, options?: BackgroundReplyUpdateOptions) => void;
@@ -74,12 +76,8 @@ export type BackgroundReplyTurnInput = {
 };
 
 export type BackgroundReplyLifecycle = {
-  /**
-   * Protects submission preparation until the turn acquires its own execution
-   * lease, and gives the Session a surface for the whole preparation stage:
-   * a user who leaves the app before the turn exists still gets one.
-   */
-  acquirePreparation: (sessionId: string, onInterrupt: (reason: Error) => void) => KeepAliveLease;
+  /** Opens preparation's surface. The returned callback cancels only an unadmitted preparation. */
+  prepareSession: (sessionId: string) => () => void;
   clearSession: (sessionId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string, connectionId?: string) => void;

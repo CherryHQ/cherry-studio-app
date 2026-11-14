@@ -16,6 +16,7 @@ export function ComposerEditor({
   onLinkPress,
   onReturnSubmit,
   placeholder,
+  restingTrailingActionCount,
   submitOnReturn,
   testID,
 }: PropsWithChildren<{
@@ -26,6 +27,7 @@ export function ComposerEditor({
   onLinkPress?: ComposerInputProps['onLinkPress'];
   onReturnSubmit?: (markdown: string) => void;
   placeholder?: string;
+  restingTrailingActionCount?: number;
   submitOnReturn?: boolean;
   testID: string;
 }>) {
@@ -49,6 +51,7 @@ export function ComposerEditor({
           testID={`${testID}-input`}
         />
       }
+      restingTrailingActionCount={restingTrailingActionCount}
       testID={`${testID}-expand`}
     >
       {children}

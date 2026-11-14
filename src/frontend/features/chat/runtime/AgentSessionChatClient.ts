@@ -1,8 +1,9 @@
 import type {
   AgentApprovalView,
+  AgentEditUserMessageInput,
+  AgentEvent,
   AgentPendingQuestion,
   AgentUserAnswers,
-  AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -36,6 +37,7 @@ export type AgentSessionChatState = {
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
+  contextUsages?: AgentSessionSnapshot['contextUsages'];
   status: AgentSessionChatStatus;
 };
 
@@ -350,33 +352,55 @@ export class AgentSessionChatClient {
   }
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
-    const entry = this.getEntry(input.sessionId);
-    // Explicit model selection adds a branch and keeps the source answer visible.
-    const submission = this.beginSubmission(entry, {
+    // A retry without a model replaces the displayed answer; explicit model selection adds
+    // another answer and keeps its source visible. A returned Session also needs invalidation.
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.retryMessage(input), {
       pendingRetryMessageId: input.modelId === undefined ? input.messageId : undefined,
+      applied: (session) => {
+        if (session) {
+          this.options.onSessionChanged?.(session.id);
+          this.options.onTranscriptChanged?.(session.id);
+        }
+      },
+    });
+  }
+
+  async editUserMessage(input: AgentEditUserMessageInput): Promise<void> {
+    // Editing adds a sibling question; it never hides or rewrites the original exchange.
+    return this.runTranscriptSubmission(input.sessionId, () =>
+      this.protocol.editUserMessage(input),
+    );
+  }
+
+  /** One idle-only admission/observation lifecycle, with operation semantics kept by callers. */
+  private async runTranscriptSubmission<Result>(
+    sessionId: string,
+    submit: () => Promise<Result>,
+    options: { pendingRetryMessageId?: string; applied?: (result: Result) => void } = {},
+  ): Promise<Result> {
+    const entry = this.getEntry(sessionId);
+    const submission = this.beginSubmission(entry, {
+      pendingRetryMessageId: options.pendingRetryMessageId,
     });
     try {
-      await this.observe(input.sessionId);
+      await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
-      const session = await this.protocol.retryMessage(input);
-      this.options.onSessionChanged?.(input.sessionId);
-      this.options.onTranscriptChanged?.(input.sessionId);
-      if (session) {
-        this.options.onSessionChanged?.(session.id);
-        this.options.onTranscriptChanged?.(session.id);
-      }
-      return session;
+      const result = await submit();
+      this.options.onSessionChanged?.(sessionId);
+      this.options.onTranscriptChanged?.(sessionId);
+      options.applied?.(result);
+      return result;
     } finally {
-      // Drop the display overlay; preparation never mutates the source answer.
+      // Preparation never mutates a source row; retire only its pending display overlay.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
         pendingRetryMessageId: undefined,
       });
-      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+      if (entry.listeners.size === 0 && this.sessions.get(sessionId) === entry) {
         this.stopObservation(entry);
-        this.sessions.delete(input.sessionId);
+        this.sessions.delete(sessionId);
       }
     }
   }
@@ -422,8 +446,8 @@ export class AgentSessionChatClient {
     }
 
     const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
-    // Observation supplies a question while an answer to it runs: settled history omits it then,
-    // even when a page read just before a regeneration still holds it.
+    // Keep the question and its answer versions while any answer runs: settled history omits
+    // their whole turn, even when a page read just before regeneration still holds those rows.
     const answeredLive = new Set(
       [...entry.liveMessages.values()].flatMap((message) =>
         message.role === 'assistant' && message.parentId && !isTerminalMessage(message)
@@ -437,6 +461,7 @@ export class AgentSessionChatClient {
       if (
         persistedMessage &&
         !answeredLive.has(messageId) &&
+        !(liveMessage.parentId && answeredLive.has(liveMessage.parentId)) &&
         persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
@@ -492,6 +517,10 @@ export class AgentSessionChatClient {
     const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
     await this.refresh(sessionId);
     return result;
+  }
+
+  async steerQueuedInput(sessionId: string, turnId: string) {
+    return this.protocol.steerQueuedInput({ sessionId, turnId });
   }
 
   async respondQuestion(
@@ -596,6 +625,7 @@ export class AgentSessionChatClient {
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
       contextStatus: snapshot.contextStatus,
+      contextUsages: snapshot.contextUsages,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -610,10 +640,14 @@ export class AgentSessionChatClient {
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;
+      case 'context.usage.updated':
+        this.updateState(entry, { ...entry.state, contextUsages: event.usages });
+        return;
       case 'runtime.failed':
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,
+          contextUsages: [],
           pendingApprovals: [],
           pendingQuestion: null,
           status: 'error',

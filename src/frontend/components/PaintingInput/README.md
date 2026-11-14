@@ -64,3 +64,5 @@ generation. Sending hides the reference preview while preserving selection for f
 Parameter drafts retain invalid user edits for correction. First visits use mode defaults and legal
 shared values from the same model; returning to a mode restores its saved draft. Submission freezes
 and validates the selected model, actual mode, parameters, prompt and participating images.
+GPT Image 2.6 generation defaults to GIF, with automatic size and compatible background controls.
+Submission sends the default output format explicitly while preserving a user-selected static format.

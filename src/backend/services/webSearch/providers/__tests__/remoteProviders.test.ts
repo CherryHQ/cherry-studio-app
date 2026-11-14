@@ -68,6 +68,101 @@ test('keeps Exa MCP search and page-reading capabilities with their separate dea
   });
 });
 
+test('reads Exa pages through the mobile provider with its configured host and key', async () => {
+  const configuration = providerConfig('exa');
+  configuration.apiKeys = ['exa-key'];
+  configuration.capabilities.find((item) => item.feature === 'fetchUrls')!.apiHost =
+    'https://read.example.com';
+  request.mockResolvedValue({
+    status: 200,
+    headers: {},
+    bodyText: JSON.stringify({
+      results: [{ title: 'Page', text: ' Full page ', url: 'https://example.com' }],
+    }),
+  });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.fetchUrls!(' https://example.com ', config)).resolves.toMatchObject({
+    providerId: 'exa',
+    capability: 'fetchUrls',
+    results: [{ title: 'Page', content: 'Full page', sourceInput: 'https://example.com' }],
+  });
+  const call = request.mock.calls[0][0];
+  expect(call).toMatchObject({
+    url: 'https://read.example.com/contents',
+    method: 'POST',
+    headers: { 'x-api-key': 'exa-key' },
+    timeoutMs: 60_000,
+  });
+  expect(JSON.parse(call.body!)).toEqual({ urls: ['https://example.com'], text: true });
+});
+
+test.each([
+  {
+    id: 'stepfun',
+    response: { results: [{ title: 'Result', url: 'https://example.com', snippet: 'Summary' }] },
+    path: '/v1/search',
+    method: 'POST',
+    body: { query: 'query', n: 5 },
+  },
+  {
+    id: 'serpkite',
+    response: { results: [{ title: 'Result', link: 'https://example.com', snippet: 'Summary' }] },
+    path: '/v1/search?q=query&num=5',
+    method: 'GET',
+    body: undefined,
+  },
+] as const)('runs $id searches with mobile credentials and result limits', async (scenario) => {
+  const configuration = providerConfig(scenario.id);
+  configuration.apiKeys = ['search-key'];
+  configuration.capabilities[0].apiHost = 'https://search.example.com';
+  request.mockResolvedValue({
+    status: 200,
+    headers: {},
+    bodyText: JSON.stringify(scenario.response),
+  });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.searchKeywords!('query', config)).resolves.toMatchObject({
+    providerId: scenario.id,
+    results: [{ title: 'Result', content: 'Summary', url: 'https://example.com' }],
+  });
+  const call = request.mock.calls[0][0];
+  expect(call).toMatchObject({
+    url: `https://search.example.com${scenario.path}`,
+    method: scenario.method,
+    headers: { Authorization: 'Bearer search-key' },
+  });
+  expect(call.body ? JSON.parse(call.body) : undefined).toEqual(scenario.body);
+});
+
+test.each([
+  [5, 5],
+  [100, 100],
+  [101, 100],
+  [200, 100],
+])(
+  'limits SerpKite requests for %i configured results to %i',
+  async (maxResults, expectedResults) => {
+    const configuration = providerConfig('serpkite');
+    configuration.apiKeys = ['search-key'];
+    const runtimeConfig = Object.freeze({ ...config, maxResults });
+    request.mockResolvedValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({ results: [] }),
+    });
+    const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), {
+      request,
+    });
+
+    await provider.searchKeywords!('query', runtimeConfig);
+
+    expect(request.mock.calls[0][0].url).toBe(
+      `https://api.serpkite.com/v1/search?q=query&num=${expectedResults}`,
+    );
+    expect(runtimeConfig.maxResults).toBe(maxResults);
+  },
+);
+
 test('never enables a protocol capability absent from the host configuration', async () => {
   const configuration = providerConfig('exa-mcp');
   configuration.capabilities = configuration.capabilities.filter(
@@ -265,9 +360,7 @@ test.each([
   },
 );
 
-function providerConfig(
-  id: 'exa-mcp' | 'searxng' | 'deepseek' | 'yuanbao' | 'crawl4ai' | 'desearch',
-): WebSearchProvider {
+function providerConfig(id: WebSearchProvider['id']): WebSearchProvider {
   const preset = WEB_SEARCH_PROVIDER_PRESET_MAP[id];
   return {
     id,

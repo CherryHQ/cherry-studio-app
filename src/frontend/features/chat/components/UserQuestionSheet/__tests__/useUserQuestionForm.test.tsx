@@ -210,6 +210,115 @@ test('honors an explicit required field even when other questions may be skipped
   expect(respond).not.toHaveBeenCalled();
 });
 
+const review: QuestionFormQuestion = {
+  id: 'review',
+  question: 'Save these changes?',
+  selection: 'single',
+  options: [
+    { id: 'adapt', label: 'Save and continue' },
+    { id: 'keep', label: 'Keep unchanged' },
+  ],
+  textChanges: [{ before: 'Old instructions', after: 'New instructions', reason: 'Use on mobile' }],
+};
+
+test.each(['skip', 'text'] as const)(
+  'preserves the %s answer to reviewed text alongside another question until submission',
+  async (mode) => {
+    act(() =>
+      renderer.update(
+        <Harness
+          key={`mixed-review-${mode}`}
+          value={[review, { ...questions[2], required: true }]}
+        />,
+      ),
+    );
+    if (mode === 'skip') {
+      act(() => form.skip());
+    } else {
+      act(() => form.setText('Please revise this step'));
+      act(() => form.advance());
+    }
+    expect(form.index).toBe(1);
+    expect(respond).not.toHaveBeenCalled();
+    act(() => form.navigate(0));
+    expect(form.answer).toEqual({
+      selectedOptionIds: [],
+      text: mode === 'text' ? 'Please revise this step' : '',
+      skipped: mode === 'skip',
+    });
+    act(() => form.navigate(1));
+    act(() => form.setText('More context'));
+    await act(async () => form.advance());
+    expect(respond).toHaveBeenCalledTimes(1);
+    expect(respond).toHaveBeenCalledWith([
+      {
+        questionId: 'review',
+        selectedOptionIds: [],
+        text: mode === 'text' ? 'Please revise this step' : '',
+        skipped: mode === 'skip',
+      },
+      { questionId: 'notes', selectedOptionIds: [], text: 'More context', skipped: false },
+    ]);
+  },
+);
+
+test.each(['adapt', 'keep'])(
+  'submits the %s review decision directly without a prior selection',
+  async (id) => {
+    act(() => renderer.update(<Harness key="review" value={[review]} />));
+    await act(async () => form.submit());
+    await act(async () => form.respondOption('missing'));
+    expect(respond).not.toHaveBeenCalled();
+    await act(async () => form.respondOption(id));
+    expect(respond).toHaveBeenCalledWith([
+      { questionId: 'review', selectedOptionIds: [id], text: '', skipped: false },
+    ]);
+  },
+);
+
+test('locks both review decisions during submission and permits a different decision after failure', async () => {
+  act(() => renderer.update(<Harness key="review-retry" value={[review]} />));
+  let reject!: (error: Error) => void;
+  respond.mockImplementationOnce(
+    () =>
+      new Promise((_, rejectResponse) => {
+        reject = rejectResponse;
+      }),
+  );
+  let submission!: Promise<void>;
+  act(() => {
+    submission = form.respondOption('adapt');
+  });
+  expect(form.locked).toBe(true);
+  await act(async () => form.respondOption('keep'));
+  expect(respond).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    reject(new Error('Failed'));
+    await submission;
+  });
+  expect(form.locked).toBe(false);
+  expect(form.failed).toBe(true);
+  await act(async () => form.respondOption('keep'));
+  expect(respond).toHaveBeenCalledTimes(2);
+  expect(respond).toHaveBeenLastCalledWith([
+    { questionId: 'review', selectedOptionIds: ['keep'], text: '', skipped: false },
+  ]);
+});
+
+test('allows free text when a question shows changes without offering any choices', async () => {
+  const question: QuestionFormQuestion = {
+    ...questions[2],
+    textChanges: [{ before: 'Before', after: 'After', reason: 'Explain the change' }],
+  };
+  act(() => renderer.update(<Harness key="change-comment" value={[question]} allowSkip={false} />));
+  expect(form.isReview).toBe(false);
+  act(() => form.setText('Please revise this step'));
+  await act(async () => form.submit());
+  expect(respond).toHaveBeenCalledWith([
+    { questionId: 'notes', selectedOptionIds: [], text: 'Please revise this step', skipped: false },
+  ]);
+});
+
 test('preserves protocol parameter whitespace when the field requests it', async () => {
   const value: QuestionFormQuestion[] = [
     { ...questions[2], input: { label: 'Code', preserveWhitespace: true } },

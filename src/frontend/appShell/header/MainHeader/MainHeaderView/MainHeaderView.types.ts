@@ -10,7 +10,7 @@ export type MainHeaderViewProps = {
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
   selection?: { selectedCount: number; onExit(): void };
-  onNewChat: () => void;
+  onNewChat?: () => void;
   onAgentPress?: () => void;
   onAgentSwitch?: () => void;
   actions?: readonly HeaderToolbarAction[];

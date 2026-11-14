@@ -67,6 +67,8 @@ The implementation name may use repository `camelCase` conventions even when the
   pages.
 - `search/`: transient search result page; its cross-page request session lives in
   `appShell/search`.
+- `remoteTask/`: desktop scheduled-task list with expandable conversation groups; transcript
+  routes are owned by `chat/`.
 - `settings/`: settings home and all settings child pages, including provider and model
   configuration.
 

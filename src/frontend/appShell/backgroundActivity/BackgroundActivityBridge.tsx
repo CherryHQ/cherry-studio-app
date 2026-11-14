@@ -24,10 +24,11 @@ export function BackgroundActivityBridge() {
   const router = useRouter();
   const status = useBackgroundExecutionStatus();
   const [hasSeenGuidance, setHasSeenGuidance] = usePreference('app.background_run_guidance.seen');
+  const [audioConsent, setAudioConsent] = usePreference('app.background_audio.consent');
   const hasShownGuidance = useRef(false);
   useEffect(() => {
     if (
-      hasSeenGuidance ||
+      (Platform.OS === 'ios' ? audioConsent !== null : hasSeenGuidance) ||
       hasShownGuidance.current ||
       (status !== 'active' && status !== 'limited')
     )
@@ -46,14 +47,27 @@ export function BackgroundActivityBridge() {
           )
             return;
           hasShownGuidance.current = true;
-          void setHasSeenGuidance(true).catch(() => {});
+          const reportConsentFailure = () => {
+            toast.show({ label: t('backgroundRun.ios.saveFailed'), variant: 'danger' });
+          };
+          // A shown prompt suppresses repeated asks but leaves audio unauthorized.
+          // Only the confirmation below can persist a true opt-in.
+          if (Platform.OS === 'ios')
+            void setAudioConsent(false, { optimistic: false }).catch(reportConsentFailure);
+          else void setHasSeenGuidance(true).catch(() => {});
           alert.confirm({
             title: t('backgroundRun.title'),
             description: t(
-              Platform.OS === 'android' ? 'backgroundRun.android.guide' : 'backgroundRun.ios.guide',
+              Platform.OS === 'android'
+                ? 'backgroundRun.android.guide'
+                : 'backgroundRun.ios.audioGuide',
             ),
-            confirmLabel: t('backgroundRun.settings'),
+            confirmLabel: t(
+              Platform.OS === 'ios' ? 'backgroundRun.ios.enable' : 'backgroundRun.settings',
+            ),
             onConfirm: () => {
+              if (Platform.OS === 'ios')
+                return setAudioConsent(true, { optimistic: false }).catch(reportConsentFailure);
               router.push('/settings/notifications');
             },
           });
@@ -71,7 +85,17 @@ export function BackgroundActivityBridge() {
       changes.remove();
       focus?.remove();
     };
-  }, [alert, hasSeenGuidance, router, setHasSeenGuidance, status, t]);
+  }, [
+    alert,
+    audioConsent,
+    hasSeenGuidance,
+    router,
+    setAudioConsent,
+    setHasSeenGuidance,
+    status,
+    t,
+    toast,
+  ]);
   useEffect(
     () =>
       subscribeForegroundActivityAttention((attention) => {

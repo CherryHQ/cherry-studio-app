@@ -15,6 +15,7 @@ import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSett
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { EnterToSendSetting } from './components/EnterToSendSetting';
 import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
+import { SessionBranchTreeSetting } from './components/SessionBranchTreeSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -23,6 +24,9 @@ export default function AppearanceSettingsScreen() {
   const router = useRouter();
   const [isLanguagePickerOpen, setIsLanguagePickerOpen] = useState(false);
   const [fontSizeStep] = usePreference('ui.font_size_step');
+  const [isKeepScreenOnEnabled, setIsKeepScreenOnEnabled] = usePreference(
+    'app.keep_screen_on.enabled',
+  );
   const [isWatermarkEnabled, setIsWatermarkEnabled] = usePreference(
     'file.export.watermark_enabled',
   );
@@ -35,6 +39,12 @@ export default function AppearanceSettingsScreen() {
   const changeWatermark = (value: boolean) => {
     void setIsWatermarkEnabled(value).catch(() => {
       toast.show({ label: t('settings.exportWatermark.saveFailed'), variant: 'danger' });
+    });
+  };
+
+  const changeKeepScreenOn = (value: boolean) => {
+    void setIsKeepScreenOnEnabled(value).catch(() => {
+      toast.show({ label: t('settings.keepScreenOn.saveFailed'), variant: 'danger' });
     });
   };
 
@@ -81,7 +91,14 @@ export default function AppearanceSettingsScreen() {
             value={isWatermarkEnabled}
           />
           <EnterToSendSetting />
+          <Section.SwitchItem
+            label={t('settings.keepScreenOn.title')}
+            onValueChange={changeKeepScreenOn}
+            testID="settings-keep-screen-on"
+            value={isKeepScreenOnEnabled}
+          />
           <MultiModelCardsSetting />
+          <SessionBranchTreeSetting />
           <DocumentParserSetting />
           <AutoCollapseProcessSetting />
         </Section>

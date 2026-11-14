@@ -86,7 +86,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
   fallback ordering.
 - The plus action opens a content-height tools sheet with camera, photos, files, workspace,
-  Plugins, Skills and available MCP prompts. Child sheets cover the menu, keeping its content
+  Plugins, Skills, SSH and available MCP prompts. Child sheets cover the menu, keeping its content
   mounted and inactive. Drag, scrim, Back and Escape dismiss only the top layer; the handle retains
   an accessible name without a visible title or header buttons. Completing a content selection
   closes both layers before focusing the input. Workspace selection returns to the tools sheet;
@@ -108,6 +108,12 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
   its previous/next navigation and retained answers. Required fields gate submission; optional
   fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
+- In standard mode, the plus menu also offers SSH when the native runtime is available. Its
+  covering sheet uses the tools menu's input-replacement path and only selects saved servers, inserting an inline
+  mention without sending a message or executing a command. Saved connections, trust, credentials
+  and the remote file browser belong to Plugins > SSH. There is no separate target pill or
+  management/grant control in the picker. The one-hour diagnostics grant is offered when approving
+  a command and remains scoped to the current conversation and connection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or
@@ -157,11 +163,24 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
-  row shows the original text/attachment summary and can withdraw that one waiting input. The
+- Accepted follow-ups appear in a collapsible, bounded queue, expanded by default, above the composer until Pi starts them. Each
+  row shows the original text/attachment summary, offers Steer, and can withdraw that one waiting input. The
   queue comes from the Session observation snapshot and `queue.updated` events, so route changes
   and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
   Queue removal never falls back to stopping an active turn when placement wins the race.
   Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
-  deletes their unexecuted message pair without invalidating the current model context. Steering
-  remains outside this composer.
+  deletes their unexecuted message pair without invalidating the current model context. Steer
+  promotes the queued input through Pi's native admission. Its question appears in the transcript
+  when accepted; the next assistant reply appears below it when output starts. Failure leaves the
+  queue item available to retry. Pending and accepted actions stay locked until observation removes
+  the item, so repeated taps cannot send it twice. Preview/take-back retains the existing edit flow.
+
+The chat-owned context usage action stays on the right of the composer at rest and while editing.
+Tapping it opens a keyboard-preserving anchored popover with one progress row: measured occupancy,
+percentage, and declared model capacity in `k token`. The action owns the popover and remounts when
+its Session or context answer changes, so an old measurement cannot reopen it. Usage comes from
+the selected branch's current Pi working context, including the retained answer and tool results.
+Committed background compaction updates the same value without waiting for another answer.
+Without a working copy, the Host estimates the saved checkpoint and normalized message tail in
+memory; estimated occupancy is prefixed with `≈`. It does not display a persisted input count or
+cumulative billing total as current occupancy. A new provider measurement calibrates the count.

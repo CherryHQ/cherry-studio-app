@@ -31,6 +31,30 @@ jest.mock('../../parts/MessageParts', () => {
 });
 
 describe('UserMessage', () => {
+  test('outlines the edited question without changing body or attachment content', () => {
+    const message = createMessage([textPart('Hello')]);
+    const renderer = render(<UserMessage message={message} editingContext="question" />);
+    const outline = renderer.root.findByProps({ testID: 'editing-question-outline' });
+    expect(outline.props.pointerEvents).toBe('none');
+    expect(outline.props.className).toContain('border-[1.5px]');
+    expect(renderer.root.findByType('MessageParts').props.message).toBe(message);
+    act(() => renderer.update(<UserMessage message={message} />));
+    expect(renderer.root.findAllByProps({ testID: 'editing-question-outline' })).toHaveLength(0);
+    act(() => renderer.unmount());
+  });
+
+  test('quiets continuation bubble chrome without reducing text opacity', () => {
+    const message = createMessage([textPart('Hello')]);
+    const renderer = render(<UserMessage message={message} editingContext="continuation" />);
+    const bubble = renderer.root.find(
+      (node) => node.type === View && node.props.className?.includes('bg-transparent'),
+    );
+    expect(bubble.props.className).toContain('bg-transparent');
+    expect(bubble.props.className).not.toContain('opacity');
+    expect(renderer.root.findByType('MessageParts').props.message).toBe(message);
+    act(() => renderer.unmount());
+  });
+
   test('keeps a text-only message in the bubble', () => {
     const message = createMessage([textPart('Hello')]);
     const renderer = render(<UserMessage message={message} />);

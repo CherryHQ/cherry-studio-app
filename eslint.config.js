@@ -191,6 +191,21 @@ const frontendPublicSurfaceZones = [
   },
 ];
 
+const backendPublicSurfaceZones = [
+  {
+    target: [
+      'src/bootstrap',
+      'src/backend/!(ai)/**/*',
+      'src/backend/ai/!(agent)/**/*',
+      'src/backend/ai/agent/!(diagnostics)/**/*',
+    ],
+    from: 'src/backend/ai/agent/diagnostics',
+    except: ['./index.ts'],
+    message:
+      'Import the diagnostic Agent from @/backend/ai/agent/diagnostics; its definition and tool adapters are private.',
+  },
+];
+
 // Reuse the same layer declarations for resolved paths, so relative imports,
 // @src aliases, re-exports, require(), and dynamic imports cannot bypass them.
 const restrictedImportRules = (patterns, zones = []) => ({
@@ -221,6 +236,7 @@ const restrictedImportRules = (patterns, zones = []) => ({
       basePath: projectRoot,
       zones: [
         ...frontendPublicSurfaceZones,
+        ...backendPublicSurfaceZones,
         ...patterns.flatMap((pattern) =>
           (pattern.group ?? [])
             .filter((entry) => entry.startsWith('@/') && !entry.includes('*'))

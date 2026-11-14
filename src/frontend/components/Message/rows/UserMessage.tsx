@@ -20,6 +20,7 @@ type UserMessageProps = {
   /** The message this one replies to, under the bubble. */
   quote?: ReactNode;
   variant?: 'default' | 'selection';
+  editingContext?: 'question' | 'continuation';
 };
 
 export const UserMessage = memo(function UserMessage({
@@ -27,6 +28,7 @@ export const UserMessage = memo(function UserMessage({
   message,
   quote,
   variant = 'default',
+  editingContext,
 }: UserMessageProps) {
   const { t } = useTranslation();
   const { attachments: fileParts, bodyMessage } = useMemo(
@@ -65,7 +67,21 @@ export const UserMessage = memo(function UserMessage({
           </View>
         ) : null}
         {bodyMessage ? (
-          <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
+          <View
+            className={
+              editingContext === 'continuation'
+                ? 'self-end rounded-[18px] bg-transparent'
+                : 'self-end rounded-[18px] bg-chat-user'
+            }
+            style={styles.bubble}
+          >
+            {editingContext === 'question' ? (
+              <View
+                pointerEvents="none"
+                className="absolute inset-0 rounded-[18px] border-[1.5px] border-border-selected"
+                testID="editing-question-outline"
+              />
+            ) : null}
             <MessageParts message={bodyMessage} renderMode="plainText" />
           </View>
         ) : null}

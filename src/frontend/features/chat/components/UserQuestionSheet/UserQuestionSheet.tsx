@@ -99,20 +99,36 @@ export function UserQuestionSheet({
               />
             </View>
           ) : null}
-          <View className="flex-1">
-            {/* Remount on a variant change: switching the mounted button from secondary to
+          {form.isReview ? (
+            form.question.options.toReversed().map((option) => (
+              <View key={option.id} className="flex-1">
+                <Button
+                  disabled={form.locked}
+                  loading={form.busy && form.answer.selectedOptionIds.includes(option.id)}
+                  onPress={() => void form.respondOption(option.id)}
+                  testID={`user-question-decision-${option.id}`}
+                  variant={option === form.question.options[0] ? 'default' : 'secondary'}
+                >
+                  <Button.Label>{option.label}</Button.Label>
+                </Button>
+              </View>
+            ))
+          ) : (
+            <View className="flex-1">
+              {/* Remount on a variant change: switching the mounted button from secondary to
                 default in place left its label invisible on iOS. */}
-            <Button
-              key={actionVariant}
-              disabled={form.locked || !form.canAct}
-              loading={form.busy}
-              onPress={advance}
-              testID="user-question-action"
-              variant={actionVariant}
-            >
-              <Button.Label>{actionLabel}</Button.Label>
-            </Button>
-          </View>
+              <Button
+                key={actionVariant}
+                disabled={form.locked || !form.canAct}
+                loading={form.busy}
+                onPress={advance}
+                testID="user-question-action"
+                variant={actionVariant}
+              >
+                <Button.Label>{actionLabel}</Button.Label>
+              </Button>
+            </View>
+          )}
         </View>
       }
       onClose={onClose ?? ignoreClose}
@@ -142,6 +158,36 @@ export function UserQuestionSheet({
           <Text className="text-sm text-muted-foreground" selectable>
             {form.question.description}
           </Text>
+        ) : null}
+        {!form.isReview && form.question.options.length ? (
+          <View className="gap-2">
+            {form.question.options.map((option) => {
+              const selected = form.answer.selectedOptionIds.includes(option.id);
+              return (
+                <Pressable
+                  key={option.id}
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                  accessibilityState={{ checked: selected, disabled: form.locked }}
+                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border px-4 py-3 active:opacity-70 ${selected ? 'border-border-selected bg-secondary' : 'border-border bg-field'}`}
+                  disabled={form.locked}
+                  onPress={() => form.select(option.id)}
+                >
+                  <View className="min-w-0 flex-1 gap-0.5">
+                    <Text className="font-medium text-base text-foreground">{option.label}</Text>
+                    {option.description ? (
+                      <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
+                    ) : null}
+                  </View>
+                  <SelectionIndicator
+                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
+                    selected={selected}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         ) : null}
         {form.question.textChanges?.map((change) => (
           <View key={change.before} className="gap-3">
@@ -179,36 +225,6 @@ export function UserQuestionSheet({
             </View>
           </View>
         ))}
-        {form.question.options.length ? (
-          <View className="gap-2">
-            {form.question.options.map((option) => {
-              const selected = form.answer.selectedOptionIds.includes(option.id);
-              return (
-                <Pressable
-                  key={option.id}
-                  accessibilityLabel={option.label}
-                  accessibilityHint={option.description}
-                  accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
-                  accessibilityState={{ checked: selected, disabled: form.locked }}
-                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border px-4 py-3 active:opacity-70 ${selected ? 'border-border-selected bg-secondary' : 'border-border bg-field'}`}
-                  disabled={form.locked}
-                  onPress={() => form.select(option.id)}
-                >
-                  <View className="min-w-0 flex-1 gap-0.5">
-                    <Text className="font-medium text-base text-foreground">{option.label}</Text>
-                    {option.description ? (
-                      <Text className="text-foreground-tertiary text-sm">{option.description}</Text>
-                    ) : null}
-                  </View>
-                  <SelectionIndicator
-                    control={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
-                    selected={selected}
-                  />
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
         {form.answer.skipped ? (
           <Text className="text-foreground-tertiary text-sm">{t('chat.question.skipped')}</Text>
         ) : null}
@@ -219,20 +235,22 @@ export function UserQuestionSheet({
         ) : null}
       </ScrollView>
       {/* Outside the scroll view, so the keyboard shrinks the options instead of hiding it. */}
-      <View className="px-5 pb-3">
-        <Input
-          accessibilityLabel={form.question.input?.label ?? t('chat.question.custom')}
-          disabled={form.locked}
-          maxLength={form.question.input?.maxLength ?? 4000}
-          onChangeText={form.setText}
-          onSubmitEditing={advance}
-          placeholder={form.question.input?.label ?? t('chat.question.custom')}
-          returnKeyType={form.action === 'submit' ? 'done' : 'next'}
-          style={fieldStyle}
-          testID="user-question-custom"
-          value={form.answer.text}
-        />
-      </View>
+      {!form.isReview ? (
+        <View className="px-5 pb-3">
+          <Input
+            accessibilityLabel={form.question.input?.label ?? t('chat.question.custom')}
+            disabled={form.locked}
+            maxLength={form.question.input?.maxLength ?? 4000}
+            onChangeText={form.setText}
+            onSubmitEditing={advance}
+            placeholder={form.question.input?.label ?? t('chat.question.custom')}
+            returnKeyType={form.action === 'submit' ? 'done' : 'next'}
+            style={fieldStyle}
+            testID="user-question-custom"
+            value={form.answer.text}
+          />
+        </View>
+      ) : null}
     </BottomSheet>
   );
 }

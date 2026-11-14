@@ -6,6 +6,8 @@ import type { Provider } from '@/shared/data/types/provider';
 import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from './BrandAvatar';
 
 type ModelAvatarProps = {
+  /** Compact identity rows prefer the maker's mark over model-specific artwork. */
+  artwork?: 'model' | 'brand';
   model: Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>;
   /** Optional provider metadata refines custom-provider icon resolution. */
   provider?: Pick<Provider, 'id' | 'presetProviderId'>;
@@ -20,11 +22,12 @@ type ModelAvatarProps = {
  * appears one at a time rather than in a column; the two shapes coexist rather
  * than becoming one component with a shape switch.
  */
-export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
+export function ModelAvatar({ artwork = 'model', model, provider, size }: ModelAvatarProps) {
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
   const { iconSource, isProviderFallback, modelIconSource } = resolveModelIconSources(
     model.modelId,
     providerIconId,
+    artwork,
   );
   const providerAvatarUri = useProviderAvatar(provider?.id ?? model.providerId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
