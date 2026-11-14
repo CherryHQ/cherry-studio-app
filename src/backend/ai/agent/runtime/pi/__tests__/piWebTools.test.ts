@@ -1,5 +1,10 @@
 import type { RuntimeTool, RuntimeWebTools } from '../../types';
-import { applyPiWebTools, resolvePiWebToolRoutes, selectPiClientTools } from '../piWebTools';
+import {
+  applyPiWebTools,
+  isPiNativeWebActivity,
+  resolvePiWebToolRoutes,
+  selectPiClientTools,
+} from '../piWebTools';
 
 const policy: RuntimeWebTools = {
   modelToolsPreferred: true,
@@ -17,6 +22,42 @@ const tool = (name: string, approval: RuntimeTool['approval'] = 'auto'): Runtime
   execute: async () => ({ value: [], artifacts: [] }),
 });
 const tools = [tool('web_search'), tool('web_fetch')];
+
+test.each(['deepseek-chat', 'deepseek-messages', 'deepseek-responses'] as const)(
+  'declares only the permitted DeepSeek web capability for %s',
+  (dialect) => {
+    const body = { tools: [{ type: 'function', name: 'read_file' }] };
+    expect(applyPiWebTools(body, dialect, { search: 'none', fetch: 'server' })).toEqual({
+      tools: [
+        ...body.tools,
+        {
+          type: 'deepseek_read_url',
+          ...(dialect === 'deepseek-messages' ? { name: 'deepseek_read_url' } : {}),
+        },
+      ],
+    });
+    expect(applyPiWebTools(body, dialect, { search: 'client', fetch: 'none' })).toBe(body);
+  },
+);
+
+test('commits DeepSeek Chat native calls before answer text prevents credential replay', () => {
+  expect(
+    isPiNativeWebActivity({
+      choices: [
+        {
+          delta: {},
+          server_tool_event: { type: 'call_started', step: 0, call: { id: 'search-1' } },
+        },
+      ],
+    }),
+  ).toBe(true);
+  expect(
+    isPiNativeWebActivity({
+      choices: [{ delta: { server_tool_calls: [{ index: 0, calls: [] }] } }],
+    }),
+  ).toBe(true);
+  expect(isPiNativeWebActivity({ choices: [{ delta: { content: '' } }] })).toBe(false);
+});
 
 describe('Pi web tool selection', () => {
   test.each([

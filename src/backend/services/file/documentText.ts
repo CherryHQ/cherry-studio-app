@@ -1,11 +1,13 @@
 import { File } from 'expo-file-system';
 
+import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
 import { documentAttachmentByteLimit } from '@/shared/utils/fileAttachmentPolicy';
 
+import { readDeepseekOcr } from './deepseekOcr';
 import { readFileUriBytes } from './fileStorage';
 import { readPdfText } from './fileTextExtraction';
 import type { ExtractedDocumentText } from './officeText';
@@ -27,7 +29,11 @@ export async function readDocumentUriText(
 ): Promise<ExtractedDocumentText> {
   signal.throwIfAborted();
   const type = documentFileTypeFromMediaType(mediaType);
-  if (!type || (type !== 'pdf' && !isBuiltinOfficeFileType(type)))
+  const cloud =
+    getDeepseekServices().ocr &&
+    type !== undefined &&
+    ['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(type);
+  if (!type || (!cloud && type !== 'pdf' && !isBuiltinOfficeFileType(type)))
     throw new DocumentTextError('invalid');
   const maxBytes = documentAttachmentByteLimit(mediaType);
   const source = new File(uri);
@@ -36,19 +42,26 @@ export async function readDocumentUriText(
 
   let result: ExtractedDocumentText;
   try {
-    if (type === 'pdf') {
-      const extracted = await readPdfText(source, signal);
+    if (type === 'pdf' || cloud) {
+      const extracted = cloud
+        ? await readDeepseekOcr(uri, signal)
+        : await readPdfText(source, signal);
       if (extracted.ocrError) throw new DocumentTextError('ocr');
       if (extracted.extractionError) throw new DocumentTextError('invalid');
       if (extracted.ocrUnavailable && !extracted.text.trim())
         throw new DocumentTextError('ocr-unsupported');
-      result = { text: extracted.text.trim(), truncated: extracted.isTruncated };
+      result = {
+        text: extracted.text.trim(),
+        truncated: extracted.isTruncated,
+        ...(cloud ? { parser: 'deepseek-ocr' as const } : {}),
+      };
       if (result.text && extracted.unrecognizedPages.length > 0) {
         result.unrecognizedPages = extracted.unrecognizedPages;
         // Model-facing metadata precedes the body so attachment character budgets retain it.
         result.text = `[PDF extraction notice: pages ${extracted.unrecognizedPages.join(', ')} contain visual content with no recognized text. The text below does not represent those pages; if their content matters, ask the user to attach them as images.]\n\n${result.text}`;
       }
     } else {
+      if (!isBuiltinOfficeFileType(type)) throw new DocumentTextError('invalid');
       const bytes = await readFileUriBytes(uri, signal);
       if (bytes.byteLength > maxBytes) throw new DocumentTextError('file-bytes');
       const { extractOfficeText } = await import('./officeText');

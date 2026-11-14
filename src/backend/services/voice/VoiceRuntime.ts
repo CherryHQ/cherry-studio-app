@@ -113,7 +113,7 @@ export function createVoiceRuntime({
       VOICE_ENGINES.find((engine) => engine === stored) ??
       (capability === 'transcription' ? 'sensevoice' : undefined);
     if (capability === 'dictation' && !selected) return null;
-    for (const id of selected ? [selected] : VOICE_ENGINES) {
+    for (const id of selected ? [selected] : VOICE_ENGINES.filter((id) => id !== 'deepseek')) {
       const status = (await registry(capability)[id]?.status(signal)) ?? 'unsupported';
       signal.throwIfAborted();
       if (status !== 'unsupported' || selected) return { id, status };
@@ -128,6 +128,11 @@ export function createVoiceRuntime({
     const effective = await effectiveEngine(capability, signal);
     if (!effective && capability === 'dictation')
       throw new VoiceError('not-configured', 'Select a dictation engine first.');
+    if (effective?.status === 'needs-service')
+      throw new VoiceError(
+        'service-not-configured',
+        'Configure the selected DeepSeek service first.',
+      );
     if (effective?.status === 'needs-setup')
       throw new VoiceError(
         capability === 'transcription'

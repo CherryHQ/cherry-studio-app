@@ -1,5 +1,6 @@
 import { BottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform } from 'react-native';
@@ -19,11 +20,12 @@ export function VoiceEngineSection({
   effectiveEngine,
   children,
 }: {
-  capability: 'dictation' | 'transcription';
+  capability: 'dictation' | 'transcription' | 'speech';
   effectiveEngine: VoiceEngineId | null;
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const router = useRouter();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
   const queryClient = useQueryClient();
@@ -31,10 +33,18 @@ export function VoiceEngineSection({
   const [language] = usePreference(
     capability === 'dictation'
       ? 'feature.voice.dictation_language'
-      : 'feature.voice.transcription_language',
+      : capability === 'transcription'
+        ? 'feature.voice.transcription_language'
+        : 'app.language',
   );
   const showDictationSetup = useDictationSetup();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const engines = VOICE_ENGINES.filter(
+    (engine) => capability !== 'speech' || engine !== 'sensevoice',
+  );
+  const engineLabel = t(
+    capability === 'speech' ? 'settings.voice.speech.engine' : 'settings.voice.engine.title',
+  );
   const [, setSelected] = usePreference(VOICE_ENGINE_PREFERENCE[capability]);
   const statuses = useQuery({
     queryKey: ['voice', 'engine-status', capability, language, appLanguage],
@@ -52,6 +62,7 @@ export function VoiceEngineSection({
   });
   const describe = (engine: VoiceEngineId) => {
     const status = statuses.data?.[engine];
+    if (status === 'needs-service') return t('deepseek.setupRequired');
     if (status === 'needs-setup')
       return t(
         capability === 'transcription'
@@ -82,12 +93,14 @@ export function VoiceEngineSection({
         title={t(
           capability === 'dictation'
             ? 'settings.voice.dictation.title'
-            : 'settings.voice.transcription.title',
+            : capability === 'transcription'
+              ? 'settings.voice.transcription.title'
+              : 'settings.voice.speech.title',
         )}
       >
         <Section.SelectItem
-          description={effectiveEngine === 'system' ? describe(effectiveEngine) : undefined}
-          label={t('settings.voice.engine.title')}
+          description={effectiveEngine ? describe(effectiveEngine) : undefined}
+          label={engineLabel}
           onPress={() => setIsPickerOpen(true)}
           testID={`settings-voice-${capability}-engine`}
           value={
@@ -97,7 +110,14 @@ export function VoiceEngineSection({
           }
         />
         {children}
-        {capability === 'transcription' ? (
+        {effectiveEngine === 'deepseek' ? (
+          <Section.Item
+            label={t('deepseek.title')}
+            description={t('deepseek.voiceDescription')}
+            onPress={() => router.push('/settings/deepseek')}
+          />
+        ) : null}
+        {capability === 'transcription' && effectiveEngine !== 'deepseek' ? (
           <Section.Item
             description={t('settings.voice.transcription.description')}
             label={t('settings.voice.transcription.offline')}
@@ -115,7 +135,7 @@ export function VoiceEngineSection({
         onClose={() => setIsPickerOpen(false)}
         open={isPickerOpen}
         size="compact"
-        title={t('settings.voice.engine.title')}
+        title={engineLabel}
       >
         <Section variant="plain">
           {capability === 'dictation' ? (
@@ -129,7 +149,7 @@ export function VoiceEngineSection({
               testID="settings-voice-dictation-off"
             />
           ) : null}
-          {VOICE_ENGINES.map((engine) => (
+          {engines.map((engine) => (
             <Section.RadioItem
               description={describe(engine)}
               disabled={!statuses.data || statuses.data[engine] === 'unsupported'}

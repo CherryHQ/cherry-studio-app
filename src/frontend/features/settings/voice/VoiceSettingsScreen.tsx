@@ -1,4 +1,3 @@
-import { Section } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
@@ -24,7 +23,7 @@ function useEffectiveEngine(capability: VoiceCapability) {
   }).data;
 }
 
-/** Keep the system voice controls beside their corresponding capability. */
+/** Keep each engine's controls beside its corresponding capability. */
 export default function VoiceSettingsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -53,18 +52,9 @@ export default function VoiceSettingsScreen() {
           <OfflineModelSetting />
         ) : null}
       </VoiceEngineSection>
-      <Section title={t('settings.voice.speech.title')}>
-        {speechEngine ? (
-          <SpeechVoiceSetting engine={speechEngine} key={speechEngine} />
-        ) : (
-          <Section.Item
-            label={t('settings.voice.voice')}
-            description={
-              speechEngine === null ? t('settings.voice.speech.systemUnavailable') : undefined
-            }
-          />
-        )}
-      </Section>
+      <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
+        {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
+      </VoiceEngineSection>
     </SettingsScrollPage>
   );
 }

@@ -341,7 +341,7 @@ export function createReadFileTool(
       let text: string;
       let sourceTruncated: boolean;
       let unrecognizedPages: number[] | undefined;
-      let parser: 'builtin' | 'native-pdf' | 'native-image-ocr' | undefined;
+      let parser: 'builtin' | 'native-pdf' | 'native-image-ocr' | 'deepseek-ocr' | undefined;
       try {
         const content = await readContent(source, signal, toolCallId);
         signal.throwIfAborted();
@@ -398,7 +398,12 @@ export function createReadFileTool(
               delivery:
                 'ocr-text-only; first frame; image pixels and visual details are not available to the model',
             }
-          : {}),
+          : parser === 'deepseek-ocr' && isAiSupportedImageMediaType(source.mediaType)
+            ? {
+                delivery:
+                  'ocr-text-only; image pixels and visual details are not available to the model',
+              }
+            : {}),
         ...(unrecognizedPages ? { unrecognizedPages } : {}),
       };
       if (hasJsonParameters) {

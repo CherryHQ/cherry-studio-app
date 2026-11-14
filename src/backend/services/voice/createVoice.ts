@@ -5,10 +5,14 @@ import type {
   VOICE_ENGINE_PREFERENCE,
   VoiceCapability,
   VoiceEngineId,
+  VoiceEngineStatus,
+  AudioTranscriptionOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 import { voiceAudioSession } from './audioSession';
+import { createDeepseekDictation, createDeepseekTranscription } from './deepseekRecognition';
+import { createDeepseekSpeech } from './deepseekSpeech';
 import type { DictationEngine, TranscriptionEngine } from './engines';
 import type { SystemPromptQueue } from './microphoneAccess';
 import { createSenseVoiceDictationEngine } from './senseVoiceDictation';
@@ -46,9 +50,13 @@ export function createVoice({
   getCountry(): Promise<string>;
 }) {
   const model = createVoiceModel(getCountry);
-  const bindTranscription = (
-    engine: ReturnType<typeof createSenseVoiceTranscription>,
-  ): TranscriptionEngine => ({
+  const bindTranscription = (engine: {
+    status(signal: AbortSignal): Promise<VoiceEngineStatus>;
+    transcribe(
+      uri: string,
+      options: AudioTranscriptionOptions & { signal: AbortSignal },
+    ): Promise<{ text: string; durationSeconds: number }>;
+  }): TranscriptionEngine => ({
     status: engine.status,
     run: (input, options) => transcribeAudioFile(fileContent, engine.transcribe, input, options),
   });
@@ -69,16 +77,19 @@ export function createVoice({
   const runtime = createVoiceRuntime({
     engines: {
       transcription: {
+        deepseek: bindTranscription(createDeepseekTranscription()),
         sensevoice: bindTranscription(createSenseVoiceTranscription(model)),
         system: bindTranscription(
           createSystemTranscription({ permissions, language: transcriptionLanguage }),
         ),
       },
       dictation: {
+        deepseek: bindDictation(createDeepseekDictation(permissions)),
         system: bindDictation(createSystemDictationEngine({ permissions })),
         sensevoice: bindDictation(createSenseVoiceDictationEngine(model, permissions)),
       },
       speech: {
+        deepseek: createDeepseekSpeech(),
         system: createSystemSpeechEngine({
           voice: () => preference.get('feature.voice.system_voice'),
         }),

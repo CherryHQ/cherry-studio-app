@@ -42,13 +42,23 @@ export class FileAttachmentError extends Error {
 
 /** Persist facts about what was sent, never extracted file bodies. */
 export const FileAttachmentReportSchema = z.strictObject({
-  mode: z.enum(['image', 'image-text', 'text', 'document-text', 'document-ir', 'audio']),
+  mode: z.enum([
+    'image',
+    'image-text',
+    'text',
+    'document-text',
+    'document-ir',
+    'provider-document',
+    'audio',
+  ]),
   sourceTruncated: z.boolean(),
   /** One-based PDF pages whose visual content did not yield recognized text. */
   unrecognizedPages: z.array(z.number().int().positive()).optional(),
   requestTruncated: z.boolean(),
   includedCharacters: z.number().int().nonnegative().optional(),
-  parser: z.enum(['anydoc', 'builtin', 'native-pdf', 'native-image-ocr']).optional(),
+  parser: z
+    .enum(['anydoc', 'builtin', 'native-pdf', 'native-image-ocr', 'deepseek-ocr'])
+    .optional(),
   parserVersion: z.string().optional(),
   delivery: z.enum(['complete', 'deferred']).optional(),
   images: z

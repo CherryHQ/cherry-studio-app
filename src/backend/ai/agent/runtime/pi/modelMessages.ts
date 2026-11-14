@@ -19,6 +19,7 @@ import type {
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
+import type { PiProviderDocument } from './piProviderDocument';
 import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
@@ -160,12 +161,12 @@ function collectUserContent(
     }
     return [];
   });
-  return content.some((part) => part.type === 'image')
+  return content.some((part) => part.type === 'image' || 'cherryProviderDocument' in part)
     ? content
     : content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
 }
 
-function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
+function toPiTextAttachment(part: RuntimeTextAttachmentPart): PiProviderDocument {
   const envelope = {
     version: 1,
     kind: 'managed-text-attachment',
@@ -177,7 +178,9 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
     ...(part.attachmentReport?.mode === 'image-text'
       ? {
           interpretation:
-            'OCR text from the first image frame only. The model has not received image pixels; visual details and layout may be missing.',
+            part.attachmentReport.parser === 'deepseek-ocr'
+              ? 'OCR text only. The model has not received image pixels; visual details and layout may be missing.'
+              : 'OCR text from the first image frame only. The model has not received image pixels; visual details and layout may be missing.',
         }
       : {}),
     truncation: part.truncated ? '[truncated]' : '[complete]',
@@ -186,6 +189,15 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
   return {
     type: 'text',
     text: `${PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX}${JSON.stringify(envelope)}`,
+    ...(part.attachmentReport?.mode === 'provider-document'
+      ? {
+          cherryProviderDocument: {
+            fileEntryId: part.fileEntryId,
+            mediaType: part.mediaType,
+            ...(part.revision !== undefined ? { revision: part.revision } : {}),
+          },
+        }
+      : {}),
   };
 }
 

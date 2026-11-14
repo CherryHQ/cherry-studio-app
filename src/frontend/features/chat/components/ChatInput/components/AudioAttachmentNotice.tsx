@@ -42,16 +42,26 @@ function TranscriptionAvailability() {
       ? t('attachments.audio.needsModel')
       : status.data === 'ready'
         ? t('attachments.audio.ready')
-        : status.data === 'needs-setup'
-          ? t('voice.error.offlineRecognitionUnavailable')
-          : t('voice.error.unsupported');
+        : status.data === 'needs-service'
+          ? t('deepseek.setupRequired')
+          : status.data === 'needs-setup'
+            ? t('voice.error.offlineRecognitionUnavailable')
+            : t('voice.error.unsupported');
   return (
     <View className="gap-2 px-1 pb-2">
       <Text className="text-xs text-muted-foreground">{label}</Text>
       {needsSettings ? (
         <View className="self-start">
-          <Button size="sm" variant="outline" onPress={() => router.push('/settings/voice')}>
-            {t('settings.voice.title')}
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() =>
+              router.push(
+                status.data === 'needs-service' ? '/settings/deepseek' : '/settings/voice',
+              )
+            }
+          >
+            {t(status.data === 'needs-service' ? 'deepseek.title' : 'settings.voice.title')}
           </Button>
         </View>
       ) : null}

@@ -174,6 +174,8 @@ export type RuntimeToolResult = {
 };
 
 export type RuntimeTextAttachmentPart = {
+  /** Managed source revision, used to reject an edited source before a provider upload. */
+  revision?: number;
   fileEntryId: string;
   type: 'text-attachment';
   mediaType: string;

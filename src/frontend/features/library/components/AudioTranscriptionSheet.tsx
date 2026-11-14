@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import { useBackendModule } from '@/frontend/data';
+import { useBackendModule, usePreference } from '@/frontend/data';
 import { voiceErrorLabelKey } from '@/frontend/utils/voiceErrorLabel';
 import { VoiceError } from '@/shared/contracts/voice';
 
@@ -24,12 +24,20 @@ export function AudioTranscriptionSheet({
   const files = useBackendModule('file');
   const { openFileEntry } = useOpenFileEntry();
   const { toast } = useToast();
+  const [engine] = usePreference('feature.voice.transcription_engine');
+  const needsService =
+    state.status === 'failed' &&
+    state.error instanceof VoiceError &&
+    state.error.code === 'service-not-configured';
   const needsSettings =
     state.status === 'failed' &&
     state.error instanceof VoiceError &&
-    ['model-not-downloaded', 'offline-recognition-unavailable', 'unsupported'].includes(
-      state.error.code,
-    );
+    [
+      'model-not-downloaded',
+      'offline-recognition-unavailable',
+      'unsupported',
+      'service-not-configured',
+    ].includes(state.error.code);
   const progress = state.status === 'running' ? state.progress : undefined;
   const fraction = progress ? Math.min(1, progress.completedSeconds / progress.totalSeconds) : 0;
   const openResult = async () => {
@@ -62,12 +70,14 @@ export function AudioTranscriptionSheet({
               needsSettings
                 ? () => {
                     onClose();
-                    router.push('/settings/voice');
+                    router.push(needsService ? '/settings/deepseek' : '/settings/voice');
                   }
                 : onRetry
             }
           >
-            {needsSettings ? t('settings.voice.title') : t('common.retry')}
+            {needsSettings
+              ? t(needsService ? 'deepseek.title' : 'settings.voice.title')
+              : t('common.retry')}
           </Button>
         )
       }
@@ -92,7 +102,11 @@ export function AudioTranscriptionSheet({
               </View>
             ) : null}
             <Text className="text-sm text-muted-foreground">
-              {t('library.transcription.offline')}
+              {t(
+                engine === 'deepseek'
+                  ? 'deepseek.transcriptionDescription'
+                  : 'library.transcription.offline',
+              )}
             </Text>
           </>
         ) : state.status === 'complete' ? (

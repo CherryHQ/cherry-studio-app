@@ -11,6 +11,7 @@
  * shape is asserted in `__tests__/preferenceUtils.test.ts` instead.
  */
 
+import { DEFAULT_DEEPSEEK_SERVICES, type DeepseekServices } from '@/shared/contracts/deepseek';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
@@ -74,6 +75,7 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  'feature.deepseek.services': DeepseekServices;
   /** Null disables voice input and keeps the composer's send action. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
   /** Null follows the app language. */
@@ -138,6 +140,7 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.deepseek.services': DEFAULT_DEEPSEEK_SERVICES,
   'feature.voice.dictation_engine': null,
   'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,

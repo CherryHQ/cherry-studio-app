@@ -17,7 +17,10 @@ export function useDictationAvailability(): boolean {
   });
   return (
     !!selected &&
-    (status.data === 'ready' || status.data === 'needs-setup' || status.data === 'needs-model') &&
+    (status.data === 'ready' ||
+      status.data === 'needs-setup' ||
+      status.data === 'needs-model' ||
+      status.data === 'needs-service') &&
     !status.isError
   );
 }

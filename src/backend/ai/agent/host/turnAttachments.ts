@@ -4,6 +4,8 @@
  * failures; the primitives under `../resources` stay protocol-free.
  */
 
+import { isDeepseekDocument } from '@/backend/services/file/deepseekFiles';
+import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import {
   AgentProtocolError,
   AgentToolResultSchema,
@@ -27,7 +29,12 @@ import type {
   TurnResourceLedger,
 } from '../resources/managedFileResolver';
 import { raceAbort, unsupportedMediaNote } from '../runtime';
-import type { AgentRuntime, RuntimeInputPart, RuntimeModelPreflight } from '../runtime';
+import type {
+  AgentRuntime,
+  RuntimeInputPart,
+  RuntimeModelPreflight,
+  RuntimeModel,
+} from '../runtime';
 import type { RuntimeAttachmentContents } from './turnRuntimeInput';
 
 const NO_IMAGE_MEDIA_CAPABILITIES = { image: false, video: true, audio: true } as const;
@@ -227,7 +234,13 @@ export async function resolveRuntimeContentAttachments(
   signal: AbortSignal,
   model: RuntimeModelPreflight,
   documentParserMode: DocumentParserMode,
+  selectedModel?: RuntimeModel,
 ): Promise<RuntimeAttachmentContents> {
+  const deepseek = getDeepseekServices();
+  const providerDocuments =
+    deepseek.files &&
+    selectedModel?.providerId === deepseek.providerId &&
+    selectedModel?.modelId === 'deepseek-flash';
   const currentFileEntryIds = input.flatMap((part) =>
     part.type === 'file' ? [part.fileEntryId] : [],
   );
@@ -253,6 +266,9 @@ export async function resolveRuntimeContentAttachments(
       readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       signal,
       documentParserMode,
+      ...(providerDocuments
+        ? { deferDocument: (file: ManagedFileFact) => isDeepseekDocument(file.mediaType) }
+        : {}),
       target: {
         purpose: 'chat',
         acceptsImages: model.inputModalities.includes('image'),
