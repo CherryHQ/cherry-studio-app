@@ -427,7 +427,7 @@ export function createPendingChatMessages(
   return [
     {
       createdAt,
-      data: toDisplayParts(parts),
+      data: toAgentMessageDisplayParts(parts),
       id: input.userMessageId,
       role: 'user',
       status: 'pending',
