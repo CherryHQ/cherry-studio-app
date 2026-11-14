@@ -7,6 +7,8 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
@@ -143,7 +145,7 @@ type LiveSession = {
     { view: AgentApprovalView; resolve: (decision: 'approve' | 'deny') => void }
   >;
 };
-type PreparedInput = { turnId: string; plan: TurnPlan };
+type PreparedInput = { sessionId: string; turnId: string; plan: TurnPlan };
 type ReplyTarget = LaneChoice & {
   plan: TurnPlan;
   input: Pick<AgentSubmitMessageInput, 'assistantMessageId'>;
@@ -192,7 +194,12 @@ export class DurableAgentHost implements AgentProtocol {
   private resuming: Promise<void> | undefined;
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
-  private executionLease: { release(): void } | undefined;
+  private executionLease: KeepAliveLease | undefined;
+  /** One stable lease per user-started Session, independent of reply presentation. */
+  private readonly sessionExecutions = new Map<
+    string,
+    { lease: KeepAliveLease; completed: boolean }
+  >();
   private screenAwakeLease: { release(): void } | undefined;
   /** Cancelling is published before Pi updates its stored running turn. */
   private readonly screenSuppressedRequests = new Set<string>();
@@ -465,6 +472,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.listeners.clear();
       this.executionLease?.release();
       this.executionLease = undefined;
+      this.releaseSessionExecutions();
     }
   }
 
@@ -475,6 +483,37 @@ export class DurableAgentHost implements AgentProtocol {
       this.executionLease?.release();
       this.executionLease = undefined;
     }
+  }
+
+  private startSessionExecution(sessionId: string): void {
+    if (this.sessionExecutions.has(sessionId)) return;
+    const lease = this.ports.executionLease?.(
+      (reason) =>
+        reason instanceof KeepAliveInterruptionError &&
+        reason.reason === 'continued-processing-expired'
+          ? this.cancelBackgroundSession(sessionId, reason)
+          : this.suspend(reason),
+      sessionId,
+    );
+    if (lease) this.sessionExecutions.set(sessionId, { lease, completed: false });
+  }
+
+  private updateSessionExecution(sessionId: string): void {
+    const execution = this.sessionExecutions.get(sessionId);
+    if (execution) {
+      const states = this.liveStates(sessionId);
+      const preparing = [...this.prepared.values()].some((input) => input.sessionId === sessionId);
+      const admitting = this.admissions.has(sessionId) || this.settlements.has(sessionId);
+      if (!admitting && !preparing && !states.some((state) => state.active || state.queue.length)) {
+        this.sessionExecutions.delete(sessionId);
+        execution.lease.release(execution.completed ? 'completed' : undefined);
+      }
+    }
+  }
+
+  private releaseSessionExecutions(): void {
+    for (const { lease } of this.sessionExecutions.values()) lease.release();
+    this.sessionExecutions.clear();
   }
 
   private reconcileScreenAwake(): void {
@@ -525,6 +564,7 @@ export class DurableAgentHost implements AgentProtocol {
         this.preparing.clear();
         this.executionLease?.release();
         this.executionLease = undefined;
+        this.releaseSessionExecutions();
       }
     }));
   }
@@ -912,7 +952,11 @@ export class DurableAgentHost implements AgentProtocol {
         const state = await this.attach(target.lane);
         signal.throwIfAborted();
         plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
-        this.prepared.set(executionKey(target.lane, requestId), { turnId, plan });
+        this.prepared.set(executionKey(target.lane, requestId), { sessionId, turnId, plan });
+        this.sessionExecutions.get(sessionId)?.lease.update?.({
+          title: selected?.name || plan.agent.name,
+          completedUnitCount: 1,
+        });
         await this.conversations.submit(target.lane, {
           requestId,
           turnId,
@@ -1789,7 +1833,7 @@ export class DurableAgentHost implements AgentProtocol {
         for (const part of turn.parts)
           if (part.type === 'file')
             plan.resources.grantFile(FileEntryIdSchema.parse(part.ref.fileEntryId));
-        const prepared = { turnId: identity.turnId, plan };
+        const prepared = { sessionId, turnId: identity.turnId, plan };
         this.prepared.set(key, prepared);
         return prepared;
       },
@@ -2062,7 +2106,7 @@ export class DurableAgentHost implements AgentProtocol {
             const turn = this.timed(selected);
             await this.persistTurn(turn, signal);
             signal?.throwIfAborted();
-            if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
+            if (this.live.has(laneKey(turn.identity))) await this.presentSettled(turn);
           }
           continue;
         }
@@ -2094,6 +2138,8 @@ export class DurableAgentHost implements AgentProtocol {
           },
         });
         signal?.throwIfAborted();
+        for (const lane of sessionCopies.get(row.sessionId) ?? [])
+          this.prepared.delete(executionKey(lane, row.assistantMessageId));
         this.ports.durableStorage?.notifyTranscript(row.sessionId);
         logger.warn('Agent reservation recovered as interrupted', {
           sessionId: row.sessionId,
@@ -2202,7 +2248,9 @@ export class DurableAgentHost implements AgentProtocol {
     const operation = (this.settlements.get(sessionId) ?? Promise.resolve())
       .then(async () => {
         await this.persistTurn(turn);
-        this.presentSettled(turn);
+        const execution = this.sessionExecutions.get(sessionId);
+        if (execution && turn.status === 'completed') execution.completed = true;
+        await this.presentSettled(turn);
       })
       .catch((error: unknown) => {
         logger.warn(
@@ -2220,6 +2268,7 @@ export class DurableAgentHost implements AgentProtocol {
     void operation.finally(() => {
       this.pendingWrites.delete(operation);
       if (this.settlements.get(sessionId) === operation) this.settlements.delete(sessionId);
+      this.updateSessionExecution(sessionId);
     });
   }
 
@@ -2339,6 +2388,9 @@ export class DurableAgentHost implements AgentProtocol {
       this.screenSuppressedRequests.delete(previousRequestId);
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
+    if (state.active?.parts.some((part) => part.type === 'text' && part.text.length > 0))
+      this.sessionExecutions.get(sessionId)?.lease.update?.({ completedUnitCount: 2 });
+    this.updateSessionExecution(sessionId);
     this.reconcileScreenAwake();
   }
 
@@ -2373,6 +2425,7 @@ export class DurableAgentHost implements AgentProtocol {
     const view = projectDurableHostTurn(turn);
     const projected = state ? this.turnStatus(view.turn, state) : view.turn;
     const terminal = turn.status !== 'running';
+    let delivery: void | Promise<void> = undefined;
     // Another answer of the same Session still runs: it keeps the Session busy.
     const sibling = terminal
       ? this.liveStates(sessionId).find((candidate) => candidate !== state && candidate.active)
@@ -2415,7 +2468,6 @@ export class DurableAgentHost implements AgentProtocol {
               sessionTitle: session?.name ?? '',
               agentId: agent.id,
               agentName: agent.name,
-              onInterrupt: () => this.suspend(),
             });
             state.backgroundRequestId = turn.identity.requestId;
             state.backgroundCompleted = false;
@@ -2424,7 +2476,8 @@ export class DurableAgentHost implements AgentProtocol {
         );
       if (view.assistant) state?.background?.update(view.assistant);
     } else {
-      if (state?.backgroundRequestId === turn.identity.requestId) this.passBackground(state, turn);
+      if (state?.backgroundRequestId === turn.identity.requestId)
+        delivery = this.passBackground(state, turn);
       else if (turn.status === 'completed') {
         const holder = this.liveStates(sessionId).find(
           (candidate) => candidate !== state && candidate.background,
@@ -2453,6 +2506,7 @@ export class DurableAgentHost implements AgentProtocol {
       }
       this.ports.durableStorage?.notifyTranscript(sessionId);
     }
+    return delivery;
   }
 
   /**
@@ -2481,7 +2535,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.updateBackgroundInteraction(state.lane.sessionId);
       return;
     }
-    background.finish(
+    return background.finish(
       completed ? 'completed' : turn.status === 'cancelled' ? 'cancelled' : 'failed',
     );
   }
@@ -2693,6 +2747,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (session) {
           this.publish(session.id, { type: 'session.updated', session });
           this.background.updateSessionTitle(session.id, session.name);
+          this.sessionExecutions.get(session.id)?.lease.update?.({ title: session.name });
         }
       }),
     );
@@ -2733,9 +2788,8 @@ export class DurableAgentHost implements AgentProtocol {
     if (this.deleting.has(sessionId) || this.admissions.has(sessionId))
       fail('SESSION_BUSY', 'This session is already admitting input.');
     const controller = new AbortController();
-    const lease = this.background.acquirePreparation(sessionId, (reason) =>
-      controller.abort(reason),
-    );
+    this.startSessionExecution(sessionId);
+    const cancelPreparation = this.background.prepareSession(sessionId);
     const promise = Promise.resolve()
       .then(() =>
         this.traceOperation(
@@ -2746,15 +2800,24 @@ export class DurableAgentHost implements AgentProtocol {
         ),
       )
       .catch((error: unknown) => {
+        cancelPreparation();
         if (controller.signal.reason instanceof AgentProtocolError) throw controller.signal.reason;
         throw error;
       })
       .finally(() => {
         this.admissions.delete(sessionId);
-        lease.release();
+        this.updateSessionExecution(sessionId);
       });
     this.admissions.set(sessionId, { controller, promise });
     return promise;
+  }
+
+  /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
+  private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
+    this.admissions.get(sessionId)?.controller.abort(reason);
+    await Promise.all(
+      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
+    );
   }
 
   private recordQueue(

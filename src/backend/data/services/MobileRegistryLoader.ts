@@ -84,9 +84,10 @@ export type MobileRemoteRegistrySnapshot = {
   providerModels: ProviderModelsBundle;
 };
 
-/** Admit GIF generation using SDK defaults, without extending the SDK's edit or frame controls. */
-function mobileImageGenerationSupport(support: ModelConfig['imageGeneration']) {
+/** Default GPT Image 2.6 generation to GIF without extending SDK edit or frame controls. */
+function mobileImageGenerationSupport(modelId: string, support: ModelConfig['imageGeneration']) {
   if (!support) return support;
+  const isGptImage26 = modelId === 'gpt-image-2-6-flare' || modelId === 'gpt-image-2-6-sunburst';
   const modes = { ...support.modes };
   for (const mode of Object.keys(modes) as (keyof typeof modes)[]) {
     const definition = modes[mode];
@@ -95,6 +96,14 @@ function mobileImageGenerationSupport(support: ModelConfig['imageGeneration']) {
     delete supports.frameCount;
     delete supports.frameDurationMs;
     const format = supports.outputFormat;
+    if (
+      isGptImage26 &&
+      mode === 'generate' &&
+      format?.type === 'enum' &&
+      format.options.includes('gif')
+    ) {
+      supports.outputFormat = { ...format, default: 'gif' };
+    }
     if (mode !== 'generate' && format?.type === 'enum') {
       supports.outputFormat = {
         ...format,
@@ -212,7 +221,10 @@ export class MobileRegistryLoader {
           .filter((model) => model.reasoning?.wireDialect !== 'adaptive-between-tools')
           .map((model) =>
             model.imageGeneration
-              ? { ...model, imageGeneration: mobileImageGenerationSupport(model.imageGeneration) }
+              ? {
+                  ...model,
+                  imageGeneration: mobileImageGenerationSupport(model.id, model.imageGeneration),
+                }
               : model,
           ),
       },
@@ -229,7 +241,10 @@ export class MobileRegistryLoader {
             override.imageGeneration
               ? {
                   ...override,
-                  imageGeneration: mobileImageGenerationSupport(override.imageGeneration),
+                  imageGeneration: mobileImageGenerationSupport(
+                    override.modelId,
+                    override.imageGeneration,
+                  ),
                 }
               : override,
           ),

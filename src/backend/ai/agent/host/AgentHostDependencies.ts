@@ -32,6 +32,7 @@ import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
@@ -79,6 +80,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'BackgroundActivityEnvironment',
   'SshRuntime',
   'ScreenAwakeRuntime',
 ])
@@ -124,8 +126,40 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly skills;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
-  readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
-    this.keepAlive.acquire('agent.durable', onInterrupt);
+  readonly executionLease: NonNullable<MobileAgentHostPorts['executionLease']> = (
+    onInterrupt,
+    sessionId,
+  ) => {
+    const lease = this.keepAlive.acquire(
+      sessionId ? 'agent.session' : 'agent.durable',
+      onInterrupt,
+      sessionId
+        ? {
+            title: this.backgroundEnvironment.translate('chat.backgroundReply.assistant'),
+            subtitle: this.backgroundEnvironment.translate('chat.backgroundReply.preparing'),
+            completedUnitCount: 0,
+            totalUnitCount: 3,
+          }
+        : undefined,
+    );
+    if (!sessionId || !lease.update) return lease;
+    return {
+      ...lease,
+      update: (progress) =>
+        lease.update?.({
+          ...progress,
+          ...(progress.completedUnitCount !== undefined
+            ? {
+                subtitle: this.backgroundEnvironment.translate(
+                  progress.completedUnitCount >= 2
+                    ? 'chat.backgroundReply.responding'
+                    : 'chat.backgroundReply.thinking',
+                ),
+              }
+            : {}),
+        }),
+    };
+  };
   readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
@@ -168,6 +202,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
+      translate: (key) => key,
+    },
     private readonly ssh?: SshRuntime,
     private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
       acquire: () => ({ release() {} }),

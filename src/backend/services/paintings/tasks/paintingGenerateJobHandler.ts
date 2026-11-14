@@ -114,6 +114,12 @@ export function createPaintingGenerateJobHandler(
     // The class states the product promise ("keeps generating while you do
     // something else"); the dispatch loop honors it with a keep-alive lease.
     executionClass: 'user-continued',
+    continuedProcessing: (input) => ({
+      title: input.modelName,
+      subtitle: (dependencies.translate ?? ((key: string) => key))(
+        'painting.backgroundActivity.generating',
+      ),
+    }),
     recovery: 'abandon',
     // Deleting the receipt this job writes through must cancel it first. The
     // input already carries the id, so no `paintingId -> jobId` index is needed:
@@ -160,6 +166,7 @@ export function createPaintingGenerateJobHandler(
           }),
         );
         throwIfAborted(ctx.signal);
+        ctx.reportProgress(25);
         const result = await ai.generateImage({
           inputImages,
           mode,
@@ -173,6 +180,7 @@ export function createPaintingGenerateJobHandler(
         if (result.images.length === 0) {
           throw new Error('Image provider returned no image');
         }
+        ctx.reportProgress(50);
 
         const createdOutputs: FileEntry[] = [];
         let outputRefsCommitted = false;
@@ -194,6 +202,7 @@ export function createPaintingGenerateJobHandler(
             );
           }
           throwIfAborted(ctx.signal);
+          ctx.reportProgress(75);
           const painting = await paintings.replaceOutputs(
             paintingId,
             createdOutputs.map((entry) => entry.id),
@@ -201,6 +210,7 @@ export function createPaintingGenerateJobHandler(
           );
           outputRefsCommitted = true;
           throwIfAborted(ctx.signal);
+          ctx.reportProgress(100);
           const persistedOutputIds = new Set(painting.files.output);
           const outputs = createdOutputs.map((entry) => {
             if (!persistedOutputIds.has(entry.id)) {
