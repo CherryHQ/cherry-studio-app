@@ -2349,6 +2349,8 @@
   "settings.provider.vertex.project": "プロジェクト ID",
   "settings.provider.vertex.title": "サービス アカウント",
   "settings.select.placeholder": "選択してください",
+  "settings.sessionBranchTree.saveFailed": "分岐セッションの表示設定を保存できませんでした。もう一度お試しください。",
+  "settings.sessionBranchTree.title": "分岐セッションのツリー表示",
   "settings.title": "設定",
   "settings.voice.defaultVoice": "システムのデフォルト",
   "settings.voice.dictation.settingsUnavailable": "システム設定を開けませんでした。",

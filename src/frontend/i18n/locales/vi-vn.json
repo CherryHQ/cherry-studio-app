@@ -2349,6 +2349,8 @@
   "settings.provider.vertex.project": "ID dự án",
   "settings.provider.vertex.title": "Tài khoản dịch vụ",
   "settings.select.placeholder": "Chọn",
+  "settings.sessionBranchTree.saveFailed": "Không thể lưu cách hiển thị nhánh hội thoại. Vui lòng thử lại.",
+  "settings.sessionBranchTree.title": "Chế độ xem dạng cây cho hội thoại phân nhánh",
   "settings.title": "Cài đặt",
   "settings.voice.defaultVoice": "Mặc định của hệ thống",
   "settings.voice.dictation.settingsUnavailable": "Không thể mở cài đặt hệ thống.",

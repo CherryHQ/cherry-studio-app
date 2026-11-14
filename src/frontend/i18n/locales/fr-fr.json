@@ -2383,6 +2383,8 @@
   "settings.provider.vertex.project": "ID du projet",
   "settings.provider.vertex.title": "Compte de service",
   "settings.select.placeholder": "Sélectionner",
+  "settings.sessionBranchTree.saveFailed": "Impossible d’enregistrer l’affichage des branches de conversation. Réessayez.",
+  "settings.sessionBranchTree.title": "Vue arborescente des conversations ramifiées",
   "settings.title": "Paramètres",
   "settings.voice.defaultVoice": "Par défaut du système",
   "settings.voice.dictation.settingsUnavailable": "Impossible d’ouvrir les paramètres système.",

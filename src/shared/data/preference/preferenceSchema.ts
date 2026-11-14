@@ -99,6 +99,7 @@ export interface PreferenceSchema {
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
+  'ui.sidebar.session_tree_enabled': boolean;
   'ui.theme_mode': ThemeMode;
 }
 
@@ -155,6 +156,7 @@ export const PreferenceDefaults = {
   'ui.library.view_mode': 'grid',
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
+  'ui.sidebar.session_tree_enabled': true,
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 

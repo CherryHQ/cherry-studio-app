@@ -67,8 +67,13 @@ Deleted rows hide immediately, and each removal's catalog change notification re
 selection never refreshes them itself. Failed deletions remain selected for retry.
 
 The recent-list menu switches between the conversation list and conversations grouped by Agent.
-Local conversation rows with forks form collapsible groups under their main conversation in both
-views. The root row opens its conversation; its separate disclosure target expands only its direct
+General settings owns `ui.sidebar.session_tree_enabled`, enabled by default. With it enabled,
+local conversation rows with forks form collapsible groups under their main conversation in both
+views. With it disabled, both views list main and branch conversations separately by each
+conversation's latest activity, using the complete catalog rather than flattening loaded child
+pages. Changing this preference resets list pagination and releases child queries; query caches and
+local pagination cursors keep the two modes separate. The destination picker retains tree grouping.
+The root row opens its conversation; its separate disclosure target expands only its direct
 children. Each expanded node owns an independently paginated metadata query, ordered by creation
 time and id so new replies do not move sibling nodes. Collapsing it releases the child queries.
 Root groups are paginated by the family's latest activity. A lightweight root-first path read

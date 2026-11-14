@@ -2366,6 +2366,8 @@
   "settings.provider.vertex.project": "Proje kimliği",
   "settings.provider.vertex.title": "Hizmet hesabı",
   "settings.select.placeholder": "Seç",
+  "settings.sessionBranchTree.saveFailed": "Sohbet dallarının görünümü kaydedilemedi. Lütfen tekrar deneyin.",
+  "settings.sessionBranchTree.title": "Sohbet dalları için ağaç görünümü",
   "settings.title": "Ayarlar",
   "settings.voice.defaultVoice": "Sistem varsayılanı",
   "settings.voice.dictation.settingsUnavailable": "Sistem ayarları açılamadı.",

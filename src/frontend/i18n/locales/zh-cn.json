@@ -2349,6 +2349,8 @@
   "settings.provider.vertex.project": "项目 ID",
   "settings.provider.vertex.title": "服务账号",
   "settings.select.placeholder": "请选择",
+  "settings.sessionBranchTree.saveFailed": "保存会话分支展示设置失败，请重试。",
+  "settings.sessionBranchTree.title": "分支对话树形视图",
   "settings.title": "设置",
   "settings.voice.defaultVoice": "系统默认",
   "settings.voice.dictation.settingsUnavailable": "无法打开系统设置。",

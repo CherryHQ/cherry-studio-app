@@ -2383,6 +2383,8 @@
   "settings.provider.vertex.project": "ID del proyecto",
   "settings.provider.vertex.title": "Cuenta de servicio",
   "settings.select.placeholder": "Seleccionar",
+  "settings.sessionBranchTree.saveFailed": "No se pudo guardar la visualización de las ramas de conversación. Inténtalo de nuevo.",
+  "settings.sessionBranchTree.title": "Vista de árbol de conversaciones ramificadas",
   "settings.title": "Configuración",
   "settings.voice.defaultVoice": "Predeterminada del sistema",
   "settings.voice.dictation.settingsUnavailable": "No se pudieron abrir los ajustes del sistema.",

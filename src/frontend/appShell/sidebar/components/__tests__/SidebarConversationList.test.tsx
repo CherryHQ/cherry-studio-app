@@ -1,4 +1,5 @@
 import { type ReactNode, useLayoutEffect } from 'react';
+import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -33,6 +34,7 @@ const mockToast = jest.fn();
 const mockProgress = { set: jest.fn() };
 let mockSelectedSessionId: string | undefined;
 let mockSidebarPresence: 'open' | 'closed' = 'open';
+let mockIsSessionTreeEnabled = true;
 let mockSource: ConversationSource | undefined;
 let mockUseSelectionProvider = false;
 let mockSelectionStore: ReturnType<typeof useSidebarSelection> | undefined;
@@ -73,6 +75,9 @@ jest.mock('@/frontend/appShell/navigation', () => ({
   useFocusedBackPress: jest.fn(),
 }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [mockIsSessionTreeEnabled, jest.fn()],
+}));
 jest.mock('uniwind', () => ({
   useResolveClassNames: () => ({}),
   useUniwind: () => ({ theme: 'light' }),
@@ -158,6 +163,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSelectedSessionId = undefined;
   mockSidebarPresence = 'open';
+  mockIsSessionTreeEnabled = true;
   mockSource = undefined;
   mockUseSelectionProvider = false;
   mockSelectionStore = undefined;
@@ -179,6 +185,8 @@ beforeEach(() => {
 afterEach(() => act(() => renderer.unmount()));
 
 it('keeps root navigation separate from lazy child expansion', () => {
+  // The destination picker retains its tree independently of the sidebar preference.
+  mockIsSessionTreeEnabled = false;
   const branch = {
     ...mockSession,
     ref: { source: { kind: 'local' } as const, sessionId: 'fork-1' },
@@ -247,6 +255,60 @@ it('loads each nested sibling list only after its own disclosure is expanded', (
   expect(renderer.root.findAllByProps({ testID: 'share-session-grandchild' })).toHaveLength(0);
   expect(renderer.root.findAllByProps({ testID: 'share-session-child' })).not.toHaveLength(0);
 });
+
+it.each(['sessions', 'agents'] as const)(
+  'lists branches independently in the flat %s view and restores the selected tree path',
+  (mode) => {
+    mockDrawerSelection.mockReturnValue({ registerList: () => () => {} });
+    mockIsSessionTreeEnabled = false;
+    const root = { ...mockSession, hasChildren: true };
+    const branch = {
+      ...mockSession,
+      ref: { ...mockSession.ref, sessionId: 'branch' },
+      forkedFromSessionId: root.ref.sessionId,
+    };
+    mockSelectedSessionId = branch.ref.sessionId;
+    mockPath.mockImplementation((sessionId?: string) => ({
+      items: sessionId ? [root, branch] : [],
+    }));
+    mockSessions.mockReturnValue({ data: {}, items: [branch, root], isSuccess: true });
+    mockChildren.mockReturnValue({ items: [branch] });
+    const sidebar = () => (
+      <SidebarConversationList mode={mode} showLoading registerEndReachedHandler={jest.fn()} />
+    );
+    act(() => renderer.update(sidebar()));
+    if (mode === 'agents') press('sidebar-agent-agent-1');
+
+    expect(mockSessions).toHaveBeenLastCalledWith(
+      mode === 'agents' ? mockAgent.ref : undefined,
+      true,
+      { includeBranches: true },
+    );
+    const rows = renderer.root
+      .findAllByType(Pressable)
+      .filter((node) => node.props.accessibilityRole === 'link');
+    expect(rows.map((row) => row.props.testID)).toEqual([
+      'sidebar-session-branch',
+      'sidebar-session-session-1',
+    ]);
+    expect(rows[0].props.accessibilityState.selected).toBe(true);
+    expect(
+      renderer.root.findAllByProps({ testID: 'sidebar-session-expand-session-1' }),
+    ).toHaveLength(0);
+    expect(mockPath).toHaveBeenLastCalledWith(undefined);
+    expect(mockChildren).not.toHaveBeenCalled();
+
+    mockIsSessionTreeEnabled = true;
+    mockSessions.mockReturnValue({ data: {}, items: [root], isSuccess: true });
+    act(() => renderer.update(sidebar()));
+    expect(mockPath).toHaveBeenLastCalledWith('branch');
+    expect(mockChildren).toHaveBeenCalledWith(root.ref, true);
+    expect(
+      renderer.root.findByProps({ testID: 'sidebar-session-branch' }).props.accessibilityState
+        .selected,
+    ).toBe(true);
+  },
+);
 
 it('keeps the selected lineage visible when its root and ancestors are outside loaded pages', () => {
   mockDrawerSelection.mockReturnValue({ registerList: () => () => {} });
