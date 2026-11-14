@@ -186,7 +186,7 @@ describe('image provider option routing', () => {
     });
   });
 
-  it('passes output format through for custom compatible providers without losing sampling options', () => {
+  it('maps output format for custom compatible providers without losing sampling options', () => {
     expect(
       build(
         'openai-compatible',
@@ -195,7 +195,7 @@ describe('image provider option routing', () => {
       ),
     ).toEqual({
       'custom-provider': {
-        outputFormat: 'gif',
+        output_format: 'gif',
         complexity: 'medium',
         cfg: 7.5,
         seed: 4,
@@ -214,12 +214,12 @@ describe('image provider option routing', () => {
         ),
       ).toEqual({
         [aiSdkProviderId === 'openai-compatible' ? 'imported-aihubmix' : 'aihubmix']: {
-          outputFormat: 'gif',
+          output_format: 'gif',
           complexity: 'medium',
           seed: 9,
           cfg: 7.5,
         },
-        openai: { complexity: 'medium', seed: 9 },
+        openai: { outputFormat: 'gif', complexity: 'medium', seed: 9 },
       });
     },
   );

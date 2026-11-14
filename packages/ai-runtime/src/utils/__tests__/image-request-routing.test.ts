@@ -104,17 +104,8 @@ describe('painting parameters through the image provider to the HTTP request', (
       expect(url).toBe('https://images.example.com/v1/images/generations');
       const fields = JSON.parse(request?.body as string);
       expect(fields).toHaveProperty('model', modelId);
-      if (providerId === 'dmxapi') {
-        expect(fields).not.toHaveProperty('output_format');
-        expect(fields).not.toHaveProperty('outputFormat');
-        expect(fields).not.toHaveProperty('complexity');
-      } else if (providerId === 'openai' || providerId === 'aihubmix') {
-        expect(fields).toMatchObject({ output_format: 'gif', complexity: 'medium' });
-        expect(fields).not.toHaveProperty('outputFormat');
-      } else {
-        expect(fields).toMatchObject({ outputFormat: 'gif', complexity: 'medium' });
-        expect(fields).not.toHaveProperty('output_format');
-      }
+      expect(fields).toMatchObject({ output_format: 'gif', complexity: 'medium' });
+      expect(fields).not.toHaveProperty('outputFormat');
       for (const key of ['frame_count', 'frame_duration_ms', 'output_compression', 'size']) {
         expect(fields).not.toHaveProperty(key);
       }
@@ -123,6 +114,38 @@ describe('painting parameters through the image provider to the HTTP request', (
       expect(result.image.base64).toBe(base64);
     },
   );
+
+  it('delivers cataloged options through the DMXAPI native OpenAI model', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      jsonResponse({ data: [{ b64_json: 'AQID' }] }),
+    );
+    const provider = createDmxapiProvider({
+      apiKey: 'test-key',
+      baseURL: 'https://images.example.com/v1',
+      fetch,
+    });
+    const modelId = 'gpt-image-1.5';
+    const options = callOptions('dmxapi', modelId, {
+      quality: 'high',
+      background: 'transparent',
+      outputFormat: 'webp',
+    });
+    await generateImage({
+      model: provider.imageModel(modelId),
+      prompt: 'a fox',
+      n: 1,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+    const fields = JSON.parse(fetch.mock.calls[0]?.[1]?.body as string);
+    expect(fields).toMatchObject({
+      quality: 'high',
+      background: 'transparent',
+      output_format: 'webp',
+    });
+    expect(fields).not.toHaveProperty('outputFormat');
+    expect(fields).not.toHaveProperty('dmxapi');
+  });
 
   it('sends newapi diffusion controls and vendor extras in the HTTP body', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
@@ -148,7 +171,7 @@ describe('painting parameters through the image provider to the HTTP request', (
     });
     expect(options.providerOptions).toEqual({
       newapi: {
-        outputFormat: 'gif',
+        output_format: 'gif',
         complexity: 'medium',
         quality: 'high',
         seed: 7,
@@ -174,7 +197,7 @@ describe('painting parameters through the image provider to the HTTP request', (
       model: modelId,
       prompt: 'a fox',
       n: 1,
-      outputFormat: 'gif',
+      output_format: 'gif',
       complexity: 'medium',
       quality: 'high',
       seed: 7,
@@ -186,7 +209,7 @@ describe('painting parameters through the image provider to the HTTP request', (
     });
   });
 
-  it('does not map GIF output format to snake_case through an imported AiHubMix compatible image endpoint', async () => {
+  it('maps GIF output format to snake_case through an imported AiHubMix compatible image endpoint', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       jsonResponse({ data: [{ b64_json: 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' }] }),
     );
@@ -218,8 +241,8 @@ describe('painting parameters through the image provider to the HTTP request', (
     expect(url).toBe('https://images.example.com/v1/images/generations');
     const fields = JSON.parse(request?.body as string);
     expect(fields).toMatchObject({ model: modelId, complexity: 'medium' });
-    expect(fields).not.toHaveProperty('output_format');
-    expect(fields.outputFormat).toBe('gif');
+    expect(fields).not.toHaveProperty('outputFormat');
+    expect(fields.output_format).toBe('gif');
   });
 
   it.each(['qwen-image-3.0', 'qwen-image-3.0-pro'])(

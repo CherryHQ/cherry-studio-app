@@ -12,6 +12,7 @@
  * {@link WireRegistration} (`dualOpenAI` / `passthrough`) + the adapter
  * (`buildVendorProviderOptions`).
  */
+import { wireName } from '@cherrystudio/provider-registry';
 import type { CanonicalParamKey } from '@cherrystudio/universal/data/types/model';
 import type { JSONValue } from 'ai';
 
@@ -55,6 +56,7 @@ export interface WireProfile {
 export const DIFFUSION_WIRE_PROFILE: WireProfile = {
   forward: [
     'negativePrompt',
+    'outputFormat',
     'seed',
     'numInferenceSteps',
     'guidanceScale',
@@ -84,7 +86,14 @@ export const OPENAI_WIRE_PROFILE: WireProfile = {
  * uses compatible field names for the primary body and this SDK shape under `openai`.
  */
 export const AIHUBMIX_WIRE_PROFILE: WireProfile = {
+  ...OPENAI_WIRE_PROFILE,
   forward: [...(OPENAI_WIRE_PROFILE.forward ?? []), 'seed'],
+};
+
+/** Primary body on the compatible boundary: snake_case output_format. */
+const AIHUBMIX_COMPATIBLE_WIRE_PROFILE: WireProfile = {
+  ...AIHUBMIX_WIRE_PROFILE,
+  fields: { outputFormat: { to: wireName('outputFormat') } },
 };
 
 /** OpenRouter's native `/images` JSON body. `n`/`size`/`seed`/`aspectRatio` are
@@ -284,11 +293,18 @@ export const WIRE_REGISTRY: Record<string, WireRegistration> = {
   // sequentialImageGeneration / responseFormat …) under the `aihubmix` key, where
   // the per-backend custom model (Doubao Seedream / Qwen / Wan …) reads it.
   // Mirrors desktop origin/main wireProfile.ts:281.
-  aihubmix: { profile: AIHUBMIX_WIRE_PROFILE, dualOpenAI: true, passthrough: true },
+  aihubmix: {
+    profile: AIHUBMIX_COMPATIBLE_WIRE_PROFILE,
+    passthrough: true,
+    also: [{ key: 'openai', profile: AIHUBMIX_WIRE_PROFILE }],
+  },
   // Mirrors desktop origin/main wireProfile.ts:282.
   dmxapi: {
     profile: DMXAPI_WIRE_PROFILE,
-    also: [{ key: 'google', profile: DMXAPI_GOOGLE_PROFILE }],
+    also: [
+      { key: 'google', profile: DMXAPI_GOOGLE_PROFILE },
+      { key: 'openai', profile: OPENAI_WIRE_PROFILE },
+    ],
   },
   ollama: { profile: OLLAMA_WIRE_PROFILE },
   minimax: { profile: MINIMAX_WIRE_PROFILE },
