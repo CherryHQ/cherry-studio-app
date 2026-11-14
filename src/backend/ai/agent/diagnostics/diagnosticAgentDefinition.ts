@@ -9,7 +9,7 @@ import definition from './diagnosticAgent.json';
 export const diagnosticAgentDefinition = {
   ...definition,
   reasoningEffort: ReasoningEffortOptionSchema.parse(definition.reasoningEffort),
-} satisfies {
+} satisfies typeof definition & {
   tools: Record<DiagnosticToolId, string>;
 };
 

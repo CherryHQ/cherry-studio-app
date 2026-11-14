@@ -1,5 +1,6 @@
 import { resolveEffectiveEndpoint } from '@cherrystudio/ai-runtime/provider';
 
+import { createHttpClient } from '@/backend/services/http';
 import type { DiagnosticFeedbackContext } from '@/shared/contracts/diagnostics';
 import { DiagnosticSessionError } from '@/shared/contracts/diagnosticSession';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -9,7 +10,7 @@ import { createDiagnosticsModule } from '../createDiagnosticsModule';
 
 jest.mock('expo-file-system', () => ({ Paths: { availableDiskSpace: 1024 ** 3 } }));
 jest.mock('@/backend/services/http', () => ({
-  createHttpClient: () => ({ request: async () => ({ status: 200, data: '' }) }),
+  createHttpClient: jest.fn(() => ({ request: async () => ({ status: 200, data: '' }) })),
   isHttpError: () => false,
 }));
 
@@ -67,6 +68,7 @@ function fixture() {
     resolveConnection: () => ({
       baseUrl: provider.endpointConfigs?.['openai-chat-completions']?.baseUrl ?? '',
     }),
+    resolveServiceUrl: (baseUrl) => baseUrl,
     defaultModel,
     language: () => 'en-US',
     oauthSignedIn: async () => false,
@@ -102,6 +104,73 @@ test('an incident without model identity never checks the current default model'
   expect(f.defaultModel).not.toHaveBeenCalled();
   await owner.dispose();
 });
+
+test.each(['', 'https://aiplatform.googleapis.com/v1'])(
+  'diagnostic probes and AI facts use the supplied service URL, preserving configured URL %s for validation',
+  async (baseUrl) => {
+    const f = fixture();
+    f.provider.authType = 'iam-gcp';
+    f.provider.defaultChatEndpoint = 'google-generate-content';
+    f.provider.endpointConfigs = { 'google-generate-content': { baseUrl } };
+    f.model.endpointTypes = ['google-generate-content'];
+    f.deps.resolveConnection = resolveEffectiveEndpoint;
+    const resolveServiceUrl = jest.fn(() => 'https://us-central1-aiplatform.googleapis.com');
+    f.deps.resolveServiceUrl = resolveServiceUrl;
+    f.deps.provider.getAuthConfig = async () => ({
+      type: 'iam-gcp',
+      project: 'project-id',
+      location: 'us-central1',
+      credentials: {
+        client_email: 'svc@example.com',
+        private_key: '-----BEGIN PRIVATE KEY-----\nYWJjZA==\n-----END PRIVATE KEY-----',
+      },
+    });
+    const owner = createDiagnosticsModule(f.deps);
+    const session = owner.module.createSession(f.context);
+    try {
+      const report = await session.check({ network: true });
+      expect(report.target).toMatchObject({
+        endpointHost: 'us-central1-aiplatform.googleapis.com',
+      });
+      expect(report.target?.configurationIssue).toBeUndefined();
+      expect(report.checks).toContainEqual({ id: 'model', status: 'pass', issue: undefined });
+      expect(report.checks).toContainEqual(
+        expect.objectContaining({ id: 'endpoint', status: 'pass' }),
+      );
+      expect(resolveServiceUrl).toHaveBeenCalledWith(
+        baseUrl,
+        expect.objectContaining({
+          type: 'iam-gcp',
+          project: 'project-id',
+          location: 'us-central1',
+        }),
+      );
+      expect(createHttpClient).toHaveBeenLastCalledWith(
+        expect.objectContaining({ baseUrl: 'https://us-central1-aiplatform.googleapis.com' }),
+      );
+      await session.diagnose(f.model.id);
+      expect(f.runAgent.mock.calls.at(-1)?.[0].context.configuration.endpointHost).toBe(
+        'us-central1-aiplatform.googleapis.com',
+      );
+
+      // Derivation must not mask a stored project/location mismatch as a valid empty default.
+      f.provider.endpointConfigs['google-generate-content']!.baseUrl =
+        'https://aiplatform.googleapis.com/v1/projects/other/locations/us-central1';
+      resolveServiceUrl.mockImplementation(() => {
+        throw new Error('The configured project does not match the service address.');
+      });
+      const invalid = await session.check({ network: true });
+      expect(invalid.target?.configurationIssue).toBe('invalid-endpoint');
+      expect(invalid.checks).toContainEqual({
+        id: 'endpoint',
+        status: 'skipped',
+        issue: 'configuration',
+      });
+    } finally {
+      await owner.dispose();
+    }
+  },
+);
 
 test('desktop incidents do not run phone model probes or resolve its credentials', async () => {
   const f = fixture();

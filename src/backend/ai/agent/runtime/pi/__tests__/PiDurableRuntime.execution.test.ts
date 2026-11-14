@@ -8,6 +8,7 @@ import {
   RUNTIME_EXECUTION_LIMIT_CODE,
   type RuntimeEvent,
   type RuntimeExecutionRequest,
+  type RuntimeModelPreflight,
   type RuntimeTool,
 } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
@@ -114,6 +115,69 @@ async function runLimitedProbe(
 }
 
 describe('Pi durable execution integration', () => {
+  test.each(['cancel', 'close'] as const)(
+    '%s releases model registration before a stalled preflight returns',
+    async (ending) => {
+      let release!: (value: RuntimeModelPreflight) => void;
+      const preflight = new Promise<RuntimeModelPreflight>((resolve) => {
+        release = resolve;
+      });
+      let started!: () => void;
+      const registering = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const resolveModel = jest.fn(async () => {
+        throw new Error('A cancelled registration must not resolve a serving model.');
+      });
+      const runtime = new PiModelProbeRuntime({
+        preflightModel: () => {
+          started();
+          return preflight;
+        },
+        resolveModel,
+      });
+      const session = await runtime.open();
+      const events: RuntimeEvent[] = [];
+      const draining = (async () => {
+        for await (const event of session.execute({
+          sessionId: 'registering-probe',
+          turnId: 'registering-turn',
+          model: reference,
+          instructions: '',
+          input: [{ type: 'text', text: 'Check.' }],
+          history: [],
+          contextCheckpoint: null,
+          options: {},
+          tools: [],
+        }))
+          events.push(event);
+      })();
+      const result: RuntimeModelPreflight = {
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 4096,
+        inputModalities: ['text'],
+        supportsTools: true,
+      };
+      try {
+        await registering;
+        if (ending === 'cancel') await session.cancel('registering-turn');
+        // Closing must finish while the underlying configuration read is still pending.
+        await session.close();
+        await draining;
+        expect(events).toEqual([{ type: 'cancelled' }]);
+        release(result);
+        await preflight;
+        await Promise.resolve();
+        expect(resolveModel).not.toHaveBeenCalled();
+      } finally {
+        release(result);
+        await session.close();
+        await draining;
+      }
+    },
+  );
+
   test.each(['unknown-tool', 'invalid-arguments', 'valid-tool'] as const)(
     'counts %s attempts before they can bypass the diagnostic tool budget',
     async (kind) => {

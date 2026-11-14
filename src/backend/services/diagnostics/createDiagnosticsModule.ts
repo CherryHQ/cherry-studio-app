@@ -24,7 +24,7 @@ import {
 import type { ModelsModule } from '@/shared/contracts/models';
 import type { PermissionStatuses } from '@/shared/contracts/permissions';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -34,6 +34,7 @@ type Dependencies = {
   bundle: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
   agent: DiagnosticAgent;
   resolveConnection(provider: Provider, model: Model): { baseUrl: string };
+  resolveServiceUrl(baseUrl: string, auth: AuthConfig | null): string;
   model: Pick<ModelService, 'getById'>;
   provider: Pick<ProviderService, 'getByProviderId' | 'listApiKeys' | 'getAuthConfig'>;
   models: Pick<ModelsModule, 'checkChat'>;
@@ -119,7 +120,7 @@ function createSession(
     let endpoint: URL | undefined;
     try {
       connection = deps.resolveConnection(provider, model);
-      const parsed = new URL(connection.baseUrl);
+      const parsed = new URL(deps.resolveServiceUrl(connection.baseUrl, auth));
       if (['https:', 'http:'].includes(parsed.protocol) && !parsed.username && !parsed.password)
         endpoint = parsed;
     } catch {

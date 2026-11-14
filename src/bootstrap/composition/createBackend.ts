@@ -5,7 +5,10 @@ import { createDiagnosticAgent } from '@/backend/ai/agent/diagnostics';
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
-import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
+import {
+  resolveProviderConnection,
+  resolveProviderServiceUrl,
+} from '@/backend/ai/provider/providerConnection';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -231,6 +234,7 @@ export function createBackend(
   const diagnostics = createDiagnosticsModule({
     bundle: infrastructure.diagnostics,
     resolveConnection: resolveProviderConnection,
+    resolveServiceUrl: resolveProviderServiceUrl,
     model: services.model,
     provider: services.provider,
     models,

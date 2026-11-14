@@ -2,6 +2,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createRegistry, GenerationTask, hook, MemoryStorage } from '@earendil-works/pi-durable';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
+import { raceAbort } from '@/backend/utils/raceAbort';
 
 import { runtimeLane } from '../durableTypes';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
@@ -136,7 +137,8 @@ class PiModelProbeSession implements AgentRuntimeSession {
         this.channel.push({ type: 'usage', ...report });
       },
     );
-    await bridge.registerModel(request.model);
+    // Registration only fills this bridge's memory catalog; late reads cannot admit a run.
+    await raceAbort(bridge.registerModel(request.model), this.controller.signal);
     this.controller.signal.throwIfAborted();
     const model = bridge.models.getModel(request.model.providerId, request.model.modelId);
     if (!model) throw new Error('The probe model is unavailable.');

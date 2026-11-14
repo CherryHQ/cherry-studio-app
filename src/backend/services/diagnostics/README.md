@@ -23,14 +23,19 @@ association; they do not perform an exhaustive integrity scan or repair.
 Configuration revalidation and diagnostic-model reads also release their wait on cancellation or
 timeout. Late storage/credential reads cannot publish a target or admit an AI run. Actual admitted
 AI execution and usage delivery are still joined before host resources stop.
+The isolated runtime also releases a stalled model-registration preflight on cancellation;
+late configuration reads only finish populating its discarded in-memory model catalog.
 
 Configuration checks use the same resolved model connection as the endpoint probe, including
 per-model and gateway routing. Provider authentication checks keep their shared owner. An invalid
 model endpoint excludes that model from diagnostic selection; provider-wide authentication or
 disablement excludes the provider. Setup checks that do not supply a resolved connection retain
 their default-endpoint behavior.
+For Vertex, the probe address uses the same project/location URL resolver as model serving, including
+empty defaults and regional Google hosts. The original connection remains the input to configuration
+validation, so deriving the address cannot hide a malformed override or project mismatch.
 
-Connection checks probe the configured origin without credentials, reject redirects, cap response
+Connection checks probe the resolved service origin without credentials, reject redirects, cap response
 bodies and treat an HTTP response as evidence of reachability rather than successful authentication.
 Automatic checks do not list remote models or send a generation request. The retained explicit
 conversation-check capability requires separate caller confirmation and is not part of this panel.
