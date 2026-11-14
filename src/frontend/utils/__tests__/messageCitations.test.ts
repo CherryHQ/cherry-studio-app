@@ -1,6 +1,10 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { resolveMessageCitations } from '../messageCitations';
+import {
+  citationIds,
+  conversationCitationSources,
+  resolveMessageCitations,
+} from '../messageCitations';
 
 describe('resolveMessageCitations', () => {
   test('makes native provider citations clickable while retaining plain-text numbering', () => {
@@ -174,5 +178,69 @@ describe('resolveMessageCitations', () => {
         ['bbbb2222-1', 1],
       ]),
     );
+  });
+});
+
+describe('conversation citation scope', () => {
+  test('uses earlier confirmed tool IDs without leaking future or native source IDs', () => {
+    const source = { id: 'lookup-1', title: 'Earlier', url: 'https://example.com' };
+    const registry = conversationCitationSources([
+      { id: 'early', parts: [{ type: 'text', text: '[cite:future-1]' }], sources: [source] },
+      {
+        id: 'native',
+        parts: [{ type: 'source-url', sourceId: 'native-1', url: 'https://native.example' }],
+        sources: [],
+      },
+      {
+        id: 'answer',
+        parts: [{ type: 'text', text: '[cite:lookup-1] [cite:native-1]' }],
+        sources: [{ ...source, id: 'future-1' }],
+      },
+    ]);
+    expect(registry.get('early')).toEqual([source]);
+    expect(registry.get('answer')?.map((item) => item.id)).toEqual(['future-1', 'lookup-1']);
+  });
+
+  test('resolves known provider and multi-ID marks, preserving code and unknown marks', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'turn0search0', url: 'https://example.com' },
+      {
+        type: 'text',
+        text: '[1] citeturn0search0 [cite:turn0search0, missing] `[1]` citeunknown',
+      },
+    ];
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)?.plainText).toBe(
+      '[1] [1] [1][cite:missing] `[1]` citeunknown',
+    );
+    expect(citationIds(parts)).toEqual(['turn0search0', 'missing', 'unknown']);
+  });
+
+  test('maps 0-based provider citation IDs and consecutive numeric markers accurately', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'citation-2', url: 'https://third.example' },
+      { type: 'source-url', sourceId: 'citation-0', url: 'https://first.example' },
+      { type: 'source-url', sourceId: 'citation-1', url: 'https://second.example' },
+      {
+        type: 'text',
+        text: 'Claim [1][2] and [3], skip [4], [1](https://link.example), [1][ref].',
+      },
+    ];
+    const resolved = resolveMessageCitations(parts);
+    expect(resolved.textByPartIndex.get(3)).toEqual({
+      markdown:
+        'Claim [❶](cite:https%3A%2F%2Ffirst.example)[❷](cite:https%3A%2F%2Fsecond.example) and [❸](cite:https%3A%2F%2Fthird.example), skip [4], [1](https://link.example), [1][ref].',
+      plainText: 'Claim [1][2] and [3], skip [4], [1](https://link.example), [1][ref].',
+    });
+
+    const sparse: CherryMessagePart[] = [
+      { type: 'source-url', sourceId: 'citation-0', url: 'https://first.example' },
+      { type: 'source-url', sourceId: 'citation-2', url: 'https://third.example' },
+      { type: 'text', text: 'Only [2] literal and [3] cited.' },
+    ];
+    const sparseResolved = resolveMessageCitations(sparse);
+    expect(sparseResolved.textByPartIndex.get(2)).toEqual({
+      markdown: 'Only [2] literal and [❶](cite:https%3A%2F%2Fthird.example) cited.',
+      plainText: 'Only [2] literal and [1] cited.',
+    });
   });
 });

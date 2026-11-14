@@ -108,6 +108,8 @@ export function ChatWorkspace({
   const mergedMessages = useMessageCitationSources(
     sourceMessages,
     dataKey || `${executionSource}:${sessionId ?? 'draft'}`,
+    messageWindow.readCitations,
+    messageWindow.revision,
   );
   useConversationFeedbackHint(
     messageWindow.dataKey || sessionId || 'draft',

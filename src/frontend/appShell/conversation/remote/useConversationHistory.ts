@@ -136,6 +136,8 @@ export function useConversationHistory(
   }, [hasPreviousPage, isFetching, fetchPreviousPage]);
   return {
     dataKey: JSON.stringify([session?.scope, session?.ref.sessionId, around, navigationKey]),
+    revision: version,
+    readCitations: retired ? undefined : session?.history.readCitations,
     messages: retired
       ? []
       : around
