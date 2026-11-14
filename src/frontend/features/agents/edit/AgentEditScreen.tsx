@@ -465,7 +465,14 @@ function AgentEditForm({
             ) : null}
           </View>
         </View>
-        <Section title={t('agent.form.instructions')}>
+        <Section
+          footer={
+            <View className="px-3">
+              <ApplicationSystemRulesSection mode={form.mode} />
+            </View>
+          }
+          title={t('agent.form.instructions')}
+        >
           <TextInput
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect
@@ -526,7 +533,6 @@ function AgentEditForm({
             </Button>
           ) : null}
         </View>
-        <ApplicationSystemRulesSection mode={form.mode} />
         {form.mode === 'standard' ? (
           <AgentToolsSection
             bindings={toolBindings}

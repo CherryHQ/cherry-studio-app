@@ -85,9 +85,9 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
   empty snapshot is ordinary conversation.
 - The Host builds the mobile-owned application prompt for every turn. Standard/minimal Runtime
   rules and response-language rules are application-owned, not editable Agent configuration.
-  The Agent editor provides a read-only viewer with full-text copy for the current mode and App
-  language. It shares `buildApplicationSystemRules` with the Host; per-turn capability guidance
-  and Agent instructions are separate additions, not part of this base-rule preview.
+  The Agent editor's instructions footer links to a read-only viewer with full-text copy for the
+  current mode and App language. It shares `buildApplicationSystemRules` with the Host; per-turn
+  capability guidance and Agent instructions are separate additions, not part of this base-rule preview.
   Fixed Runtime rules define truthful capability use, approval and permission behavior,
   untrusted-content handling, and result reporting. Reply language follows an explicit user request,
   then the Agent Instructions' language preference, then the user's message, with the App's

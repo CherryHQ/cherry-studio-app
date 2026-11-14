@@ -1,7 +1,7 @@
-import { BottomSheet, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, Text } from 'react-native';
+import { Keyboard, ScrollView, Text, View } from 'react-native';
 
 import { MessageDetailSection } from '@/frontend/components/MessageDetail';
 import type { AgentMode } from '@/shared/data/types/agent';
@@ -20,17 +20,22 @@ export function ApplicationSystemRulesSection({ mode }: { mode: AgentMode }) {
 
   return (
     <>
-      <Section footer={t('agent.systemRules.description')}>
-        <Section.SelectItem
-          label={t('agent.systemRules.title')}
+      <View className="flex-row flex-wrap items-center gap-x-1">
+        <Text className="max-w-full text-sm text-muted-foreground">
+          {t('agent.systemRules.description')}
+        </Text>
+        <Button
           onPress={() => {
             Keyboard.dismiss();
             setIsOpen(true);
           }}
+          size="inline"
           testID="agent-system-rules"
-          value={modeLabel}
-        />
-      </Section>
+          variant="link"
+        >
+          {t('agent.systemRules.view')}
+        </Button>
+      </View>
       <BottomSheet
         closeAction={{ accessibilityLabel: t('common.close') }}
         onClose={() => setIsOpen(false)}
@@ -40,9 +45,6 @@ export function ApplicationSystemRulesSection({ mode }: { mode: AgentMode }) {
       >
         {isOpen ? (
           <ScrollView contentContainerClassName="gap-4 px-5 pb-8 pt-2">
-            <Text className="text-sm text-muted-foreground">
-              {t('agent.systemRules.description')}
-            </Text>
             <MessageDetailSection
               copyTestID="agent-system-rules-copy"
               copyText={() => rules}

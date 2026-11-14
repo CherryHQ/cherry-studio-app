@@ -21,7 +21,8 @@ surfaces.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   standard/minimal mode, and its two-mode tool-approval preference.
   Inference parameters are not part of the Agent editor surface.
-- The application system rules row below mode/model opens a read-only sheet with full-text copy.
+- A short hint below the instructions input explains that application system rules accompany the
+  Agent's instructions. Its inline View rules action opens a read-only sheet with full-text copy.
   It shows the current mode's base rules and response-language rules using the effective App
   language, from the same source the Host uses. These rules are not Agent fields or editable
   defaults. Agent instructions remain editable separately; tool, Skill and plugin guidance is
