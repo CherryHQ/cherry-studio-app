@@ -1,16 +1,18 @@
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type AccessibilityActionEvent,
   type LayoutChangeEvent,
   type ScrollViewInstance,
   StyleSheet,
-  Text,
   View,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  FadeOut,
+  ReduceMotion,
   runOnJS,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -22,17 +24,22 @@ import {
   type ModelPickerFastScrollAnchor,
   modelPickerFastScrollIndexAtPosition,
 } from '../utils/modelPickerFastScroll';
+import { ModelPickerBackdrop } from './ModelPickerBackdrop';
+import { ModelPickerProviderPreview } from './ModelPickerProviderPreview';
 
 const RAIL_INSET = 8;
 const NAVIGATION_ITEM_HEIGHT = 48;
 const MAXIMUM_PROVIDER_ICON_SIZE = 20;
 const accessibilityActions = [{ name: 'increment' }, { name: 'decrement' }] as const;
+// Press feedback appears immediately; only release fades, with a reduced-motion fallback.
+const providerPreviewExit = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
 
 export const MODEL_PICKER_FAST_SCROLLER_WIDTH = 48;
 
 type ModelPickerFastScrollerProps = {
   activeIndex: number;
   anchors: readonly ModelPickerFastScrollAnchor[];
+  blurTarget: RefObject<ViewInstance | null>;
   onNavigate: (index: number) => void;
 };
 
@@ -40,6 +47,7 @@ type ModelPickerFastScrollerProps = {
 export function ModelPickerFastScroller({
   activeIndex,
   anchors,
+  blurTarget,
   onNavigate,
 }: ModelPickerFastScrollerProps) {
   const { t } = useTranslation();
@@ -148,6 +156,9 @@ export function ModelPickerFastScroller({
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setMeasuredRailHeight(event.nativeEvent.layout.height);
   }, []);
+  const handlePreviewLayout = useCallback((event: LayoutChangeEvent) => {
+    setPreviewHeight(event.nativeEvent.layout.height);
+  }, []);
   useEffect(() => {
     if (
       measuredRailHeight <= 0 ||
@@ -229,9 +240,13 @@ export function ModelPickerFastScroller({
         testID="model-picker-fast-scroller"
       >
         <View
-          className="absolute inset-y-0 w-9 rounded-full border border-border bg-card shadow-md shadow-constant-black/10 dark:shadow-constant-black/40"
+          className="absolute inset-y-0 w-9 rounded-full border border-constant-white/65 shadow-sm shadow-constant-black/10 dark:border-border dark:shadow-constant-black/20"
           pointerEvents="none"
-        />
+        >
+          <View className="absolute inset-0 overflow-hidden rounded-full">
+            <ModelPickerBackdrop blurTarget={blurTarget} variant="rail" />
+          </View>
+        </View>
         <GestureDetector gesture={gesture}>
           <View className="w-full flex-1 overflow-hidden rounded-full" collapsable={false}>
             <GestureDetector gesture={scrollGesture}>
@@ -264,29 +279,18 @@ export function ModelPickerFastScroller({
           </View>
         </GestureDetector>
         {pressedAnchor ? (
-          <View
+          <Animated.View
             accessibilityElementsHidden
-            className="absolute right-14 w-52 items-end"
+            className="absolute right-16"
+            exiting={providerPreviewExit}
             importantForAccessibility="no-hide-descendants"
+            onLayout={handlePreviewLayout}
             pointerEvents="none"
             style={{ top: previewTop }}
             testID="model-picker-provider-preview"
           >
-            <View
-              className="max-w-full rounded-xl bg-foreground px-3 py-2 shadow-md shadow-constant-black/15"
-              onLayout={({ nativeEvent }) => {
-                setPreviewHeight(nativeEvent.layout.height);
-              }}
-            >
-              <Text
-                className="font-medium text-background text-xs"
-                ellipsizeMode="middle"
-                numberOfLines={1}
-              >
-                {pressedAnchor.label}
-              </Text>
-            </View>
-          </View>
+            <ModelPickerProviderPreview anchor={pressedAnchor} blurTarget={blurTarget} />
+          </Animated.View>
         ) : null}
       </View>
     </View>
@@ -308,12 +312,15 @@ function ModelPickerFastScrollAnchorIcon({
           : 'size-8 items-center justify-center opacity-80'
       }
     >
-      <ProviderAvatar
-        presetProviderId={anchor.provider.presetProviderId}
-        providerId={anchor.provider.id}
-        providerName={anchor.provider.name}
-        size={MAXIMUM_PROVIDER_ICON_SIZE}
-      />
+      <View className="size-5 overflow-hidden rounded-sm">
+        <ProviderAvatar
+          presetProviderId={anchor.provider.presetProviderId}
+          providerId={anchor.provider.id}
+          providerName={anchor.provider.name}
+          shape="rounded"
+          size={MAXIMUM_PROVIDER_ICON_SIZE}
+        />
+      </View>
     </View>
   );
 }
