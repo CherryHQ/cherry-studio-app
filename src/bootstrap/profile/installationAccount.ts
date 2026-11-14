@@ -5,8 +5,8 @@ import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
-import * as z from 'zod';
 
 import {
   AccountRuntime,
@@ -15,26 +15,20 @@ import {
 } from '@/backend/services/enterprise';
 import { createFetchBridge } from '@/backend/services/http';
 import { nativeCallbackUrl } from '@/backend/utils/oauth';
-import {
-  AccountError,
-  type AccountSessionContext,
-  AccountSessionContextSchema,
-} from '@/shared/contracts/account';
+import { AccountError, type AccountSessionContext } from '@/shared/contracts/account';
 import { getActiveProfile } from '@/shared/data/activeProfile';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { setDiagnosticAccountReader } from '../runtime/diagnosticContext';
+import {
+  configOrigin,
+  parseCloudLogin,
+  resolveCloudLogin,
+  sdkScopes,
+  type CloudLoginConfig,
+} from './cloudLoginConfig';
 import { installationProfiles } from './installationProfiles';
 
-const ConfigSchema = z.object({
-  issuer: z.string().min(1),
-  origin: z.string().min(1),
-  clientId: z.string().min(1),
-  scopes: z.array(z.string()).min(1),
-  enterpriseApiBaseUrl: z.string().optional(),
-  cloudApiOrigin: z.string().optional(),
-  cloudWebUrl: z.string().optional(),
-});
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
 let account: AccountRuntime | undefined;
@@ -46,73 +40,55 @@ export function installationAccount(): AccountRuntime {
 }
 
 function createAccount(): AccountRuntime {
-  const parsed = ConfigSchema.safeParse(Constants.expoConfig?.extra?.accountsPortal);
-  if (!parsed.success)
-    loggerService.withContext('AccountRuntime').error('Cloud sign-in configuration is invalid', {
-      fields: parsed.error.issues.map((issue) => issue.path.join('.')),
-      operation: 'account.configuration',
-    });
-  const config = parsed.success ? parsed.data : undefined;
+  const origin = configOrigin(Constants.expoConfig?.extra?.configServiceOrigin);
   const store = createMMKV({ id: 'cherry-installation-account' });
   const redirectUri = nativeCallbackUrl('auth/callback');
-  const portal =
-    config && redirectUri
-      ? createAccountsPortal({
-          issuer: config.issuer,
-          origin: config.origin,
-          clientId: config.clientId,
-          redirectUri,
-          scopes: config.scopes,
-          storage: {
-            get: (key) => SecureStore.getItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
-            set: (key, value) =>
-              SecureStore.setItemAsync(`accounts-portal.${key}`, value, STORAGE_OPTIONS),
-            delete: (key) => SecureStore.deleteItemAsync(`accounts-portal.${key}`, STORAGE_OPTIONS),
-          },
-          crypto: {
-            randomBytes: Crypto.getRandomBytes,
-            sha256: async (value) =>
-              new Uint8Array(
-                await Crypto.digest(
-                  Crypto.CryptoDigestAlgorithm.SHA256,
-                  new TextEncoder().encode(value),
-                ),
-              ),
-          },
-          // Only the SDK's own endpoints, its profile list and an enterprise product entry, so tokens
-          // go nowhere else.
-          fetch: createFetchBridge({
-            maxResponseBytes: 1024 * 1024,
-            timeoutMs: 20_000,
-            unsupportedMethodError: () => new AccountError('failed'),
-            assertUrl(value) {
-              const url = new URL(value);
-              const fixed = [
-                `${config.issuer}/oauth/v2/token`,
-                `${config.issuer}/oauth/v2/revoke`,
-                `${config.issuer}/oidc/v1/userinfo`,
-                `${config.origin}/api/v1/logout`,
-                `${config.origin}/api/v1/profiles`,
-              ];
-              if (
-                !fixed.includes(url.toString()) &&
-                !(url.pathname.endsWith('/accounts-portal/v1/enter') && !url.search && !url.hash)
-              )
-                throw new AccountError('address');
-              return url;
-            },
-          }),
-        })
-      : null;
-  void portal?.ready.catch((error: unknown) => {
-    loggerService
-      .withContext('AccountRuntime')
-      .error('Could not restore the sign-in', error as Error);
-  });
   const active = getActiveProfile();
+  const bindingKey =
+    origin && redirectUri
+      ? `accounts-portal.registration.${sha256HexOfText(JSON.stringify([origin, redirectUri]))}`
+      : undefined;
+  const expectedIssuer =
+    active.identity && 'issuer' in active.identity ? active.identity.issuer : undefined;
+  let config: CloudLoginConfig | undefined;
+  if (bindingKey && redirectUri) {
+    try {
+      const saved = SecureStore.getItem(bindingKey, STORAGE_OPTIONS);
+      if (saved) {
+        const registration = parseCloudLogin(JSON.parse(saved), redirectUri);
+        if (!expectedIssuer || registration.endpoints.issuer === expectedIssuer)
+          config = registration;
+      }
+    } catch {
+      loggerService
+        .withContext('AccountRuntime')
+        .error('Could not read the cloud login registration');
+    }
+  }
+  let portal = config ? createRegionalPortal(config) : null;
+  const sessionContext = (session: AuthState): AccountSessionContext | null =>
+    config && session._tag === 'signedIn'
+      ? {
+          issuer: config.endpoints.issuer,
+          enterpriseApiBaseUrl: config.endpoints.api_base_url,
+          cloudApiOrigin: config.endpoints.cloud_api_origin,
+          cloudWebUrl: config.endpoints.cloud_web_url,
+        }
+      : null;
   const runtime = new AccountRuntime({
     portal,
-    resolveSessionContext: (session) => resolvePortalSessionContext(session, config),
+    async preparePortal() {
+      if (!origin || !redirectUri || !bindingKey) throw new AccountError('unavailable');
+      const next = await resolveCloudLogin(origin, Platform.OS, redirectUri, expectedIssuer);
+      // Persist before beginSignIn saves PKCE and before handing control to the system browser.
+      if (!portal || JSON.stringify(next) !== JSON.stringify(config)) {
+        SecureStore.setItem(bindingKey, JSON.stringify(next), STORAGE_OPTIONS);
+        portal = createRegionalPortal(next);
+        config = next;
+      }
+      return portal;
+    },
+    resolveSessionContext: sessionContext,
     active,
     profiles: installationProfiles(),
     prompt: {
@@ -150,7 +126,7 @@ function createAccount(): AccountRuntime {
     if (active.identity && 'authentication' in active.identity)
       return { accountStatus, accountSubjectId: active.identity.subject };
     const session = portal?.getState();
-    const context = session ? resolvePortalSessionContext(session, config) : null;
+    const context = session ? sessionContext(session) : null;
     return {
       accountStatus,
       ...(session?._tag === 'signedIn' && context
@@ -164,16 +140,47 @@ function createAccount(): AccountRuntime {
   return runtime;
 }
 
-/**
- * SDK 0.2.1 has no session service metadata. Its current deployment supplies concrete addresses
- * here from configuration. Replace this mapping with the SDK's session result when available;
- * product code consumes actual addresses and never selects a region.
- */
-function resolvePortalSessionContext(
-  session: AuthState,
-  config: z.infer<typeof ConfigSchema> | undefined,
-): AccountSessionContext | null {
-  if (session._tag !== 'signedIn') return null;
-  const context = AccountSessionContextSchema.safeParse(config);
-  return context.success ? context.data : null;
+function createRegionalPortal(config: CloudLoginConfig) {
+  const { issuer, portal_url: origin, api_base_url: enterpriseApi } = config.endpoints;
+  // An SDK instance must never find another issuer's tokens or pending PKCE transaction.
+  const prefix = sha256HexOfText(
+    JSON.stringify([issuer, origin, config.oidc_client_id, config.redirect_uri]),
+  );
+  const allowed = new Set([
+    `${issuer}/oauth/v2/token`,
+    `${issuer}/oauth/v2/revoke`,
+    `${issuer}/oidc/v1/userinfo`,
+    `${origin}/api/v1/logout`,
+    `${origin}/api/v1/profiles`,
+    `${enterpriseApi}/accounts-portal/v1/enter`,
+  ]);
+  return createAccountsPortal({
+    issuer,
+    origin,
+    clientId: config.oidc_client_id,
+    redirectUri: config.redirect_uri,
+    scopes: config.scopes.filter((scope) => !sdkScopes.includes(scope)),
+    storage: {
+      get: (key) => SecureStore.getItemAsync(`${prefix}.${key}`, STORAGE_OPTIONS),
+      set: (key, value) => SecureStore.setItemAsync(`${prefix}.${key}`, value, STORAGE_OPTIONS),
+      delete: (key) => SecureStore.deleteItemAsync(`${prefix}.${key}`, STORAGE_OPTIONS),
+    },
+    crypto: {
+      randomBytes: Crypto.getRandomBytes,
+      sha256: async (value) =>
+        new Uint8Array(
+          await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, new TextEncoder().encode(value)),
+        ),
+    },
+    fetch: createFetchBridge({
+      maxResponseBytes: 1024 * 1024,
+      timeoutMs: 20_000,
+      unsupportedMethodError: () => new AccountError('failed'),
+      assertUrl(value) {
+        const url = new URL(value);
+        if (!allowed.has(url.toString())) throw new AccountError('address');
+        return url;
+      },
+    }),
+  });
 }

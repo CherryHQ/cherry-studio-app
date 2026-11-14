@@ -49,7 +49,7 @@ models and organization configuration are not inherited. Community accounts keep
 | Owner | Location |
 | --- | --- |
 | Installation directory of profiles (`ProfileRegistry`) | MMKV `cherry-installation-profiles` |
-| Accounts Portal session and the sign-in prompt flag | SecureStore `accounts-portal.*`, MMKV `cherry-installation-account` |
+| Accounts Portal session and the sign-in prompt flag | SecureStore (registration and scoped SDK credentials), MMKV `cherry-installation-account` |
 | Private access and refresh tokens (never the password) | SecureStore `profile.<id>.private-account` |
 | Local profile | Original Documents, SQLite, MMKV and SecureStore names |
 | Enterprise profile | `Documents/profiles/<id>/`; MMKV stores and SecureStore keys prefixed `profile.<id>.` |
@@ -78,43 +78,21 @@ restore replaces authorization references before the imported database opens.
 ## Account
 
 `AccountRuntime` (`src/backend/services/enterprise/account`, exposed as `Backend.account`) owns the
-installation's single Accounts Portal SDK instance, composed natively in
-`src/bootstrap/profile/installationAccount.ts`. The SDK owns PKCE, token storage, identity claims, refresh and candidate-session admission.
-The runtime also owns private credentials; `privateAccountApi` validates the v2 password exchange
-over the shared HTTP transport. Private sign-in works without Accounts Portal build configuration.
-Missing Portal configuration does not change the sign-in method page. Requesting cloud sign-in
-reports the configuration error, whose invalid field names are recorded in diagnostics. Community
-sign-in does not require an enterprise service address; only enterprise admission validates it.
+installation's cloud session. On a fresh official-cloud login the app calls Config Service before
+opening the system browser. The selected registration supplies the issuer, Portal, native client ID,
+callback, scopes and enterprise API. The Accounts Portal SDK owns PKCE, identity tokens, refresh
+and candidate admission. Private password sign-in uses the server address entered by the user.
 
-`AccountSessionContext` is the app-owned input with actual service addresses:
+The app stores the selected registration before opening the browser. Cold callbacks, token refresh
+and workspace switches use that registration even when the network changes. Credentials and pending
+PKCE state are scoped to the issuer, Portal, client ID and callback. Builds that used the old
+unscoped token store require one fresh cloud login after upgrade. Local profiles remain available
+under their existing identities. An existing enterprise profile reauthenticates against its saved issuer.
 
-| Field | Meaning |
-| --- | --- |
-| `issuer` | The current session's identity issuer; required for account identity |
-| `enterpriseApiBaseUrl` | Enterprise API base URL, including an API path if needed; required for enterprise admission |
-| `cloudApiOrigin` | Community subscription API origin used for account reads, models and inference |
-| `cloudWebUrl` | Full subscription-management webpage URL |
-
-Service fields are optional because an account may have no access to a product. Each product
-validates its own addresses before use: enterprise admission rejects a missing or invalid base
-URL, while a community login does not require enterprise configuration. The Cloud consumer requires
-both a valid HTTPS API origin and a full HTTPS webpage URL. There is no region marker, address map,
-or geographic inference in the account contract or product routing.
-
-The installation's `resolvePortalSessionContext` is the single SDK integration point for current,
-candidate and restored sessions. These field names do not prescribe the SDK's response format;
-the adapter translates it into the app-owned contract. Accounts Portal 0.2.1 does not expose service
-metadata yet. For its current China-only deployment, this adapter uses the configured issuer and
-concrete service addresses. Once the SDK supplies session metadata, replace that mapping and remove
-the temporary business-address build inputs. Product code continues consuming the same contract.
-Private deployment sign-in remains independent.
-
-The SDK integration must supply the candidate's addresses before `completeSignIn` admission,
-restore them with the stored identity, and publish changes atomically with account or organization
-switches. A configuration change must also notify subscribers when the subject and product profile
-are unchanged. Identity tokens and product tokens must belong to that same session. Multi-issuer
-authentication also requires SDK-owned login discovery/selection and matching transport endpoints;
-returning business URLs after login alone does not replace the SDK's pre-login configuration.
+`AccountSessionContext` supplies product addresses for the selected session. The required
+`endpoints.api_base_url` is the enterprise API. The optional community subscription API origin
+and management webpage are separate. Config Service v1 currently supplies neither community
+address. Account login works, but subscription features need both addresses before rollout.
 
 `AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
 identity exposes the actual Cloud API origin and webpage URL. Its key includes those addresses,
@@ -216,28 +194,13 @@ profile, only a community session counts as signed in.
   Other failures retain their original cause in diagnostics and show an account-action failure;
   persistence and reload failures are never presented as connection failures.
 
-Build inputs live in `app.config.ts` under `extra.accountsPortal` (`ACCOUNTS_PORTAL_*`). Every build
-profile reads them from the environment; the repository has no deployment defaults. Set local
-values in the Git-ignored repository-root `.env.local`, using the keys in `.env.example`; configure
-cloud builds in their selected EAS environment. The local build wrapper loads `.env.local` before
-starting EAS. Register the installed app's native callback scheme with the corresponding Accounts
-Portal client, as described above.
-
-SDK login configuration remains under its own `origin`, `issuer`, `clientId` and `scopes` inputs.
-Until the SDK returns service metadata, the single deployment adapter receives these build inputs:
-
-| Existing deployment variable | Temporary `extra.accountsPortal` input |
-| --- | --- |
-| `ACCOUNTS_PORTAL_ENTERPRISE_API_CN` | `enterpriseApiBaseUrl` |
-| `CHERRY_CLOUD_API_ORIGIN_CN` | `cloudApiOrigin` |
-| `CHERRY_CLOUD_WEB_URL_CN` | `cloudWebUrl` |
-
-The `_CN` suffixes preserve the already configured deployment variables; they are not routing
-flags. No global-address build input is consumed. Do not add new regional variants: the future
-SDK result replaces these inputs at the single adapter. The enterprise API from the normalized
-session is used for admission, product entry and the active profile's synchronization. Missing
-configuration rejects that entry. A changed service address is admitted before reloading the
-profile, and the existing server identity continues to own its local data.
+Set `CONFIG_SERVICE_ORIGIN` to the public HTTPS origin in the selected EAS environment or in
+`.env.local` for a local build. It is the only build input for official cloud login.
+The app sends an anonymous `POST /v1/resolve` with `{"client":"mobile","platform":"ios"}`
+or `"platform":"android"`. Configure each region's native registration with the exact callback
+for the installed build, the SDK's `openid profile offline_access` scopes, and any required product
+audience scopes. A missing registration, incompatible callback or unavailable discovery service
+stops a fresh login before the browser opens.
 
 ## Synchronization
 

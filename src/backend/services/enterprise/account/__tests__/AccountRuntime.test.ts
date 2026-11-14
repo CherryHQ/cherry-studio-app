@@ -89,6 +89,7 @@ function setup(
   };
   const options = {
     portal,
+    preparePortal: jest.fn(async () => portal),
     resolveSessionContext: jest.fn((state: AuthState) => {
       const context = AccountSessionContextSchema.safeParse(state);
       return context.success ? context.data : null;
@@ -106,7 +107,7 @@ function setup(
         setStale: jest.fn((value: boolean) => (stale = value)),
       };
     })(),
-    createApi: jest.fn((_address: string, _session: EnterpriseSession) => ({
+    createApi: jest.fn((_address?: string, _session?: EnterpriseSession) => ({
       getUser: jest.fn(async () => privateCredentials.user),
       getConfiguration: jest.fn(async () => ({ serverUniqueId: 'server-1' })),
       setupAgent: jest.fn(),
@@ -153,6 +154,14 @@ const signedIn = (product: 'cloud' | 'enterprise'): Extract<PortalState, { _tag:
 });
 
 describe('AccountRuntime', () => {
+  it('can leave a legacy organization when its registration is missing', async () => {
+    const { options } = setup({ _tag: 'signedOut' }, enterpriseProfile);
+    const runtime = new AccountRuntime({ ...options, portal: null });
+    await runtime.signOut();
+    expect(options.profiles.setActive).toHaveBeenCalledWith(LOCAL_PROFILE);
+    expect(options.preparePortal).not.toHaveBeenCalled();
+  });
+
   it('keeps local data for a community account without reloading', async () => {
     const { runtime, options } = setup(signedIn('cloud'));
     await expect(runtime.signIn()).resolves.toBe(true);
@@ -172,6 +181,7 @@ describe('AccountRuntime', () => {
 
   it('reports missing cloud configuration only when cloud sign-in is requested', async () => {
     const { options } = setup({ _tag: 'signedOut' });
+    options.preparePortal.mockRejectedValue(new AccountError('unavailable'));
     const runtime = new AccountRuntime({ ...options, portal: null });
     await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
     expect(options.openBrowser).not.toHaveBeenCalled();
@@ -184,6 +194,7 @@ describe('AccountRuntime', () => {
   it('opens the chooser without forcing account authentication when switching spaces', async () => {
     const { runtime, options } = setup(signedIn('cloud'));
     await runtime.switchSpace();
+    expect(options.preparePortal).not.toHaveBeenCalled();
     expect(options.portal.beginSignIn).toHaveBeenCalledWith({ forceLogin: false });
     await runtime.signIn();
     expect(options.portal.beginSignIn).toHaveBeenLastCalledWith({ forceLogin: true });
@@ -1107,7 +1118,7 @@ describe('normalized account service admission', () => {
           address,
         }),
       );
-      const session = options.createApi.mock.calls[0]![1];
+      const session = options.createApi.mock.calls[0]![1]!;
       await session.getProductToken();
       expect(options.portal.getProductToken).toHaveBeenCalledWith(address);
     },
