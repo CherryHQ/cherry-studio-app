@@ -9,9 +9,12 @@ import {
   UserEntry,
 } from '@earendil-works/pi-durable';
 
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { RuntimeContextCheckpoint, RuntimeJsonValue } from '../types';
 import { type PiConversationInput, toPiConversation } from './modelMessages';
 import { parseCheckpointPayload } from './piLegacyCheckpoint';
+import { projectPiWebReplayForImport, readPiWebResult } from './PiWebResponse';
 
 /**
  * Rebuild a disposable working copy from Cherry. Importing entries never calls a model or runs a
@@ -124,5 +127,31 @@ function readPiContextCheckpoint(payload: unknown): Message[] | null {
       !(typeof message.content === 'string' || Array.isArray(message.content))
     )
       throw new Error('The saved Pi context contains an invalid message.');
-  return payload.messages as Message[];
+  let droppedThinkingBlocks = 0;
+  let droppedRawThinkingBlocks = 0;
+  let droppedAssistantMessages = 0;
+  const messages = (payload.messages as Message[]).flatMap((message): Message[] => {
+    if (message.role !== 'assistant' || message.api !== 'anthropic-messages') return [message];
+    if (!Array.isArray(message.content)) return [message];
+    const projected = projectPiWebReplayForImport(message);
+    droppedRawThinkingBlocks +=
+      (readPiWebResult(message)?.anthropicContent?.length ?? 0) -
+      (readPiWebResult(projected)?.anthropicContent?.length ?? 0);
+    const content = message.content.filter((block) => block.type !== 'thinking');
+    const dropped = message.content.length - content.length;
+    droppedThinkingBlocks += dropped;
+    if (dropped && !content.length) {
+      droppedAssistantMessages++;
+      return [];
+    }
+    return [dropped ? { ...projected, content } : projected];
+  });
+  // The context estimator also calls this boundary: these counts describe a projection, not a turn.
+  if (droppedThinkingBlocks || droppedRawThinkingBlocks)
+    loggerService.withContext('piWorkingHistory').info('Sanitized checkpoint projection', {
+      droppedThinkingBlocks,
+      droppedRawThinkingBlocks,
+      droppedAssistantMessages,
+    });
+  return messages;
 }
