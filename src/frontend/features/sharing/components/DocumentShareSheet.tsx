@@ -1,5 +1,5 @@
 import { CardStack, ContentState, useToast } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -16,14 +16,12 @@ import { DocumentExportError } from '@/shared/contracts/documentExport';
 import { useDocumentExportHtmlCapture } from '../hooks/useDocumentExportHtmlCapture';
 import { useDocumentExportPreview } from '../hooks/useDocumentExportPreview';
 import { useExportPresentation } from '../hooks/useExportPresentation';
-import { IMAGE_PAGE_HEIGHT, type ImagePageSlice } from '../utils/imagePagePlan';
 import { DocumentFilePreview } from './DocumentFilePreview';
 import { DocumentPagePreview } from './DocumentPagePreview';
 import { ShareFormatTabs } from './ShareFormatTabs';
 import { ShareSheet } from './ShareSheet';
 
 type Request = Extract<NonNullable<ReturnType<typeof getShareRequest>>, { kind: 'document' }>;
-const FIRST_PAGE: readonly ImagePageSlice[] = [{ top: 0, height: IMAGE_PAGE_HEIGHT }];
 
 export function DocumentShareSheet({ request, onClose }: { request: Request; onClose(): void }) {
   const { t } = useTranslation();
@@ -42,21 +40,9 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   const presentation = deliveryPresentation ?? livePresentation;
   const { capture, surface, onCaptureLayout } = useDocumentExportHtmlCapture();
   const preview = useDocumentExportPreview(request.session, format, presentation, capture);
-  const [plan, setPlan] = useState<{ html: string; pages: readonly ImagePageSlice[] }>();
-  const [failure, setFailure] = useState<{ html: string; error?: unknown }>();
-  const failedHtml = failure?.html;
-  const error = preview.error ?? (failedHtml === preview.html ? failure?.error : undefined);
+  const error = preview.error;
   const isSizeLimit =
     error instanceof DocumentExportError && ['size-limit', 'image-size-limit'].includes(error.code);
-  const pages = format === 'image' && plan?.html === preview.html ? plan.pages : FIRST_PAGE;
-  const onPages = useCallback(
-    (pages: readonly ImagePageSlice[]) => setPlan({ html: preview.html, pages }),
-    [preview.html],
-  );
-  const onPreviewError = useCallback(
-    (error?: unknown) => setFailure({ html: preview.html, error }),
-    [preview.html],
-  );
   const [isPending, setIsPending] = useState(false);
   const pending = useRef<AbortController | undefined>(undefined);
   const savePhotos = useSaveImagesToPhotos();
@@ -109,10 +95,6 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
       })(),
     );
   };
-  const retry = () => {
-    setFailure(undefined);
-    preview.retry();
-  };
   const saveImages = () => {
     if (pending.current) return;
     void savePhotos((signal) =>
@@ -155,7 +137,7 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
   return (
     <ShareSheet
       isPending={isPending}
-      canShare={!preview.error && failedHtml !== preview.html}
+      canShare={!preview.isPreparing && !error}
       onClose={() => {
         pending.current?.abort();
         onClose();
@@ -176,85 +158,100 @@ export function DocumentShareSheet({ request, onClose }: { request: Request; onC
         />
       }
     >
-      <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
-        <ScrollView
-          accessibilityElementsHidden
-          className="absolute inset-0"
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-          removeClippedSubviews={false}
-        >
-          {surface}
-        </ScrollView>
-        <View className="min-h-0 flex-1 px-4 pt-2.5">
-          {preview.issues.length ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              className="px-2 pt-2 text-muted-foreground text-xs"
-            >
-              {t('documentExport.issues', { count: preview.issues.length })}
-            </Text>
-          ) : null}
-          {preview.error || failedHtml === preview.html ? (
-            <View className="flex-1 justify-center p-6">
-              <ContentState.Error
-                title={t(
-                  isSizeLimit
-                    ? 'sharing.tooLarge'
-                    : preview.isPaused
-                      ? 'documentExport.paused'
-                      : 'documentExport.deliveryFailed',
-                )}
-                primaryAction={{ children: t('common.retry'), onPress: retry }}
-              />
-            </View>
-          ) : (
-            <CardStack
-              layout="fill"
-              items={pages}
-              index={index}
-              onIndexChange={setIndex}
-              labels={{
-                previous: t('sharing.previous'),
-                next: t('sharing.next'),
-                page: (page, total) => t('documentExport.page', { page, total }),
-              }}
-              renderItem={(page, frame) => {
-                if (!frame.isFront) return <View className="flex-1 bg-card" />;
-                const content = (
-                  <DocumentPagePreview
-                    html={preview.html}
-                    page={page}
-                    width={frame.width}
-                    height={frame.height}
-                    isImage={format === 'image'}
-                    layout={presentation.imageFrame?.layout ?? 'pages'}
-                    onPages={onPages}
-                    onError={onPreviewError}
-                  />
-                );
-                return format === 'image' ? (
-                  content
-                ) : (
-                  <DocumentFilePreview
-                    filename={
-                      preview.filename ??
-                      `${request.session.document.title ?? t('documentExport.document')}.${format === 'markdown' ? 'md' : 'html'}`
-                    }
-                    messageCount={
-                      isMessageCard ? request.session.document.sections.length : undefined
-                    }
-                    source={format === 'markdown' ? preview.text : preview.html}
-                    format={format}
-                  >
-                    {content}
-                  </DocumentFilePreview>
-                );
-              }}
-            />
-          )}
+      {(bottomInset) => (
+        <View className="min-h-0 flex-1" onLayout={onCaptureLayout}>
+          <ScrollView
+            accessibilityElementsHidden
+            className="absolute inset-0"
+            importantForAccessibility="no-hide-descendants"
+            pointerEvents="none"
+            removeClippedSubviews={false}
+          >
+            {surface}
+          </ScrollView>
+          <View className="min-h-0 flex-1 px-4 pt-2.5">
+            {preview.issues.length ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                className="px-2 pt-2 text-muted-foreground text-xs"
+              >
+                {t('documentExport.issues', { count: preview.issues.length })}
+              </Text>
+            ) : null}
+            {error ? (
+              <View className="flex-1 justify-center p-6">
+                <ContentState.Error
+                  title={t(
+                    isSizeLimit
+                      ? 'sharing.tooLarge'
+                      : preview.isPaused
+                        ? 'documentExport.paused'
+                        : 'documentExport.deliveryFailed',
+                  )}
+                  primaryAction={{ children: t('common.retry'), onPress: preview.retry }}
+                />
+              </View>
+            ) : preview.isPreparing ? (
+              <View className="flex-1 justify-center p-6">
+                <ContentState.Loading />
+              </View>
+            ) : (
+              <View
+                className="min-h-0 flex-1"
+                style={{ paddingBottom: preview.pages.length > 1 ? bottomInset : 0 }}
+              >
+                <CardStack
+                  layout="fill"
+                  items={preview.pages}
+                  index={index}
+                  onIndexChange={setIndex}
+                  labels={{
+                    previous: t('sharing.previous'),
+                    next: t('sharing.next'),
+                    page: (page, total) => t('documentExport.page', { page, total }),
+                  }}
+                  renderItem={(page, frame) => {
+                    if (!frame.isFront) return <View className="flex-1 bg-card" />;
+                    const content = (
+                      <DocumentPagePreview
+                        html={preview.html}
+                        page={page}
+                        width={frame.width}
+                        height={frame.height}
+                        bottomInset={
+                          format === 'image' && preview.pages.length > 1 ? 0 : bottomInset
+                        }
+                        isImage={format === 'image'}
+                        layout={presentation.imageFrame?.layout ?? 'pages'}
+                        onPages={preview.onPages}
+                        onError={preview.onPreviewError}
+                      />
+                    );
+                    return format === 'image' ? (
+                      content
+                    ) : (
+                      <DocumentFilePreview
+                        filename={
+                          preview.filename ??
+                          `${request.session.document.title ?? t('documentExport.document')}.${format === 'markdown' ? 'md' : 'html'}`
+                        }
+                        messageCount={
+                          isMessageCard ? request.session.document.sections.length : undefined
+                        }
+                        source={format === 'markdown' ? preview.text : preview.html}
+                        format={format}
+                        bottomInset={bottomInset}
+                      >
+                        {content}
+                      </DocumentFilePreview>
+                    );
+                  }}
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </ShareSheet>
   );
 }

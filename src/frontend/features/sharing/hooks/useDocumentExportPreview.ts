@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   DocumentExportError,
@@ -12,6 +12,10 @@ import {
 import type { ExportWatermark } from '@/shared/contracts/fileExport';
 import { renderMarkdownSignature } from '@/shared/utils/documentExportMarkdown';
 
+import { IMAGE_PAGE_HEIGHT, type ImagePageSlice } from '../utils/imagePagePlan';
+
+const FIRST_PAGE: readonly ImagePageSlice[] = [{ top: 0, height: IMAGE_PAGE_HEIGHT }];
+
 /** Preparing a readable preview never captures PNGs. Delivery selects its own watermark treatment. */
 export function useDocumentExportPreview(
   session: DocumentExportSession,
@@ -20,20 +24,31 @@ export function useDocumentExportPreview(
   capture: CaptureExportHtml,
 ) {
   const [attempt, setAttempt] = useState(0);
+  // Revisiting the same format/HTML is a new load, including after retry.
+  const request = useMemo(
+    () => ({ session, format, presentation, attempt }),
+    [attempt, format, presentation, session],
+  );
+  const activeRequest = useRef<typeof request | undefined>(undefined);
+  useLayoutEffect(() => {
+    activeRequest.current = request;
+    return () => {
+      activeRequest.current = undefined;
+    };
+  }, [request]);
   const [result, setResult] = useState<{
-    session: DocumentExportSession;
-    format: ExportFormat;
-    presentation: ExportPresentation;
+    request: typeof request;
     html?: string;
     artifact?: DocumentExportArtifact;
     error?: unknown;
   }>();
+  const [pageResult, setPageResult] = useState<{
+    request: typeof request;
+    pages?: readonly ImagePageSlice[];
+    error?: unknown;
+  }>();
   const tail = useRef<Promise<unknown>>(Promise.resolve());
   const text = session.markdown + renderMarkdownSignature(presentation.watermark);
-  const immediateHtml = useMemo(
-    () => (format !== 'markdown' ? session.previewDocument(presentation) : ''),
-    [format, presentation, session],
-  );
   useEffect(() => {
     const controller = new AbortController();
     tail.current = tail.current
@@ -49,22 +64,38 @@ export function useDocumentExportPreview(
           );
           if (!controller.signal.aborted)
             setResult({
-              session,
-              format,
-              presentation,
+              request,
               artifact,
               html: artifact.format === 'html' ? artifact.html : undefined,
             });
         } catch (error) {
-          if (!controller.signal.aborted) setResult({ session, format, presentation, error });
+          if (!controller.signal.aborted) setResult({ request, error });
         }
       });
     return () => controller.abort();
-  }, [attempt, format, presentation, session]);
-  const current =
-    result?.session === session && result.format === format && result.presentation === presentation
-      ? result
-      : undefined;
+  }, [format, presentation, request, session]);
+  const current = result?.request === request ? result : undefined;
+  const currentPage = pageResult?.request === request ? pageResult : undefined;
+  const error = current?.error ?? currentPage?.error;
+  const onPages = useCallback(
+    (pages: readonly ImagePageSlice[]) => {
+      if (activeRequest.current === request)
+        setPageResult((current) =>
+          // A failed load stays failed until retry or a new preview request.
+          current?.request === request && current.error !== undefined
+            ? current
+            : { request, pages },
+        );
+    },
+    [request],
+  );
+  const onPreviewError = useCallback(
+    (error?: unknown) => {
+      if (activeRequest.current === request)
+        setPageResult({ request, error: error ?? new DocumentExportError('capture-failed') });
+    },
+    [request],
+  );
   const getArtifact = useCallback(
     async (
       signal: AbortSignal,
@@ -101,14 +132,15 @@ export function useDocumentExportPreview(
       current?.artifact && current.artifact.format !== 'image'
         ? current.artifact.file.filename
         : undefined,
-    html: current?.html ?? immediateHtml,
+    html: current?.html ?? '',
     isPreparing: !current,
-    error: current?.error,
+    error,
+    pages: format === 'image' ? (currentPage?.pages ?? FIRST_PAGE) : FIRST_PAGE,
+    onPages,
+    onPreviewError,
     issues: current?.artifact?.issues ?? [],
     getArtifact,
     retry: () => setAttempt((value) => value + 1),
-    isPaused:
-      current?.error instanceof DocumentExportError &&
-      ['inactive', 'busy'].includes(current.error.code),
+    isPaused: error instanceof DocumentExportError && ['inactive', 'busy'].includes(error.code),
   };
 }
