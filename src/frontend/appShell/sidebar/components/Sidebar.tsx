@@ -10,7 +10,6 @@ import {
   chatRouteParams,
   useChatSource,
   useConversationTarget,
-  useStartNewChat,
 } from '@/frontend/appShell/navigation/chat';
 import { useFilePane } from '@/frontend/appShell/pane/state';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
@@ -50,13 +49,12 @@ function getContentStack(navigation: SidebarNavigation) {
 /** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
 export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) {
   const router = useRouter();
-  const { source, remoteTarget, viewMode, startRemoteChat, localChat } = useChatSource();
+  const { source, remoteTarget, viewMode, localChat } = useChatSource();
   // Destinations act for the chat beside the sidebar, or the one a page currently covers.
   const agentId = localChat?.kind === 'draft' ? localChat.agentId : undefined;
   const sessionId = localChat?.kind === 'session' ? localChat.sessionId : undefined;
   // Serialized so the actions below change only when the chat does.
   const sourceChat = localChat ? JSON.stringify(chatRouteParams(localChat)) : undefined;
-  const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
   const canDock = useCanDockSidebar();
@@ -134,12 +132,6 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
           });
       },
       openSettings: () => openDestination('/settings'),
-      startNewChat: () => {
-        navigation.closeDrawer();
-        returnToChat();
-        if (source === 'remote') startRemoteChat();
-        else void startNewChat();
-      },
     }),
     [
       agentId,
@@ -157,8 +149,6 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       setContent,
       source,
       remoteTarget.connectionId,
-      startRemoteChat,
-      startNewChat,
     ],
   );
 

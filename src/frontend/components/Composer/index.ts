@@ -20,6 +20,7 @@ export {
   type ComposerSendPayload,
   useComposerSubmit,
 } from './components/ComposerSurface';
+export { useComposerMediaActions } from './hooks/useComposerMediaActions';
 export { useComposerDocumentPicker } from './hooks/useComposerDocumentPicker';
 export {
   type ComposerAttachmentStore,

@@ -1,19 +1,15 @@
-import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import FolderCheckIcon from '@cherrystudio/app-icons/icons/folder-check';
 import {
   composerContentGap,
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { router, useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { type ComponentProps, useCallback, useMemo, useState } from 'react';
+import { useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { v7 as uuidv7 } from 'uuid';
 
-import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
@@ -21,7 +17,6 @@ import {
   type ChatComposerHandoff,
   parseChatRoute,
   getChatComposerHandoff,
-  chatRouteParams,
 } from '@/frontend/appShell/navigation/chat';
 import {
   ComposerDismissArea,
@@ -35,11 +30,12 @@ import { PolicyScope } from '@/frontend/components/Policy';
 import { useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
-import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
+import { useFileWorkspace } from '@/frontend/hooks/file';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
+import { ChatHeader } from './components/ChatHeader';
 import { ChatInput } from './components/ChatInput';
 import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
@@ -52,7 +48,6 @@ import {
   ChatEmptyState,
   ChatWorkspace,
 } from './components/ChatWorkspace';
-import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useComposerHandoffAppend } from './composer/useComposerHandoffAppend';
@@ -78,73 +73,9 @@ const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage me
 
 export function ChatScreen() {
   return (
-    <ChatScreenFrame header={LocalChatHeader}>
+    <ChatScreenFrame header={ChatHeader}>
       <ChatRouteContent />
     </ChatScreenFrame>
-  );
-}
-
-function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
-  const { t } = useTranslation();
-  const params = useLocalSearchParams<ChatRouteParamsInput>();
-  const route = parseChatRoute(params);
-  const target = route.status === 'ready' ? route.target : undefined;
-  // Shares the content's queries, so the header reflects the binding without another fetch.
-  const workspace = useFileWorkspace({
-    sessionId: target?.kind === 'session' ? target.sessionId : undefined,
-    workspaceDraftId: target?.kind === 'draft' ? target.workspaceDraftId : undefined,
-  });
-  const workspaceName = workspace.workspace?.name;
-  const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
-  const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
-  // The sheet reopens on focus; a reference returning from its preview belongs to the composer.
-  const selectionHandoff = target?.selectionHandoff;
-  const [shownSelectionHandoff, setShownSelectionHandoff] = useState(selectionHandoff);
-  if (selectionHandoff !== shownSelectionHandoff) {
-    setShownSelectionHandoff(selectionHandoff);
-    if (selectionHandoff) setWorkspaceAddress(null);
-  }
-  function openWorkspace() {
-    if (!target) return;
-    Keyboard.dismiss();
-    if (target.kind === 'session') {
-      setWorkspaceAddress({ sessionId: target.sessionId });
-    } else {
-      const workspaceDraftId = target.workspaceDraftId ?? uuidv7();
-      if (!target.workspaceDraftId)
-        router.setParams(chatRouteParams({ ...target, workspaceDraftId }));
-      setWorkspaceAddress({ workspaceDraftId });
-    }
-  }
-  return (
-    <>
-      <MainHeader
-        {...props}
-        actions={
-          target
-            ? [
-                {
-                  key: 'file-workspace',
-                  type: 'icon',
-                  // The check marks a linked workspace, matching the selection in its sheet.
-                  icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
-                  nativeIcon: workspace.folderId
-                    ? require('@/assets/header-toolbar/folder-check.png')
-                    : require('@/assets/header-toolbar/folder.png'),
-                  accessibilityLabel: workspaceName
-                    ? t('workspace.openCurrent', { name: workspaceName })
-                    : t('workspace.open'),
-                  testID: 'chat-file-workspace',
-                  onPress: () => openWorkspace(),
-                },
-              ]
-            : undefined
-        }
-      />
-      {workspaceAddress ? (
-        <FileWorkspaceSheet address={workspaceAddress} onClose={closeWorkspace} />
-      ) : null}
-    </>
   );
 }
 

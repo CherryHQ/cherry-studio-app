@@ -11,6 +11,7 @@ import {
   chatRouteParams,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
+import { AgentEditor } from '@/frontend/components/AgentEditor';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
@@ -30,6 +31,7 @@ export function MainHeader({
 }) {
   const { agent, openNewSession } = useMainHeaderAgent();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string>();
   return (
     <>
       <MainHeaderView
@@ -41,6 +43,10 @@ export function MainHeader({
         onNewChat={openNewSession}
         onAgentPress={() => {
           Keyboard.dismiss();
+          setEditingAgentId(agent?.id);
+        }}
+        onAgentSwitch={() => {
+          Keyboard.dismiss();
           setPickerOpen(true);
         }}
       />
@@ -51,6 +57,13 @@ export function MainHeader({
           onClose={() => setPickerOpen(false)}
         />
       </ConversationSourceBoundary>
+      {editingAgentId ? (
+        <AgentEditor
+          agentId={editingAgentId}
+          onClose={() => setEditingAgentId(undefined)}
+          presentation="sheet"
+        />
+      ) : null}
     </>
   );
 }
@@ -78,11 +91,11 @@ function LocalAgentPicker({
       catalog={catalog}
       open={open}
       onClose={onClose}
+      onEdit={(agentId) => router.push({ params: { agentId }, pathname: '/agents/[agentId]/edit' })}
+      onCreate={() => router.push({ params: { startChat: 'true' }, pathname: '/agents/new' })}
       onSelect={(agentId) =>
         router.setParams(chatRouteParams({ agentId, kind: 'draft', workspaceDraftId }))
       }
-      onEdit={(agentId) => router.push({ params: { agentId }, pathname: '/agents/[agentId]/edit' })}
-      onCreate={() => router.push({ params: { startChat: 'true' }, pathname: '/agents/new' })}
     />
   );
 }

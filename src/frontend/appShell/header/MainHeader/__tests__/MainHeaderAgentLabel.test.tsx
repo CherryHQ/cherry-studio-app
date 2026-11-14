@@ -10,6 +10,7 @@ import { MainHeaderAgentLabel, useMainHeaderAgent } from '../MainHeaderAgentLabe
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartNewChat = jest.fn();
+const mockCreateHandoff = jest.fn((_value: unknown) => 'blank-composer');
 let mockAgent: Agent | undefined;
 let mockAgentId: string | undefined;
 let mockSessionAgentId: string | undefined;
@@ -23,13 +24,26 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
 }));
 
+jest.mock('@/frontend/components/AgentEditor', () => ({
+  AgentEditor: (props: object) => {
+    const { createElement } = jest.requireActual('react');
+    return createElement('AgentEditor', props);
+  },
+}));
+
 jest.mock('@/frontend/components/Avatar', () => ({
   AgentAvatar: () => null,
 }));
 
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
-  chatRouteParams: (target: { agentId: string; kind: string; sessionId?: string }) => ({
+  chatRouteParams: (target: {
+    agentId: string;
+    kind: string;
+    sessionId?: string;
+    composerHandoff?: string;
+  }) => ({
     agentId: target.agentId,
+    ...(target.composerHandoff ? { composerHandoff: target.composerHandoff } : {}),
     sessionId: target.kind === 'session' ? target.sessionId : undefined,
   }),
   parseChatRoute: (params: { agentId?: string; sessionId?: string }) =>
@@ -41,12 +55,16 @@ jest.mock('@/frontend/appShell/navigation/chat', () => ({
       : params.agentId
         ? { status: 'ready', target: { agentId: params.agentId, kind: 'draft' } }
         : { status: 'empty' },
+  createChatComposerHandoff: (value: unknown) => mockCreateHandoff(value),
   useStartNewChat: () => mockStartNewChat,
 }));
 
 jest.mock('@/frontend/appShell/conversation', () => ({
   ConversationSourceBoundary: ({ children }: { children: React.ReactNode }) => children,
-  useConversationAgents: () => ({ items: mockAgent ? [mockAgent] : [], isLoading: false }),
+  useConversationAgents: () => ({
+    items: mockAgent ? [mockAgent, { id: 'agent-2', name: 'Cherry' }] : [],
+    isLoading: false,
+  }),
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -60,9 +78,23 @@ jest.mock('@/frontend/hooks/agent', () => ({
 }));
 
 jest.mock('../MainHeaderView/MainHeaderView', () => ({
-  MainHeaderView: ({ agent, onAgentPress }: { agent?: Agent; onAgentPress?: () => void }) => {
+  MainHeaderView: ({
+    agent,
+    onAgentPress,
+    onAgentSwitch,
+  }: {
+    agent?: Agent;
+    onAgentPress?: () => void;
+    onAgentSwitch?: () => void;
+  }) => {
     const { MainHeaderAgentLabel } = jest.requireActual('../MainHeaderAgentLabel');
-    return agent ? <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} /> : null;
+    const { Pressable } = jest.requireActual('react-native');
+    return agent ? (
+      <>
+        <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
+        <Pressable testID="main-header-agent-switch" onPress={onAgentSwitch} />
+      </>
+    ) : null;
   },
 }));
 
@@ -141,39 +173,40 @@ describe('MainHeaderAgentLabel', () => {
     expect(label?.props.onPress).toBeUndefined();
   });
 
-  it.each(['edit', 'switch', 'create'] as const)(
-    'opens the local header picker and lets the user %s an Agent',
-    async (action) => {
-      await act(async () => {
-        renderer = create(<MainHeader blurTarget={{ current: null }} />);
-      });
-      expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
-      await act(async () =>
-        renderer!.root.findByProps({ testID: 'current-agent-label' }).props.onPress(),
-      );
-      if (action === 'edit') {
-        await act(async () =>
-          renderer!.root.findByProps({ accessibilityLabel: 'common.edit: Peanut' }).props.onPress(),
-        );
-        expect(mockPush).toHaveBeenCalledWith({
-          pathname: '/agents/[agentId]/edit',
-          params: { agentId: 'agent-1' },
-        });
-      } else if (action === 'switch') {
-        await act(async () =>
-          renderer!.root.findByProps({ accessibilityRole: 'radio' }).props.onPress(),
-        );
-        expect(mockSetParams).toHaveBeenCalledWith({ agentId: 'agent-1', sessionId: undefined });
-      } else {
-        await act(async () => renderer!.root.findByType('Button').props.onPress());
-        expect(mockPush).toHaveBeenCalledWith({
-          pathname: '/agents/new',
-          params: { startChat: 'true' },
-        });
-      }
-      expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
-    },
-  );
+  it('edits the current Agent directly from its name', async () => {
+    await act(async () => {
+      renderer = create(<MainHeader blurTarget={{ current: null }} />);
+    });
+    await act(async () =>
+      renderer!.root.findByProps({ testID: 'current-agent-label' }).props.onPress(),
+    );
+    expect(renderer!.root.findByType('AgentEditor').props).toMatchObject({
+      agentId: 'agent-1',
+      presentation: 'sheet',
+    });
+    expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['agent-1', 'Peanut'],
+    ['agent-2', 'Cherry'],
+  ])('selects %s through the separate switch button', async (agentId, name) => {
+    await act(async () => {
+      renderer = create(<MainHeader blurTarget={{ current: null }} />);
+    });
+    await act(async () =>
+      renderer!.root.findByProps({ testID: 'main-header-agent-switch' }).props.onPress(),
+    );
+    await act(async () =>
+      renderer!.root
+        .findByProps({ accessibilityRole: 'radio', accessibilityLabel: name })
+        .props.onPress(),
+    );
+    if (agentId === 'agent-1') expect(mockSetParams).not.toHaveBeenCalled();
+    else expect(mockSetParams).toHaveBeenCalledWith({ agentId, sessionId: undefined });
+    expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
+  });
 
   it('selects from a remote catalog without local edit/create actions or a false missing-model label', async () => {
     const onSelect = jest.fn();
@@ -207,7 +240,7 @@ describe('MainHeaderAgentLabel', () => {
     await act(async () => renderer!.root.findByType('Button').props.onPress());
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
     await act(async () => option.props.onPress());
-    expect(onSelect).toHaveBeenCalledWith('remote');
+    expect(onSelect).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockSetParams).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
@@ -223,19 +256,25 @@ describe('MainHeaderAgentLabel', () => {
     expect(renderer?.root.findAllByProps({ testID: 'current-agent-label' })).toHaveLength(0);
   });
 
-  it('starts a new Session with the current Agent', async () => {
-    await act(async () => {
-      renderer = create(<NewSessionHarness />);
-    });
+  it.each(['session-1', undefined])(
+    'starts a blank composer from %s with the current Agent',
+    async (sessionId) => {
+      mockSessionId = sessionId;
+      await act(async () => {
+        renderer = create(<NewSessionHarness />);
+      });
 
-    const button = renderer?.root.findByProps({ testID: 'new-session-button' });
-    await act(async () => button?.props.onPress());
+      const button = renderer?.root.findByProps({ testID: 'new-session-button' });
+      await act(async () => button?.props.onPress());
 
-    expect(mockSetParams).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      sessionId: undefined,
-    });
-  });
+      expect(mockCreateHandoff).toHaveBeenCalledWith({ attachments: [], draft: '' });
+      expect(mockSetParams).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        composerHandoff: 'blank-composer',
+        sessionId: undefined,
+      });
+    },
+  );
 
   it('falls back to another available Agent when the Session Agent was deleted', async () => {
     mockAgent = undefined;

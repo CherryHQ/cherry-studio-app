@@ -82,9 +82,7 @@ const ProviderListRowView = memo(function ProviderListRow({
               testID={`provider-enabled-switch-${provider.id}`}
               value={isEnabled}
             />
-          ) : (
-            <Text className="text-sm text-muted-foreground">{t('cloud.title')}</Text>
-          )}
+          ) : null}
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />

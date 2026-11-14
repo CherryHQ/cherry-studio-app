@@ -31,6 +31,7 @@ import {
   hasMultipleProviderModelPurposes,
   type ProviderModelPurpose,
 } from '../models/utils/providerModelPurpose';
+import { CloudProviderDetail } from './components/CloudProviderDetail';
 import { ManagedProviderDetail } from './components/ManagedProviderDetail';
 import { ProviderDetailTabs } from './components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './components/ProviderDetailTabs/types';
@@ -46,7 +47,7 @@ export default function ProviderDetailSettingsScreen() {
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
-  if (providerId === CLOUD_PROVIDER_ID) return <Redirect href="/settings/profile/subscription" />;
+  if (providerId === CLOUD_PROVIDER_ID) return <CloudProviderDetail />;
 
   return <ProviderDetail key={providerId} providerId={providerId} providerName={providerName} />;
 }

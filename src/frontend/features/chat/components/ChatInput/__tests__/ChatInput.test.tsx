@@ -111,19 +111,6 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
-jest.mock('../components/ChatInputSsh', () => ({
-  ChatInputSshPopover: ({ children }: { children: ReactNode }) => children,
-}));
-jest.mock('../components/ChatInputPluginPopover', () => ({
-  ChatInputPluginPopover: ({ children, ...props }: { children: ReactNode }) =>
-    jest.requireActual('react').createElement('PluginPopover', props, children),
-}));
-jest.mock('../components/ChatInputPromptPopover', () => ({
-  ChatInputPromptPopover: ({ children }: { children: ReactNode }) => children,
-}));
-jest.mock('../components/ChatInputSkillPopover', () => ({
-  ChatInputSkillPopover: ({ children }: { children: ReactNode }) => children,
-}));
 jest.mock('../hooks/useChatInputAgentModelSelection', () => ({
   useChatInputAgentModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
 }));
@@ -352,19 +339,18 @@ test('failed edit admission retains editing state and does not restore the inter
   expect(mockEditing?.messageId).toBe('question');
 });
 
-test('entering question edit closes the plugin picker and does not reopen it on cancel', async () => {
+test('entering question edit removes the tools menu and restores it on cancel', async () => {
   await mount();
-  const surface = renderer.root.findByType('TextSurface' as never);
-  await act(async () => surface.props.leadingAction.props.onPickPlugins());
-  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(true);
+  const surface = () => renderer.root.findByType('TextSurface' as never);
+  expect(surface().props.leadingAction).not.toBeNull();
   mockEditing = { messageId: 'question', initialText: 'Original question', attachmentCount: 0 };
   await act(async () =>
     renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
   );
-  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(false);
+  expect(surface().props.leadingAction).toBeNull();
   mockEditing = null;
   await act(async () =>
     renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
   );
-  expect(renderer.root.findByType('PluginPopover' as never).props.open).toBe(false);
+  expect(surface().props.leadingAction).not.toBeNull();
 });

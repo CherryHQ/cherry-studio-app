@@ -132,8 +132,9 @@ walk to verify it.
 - `components/ComposerSurface.tsx`: the root and the send protocol.
 - `components/ComposerField.tsx`, `components/ComposerAttachments.tsx`,
   `components/ComposerModelPill.tsx`: the parts.
-- `components/ComposerMenu.tsx`: the ＋ menu. Camera and photos hand off to
-  `expo-image-picker`. Files use the caller's destination when supplied and
+- `components/ComposerMenu.tsx`: the anchored ＋ menu used by painting.
+  `hooks/useComposerMediaActions.ts` shares camera and photo-library handoffs with the chat tools
+  sheet, retaining permission and input-replacement behavior through `expo-image-picker`. Files use the caller's destination when supplied and
   otherwise use the shared file-upload picker through the Composer adapter.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
   shows import progress, then delegates ready files to `FileEntryPreview`.

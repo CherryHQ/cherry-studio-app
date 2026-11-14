@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useReportChatHeaderHeight } from '@/frontend/appShell/layout';
@@ -12,7 +12,7 @@ import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { renderHeaderToolbarItem } from '../../components/HeaderAction';
 import { headerScreenOptions } from '../../headerScreenOptions';
-import { MainHeaderAgentLabel } from '../MainHeaderAgentLabel';
+import { MainHeaderAgentLabel, MainHeaderAgentSwitch } from '../MainHeaderAgentLabel';
 import { useMainHeaderActions } from '../useMainHeaderActions';
 import type { MainHeaderViewProps } from './MainHeaderView.types';
 
@@ -45,6 +45,7 @@ export function MainHeaderView({
   agent,
   hidden,
   onAgentPress,
+  onAgentSwitch,
   onNewChat,
   actions,
   selection,
@@ -52,6 +53,11 @@ export function MainHeaderView({
   const { t } = useTranslation();
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
+  const { width } = useWindowDimensions();
+  const agentWidth = Math.max(
+    40,
+    width - 40 - (leadingAction ? 44 : 0) - rightActions.length * 44 - (onAgentSwitch ? 48 : 0),
+  );
   useReportChatHeaderHeight();
   if (isPreview) {
     return null;
@@ -87,8 +93,16 @@ export function MainHeaderView({
         <Stack.Toolbar.Spacer hidden={Boolean(selection) || !leadingAction || !agent} width={4} />
         {!selection && agent ? (
           <Stack.Toolbar.View>
-            <View className={actionSurface.surfaceClassName}>
+            <View className={actionSurface.surfaceClassName} style={{ maxWidth: agentWidth }}>
               <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
+            </View>
+          </Stack.Toolbar.View>
+        ) : null}
+        <Stack.Toolbar.Spacer hidden={Boolean(selection) || !agent || !onAgentSwitch} width={8} />
+        {!selection && agent && onAgentSwitch ? (
+          <Stack.Toolbar.View>
+            <View className={actionSurface.surfaceClassName}>
+              <MainHeaderAgentSwitch onPress={onAgentSwitch} />
             </View>
           </Stack.Toolbar.View>
         ) : null}

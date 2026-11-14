@@ -243,6 +243,32 @@ test('catalog withdrawal resumes after a backup freeze without restoring signed-
   await runtime._doStop();
 });
 
+test('Plan models appear only while the account has a paid subscription', async () => {
+  let subscribed = false;
+  mockGet.mockImplementation(async (account: string, path: string) => {
+    if (path !== '/api/v1/account') return reply(account, path);
+    const snapshot = cloudSnapshot(account).account!;
+    snapshot.entitlements[0].is_free = !subscribed;
+    return snapshot;
+  });
+  const { runtime } = await setup();
+  await runtime.refresh();
+  expect(mockProject.mock.lastCall?.[2]).toEqual([]);
+  const fetch = runtime.createModelFetch('cloud-model', 'agent');
+  await expect(
+    fetch('https://cloud.example/v1/messages', { method: 'POST', body: '{}' }),
+  ).rejects.toMatchObject({ code: 'cloud_not_entitled' });
+
+  subscribed = true;
+  await runtime.refresh();
+  expect(mockProject.mock.lastCall?.[2]).toEqual(cloudSnapshot().models);
+
+  subscribed = false;
+  await runtime.refresh();
+  expect(mockProject.mock.lastCall?.[2]).toEqual([]);
+  await runtime._doStop();
+});
+
 test('quota exhaustion rejects a previously selected model before requesting inference', async () => {
   const { runtime } = await setup();
   await runtime.refresh();

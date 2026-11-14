@@ -66,6 +66,8 @@ type PaintingInputProps = {
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
   initialParamValues?: ImageParamDraft;
+  /** Chat presentation only: caller-owned media and conversation actions. */
+  menu?: ReactNode;
   modelSelection?: PaintingModelSelection;
   onCancel: () => void;
   onLinkPress?: ComposerInputProps['onLinkPress'];
@@ -93,6 +95,7 @@ function PaintingInputControls({
   canSend,
   dismissKeyboardOnSend,
   initialParamValues,
+  menu,
   modelSelection,
   onCancel,
   onGenerate,
@@ -223,7 +226,7 @@ function PaintingInputControls({
           ) : null}
           <ComposerField onLinkPress={onLinkPress} placeholder={t('painting.input.placeholder')} />
           <Composer.Toolbar>
-            {attachmentsEnabled ? <ComposerMenu media="images" /> : null}
+            {attachmentsEnabled ? (menu ?? <ComposerMenu media="images" />) : null}
             {input.resolvedMode && paramFields.length > 0 ? (
               <Composer.Action
                 accessibilityLabel={

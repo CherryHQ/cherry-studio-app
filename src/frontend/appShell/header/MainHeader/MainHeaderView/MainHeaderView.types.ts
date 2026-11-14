@@ -12,5 +12,6 @@ export type MainHeaderViewProps = {
   selection?: { selectedCount: number; onExit(): void };
   onNewChat?: () => void;
   onAgentPress?: () => void;
+  onAgentSwitch?: () => void;
   actions?: readonly HeaderToolbarAction[];
 };

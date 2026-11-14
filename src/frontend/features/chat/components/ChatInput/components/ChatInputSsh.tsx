@@ -1,8 +1,8 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import TerminalIcon from '@cherrystudio/app-icons/icons/terminal';
-import { Button, Composer } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import { useFocusEffect } from 'expo-router';
-import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
@@ -19,16 +19,18 @@ import {
   removeSshMentions,
 } from '../utils/sshMentions';
 
-export function ChatInputSshPopover({
+export function ChatInputSshSheet({
   contextId,
-  children,
   onClose,
+  onClosed,
+  onSelect,
   open,
   returnFocusRef,
 }: {
   contextId?: string;
-  children: ReactNode;
   onClose: () => void;
+  onClosed?: () => void;
+  onSelect: () => void;
   open: boolean;
   returnFocusRef?: RefObject<ViewInstance | null>;
 }) {
@@ -60,9 +62,9 @@ export function ChatInputSshPopover({
     ),
   );
 
-  function close(reason: 'outside' | 'anchor' | 'back') {
+  function close() {
     isOpen.current = false;
-    setShouldRestoreFocus(reason !== 'anchor');
+    setShouldRestoreFocus(true);
     onClose();
   }
   async function select(profile: SshProfile) {
@@ -103,12 +105,12 @@ export function ChatInputSshPopover({
     if (!selected || !isCurrent()) return;
     setShouldRestoreFocus(true);
     isOpen.current = false;
-    onClose();
+    onSelect();
   }
   const content = (
     <ScrollView
-      className="grow-0 shrink"
-      contentContainerClassName="gap-0.5 p-2"
+      className="min-h-0 flex-1"
+      contentContainerClassName="gap-1 px-5 py-2"
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
@@ -161,18 +163,18 @@ export function ChatInputSshPopover({
     </ScrollView>
   );
   return (
-    <Composer.Popover
-      accessibilityLabel={t('ssh.selectTarget')}
-      content={content}
+    <BottomSheet
       initialFocusRef={initialFocusRef}
-      maxHeight={400}
-      maxWidth={320}
       onClose={close}
+      onClosed={onClosed}
       open={open}
+      presentation="overlay"
       returnFocusRef={shouldRestoreFocus ? returnFocusRef : undefined}
-      testID="chat-ssh-picker"
+      sizes={['large', 'full']}
+      testID="chat-ssh-sheet"
+      title={t('ssh.selectTarget')}
     >
-      {children}
-    </Composer.Popover>
+      {content}
+    </BottomSheet>
   );
 }

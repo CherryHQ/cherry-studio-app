@@ -1,6 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
-import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
@@ -10,7 +9,7 @@ import { useSkillMutations } from '@/frontend/hooks/skill';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 
-import type { AgentFormState } from './agentForm';
+import type { AgentFormState } from '../utils/agentForm';
 
 const TEXT_SAVE_DELAY_MS = 600;
 const logger = loggerService.withContext('useAgentAutoSave');
@@ -19,7 +18,7 @@ type SaveKey = keyof AgentFormState | 'toolBindings' | 'skillBindings';
 type SaveTask = () => Promise<unknown>;
 
 /** Keeps writes ordered and coalesces changes to the same field while a write is in flight. */
-export function useAgentAutoSave(agentId: string | undefined) {
+export function useAgentAutoSave(agentId: string | undefined, isFocused: boolean) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { setAgentAvatar, updateAgent } = useAgentMutations();
@@ -180,9 +179,12 @@ export function useAgentAutoSave(agentId: string | undefined) {
     flush();
   }, [flush]);
 
-  // Leaving the page must submit the last keystrokes. Already-started work
-  // deliberately continues after unmount, including the remainder of the queue.
-  useFocusEffect(useCallback(() => flush, [flush]));
+  // Route focus comes from the caller because a sheet portal has no route context.
+  // Leaving the page or closing the sheet must submit the last keystrokes.
+  // Already-started work continues after unmount, including the rest of the queue.
+  useEffect(() => {
+    if (isFocused) return flush;
+  }, [flush, isFocused]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') flush();

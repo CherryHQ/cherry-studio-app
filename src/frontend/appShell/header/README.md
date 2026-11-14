@@ -6,7 +6,9 @@ This module owns Expo Router header adapters used by the app screens.
 
 - `RouteHeader`, `RouteHeaderProvider`, `MainHeader`, `MainHeaderView`, `HeaderToolbarAction`, `HeaderActionGroup`,
   `HeaderChrome`, `HeaderIconButton`, and `headerScreenOptions` are exported from `index.ts`.
-- Callers should import from `@/frontend/appShell/header`.
+- Screens import from `@/frontend/appShell/header`. Shared forms may use the public
+  `@/frontend/appShell/header/RouteHeader` sub-entry to avoid loading `MainHeader` and its Agent
+  editor dependency.
 
 ## Organization
 
@@ -69,10 +71,15 @@ This module owns Expo Router header adapters used by the app screens.
   Android draws a borderless translucent card tint over the header's existing blur,
   in the flexible space between the action groups. The capsule reuses that blur without another
   blur view or sampling target; Android versions below 12 retain the translucent material fallback.
-  Long names truncate at the end. Both local and remote capsules open the same Agent picker, using the current
-  source catalog and `AgentPickerSheet` from `frontend/components/AgentPicker`, also reused by SSH.
-  Local callers supply editing and creation shortcuts;
-  remote callers supply selection only. The sheet owns presentation and pagination controls, while
+  Long names truncate at the end. In local chat the capsule opens the shared auto-saving Agent
+  editor as a handle-only sheet. An independent `circle-user-round` button reuses the Agent picker
+  with its title, per-row management edit action, and fixed Create footer. The picker is also shared
+  with SSH. Remote catalogs omit management callbacks and stay selection-only. Selecting the
+  current Agent only closes the picker.
+  Switching within a draft preserves text and attachments,
+  while switching from an existing Session opens a draft for that Agent. The upper-right new-chat
+  action always starts a blank draft with the current Agent, including from an unsent draft.
+  Remote capsules retain their catalog picker and selection behavior. The sheet owns presentation and pagination controls, while
   callers own navigation and source observation. Unknown remote model metadata is not shown as an
   unconfigured model.
 
