@@ -2033,7 +2033,8 @@ export class DurableAgentHost implements AgentProtocol {
         },
       });
       signal?.throwIfAborted();
-      for (const lane of copies) this.prepared.delete(executionKey(lane, row.assistantMessageId));
+      for (const lane of sessionCopies.get(row.sessionId) ?? [])
+        this.prepared.delete(executionKey(lane, row.assistantMessageId));
       this.ports.durableStorage?.notifyTranscript(row.sessionId);
       logger.warn('Agent reservation recovered as interrupted', {
         sessionId: row.sessionId,
