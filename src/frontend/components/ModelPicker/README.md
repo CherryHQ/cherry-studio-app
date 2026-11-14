@@ -14,11 +14,15 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order. The contact-style index
-  floats in a narrow capsule; holding or dragging it shows the targeted provider's name to its left
-  until release or cancellation. The gesture target owns that preview independently of the
-  scroll-driven current group; the preview does not intercept touches or open a menu. An immediate
-  native press retains the touch while scrubbing the index, so the sheet's vertical pan cannot move
-  the sheet underneath the finger. There is no hold delay or movement-distance cutoff.
+  floats in a narrow capsule centered in the model-list viewport, capped at 80% of that viewport's
+  current height. It grows with the sheet until all providers fit. Provider rows retain 48-point
+  targets and 20-point icons; overflow scrolls vertically without a visible scrollbar.
+  A press previews the provider name to the left; a completed tap jumps to its group. Native
+  scrolling cancels the preview and navigation candidate, and a touch that stops momentum does
+  not navigate. The immediate native press excludes the sheet pan while recognizing simultaneously
+  with the navigation scroller; dragging the index scrolls its contents instead of the sheet.
+  The preview never intercepts touches. Scrolling the model list reveals its current provider in
+  the index without interrupting a navigation drag or momentum scroll.
   Model names stay on one line with middle truncation, retaining their identifying prefix and
   suffix. Brand marks align with the name's first line. Chat capability icons occupy a compact
   second line without chip backgrounds; provider management retains its default chip style.

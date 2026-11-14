@@ -212,7 +212,7 @@ export function ModelPickerList({
   }
 
   return (
-    <View style={styles.list}>
+    <View style={styles.list} testID="model-picker-list">
       <LegendList
         ref={listRef}
         contentContainerStyle={styles.listContentContainer}
