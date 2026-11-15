@@ -213,7 +213,9 @@ stops a fresh login before the browser opens.
   Later launches use what the database already holds.
 - **Success:** a sync reads `/configurations` and every Agent's `/agents/:id/setup`. Resources,
   default-model preferences and the applied sync state commit in one transaction. Skill packages
-  whose server revision changed then download and bind in a second commit. Preference caches and
+  whose server revision changed then download and bind in a second commit limited to Skill
+  publication and the affected Agents, without reapplying providers, models or MCP servers. Package
+  digests yield between bounded chunks and files use native asynchronous writes. Preference caches and
   resource observers update after each commit; failed MCP connection invalidations are retried even
   when the next snapshot is unchanged.
 - **Failure:** a configuration fetch failure, an invalid configuration inventory or a database

@@ -236,22 +236,7 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       .returning({ id: agentSkillTable.agentId })),
   );
   await tx.delete(agentGlobalSkillTable).where(removedSkills);
-  for (const { remoteId, ...skill } of input.publishedSkills) {
-    const [existing] = await tx
-      .select({ id: agentGlobalSkillTable.id })
-      .from(agentGlobalSkillTable)
-      .where(eq(agentGlobalSkillTable.managedRemoteId, remoteId));
-    if (existing) {
-      await tx
-        .update(agentGlobalSkillTable)
-        .set({ ...skill, updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt) })
-        .where(eq(agentGlobalSkillTable.id, existing.id));
-    } else {
-      await tx
-        .insert(agentGlobalSkillTable)
-        .values({ ...skill, id: uuidv4(), managedRemoteId: remoteId, isEnabled: true });
-    }
-  }
+  await writePublishedSkills(tx, input.publishedSkills);
   const skillRows = await tx
     .select({ id: agentGlobalSkillTable.id, remoteId: agentGlobalSkillTable.managedRemoteId })
     .from(agentGlobalSkillTable)
@@ -417,6 +402,64 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       ].flatMap(({ id }) => [`/agents/${id}`, `/agents/${id}/skills`]),
     ],
   };
+}
+
+/** The resource snapshot already committed; only publish packages and their affected bindings. */
+export async function projectPublishedSkills(
+  tx: Database,
+  input: Pick<ProjectionInput, 'agents' | 'publishedSkills'>,
+): Promise<string[]> {
+  const skillIds = await writePublishedSkills(tx, input.publishedSkills);
+  const bindings = await tx
+    .select({ agentId: agentSkillTable.agentId })
+    .from(agentSkillTable)
+    .where(inArray(agentSkillTable.skillId, [...skillIds.values()]));
+  const affectedAgentIds = new Set(bindings.map(({ agentId }) => agentId));
+
+  for (const setup of input.agents) {
+    if (!setup.agent) continue;
+    const boundSkillIds = setup.skillRemoteIds.flatMap((id) => skillIds.get(id) ?? []);
+    if (!boundSkillIds.length) continue;
+    const [agent] = await tx
+      .select({ id: agentTable.id })
+      .from(agentTable)
+      .where(eq(agentTable.managedRemoteId, setup.remoteId));
+    if (!agent) continue;
+    await tx
+      .insert(agentSkillTable)
+      .values(boundSkillIds.map((skillId) => ({ agentId: agent.id, skillId, isEnabled: true })))
+      .onConflictDoUpdate({
+        target: [agentSkillTable.agentId, agentSkillTable.skillId],
+        set: { isEnabled: true },
+      });
+    await tx
+      .update(agentTable)
+      .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+      .where(eq(agentTable.id, agent.id));
+    affectedAgentIds.add(agent.id);
+  }
+
+  return [
+    '/skills',
+    ...(affectedAgentIds.size ? ['/agents'] : []),
+    ...[...affectedAgentIds].flatMap((id) => [`/agents/${id}`, `/agents/${id}/skills`]),
+  ];
+}
+
+async function writePublishedSkills(tx: Database, skills: readonly PublishedSkill[]) {
+  const skillIds = new Map<string, string>();
+  for (const { remoteId, ...skill } of skills) {
+    const [row] = await tx
+      .insert(agentGlobalSkillTable)
+      .values({ ...skill, id: uuidv4(), managedRemoteId: remoteId, isEnabled: true })
+      .onConflictDoUpdate({
+        target: agentGlobalSkillTable.managedRemoteId,
+        set: { ...skill, updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt) },
+      })
+      .returning({ id: agentGlobalSkillTable.id });
+    skillIds.set(remoteId, row!.id);
+  }
+  return skillIds;
 }
 
 /** Managed resources an unread Agent binds. Its setup is unknown, so they are not withdrawn. */

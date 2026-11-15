@@ -18,7 +18,11 @@ import { installProviderRegistryTestSnapshot } from '@/backend/data/services/pro
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { type AgentSetup, type ManagedAgent, parseConfiguration } from '../enterpriseConfiguration';
-import { type PublishedSkill, projectConfiguration } from '../projectConfiguration';
+import {
+  type PublishedSkill,
+  projectConfiguration,
+  projectPublishedSkills,
+} from '../projectConfiguration';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
@@ -116,6 +120,53 @@ describe('projectConfiguration', () => {
     });
     const bindings = await db.database.select().from(agentToolBindingTable);
     expect(bindings).toEqual([expect.objectContaining({ mcpServerId: server!.id })]);
+  });
+
+  it('only binds published Skills to supported Agents and preserves unrelated Agent choices', async () => {
+    const supported = { ...agent('1'), skillRemoteIds: ['7'] };
+    const unsupported = { ...agent('2'), skillRemoteIds: ['7'] };
+    await project({ ...raw, agents: [{ id: 1 }, { id: 2 }] }, [supported, unsupported]);
+    await db.database
+      .update(agentTable)
+      .set({ toolApprovalMode: 'auto' })
+      .where(eq(agentTable.managedRemoteId, '1'));
+    const before = await db.database.select().from(agentTable);
+    const paths = await db.dbService.withWriteTx((tx) =>
+      projectPublishedSkills(tx, {
+        agents: [supported, { ...unsupported, agent: null }],
+        publishedSkills: [researchSkill],
+      }),
+    );
+    const [skill] = await db.database.select().from(agentGlobalSkillTable);
+    const first = before.find(({ managedRemoteId }) => managedRemoteId === '1');
+    expect(await db.database.select().from(agentSkillTable)).toEqual([
+      expect.objectContaining({ agentId: first!.id, skillId: skill!.id, isEnabled: true }),
+    ]);
+    const after = await db.database.select().from(agentTable);
+    expect(after.map(({ updatedAt: _updatedAt, ...row }) => row)).toEqual(
+      before.map(({ updatedAt: _updatedAt, ...row }) => row),
+    );
+    expect(paths).toEqual([
+      '/skills',
+      '/agents',
+      `/agents/${first!.id}`,
+      `/agents/${first!.id}/skills`,
+    ]);
+
+    await db.database.update(agentGlobalSkillTable).set({ isEnabled: false });
+    await db.dbService.withWriteTx((tx) =>
+      projectPublishedSkills(tx, {
+        agents: [supported],
+        publishedSkills: [{ ...researchSkill, contentHash: 'directory-sha256:def' }],
+      }),
+    );
+    const [updated] = await db.database.select().from(agentGlobalSkillTable);
+    expect(updated).toMatchObject({
+      id: skill!.id,
+      isEnabled: false,
+      contentHash: 'directory-sha256:def',
+    });
+    expect(await db.database.select().from(agentSkillTable)).toHaveLength(1);
   });
 
   it('keeps the user’s choices on a managed Agent across syncs', async () => {
