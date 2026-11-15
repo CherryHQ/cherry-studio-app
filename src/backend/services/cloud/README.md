@@ -17,15 +17,10 @@ make Cloud unavailable without changing ordinary provider use or reusing the pre
 service. API origins must be HTTPS and cannot contain a path, query, fragment or credentials;
 webpage URLs must be HTTPS and contain no credentials.
 
-Accounts Portal 0.2.1 does not expose session service metadata yet. Its installation adapter
-temporarily receives `CHERRY_CLOUD_API_ORIGIN_CN` and `CHERRY_CLOUD_WEB_URL_CN` through
-`extra.accountsPortal.cloudApiOrigin` and `extra.accountsPortal.cloudWebUrl`. Configure these in
-each EAS deployment environment (`development`, `preview`, `production`). The existing `_CN`
-variable names preserve deployment configuration; product code consumes only the resulting
-addresses. Once the SDK supplies service metadata, replace the installation mapping without
-changing this consumer. The app does not retrieve variables from EAS at runtime.
+Mobile reads `cloud_api_origin` and `cloud_web_url` from the selected region’s
+`POST /v1/resolve` response. The registration supplies the Cloud audience in `scopes`.
+A community-only region can omit both enterprise endpoints.
 
-Supply the Cloud product audience in `ACCOUNTS_PORTAL_SCOPES`, alongside any enterprise audience.
 Models and subscription state come from the service. The configured webpage URL remains in the
 internal Cloud snapshot; the app exposes no subscription-management or purchase action. The old
 subscription route redirects to profile settings.
