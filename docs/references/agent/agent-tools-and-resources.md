@@ -994,8 +994,10 @@ registered `provider::model` string; omitting it preserves the model on update. 
 clear a model; the user does that in the editor. Agent targets are strings validated locally as an
 exact Agent ID or `current`.
 
-`agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+`agent_list` lists saved Agents with optional name filtering and pagination. Call with `{}` to browse
+without a name filter; a request to list Agents does not require asking the user for a search keyword.
+It returns at most 50 compact records per call and omits instructions.
+`agent_get` returns the editable definition, `updatedAt`, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before

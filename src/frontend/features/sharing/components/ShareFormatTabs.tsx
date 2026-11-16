@@ -17,7 +17,7 @@ const FORMAT_ICONS = {
   pptx: PresentationIcon,
 };
 
-/** Floats over the preview; the caller owns its bottom inset and format state. */
+/** Floats over the preview; the sheet owns clearance and the caller owns format state. */
 export function ShareFormatTabs({
   formats,
   format,
