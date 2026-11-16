@@ -60,7 +60,7 @@ describe('Agent file-library management', () => {
     return tool.execute({ input, signal, toolCallId: 'call', turnId: 'turn' });
   }
 
-  it('creates root and nested folders without a workspace and reports collision names', async () => {
+  it('creates root and nested folders without a workspace and rejects duplicate names', async () => {
     const changes: string[] = [];
     const unsubscribe = subscribeDataApiChanges((paths) => changes.push(...paths));
     try {
@@ -77,10 +77,10 @@ describe('Agent file-library management', () => {
       expect(nested.value).toMatchObject({
         folder: { parentId: folder.id, name: 'Drafts' },
       });
-      expect((await call('library_create_folder', { name: 'Reports' })).value).toMatchObject({
-        folder: { name: 'Reports (2)' },
+      await expect(call('library_create_folder', { name: 'Reports' })).rejects.toMatchObject({
+        code: 'CONFLICT',
       });
-      expect(await library.folders()).toHaveLength(3);
+      expect(await library.folders()).toHaveLength(2);
       expect(changes).toContain('/files/folders');
     } finally {
       unsubscribe();

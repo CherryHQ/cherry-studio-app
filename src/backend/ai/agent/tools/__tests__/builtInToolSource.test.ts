@@ -316,6 +316,7 @@ describe('createSystemCapabilitySource', () => {
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',

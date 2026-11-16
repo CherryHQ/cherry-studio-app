@@ -99,7 +99,7 @@ export function createFileLibraryManagementTools(
       'library_create_folder',
       'Create library folder',
       'ask',
-      'Create a folder in the file library, even when this conversation has no workspace. Use an exact parent_id from library_list_folders, or null for the root. The parent must exist. A name collision adds a suffix; use the returned saved name and id. This does not change the conversation workspace. After an uncertain result, inspect library_list_folders before retrying.',
+      'Create a folder in the file library, even when this conversation has no workspace. Use an exact parent_id from library_list_folders, or null for the root. The parent must exist. A duplicate file or folder name is rejected; choose another name after a conflict. Use the returned saved name and id. This does not change the conversation workspace. After an uncertain result, inspect library_list_folders before retrying.',
       createFolderSchema,
       async ({ parent_id, name }, signal) => {
         const folder = await library.createFolder(parent_id, name, undefined, signal);

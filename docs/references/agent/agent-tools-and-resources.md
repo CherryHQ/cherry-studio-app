@@ -289,7 +289,7 @@ and its `folderId`, alongside the current version's `fileEntryId`. Names may be 
 rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
 `library_create_folder` creates one folder without requiring a Session workspace. It accepts a
 safe name and an exact parent id, or `null` (also the default) for the library root. The existing
-transaction validates the live parent, chooses a collision suffix, observes cancellation and
+transaction validates the live parent, rejects duplicate names, observes cancellation and
 notifies folder subscribers. The result returns the saved id, parent id and name. It does not
 associate the folder with the conversation; workspace association remains a separate user action.
 `library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
