@@ -60,6 +60,7 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'health_list_data_types',
       'edit_file',

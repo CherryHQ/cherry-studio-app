@@ -47,6 +47,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   find_skills: 'skills.find.name',
   install_skill: 'skills.candidate.install',
   list_local_skills: 'skills.activity.list',
+  list_installed_skills: 'skills.activity.list',
   load_skill: 'skills.activity.load',
   list_skill_files: 'skills.activity.listFiles',
   read_skill_file: 'chat.builtinTool.file.read',

@@ -19,6 +19,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import {
+  agentGlobalSkillService,
+  type AgentGlobalSkillService,
+} from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -70,6 +74,7 @@ import {
 } from './painting';
 import { createReadFileContentReader, createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createSkillInventoryTool } from './skill/skillInventoryTool';
 import { createSshFileTools } from './sshFileTools';
 import { createSshTool, type SshToolAccess } from './sshTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
@@ -119,6 +124,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
+    skillLibrary: Pick<AgentGlobalSkillService, 'list'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -300,6 +306,7 @@ function createCatalog(
   const tools = [
     createAskUserQuestionTool(askUser),
     ...createAgentManagementTools(deps.agents, agentId),
+    createSkillInventoryTool(deps.skillLibrary, agentId),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -462,6 +469,7 @@ function resolveDependencies(
   return {
     voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
+    skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),

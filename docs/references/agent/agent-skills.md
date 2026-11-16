@@ -318,6 +318,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
+| `list_installed_skills` | App-wide installed metadata, including globally disabled and unbound Skills; optional name/description search, bounded cursor pagination, and current Agent binding state; does not load instructions or expand the turn scope |
 | `list_local_skills` | Unfiltered scoped automatic-invocation metadata, 20 results per page; the model judges task fit from names and complete descriptions; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
@@ -327,10 +328,11 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are application built-ins. Skill metadata, instruction and package file readers are directly
-exposed; discovery, installation, adaptation and creation tools are deferred and found with
+exposed; app-wide inventory, discovery, installation, adaptation and creation tools are deferred and found with
 `tool_search` by exact name. When the Agent has no Skill packages, the Skills section keeps only
 the inventory, discovery and in-turn installation rules. A search for a generic Skill tool does not describe installed package
-availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
+availability: use `list_local_skills` for the current Agent's usable inventory, or
+`list_installed_skills` for the complete installed library. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
 
@@ -348,7 +350,11 @@ not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
 subset, even when either is zero, and distinguishes them from the app's installed library and explicit
-selections. Current inventory questions use `list_local_skills`
+selections. App-wide inventory questions use `list_installed_skills`, following every page before
+reporting a complete list or count. It reads the same library service as the Skill page and returns
+global enablement, Agent binding state and invocation flags without package paths or instruction
+bodies. These are configuration facts, not proof of execution support or package readability.
+Current Agent inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
 automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
 null with the same options. This also refreshes inventory after a conversation installation without
