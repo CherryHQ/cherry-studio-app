@@ -38,7 +38,11 @@ import {
   parseConfiguration,
   type SkipLog,
 } from './enterpriseConfiguration';
-import { projectConfiguration, type PublishedSkill } from './projectConfiguration';
+import {
+  projectConfiguration,
+  projectPublishedSkills,
+  type PublishedSkill,
+} from './projectConfiguration';
 
 const logger = loggerService.withContext('EnterpriseSync');
 
@@ -321,12 +325,13 @@ export class EnterpriseSyncService extends BaseService {
         // react-doctor-disable-next-line async-await-in-loop -- sequential with its download
         const files = await readEnterpriseSkill(download.data, download.contentType);
         this.assertWritable();
-        const validation = validateSkillPackage(files);
+        const validation = await validateSkillPackage(files);
         if (!validation.ok)
           throw new Error(validation.issues.map((issue) => issue.code).join(', '));
         const pkg = validation.package;
         if (rows.some((row) => row.folderName === pkg.name && row.remoteId !== skill.remoteId))
           throw new Error(`a different Skill named ${pkg.name} is installed`);
+        this.assertWritable();
         // react-doctor-disable-next-line async-await-in-loop -- staging owns one package at a time
         handle = await skillStorage.stage(files);
         this.assertWritable();
@@ -358,19 +363,22 @@ export class EnterpriseSyncService extends BaseService {
       }
     }
     if (!published.length) return;
-    const { changedServers, changedPaths } = await this.db.withWriteTx(async (tx) => {
+    const changedPaths = await this.db.withWriteTx(async (tx) => {
       this.assertWritable();
-      const result = await projectConfiguration(tx, { ...snapshot, publishedSkills: published });
+      const paths = await projectPublishedSkills(tx, {
+        agents: snapshot.agents,
+        publishedSkills: published,
+      });
       const current = await this.readState(tx);
       if (current)
         await this.writeState(tx, {
           ...current,
-          skills: installedRevisions({ ...current.skills, ...revisions }, result.skillRemoteIds),
+          skills: { ...current.skills, ...revisions },
         });
       this.assertWritable();
-      return result;
+      return paths;
     });
-    this.publishChanges(changedServers, changedPaths);
+    this.publishChanges([], changedPaths);
   }
 
   private async readState(db: Database): Promise<SyncState | null> {

@@ -44,7 +44,7 @@ function createFakeFileSystem() {
       if (node?.kind !== 'file') throw new Error('not a file');
       return node.bytes;
     },
-    writeBytes: (path, bytes) => {
+    writeBytes: async (path, bytes) => {
       const { parent, name } = parentOf(path);
       parent.children.set(name, { kind: 'file', bytes });
     },
@@ -89,6 +89,54 @@ const files = new Map([
 ]);
 
 describe('createSkillStorage', () => {
+  it('waits for each native write before accepting complete staging', async () => {
+    const { fs, snapshot } = createFakeFileSystem();
+    const writeBytes = fs.writeBytes;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    fs.writeBytes = jest.fn(async (path, bytes) => {
+      await pending;
+      await writeBytes(path, bytes);
+    });
+    const storage = createSkillStorage(fs, {
+      persistent: () => ['store'],
+      cache: () => ['cache'],
+    });
+    let finished = false;
+    const staging = storage.stage(files).then((handle) => {
+      finished = true;
+      return handle;
+    });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    expect(fs.writeBytes).toHaveBeenCalledTimes(1);
+    expect(snapshot()).toEqual([]);
+    release();
+    const handle = await staging;
+    expect(snapshot()).toEqual([
+      `cache/SkillStaging/${handle}/SKILL.md`,
+      `cache/SkillStaging/${handle}/references/format.md`,
+    ]);
+  });
+
+  it('removes partial staging if an asynchronous native write rejects', async () => {
+    const { fs, snapshot } = createFakeFileSystem();
+    const writeBytes = fs.writeBytes;
+    fs.writeBytes = async (path, bytes) => {
+      if (path.at(-1) === 'format.md') throw new Error('Disk full');
+      await writeBytes(path, bytes);
+    };
+    const storage = createSkillStorage(fs, {
+      persistent: () => ['store'],
+      cache: () => ['cache'],
+    });
+    await expect(storage.stage(files)).rejects.toThrow('Disk full');
+    expect(snapshot()).toEqual([]);
+    expect(fs.list(['cache', 'SkillStaging'])).toEqual([]);
+  });
+
   it('stages under cache, publishes into the persistent root, and reads only package paths', async () => {
     const { fs, snapshot } = createFakeFileSystem();
     fs.createDirectory(['store']);
