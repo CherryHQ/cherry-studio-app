@@ -6,7 +6,7 @@ import {
 } from '@/backend/data/services/AgentGlobalSkillService';
 import { SKILL_SEARCH_MAX_LENGTH } from '@/shared/data/api/schemas/skills';
 
-import type { RuntimeTool } from '../../runtime';
+import type { RuntimeTool, RuntimeToolResult } from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 
 export const SKILL_INVENTORY_MAX_CHARACTERS = 12_000;
@@ -33,7 +33,7 @@ export function createSkillInventoryTool(
     description:
       'Inspect all Skills installed in this Cherry app, including globally disabled and unbound Skills. Use mode=count for a total without listing entries; search matches name or description in both modes. Lists default to 20 compact entries; include_descriptions adds complete descriptions. Each list reply is capped at 12,000 serialized characters and may return fewer than limit. Follow nextCursor with the same search and options until null for a complete list. Enablement, Agent binding and invocation flags are configuration facts, not execution support. Listing never binds, enables or loads instructions; load_skill still requires access in this Agent.',
     inputSchema: toRuntimeInputSchema(inputSchema),
-    async execute({ input, signal }) {
+    async execute({ input, signal }): Promise<RuntimeToolResult> {
       const { mode, search, cursor, limit, include_descriptions } = inputSchema.parse(input);
       signal.throwIfAborted();
       if (mode === 'count') {

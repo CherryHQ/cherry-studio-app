@@ -307,6 +307,7 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',

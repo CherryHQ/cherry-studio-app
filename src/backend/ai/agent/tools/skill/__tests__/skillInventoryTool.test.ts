@@ -142,7 +142,11 @@ it.each([
     for (let page = 0; page < entries.length; page++) {
       const result = await tool.execute({
         ...call,
-        input: { limit: 100, include_descriptions: includeDescriptions, cursor },
+        input: {
+          limit: 100,
+          include_descriptions: includeDescriptions,
+          ...(cursor ? { cursor } : {}),
+        },
       });
       const value = result.value as {
         returned: number;
