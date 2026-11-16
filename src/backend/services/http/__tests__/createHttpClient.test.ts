@@ -1,3 +1,6 @@
+import { ReadableStream } from 'node:stream/web';
+import { TextDecoder } from 'node:util';
+
 import {
   AxiosError,
   AxiosHeaders,
@@ -22,6 +25,14 @@ const transportLogger = (
     loggerService: { withContext: (module: string) => { error: jest.Mock; warn: jest.Mock } };
   }
 ).loggerService.withContext('HttpTransport');
+
+const originalDecoder = globalThis.TextDecoder;
+beforeAll(() => {
+  globalThis.TextDecoder = TextDecoder as typeof globalThis.TextDecoder;
+});
+afterAll(() => {
+  globalThis.TextDecoder = originalDecoder;
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -64,6 +75,108 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
+  it.each(['success', 'all'] as const)(
+    'retains status policy %s when truncating a response',
+    async (statusPolicy) => {
+      const adapter = mockAdapter(async (config) => {
+        expect(config.responseType).toBe('stream');
+        expect(config.maxContentLength).toBe(-1);
+        expect(config.validateStatus?.(422)).toBe(true);
+        return response(
+          config,
+          422,
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array([65, 66, 67]));
+              controller.close();
+            },
+          }),
+          new AxiosHeaders({ 'X-Request-Id': 'request-422' }),
+        );
+      });
+      const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+        baseUrl: 'https://example.com',
+        statusPolicy,
+      });
+      const pending = client.request({
+        method: 'GET',
+        path: '/',
+        responseType: 'text',
+        maxResponseBytes: 2,
+        truncateResponse: true,
+      });
+      if (statusPolicy === 'all') {
+        await expect(pending).resolves.toEqual({
+          data: 'AB',
+          status: 422,
+          headers: { 'x-request-id': 'request-422' },
+          truncated: true,
+        });
+      } else {
+        await expect(pending).rejects.toMatchObject({
+          kind: 'http',
+          status: 422,
+          requestId: 'request-422',
+        });
+      }
+    },
+  );
+
+  it.each(['HEAD', 'OPTIONS'] as const)('supports ordinary %s requests', async (method) => {
+    const adapter = mockAdapter(async (config) => response(config, 204, ''));
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://example.com',
+    });
+    await expect(client.request({ method, path: '/' })).resolves.toMatchObject({
+      status: 204,
+      data: '',
+    });
+    expect(adapter.mock.calls[0][0].method).toBe(method);
+  });
+
+  it('preserves serialized JSON body bytes instead of applying Axios JSON transformation', async () => {
+    const body = ' { invalid JSON }\n';
+    const adapter = mockAdapter(async (config) => {
+      expect(config.data).toBe(body);
+      return response(config, 200, 'ok');
+    });
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://example.com',
+    });
+    await client.request({
+      method: 'POST',
+      path: '/',
+      body,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  it('keeps the full-request deadline active after headers arrive', async () => {
+    jest.useFakeTimers();
+    try {
+      const adapter = mockAdapter(async (config) => response(config, 200, new ReadableStream()));
+      const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+        baseUrl: 'https://example.com',
+      });
+      const pending = client.request({
+        method: 'GET',
+        path: '/',
+        timeoutMs: 100,
+        responseType: 'text',
+        maxResponseBytes: 2,
+        truncateResponse: true,
+      });
+      const assertion = expect(pending).rejects.toMatchObject({
+        kind: 'timeout',
+        code: 'REQUEST_TIMEOUT',
+      });
+      await jest.advanceTimersByTimeAsync(100);
+      await assertion;
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('redacts capability paths and transport messages without changing the request destination', async () => {
     const reportId = '550e8400-e29b-41d4-a716-446655440000';
     const adapter = mockAdapter(async (config) => {

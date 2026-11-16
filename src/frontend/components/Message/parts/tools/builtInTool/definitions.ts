@@ -76,4 +76,5 @@ export const builtInToolIconNames = {
   run_js: 'code',
   codemode: 'code',
   web_fetch: 'web',
+  http_request: 'web',
 } as const satisfies Record<BuiltInToolTitleName, BuiltInToolIconName>;

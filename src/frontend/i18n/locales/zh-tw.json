@@ -360,6 +360,7 @@
   "chat.builtinTool.health.listWorkouts": "查詢體能訓練記錄",
   "chat.builtinTool.health.queryData": "讀取健康資料",
   "chat.builtinTool.health.summary": "獲取健康摘要",
+  "chat.builtinTool.http.request": "HTTP 請求",
   "chat.builtinTool.library.findFolders": "尋找資料夾",
   "chat.builtinTool.library.listTrash": "檢視最近刪除",
   "chat.builtinTool.library.move": "移動檔案或資料夾",

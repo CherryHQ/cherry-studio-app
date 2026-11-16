@@ -360,6 +360,7 @@
   "chat.builtinTool.health.listWorkouts": "Tìm hồ sơ tập luyện",
   "chat.builtinTool.health.queryData": "Đọc dữ liệu sức khỏe",
   "chat.builtinTool.health.summary": "Nhận tóm tắt sức khỏe",
+  "chat.builtinTool.http.request": "Yêu cầu HTTP",
   "chat.builtinTool.library.findFolders": "Tìm thư mục",
   "chat.builtinTool.library.listTrash": "Xem mục đã xóa gần đây",
   "chat.builtinTool.library.move": "Di chuyển tệp hoặc thư mục",

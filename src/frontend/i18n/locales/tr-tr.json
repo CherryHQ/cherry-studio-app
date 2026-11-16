@@ -362,6 +362,7 @@
   "chat.builtinTool.health.listWorkouts": "Antrenman kayıtlarını bulun",
   "chat.builtinTool.health.queryData": "Sağlık verilerini oku",
   "chat.builtinTool.health.summary": "Sağlık özetini alın",
+  "chat.builtinTool.http.request": "HTTP isteği",
   "chat.builtinTool.library.findFolders": "Klasör bul",
   "chat.builtinTool.library.listTrash": "Son silinenleri görüntüle",
   "chat.builtinTool.library.move": "Dosya veya klasörü taşı",

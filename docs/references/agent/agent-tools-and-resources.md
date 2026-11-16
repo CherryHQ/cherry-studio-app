@@ -3,7 +3,7 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+generation, plain HTTP requests, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
 `create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
@@ -933,6 +933,20 @@ desktop event labels or persistence shapes.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.
 
+
+## Plain HTTP Requests
+
+`http_request` is a deferred built-in tool for ordinary API calls from the device. It takes a full
+HTTP(S) `url`, optional `method` (GET by default), string-valued `headers`, and a string `body`.
+GET and HEAD reject bodies; POST, PUT, PATCH, DELETE and OPTIONS can send one. It uses the shared
+HTTP service without native cookies, a 30-second deadline, and no automatic retries. The base
+approval is `ask` and follows the Agent's existing approval preference.
+
+Results contain the numeric `status`, response `headers`, raw text `body`, and `truncated` flag.
+All HTTP statuses are returned, including non-followed redirects and 4xx/5xx responses. At most
+64 KiB of response bytes are retained, dropping an incomplete trailing UTF-8 character. Network
+failures and timeouts do not prove that a write was not applied; the model must inspect resulting
+state before considering another write. No configuration page or credential management is added.
 
 ## User Questions
 

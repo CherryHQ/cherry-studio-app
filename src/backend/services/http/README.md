@@ -21,13 +21,18 @@ pairing and configuration import.
   absolute URL from redirecting credentials to another authority.
 - The wire format for queries is owned here, not by the Axios version: values serialize as repeated
   keys (`tag=a&tag=b`) and `null` or `undefined` values are omitted.
-- `GET` requests carry no body; `DELETE` may carry one when required by an API, such as GitHub token
-  revocation. Timeouts must be positive milliseconds. These rules
+- `GET` and `HEAD` requests carry no body; `DELETE` and `OPTIONS` may carry one when required by an
+  API, such as GitHub token revocation. Timeouts must be positive milliseconds. These rules
   are enforced at the type level and revalidated after interceptors run.
 - Domains that download artifacts can request `responseType: 'text'` or `'arraybuffer'` for binary
   bytes and impose a positive
   `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before
   reading and also counts streamed bytes when the server omits or misreports that header.
+- Bounded text callers can opt into `truncateResponse: true` to retain a prefix rather than reject
+  a large response. The transport reads incrementally, cancels unread bytes, and returns
+  `truncated`; one deadline and the caller's cancellation cover headers and body reading. Other
+  callers keep the existing reject-on-overflow default. Serialized string request bodies are sent
+  unchanged, including their whitespace and invalid JSON.
 - Requests whose path contains a capability can provide `logPath` with a redacted route. It changes
   only transport logging, suppresses the raw transport message, and never changes the wire path.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,

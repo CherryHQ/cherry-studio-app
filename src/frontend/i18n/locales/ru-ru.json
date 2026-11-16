@@ -366,6 +366,7 @@
   "chat.builtinTool.health.listWorkouts": "Найти записи тренировок",
   "chat.builtinTool.health.queryData": "Прочитать данные о здоровье",
   "chat.builtinTool.health.summary": "Получить сводку о состоянии здоровья",
+  "chat.builtinTool.http.request": "HTTP-запрос",
   "chat.builtinTool.library.findFolders": "Найти папки",
   "chat.builtinTool.library.listTrash": "Показать недавно удалённые",
   "chat.builtinTool.library.move": "Переместить файл или папку",

@@ -364,6 +364,7 @@
   "chat.builtinTool.health.listWorkouts": "Buscar registros de entrenamiento",
   "chat.builtinTool.health.queryData": "Leer datos de salud",
   "chat.builtinTool.health.summary": "Obtener resumen de salud",
+  "chat.builtinTool.http.request": "Solicitud HTTP",
   "chat.builtinTool.library.findFolders": "Buscar carpetas",
   "chat.builtinTool.library.listTrash": "Ver eliminados recientemente",
   "chat.builtinTool.library.move": "Mover archivo o carpeta",

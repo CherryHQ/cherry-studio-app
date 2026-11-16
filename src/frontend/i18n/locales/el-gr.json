@@ -362,6 +362,7 @@
   "chat.builtinTool.health.listWorkouts": "Βρείτε ρεκόρ προπόνησης",
   "chat.builtinTool.health.queryData": "Ανάγνωση δεδομένων υγείας",
   "chat.builtinTool.health.summary": "Λήψη περίληψης υγείας",
+  "chat.builtinTool.http.request": "Αίτημα HTTP",
   "chat.builtinTool.library.findFolders": "Εύρεση φακέλων",
   "chat.builtinTool.library.listTrash": "Προβολή πρόσφατα διαγραμμένων",
   "chat.builtinTool.library.move": "Μετακίνηση αρχείου ή φακέλου",

@@ -60,6 +60,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createHttpRequestTool } from './httpRequestTool';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -340,6 +341,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
+    createHttpRequestTool(),
     createGenerateImageTool(
       {
         ...deps.painting,

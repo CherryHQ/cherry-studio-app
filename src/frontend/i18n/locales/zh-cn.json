@@ -360,6 +360,7 @@
   "chat.builtinTool.health.listWorkouts": "查询体能训练记录",
   "chat.builtinTool.health.queryData": "读取健康数据",
   "chat.builtinTool.health.summary": "获取健康摘要",
+  "chat.builtinTool.http.request": "HTTP 请求",
   "chat.builtinTool.library.findFolders": "查找文件夹",
   "chat.builtinTool.library.listTrash": "查看最近删除",
   "chat.builtinTool.library.move": "移动文件或文件夹",

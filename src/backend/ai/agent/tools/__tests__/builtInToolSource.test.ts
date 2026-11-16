@@ -62,6 +62,7 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -74,6 +75,11 @@ describe('createSystemCapabilitySource', () => {
       'read_file',
       'write_file',
     ]);
+    expect(tools.find((tool) => tool.providerName === 'http_request')).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: true,
+      deferred: true,
+    });
   });
 
   test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
