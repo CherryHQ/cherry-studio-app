@@ -423,7 +423,7 @@ test('HTML displays embedded PNG/JPEG without captions and rejects active data f
   const { html } = await renderHtml(
     normalizeDocument({
       kind: 'markdown',
-      markdown:
+      source:
         '![internal-name.png](data:image/png;base64,AA==)\n\n![internal-name.jpg](data:image/jpeg;base64,AQ==)\n\n![bad](data:image/svg+xml;base64,PHN2Zz4=)',
     }),
     presentation,

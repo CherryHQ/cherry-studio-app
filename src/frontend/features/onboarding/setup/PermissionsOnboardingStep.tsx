@@ -118,7 +118,6 @@ function PermissionOption({
       testID={`onboarding-permission-${kind}`}
       density="comfortable"
       inset="none"
-      showChevron={false}
     >
       <View className="flex-row items-center gap-4">
         <Icon className="size-5 shrink-0 text-foreground" />

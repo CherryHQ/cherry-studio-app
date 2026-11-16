@@ -1108,6 +1108,7 @@ describe('normalized account service admission', () => {
     options.resolveSessionContext.mockReturnValue({
       issuer: 'https://identity.example.com',
       enterpriseApiBaseUrl: 'https://enterprise.example.com/api',
+      cloudApiOrigin: undefined,
     });
     const runtime = new AccountRuntime(options);
 
