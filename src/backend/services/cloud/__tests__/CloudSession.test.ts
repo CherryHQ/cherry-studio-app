@@ -1,5 +1,5 @@
 import { CloudSession, type CloudIdentity } from '../CloudSession';
-import { cloudSnapshot } from './cloudFixtures';
+import { cloudSnapshot } from './_cloudFixtures';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
