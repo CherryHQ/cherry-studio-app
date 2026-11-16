@@ -89,6 +89,37 @@ function createAccount(): AccountRuntime {
       return portal;
     },
     resolveSessionContext: sessionContext,
+    async refreshSessionContext(isCurrent, signal) {
+      const previous = config;
+      if (!origin || !redirectUri || !bindingKey || !previous || !isCurrent()) return;
+      const discovered = await resolveCloudLogin(
+        origin,
+        Platform.OS,
+        redirectUri,
+        previous.endpoints.issuer,
+        { region: previous.region, signal },
+      );
+      signal.throwIfAborted();
+      if (config !== previous || !isCurrent()) return;
+      if (
+        discovered.endpoints.portal_url !== previous.endpoints.portal_url ||
+        discovered.oidc_client_id !== previous.oidc_client_id
+      )
+        throw new AccountError('unavailable');
+      // Refresh product routing without replacing the SDK, its issuer, tokens or login state.
+      const next: CloudLoginConfig = {
+        ...previous,
+        endpoints: {
+          ...previous.endpoints,
+          cloud_api_origin: discovered.endpoints.cloud_api_origin,
+          cloud_web_url: discovered.endpoints.cloud_web_url,
+        },
+      };
+      if (JSON.stringify(next) !== JSON.stringify(previous)) {
+        SecureStore.setItem(bindingKey, JSON.stringify(next), STORAGE_OPTIONS);
+        config = next;
+      }
+    },
     active,
     profiles: installationProfiles(),
     prompt: {

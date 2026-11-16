@@ -11,24 +11,29 @@ details are not displayed in the app; signed-in subscribers use their models thr
 ## Configuration
 
 The account identity source supplies the current session's concrete `apiOrigin` and `webUrl`.
-`CloudRuntime` validates both before account reads, model synchronization or inference. It does not
-read a regional address map or select a service from a region marker. Missing or invalid addresses
-make Cloud unavailable without changing ordinary provider use or reusing the previous session's
-service. API origins must be HTTPS and cannot contain a path, query, fragment or credentials;
-webpage URLs must be HTTPS and contain no credentials.
+`CloudRuntime` requires a validated API origin before account reads, model synchronization or
+inference. The management webpage is optional; its absence does not block subscription models.
+It does not read a regional address map or select a service from a region marker. A missing API
+origin or invalid supplied address makes Cloud unavailable without changing ordinary provider use
+or reusing the previous session's service. API origins must be HTTPS and cannot contain a path,
+query, fragment or credentials; supplied webpage URLs must be HTTPS and contain no credentials.
 
-Accounts Portal 0.2.1 does not expose session service metadata yet. Its installation adapter
-temporarily receives `CHERRY_CLOUD_API_ORIGIN_CN` and `CHERRY_CLOUD_WEB_URL_CN` through
-`extra.accountsPortal.cloudApiOrigin` and `extra.accountsPortal.cloudWebUrl`. Configure these in
-each EAS deployment environment (`development`, `preview`, `production`). The existing `_CN`
-variable names preserve deployment configuration; product code consumes only the resulting
-addresses. Once the SDK supplies service metadata, replace the installation mapping without
-changing this consumer. The app does not retrieve variables from EAS at runtime.
+The installation account adapter gets `endpoints.cloud_api_origin` and `endpoints.cloud_web_url`
+from Config Service and persists the registration in SecureStore. When product metadata is missing
+or a Cloud read failed, its backend-only metadata refresh resolves the saved login region and issuer
+before that read. It has no timer. Healthy configured reads go directly to Cloud without waiting
+for discovery. It retains the SDK, authentication binding and enterprise routing. Missing product
+metadata can recover when the server starts supplying it, without another login; a discovery
+outage keeps already configured product addresses usable. An address change enters the same
+identity-replacement boundary as an account change.
 
-Supply the Cloud product audience in `ACCOUNTS_PORTAL_SCOPES`, alongside any enterprise audience.
+Supply the Cloud product audience in the region's Config Service registration scopes.
 Models and subscription state come from the service. The configured webpage URL remains in the
 internal Cloud snapshot; the app exposes no subscription-management or purchase action. The old
 subscription route redirects to profile settings.
+Subscription model availability is checked once when the community account is restored on a cold
+start. It does not depend on a purchase entry or browser-return trigger. Only confirmed service
+entitlements determine subscription status.
 
 Accounts Portal 0.2.1 provides `getIdentityTokens()` without a local patch. It returns a matched
 access/ID pair after refresh and checks the SDK's session, profile and sign-in generations.
@@ -87,8 +92,14 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
   without changing other providers' saved order keys. Ordinary provider/model mutation services
   reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
   keeping their IDs/names for history; user-configured providers and conversations remain.
-- State refreshes after sign-in/account replacement, foreground entry, Plan model-list opening,
-  inference completion/cancellation, and periodically. Admission refreshes a stale snapshot.
+- Cold start checks subscription display once after account restoration. Repeated notifications
+  for that identity do not issue another read. A newly signed-in/replaced account loads its own
+  state, while signed-out installations make no subscription requests. Foreground transitions,
+  elapsed time and inference completion do not trigger another display check; there is no polling
+  or automatic retry. A failed cold-start check remains an error until an explicit retry or the
+  next start. The automatic read is silent and does not set the explicit-refresh flag.
+  Model admission still revalidates a stale snapshot before sending. Completion/cancellation only
+  marks it stale for the next request, preserving quota checks without an idle background read.
   Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
 - Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's

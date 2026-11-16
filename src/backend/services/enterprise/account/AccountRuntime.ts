@@ -53,6 +53,8 @@ export interface AccountRuntimeOptions {
   preparePortal(): Promise<Portal>;
   /** The SDK integration supplies app-owned context for this exact current or candidate session. */
   resolveSessionContext(session: AuthState): AccountSessionContext | null;
+  /** Refreshes product metadata for the current login without replacing its authentication. */
+  refreshSessionContext?(isCurrent: () => boolean, signal: AbortSignal): Promise<void>;
   /** The profile this runtime serves. */
   active: ActiveProfile;
   profiles: {
@@ -347,6 +349,16 @@ export class AccountRuntime implements AccountModule {
     const tokens = await this.requirePortal().getIdentityTokens();
     if (this.getCommunityIdentity()?.key !== key) throw new AccountError('rejected');
     return tokens;
+  };
+
+  /** Backend-only: discovery must still belong to the login that requested it when it completes. */
+  readonly refreshCommunityServices = async (key: string, signal: AbortSignal): Promise<void> => {
+    signal.throwIfAborted();
+    const isCurrent = () => this.getCommunityIdentity()?.key === key;
+    if (!isCurrent()) throw new AccountError('rejected');
+    await this.options.refreshSessionContext?.(isCurrent, signal);
+    signal.throwIfAborted();
+    if (!isCurrent()) this.changes.fire();
   };
 
   /** Captures one login for an enterprise attempt, including its later rejection callbacks. */

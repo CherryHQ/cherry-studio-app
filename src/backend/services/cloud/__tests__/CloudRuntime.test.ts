@@ -1,3 +1,5 @@
+import { AppState, type AppStateStatus } from 'react-native';
+
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { CloudModel, CloudState } from '@/shared/contracts/cloud';
@@ -8,6 +10,9 @@ import { cloudSnapshot } from './cloudFixtures';
 
 const mockGet = jest.fn();
 const mockRevoke = jest.fn();
+const mockInference = jest.fn();
+const mockRefreshServices = jest.fn();
+const appStateListeners = new Set<(status: AppStateStatus) => void>();
 const mockProject = jest.fn(
   async (
     _tx: unknown,
@@ -32,13 +37,17 @@ jest.mock('../CloudSession', () => ({
     get(path: string) {
       return mockGet(this.identity.profileId, path, this.origin);
     }
+    async headers() {
+      return {};
+    }
     revoke() {
       mockRevoke(this.origin);
       return Promise.resolve();
     }
   },
 }));
-jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockInference(...args) }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => '018f47a2-7d3b-7c91-b8f5-8b3f4c6d2a10' }));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
 jest.mock('@/backend/data/dataApiChanges', () => ({ publishDataApiChanges: jest.fn() }));
 
@@ -47,6 +56,11 @@ function reply(account: string, path: string) {
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
   return { data: state.models };
+}
+
+function changeAppState(status: AppStateStatus): void {
+  AppState.currentState = status;
+  for (const listener of appStateListeners) listener(status);
 }
 
 const service = {
@@ -58,12 +72,14 @@ const replacementService = {
   webUrl: 'https://replacement.example/account/plans',
 };
 
-async function setup(configuration: Pick<CloudIdentity, 'apiOrigin' | 'webUrl'> = service) {
-  let identity: CloudIdentity | null = { key: 'a', profileId: 'account-a', ...configuration };
+async function setup(configuration: Pick<CloudIdentity, 'apiOrigin' | 'webUrl'> | null = service) {
+  let identity: CloudIdentity | null =
+    configuration === null ? null : { key: 'a', profileId: 'account-a', ...configuration };
   let changed: () => void = () => {};
   const source = {
     getIdentity: () => identity,
     getTokens: async () => ({ accessToken: '', idToken: '' }),
+    refreshServices: (key: string, signal: AbortSignal) => mockRefreshServices(key, signal),
     subscribe: (listener: () => void) => {
       changed = listener;
       return () => {};
@@ -87,13 +103,28 @@ async function setup(configuration: Pick<CloudIdentity, 'apiOrigin' | 'webUrl'> 
 
 beforeEach(() => {
   jest.useFakeTimers();
+  AppState.currentState = 'active';
+  appStateListeners.clear();
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+    appStateListeners.add(listener);
+    return {
+      remove: () => {
+        appStateListeners.delete(listener);
+      },
+    };
+  });
   mockGet
     .mockReset()
     .mockImplementation(async (account: string, path: string) => reply(account, path));
   mockProject.mockClear();
   mockRevoke.mockClear();
+  mockInference.mockReset();
+  mockRefreshServices.mockReset().mockResolvedValue(undefined);
 });
-afterEach(() => jest.useRealTimers());
+afterEach(() => {
+  jest.restoreAllMocks();
+  jest.useRealTimers();
+});
 
 test('account replacement immediately clears state and drops late responses even when cancellation is ignored', async () => {
   let finish!: (value: unknown) => void;
@@ -182,7 +213,6 @@ test('service address replacement switches API and webpage together, cancels old
 
 test.each([
   { apiOrigin: undefined, webUrl: replacementService.webUrl },
-  { apiOrigin: replacementService.apiOrigin, webUrl: undefined },
   { apiOrigin: 'http://replacement.example', webUrl: replacementService.webUrl },
   { apiOrigin: 'https://replacement.example/api', webUrl: replacementService.webUrl },
   { apiOrigin: replacementService.apiOrigin, webUrl: 'https://user:pass@replacement.example' },
@@ -204,6 +234,124 @@ test.each([
     await runtime._doStop();
   },
 );
+
+test('a subscription API can supply models without a management webpage', async () => {
+  const { runtime } = await setup({ apiOrigin: service.apiOrigin });
+  await runtime.refresh();
+  expect(runtime.getState()).toMatchObject({ phase: 'ready', webUrl: null });
+  expect(runtime.getState().models).toHaveLength(1);
+  await runtime._doStop();
+});
+
+test.each(['paid', 'unsubscribed', 'failed'])(
+  'cold start checks once when %s, without foreground checks, polling or automatic retries',
+  async (result) => {
+    mockGet.mockImplementation(async (account: string, path: string) => {
+      if (result === 'failed') throw new Error('offline');
+      if (path !== '/api/v1/account') return reply(account, path);
+      const data = cloudSnapshot(account).account!;
+      return result === 'unsubscribed' ? { ...data, entitlements: [] } : data;
+    });
+    const { runtime } = await setup();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(runtime.getState()).toMatchObject({
+      phase: result === 'failed' ? 'error' : 'ready',
+      isRefreshing: false,
+    });
+    changeAppState('inactive');
+    changeAppState('active');
+    changeAppState('background');
+    changeAppState('active');
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    await runtime._doStop();
+  },
+);
+
+test('cold start waits for account restoration and ignores repeated identity notifications', async () => {
+  const { runtime, change } = await setup(null);
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockGet).not.toHaveBeenCalled();
+  const identity = { key: 'a', profileId: 'account-a', ...service };
+  change(identity);
+  change({ ...identity });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(runtime.getState().phase).toBe('ready');
+  change({ ...identity });
+  await jest.advanceTimersByTimeAsync(120_000);
+  expect(mockGet).toHaveBeenCalledTimes(3);
+  await runtime._doStop();
+});
+
+test('a new cold-start runtime checks the same saved account again', async () => {
+  const first = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockGet).toHaveBeenCalledTimes(3);
+  await first.runtime._doStop();
+  const second = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  expect(mockGet).toHaveBeenCalledTimes(6);
+  await second.runtime._doStop();
+});
+
+test('cold-start discovery recovers missing metadata before one subscription check', async () => {
+  let finish!: () => void;
+  mockRefreshServices.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { runtime, change } = await setup({});
+  expect(mockRefreshServices).toHaveBeenCalledTimes(1);
+  expect(mockGet).not.toHaveBeenCalled();
+  change({ key: 'a', profileId: 'account-a', ...service });
+  finish();
+  await jest.advanceTimersByTimeAsync(0);
+  expect(runtime.getState()).toMatchObject({ phase: 'ready' });
+  expect(mockGet).toHaveBeenCalledTimes(3);
+  expect(mockProject.mock.lastCall?.[2]).toHaveLength(1);
+  await runtime._doStop();
+});
+
+test('inference completion defers entitlement revalidation until the next model request', async () => {
+  mockInference.mockImplementation(async () => new Response(null, { status: 200 }));
+  const { runtime } = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  const send = runtime.createModelFetch('cloud-model', 'agent');
+  const request = () =>
+    send('https://cloud.example/v1/messages', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'cloud-model' }),
+    });
+  await request();
+  await jest.advanceTimersByTimeAsync(120_000);
+  expect(mockGet).toHaveBeenCalledTimes(3);
+  await request();
+  expect(mockGet).toHaveBeenCalledTimes(6);
+  await runtime._doStop();
+});
+
+test('healthy configured subscription reads do not wait for configuration rediscovery', async () => {
+  mockRefreshServices.mockImplementation(() => new Promise(() => {}));
+  const { runtime } = await setup();
+  await runtime.refresh();
+  expect(runtime.getState().phase).toBe('ready');
+  expect(mockRefreshServices).not.toHaveBeenCalled();
+  await runtime._doStop();
+});
+
+test('a failed read can recover through the configured service even if rediscovery is unavailable', async () => {
+  const { runtime } = await setup();
+  await runtime.refresh();
+  mockGet.mockRejectedValueOnce(new Error('temporary read failure'));
+  await expect(runtime.refresh()).rejects.toThrow('temporary read failure');
+  mockRefreshServices.mockRejectedValue(new Error('config service offline'));
+  await runtime.refresh();
+  expect(runtime.getState().phase).toBe('ready');
+  await runtime._doStop();
+});
 
 test('an outage keeps display data but fails closed, and unchanged refreshes do not rewrite the catalog', async () => {
   const { runtime } = await setup();
