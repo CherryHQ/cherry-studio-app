@@ -361,6 +361,7 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',
