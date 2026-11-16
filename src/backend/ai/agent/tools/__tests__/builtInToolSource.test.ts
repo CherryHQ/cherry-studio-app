@@ -895,7 +895,7 @@ async function resolve(
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(
-    { ...SERVICES, ssh: options.ssh, mcpManagement: options.mcpManagement },
+    { ...SERVICES, ...options },
     {
       ...dependencies(scenario),
       platform: options.platform ?? 'ios',
