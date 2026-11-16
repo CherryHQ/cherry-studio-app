@@ -692,6 +692,7 @@
   "chat.runtime.failed": "Tác nhân hiện không khả dụng. Hãy thử lại để tiếp tục.",
   "chat.runtime.paused": "Quá trình thực thi đã tạm dừng do bị gián đoạn nhiều lần. Hãy dừng phản hồi này rồi thử lại.",
   "chat.runtime.retrying": "Yêu cầu thất bại. Đang tự động thử lại…",
+  "chat.runtime.sessionRecoveryFailed": "Không thể đọc dữ liệu thực thi của cuộc trò chuyện này. Các bản ghi đã được giữ lại. Hãy bắt đầu cuộc trò chuyện mới để tiếp tục hoặc gửi báo cáo chẩn đoán.",
   "chat.share.assistant": "Trợ lý",
   "chat.share.cancelled": "Đã hủy",
   "chat.share.completed": "Hoàn thành",

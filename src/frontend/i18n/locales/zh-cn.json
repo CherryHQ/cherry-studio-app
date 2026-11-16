@@ -692,6 +692,7 @@
   "chat.runtime.failed": "智能体暂不可用，重试以恢复。",
   "chat.runtime.paused": "多次中断后，执行已暂停。请停止本次回复后重试。",
   "chat.runtime.retrying": "请求失败，正在自动重试…",
+  "chat.runtime.sessionRecoveryFailed": "此会话的执行数据无法读取，已保留原记录。请新建会话继续，或提交诊断报告。",
   "chat.share.assistant": "助手",
   "chat.share.cancelled": "已取消",
   "chat.share.completed": "已完成",

@@ -702,6 +702,7 @@
   "chat.runtime.failed": "El agente no está disponible. Vuelve a intentarlo para continuar.",
   "chat.runtime.paused": "La ejecución se ha pausado tras varias interrupciones. Detén esta respuesta y vuelve a intentarlo.",
   "chat.runtime.retrying": "La solicitud falló. Reintentando automáticamente…",
+  "chat.runtime.sessionRecoveryFailed": "No se pudieron leer los datos de ejecución de esta conversación. Sus registros se han conservado. Inicia una conversación nueva para continuar o envía un informe de diagnóstico.",
   "chat.share.assistant": "Asistente",
   "chat.share.cancelled": "Cancelado",
   "chat.share.completed": "Completado",

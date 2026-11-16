@@ -697,6 +697,7 @@
   "chat.runtime.failed": "Ajan kullanılamıyor. Devam etmek için yeniden deneyin.",
   "chat.runtime.paused": "Tekrarlanan kesintiler nedeniyle yürütme duraklatıldı. Bu yanıtı durdurup yeniden deneyin.",
   "chat.runtime.retrying": "İstek başarısız oldu. Otomatik olarak yeniden deneniyor…",
+  "chat.runtime.sessionRecoveryFailed": "Bu sohbetin yürütme verileri okunamadı. Kayıtları korundu. Devam etmek için yeni bir sohbet başlatın veya tanılama raporu gönderin.",
   "chat.share.assistant": "Asistan",
   "chat.share.cancelled": "İptal edildi",
   "chat.share.completed": "Tamamlandı",
