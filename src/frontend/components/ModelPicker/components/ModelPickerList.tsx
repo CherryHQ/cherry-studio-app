@@ -5,9 +5,10 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
+import { BlurTargetView } from 'expo-blur';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
@@ -23,7 +24,10 @@ import {
 } from '../utils/modelPickerFastScroll';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
 import { ModelPickerBadge } from './ModelPickerBadge';
-import { ModelPickerFastScroller } from './ModelPickerFastScroller';
+import {
+  MODEL_PICKER_FAST_SCROLLER_WIDTH,
+  ModelPickerFastScroller,
+} from './ModelPickerFastScroller';
 
 const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
@@ -54,6 +58,7 @@ type ModelPickerListExtraData = {
   selectedModelId: string | null;
   selectedModelIds?: readonly string[];
   isFull: boolean;
+  trailingInset: number | undefined;
 };
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
@@ -73,6 +78,7 @@ export function ModelPickerList({
   showBadges = false,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
+  const blurTarget = useRef<ViewInstance>(null);
   const navigationFrameRef = useRef<number | null>(null);
   const pendingNavigationIndexRef = useRef<number | null>(null);
   const hasScrolledToSelectedRef = useRef(false);
@@ -136,8 +142,16 @@ export function ModelPickerList({
       selectedModelId,
       selectedModelIds,
       isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
+      trailingInset: isFastScrollerVisible ? MODEL_PICKER_FAST_SCROLLER_WIDTH + 8 : undefined,
     }),
-    [contentInset, density, maxSelectedCount, selectedModelId, selectedModelIds],
+    [
+      contentInset,
+      density,
+      isFastScrollerVisible,
+      maxSelectedCount,
+      selectedModelId,
+      selectedModelIds,
+    ],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -167,6 +181,7 @@ export function ModelPickerList({
           multiple={Boolean(extraData.selectedModelIds)}
           onSelect={onSelect}
           showBadges={showBadges}
+          trailingInset={extraData.trailingInset}
         />
       );
     },
@@ -240,31 +255,34 @@ export function ModelPickerList({
 
   return (
     <View style={styles.list} testID="model-picker-list">
-      <LegendList
-        ref={listRef}
-        contentContainerStyle={styles.listContentContainer}
-        data={listItems}
-        drawDistance={320}
-        estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
-        extraData={listExtraData}
-        getItemType={getItemType}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={keyExtractor}
-        maintainVisibleContentPosition={false}
-        nestedScrollEnabled
-        onFirstVisibleItemChanged={
-          isFastScrollerVisible ? handleFirstVisibleItemChanged : undefined
-        }
-        recycleItems
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
-        style={styles.list}
-      />
+      <BlurTargetView ref={blurTarget} style={styles.list}>
+        <LegendList
+          ref={listRef}
+          contentContainerStyle={styles.listContentContainer}
+          data={listItems}
+          drawDistance={320}
+          estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
+          extraData={listExtraData}
+          getItemType={getItemType}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={keyExtractor}
+          maintainVisibleContentPosition={false}
+          nestedScrollEnabled
+          onFirstVisibleItemChanged={
+            isFastScrollerVisible ? handleFirstVisibleItemChanged : undefined
+          }
+          recycleItems
+          renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
+          style={styles.list}
+        />
+      </BlurTargetView>
       {isFastScrollerVisible ? (
         <ModelPickerFastScroller
           activeIndex={activeAnchorIndex}
           anchors={fastScrollAnchors}
+          blurTarget={blurTarget}
           onNavigate={handleFastScrollNavigate}
         />
       ) : null}
@@ -299,6 +317,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   multiple,
   onSelect,
   showBadges,
+  trailingInset,
 }: {
   contentInset: 'default' | 'none';
   density: ModelPickerDensity;
@@ -308,6 +327,8 @@ const ModelPickerRow = memo(function ModelPickerRow({
   multiple: boolean;
   onSelect: (item: ModelPickerModelItem) => void;
   showBadges: boolean;
+  /** The list owns clearance for its floating navigation. */
+  trailingInset: number | undefined;
 }) {
   const { t } = useTranslation();
   const handleSelect = useCallback(() => {
@@ -335,11 +356,12 @@ const ModelPickerRow = memo(function ModelPickerRow({
         'flex-row items-center gap-3 active:bg-secondary-active dark:active:bg-secondary-active/50',
         density === 'compact' ? 'min-h-11 py-2' : 'min-h-14 py-2.5',
         contentInset === 'default' && 'px-5',
-        isSelected && 'bg-secondary dark:bg-secondary/40',
+        isSelected && 'bg-secondary',
         isDisabled && 'opacity-40',
       )}
       disabled={isDisabled}
       onPress={handleSelect}
+      style={trailingInset === undefined ? undefined : { paddingRight: trailingInset }}
     >
       <View
         className={cn(
