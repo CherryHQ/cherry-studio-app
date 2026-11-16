@@ -48,8 +48,6 @@ const value: ProviderModelSettingsValue = {
     functionCall: true,
     reasoning: true,
     rerank: false,
-    speech: false,
-    transcription: false,
     video: false,
     vision: false,
   },
