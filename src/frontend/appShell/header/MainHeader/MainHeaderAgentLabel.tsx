@@ -1,4 +1,5 @@
-import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -52,12 +53,13 @@ export function MainHeaderAgentSwitch({ onPress }: { onPress: () => void }) {
     <Pressable
       accessibilityLabel={t('agent.actions.switch')}
       accessibilityRole="button"
-      className="size-10 shrink-0 items-center justify-center rounded-full active:opacity-60"
+      className="size-10 shrink-0 flex-row items-center justify-center gap-0.5 rounded-full active:opacity-60"
       hitSlop={2}
       onPress={onPress}
       testID="main-header-agent-switch"
     >
-      <CircleUserRoundIcon className="size-4.5 text-foreground" strokeWidth={1.8} />
+      <BotIcon className="size-4.5 text-foreground" strokeWidth={1.8} />
+      <ChevronDownIcon className="size-2.5 text-foreground" strokeWidth={1.8} />
     </Pressable>
   );
 }
