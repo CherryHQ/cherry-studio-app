@@ -306,6 +306,41 @@ describe('EnterpriseSyncService persistence and lifetime', () => {
     expect(await db.database.select().from(agentGlobalSkillTable)).toEqual([]);
   });
 
+  it('installs Skills without rewriting providers, models, MCP or tool bindings', async () => {
+    mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+    await service.syncResources();
+    const resources = () => ({
+      providers: db.sqlite.prepare('SELECT * FROM user_provider').all(),
+      models: db.sqlite.prepare('SELECT * FROM user_model').all(),
+      servers: db.sqlite.prepare('SELECT * FROM mcp_server').all(),
+      bindings: db.sqlite.prepare('SELECT * FROM agent_tool_binding').all(),
+    });
+    const installed = resources();
+    // Resource writes after this point belong to a changed configuration, never package publication.
+    db.sqlite.exec(
+      "CREATE TRIGGER reject_provider_rewrite BEFORE UPDATE ON user_provider BEGIN SELECT RAISE(ABORT, 'unrelated resource write'); END;",
+    );
+    await service.sync();
+    expect(resources()).toEqual(installed);
+    expect(await db.database.select().from(agentGlobalSkillTable)).toHaveLength(1);
+    expect(await db.database.select().from(agentSkillTable)).toHaveLength(1);
+  });
+
+  it('rolls back package rows, bindings and installed revisions together, then retries', async () => {
+    mockApi.getConfiguration.mockResolvedValue({ ...configuration, agents: [{ id: 1 }] });
+    await service.syncResources();
+    const state = await db.database.select().from(appStateTable);
+    db.failWriteTxCommit(new Error('package commit failed'));
+    await expect(service.sync()).rejects.toThrow('package commit failed');
+    expect(await db.database.select().from(agentGlobalSkillTable)).toEqual([]);
+    expect(await db.database.select().from(agentSkillTable)).toEqual([]);
+    expect(await db.database.select().from(appStateTable)).toEqual(state);
+
+    await service.sync();
+    expect(await db.database.select().from(agentSkillTable)).toHaveLength(1);
+    expect(mockApi.downloadLibraryItem).toHaveBeenCalledTimes(2);
+  });
+
   it('discards completed staging after stop and never publishes its package', async () => {
     const staged = deferred<string>();
     const started = deferred<void>();

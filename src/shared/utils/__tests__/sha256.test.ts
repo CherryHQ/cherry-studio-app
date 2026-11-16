@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { sha256Hex, sha256HexOfText } from '../sha256';
+import { sha256Hex, sha256HexChunks, sha256HexOfText } from '../sha256';
 
 describe('sha256Hex', () => {
   it('matches the reference vectors', () => {
@@ -20,5 +20,34 @@ describe('sha256Hex', () => {
     }
     const text = '技能包 — skill package ✓';
     expect(sha256HexOfText(text)).toBe(createHash('sha256').update(text, 'utf8').digest('hex'));
+  });
+
+  it('hashes chunk boundaries identically while letting timers run before completion', async () => {
+    jest.useFakeTimers();
+    try {
+      const bytes = new Uint8Array(150_013);
+      for (let index = 0; index < bytes.length; index++) bytes[index] = index % 251;
+      const consumed: number[] = [];
+      function* chunks() {
+        consumed.push(1);
+        yield bytes.subarray(0, 70_003);
+        consumed.push(2);
+        yield new Uint8Array();
+        yield bytes.subarray(70_003);
+      }
+      let finished = false;
+      const hashing = sha256HexChunks(chunks()).then((digest) => {
+        finished = true;
+        return digest;
+      });
+      expect(consumed).toEqual([1]);
+      expect(finished).toBe(false);
+      await jest.runAllTimersAsync();
+      expect(consumed).toEqual([1, 2]);
+      expect(await hashing).toBe(createHash('sha256').update(bytes).digest('hex'));
+      expect(await sha256HexChunks([])).toBe(sha256Hex(new Uint8Array()));
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
