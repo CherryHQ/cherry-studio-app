@@ -471,6 +471,7 @@
   "chat.errorPart.interrupted.title": "Ответ прерван",
   "chat.errorPart.message": "Не удалось завершить ответ.",
   "chat.errorPart.message.auth": "Проверьте ключ API в настройках провайдера, затем повторите попытку.",
+  "chat.errorPart.message.contextLength": "Начните новый разговор, удалите вложения или проверьте ограничение контекста у поставщика, прежде чем повторить попытку.",
   "chat.errorPart.notSaved.message": "Компьютер не смог сохранить этот ответ. Не закрывайте разговор, чтобы сохранить доступное содержимое.",
   "chat.errorPart.notSaved.title": "Ответ не сохранён",
   "chat.errorPart.reason.auth": "Ошибка аутентификации",

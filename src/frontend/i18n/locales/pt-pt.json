@@ -468,6 +468,7 @@
   "chat.errorPart.interrupted.title": "Resposta interrompida",
   "chat.errorPart.message": "A resposta não pôde ser concluída.",
   "chat.errorPart.message.auth": "Verifique a chave API nas definições do fornecedor e tente novamente.",
+  "chat.errorPart.message.contextLength": "Inicie uma nova conversa, remova anexos ou verifique o limite de contexto do fornecedor antes de tentar novamente.",
   "chat.errorPart.notSaved.message": "O computador não conseguiu guardar esta resposta. Mantenha esta conversa aberta para preservar o conteúdo disponível.",
   "chat.errorPart.notSaved.title": "Resposta não guardada",
   "chat.errorPart.reason.auth": "Falha na autenticação",

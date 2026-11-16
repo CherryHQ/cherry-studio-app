@@ -462,6 +462,7 @@
   "chat.errorPart.interrupted.title": "返信が中断されました",
   "chat.errorPart.message": "返信を完了できませんでした。",
   "chat.errorPart.message.auth": "プロバイダ設定の API キーを確認して、再試行してください。",
+  "chat.errorPart.message.contextLength": "新しい会話を開始するか、添付ファイルを減らすか、プロバイダーのコンテキスト上限を確認してから再試行してください。",
   "chat.errorPart.notSaved.message": "デスクトップで返信を保存できませんでした。取得済みの内容を保持するため、この会話を開いたままにしてください。",
   "chat.errorPart.notSaved.title": "返信が保存されていません",
   "chat.errorPart.reason.auth": "認証失敗",

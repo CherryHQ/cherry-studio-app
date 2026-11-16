@@ -77,6 +77,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   insufficient_credit: 'quota',
   insufficient_quota: 'quota',
   insufficient_user_quota: 'quota',
+  input_too_long: 'context_length',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
   image_too_large: 'payload_too_large',

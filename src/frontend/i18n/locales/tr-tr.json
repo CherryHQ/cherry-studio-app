@@ -465,6 +465,7 @@
   "chat.errorPart.interrupted.title": "Yanıt kesildi",
   "chat.errorPart.message": "Yanıt tamamlanamadı.",
   "chat.errorPart.message.auth": "Sağlayıcı ayarlarında API anahtarını kontrol edip tekrar deneyin.",
+  "chat.errorPart.message.contextLength": "Yeniden denemeden önce yeni bir sohbet başlatın, ekleri kaldırın veya sağlayıcının bağlam sınırını kontrol edin.",
   "chat.errorPart.notSaved.message": "Masaüstü bu yanıtı kaydedemedi. Mevcut içeriği korumak için bu konuşmayı açık tutun.",
   "chat.errorPart.notSaved.title": "Yanıt kaydedilmedi",
   "chat.errorPart.reason.auth": "Kimlik doğrulama başarısız oldu",

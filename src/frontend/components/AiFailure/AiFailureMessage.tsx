@@ -68,9 +68,11 @@ export function AiFailureMessage({
     t(
       reasonCode === 'auth'
         ? 'chat.errorPart.message.auth'
-        : retryable === true
-          ? 'chat.errorPart.retryable'
-          : 'chat.errorPart.message',
+        : reasonCode === 'context_length'
+          ? 'chat.errorPart.message.contextLength'
+          : retryable === true
+            ? 'chat.errorPart.retryable'
+            : 'chat.errorPart.message',
     );
 
   return (
