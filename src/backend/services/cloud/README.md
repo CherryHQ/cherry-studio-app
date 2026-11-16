@@ -4,8 +4,8 @@
 catalog, and request admission. Bootstrap supplies its account identity source; this module does
 not import the enterprise implementation or read Accounts Portal's private storage keys.
 `Backend.cloud` exposes only status, subscription data, model metadata and refresh methods.
-Tokens and device secrets never reach the frontend or database. Community subscription and quota
-details are not displayed in the app; signed-in subscribers use their models through a managed
+Tokens and device secrets never reach the frontend or database. Confirmed community subscribers
+see their plan and remaining quota in the sidebar badge and use their models through a managed
 `Cherry Studio Plan` provider.
 
 ## Configuration
@@ -71,10 +71,13 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 
 ## Entitlements and model ownership
 
-- `/api/v1/account` is the admission snapshot; `/api/v1/account/plans` supplies internal plan details;
+- `/api/v1/account` is the admission and quota snapshot; `/api/v1/account/plans` supplies plan display details;
   `/v1/models` supplies the catalog and features.
-- The profile and sidebar expose no subscription, quota or entitlement indicators. The managed
-  provider opens a read-only model list, without connection settings or model mutation actions.
+- The sidebar badge requires a confirmed, currently effective paid entitlement, independently of
+  quota exhaustion or model catalog availability. It hides for free, expired, signed-out,
+  unavailable and enterprise accounts. Plan metadata supplies its name; remaining quotas come from
+  matching allocation IDs in the account snapshot. The profile exposes no purchase or management
+  action. The managed provider opens a read-only model list, without connection settings or model mutation actions.
   Accounts without any currently entitled Plan models do not see the provider in settings or
   the picker.
 - An active, currently effective paid entitlement and an available model feature are required. Free
