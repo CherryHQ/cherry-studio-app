@@ -28,7 +28,6 @@ jest.mock('@cherrystudio/ui/components', () => {
       Detail: (props: object) => createElement('MessagePartDetail', props),
       Error: (props: object) => createElement('MessagePartError', props),
       TextSection: (props: object) => createElement('MessagePartTextSection', props),
-      ToolGroup: (props: object) => createElement('MessagePartToolGroup', props),
       ValueSection: (props: object) => createElement('MessagePartValueSection', props),
     },
   };
@@ -140,9 +139,7 @@ describe('ErrorPart', () => {
 
     const detail = renderer.root.findByType('MessagePartDetail');
     expect(detail.props.title).toBe('chat.errorPart.detail.title');
-    const technical = detail.findByType('MessagePartToolGroup');
-    expect(technical.props.title).toBe('chat.errorPart.detail.technical');
-    const textSections = technical.findAllByType('MessagePartTextSection');
+    const textSections = detail.findAllByType('MessagePartTextSection');
     expect(textSections.map((section) => [section.props.title, section.props.value])).toEqual([
       [
         'chat.errorPart.detail.message',
@@ -150,7 +147,7 @@ describe('ErrorPart', () => {
       ],
       ['chat.errorPart.detail.responseBody', '{"error":"insufficient_credit"}'],
     ]);
-    expect(technical.findByType('MessagePartValueSection').props.value).toEqual({
+    expect(detail.findByType('MessagePartValueSection').props.value).toEqual({
       'chat.errorPart.detail.reason': 'quota',
       'chat.errorPart.detail.source': 'provider \u00B7 insufficient_credit',
       'chat.errorPart.detail.name': 'AI_APICallError',
