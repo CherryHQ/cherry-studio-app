@@ -19,7 +19,8 @@ or reusing the previous session's service. API origins must be HTTPS and cannot 
 query, fragment or credentials; supplied webpage URLs must be HTTPS and contain no credentials.
 
 The installation account adapter gets `endpoints.cloud_api_origin` and `endpoints.cloud_web_url`
-from Config Service and persists the registration in SecureStore. When product metadata is missing
+from the selected region's Config Service `POST /v1/resolve` response and persists the registration
+in SecureStore. A community-only region can omit both enterprise endpoints. When product metadata is missing
 or a Cloud read failed, its backend-only metadata refresh resolves the saved login region and issuer
 before that read. It has no timer. Healthy configured reads go directly to Cloud without waiting
 for discovery. It retains the SDK, authentication binding and enterprise routing. Missing product

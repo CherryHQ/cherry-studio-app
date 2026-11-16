@@ -106,6 +106,21 @@ export interface CloudModule {
   refresh(): Promise<void>;
 }
 
+/** A current paid subscription, independent of remaining quota or catalog availability. */
+export function hasActiveCloudSubscription(state: CloudState, now = Date.now()): boolean {
+  return (
+    state.phase === 'ready' &&
+    state.account?.account.status === 'active' &&
+    state.account.entitlements.some(
+      (entry) =>
+        entry.status === 'active' &&
+        !entry.is_free &&
+        (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
+        (!entry.expires_at || Date.parse(entry.expires_at) > now),
+    )
+  );
+}
+
 /** Windows constrain the same pool; independent pools are alternative sources of credit. */
 export function cloudModelUnavailable(
   state: CloudState,

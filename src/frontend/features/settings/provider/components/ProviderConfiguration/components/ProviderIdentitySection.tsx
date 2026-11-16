@@ -11,9 +11,9 @@ import {
   ProviderBrandAvatar,
 } from '@/frontend/components/Avatar';
 import { withPolicy } from '@/frontend/components/Policy';
+import type { ProviderConfigurationValue } from '@/frontend/types/providerConfiguration';
 
 import { ProviderValueSheet } from '../../ProviderValueSheet';
-import type { ProviderConfigurationValue } from '../types';
 
 const IDENTITY_AVATAR_SIZE = 56;
 const logger = loggerService.withContext('ProviderIdentitySection');

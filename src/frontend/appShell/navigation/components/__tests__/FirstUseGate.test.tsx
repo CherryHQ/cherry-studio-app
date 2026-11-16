@@ -5,27 +5,26 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { useLatestAgentSession } from '@/frontend/hooks/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient } from '@/shared/data/api/types';
+import type { PreferenceSchema } from '@/shared/data/preference';
 
 import { FirstUseGate } from '../FirstUseGate';
 
-let mockStatus: 'unseen' | 'skipped' | 'completed' = 'unseen';
-let mockAccount = { hasPrompted: true };
+let mockStatus: PreferenceSchema['app.onboarding.status'] = 'unseen';
+const mockSetStatus = jest.fn();
 
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data/hooks/useDataApi'),
-  usePreference: () => [mockStatus],
-}));
-jest.mock('@/frontend/appShell/account', () => ({
-  useAccount: () => ({ state: mockAccount }),
+  usePreference: () => [mockStatus, mockSetStatus],
 }));
 jest.mock('@/frontend/hooks/agent', () =>
   jest.requireActual('@/frontend/hooks/agent/useAgentSessions'),
 );
 jest.mock('@cherrystudio/ui/components', () => ({
-  ContentState: { Loading: () => null },
+  ContentState: { Error: () => null, Loading: () => null },
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -82,7 +81,7 @@ describe('first-use admission and chat restoration', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mockStatus = 'unseen';
-    mockAccount = { hasPrompted: true };
+    mockSetStatus.mockResolvedValue(undefined);
     latest = undefined;
     chatMountCount = 0;
     chatUnmountCount = 0;
@@ -146,15 +145,32 @@ describe('first-use admission and chat restoration', () => {
     },
   );
 
-  it('offers sign-in before onboarding until the prompt is dismissed', async () => {
-    mockAccount = { hasPrompted: false };
+  it('starts with the welcome stage before asking for privacy or permissions', async () => {
     await renderGate();
-    expect(renderer?.root.findByType(Redirect).props.href).toBe('/login');
+    expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+    expect(mockSetStatus).toHaveBeenCalledWith('welcome', { optimistic: false });
+  });
 
-    mockAccount = { hasPrompted: true };
+  it('still prepares a new installation when only SDK subscription models have arrived', async () => {
+    dataApi.get.mockImplementation(
+      async (path) =>
+        (path === '/models'
+          ? [{ id: 'plan-model', providerId: CLOUD_PROVIDER_ID }]
+          : { items: [] }) as never,
+    );
     await renderGate();
     expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
   });
+
+  it.each(['welcome', 'privacy', 'permissions', 'notifications', 'login', 'pending'] as const)(
+    'resumes the unfinished %s stage inside the dedicated onboarding flow',
+    async (status) => {
+      mockStatus = status;
+      await renderGate();
+      expect(renderer?.root.findByType(Redirect).props.href).toBe('/onboarding');
+      expect(dataApi.get).not.toHaveBeenCalled();
+    },
+  );
 
   it('admits an enterprise profile without onboarding, whose setup the organization owns', async () => {
     setActiveProfile({

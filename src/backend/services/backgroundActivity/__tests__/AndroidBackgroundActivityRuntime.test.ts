@@ -169,6 +169,10 @@ test('retires cancelled startup registrations without stopping or clearing a rep
 });
 
 test('a failed service start leaves work running unprotected and retries after the next foreground entry', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    status: 'undetermined',
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
   native.start.mockRejectedValueOnce(new Error('Native service admission failed'));
   const interrupted = jest.fn();
   const surface = runtime.createPresenter<BackgroundReplyActivityProps>().start(props('preparing'));
@@ -199,6 +203,10 @@ test('a failed start does not block protection for work admitted after the unpro
 });
 
 test('returning while the service runs requests permission skipped during startup', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    status: 'undetermined',
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
   native.start.mockImplementationOnce(async () => {
     running = true;
     setAppState('background');
@@ -213,6 +221,10 @@ test('returning while the service runs requests permission skipped during startu
 });
 
 test('a notification update failure does not interrupt a service that is still running', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    status: 'undetermined',
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
   const interrupted = jest.fn();
   native.updateNotification.mockRejectedValueOnce(new Error('Update failed'));
   runtime.acquire('chat', interrupted);
@@ -223,6 +235,10 @@ test('a notification update failure does not interrupt a service that is still r
 });
 
 test('returning retries a failed permission request without repeatedly prompting after denial', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    status: 'undetermined',
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
   notices.requestPermissionsAsync.mockRejectedValueOnce(
     new Error('Permission activity unavailable'),
   );
@@ -290,6 +306,10 @@ test('work admitted while hidden runs unprotected until the app returns, then co
 });
 
 test('notification permission denial does not stop execution and the prompt follows service start', async () => {
+  notices.getPermissionsAsync.mockResolvedValue({
+    status: 'undetermined',
+    granted: false,
+  } as notifications.NotificationPermissionsStatus);
   expect(notices.requestPermissionsAsync).not.toHaveBeenCalled();
   runtime.acquire('chat');
   await flush();
@@ -298,6 +318,20 @@ test('notification permission denial does not stop execution and the prompt foll
     notices.requestPermissionsAsync.mock.invocationCallOrder[0]!,
   );
 });
+
+test.each(['denied', 'granted'] as const)(
+  'does not repeat a %s notification decision from setup',
+  async (status) => {
+    notices.getPermissionsAsync.mockResolvedValue({
+      status,
+      granted: status === 'granted',
+    } as notifications.NotificationPermissionsStatus);
+    runtime.acquire('chat');
+    await flush();
+    expect(running).toBe(true);
+    expect(notices.requestPermissionsAsync).not.toHaveBeenCalled();
+  },
+);
 
 test('the service task cannot later auto-stop a replacement when the old service is released', async () => {
   const first = runtime.acquire('first');

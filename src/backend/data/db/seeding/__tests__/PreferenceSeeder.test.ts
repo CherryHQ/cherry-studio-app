@@ -51,7 +51,7 @@ test('upgrades preserve external search and later seeding preserves an explicit 
   expect(db.values.get('chat.web_search.model_tools_preferred')).toBe(true);
 });
 
-test('a new profile inherits application settings without copying identity or model configuration', async () => {
+test('a new profile inherits application and onboarding settings without copying identity or model configuration', async () => {
   setActiveProfile({
     id: 'new-profile',
     identity: { deployment: 'server', subject: 'user', authentication: 'password' },
@@ -83,6 +83,7 @@ test('a new profile inherits application settings without copying identity or mo
     'app.feedback.shake_enabled': true,
     'app.privacy.data_collection.enabled': false,
     'app.privacy.policy_version': 'consent-version',
+    'app.onboarding.status': 'completed',
   });
 
   db.values.set('ui.theme_mode', ThemeMode.light);
