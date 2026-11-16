@@ -72,9 +72,15 @@ jest.mock('uniwind', () => ({
 
 describe('BottomSheet', () => {
   let backHandlerSpy: jest.SpyInstance;
+  let animationFrameSpy: jest.SpyInstance;
+  let frames: FrameRequestCallback[];
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    frames = [];
+    animationFrameSpy = jest
+      .spyOn(global, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
     mockAnimatedStyleFactories.length = 0;
@@ -92,6 +98,7 @@ describe('BottomSheet', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    animationFrameSpy.mockRestore();
     backHandlerSpy.mockRestore();
   });
 
@@ -555,10 +562,17 @@ describe('BottomSheet', () => {
   test('covers a parent and routes Back only to its nested overlay', () => {
     const closeParent = jest.fn();
     const closeChild = jest.fn();
+    const childClosed = jest.fn();
     act(() => {
       renderer = create(
         <BottomSheet onClose={closeParent} open presentation="overlay" size="large" title="Parent">
-          <BottomSheet onClose={closeChild} open size="compact" title="Child">
+          <BottomSheet
+            onClosed={childClosed}
+            onClose={closeChild}
+            open
+            size="compact"
+            title="Child"
+          >
             <Text>Child body</Text>
           </BottomSheet>
         </BottomSheet>,
@@ -575,6 +589,9 @@ describe('BottomSheet', () => {
     act(() => sheets[1].props.onSettle(0));
     expect(closeParent).not.toHaveBeenCalled();
     expect(closeChild).toHaveBeenCalledTimes(1);
+    expect(childClosed).not.toHaveBeenCalled();
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    expect(childClosed).toHaveBeenCalledTimes(1);
   });
 
   test('keeps the footer inside the initial visible height of an expandable sheet', () => {
