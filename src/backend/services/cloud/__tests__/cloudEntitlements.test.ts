@@ -4,7 +4,7 @@ import {
   cloudModelUnavailable,
 } from '@/shared/contracts/cloud';
 
-import { cloudSnapshot } from './cloudFixtures';
+import { cloudSnapshot } from './_cloudFixtures';
 
 const now = Date.parse('2026-10-31T00:00:00Z');
 

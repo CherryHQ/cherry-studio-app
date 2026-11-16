@@ -22,6 +22,10 @@ const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
 const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
+const mockCloud = {
+  configure: jest.fn(),
+  hasPendingStorageWork: jest.fn(() => false),
+};
 const mockEnterpriseSync = {
   configure: jest.fn(),
   hasPendingStorageWork: jest.fn(() => false),
@@ -34,6 +38,9 @@ const mockEnterpriseAccount = {
   verify: jest.fn(async () => {}),
   admit: jest.fn(async () => {}),
   createEnterpriseSession: jest.fn(),
+  getCommunityIdentity: jest.fn(() => null),
+  getCommunityTokens: jest.fn(async () => ({ accessToken: 'access', idToken: 'identity' })),
+  refreshCommunityServices: jest.fn(async () => {}),
   getState: () => mockAccountState,
   subscribe: (listener: () => void) => {
     mockAccountListeners.add(listener);
@@ -191,6 +198,7 @@ const createRuntime = () =>
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     EnterpriseSyncService: mockEnterpriseSync,
+    CloudRuntime: mockCloud,
     JobRuntime: mockJobRuntime,
     ScreenAwakeRuntime: mockScreenAwake,
     McpRuntimeService: mockMcpRuntime,
@@ -435,6 +443,7 @@ describe('createAppBootstrapRuntime', () => {
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       account: mockEnterpriseAccount,
+      cloud: mockCloud,
       languageServing: mockAgentRuntime,
       screenAwake: mockScreenAwake,
       providerAccounts: mockProviderAccounts,
@@ -443,6 +452,15 @@ describe('createAppBootstrapRuntime', () => {
       trash: mockTrash,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
+    expect(mockCloud.configure).toHaveBeenCalledWith(
+      {
+        getIdentity: mockEnterpriseAccount.getCommunityIdentity,
+        getTokens: mockEnterpriseAccount.getCommunityTokens,
+        refreshServices: mockEnterpriseAccount.refreshCommunityServices,
+        subscribe: mockEnterpriseAccount.subscribe,
+      },
+      expect.any(String),
+    );
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);

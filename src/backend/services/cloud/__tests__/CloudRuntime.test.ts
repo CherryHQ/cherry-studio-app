@@ -6,7 +6,7 @@ import type { CloudModel, CloudState } from '@/shared/contracts/cloud';
 
 import { CloudRuntime } from '../CloudRuntime';
 import type { CloudIdentity } from '../CloudSession';
-import { cloudSnapshot } from './cloudFixtures';
+import { cloudSnapshot } from './_cloudFixtures';
 
 const mockGet = jest.fn();
 const mockRevoke = jest.fn();
@@ -30,10 +30,12 @@ jest.mock('../projectCloudModels', () => ({
 }));
 jest.mock('../CloudSession', () => ({
   CloudSession: class {
-    constructor(
-      readonly origin: string,
-      private identity: CloudIdentity,
-    ) {}
+    readonly origin: string;
+    private readonly identity: CloudIdentity;
+    constructor(origin: string, identity: CloudIdentity) {
+      this.origin = origin;
+      this.identity = identity;
+    }
     get(path: string) {
       return mockGet(this.identity.profileId, path, this.origin);
     }
