@@ -25,3 +25,7 @@ copy through `MessageDetail`, without nested raw-data disclosures. Native row pr
 selectable fact values and the copy button stay outside that press target. The exhaustive tool
 switch makes a newly added evidence type require a presentation decision. Authentication problems
 exclude a provider from model selection, while a model-endpoint problem excludes only that model.
+
+Expanded log evidence also shows its complete validated records in the shared bounded text reader,
+including timestamps, messages, and facts. The entry's existing copy action retains the full raw
+data; reading the records does not require another disclosure or an external paste target.

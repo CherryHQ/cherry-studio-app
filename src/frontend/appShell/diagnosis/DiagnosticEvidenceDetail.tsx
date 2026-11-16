@@ -1,6 +1,6 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Button, Section } from '@cherrystudio/ui/components';
+import { Button, MessagePart, Section } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -155,6 +155,9 @@ export function DiagnosticEvidenceDetail({
           ))}
           {isEndpointReachable ? (
             <Text className="text-xs text-muted-foreground">{t('diagnosis.endpointNote')}</Text>
+          ) : null}
+          {evidence.tool === 'logs' && !('unavailable' in evidence) && evidence.data.length > 0 ? (
+            <MessagePart.TextBody value={JSON.stringify(evidence.data, null, 2)} />
           ) : null}
           <View className="items-end">
             <Button
