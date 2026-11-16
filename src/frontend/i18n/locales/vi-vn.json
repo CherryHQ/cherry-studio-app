@@ -462,6 +462,7 @@
   "chat.errorPart.interrupted.title": "Trả lời bị gián đoạn",
   "chat.errorPart.message": "Không thể hoàn thành câu trả lời.",
   "chat.errorPart.message.auth": "Hãy kiểm tra khóa API trong cài đặt của nhà cung cấp rồi thử lại.",
+  "chat.errorPart.message.contextLength": "Hãy bắt đầu cuộc trò chuyện mới, bớt tệp đính kèm hoặc kiểm tra giới hạn ngữ cảnh của nhà cung cấp trước khi thử lại.",
   "chat.errorPart.notSaved.message": "Máy tính không thể lưu phản hồi này. Hãy giữ cuộc trò chuyện này mở để giữ lại nội dung hiện có.",
   "chat.errorPart.notSaved.title": "Chưa lưu phản hồi",
   "chat.errorPart.reason.auth": "Xác thực thất bại",

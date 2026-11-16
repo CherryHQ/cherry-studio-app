@@ -465,6 +465,7 @@
   "chat.errorPart.interrupted.title": "Reply interrupted",
   "chat.errorPart.message": "The reply could not be completed.",
   "chat.errorPart.message.auth": "Check the API key in provider settings, then try again.",
+  "chat.errorPart.message.contextLength": "Start a new conversation, remove attachments, or check the provider's context limit before retrying.",
   "chat.errorPart.notSaved.message": "The desktop could not save this response. Keep this conversation open to retain the available content.",
   "chat.errorPart.notSaved.title": "Response not saved",
   "chat.errorPart.reason.auth": "Authentication failed",

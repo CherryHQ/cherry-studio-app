@@ -465,6 +465,7 @@
   "chat.errorPart.interrupted.title": "Antwort unterbrochen",
   "chat.errorPart.message": "Die Antwort konnte nicht abgeschlossen werden.",
   "chat.errorPart.message.auth": "Prüfen Sie den API-Schlüssel in den Anbietereinstellungen und versuchen Sie es erneut.",
+  "chat.errorPart.message.contextLength": "Starte eine neue Unterhaltung, entferne Anhänge oder prüfe das Kontextlimit des Anbieters, bevor du es erneut versuchst.",
   "chat.errorPart.notSaved.message": "Der Desktop konnte diese Antwort nicht speichern. Lassen Sie diese Unterhaltung geöffnet, um den verfügbaren Inhalt zu behalten.",
   "chat.errorPart.notSaved.title": "Antwort nicht gespeichert",
   "chat.errorPart.reason.auth": "Authentifizierung fehlgeschlagen",

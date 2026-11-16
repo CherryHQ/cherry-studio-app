@@ -468,6 +468,7 @@
   "chat.errorPart.interrupted.title": "Réponse interrompue",
   "chat.errorPart.message": "La réponse n'a pas pu être complétée.",
   "chat.errorPart.message.auth": "Vérifiez la clé API dans les paramètres du fournisseur, puis réessayez.",
+  "chat.errorPart.message.contextLength": "Démarrez une nouvelle conversation, retirez des pièces jointes ou vérifiez la limite de contexte du fournisseur avant de réessayer.",
   "chat.errorPart.notSaved.message": "Le poste de bureau n’a pas pu enregistrer cette réponse. Gardez cette conversation ouverte pour conserver le contenu disponible.",
   "chat.errorPart.notSaved.title": "Réponse non enregistrée",
   "chat.errorPart.reason.auth": "Échec de l'authentification",

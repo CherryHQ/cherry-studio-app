@@ -58,6 +58,27 @@ describe('ErrorPart', () => {
     expect(props.message).toBe('chat.errorPart.message.auth');
   });
 
+  test.each([true, false])(
+    'offers context reduction before retrying an oversized input (retryable: %s)',
+    (retryable) => {
+      const renderer = render(
+        <ErrorPart
+          part={errorPart({
+            code: 'EXECUTION_FAILED',
+            message: 'Request failed',
+            reasonCode: 'context_length',
+            retryable,
+            source: { layer: 'provider', code: 'input_too_long' },
+          })}
+        />,
+      );
+
+      const props = renderer.root.findByType('MessagePartError').props;
+      expect(props.title).toBe('chat.errorPart.reason.contextLength');
+      expect(props.message).toBe('chat.errorPart.message.contextLength');
+    },
+  );
+
   test('replaces app-owned diagnostic messages with translated copy', () => {
     const renderer = render(
       <ErrorPart
