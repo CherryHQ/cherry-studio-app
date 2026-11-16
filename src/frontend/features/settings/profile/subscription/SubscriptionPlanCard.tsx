@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { CLOUD_PROVIDER_ID, type CloudModel, type CloudPlans } from '@/shared/contracts/cloud';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import {
   formatSubscriptionDate,
@@ -81,7 +82,12 @@ export function SubscriptionPlanCard({
               return (
                 <View key={id} className="min-h-11 flex-row items-center gap-3">
                   <ModelAvatar
-                    model={{ id, modelId: id, name, providerId: CLOUD_PROVIDER_ID }}
+                    model={{
+                      id: createUniqueModelId(CLOUD_PROVIDER_ID, id),
+                      modelId: id,
+                      name,
+                      providerId: CLOUD_PROVIDER_ID,
+                    }}
                     size={30}
                   />
                   <Text className="min-w-0 flex-1 text-base text-foreground">{name}</Text>

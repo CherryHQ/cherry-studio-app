@@ -48,6 +48,9 @@ jest.mock('@/frontend/components/Avatar', () => ({
 }));
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => ({ persistAvatar: jest.fn() }) }));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => ['Ada', jest.fn()] }));
+jest.mock('@/frontend/hooks/useCloud', () => ({
+  useCloud: () => ({ state: { phase: 'signed_out', plans: null } }),
+}));
 jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => '#888' }));
 jest.mock('../../components/SettingsScrollPage', () => ({
   SettingsScrollPage: ({ children }: { children: ReactNode }) => children,
