@@ -1,1 +1,6 @@
-export { MessageDetailSection, MessageDetailText, MessageDetailValue } from './MessageDetail';
+export {
+  MessageDetailSection,
+  MessageDetailText,
+  MessageDetailValue,
+  useCopyDetailText,
+} from './MessageDetail';
