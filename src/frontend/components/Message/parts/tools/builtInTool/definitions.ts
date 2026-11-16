@@ -33,6 +33,7 @@ export const builtInToolIconNames = {
   library_search_files: 'fileText',
   library_read_file: 'fileText',
   library_list_folders: 'fileText',
+  library_create_folder: 'fileEdit',
   library_move_item: 'fileEdit',
   library_rename_item: 'fileEdit',
   library_trash_item: 'fileEdit',
