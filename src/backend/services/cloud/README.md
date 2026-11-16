@@ -60,7 +60,9 @@ proposal in Cloud's device-signature protocol (application domain, platform, NUL
 That proposal was marked pending Cloud-owner confirmation in the reviewed server revision;
 matching the deployed policy and mobile minimum-version configuration requires integration
 verification. Device signatures use the published v2 canonical bytes, raw body hash and a fresh
-nonce. Inference includes an idempotency key. Redirects and cookies are disabled.
+nonce. Each inference request generates a separate 32-byte random idempotency key encoded as
+43 unpadded base64url characters; the same value is signed and sent in `Idempotency-Key`.
+`Cherry-Request-ID` remains a UUID. Redirects and cookies are disabled.
 
 Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
 accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
