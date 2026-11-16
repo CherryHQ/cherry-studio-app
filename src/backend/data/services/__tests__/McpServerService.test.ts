@@ -67,6 +67,48 @@ describe('McpServerService', () => {
     ).rejects.toBeDefined();
   });
 
+  it('rejects stale Agent configuration edits without overwriting a newer saved value', async () => {
+    const before = await service.create({
+      name: 'Versioned',
+      endpointUrl: 'https://example.com/mcp',
+    });
+    const updated = await service.update(
+      before.id,
+      { name: 'Newer' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    await expect(
+      service.update(before.id, { name: 'Stale' }, { expectedUpdatedAt: before.updatedAt }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await service.getById(before.id)).toEqual(updated);
+  });
+
+  it('rechecks the read version after waiting behind another configuration write', async () => {
+    const before = await service.create({ name: 'Queued', endpointUrl: 'https://example.com/mcp' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outer = dbService.withWriteTx(async () => gate);
+    const first = service.update(
+      before.id,
+      { name: 'First' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    const second = service.update(
+      before.id,
+      { name: 'Second' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    const rejected = expect(second).rejects.toMatchObject({ code: 'CONFLICT' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await outer;
+    const saved = await first;
+    await rejected;
+    expect(await service.getById(before.id)).toEqual(saved);
+  });
+
   it('updates and clears custom HTTP headers', async () => {
     const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Headers' });
 

@@ -60,6 +60,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -135,6 +136,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  mcpManagement?: McpManagementAccess;
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
@@ -188,6 +190,10 @@ export function createSystemCapabilitySource(
         acceptsImages,
         transcriptionReady ?? false,
       );
+      if (services.mcpManagement) {
+        for (const tool of createMcpManagementTools(services.mcpManagement))
+          catalog.set(tool.providerName, tool);
+      }
       if (sessionId && services.ssh?.isAvailable()) {
         const target = await services.ssh.resolveAgentTarget(sessionId);
         if (target) {

@@ -131,8 +131,21 @@ export class McpServerService {
     return rowToMcpServer(row);
   }
 
-  async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
+  async update(
+    id: string,
+    dto: UpdateMcpServerDto,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<McpServer> {
     const existing = await this.getById(id);
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (
+      expectedTimestamp !== undefined &&
+      (!Number.isFinite(expectedTimestamp) || Date.parse(existing.updatedAt) !== expectedTimestamp)
+    )
+      throw DataApiErrorFactory.conflict(
+        'The MCP connection changed. Read it again before editing.',
+      );
     const parsed = UpdateMcpServerSchema.parse(dto);
     if (
       existing.origin === 'builtin' &&
@@ -174,10 +187,25 @@ export class McpServerService {
       if (name !== undefined) {
         await this.assertNameAvailable(tx, name, id);
       }
-      return tx.update(mcpServerTable).set(updates).where(eq(mcpServerTable.id, id)).returning();
+      return tx
+        .update(mcpServerTable)
+        .set({ ...updates, updatedAt: monotonicUpdateTimestamp(mcpServerTable.updatedAt) })
+        .where(
+          and(
+            eq(mcpServerTable.id, id),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(mcpServerTable.updatedAt, expectedTimestamp),
+          ),
+        )
+        .returning();
     });
 
     if (!row) {
+      if (expectedTimestamp !== undefined)
+        throw DataApiErrorFactory.conflict(
+          'The MCP connection changed while saving. Read it again.',
+        );
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
