@@ -128,7 +128,7 @@ it('does not mutate bundled plugin connections or accept executable MCP configur
         changes: { isEnabled: false },
       })
     ).value,
-  ).toMatchObject({ code: 'mcp_builtin_connection' });
+  ).toMatchObject({ status: 'error', error: { code: 'mcp_builtin_connection' } });
   expect(
     (
       await f.run('mcp_create_server', {
@@ -137,7 +137,7 @@ it('does not mutate bundled plugin connections or accept executable MCP configur
         command: 'npx anything',
       })
     ).value,
-  ).toMatchObject({ code: 'mcp_invalid_input' });
+  ).toMatchObject({ status: 'error', error: { code: 'mcp_invalid_input' } });
   expect(f.servers.update).not.toHaveBeenCalled();
   expect(f.servers.create).not.toHaveBeenCalled();
 });
@@ -150,7 +150,29 @@ it('reports conflicts and uncertain outcomes without echoing secret-bearing erro
     expected_updated_at: server.updatedAt,
     changes: { name: 'Next' },
   });
-  expect(result.value).toMatchObject({ status: 'error', code: 'CONFLICT' });
+  expect(result).toMatchObject({
+    value: { status: 'error', error: { code: 'CONFLICT' } },
+    failure: { scope: 'call', error: { code: 'CONFLICT', retryable: false } },
+  });
   expect(JSON.stringify(result)).not.toContain('secret');
   expect(f.servers.update).toHaveBeenCalledTimes(1);
+});
+
+it('marks invalid configuration and uncertain persistence failures as failed calls', async () => {
+  const f = fixture();
+  expect(
+    await f.run('mcp_create_server', { name: 'Invalid', endpointUrl: 'file:///secret' }),
+  ).toMatchObject({
+    failure: { scope: 'call', error: { code: 'mcp_invalid_input' } },
+  });
+  f.servers.create.mockRejectedValueOnce(new Error('Authorization: Bearer private-key'));
+  const result = await f.run('mcp_create_server', {
+    name: 'Example',
+    endpointUrl: 'https://example.com/mcp',
+  });
+  expect(result).toMatchObject({
+    failure: { scope: 'call', error: { code: 'mcp_operation_unconfirmed', retryable: false } },
+  });
+  expect(JSON.stringify(result)).not.toContain('private-key');
+  expect(f.servers.create).toHaveBeenCalledTimes(1);
 });

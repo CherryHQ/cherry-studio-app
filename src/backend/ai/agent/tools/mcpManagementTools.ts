@@ -8,7 +8,7 @@ import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@/shared/data/api/
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
-import type { RuntimeTool, RuntimeToolResult } from '../runtime';
+import { createCallErrorToolResult, type RuntimeTool, type RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export type McpManagementAccess = {
@@ -64,7 +64,7 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
     approval: 'auto' | 'ask',
     description: string,
     schema: z.ZodType<T>,
-    execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult['value']>,
+    execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult>,
   ): RuntimeTool {
     return {
       ref: { source: 'builtin', capabilityId: name },
@@ -76,30 +76,17 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
       inputSchema: toRuntimeInputSchema(schema),
       async execute({ input, signal }) {
         const parsed = schema.safeParse(input);
-        if (!parsed.success)
-          return {
-            value: {
-              status: 'error',
-              code: 'mcp_invalid_input',
-              message: z.prettifyError(parsed.error),
-            },
-            artifacts: [],
-          };
+        if (!parsed.success) return failure('mcp_invalid_input', z.prettifyError(parsed.error));
         signal.throwIfAborted();
         try {
-          return { value: await execute(parsed.data, signal), artifacts: [] };
+          return await execute(parsed.data, signal);
         } catch (error) {
           signal.throwIfAborted();
           // Provider failures and configuration values may contain credentials; do not echo them.
-          return {
-            value: {
-              status: 'error',
-              code: error instanceof DataApiError ? error.code : 'mcp_operation_unconfirmed',
-              message:
-                'The operation could not be confirmed. Read mcp_list_servers/mcp_get_server before retrying a write. On conflict, read the latest record and reconcile. Bundled plugin authorization must be managed in Plugins.',
-            },
-            artifacts: [],
-          };
+          return failure(
+            error instanceof DataApiError ? error.code : 'mcp_operation_unconfirmed',
+            'The operation could not be confirmed. Read mcp_list_servers/mcp_get_server before retrying a write. On conflict, read the latest record and reconcile. Bundled plugin authorization must be managed in Plugins.',
+          );
         }
       },
     };
@@ -114,9 +101,12 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
         const { items } = await access.servers.list();
         const start = (page - 1) * limit;
         return {
-          servers: items.slice(start, start + limit).map(serverRecord),
-          total: items.length,
-          nextPage: start + limit < items.length ? page + 1 : null,
+          value: {
+            servers: items.slice(start, start + limit).map(serverRecord),
+            total: items.length,
+            nextPage: start + limit < items.length ? page + 1 : null,
+          },
+          artifacts: [],
         };
       },
     ),
@@ -125,7 +115,10 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
       'auto',
       'Read one saved MCP connection and its updatedAt before editing. Returns endpoint origin and header names, never full credential-bearing URLs, header values or OAuth references. Omitted fields in an update are preserved; do not reconstruct secrets from this metadata.',
       getSchema,
-      async ({ server_id }) => ({ server: serverRecord(await access.servers.getById(server_id)) }),
+      async ({ server_id }) => ({
+        value: { server: serverRecord(await access.servers.getById(server_id)) },
+        artifacts: [],
+      }),
     ),
     tool(
       'mcp_create_server',
@@ -135,7 +128,10 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
       async (input) => {
         const server = await access.mutations.createServer(input);
         publishDataApiChanges(['/mcp-servers', `/mcp-servers/${server.id}`]);
-        return { status: 'created', server: serverRecord(server), connectionVerified: false };
+        return {
+          value: { status: 'created', server: serverRecord(server), connectionVerified: false },
+          artifacts: [],
+        };
       },
     ),
     tool(
@@ -146,18 +142,21 @@ export function createMcpManagementTools(access: McpManagementAccess): RuntimeTo
       async ({ server_id, expected_updated_at, changes }, signal) => {
         const current = await access.servers.getById(server_id);
         if (current.origin === 'builtin')
-          return {
-            status: 'error',
-            code: 'mcp_builtin_connection',
-            message: 'Manage bundled plugin connections in Plugins.',
-          };
+          return failure('mcp_builtin_connection', 'Manage bundled plugin connections in Plugins.');
         signal.throwIfAborted();
         const { server } = await access.mutations.updateServer(server_id, changes, {
           expectedUpdatedAt: expected_updated_at,
         });
         publishDataApiChanges(['/mcp-servers', `/mcp-servers/${server.id}`]);
-        return { status: 'updated', server: serverRecord(server), connectionVerified: false };
+        return {
+          value: { status: 'updated', server: serverRecord(server), connectionVerified: false },
+          artifacts: [],
+        };
       },
     ),
   ];
+}
+
+function failure(code: string, message: string): RuntimeToolResult {
+  return createCallErrorToolResult({ code, message, retryable: false, origin: 'tool' });
 }

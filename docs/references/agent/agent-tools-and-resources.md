@@ -991,6 +991,9 @@ OAuth grants, configure bundled plugin authorizations, or bind a connection to a
 Receipts expose endpoint origin, header names, enablement and version metadata, never full URLs,
 header values or OAuth references. Saving does not verify connectivity, authentication or execution.
 Unknown write outcomes direct the model to inspect saved state before another write.
+Validation, unsupported configuration and persistence failures use the Runtime's call-failure
+envelope, including sanitized error diagnostics. Pi and Code Mode therefore retain the failed
+outcome instead of treating an error-valued reply as a successful invocation.
 
 ## Agent Management
 
