@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 export const CLOUD_PROVIDER_ID = 'cherryai-subscription';
-export const CLOUD_PROVIDER_NAME = 'Cherry Studio Plan';
+export const CLOUD_PROVIDER_NAME = 'CherryAI';
 export type CloudModelUse = 'agent' | 'general';
 
 const UnitsSchema = z.number().int().nonnegative();
