@@ -6,7 +6,7 @@ not import the enterprise implementation or read Accounts Portal's private stora
 `Backend.cloud` exposes only status, subscription data, model metadata and refresh methods.
 Tokens and device secrets never reach the frontend or database. Confirmed community subscribers
 see their plan and remaining quota in the sidebar badge and use their models through a managed
-`Cherry Studio Plan` provider.
+`CherryAI` provider.
 
 ## Configuration
 
@@ -95,7 +95,7 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 - Rolling, calendar-day and paid-subscription-month windows retain their server timestamps.
   Money quotas use 1,000,000 units per currency unit. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
-- `cherryai-subscription` is the reserved, managed `Cherry Studio Plan` provider. Provider queries
+- `cherryai-subscription` is the reserved, managed `CherryAI` provider. Provider queries
   pin it first, including cursor pagination, so settings and model pickers share the same priority
   without changing other providers' saved order keys. Ordinary provider/model mutation services
   reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
