@@ -2192,51 +2192,89 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('drops earlier sibling observation when another lane of that Session is invalid', async () => {
-    const state = fixture();
-    const first = await state.reserve('running');
-    const next = await state.store.reserveSubmission({
-      sessionId: state.sessionId,
-      userMessageId: uuid(),
-      assistantMessageId: uuid(),
-      userParts: [{ id: 'next', type: 'text', text: 'Next', state: 'done' }],
-      modelId: inferenceSnapshot.model.uniqueModelId,
-      inferenceSnapshot,
-    });
-    const lane = runtimeLane(state.sessionId, 1);
-    state.copies.set(laneKey(lane), {
-      revision: 0,
-      turns: [
-        {
-          ...first,
-          identity: { ...lane, turnId: next.turnId, requestId: next.turnId },
-          userMessageId: next.userMessage.id,
-          assistantMessageId: next.assistantMessage.id,
-          status: 'queued',
-        },
-      ],
-    });
-    const observe = state.conversations.observe;
-    jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
-      if (lane.slot === 1) throw new ZodError([]);
-      return observe(lane, listener);
-    });
-    try {
-      await state.host.initialize();
-      expect(state.listeners.has(state.sessionId)).toBe(false);
-      expect(state.host.pendingTurns(state.sessionId)).toEqual([]);
-      expect(state.conversations.abort).not.toHaveBeenCalled();
-      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
-      expect(
-        (await state.store.getMessage(state.sessionId, first.assistantMessageId))?.status,
-      ).toBe('pending');
-      expect(
-        (await state.store.getMessage(state.sessionId, next.assistantMessage.id))?.status,
-      ).toBe('pending');
-    } finally {
-      await state.host.close();
-    }
-  });
+  test.each(['isolating', 'isolated', 'deleted'] as const)(
+    'drops sibling observation and prevents delayed background presentation while %s',
+    async (stage) => {
+      const state = fixture();
+      const first = await state.reserve('running');
+      const next = await state.store.reserveSubmission({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'next', type: 'text', text: 'Next', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      const lane = runtimeLane(state.sessionId, 1);
+      state.copies.set(laneKey(lane), {
+        revision: 0,
+        turns: [
+          {
+            ...first,
+            identity: { ...lane, turnId: next.turnId, requestId: next.turnId },
+            userMessageId: next.userMessage.id,
+            assistantMessageId: next.assistantMessage.id,
+            status: 'queued',
+          },
+        ],
+      });
+      let finishLookup!: () => void;
+      const lookup = new Promise<void>((resolve) => {
+        finishLookup = resolve;
+      });
+      let lookupStarted!: () => void;
+      const lookupEntered = new Promise<void>((resolve) => {
+        lookupStarted = resolve;
+      });
+      const getSession = state.store.getSession.bind(state.store);
+      jest.spyOn(state.store, 'getSession').mockImplementationOnce(async (sessionId) => {
+        // Preserve the read result even if the Session is deleted before presentation catches up.
+        const session = await getSession(sessionId);
+        lookupStarted();
+        await lookup;
+        return session;
+      });
+      const observe = state.conversations.observe;
+      jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
+        if (lane.slot === 1) {
+          await lookupEntered;
+          throw new ZodError([]);
+        }
+        const observation = await observe(lane, listener);
+        return {
+          ...observation,
+          unsubscribe: async () => {
+            if (stage === 'isolating') {
+              finishLookup();
+              await settle();
+            }
+            await observation.unsubscribe();
+          },
+        };
+      });
+      try {
+        await state.host.initialize();
+        expect(state.listeners.has(state.sessionId)).toBe(false);
+        expect(state.host.pendingTurns(state.sessionId)).toEqual([]);
+        expect(state.conversations.abort).not.toHaveBeenCalled();
+        expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+        expect(
+          (await state.store.getMessage(state.sessionId, first.assistantMessageId))?.status,
+        ).toBe('pending');
+        expect(
+          (await state.store.getMessage(state.sessionId, next.assistantMessage.id))?.status,
+        ).toBe('pending');
+        if (stage === 'deleted') await state.host.deleteSession({ sessionId: state.sessionId });
+        finishLookup();
+        await settle();
+        expect(state.background.startTurn).not.toHaveBeenCalled();
+        expect(state.host.isReady).toBe(true);
+      } finally {
+        finishLookup();
+        await state.host.close();
+      }
+    },
+  );
 
   test('keeps non-validation observation failures fatal', async () => {
     const state = fixture();

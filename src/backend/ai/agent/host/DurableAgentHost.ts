@@ -2495,8 +2495,11 @@ export class DurableAgentHost implements AgentProtocol {
             const agent =
               prepared?.plan.agent ??
               (session ? await this.ports.agents.getAgent(session.agentId) : null);
+            // The awaited lookups may outlive isolation or removal of this observed copy.
             if (
               !agent ||
+              this.recoveryFailures.has(sessionId) ||
+              this.live.get(laneKey(lane)) !== state ||
               this.liveStates(sessionId).some((candidate) => candidate.background) ||
               state.active?.identity.requestId !== turn.identity.requestId
             )
