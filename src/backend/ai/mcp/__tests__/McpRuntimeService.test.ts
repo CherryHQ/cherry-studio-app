@@ -1,5 +1,6 @@
 import type { ListToolsResult } from '@modelcontextprotocol/client';
 import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { fetch as expoFetch } from 'expo/fetch';
 import { AppState } from 'react-native';
 
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
@@ -10,6 +11,11 @@ import type { McpPromptEntry, McpProtocolInfo } from '@/shared/contracts/mcp';
 import { McpLegacyFallbackError } from '@/shared/contracts/mcp';
 import { PluginError } from '@/shared/contracts/plugins';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import {
+  readMcpSaveStep,
+  readMcpFailureFacts,
+  withMcpOperationStep,
+} from '@/shared/data/api/mcpFailureFacts';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
@@ -31,23 +37,22 @@ jest.mock('@/backend/services/builtInMcp', () => ({
     mockSdkInitContract({ pluginId, authorizationId, initializationOptions: { signal } }),
 }));
 
+jest.mock('@modelcontextprotocol/client', () => {
+  // The parser subclasses TransformStream at module evaluation time.
+  Object.assign(globalThis, jest.requireActual('node:stream/web'));
+  return jest.requireActual('@modelcontextprotocol/client');
+});
+
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 jest.mock('../mcpProtocolClient', () => ({
   classifyMcpCallRejection: jest.requireActual('../mcpProtocolClient').classifyMcpCallRejection,
-  createRemoteMcpClient: ({
-    config,
-    elicit,
-    signal,
-    shouldUseLegacyProtocol,
-    onLegacyPreferenceChanged,
-  }: {
-    shouldUseLegacyProtocol?: boolean;
-    onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
-    config: { endpointUrl: string; headers?: Record<string, string> };
-    elicit?: MockElicit;
-    signal: AbortSignal;
-  }) => {
+  createRemoteMcpClient: (
+    input: Parameters<(typeof import('../mcpProtocolClient'))['createRemoteMcpClient']>[0],
+  ) => {
+    if (mockRealProtocol)
+      return jest.requireActual('../mcpProtocolClient').createRemoteMcpClient(input);
+    const { config, elicit, signal, shouldUseLegacyProtocol, onLegacyPreferenceChanged } = input;
     mockElicit = elicit;
     mockProtocolControls.push({ shouldUseLegacyProtocol, onLegacyPreferenceChanged });
     return mockSdkInitContract({
@@ -56,6 +61,8 @@ jest.mock('../mcpProtocolClient', () => ({
     });
   },
 }));
+
+let mockRealProtocol = false;
 
 const mockProtocolControls: {
   shouldUseLegacyProtocol?: boolean;
@@ -266,6 +273,245 @@ afterEach(() => {
 });
 
 describe('getServerInfo', () => {
+  it.each(['socket', 'silence'] as const)(
+    'classifies real SDK SSE %s through the runtime without losing the fallback budget',
+    async (outcome) => {
+      jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+      mockRealProtocol = true;
+      const methods: string[] = [];
+      const { service } = makeService([]);
+      try {
+        jest.mocked(expoFetch).mockImplementation((async (_url, init) => {
+          if (init?.method === 'DELETE') return new Response(null, { status: 200 });
+          const method = JSON.parse(String(init?.body)).method;
+          methods.push(method);
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              if (outcome === 'socket')
+                setTimeout(
+                  () => controller.error(new TypeError('private socket')),
+                  method === 'server/discover' ? 14_990 : 10_000,
+                );
+            },
+          });
+          const response = new Response(null, { headers: { 'content-type': 'text/event-stream' } });
+          Object.defineProperty(response, 'body', { value: stream, configurable: true });
+          return response;
+        }) as typeof expoFetch);
+        const result = service
+          .getServerInfo({ endpointUrl: 'https://example.com/mcp' })
+          .catch((error: unknown) => error);
+        await flush();
+        await jest.advanceTimersByTimeAsync(outcome === 'socket' ? 25_000 : 15_000);
+        const error = await result;
+        if (outcome === 'socket') {
+          expect(methods).toEqual(['server/discover', 'initialize']);
+          expect(error).toBeInstanceOf(McpLegacyFallbackError);
+          expect(readMcpFailureFacts(error)).toEqual({
+            stage: 'initialize',
+            kind: 'refused-or-unreachable',
+            fallback: {
+              negotiation: { stage: 'negotiation', kind: 'refused-or-unreachable' },
+              legacy: { stage: 'initialize', kind: 'refused-or-unreachable' },
+            },
+          });
+        } else {
+          expect(methods).toEqual(['server/discover']);
+          expect(readMcpFailureFacts(error)).toEqual({
+            stage: 'negotiation',
+            kind: 'timeout',
+            timeoutMs: 15_000,
+          });
+        }
+      } finally {
+        await service._doStop();
+        mockRealProtocol = false;
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  it('reconnects on a later summary refresh after failed discovery and clears the error', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    const server = makeServer();
+    const { service } = makeService([server]);
+    mockCreateMCPClient
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'));
+    try {
+      await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+        [server.id]: { state: 'error' },
+      });
+      jest.advanceTimersByTime(60_000);
+      mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['recovered'])));
+      await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+        [server.id]: { state: 'connected', toolCount: 1 },
+      });
+      const summary = (await service.getRuntimeSummaries([server]))[server.id];
+      expect(summary?.lastError).toBeUndefined();
+      expect(summary?.connectionFailure).toBeUndefined();
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(3);
+    } finally {
+      await service._doStop();
+      jest.useRealTimers();
+    }
+  });
+
+  it('joins an in-flight tools discovery before returning a summary', async () => {
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const client = makeClient([]);
+    const listing = deferred<ListToolsResult>();
+    client.listTools.mockReturnValue(listing.promise);
+    mockCreateMCPClient.mockResolvedValue(client);
+    try {
+      const tools = service.listTools(server.id);
+      await flush();
+      const summarized = jest.fn();
+      const summaries = service.getRuntimeSummaries([server]).then((result) => {
+        summarized(result);
+        return result;
+      });
+      await flush();
+      expect(summarized).not.toHaveBeenCalled();
+      listing.resolve({ tools: makeRawTools(['shared']) });
+      await expect(tools).resolves.toHaveLength(1);
+      await expect(summaries).resolves.toMatchObject({
+        [server.id]: { state: 'connected', toolCount: 1 },
+      });
+      expect(client.listTools).toHaveBeenCalledTimes(1);
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it.each(['primitive database failure', Object.freeze(new Error('frozen database failure'))])(
+    'keeps an OAuth persistence rejection operation-scoped with its original cause: %p',
+    async (error) => {
+      jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockResolvedValue({
+        input: { name: 'OAuth', endpointUrl: 'https://example.com/mcp' },
+        authorizationId: 'new-grant',
+        clientId: 'client',
+        previous: undefined,
+      });
+      jest.spyOn(McpOAuthRuntime.prototype, 'remove').mockResolvedValue();
+      const { service } = makeService([]);
+      jest.spyOn(service, 'getServerInfo').mockResolvedValue({ name: 'server', version: '1' });
+      jest.spyOn(mcpServerService, 'saveOAuthConnection').mockRejectedValue(error);
+      try {
+        const failure = await service
+          .completeOAuth('attempt', 'callback')
+          .catch((value: unknown) => value);
+        expect(readMcpSaveStep(failure)).toBe('persistence');
+        if (typeof error === 'object') expect(failure).toBe(error);
+        else expect(failure).toMatchObject({ cause: error });
+      } finally {
+        await service._doStop();
+      }
+    },
+  );
+
+  it('does not inherit a reused OAuth error step from an earlier operation', async () => {
+    const error = Object.freeze(new Error('reused'));
+    jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockResolvedValue({
+      input: { name: 'OAuth', endpointUrl: 'https://example.com/mcp' },
+      authorizationId: 'new-grant',
+      clientId: 'client',
+      previous: undefined,
+    });
+    jest.spyOn(McpOAuthRuntime.prototype, 'remove').mockResolvedValue();
+    const { service } = makeService([]);
+    const probe = jest
+      .spyOn(service, 'getServerInfo')
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue({ name: 'server', version: '1' });
+    const save = jest.spyOn(mcpServerService, 'saveOAuthConnection').mockRejectedValue(error);
+    try {
+      const first = await service
+        .completeOAuth('first', 'callback')
+        .catch((value: unknown) => value);
+      expect(readMcpSaveStep(first)).toBe('connection');
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(save).not.toHaveBeenCalled();
+      const second = await service
+        .completeOAuth('second', 'callback')
+        .catch((value: unknown) => value);
+      expect(readMcpSaveStep(second)).toBe('persistence');
+      expect(first).toBe(error);
+      expect(second).toMatchObject({ cause: error });
+      expect(first).not.toBe(second);
+      expect(readMcpSaveStep(first)).toBe('connection');
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('retains the grant persistence step carried by an OAuth completion rejection', async () => {
+    const error = Object.freeze(new Error('grant storage failure'));
+    jest
+      .spyOn(McpOAuthRuntime.prototype, 'complete')
+      .mockImplementation(async (_attempt, _callback, operation) => {
+        throw withMcpOperationStep(error, 'persistence', operation);
+      });
+    const { service } = makeService([]);
+    try {
+      await expect(service.completeOAuth('attempt', 'callback')).rejects.toBe(error);
+      expect(readMcpSaveStep(error)).toBe('persistence');
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('attributes a reused OAuth completion rejection to the current authorization operation', async () => {
+    const error = Object.freeze(new Error('reused grant error'));
+    withMcpOperationStep(error, 'persistence', {});
+    jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockRejectedValue(error);
+    const { service } = makeService([]);
+    try {
+      const failure = await service
+        .completeOAuth('attempt', 'callback')
+        .catch((value: unknown) => value);
+      expect(readMcpSaveStep(failure)).toBe('authorization');
+      expect(failure).toHaveProperty('cause', error);
+      expect(readMcpSaveStep(error)).toBe('persistence');
+    } finally {
+      await service._doStop();
+    }
+  });
+
+  it('attributes a shared OAuth completion failure independently to each waiting operation', async () => {
+    const error = Object.freeze(new Error('shared authorization failure'));
+    let reject!: (error: unknown) => void;
+    const pending = new Promise<never>((_resolve, rejectPromise) => {
+      reject = rejectPromise;
+    });
+    const complete = jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockReturnValue(pending);
+    const { service } = makeService([]);
+    const firstOperation = {};
+    const secondOperation = {};
+    try {
+      const first = service
+        .completeOAuth('attempt', 'callback', firstOperation)
+        .catch((failure: unknown) => failure);
+      const second = service
+        .completeOAuth('attempt', 'callback', secondOperation)
+        .catch((failure: unknown) => failure);
+      reject(error);
+      const [firstFailure, secondFailure] = await Promise.all([first, second]);
+      expect(complete).toHaveBeenCalledTimes(1);
+      expect(readMcpSaveStep(firstFailure, firstOperation)).toBe('authorization');
+      expect(readMcpSaveStep(firstFailure, secondOperation)).toBeUndefined();
+      expect(readMcpSaveStep(secondFailure, secondOperation)).toBe('authorization');
+      expect(readMcpSaveStep(secondFailure, firstOperation)).toBeUndefined();
+      expect(firstFailure).toBe(error);
+      expect(secondFailure).toHaveProperty('cause', error);
+    } finally {
+      await service._doStop();
+    }
+  });
+
   it('cancels temporary inspection and rejects new work after service stop', async () => {
     mockCreateMCPClient.mockReturnValue(new Promise(() => {}));
     const { service } = makeService([]);
@@ -304,6 +550,33 @@ describe('getServerInfo', () => {
     }
     expect(client.close).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['authorization', 'connection', 'persistence'] as const)(
+    'marks OAuth failures at the actual %s boundary, preserving frozen errors and grant cleanup',
+    async (step) => {
+      const error = Object.freeze(new Error('ordinary failure'));
+      const complete = jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockResolvedValue({
+        input: { name: 'OAuth', endpointUrl: 'https://example.com/mcp' },
+        authorizationId: 'new-grant',
+        clientId: 'client',
+        previous: undefined,
+      });
+      const remove = jest.spyOn(McpOAuthRuntime.prototype, 'remove').mockResolvedValue();
+      const { service } = makeService([]);
+      const probe = jest
+        .spyOn(service, 'getServerInfo')
+        .mockResolvedValue({ name: 'server', version: '1' });
+      const save = jest.spyOn(mcpServerService, 'saveOAuthConnection');
+      if (step === 'authorization') complete.mockRejectedValue(error);
+      if (step === 'connection') probe.mockRejectedValue(error);
+      if (step === 'persistence') save.mockRejectedValue(error);
+      await expect(service.completeOAuth('attempt', 'callback')).rejects.toBe(error);
+      expect(readMcpSaveStep(error)).toBe(step);
+      if (step !== 'authorization') expect(remove).toHaveBeenCalledWith('new-grant');
+      if (step !== 'persistence') expect(save).not.toHaveBeenCalled();
+      await service._doStop();
+    },
+  );
 
   it('accounts for OAuth completion through inspection and joins cleanup on stop', async () => {
     jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockResolvedValue({
@@ -427,7 +700,8 @@ describe('listTools', () => {
   });
 
   it('propagates partial plugin discovery failures alongside the successfully loaded tools', async () => {
-    const warning = 'Feishu document tools could not be loaded (network).';
+    const warning =
+      'Skipped method sk-mcp-sentinel-A9q7x2 Bearer secret https://example.com/#private';
     const client = {
       ...makeClient(makeRawTools(['calendar_get_primary'])),
       discoveryWarnings: [warning],
@@ -454,8 +728,23 @@ describe('listTools', () => {
     ]);
     expect(onUnavailable).toHaveBeenCalledWith(warning);
     await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
-      [server.id]: { state: 'error', lastError: warning, toolCount: 1 },
+      [server.id]: {
+        state: 'error',
+        lastError: 'MCP server connected, but part of the catalog was skipped.',
+        toolCount: 1,
+      },
     });
+    expect(JSON.stringify(await service.getRuntimeSummaries([server]))).not.toMatch(
+      /sk-mcp|sentinel|A9q7x2|Bearer|example|private/,
+    );
+    client.discoveryWarnings = [];
+    await service.listTools(server.id);
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: { state: 'connected' },
+    });
+    expect((await service.getRuntimeSummaries([server]))[server.id]).not.toHaveProperty(
+      'lastError',
+    );
   });
   it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
     const { traces, records } = createTraceRecorder();
@@ -642,7 +931,7 @@ describe('Runtime tool adapter', () => {
     expect(client.listTools).toHaveBeenCalledTimes(2);
   });
 
-  it('fails closed when pagination repeats a raw tool identity', async () => {
+  it('recovers from duplicate tool identities through summary refresh alone', async () => {
     const client = makeClient(makeRawTools([]));
     client.listTools.mockResolvedValue({
       tools: [
@@ -658,6 +947,72 @@ describe('Runtime tool adapter', () => {
       code: 'mcp_tool_unavailable',
       message: 'The MCP tool catalog contains a duplicate tool identity.',
     });
+    const runtimeState = (
+      service as unknown as {
+        runtimeStates: Map<
+          string,
+          { discoveryFailure?: { attempts: number; nextAttemptAt: number } }
+        >;
+      }
+    ).runtimeStates.get(server.id)!;
+    expect(runtimeState.discoveryFailure).toBeUndefined();
+    expect(runtimeState.discoveryFailure?.nextAttemptAt).toBeUndefined();
+    const calls = client.listTools.mock.calls.length;
+    await expect(service.listExecutableToolDescriptors(server.id)).rejects.toMatchObject({
+      code: 'mcp_tool_unavailable',
+    });
+    expect(client.listTools.mock.calls.length).toBe(calls + 1);
+    expect(runtimeState.discoveryFailure).toBeUndefined();
+
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: {
+        state: 'error',
+        connectionFailure: { stage: 'tools-list', kind: 'catalog-integrity' },
+      },
+    });
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    client.listTools.mockResolvedValue({ tools: makeRawTools(['search']) });
+    // Summary refresh alone must recover a repaired catalog, even without transport backoff.
+    const summary = (await service.getRuntimeSummaries([server]))[server.id];
+    expect(summary?.state).toBe('connected');
+    expect(summary).not.toHaveProperty('connectionFailure');
+    expect(summary).not.toHaveProperty('lastError');
+  });
+
+  it('records a repeated page cursor as a catalog-integrity failure without reconnecting', async () => {
+    const client = makeClient(makeRawTools([]));
+    client.listTools.mockResolvedValue({ tools: [], nextCursor: 'private-cursor' });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await expect(service.listTools(server.id)).rejects.toMatchObject({
+      code: 'mcp_tool_unavailable',
+    });
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: {
+        state: 'error',
+        connectionFailure: { stage: 'tools-list', kind: 'catalog-integrity' },
+      },
+    });
+    // The explicit summary refresh immediately repeats both pages on the existing client.
+    expect(client.listTools).toHaveBeenCalledTimes(4);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    const runtimeState = (
+      service as unknown as {
+        runtimeStates: Map<
+          string,
+          { discoveryFailure?: { attempts: number; nextAttemptAt: number } }
+        >;
+      }
+    ).runtimeStates.get(server.id)!;
+    const priorFailure = { attempts: 2, nextAttemptAt: Date.now() - 1 };
+    runtimeState.discoveryFailure = priorFailure;
+    await expect(service.listTools(server.id)).rejects.toMatchObject({
+      code: 'mcp_tool_unavailable',
+    });
+    expect(runtimeState.discoveryFailure).toBe(priorFailure);
+    expect(runtimeState.discoveryFailure.nextAttemptAt).toBe(priorFailure.nextAttemptAt);
+    expect(runtimeState.discoveryFailure.attempts).toBe(2);
   });
 
   it('rechecks stored policy and invokes the exact raw tool with the supplied signal', async () => {
@@ -752,9 +1107,87 @@ describe('Runtime tool adapter', () => {
 });
 
 describe('runtime lifecycle', () => {
+  it('does not attach connection failure facts to temporary cancellation or shutdown', async () => {
+    const cancelled = new Error('cancelled');
+    cancelled.name = 'AbortError';
+    mockCreateMCPClient.mockRejectedValueOnce(cancelled);
+    const { service } = makeService([]);
+    await expect(service.getServerInfo({ endpointUrl: 'https://example.com/mcp' })).rejects.toBe(
+      cancelled,
+    );
+    expect(cancelled).not.toHaveProperty('connectionFailure');
+    mockCreateMCPClient.mockImplementation(() => new Promise(() => undefined));
+    const pending = service.getServerInfo({ endpointUrl: 'https://example.com/mcp' });
+    const error = pending.catch((failure: unknown) => failure);
+    await flush();
+    await service._doStop();
+    expect(await error).not.toHaveProperty('connectionFailure');
+  });
+
+  it('does not attach failure facts or record errors when discovery is evicted', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.listTools.mockImplementationOnce((args?: { options?: { signal?: AbortSignal } }) =>
+      abortable(new Promise(() => undefined), args?.options?.signal, 'Request was aborted'),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const pending = service.listTools(server.id).catch((failure: unknown) => failure);
+    await flush();
+    service.invalidateServer(server.id);
+    expect(await pending).not.toHaveProperty('connectionFailure');
+    expect((await service.getRuntimeSummaries([server]))[server.id]).not.toHaveProperty(
+      'connectionFailure',
+    );
+    await service._doStop();
+  });
+
+  it('publishes safe temporary facts while preserving the error type and message', async () => {
+    const token = 'sk-endpoint-sentinel-K8p3';
+    const error = Object.assign(new TypeError(`fetch failed ${token}`), { status: 401 });
+    mockCreateMCPClient.mockRejectedValue(error);
+    const { service } = makeService([]);
+    const failure = await service
+      .getServerInfo({
+        endpointUrl: `https://example.com/mcp?token=${token}`,
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .catch((rejection: unknown) => rejection);
+    expect(failure).toBeInstanceOf(TypeError);
+    expect(failure).toMatchObject({
+      message: error.message,
+      connectionFailure: { stage: 'initialize', kind: 'auth-required', httpStatus: 401 },
+    });
+    expect(error).not.toHaveProperty('connectionFailure');
+    expect(Object.keys(failure as object)).not.toContain('connectionFailure');
+    expect(JSON.stringify(readMcpFailureFacts(failure))).not.toMatch(/sk-endpoint|sentinel|K8p3/);
+    await service._doStop();
+  });
+
+  it('clears failure facts when a successful catalog replaces them', async () => {
+    mockCreateMCPClient.mockRejectedValue(Object.assign(new Error('secret'), { status: 401 }));
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: {
+        connectionFailure: { stage: 'initialize', kind: 'auth-required', httpStatus: 401 },
+      },
+    });
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    await service.listTools(server.id);
+    const summaries = await service.getRuntimeSummaries([server]);
+    expect(summaries[server.id]?.state).toBe('connected');
+    expect(summaries[server.id]).not.toHaveProperty('connectionFailure');
+    expect(summaries[server.id]).not.toHaveProperty('lastError');
+    await service._doStop();
+  });
+
   it('preserves the safe combined fallback message in runtime summaries', async () => {
     mockCreateMCPClient.mockRejectedValue(
-      new McpLegacyFallbackError(new Error('probe'), new Error('legacy')),
+      new McpLegacyFallbackError(
+        Object.assign(new Error('probe'), { status: 500 }),
+        new ProtocolError(-32603, 'legacy'),
+      ),
     );
     const server = makeServer();
     const { service } = makeService([server]);
@@ -762,7 +1195,17 @@ describe('runtime lifecycle', () => {
       await expect(service.getRuntimeSummaries([server])).resolves.toEqual({
         [server.id]: {
           state: 'error',
-          lastError: 'MCP protocol negotiation and the legacy connection attempt both failed.',
+          lastError:
+            'MCP connection failed: negotiation attempt: HTTP 500 during negotiation; legacy attempt: protocol error -32603 during initialize.',
+          connectionFailure: {
+            stage: 'initialize',
+            kind: 'protocol-handshake',
+            protocolCode: -32603,
+            fallback: {
+              negotiation: { stage: 'negotiation', kind: 'http-status', httpStatus: 500 },
+              legacy: { stage: 'initialize', kind: 'protocol-handshake', protocolCode: -32603 },
+            },
+          },
         },
       });
       expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
@@ -799,7 +1242,16 @@ describe('runtime lifecycle', () => {
     const server = makeServer();
     const { service } = makeService([server]);
     try {
-      await expect(service.listTools(server.id)).rejects.toBe(failure);
+      const rejection = await service.listTools(server.id).catch((error: unknown) => error);
+      expect(rejection).toBeInstanceOf(McpLegacyFallbackError);
+      expect(rejection).toMatchObject({
+        code: failure.code,
+        message: failure.message,
+        cause: failure.cause,
+      });
+      expect((rejection as McpLegacyFallbackError).negotiationError).toBe(failure.negotiationError);
+      expect((rejection as McpLegacyFallbackError).cause).toBe(failure.cause);
+      expect(failure).not.toHaveProperty('connectionFailure');
       expect(mockProtocolControls).toHaveLength(2);
       expect(mockProtocolControls[0]!.shouldUseLegacyProtocol).toBe(false);
       expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(false);
@@ -849,7 +1301,16 @@ describe('runtime lifecycle', () => {
     const server = makeServer();
     const { service } = makeService([server]);
     try {
-      await expect(service.listTools(server.id)).rejects.toBe(failure);
+      const rejection = await service.listTools(server.id).catch((error: unknown) => error);
+      expect(rejection).toBeInstanceOf(McpLegacyFallbackError);
+      expect(rejection).toMatchObject({
+        code: failure.code,
+        message: failure.message,
+        cause: failure.cause,
+      });
+      expect((rejection as McpLegacyFallbackError).negotiationError).toBe(failure.negotiationError);
+      expect((rejection as McpLegacyFallbackError).cause).toBe(failure.cause);
+      expect(failure).not.toHaveProperty('connectionFailure');
       expect(mockProtocolControls[1]!.shouldUseLegacyProtocol).toBe(true);
       await expect(service.listTools(server.id)).resolves.toEqual([]);
       expect(mockProtocolControls).toHaveLength(3);
@@ -886,7 +1347,11 @@ describe('runtime lifecycle', () => {
 
     await expect(service.listTools(server.id)).rejects.toThrow('401 unauthorized');
     await expect(service.getRuntimeSummaries([server])).resolves.toEqual({
-      [server.id]: { lastError: 'MCP connection failed.', state: 'error' },
+      [server.id]: {
+        lastError: 'MCP connection failed: unknown failure during tools-list.',
+        connectionFailure: { stage: 'tools-list', kind: 'unknown' },
+        state: 'error',
+      },
     });
   });
 
@@ -1589,13 +2054,17 @@ describe('catalog reuse', () => {
       expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
       expect(onUnavailable).toHaveBeenCalledTimes(2);
 
-      // The settings list is not subject to the backoff; its failure extends it.
+      // An explicit settings refresh retries immediately; only the send path respects backoff.
       const summaries = service.getRuntimeSummaries([server]);
       await flush();
       expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
       jest.advanceTimersByTime(15_000);
       await expect(summaries).resolves.toMatchObject({
-        [server.id]: { state: 'error', lastError: 'MCP request timed out.' },
+        [server.id]: {
+          state: 'error',
+          lastError: 'MCP connection failed: timed out after 15000ms during tools-list.',
+          connectionFailure: { stage: 'tools-list', kind: 'timeout', timeoutMs: 15000 },
+        },
       });
 
       jest.advanceTimersByTime(60_000);
@@ -1621,10 +2090,12 @@ describe('catalog reuse', () => {
     const turn = new AbortController();
 
     const cancelled = service.listExecutableToolDescriptors(server.id, undefined, turn.signal);
+    const facts = cancelled.catch((error: unknown) => error);
     const assertion = expect(cancelled).rejects.toMatchObject({ code: 'mcp_tool_cancelled' });
     await flush();
     turn.abort();
     await assertion;
+    expect(await facts).not.toHaveProperty('connectionFailure');
 
     // The pooled client survives the cancelled request and the next turn lists at once.
     await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);

@@ -11,7 +11,7 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
 } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
@@ -208,9 +208,14 @@ export class McpServerService {
           current.origin !== 'remote' ||
           timestampToISO(current.updatedAt) !== previous.updatedAt
         ) {
-          throw DataApiErrorFactory.conflict(
+          throw DataApiErrorFactory.create(
+            ErrorCode.CONFLICT,
             'The MCP connection changed during authorization',
-            'McpServer',
+            {
+              description: 'The MCP connection changed during authorization',
+              resource: 'McpServer',
+              reason: 'connection-changed',
+            },
           );
         }
       }
@@ -286,7 +291,11 @@ export class McpServerService {
       .limit(1);
 
     if (existing) {
-      throw DataApiErrorFactory.conflict('MCP server name already exists', 'McpServer');
+      throw DataApiErrorFactory.create(ErrorCode.CONFLICT, 'MCP server name already exists', {
+        description: 'MCP server name already exists',
+        resource: 'McpServer',
+        reason: 'duplicate-name',
+      });
     }
   }
 

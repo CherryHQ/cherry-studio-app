@@ -5,7 +5,12 @@ import {
   McpLegacyFallbackError,
   McpRedirectError,
 } from '@/shared/contracts/mcp';
+import { readMcpFailureFacts } from '@/shared/data/api/mcpFailureFacts';
 
+import {
+  formatMcpConnectionFailureSummary,
+  normalizeMcpConnectionFailure,
+} from '../mcpConnectionFailure';
 import { classifyMcpCallRejection, createRemoteMcpClient } from '../mcpProtocolClient';
 
 const mockTool = { name: 'write', inputSchema: { type: 'object' } };
@@ -60,6 +65,7 @@ jest.mock('@modelcontextprotocol/client', () => ({
 }));
 
 const endpointUrl = 'https://mcp.example/mcp';
+const mockFailure = jest.fn();
 const authorization = { token: jest.fn(), rejected: jest.fn() };
 function open(elicit?: Parameters<typeof createRemoteMcpClient>[0]['elicit']) {
   return createRemoteMcpClient({
@@ -67,6 +73,7 @@ function open(elicit?: Parameters<typeof createRemoteMcpClient>[0]['elicit']) {
     signal: new AbortController().signal,
     foreground: true,
     authorization,
+    onConnectionFailure: mockFailure,
     elicit,
   });
 }
@@ -87,6 +94,300 @@ beforeEach(() => {
 });
 
 describe('native MCP protocol boundary', () => {
+  it('ignores a stream observation after its request is cancelled', async () => {
+    const client = await open();
+    const cancel = new AbortController();
+    let source!: ReadableStreamDefaultController<Uint8Array>;
+    mockExpoFetch.mockResolvedValueOnce(
+      streamingResponse(
+        new ReadableStream({
+          start(controller) {
+            source = controller;
+          },
+        }),
+        'text/event-stream',
+      ),
+    );
+    try {
+      await mockTransport.fetch(endpointUrl, {
+        method: 'POST',
+        signal: cancel.signal,
+        body: JSON.stringify({ method: 'tools/list', id: 1 }),
+      });
+      cancel.abort();
+      source.error(new TypeError('late cancellation socket'));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(mockFailure).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+    }
+  });
+
+  it.each([
+    'primitive socket',
+    null,
+    undefined,
+    new TypeError('socket'),
+    new SdkError(SdkErrorCode.RequestTimeout, 'timeout'),
+  ])(
+    'publishes one connection failure when fetch and connection reject with the same cause: %p',
+    async (error) => {
+      mockExpoFetch.mockRejectedValueOnce(error);
+      mockConnect.mockImplementationOnce(async () => {
+        await mockTransport.fetch(endpointUrl, {
+          method: 'POST',
+          body: JSON.stringify({ method: 'initialize', id: 1 }),
+        });
+      });
+      await expect(open()).rejects.toBe(error);
+      expect(mockFailure).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('publishes each fallback failure once even when the observer always throws', async () => {
+    const negotiation = new SdkError(SdkErrorCode.EraNegotiationFailed, 'negotiation');
+    const legacy = new TypeError('legacy socket');
+    mockFailure.mockImplementation(() => {
+      throw new Error('observer');
+    });
+    mockConnect.mockRejectedValueOnce(negotiation).mockImplementationOnce(async () => {
+      mockExpoFetch.mockRejectedValueOnce(legacy);
+      await mockTransport.fetch(endpointUrl, {
+        method: 'POST',
+        body: JSON.stringify({ method: 'initialize', id: 1 }),
+      });
+    });
+    try {
+      const error = await open().catch((failure: unknown) => failure);
+      expect(error).toBeInstanceOf(McpLegacyFallbackError);
+      expect((error as McpLegacyFallbackError).negotiationError).toBe(negotiation);
+      expect((error as McpLegacyFallbackError).cause).toBe(legacy);
+      // Include unknown failures: pending stages must never masquerade as failures.
+      expect(mockFailure.mock.calls.map(([facts]) => facts)).toEqual([
+        { stage: 'negotiation', kind: 'unknown' },
+        {
+          stage: 'initialize',
+          kind: 'refused-or-unreachable',
+          fallback: {
+            negotiation: { stage: 'negotiation', kind: 'unknown' },
+            legacy: { stage: 'initialize', kind: 'refused-or-unreachable' },
+          },
+        },
+      ]);
+    } finally {
+      mockFailure.mockReset();
+    }
+  });
+
+  it.each(['synchronous', 'asynchronous'] as const)(
+    'consumes a %s throwing stream observer without replacing the original failure',
+    async (timing) => {
+      const error = new TypeError('original socket');
+      const unhandled = jest.fn();
+      process.on('unhandledRejection', unhandled);
+      mockFailure.mockImplementationOnce(() => {
+        if (timing === 'asynchronous') return Promise.reject(new Error('observer'));
+        throw new Error('observer');
+      });
+      mockConnect.mockImplementationOnce(async () => {
+        mockExpoFetch.mockResolvedValueOnce(
+          streamingResponse(
+            new ReadableStream({
+              start(controller) {
+                controller.error(error);
+              },
+            }),
+            'application/json',
+          ),
+        );
+        await mockTransport.fetch(endpointUrl, {
+          method: 'POST',
+          body: JSON.stringify({ method: 'initialize', id: 1 }),
+        });
+      });
+      try {
+        await expect(open()).rejects.toBe(error);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(unhandled).not.toHaveBeenCalled();
+        expect(mockFailure).toHaveBeenCalledTimes(1);
+      } finally {
+        process.removeListener('unhandledRejection', unhandled);
+        mockFailure.mockReset();
+      }
+    },
+  );
+
+  it.each([SdkErrorCode.ClientHttpAuthentication, SdkErrorCode.ClientHttpForbidden])(
+    'keeps statusless %s non-retryable after an observed transport failure',
+    async (code) => {
+      const error = new SdkError(code, 'auth');
+      mockConnect.mockImplementationOnce(async () => {
+        mockExpoFetch.mockResolvedValueOnce(
+          streamingResponse(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new TypeError('socket'));
+              },
+            }),
+            'application/json',
+          ),
+        );
+        await mockTransport
+          .fetch(endpointUrl, {
+            method: 'POST',
+            body: JSON.stringify({ method: 'initialize', id: 1 }),
+          })
+          .catch(() => undefined);
+        throw error;
+      });
+      const result = await createRemoteMcpClient({
+        config: { endpointUrl },
+        signal: new AbortController().signal,
+        foreground: false,
+        authorization,
+        shouldUseLegacyProtocol: true,
+        onConnectionFailure: mockFailure,
+      }).catch((failure: unknown) => failure);
+      expect(result).toBe(error);
+      expect(result).toBeInstanceOf(SdkError);
+      expect(result).not.toBeInstanceOf(McpLegacyFallbackError);
+      expect(mockAttempts).toHaveLength(1);
+      expect(mockFailure.mock.calls.map(([facts]) => facts)).toEqual([
+        { stage: 'initialize', kind: 'auth-required' },
+      ]);
+    },
+  );
+
+  it('marks fetch rejections while leaving local request errors unknown', async () => {
+    await open();
+    const context = { stage: 'initialize' as const, didTimeout: false, timeoutMs: 15000 };
+    const failure = Object.freeze(new TypeError('private transport details'));
+    mockExpoFetch.mockRejectedValueOnce(failure);
+    await expect(mockTransport.fetch(endpointUrl, { method: 'POST' })).rejects.toBe(failure);
+    expect(mockFailure).toHaveBeenLastCalledWith({
+      stage: 'negotiation',
+      kind: 'refused-or-unreachable',
+    });
+    expect(readMcpFailureFacts(failure)).toBeUndefined();
+    mockExpoFetch.mockClear();
+    let localError: unknown;
+    try {
+      await mockTransport.fetch(endpointUrl, {
+        method: 'POST',
+        headers: { 'invalid\nheader': 'secret' },
+      });
+    } catch (error) {
+      localError = error;
+    }
+    expect(localError).toMatchObject({ name: 'TypeError' });
+    expect(mockExpoFetch).not.toHaveBeenCalled();
+    expect(normalizeMcpConnectionFailure(localError, context).kind).toBe('unknown');
+  });
+
+  it.each(['application/json', 'text/event-stream'])(
+    'captures %s response stream transport failures without secrets',
+    async (contentType) => {
+      await open();
+      const error = Object.freeze(
+        new TypeError('Bearer stream-sentinel https://private/#fragment'),
+      );
+      mockExpoFetch.mockResolvedValueOnce(
+        streamingResponse(
+          new ReadableStream({
+            start(controller) {
+              controller.error(error);
+            },
+          }),
+          contentType,
+        ),
+      );
+      let rejection: unknown;
+      try {
+        const response = await mockTransport.fetch(endpointUrl, {
+          method: 'POST',
+          body: JSON.stringify({ method: 'initialize' }),
+        });
+        const reader = response.body!.getReader();
+        try {
+          await reader.read();
+        } finally {
+          reader.releaseLock();
+        }
+      } catch (failure) {
+        rejection = failure;
+      }
+      expect(rejection).toBe(error);
+      const facts = mockFailure.mock.calls.at(-1)![0];
+      expect(readMcpFailureFacts(error)).toBeUndefined();
+      expect(facts).toEqual({ stage: 'initialize', kind: 'refused-or-unreachable' });
+      expect(JSON.stringify(facts) + formatMcpConnectionFailureSummary(facts)).not.toMatch(
+        /Bearer|sentinel|https|fragment/,
+      );
+    },
+  );
+
+  it.each(['application/json', 'text/event-stream'])(
+    'does not mark %s stream cancellation as transport',
+    async (contentType) => {
+      await open();
+      const error = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+      mockExpoFetch.mockResolvedValueOnce(
+        streamingResponse(
+          new ReadableStream({
+            start(controller) {
+              controller.error(error);
+            },
+          }),
+          contentType,
+        ),
+      );
+      try {
+        const response = await mockTransport.fetch(endpointUrl, { method: 'POST' });
+        await response.body!.getReader().read();
+      } catch (failure) {
+        expect(failure).toBe(error);
+      }
+      expect(mockFailure.mock.calls.at(-1)![0].kind).toBe('unknown');
+      expect(readMcpFailureFacts(error)).toBeUndefined();
+    },
+  );
+
+  it('captures independent attempts when the SDK reuses its rejection object', async () => {
+    const error = Object.assign(new SdkError(SdkErrorCode.EraNegotiationFailed, 'private'), {
+      cause: { code: 'ETIMEDOUT' },
+    });
+    mockConnect.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
+    await expect(open()).rejects.toMatchObject({
+      connectionFailure: {
+        fallback: {
+          negotiation: { stage: 'negotiation', kind: 'timeout' },
+          legacy: { stage: 'initialize', kind: 'timeout' },
+        },
+      },
+    });
+  });
+
+  it.each([
+    new SdkHttpError(SdkErrorCode.ClientHttpAuthentication, 'private', { status: 401 }),
+    new SdkError(SdkErrorCode.RequestTimeout, 'private'),
+  ])('retains negotiation facts on non-retryable legacy rejection %p', async (error) => {
+    mockConnect
+      .mockRejectedValueOnce(
+        new SdkHttpError(SdkErrorCode.EraNegotiationFailed, 'private', { status: 500 }),
+      )
+      .mockRejectedValueOnce(error);
+    await expect(open()).rejects.toBe(error);
+    expect(mockFailure.mock.calls.at(-1)![0]).toMatchObject({
+      fallback: {
+        negotiation: { stage: 'negotiation', kind: 'http-status', httpStatus: 500 },
+        legacy: {
+          stage: 'initialize',
+          kind: error instanceof SdkHttpError ? 'auth-required' : 'timeout',
+        },
+      },
+    });
+  });
+
   it('closes the failed attempt before opening a fresh legacy client', async () => {
     const callback = jest.fn();
     mockConnect.mockImplementationOnce(async () => {
@@ -337,6 +638,66 @@ describe('native MCP protocol boundary', () => {
     },
   );
 
+  it.each(['token', '401', '403', 'redirect', 'size-limit'] as const)(
+    'releases request observers after repeated %s failures on a live client',
+    async (failure) => {
+      const client = await open();
+      const listeners = new Set<EventListenerOrEventListenerObject>();
+      const add = jest.spyOn(AbortSignal.prototype, 'addEventListener');
+      const remove = jest.spyOn(AbortSignal.prototype, 'removeEventListener');
+      const originalAdd = add.getMockImplementation()!;
+      const originalRemove = remove.getMockImplementation()!;
+      add.mockImplementation(function (this: AbortSignal, type, listener, options) {
+        if (type === 'abort') listeners.add(listener);
+        return originalAdd.call(this, type, listener, options);
+      });
+      remove.mockImplementation(function (this: AbortSignal, type, listener, options) {
+        if (type === 'abort') listeners.delete(listener);
+        return originalRemove.call(this, type, listener, options);
+      });
+      try {
+        for (let id = 1; id <= 4; id += 1) {
+          authorization.token.mockImplementation(async () => {
+            if (failure === 'token') throw new Error('token lookup');
+            return 'expired';
+          });
+          mockExpoFetch.mockImplementation(async () => {
+            if (failure === 'size-limit')
+              return streamingResponse(
+                new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new Uint8Array(16 * 1024 * 1024 + 1));
+                  },
+                }),
+                'application/json',
+              );
+            return new Response(null, {
+              status: failure === 'redirect' ? 302 : Number(failure),
+              headers:
+                failure === 'redirect'
+                  ? { location: 'https://other.example/mcp' }
+                  : failure === '403'
+                    ? { 'www-authenticate': 'Bearer error="insufficient_scope"' }
+                    : {},
+            });
+          });
+          await expect(
+            mockTransport.fetch(endpointUrl, {
+              method: 'POST',
+              body: JSON.stringify({ method: 'tools/list', id }),
+            }),
+          ).rejects.toBeDefined();
+          expect(listeners.size).toBe(0);
+        }
+        expect(mockClose).not.toHaveBeenCalled();
+      } finally {
+        add.mockRestore();
+        remove.mockRestore();
+        await client.close();
+      }
+    },
+  );
+
   it('requests automatic protocol negotiation and pins the approved tool definition without an auth replay provider', async () => {
     const client = await open();
     await client.listTools();
@@ -465,4 +826,38 @@ describe('native MCP protocol boundary', () => {
     expect(elicit).toHaveBeenCalledTimes(1);
     await client.close();
   });
+});
+
+it('keeps a shared rejection untouched while two connections capture different stages', async () => {
+  const error = Object.freeze(
+    new SdkHttpError(SdkErrorCode.ClientHttpAuthentication, 'private', { status: 401 }),
+  );
+  mockConnect.mockRejectedValueOnce(error).mockRejectedValueOnce(error);
+  const initialization = jest.fn();
+  const negotiation = jest.fn();
+  const input = {
+    config: { endpointUrl },
+    signal: new AbortController().signal,
+    foreground: false,
+    authorization,
+  };
+  await expect(
+    createRemoteMcpClient({
+      ...input,
+      shouldUseLegacyProtocol: true,
+      onConnectionFailure: initialization,
+    }),
+  ).rejects.toBe(error);
+  const firstFacts = initialization.mock.calls.at(-1)![0];
+  await expect(createRemoteMcpClient({ ...input, onConnectionFailure: negotiation })).rejects.toBe(
+    error,
+  );
+  expect(firstFacts).toEqual({ stage: 'initialize', kind: 'auth-required', httpStatus: 401 });
+  expect(negotiation.mock.calls.at(-1)![0]).toEqual({
+    stage: 'negotiation',
+    kind: 'auth-required',
+    httpStatus: 401,
+  });
+  expect(initialization.mock.calls.at(-1)![0]).toBe(firstFacts);
+  expect(readMcpFailureFacts(error)).toBeUndefined();
 });

@@ -31,6 +31,7 @@ it already exists.
 | SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts` |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Provider failure facts | `normalizeAiError` in `src/backend/ai/normalizeAiError.ts`; `piModelError.ts` adapts Pi terminal messages for turn projection and diagnostics |
+| In-process MCP failure facts shared across backend and frontend | `attachMcpFailureFacts` and `readMcpFailureFacts` in `src/shared/data/api/mcpFailureFacts.ts`; the carrier preserves error identity, including frozen errors. `withMcpOperationStep` records a step (`validation`, `authorization`, `connection`, or `persistence`) on fresh objects through a WeakMap, preserving identity; primitives and already-tagged objects receive an operation wrapper with the original `cause`. `readMcpOperationStep` reads both carriers and accepts an operation scope so boundaries trust only their current call. `withMcpFailureFacts` reconstructs DOMException, copies ordinary errors, and wraps other objects with the original cause; it does not carry step markers |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |

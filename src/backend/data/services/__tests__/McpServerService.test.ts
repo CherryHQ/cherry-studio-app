@@ -201,15 +201,31 @@ describe('McpServerService', () => {
     ]);
   });
 
+  it('distinguishes a connection changed during OAuth from a duplicate name', async () => {
+    const previous = await service.create(oauthInput);
+    await service.delete(previous.id);
+    await expect(service.saveOAuthConnection(oauthInput, oauth, previous)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      status: 409,
+      message: 'The MCP connection changed during authorization',
+      details: { reason: 'connection-changed' },
+    });
+  });
+
   it('rejects duplicate names on create and update', async () => {
     await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Dup' });
     await expect(
       service.create({ endpointUrl: 'https://b.example/mcp', name: 'Dup' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      status: 409,
+      details: { reason: 'duplicate-name' },
+    });
 
     const other = await service.create({ endpointUrl: 'https://c.example/mcp', name: 'Other' });
     await expect(service.update(other.id, { name: 'Dup' })).rejects.toMatchObject({
       code: 'CONFLICT',
+      details: { reason: 'duplicate-name' },
     });
     // Renaming a server to the name it already has is not a conflict with itself.
     await expect(

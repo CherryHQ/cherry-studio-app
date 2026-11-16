@@ -8,6 +8,7 @@ import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
+import { describeConnectionFailure } from '../mcpServer/mcpFailureMessages';
 import { PluginGroup } from './PluginGroup';
 import { PluginRow } from './PluginRow';
 
@@ -36,9 +37,13 @@ export function McpServerGroup() {
         return (
           <PluginRow
             description={
-              summary?.toolCount === undefined
-                ? undefined
-                : t('settings.mcp.list.toolCount', { count: summary.toolCount })
+              status === 'error'
+                ? summary?.connectionFailure
+                  ? describeConnectionFailure(summary.connectionFailure, t)
+                  : t('settings.mcp.failure.reason.unknown')
+                : summary?.toolCount === undefined
+                  ? undefined
+                  : t('settings.mcp.list.toolCount', { count: summary.toolCount })
             }
             icon={<PluginIcon source={mcpIcon} />}
             key={server.id}

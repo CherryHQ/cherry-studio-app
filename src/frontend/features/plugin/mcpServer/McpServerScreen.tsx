@@ -33,7 +33,13 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { PluginPage } from '../components/PluginPage';
 import { McpToolsSection } from './components/McpToolsSection';
+import {
+  describeConnectionFailure,
+  describeSaveFailure,
+  describeMcpActionFailure,
+} from './mcpFailureMessages';
 import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
+import { runMcpConnectionProbe, runMcpSaveWorkflow } from './mcpSaveWorkflow';
 
 const logger = loggerService.withContext('McpServerScreen');
 
@@ -167,93 +173,96 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
   const handleSave = useCallback(
     async (reauthorize = false) => {
-      const dto = buildDto(form, t('settings.mcp.defaultName'));
-      if (!dto.ok) {
-        alert.show({ title: t(dto.errorKey) });
-        return;
-      }
-
+      let dto: ReturnType<typeof buildDto> | undefined;
+      const needsOAuth =
+        form.authorization === 'oauth' &&
+        (reauthorize ||
+          savedForm.authorization !== 'oauth' ||
+          form.endpointUrl !== savedForm.endpointUrl ||
+          form.headers !== savedForm.headers ||
+          form.clientId !== savedForm.clientId);
+      let attemptId: string | undefined;
+      let callbackUrl: string | undefined;
+      let name = '';
+      setIsSaving(true);
       try {
-        setIsSaving(true);
-        const needsOAuth =
-          form.authorization === 'oauth' &&
-          (reauthorize ||
-            savedForm.authorization !== 'oauth' ||
-            form.endpointUrl !== savedForm.endpointUrl ||
-            form.headers !== savedForm.headers ||
-            form.clientId !== savedForm.clientId);
-        if (needsOAuth) {
-          const attempt = await mcp.beginOAuth({
-            ...dto.value,
-            serverId,
-            clientId: form.clientId.trim() || undefined,
-          });
-          if (!isFocused.current) {
-            mcp.cancelOAuth(attempt.attemptId);
-            return;
-          }
-          try {
-            const result = await WebBrowser.openAuthSessionAsync(
-              attempt.authorizationUrl,
-              attempt.redirectUrl,
-            );
-            if (result.type !== 'success') {
-              mcp.cancelOAuth(attempt.attemptId);
-              return;
-            }
-            clearInitialURL();
-            const connected = await mcp.completeOAuth(attempt.attemptId, result.url);
-            queryClient.setQueryData(queryKeys.mcpServers.detail(connected.id), connected);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
-            await queryClient.invalidateQueries({
-              queryKey: queryKeys.mcpServers.tools(connected.id),
+        const result = await runMcpSaveWorkflow({
+          validate: () => {
+            dto = buildDto(form, t('settings.mcp.defaultName'));
+            if (dto.ok) name = dto.value.name;
+            return dto;
+          },
+          authorize: needsOAuth
+            ? async () => {
+                if (!dto?.ok) return false;
+                const attempt = await mcp.beginOAuth({
+                  ...dto.value,
+                  serverId,
+                  clientId: form.clientId.trim() || undefined,
+                });
+                attemptId = attempt.attemptId;
+                if (!isFocused.current) return false;
+                const response = await WebBrowser.openAuthSessionAsync(
+                  attempt.authorizationUrl,
+                  attempt.redirectUrl,
+                );
+                if (response.type !== 'success') return false;
+                clearInitialURL();
+                callbackUrl = response.url;
+                return true;
+              }
+            : undefined,
+          probe: async () => {
+            if (!dto?.ok || needsOAuth || serverId) return;
+            const info = await mcp.getServerInfo({
+              endpointUrl: dto.value.endpointUrl,
+              headers: dto.value.headers,
             });
-            if (isFocused.current) {
-              if (isCreating) router.back();
-              else setForm(createFormState(connected));
+            name = info.title?.trim() || info.name.trim() || dto.value.name;
+          },
+          persist: async (operation) => {
+            if (!dto?.ok) return;
+            if (needsOAuth) {
+              if (!attemptId || !callbackUrl) return;
+              const connected = await runMcpConnectionProbe(
+                mcp.completeOAuth(attemptId, callbackUrl, operation),
+                operation,
+              );
+              queryClient.setQueryData(queryKeys.mcpServers.detail(connected.id), connected);
+              await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
+              await queryClient.invalidateQueries({
+                queryKey: queryKeys.mcpServers.tools(connected.id),
+              });
+              if (isFocused.current) {
+                if (isCreating) router.back();
+                else setForm(createFormState(connected));
+              }
+            } else if (serverId) {
+              if (server?.origin !== 'builtin' && server?.oauth && form.authorization === 'headers')
+                await mcp.disconnectOAuth(serverId);
+              await updateServer(serverId, { ...dto.value, isEnabled: server?.isEnabled });
+              setForm({ ...form, ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
+            } else {
+              await createServer({ ...dto.value, isEnabled: true, name });
+              if (isFocused.current) router.back();
             }
-          } finally {
-            mcp.cancelOAuth(attempt.attemptId);
-          }
-          return;
+          },
+          grantCleanup: async () => {
+            if (attemptId) mcp.cancelOAuth(attemptId);
+          },
+        });
+        if (!result.ok) {
+          const { error, step } = result;
+          if (error instanceof McpAuthorizationError && error.code === 'cancelled') return;
+          if (!(error instanceof McpAuthorizationError) && !(error instanceof McpRedirectError))
+            logger.error('Failed to save MCP server', error as Error);
+          toast.show({ label: describeSaveFailure(step, error, t), variant: 'danger' });
         }
-        if (serverId) {
-          if (server?.origin !== 'builtin' && server?.oauth && form.authorization === 'headers')
-            await mcp.disconnectOAuth(serverId);
-          await updateServer(serverId, { ...dto.value, isEnabled: server?.isEnabled });
-          // Show the stored values, including a name filled in from the endpoint.
-          setForm({ ...form, ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
-        } else {
-          const serverInfo = await mcp.getServerInfo({
-            endpointUrl: dto.value.endpointUrl,
-            headers: dto.value.headers,
-          });
-          const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
-          await createServer({ ...dto.value, isEnabled: true, name });
-          // The new server joins the Plugins page's MCP group; opening it from there edits it.
-          if (isFocused.current) router.back();
-        }
-      } catch (error) {
-        if (error instanceof McpAuthorizationError) {
-          if (error.code !== 'cancelled')
-            toast.show({ label: t(`settings.mcp.oauth.errors.${error.code}`), variant: 'danger' });
-          return;
-        }
-        if (error instanceof McpRedirectError) {
-          toast.show({
-            label: t('settings.mcp.toast.redirected', { url: error.location }),
-            variant: 'danger',
-          });
-          return;
-        }
-        logger.error('Failed to save MCP server', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
       } finally {
         setIsSaving(false);
       }
     },
     [
-      alert,
       createServer,
       form,
       isCreating,
@@ -278,8 +287,8 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
       await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) });
       setForm(createFormState(disconnected));
-    } catch {
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+    } catch (error) {
+      toast.show({ label: describeMcpActionFailure('disconnect', error, t), variant: 'danger' });
     } finally {
       setIsSaving(false);
     }
@@ -294,7 +303,10 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       await updateServer(serverId, { isEnabled: !server.isEnabled });
     } catch (error) {
       logger.error('Failed to toggle MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      toast.show({
+        label: describeMcpActionFailure(server.isEnabled ? 'disable' : 'enable', error, t),
+        variant: 'danger',
+      });
     }
   }, [server, serverId, t, toast, updateServer]);
 
@@ -315,7 +327,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
       void updateServer(serverId, { disabledTools }).catch((error) => {
         logger.error('Failed to toggle MCP tool', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        toast.show({ label: describeMcpActionFailure('tool-toggle', error, t), variant: 'danger' });
       });
     },
     [server, serverId, t, toast, updateServer],
@@ -423,7 +435,11 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
                         : 'text-muted-foreground'
                   }
                 >
-                  {t(`settings.mcp.list.status.${status}`)}
+                  {status === 'error'
+                    ? summary?.connectionFailure
+                      ? describeConnectionFailure(summary.connectionFailure, t)
+                      : t('settings.mcp.failure.reason.unknown')
+                    : t(`settings.mcp.list.status.${status}`)}
                 </Text>
                 {summary?.toolCount === undefined
                   ? null

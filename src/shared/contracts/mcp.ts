@@ -31,10 +31,38 @@ export type McpProtocolInfo = {
   prompts: boolean;
 };
 
+export type McpSaveStep = 'validation' | 'authorization' | 'connection' | 'persistence';
+
+export type McpFailureStage = 'negotiation' | 'initialize' | 'tools-list';
+
+export type McpFailureKind =
+  | 'timeout'
+  | 'refused-or-unreachable'
+  | 'http-status'
+  | 'protocol-handshake'
+  | 'auth-required'
+  | 'redirect'
+  | 'size-limit'
+  | 'catalog-integrity'
+  | 'missing-identity'
+  | 'unknown';
+
+export type McpFailureDetail = Readonly<{
+  stage: McpFailureStage;
+  kind: McpFailureKind;
+  httpStatus?: number;
+  protocolCode?: number;
+  timeoutMs?: number;
+}>;
+
+export type McpConnectionFailure = McpFailureDetail &
+  Readonly<{ fallback?: { negotiation: McpFailureDetail; legacy: McpFailureDetail } }>;
+
 export type McpServerRuntimeSummary = {
   protocol?: McpProtocolInfo;
   lastConnectedAt?: number;
   lastError?: string;
+  connectionFailure?: McpConnectionFailure;
   serverName?: string;
   serverTitle?: string;
   serverVersion?: string;
@@ -125,7 +153,8 @@ export interface McpModule {
   subscribeElicitations(listener: () => void): () => void;
   respondElicitation(id: string, response: McpElicitationResponse): void;
   beginOAuth(input: McpOAuthStartInput): Promise<McpOAuthAttempt>;
-  completeOAuth(attemptId: string, callbackUrl: string): Promise<McpServer>;
+  /** In-process scope attributes nested failures to the caller's current save operation. */
+  completeOAuth(attemptId: string, callbackUrl: string, operation?: object): Promise<McpServer>;
   receiveOAuthCallback(callbackUrl: string): Promise<McpServer | undefined>;
   cancelOAuth(attemptId: string): void;
   disconnectOAuth(serverId: string): Promise<McpServer>;

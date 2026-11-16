@@ -535,6 +535,7 @@ function unknownWriteError(): McpRuntimeToolError {
 
 export type BoundedSignal = {
   setPaused: (active: boolean) => void;
+  restart: () => void;
   didTimeout: () => boolean;
   done: () => void;
   signal: AbortSignal;
@@ -563,6 +564,13 @@ export function createBoundedSignal(
 
   return {
     didTimeout: () => timedOut,
+    restart() {
+      if (finished || timedOut) return;
+      clearTimeout(handle);
+      handle = undefined;
+      remaining = timeoutMs;
+      if (pauseDepth === 0) start();
+    },
     setPaused(active) {
       if (finished || timedOut) return;
       // A modern input-required round can ask several questions concurrently.

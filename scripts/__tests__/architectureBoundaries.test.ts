@@ -97,6 +97,18 @@ describe('resolved architecture boundaries', () => {
     });
   });
 
+  it.each(['src/frontend/features/plugin/probe.ts', 'src/backend/ai/mcp/probe.ts'])(
+    'allows shared MCP facts from %s',
+    async (filePath) => {
+      expect(
+        await boundaryErrors(
+          filePath,
+          "import { readMcpFailureFacts } from '@/shared/data/api/mcpFailureFacts';",
+        ),
+      ).toHaveLength(0);
+    },
+  );
+
   it.each([
     [
       'src/frontend/utils/probe.ts',

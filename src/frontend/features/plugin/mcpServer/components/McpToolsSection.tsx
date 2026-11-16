@@ -3,10 +3,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { McpLegacyFallbackError } from '@/shared/contracts/mcp';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { useMcpServerTools } from '../hooks/useMcpServerTools';
+import { describeConnectionFailure, readConnectionFailure } from '../mcpFailureMessages';
 
 /**
  * The tools a server exposes, each with the switch that keeps it out of the model's toolset. Only
@@ -25,6 +25,7 @@ export function McpToolsSection({
 }) {
   const { t } = useTranslation();
   const toolsQuery = useMcpServerTools(server);
+  const failure = readConnectionFailure(toolsQuery.error);
   const tools = toolsQuery.data ?? [];
   const disabledTools = useMemo(() => new Set(server.disabledTools), [server.disabledTools]);
   const enabledCount = tools.filter((tool) => !disabledTools.has(tool.name)).length;
@@ -48,14 +49,10 @@ export function McpToolsSection({
         <ContentState.Loading layout="row" title={t('settings.mcp.tools.loading')} />
       ) : toolsQuery.isError ? (
         <ContentState.Error
-          // The reason is the whole point here — an expired token and a typo'd URL are the same
-          // generic failure without it.
           description={
-            toolsQuery.error instanceof McpLegacyFallbackError
-              ? t('settings.mcp.tools.legacyFallbackFailed')
-              : toolsQuery.error instanceof Error
-                ? toolsQuery.error.message
-                : String(toolsQuery.error)
+            failure
+              ? describeConnectionFailure(failure, t)
+              : t('settings.mcp.failure.reason.unknown')
           }
           layout="leading"
           primaryAction={{

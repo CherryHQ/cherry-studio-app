@@ -20,11 +20,15 @@ import {
   McpAuthorizationError,
   McpLegacyFallbackError,
   McpRedirectError,
+  type McpFailureStage,
+  type McpConnectionFailure,
   type McpConnectionConfig,
   type McpProtocolInfo,
 } from '@/shared/contracts/mcp';
+import { attachMcpFailureFacts, withMcpFailureFacts } from '@/shared/data/api/mcpFailureFacts';
 import { normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
+import { MCP_CONNECTION_ERROR_KIND, normalizeMcpConnectionFailure } from './mcpConnectionFailure';
 import { McpRuntimeToolError } from './mcpRuntimeAdapter';
 
 /** A catalog is revalidated on use at most this often; push notifications cover faster changes. */
@@ -112,10 +116,12 @@ export function classifyMcpCallRejection(
 }
 
 /** Optional protocol features do not burden the bundled, tool-only API adapters. */
-export type McpRuntimeClient = Pick<
-  PluginClient,
-  'serverInfo' | 'listTools' | 'close' | 'discoveryWarnings'
-> & {
+export type McpRuntimeClient = Pick<PluginClient, 'serverInfo' | 'close' | 'discoveryWarnings'> & {
+  listTools(
+    input?: Parameters<PluginClient['listTools']>[0] & {
+      onFailure?: (facts: McpConnectionFailure) => void;
+    },
+  ): Promise<ListToolsResult>;
   listResources?: Client['listResources'];
   listResourceTemplates?: Client['listResourceTemplates'];
   readResource?: Client['readResource'];
@@ -137,6 +143,8 @@ type RemoteMcpClientInput = {
   ) => Promise<import('@/shared/contracts/mcpInteraction').McpElicitationResponse>;
   authorization: Pick<McpOAuthRuntime, 'token' | 'rejected'>;
   onCatalogChanged?: () => void;
+  onConnectionFailure?: (facts: McpConnectionFailure) => void;
+  onConnectionStage?: (stage: McpFailureStage) => void;
   shouldUseLegacyProtocol?: boolean;
   onLegacyPreferenceChanged?: (shouldUseLegacyProtocol: boolean) => void;
 };
@@ -153,28 +161,80 @@ export async function createRemoteMcpClient(
   input: RemoteMcpClientInput,
 ): Promise<RemoteMcpRuntimeClient> {
   input.signal.throwIfAborted();
+  let snapshot: McpConnectionFailure | undefined;
+  const publish = (facts: McpConnectionFailure) => {
+    try {
+      void Promise.resolve(input.onConnectionFailure?.(facts)).catch(() => undefined);
+    } catch {
+      /* Preserve the connection outcome. */
+    }
+  };
+  const attemptInput = {
+    ...input,
+    onConnectionFailure: (facts: McpConnectionFailure) => {
+      snapshot = facts;
+      publish(facts);
+    },
+  };
   const shouldUseLegacyProtocol = input.shouldUseLegacyProtocol === true;
   try {
-    return await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'legacy' : 'auto');
+    return await connectRemoteMcpClient(attemptInput, shouldUseLegacyProtocol ? 'legacy' : 'auto');
   } catch (error) {
     if (
-      isNonRetryableConnectionError(error, input.signal) ||
+      isNonRetryableConnectionError(error, input.signal, snapshot) ||
       (!shouldUseLegacyProtocol &&
-        (!SdkError.isInstance(error) || error.code !== SdkErrorCode.EraNegotiationFailed))
+        (!SdkError.isInstance(error) ||
+          (error.code !== SdkErrorCode.EraNegotiationFailed &&
+            !(
+              error.code === SdkErrorCode.RequestTimeout &&
+              snapshot?.kind === 'refused-or-unreachable'
+            ))))
     )
       throw error;
     // Forget a failed preference even if the fresh negotiation also fails.
     if (shouldUseLegacyProtocol) input.onLegacyPreferenceChanged?.(false);
+    // Snapshot before the next attempt can reuse the same rejection object.
+    const firstFacts = snapshot ?? {
+      stage: shouldUseLegacyProtocol ? ('initialize' as const) : ('negotiation' as const),
+      kind: 'unknown' as const,
+    };
+    snapshot = undefined;
+    let retryConnected = false;
+    const retryInput = {
+      ...input,
+      onConnectionFailure: (facts: McpConnectionFailure) => {
+        if (retryConnected) publish(facts);
+        else snapshot = facts;
+      },
+    };
     let client: RemoteMcpRuntimeClient;
     try {
-      client = await connectRemoteMcpClient(input, shouldUseLegacyProtocol ? 'auto' : 'legacy');
-    } catch (retryError) {
-      if (isNonRetryableConnectionError(retryError, input.signal)) throw retryError;
-      throw new McpLegacyFallbackError(
-        shouldUseLegacyProtocol ? retryError : error,
-        shouldUseLegacyProtocol ? error : retryError,
+      client = await connectRemoteMcpClient(
+        retryInput,
+        shouldUseLegacyProtocol ? 'auto' : 'legacy',
       );
+    } catch (retryError) {
+      const secondFacts = snapshot ?? {
+        stage: shouldUseLegacyProtocol ? ('negotiation' as const) : ('initialize' as const),
+        kind: 'unknown' as const,
+      };
+      const negotiation = shouldUseLegacyProtocol ? secondFacts : firstFacts;
+      const legacy = shouldUseLegacyProtocol ? firstFacts : secondFacts;
+      const failure = isNonRetryableConnectionError(retryError, input.signal, snapshot)
+        ? retryError
+        : new McpLegacyFallbackError(
+            shouldUseLegacyProtocol ? retryError : error,
+            shouldUseLegacyProtocol ? error : retryError,
+          );
+      const facts: McpConnectionFailure = {
+        ...(legacy.kind === 'unknown' ? negotiation : legacy),
+        fallback: { negotiation, legacy },
+      };
+      publish(facts);
+      if (failure !== retryError) attachMcpFailureFacts(failure, facts);
+      throw failure;
     }
+    retryConnected = true;
     if (input.signal.aborted) {
       await client.close().catch(() => undefined);
       input.signal.throwIfAborted();
@@ -189,7 +249,11 @@ export async function createRemoteMcpClient(
   }
 }
 
-function isNonRetryableConnectionError(error: unknown, signal: AbortSignal): boolean {
+function isNonRetryableConnectionError(
+  error: unknown,
+  signal: AbortSignal,
+  facts?: McpConnectionFailure,
+): boolean {
   return (
     signal.aborted ||
     error instanceof McpAuthorizationError ||
@@ -199,11 +263,9 @@ function isNonRetryableConnectionError(error: unknown, signal: AbortSignal): boo
     // Legacy handshakes use ClientHttpNotImplemented for ordinary 401/403 replies.
     (SdkHttpError.isInstance(error) && (error.status === 401 || error.status === 403)) ||
     (SdkError.isInstance(error) &&
-      [
-        SdkErrorCode.RequestTimeout,
-        SdkErrorCode.ClientHttpAuthentication,
-        SdkErrorCode.ClientHttpForbidden,
-      ].includes(error.code))
+      (error.code === SdkErrorCode.ClientHttpAuthentication ||
+        error.code === SdkErrorCode.ClientHttpForbidden ||
+        (error.code === SdkErrorCode.RequestTimeout && facts?.kind !== 'refused-or-unreachable')))
   );
 }
 
@@ -212,6 +274,48 @@ async function connectRemoteMcpClient(
   mode: 'auto' | 'legacy',
 ): Promise<RemoteMcpRuntimeClient> {
   input.signal.throwIfAborted();
+  let stage: McpFailureStage = mode === 'auto' ? 'negotiation' : 'initialize';
+  input.onConnectionStage?.(stage);
+  // Only facts captured by this attempt may classify its rejection graph.
+  const attemptFacts = new WeakMap<object, McpConnectionFailure>();
+  const transportFailures = new WeakSet<object>();
+  const publish = (facts: McpConnectionFailure) => {
+    input.onConnectionFailure?.(facts);
+  };
+  const observe = (error: unknown, requestStage = stage) => {
+    const detail = normalizeMcpConnectionFailure(error, {
+      stage: requestStage,
+      didTimeout: false,
+      timeoutMs: 15000,
+      readFacts: (value) => attemptFacts.get(value),
+      isTransportFailure: (value) => transportFailures.has(value),
+    });
+    const facts =
+      detail.kind === 'timeout' &&
+      detail.timeoutMs !== 15_000 &&
+      SdkError.isInstance(error) &&
+      error.code === SdkErrorCode.RequestTimeout
+        ? { ...detail, timeoutMs: 15_000 }
+        : detail;
+    if (error && typeof error === 'object') attemptFacts.set(error, facts);
+    return facts;
+  };
+  const transportFailure = (error: unknown, signal: AbortSignal, requestStage = stage) => {
+    if (
+      error &&
+      typeof error === 'object' &&
+      !signal.aborted &&
+      !(error instanceof Error && error.name === 'AbortError')
+    ) {
+      transportFailures.add(error);
+      attemptFacts.delete(error);
+    }
+    const facts = observe(error, requestStage);
+    // Connection failure is published once when the attempt settles. Live requests
+    // publish their own terminal failure, independently of reused rejection identities.
+    if (connectionSettled && !signal.aborted) publish(facts);
+    return facts;
+  };
   let foreground = input.foreground;
   let closed = false;
   let eventsAbort = new AbortController();
@@ -234,6 +338,20 @@ async function connectRemoteMcpClient(
     if (foreground && !closed) input.onCatalogChanged?.();
   };
   const connectionAbort = new AbortController();
+  let connectionSettled = false;
+  const requests = new Map<string | number, () => void>();
+  const toolRequests = new Map<
+    string | number,
+    {
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    }
+  >();
+  const toolStreamFacts = new WeakMap<object, McpConnectionFailure>();
+  let rejectHandshake!: (error: unknown) => void;
+  const handshakeFailure = new Promise<never>((_resolve, reject) => {
+    rejectHandshake = reject;
+  });
   const tools = new Map<string, Tool>();
   const client = new Client(
     { name: 'Cherry Studio', version: Constants.expoConfig?.version ?? 'unknown' },
@@ -275,84 +393,234 @@ async function connectRemoteMcpClient(
       reconnectionDelayGrowFactor: 1,
     },
     fetch: async (url, init) => {
+      const rpc = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+      const method = rpc?.method;
+      if (method === 'server/discover' || method === 'initialize') {
+        const nextStage = method === 'server/discover' ? 'negotiation' : 'initialize';
+        if (stage !== nextStage) {
+          stage = nextStage;
+          input.onConnectionStage?.(stage);
+        }
+      }
       if (init?.method === 'GET' && !foreground) return new Response(null, { status: 405 });
       const signal = AbortSignal.any([
         connectionAbort.signal,
         ...(init?.signal ? [init.signal] : []),
       ]);
-      if (!isWithinOrigin(endpoint, new URL(String(url))))
-        throw new McpAuthorizationError('configuration');
-      const token = await input.authorization.token(input.config, signal);
-      const headers = new Headers(init?.headers);
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      const request = { ...init, headers, signal };
-      let response: Response;
-      if (init?.method === 'GET') {
-        response = await expoFetch(url as string, {
-          ...request,
-          signal: AbortSignal.any([eventsAbort.signal, signal]),
-        });
-      } else {
-        response = await expoFetch(url as string, request);
-      }
-      if (
-        token &&
-        (response.status === 401 ||
-          (response.status === 403 &&
-            response.headers.get('www-authenticate')?.includes('insufficient_scope')))
-      ) {
-        await input.authorization.rejected(input.config, token, response);
-        await response.body?.cancel().catch(() => undefined);
-        throw new McpAuthorizationError('reauthorize');
-      }
-      const location =
-        response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
-      if (location) {
-        const target = new URL(location, String(url));
-        if (!isWithinOrigin(endpoint, target)) {
-          await response.body?.cancel().catch(() => undefined);
-          target.username = target.password = target.search = target.hash = '';
-          throw new McpRedirectError(target.href);
-        }
-      }
-      const method = typeof init?.body === 'string' ? JSON.parse(init.body).method : undefined;
-      // Subscriptions are long-lived streams; ordinary RPC responses have a total byte budget.
-      if (!response.body || init?.method === 'GET' || method === 'subscriptions/listen')
-        return response;
-      let bytes = 0;
-      const body = response.body.pipeThrough(
-        new TransformStream<Uint8Array, Uint8Array>({
-          transform(chunk, controller) {
-            bytes += chunk.byteLength;
-            if (bytes > MAX_RESPONSE_BYTES)
-              throw new Error('The MCP response exceeds the size limit.');
-            controller.enqueue(chunk);
-          },
-        }),
-      );
-      // React Native's Response constructor stringifies streams instead of consuming them.
-      if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
-        Object.defineProperty(response, 'body', { value: body });
-        return response;
-      }
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
-      let text = '';
+      const requestStage = method === 'tools/list' ? 'tools-list' : stage;
+      const isHandshake =
+        rpc?.id !== undefined && (method === 'server/discover' || method === 'initialize');
+      let observing = true;
+      const finish = () => {
+        observing = false;
+        signal.removeEventListener('abort', finish);
+        if (rpc?.id !== undefined) toolRequests.get(rpc.id)?.resolve();
+        if (rpc?.id !== undefined && requests.get(rpc.id) === finish) requests.delete(rpc.id);
+      };
+      if (rpc?.id !== undefined) requests.set(rpc.id, finish);
+      signal.addEventListener('abort', finish, { once: true });
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          text += decoder.decode(value, { stream: true });
+        if (!isWithinOrigin(endpoint, new URL(String(url)))) {
+          const error = new McpAuthorizationError('configuration');
+          observe(error);
+          throw error;
         }
-        text += decoder.decode();
-      } finally {
-        reader.releaseLock();
+        const token = await input.authorization.token(input.config, signal);
+        const headers = new Headers(init?.headers);
+        if (token) headers.set('Authorization', `Bearer ${token}`);
+        const request = {
+          ...init,
+          headers,
+          signal: init?.method === 'GET' ? AbortSignal.any([eventsAbort.signal, signal]) : signal,
+        };
+        let response: Response;
+        try {
+          response = await expoFetch(url as string, request);
+        } catch (error) {
+          transportFailure(error, request.signal, requestStage);
+          finish();
+          throw error;
+        }
+        if (
+          token &&
+          (response.status === 401 ||
+            (response.status === 403 &&
+              response.headers.get('www-authenticate')?.includes('insufficient_scope')))
+        ) {
+          await input.authorization.rejected(input.config, token, response);
+          await response.body?.cancel().catch(() => undefined);
+          const error = Object.assign(new McpAuthorizationError('reauthorize'), {
+            status: response.status,
+          });
+          observe(error);
+          throw error;
+        }
+        const location =
+          response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
+        if (location) {
+          const target = new URL(location, String(url));
+          if (!isWithinOrigin(endpoint, target)) {
+            await response.body?.cancel().catch(() => undefined);
+            target.username = target.password = target.search = target.hash = '';
+            const error = Object.assign(new McpRedirectError(target.href), {
+              status: response.status,
+            });
+            observe(error);
+            throw error;
+          }
+        }
+        // Subscriptions are long-lived streams; ordinary RPC responses have a total byte budget.
+        if (!response.body || init?.method === 'GET' || method === 'subscriptions/listen') {
+          finish();
+          return response;
+        }
+        let bytes = 0;
+        const source = response.body.getReader();
+        const failStream = (
+          error: unknown,
+          facts: McpConnectionFailure,
+          canRetryHandshake = false,
+        ) => {
+          if (!observing) return;
+          // The SDK discards SSE errors. Settle the handshake or the send promise
+          // for this exact request before its eventual SDK deadline hides the cause.
+          if (
+            isHandshake &&
+            !connectionSettled &&
+            response.headers.get('content-type')?.includes('text/event-stream')
+          ) {
+            const failure =
+              mode === 'auto' && canRetryHandshake
+                ? new SdkError(SdkErrorCode.EraNegotiationFailed, 'MCP handshake stream failed', {
+                    cause: error,
+                  })
+                : error;
+            if (failure && typeof failure === 'object') attemptFacts.set(failure, facts);
+            rejectHandshake(failure);
+          }
+          const pending = rpc?.id !== undefined ? toolRequests.get(rpc.id) : undefined;
+          if (pending) {
+            const failure = withMcpFailureFacts(error, facts);
+            if (failure && typeof failure === 'object') toolStreamFacts.set(failure, facts);
+            pending.reject(failure);
+          }
+          finish();
+        };
+        // Observe failures even when the SDK stops pulling with bytes still queued.
+        const streamFailure = source.closed
+          .catch(async (error) => {
+            // Let the SDK dispatch bytes already read through its SSE transforms.
+            // Its matching response calls finish(), suppressing a late stream failure.
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            if (
+              !observing ||
+              request.signal.aborted ||
+              closed ||
+              (isHandshake && connectionSettled)
+            )
+              return;
+            failStream(error, transportFailure(error, request.signal, requestStage), true);
+          })
+          .catch(() => undefined);
+        const body = new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            let result: ReadableStreamReadResult<Uint8Array>;
+            try {
+              result = await source.read();
+            } catch (error) {
+              await streamFailure;
+              finish();
+              controller.error(error);
+              return;
+            }
+            if (result.done) {
+              finish();
+              source.releaseLock();
+              controller.close();
+              return;
+            }
+            bytes += result.value.byteLength;
+            if (bytes > MAX_RESPONSE_BYTES) {
+              const error = Object.assign(new Error('The MCP response exceeds the size limit.'), {
+                [MCP_CONNECTION_ERROR_KIND]: 'size-limit' as const,
+              });
+              failStream(error, observe(error, requestStage));
+              controller.error(error);
+              await source.cancel(error).catch(() => undefined);
+              return;
+            }
+            controller.enqueue(result.value);
+          },
+          cancel(reason) {
+            finish();
+            return source.cancel(reason);
+          },
+        });
+        // React Native's Response constructor stringifies streams instead of consuming them.
+        if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+          Object.defineProperty(response, 'body', { value: body });
+          return response;
+        }
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let text = '';
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            text += decoder.decode(value, { stream: true });
+          }
+          text += decoder.decode();
+        } finally {
+          reader.releaseLock();
+        }
+        return new Response([204, 205, 304].includes(response.status) ? null : text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      } catch (error) {
+        finish();
+        throw error;
       }
-      return new Response([204, 205, 304].includes(response.status) ? null : text, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      });
+    },
+  });
+
+  // Keep each tools/list send pending through its response stream so the SDK's
+  // own request handler receives a stream rejection for the matching RPC ID.
+  const send = transport.send;
+  transport.send = (message, options) => {
+    if ('method' in message && message.method === 'notifications/cancelled')
+      requests.get(message.params!.requestId as string | number)?.();
+    if (!('method' in message) || message.method !== 'tools/list' || !('id' in message))
+      return send.call(transport, message, options);
+    const id = message.id;
+    const completion = new Promise<void>((resolve, reject) => {
+      toolRequests.set(id, { resolve, reject });
+    });
+    return Promise.all([send.call(transport, message, options), completion])
+      .then(() => undefined)
+      .finally(() => toolRequests.delete(id));
+  };
+
+  // The SDK replaces onmessage during its probe window. Intercept assignments so
+  // every JSON-RPC response settles its own observation before the SDK advances.
+  let onmessage: typeof transport.onmessage;
+  Object.defineProperty(transport, 'onmessage', {
+    configurable: true,
+    get: () => onmessage,
+    set: (handler: typeof transport.onmessage) => {
+      onmessage =
+        handler &&
+        ((message) => {
+          if (
+            'id' in message &&
+            message.id !== undefined &&
+            ('result' in message || 'error' in message)
+          )
+            requests.get(message.id)?.();
+          handler(message);
+        });
     },
   });
 
@@ -403,7 +671,12 @@ async function connectRemoteMcpClient(
   };
 
   try {
-    await client.connect(transport, { signal: input.signal, timeout: 15_000 });
+    await Promise.race([
+      client.connect(transport, { signal: input.signal, timeout: 15_000 }),
+      handshakeFailure,
+    ]);
+    connectionSettled = true;
+    for (const finish of requests.values()) finish();
     input.signal.throwIfAborted();
     subscription = client.autoOpenedSubscription;
     const opened = subscription;
@@ -414,6 +687,10 @@ async function connectRemoteMcpClient(
     if (!foreground) stopSubscription();
     input.signal.throwIfAborted();
   } catch (error) {
+    connectionSettled = true;
+    for (const finish of requests.values()) finish();
+    const facts = observe(error);
+    publish(facts);
     closed = true;
     connectionAbort.abort();
     eventsAbort.abort();
@@ -423,7 +700,12 @@ async function connectRemoteMcpClient(
   const serverInfo = client.getServerVersion();
   if (!serverInfo) {
     await client.close();
-    throw new Error('The MCP server did not return its identity.');
+    const error = Object.assign(new Error('The MCP server did not return its identity.'), {
+      [MCP_CONNECTION_ERROR_KIND]: 'missing-identity' as const,
+    });
+    const facts = observe(error);
+    publish(facts);
+    throw error;
   }
   const capabilities = client.getServerCapabilities();
   return {
@@ -453,9 +735,24 @@ async function connectRemoteMcpClient(
       }
     },
     async listTools(options): Promise<ListToolsResult> {
-      const result = capabilities?.tools
-        ? await client.listTools(undefined, { ...options?.options, cacheMode: 'refresh' })
-        : { tools: [] };
+      stage = 'tools-list';
+      input.onConnectionStage?.(stage);
+      let result: ListToolsResult;
+      try {
+        result = capabilities?.tools
+          ? await client.listTools(undefined, { ...options?.options, cacheMode: 'refresh' })
+          : { tools: [] };
+      } catch (error) {
+        const facts = normalizeMcpConnectionFailure(error, {
+          stage: 'tools-list',
+          didTimeout: false,
+          timeoutMs: 15_000,
+          readFacts: (value) => toolStreamFacts.get(value),
+          isTransportFailure: (value) => transportFailures.has(value),
+        });
+        options?.onFailure?.(facts);
+        throw error;
+      }
       tools.clear();
       for (const tool of result.tools) tools.set(tool.name, tool);
       const hintedTtl =

@@ -7,6 +7,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 
 import { createHttpClient, HttpError } from '@/backend/services/http';
+import { readMcpOperationStep } from '@/shared/data/api/mcpFailureFacts';
 
 import { McpOAuthRuntime } from '../McpOAuthRuntime';
 
@@ -196,6 +197,50 @@ describe('native remote MCP authorization', () => {
       expect(exchangeAuthorization).not.toHaveBeenCalled();
       expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
       await runtime.stop();
+    },
+  );
+
+  it('marks grant storage failures as persistence without changing identity or cleanup', async () => {
+    const runtime = new McpOAuthRuntime();
+    const { attempt, callback } = await begin(runtime);
+    const error = Object.freeze(new Error('Bearer grant-sentinel https://private/#fragment'));
+    jest.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(error);
+    await expect(runtime.complete(attempt.attemptId, callback.href)).rejects.toBe(error);
+    expect(readMcpOperationStep(error)).toBe('persistence');
+    expect(JSON.stringify(readMcpOperationStep(error))).not.toMatch(
+      /Bearer|sentinel|https|fragment/,
+    );
+    expect(runtime.findAttempt(callback.href)).toBeUndefined();
+    await runtime.stop();
+  });
+
+  it.each(['primitive grant failure', Object.freeze(new Error('frozen grant failure'))])(
+    'carries each grant persistence rejection with its own step and original value: %p',
+    async (error) => {
+      const runtime = new McpOAuthRuntime();
+      jest.mocked(SecureStore.setItemAsync).mockRejectedValue(error);
+      try {
+        const first = await begin(runtime);
+        const failure = await runtime
+          .complete(first.attempt.attemptId, first.callback.href)
+          .catch((value: unknown) => value);
+        expect(readMcpOperationStep(failure)).toBe('persistence');
+        if (typeof error === 'object') expect(failure).toBe(error);
+        else expect(failure).toMatchObject({ cause: error });
+        expect(runtime.findAttempt(first.callback.href)).toBeUndefined();
+        const second = await begin(runtime);
+        const retry = await runtime
+          .complete(second.attempt.attemptId, second.callback.href)
+          .catch((value: unknown) => value);
+        expect(readMcpOperationStep(retry)).toBe('persistence');
+        expect(retry).toMatchObject({ cause: error });
+        expect(retry).not.toBe(failure);
+        expect(readMcpOperationStep(error)).toBe(
+          typeof error === 'object' ? 'persistence' : undefined,
+        );
+      } finally {
+        await runtime.stop();
+      }
     },
   );
 

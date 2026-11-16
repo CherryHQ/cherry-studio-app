@@ -26,6 +26,7 @@ import {
   type McpConnectionConfig,
   type McpOAuthStartInput,
 } from '@/shared/contracts/mcp';
+import { withMcpOperationStep } from '@/shared/data/api/mcpFailureFacts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { assertMcpOAuthUrl, createMcpOAuthFetch } from './mcpOAuthFetch';
@@ -285,7 +286,7 @@ export class McpOAuthRuntime {
     return { attemptId, authorizationUrl: url.href, redirectUrl };
   }
 
-  async complete(attemptId: string, callback: string) {
+  async complete(attemptId: string, callback: string, operation?: object) {
     const attempt = this.attempts.get(attemptId);
     if (!attempt || attempt.completing || attempt.expiresAt <= Date.now())
       throw new McpAuthorizationError('cancelled');
@@ -348,7 +349,11 @@ export class McpOAuthRuntime {
         { ...tokens, scope: tokens.scope ?? attempt.scope },
         startedAt,
       );
-      await this.serialize(() => this.write(authorizationId, grant));
+      try {
+        await this.serialize(() => this.write(authorizationId, grant));
+      } catch (error) {
+        throw withMcpOperationStep(error, 'persistence', operation);
+      }
       if (attempt.abort.signal.aborted) {
         await this.remove(authorizationId);
         throw new McpAuthorizationError('cancelled');

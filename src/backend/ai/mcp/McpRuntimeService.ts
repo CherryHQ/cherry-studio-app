@@ -33,7 +33,8 @@ import type {
 } from '@/shared/contracts';
 import {
   McpAuthorizationError,
-  McpLegacyFallbackError,
+  type McpConnectionFailure,
+  type McpFailureStage,
   type McpOAuthStartInput,
   type McpContentPreview,
   type McpPromptEntry,
@@ -48,6 +49,11 @@ import { McpResultSourceSchema, type McpResourceReference } from '@/shared/contr
 import type { McpElicitationResponse } from '@/shared/contracts/mcpInteraction';
 import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import {
+  withMcpFailureFacts,
+  withMcpOperationStep,
+  readMcpOperationStep,
+} from '@/shared/data/api/mcpFailureFacts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
 import { enablesMcpServer } from '@/shared/utils/agentMcpBinding';
@@ -58,6 +64,13 @@ import { endMcpTrace } from './endMcpTrace';
 import { McpAppAccess, type McpAppConnection } from './McpAppAccess';
 import { mcpToolAppUri, mcpToolVisible } from './mcpAppMetadata';
 import { McpAppRuntime } from './McpAppRuntime';
+import {
+  McpTimeoutError,
+  attachMcpConnectionFailure,
+  normalizeMcpConnectionFailure,
+  formatMcpConnectionFailureSummary,
+  formatMcpDiscoveryWarningSummary,
+} from './mcpConnectionFailure';
 import { listMcpPrompts, readMcpContent } from './mcpContent';
 import { McpElicitationBroker } from './mcpElicitation';
 import {
@@ -152,17 +165,23 @@ type ServerRuntimeState = {
   connectionConfig: McpRuntimeConnectionConfig;
   connectionKey?: Promise<string>;
   /** Setup shared by every caller; cancelled only once no caller still waits for it. */
-  connection?: { client: Promise<McpRuntimeClient>; cancel: AbortController; waiters: number };
+  connection?: {
+    client: Promise<McpRuntimeClient>;
+    cancel: AbortController;
+    waiters: number;
+    stage: McpFailureStage;
+    failure?: McpConnectionFailure;
+    stageListeners: Set<(stage: McpFailureStage) => void>;
+  };
   discoveryFailure?: { attempts: number; nextAttemptAt: number };
+  discovery?: Promise<ListToolsResult['tools']>;
   prompts?: McpPromptEntry[];
   generation: number;
   refresh?: Promise<void>;
   runtimeError?: string;
+  connectionFailure?: McpConnectionFailure;
   serverId: string;
 };
-
-/** Distinguishes "we gave up waiting" from a real transport error. */
-class McpTimeoutError extends Error {}
 
 /** Runtime work superseded by invalidation; it must not count as a server failure. */
 class McpEvictedError extends Error {}
@@ -178,6 +197,7 @@ function unavailableToolError(): McpRuntimeToolError {
 async function listAllTools(
   client: McpRuntimeClient,
   signal: AbortSignal,
+  onFailure?: (facts: McpConnectionFailure) => void,
 ): Promise<ListToolsResult['tools']> {
   const definitions: ListToolsResult['tools'] = [];
   const seenCursors = new Set<string>();
@@ -187,15 +207,18 @@ async function listAllTools(
   while (true) {
     const page = await client.listTools({
       options: { signal },
+      onFailure,
       ...(cursor ? { params: { cursor } } : {}),
     });
     for (const tool of page.tools) {
       if (seenToolNames.has(tool.name)) {
-        throw new McpRuntimeToolError(
+        const error = new McpRuntimeToolError(
           'mcp_tool_unavailable',
           'The MCP tool catalog contains a duplicate tool identity.',
           false,
         );
+        onFailure?.({ stage: 'tools-list', kind: 'catalog-integrity' });
+        throw error;
       }
       seenToolNames.add(tool.name);
       definitions.push(tool);
@@ -205,11 +228,13 @@ async function listAllTools(
       break;
     }
     if (seenCursors.has(page.nextCursor)) {
-      throw new McpRuntimeToolError(
+      const error = new McpRuntimeToolError(
         'mcp_tool_unavailable',
         'The MCP tool catalog returned a repeated page cursor.',
         false,
       );
+      onFailure?.({ stage: 'tools-list', kind: 'catalog-integrity' });
+      throw error;
     }
     seenCursors.add(page.nextCursor);
     cursor = page.nextCursor;
@@ -228,7 +253,12 @@ function createMcpClient(
   authorization: McpOAuthRuntime,
   pooled?: Pick<
     Parameters<typeof createRemoteMcpClient>[0],
-    'elicit' | 'onCatalogChanged' | 'shouldUseLegacyProtocol' | 'onLegacyPreferenceChanged'
+    | 'elicit'
+    | 'onCatalogChanged'
+    | 'shouldUseLegacyProtocol'
+    | 'onLegacyPreferenceChanged'
+    | 'onConnectionStage'
+    | 'onConnectionFailure'
   >,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
@@ -286,7 +316,10 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
 export class McpRuntimeService extends BaseService implements McpModule {
   readonly pluginAuthorizations: PluginAuthorizationManager;
   private readonly oauth = new McpOAuthRuntime();
-  private readonly oauthCompletions = new Map<string, Promise<McpServer>>();
+  private readonly oauthCompletions = new Map<
+    string,
+    { completion: Promise<McpServer>; operation: object }
+  >();
   private readonly lifetime = new AbortController();
   private readonly temporaryOperations = new Set<Promise<unknown>>();
   private foreground = AppState.currentState === 'active';
@@ -309,15 +342,29 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return this.oauth.begin(input, previous);
   }
 
-  completeOAuth(attemptId: string, callbackUrl: string): Promise<McpServer> {
+  completeOAuth(attemptId: string, callbackUrl: string, operation?: object): Promise<McpServer> {
     this.lifetime.signal.throwIfAborted();
     const current = this.oauthCompletions.get(attemptId);
-    if (current) return current;
-    storageMutationGate.assertWritable();
-    const completion = this.saveOAuthConnection(attemptId, callbackUrl).finally(() => {
+    if (current) {
+      if (!operation || operation === current.operation) return current.completion;
+      return current.completion.catch((error: unknown) => {
+        throw withMcpOperationStep(
+          error,
+          readMcpOperationStep(error, current.operation) ?? 'authorization',
+          operation,
+        );
+      });
+    }
+    const scope = operation ?? {};
+    try {
+      storageMutationGate.assertWritable();
+    } catch (error) {
+      throw withMcpOperationStep(error, 'persistence', scope);
+    }
+    const completion = this.saveOAuthConnection(attemptId, callbackUrl, scope).finally(() => {
       this.oauthCompletions.delete(attemptId);
     });
-    this.oauthCompletions.set(attemptId, completion);
+    this.oauthCompletions.set(attemptId, { completion, operation: scope });
     return completion;
   }
 
@@ -330,8 +377,19 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return attemptId ? this.completeOAuth(attemptId, callbackUrl) : undefined;
   }
 
-  private async saveOAuthConnection(attemptId: string, callbackUrl: string): Promise<McpServer> {
-    const completed = await this.oauth.complete(attemptId, callbackUrl);
+  private async saveOAuthConnection(
+    attemptId: string,
+    callbackUrl: string,
+    operation: object,
+  ): Promise<McpServer> {
+    const completed = await this.oauth
+      .complete(attemptId, callbackUrl, operation)
+      .catch((error: unknown) => {
+        throw readMcpOperationStep(error, operation) !== undefined
+          ? error
+          : withMcpOperationStep(error, 'authorization', operation);
+      });
+    let step: 'connection' | 'persistence' = 'connection';
     try {
       this.lifetime.signal.throwIfAborted();
       await this.getServerInfo({
@@ -340,6 +398,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         oauth: { authorizationId: completed.authorizationId, clientId: completed.clientId },
       });
       this.lifetime.signal.throwIfAborted();
+      step = 'persistence';
       storageMutationGate.assertWritable();
       const server = await mcpServerService.saveOAuthConnection(
         {
@@ -357,8 +416,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
       }
       return server;
     } catch (error) {
-      await this.forgetOAuthAuthorization(completed.authorizationId);
-      throw error;
+      try {
+        await this.forgetOAuthAuthorization(completed.authorizationId);
+      } catch {
+        // Keep the primary failure if cleanup also fails.
+      }
+      throw withMcpOperationStep(error, step, operation);
     }
   }
 
@@ -449,7 +512,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       .catch(() => undefined);
   }
 
-  /** Runtime metadata for the settings list, initializing any runnable server not yet observed. */
+  /** Settings metadata, sharing discovery and immediately retrying failed summaries. */
   async getRuntimeSummaries(
     servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>> {
@@ -459,7 +522,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
           return [];
         }
         const state = this.getRuntimeState(server);
-        return state.client ? [] : [this.fetchTools(server, state)];
+        // Explicit refresh retries failures immediately; the send path owns backoff.
+        if (state.discovery) return [state.discovery];
+        return state.client && !state.runtimeError ? [] : [this.fetchTools(server, state)];
       }),
     );
 
@@ -752,7 +817,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
     // Abort token exchanges first. Then join outer completion/inspection work while persistence
     // dependencies remain alive; failed completions can still remove their newly created grant.
     await this.oauth.stop();
-    await Promise.allSettled([...this.oauthCompletions.values(), ...this.temporaryOperations]);
+    await Promise.allSettled([
+      ...Array.from(this.oauthCompletions.values(), ({ completion }) => completion),
+      ...this.temporaryOperations,
+    ]);
     await this.pluginAuthorizations.stop();
   }
 
@@ -951,7 +1019,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
 
     const state = this.runtimeStates.get(server.id);
     if (state?.runtimeError) {
-      return { ...snapshot, lastError: state.runtimeError, state: 'error' };
+      return {
+        ...snapshot,
+        lastError: state.runtimeError,
+        ...(state.connectionFailure ? { connectionFailure: state.connectionFailure } : {}),
+        state: 'error',
+      };
     }
     if (state?.client) {
       return { ...snapshot, state: 'connected' };
@@ -959,19 +1032,28 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return { ...snapshot, state: 'connecting' };
   }
 
-  private recordRuntimeError(state: ServerRuntimeState, error: unknown): void {
-    state.runtimeError =
-      error instanceof McpTimeoutError
-        ? 'MCP request timed out.'
-        : error instanceof McpRuntimeToolError || error instanceof McpLegacyFallbackError
-          ? error.message
-          : 'MCP connection failed.';
+  private recordRuntimeError(
+    state: ServerRuntimeState,
+    error: unknown,
+    facts?: McpConnectionFailure,
+  ): void {
+    state.connectionFailure =
+      facts ??
+      normalizeMcpConnectionFailure(error, {
+        stage: 'initialize',
+        readFacts: () => undefined,
+        didTimeout: error instanceof McpTimeoutError,
+        timeoutMs: TOOLS_FETCH_TIMEOUT_MS,
+      });
+    state.runtimeError = formatMcpConnectionFailureSummary(state.connectionFailure);
   }
 
   private async getClient(
     server: McpServer,
     state: ServerRuntimeState,
     signal: AbortSignal,
+    onFailureStage?: (stage: McpFailureStage, facts?: McpConnectionFailure) => void,
+    onStage?: (stage: McpFailureStage) => void,
   ): Promise<McpRuntimeClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
@@ -991,6 +1073,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
         'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
         'mcp.connection.generation': generation,
       });
+      let stage: McpFailureStage = 'initialize';
+      let failure: McpConnectionFailure | undefined;
+      const stageListeners = new Set<(stage: McpFailureStage) => void>();
       const pending: Promise<McpRuntimeClient> = createMcpClient(
         state.connectionConfig,
         setupSignal,
@@ -998,6 +1083,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
         this.foreground,
         this.oauth,
         {
+          onConnectionFailure: (facts) => {
+            failure = facts;
+          },
+          onConnectionStage: (value) => {
+            stage = value;
+            for (const listener of stageListeners) listener(value);
+          },
           elicit: (params, requestSignal) =>
             this.askForServer(server, state, params, requestSignal),
           shouldUseLegacyProtocol: state.shouldUseLegacyProtocol,
@@ -1031,14 +1123,33 @@ export class McpRuntimeService extends BaseService implements McpModule {
             state.connection = undefined;
           }
         });
-      connection = { client: pending, cancel, waiters: 0 };
+      connection = {
+        client: pending,
+        cancel,
+        waiters: 0,
+        stageListeners,
+        get failure() {
+          return failure;
+        },
+        get stage() {
+          return stage;
+        },
+      };
       state.connection = connection;
     }
 
     connection.waiters += 1;
+    if (onStage) {
+      connection.stageListeners.add(onStage);
+      onStage(connection.stage);
+    }
     try {
       return await raceAbort(connection.client, signal);
+    } catch (error) {
+      onFailureStage?.(connection.stage, connection.failure);
+      throw error;
     } finally {
+      if (onStage) connection.stageListeners.delete(onStage);
       connection.waiters -= 1;
       if (connection.waiters === 0 && state.connection === connection) {
         state.connection = undefined;
@@ -1076,23 +1187,53 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.connection.temporary': true,
     });
     let client: McpRuntimeClient | undefined;
+    let stage: McpFailureStage = 'initialize';
+    let snapshot: McpConnectionFailure | undefined;
     try {
-      client = await createMcpClient(
+      const connecting = createMcpClient(
         config,
         bound.signal,
         this.pluginAuthorizations,
         this.foreground,
         this.oauth,
-      );
+        {
+          onConnectionFailure: (facts) => {
+            snapshot = facts;
+          },
+          onConnectionStage: (value) => {
+            if (value !== stage) bound.restart();
+            stage = value;
+          },
+        },
+      ).then((connected) => {
+        if (bound.signal.aborted) {
+          this.closeQuietly(connected);
+          bound.signal.throwIfAborted();
+        }
+        return connected;
+      });
+      client = await raceAbort(connecting, bound.signal);
       bound.signal.throwIfAborted();
       trace?.end('ok');
+      stage = 'tools-list';
       return await operation(client);
     } catch (error) {
       endMcpTrace(trace, error, bound.signal, bound.didTimeout());
-      if (bound.didTimeout()) {
-        throw new McpTimeoutError(`${label} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`);
-      }
-      throw error;
+      if (
+        this.lifetime.signal.aborted ||
+        (!bound.didTimeout() && error instanceof Error && error.name === 'AbortError')
+      )
+        throw error;
+      const failure = normalizeMcpConnectionFailure(error, {
+        readFacts: () => snapshot,
+        stage,
+        didTimeout: bound.didTimeout(),
+        timeoutMs: TOOLS_FETCH_TIMEOUT_MS,
+      });
+      const thrown = bound.didTimeout()
+        ? new McpTimeoutError(`${label} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`)
+        : error;
+      throw withMcpFailureFacts(thrown, failure);
     } finally {
       bound.done();
       if (client) {
@@ -1289,13 +1430,34 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * client may be stale (backgrounded socket, expired session); a timeout or a
    * cancelled caller never does.
    */
-  private async fetchTools(
+  private fetchTools(
     server: McpServer,
     state: ServerRuntimeState,
     signal?: AbortSignal,
   ): Promise<ListToolsResult['tools']> {
+    // Settings tools and summaries share one discovery outcome. Turn cancellation
+    // remains scoped to its caller rather than cancelling a shared settings read.
+    if (signal) return this.discoverTools(server, state, signal);
+    if (!state.discovery) {
+      const pending = this.discoverTools(server, state).finally(() => {
+        if (state.discovery === pending) state.discovery = undefined;
+      });
+      state.discovery = pending;
+    }
+    return state.discovery;
+  }
+
+  private async discoverTools(
+    server: McpServer,
+    state: ServerRuntimeState,
+    signal?: AbortSignal,
+  ): Promise<ListToolsResult['tools']> {
+    let snapshot: McpConnectionFailure | undefined;
+    const onFailure = (facts: McpConnectionFailure) => {
+      snapshot = facts;
+    };
     try {
-      return await this.fetchRawTools(server, state, signal);
+      return await this.fetchRawTools(server, state, signal, onFailure);
     } catch (error) {
       if (
         error instanceof McpEvictedError ||
@@ -1304,17 +1466,19 @@ export class McpRuntimeService extends BaseService implements McpModule {
         error instanceof McpTimeoutError ||
         signal?.aborted
       ) {
-        if (error instanceof McpAuthorizationError) this.recordDiscoveryFailure(state, error);
+        if (snapshot?.kind === 'catalog-integrity') this.recordRuntimeError(state, error, snapshot);
+        else if (error instanceof McpAuthorizationError)
+          this.recordDiscoveryFailure(state, error, snapshot);
         throw error;
       }
       logger.warn('MCP tools() failed, reconnecting once', { serverId: server.id });
       this.resetConnection(state);
       try {
-        return await this.fetchRawTools(server, state, signal);
+        return await this.fetchRawTools(server, state, signal, onFailure);
       } catch (retryError) {
         if (!(retryError instanceof McpEvictedError) && !signal?.aborted) {
           this.resetConnection(state);
-          this.recordDiscoveryFailure(state, retryError);
+          this.recordDiscoveryFailure(state, retryError, snapshot);
         }
         throw retryError;
       }
@@ -1325,18 +1489,43 @@ export class McpRuntimeService extends BaseService implements McpModule {
     server: McpServer,
     state: ServerRuntimeState,
     signal?: AbortSignal,
+    onFailure?: (facts: McpConnectionFailure) => void,
   ): Promise<ListToolsResult['tools']> {
     const generation = state.generation;
-    // One bound covers connect + full pagination, matching the old wall-clock
-    // ceiling. Eviction and the caller's cancellation ride the same signal.
+    // Each handshake gets a fresh bound; pagination shares the final handshake's
+    // remaining budget. Eviction and caller cancellation ride the same signal.
     const bound = createBoundedSignal(
       TOOLS_FETCH_TIMEOUT_MS,
       state.abort.signal,
       ...(signal ? [signal] : []),
     );
+    let stage: McpFailureStage = 'initialize';
+    let snapshot: McpConnectionFailure | undefined;
     try {
-      const client = await this.getClient(server, state, bound.signal);
-      return await this.listAndRecord(server, state, client, bound.signal, bound.didTimeout);
+      const client = await this.getClient(
+        server,
+        state,
+        bound.signal,
+        (value, facts) => {
+          snapshot = facts;
+          stage = value;
+        },
+        (value) => {
+          if (value !== stage) bound.restart();
+          stage = value;
+        },
+      );
+      stage = 'tools-list';
+      return await this.listAndRecord(
+        server,
+        state,
+        client,
+        bound.signal,
+        bound.didTimeout,
+        (facts) => {
+          snapshot = facts;
+        },
+      );
     } catch (error) {
       if (error instanceof McpEvictedError) {
         throw error;
@@ -1351,15 +1540,23 @@ export class McpRuntimeService extends BaseService implements McpModule {
           false,
         );
       }
+      const failure = normalizeMcpConnectionFailure(error, {
+        readFacts: () => snapshot,
+        stage,
+        didTimeout: bound.didTimeout(),
+        timeoutMs: TOOLS_FETCH_TIMEOUT_MS,
+      });
+      onFailure?.(failure);
       if (bound.didTimeout()) {
         this.resetConnection(state);
         const timeout = new McpTimeoutError(
           `MCP server ${server.name} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`,
         );
-        this.recordDiscoveryFailure(state, timeout);
+        attachMcpConnectionFailure(timeout, failure);
+        this.recordDiscoveryFailure(state, timeout, failure);
         throw timeout;
       }
-      throw error;
+      throw withMcpFailureFacts(error, failure);
     } finally {
       bound.done();
     }
@@ -1375,6 +1572,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     client: McpRuntimeClient,
     signal: AbortSignal,
     didTimeout?: () => boolean,
+    onFailure?: (facts: McpConnectionFailure) => void,
   ): Promise<ListToolsResult['tools']> {
     const generation = state.generation;
     const trace = this.traces?.startTrace('mcp.list_tools', undefined, {
@@ -1386,7 +1584,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     let prompts: McpPromptEntry[] | undefined;
     try {
       [rawTools, prompts] = await Promise.all([
-        listAllTools(client, signal),
+        listAllTools(client, signal, onFailure),
         server.origin === 'builtin'
           ? undefined
           : listMcpPrompts(client, signal).catch((error: unknown) => {
@@ -1440,7 +1638,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
         ? catalog.tools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name))
         : catalog.tools;
     const discoveryWarnings = [...catalog.discoveryWarnings];
-    state.runtimeError = discoveryWarnings.join(' ') || undefined;
+    state.runtimeError =
+      discoveryWarnings.length > 0 ? formatMcpDiscoveryWarningSummary() : undefined;
+    state.connectionFailure = undefined;
     if (discoveryWarnings.length > 0) this.recordDiscoveryFailure(state);
     else state.discoveryFailure = undefined;
     state.catalog = { discoveryWarnings, expiresAt, source: 'live', tools: rawTools };
@@ -1474,8 +1674,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
     for (const listener of this.promptCatalogListeners) listener();
   }
 
-  private recordDiscoveryFailure(state: ServerRuntimeState, error?: unknown): void {
-    if (error !== undefined) this.recordRuntimeError(state, error);
+  private recordDiscoveryFailure(
+    state: ServerRuntimeState,
+    error?: unknown,
+    facts?: McpConnectionFailure,
+  ): void {
+    if (error !== undefined) this.recordRuntimeError(state, error, facts);
     const attempts = (state.discoveryFailure?.attempts ?? 0) + 1;
     const delay = Math.min(DISCOVERY_BACKOFF_MS * 2 ** (attempts - 1), DISCOVERY_BACKOFF_MAX_MS);
     state.discoveryFailure = { attempts, nextAttemptAt: Date.now() + delay };
