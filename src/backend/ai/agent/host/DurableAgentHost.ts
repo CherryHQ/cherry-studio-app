@@ -164,6 +164,8 @@ export class DurableAgentHost implements AgentProtocol {
   /** Keyed by {@link laneKey}. */
   private readonly live = new Map<string, LiveSession>();
   private readonly attachments = new Map<string, Promise<LiveSession>>();
+  /** Startup observation failed validation. Keep that Session's receipts and deny execution. */
+  private readonly recoveryFailures = new Set<string>();
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
   /** Branch alternatives by {@link siblingKey}, refreshed when a sibling set changes. */
@@ -216,6 +218,7 @@ export class DurableAgentHost implements AgentProtocol {
   hasPendingStorageWork() {
     return (
       !this.accepting ||
+      this.recoveryFailures.size > 0 ||
       this.admissions.size > 0 ||
       [...this.live.values()].some((state) => state.active || state.queue.length) ||
       this.pendingWrites.size > 0
@@ -291,6 +294,8 @@ export class DurableAgentHost implements AgentProtocol {
     if (!this.ports.durableStorage || !this.ports.recordDurableUsage)
       throw new Error('Persistent Agent storage and usage ports are required.');
     let initialized = false;
+    // A new runtime generation retries the original data; isolation is never persisted as repair.
+    this.recoveryFailures.clear();
     const execution: RuntimeExecutionPorts = {
       scriptSandbox: this.ports.scriptSandbox?.(),
       writeToolOutput: this.ports.writeToolOutput
@@ -328,6 +333,7 @@ export class DurableAgentHost implements AgentProtocol {
       },
       assertExecutionAllowed: async (identity, signal) => {
         signal.throwIfAborted();
+        this.assertSessionRecovered(identity.sessionId);
         storageMutationGate.assertWritable();
         if (this.deleting.has(identity.sessionId))
           fail('SESSION_NOT_FOUND', 'This session is being deleted.');
@@ -405,11 +411,34 @@ export class DurableAgentHost implements AgentProtocol {
         'agent.recovery.unfinished_count': unfinished.length,
       });
       for (const lane of unfinished) {
+        if (this.recoveryFailures.has(lane.sessionId)) continue;
         const current = await this.isCurrentConversation(lane);
         this.controller.signal.throwIfAborted();
-        if (current) await this.attach(lane);
+        if (!current) continue;
+        try {
+          await this.attach(lane);
+        } catch (error) {
+          this.controller.signal.throwIfAborted();
+          if (!(error instanceof ZodError)) throw error;
+          this.recoveryFailures.add(lane.sessionId);
+          logger.error('Agent operation failed', {
+            error,
+            operation: 'ai.recovery',
+            reasonCode: 'invalid_observation',
+            sessionId: lane.sessionId,
+            slot: lane.slot,
+          });
+          // Sibling answers share a transcript and parent repair. Do not keep partial observation.
+          for (const state of this.liveStates(lane.sessionId)) {
+            await state.unsubscribe();
+            state.background?.retire();
+            this.live.delete(laneKey(state.lane));
+          }
+          this.setStatus(lane.sessionId, null);
+        }
       }
       for (const { lane } of copies) {
+        if (this.recoveryFailures.has(lane.sessionId)) continue;
         const current = await this.isCurrentConversation(lane);
         this.controller.signal.throwIfAborted();
         if (!current) await this.conversations.discardConversation(lane);
@@ -1472,6 +1501,7 @@ export class DurableAgentHost implements AgentProtocol {
       await this.conversations.drainUsage();
       if (!(await this.store.deleteSession(sessionId)))
         fail('SESSION_NOT_FOUND', 'The session no longer exists.');
+      this.recoveryFailures.delete(sessionId);
       this.forksToName.delete(sessionId);
       // Missing Cherry ownership is a durable invalidation: no startup path recreates this session.
       await this.detachConversation(sessionId).catch((error: unknown) =>
@@ -1511,6 +1541,7 @@ export class DurableAgentHost implements AgentProtocol {
    * observed while current, as before branching.
    */
   private async attachedLanes(sessionId: string) {
+    this.assertSessionRecovered(sessionId);
     const first = runtimeLane(sessionId);
     if (!this.live.has(laneKey(first)) && (await this.isCurrentConversation(first)))
       await this.attach(first);
@@ -1785,6 +1816,7 @@ export class DurableAgentHost implements AgentProtocol {
     identity: RuntimeExecutionIdentity,
     signal: AbortSignal,
   ): Promise<PreparedInput> {
+    this.assertSessionRecovered(identity.sessionId);
     const key = executionKey(identity, identity.requestId);
     const cached = this.prepared.get(key);
     if (cached) return cached;
@@ -2039,7 +2071,7 @@ export class DurableAgentHost implements AgentProtocol {
     signal?.throwIfAborted();
     const sessionCopies = new Map<string, RuntimeLane[]>();
     const resolved = new Map<string, RuntimeDurableTurn>();
-    const invalidSessions = new Set<string>();
+    const invalidSessions = new Set(options?.isolateInvalid ? this.recoveryFailures : []);
     const reportInvalid = (
       error: unknown,
       context: { sessionId: string; assistantMessageId?: string },
@@ -2057,6 +2089,8 @@ export class DurableAgentHost implements AgentProtocol {
     };
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
+      if (invalidSessions.has(row.sessionId)) continue;
+      this.assertSessionRecovered(row.sessionId);
       try {
         let copies = sessionCopies.get(row.sessionId);
         if (!copies) {
@@ -2179,7 +2213,9 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
     signal?.throwIfAborted();
+    this.assertSessionRecovered(turn.identity.sessionId);
     await this.syncInputParents([turn, ...(this.live.get(laneKey(turn.identity))?.queue ?? [])]);
+    this.assertSessionRecovered(turn.identity.sessionId);
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
       // invalidating the working copy; reconciliation retries this after a process interruption.
@@ -2215,6 +2251,7 @@ export class DurableAgentHost implements AgentProtocol {
           turn.identity.requestId,
         );
         signal?.throwIfAborted();
+        this.assertSessionRecovered(turn.identity.sessionId);
         const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
         await this.store.finalizeAssistantMessage({
           assistantMessageId: assistant.id,
@@ -2274,6 +2311,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async attach(copy: RuntimeLane): Promise<LiveSession> {
     this.controller.signal.throwIfAborted();
+    this.assertSessionRecovered(copy.sessionId);
     const lane = runtimeLane(copy.sessionId, copy.slot);
     const key = laneKey(lane);
     const existing = this.live.get(key);
@@ -2457,8 +2495,11 @@ export class DurableAgentHost implements AgentProtocol {
             const agent =
               prepared?.plan.agent ??
               (session ? await this.ports.agents.getAgent(session.agentId) : null);
+            // The awaited lookups may outlive isolation or removal of this observed copy.
             if (
               !agent ||
+              this.recoveryFailures.has(sessionId) ||
+              this.live.get(laneKey(lane)) !== state ||
               this.liveStates(sessionId).some((candidate) => candidate.background) ||
               state.active?.identity.requestId !== turn.identity.requestId
             )
@@ -2784,6 +2825,7 @@ export class DurableAgentHost implements AgentProtocol {
       return this.resumeSuspended().then(() => this.admit(sessionId, operation));
     if (!this.accepting)
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not accepting submissions.');
+    this.assertSessionRecovered(sessionId);
     storageMutationGate.assertWritable();
     if (this.deleting.has(sessionId) || this.admissions.has(sessionId))
       fail('SESSION_BUSY', 'This session is already admitting input.');
@@ -2810,6 +2852,14 @@ export class DurableAgentHost implements AgentProtocol {
       });
     this.admissions.set(sessionId, { controller, promise });
     return promise;
+  }
+
+  private assertSessionRecovered(sessionId: string) {
+    if (this.recoveryFailures.has(sessionId))
+      fail(
+        'SESSION_RECOVERY_FAILED',
+        'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
+      );
   }
 
   /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
@@ -2907,6 +2957,7 @@ export class DurableAgentHost implements AgentProtocol {
             ...new Set(inputs.map((turn) => turn.userMessageId)),
           ]);
           if (!confirmed.length) return;
+          this.assertSessionRecovered(lane.sessionId);
           await this.store.syncInputParents(lane.sessionId, confirmed, selection);
           const state = this.live.get(key);
           if (state) {

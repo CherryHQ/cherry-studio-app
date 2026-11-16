@@ -2070,6 +2070,266 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('isolates an unreadable observer before resuming unrelated work and denies its execution', async () => {
+    const state = fixture();
+    const unreadable = await state.reserve('running');
+    const unadmitted = await state.store.reserveSubmission({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'queued', type: 'text', text: 'Keep this input', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    const readAffected = () =>
+      state.raw
+        .prepare(
+          'SELECT id, status, data, parent_id FROM agent_session_message WHERE session_id = ? ORDER BY id',
+        )
+        .all(state.sessionId);
+    const original = readAffected();
+    const healthy = await state.store.reserveInitialSubmission({
+      sessionId: uuid(),
+      agentId: state.agentId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      userParts: [{ id: 'healthy', type: 'text', text: 'Hello', state: 'done' }],
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot,
+    });
+    state.copies.set(healthy.session.id, {
+      revision: 0,
+      turns: [
+        {
+          ...unreadable,
+          identity: {
+            sessionId: healthy.session.id,
+            slot: 0,
+            turnId: healthy.turnId,
+            requestId: healthy.turnId,
+          },
+          userMessageId: healthy.userMessage.id,
+          assistantMessageId: healthy.assistantMessage.id,
+          status: 'completed',
+          metadata: { ...unreadable.metadata, userParts: healthy.userMessage.parts as never },
+        },
+      ],
+    });
+    const observe = state.conversations.observe;
+    const observing = jest
+      .spyOn(state.conversations, 'observe')
+      .mockImplementation(async (lane, listener) => {
+        if (lane.sessionId === state.sessionId) throw new ZodError([]);
+        return observe(lane, listener);
+      });
+
+    try {
+      await state.host.initialize();
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(true);
+      expect(state.conversations.resume).toHaveBeenCalledTimes(1);
+      expect(readAffected()).toEqual(original);
+      expect(
+        (await state.store.getMessage(healthy.session.id, healthy.assistantMessage.id))?.status,
+      ).toBe('success');
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED', retryable: false },
+      });
+      await expect(
+        state
+          .execution()!
+          .assertExecutionAllowed(unreadable.identity, new AbortController().signal),
+      ).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await expect(
+        state
+          .execution()!
+          .assertExecutionAllowed(
+            { sessionId: state.sessionId, slot: 0, turnId: null, requestId: null },
+            new AbortController().signal,
+          ),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_RECOVERY_FAILED' } });
+      await expect(
+        state
+          .execution()!
+          .resolveTool(
+            unreadable.identity,
+            { source: 'builtin', capabilityId: 'unsafe' },
+            new AbortController().signal,
+          ),
+      ).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await expect(async () =>
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Must not reserve another input' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_RECOVERY_FAILED' } });
+      expect(observing).toHaveBeenCalledTimes(1);
+      expect(readAffected()).toEqual(original);
+      expect(
+        (await state.store.getMessage(state.sessionId, unadmitted.assistantMessage.id))?.status,
+      ).toBe('pending');
+      await expect(state.host.quiesce()).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'An unrelated conversation still works.' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test.each(['isolating', 'isolated', 'deleted'] as const)(
+    'drops sibling observation and prevents delayed background presentation while %s',
+    async (stage) => {
+      const state = fixture();
+      const first = await state.reserve('running');
+      const next = await state.store.reserveSubmission({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'next', type: 'text', text: 'Next', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      const lane = runtimeLane(state.sessionId, 1);
+      state.copies.set(laneKey(lane), {
+        revision: 0,
+        turns: [
+          {
+            ...first,
+            identity: { ...lane, turnId: next.turnId, requestId: next.turnId },
+            userMessageId: next.userMessage.id,
+            assistantMessageId: next.assistantMessage.id,
+            status: 'queued',
+          },
+        ],
+      });
+      let finishLookup!: () => void;
+      const lookup = new Promise<void>((resolve) => {
+        finishLookup = resolve;
+      });
+      let lookupStarted!: () => void;
+      const lookupEntered = new Promise<void>((resolve) => {
+        lookupStarted = resolve;
+      });
+      const getSession = state.store.getSession.bind(state.store);
+      jest.spyOn(state.store, 'getSession').mockImplementationOnce(async (sessionId) => {
+        // Preserve the read result even if the Session is deleted before presentation catches up.
+        const session = await getSession(sessionId);
+        lookupStarted();
+        await lookup;
+        return session;
+      });
+      const observe = state.conversations.observe;
+      jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane, listener) => {
+        if (lane.slot === 1) {
+          await lookupEntered;
+          throw new ZodError([]);
+        }
+        const observation = await observe(lane, listener);
+        return {
+          ...observation,
+          unsubscribe: async () => {
+            if (stage === 'isolating') {
+              finishLookup();
+              await settle();
+            }
+            await observation.unsubscribe();
+          },
+        };
+      });
+      try {
+        await state.host.initialize();
+        expect(state.listeners.has(state.sessionId)).toBe(false);
+        expect(state.host.pendingTurns(state.sessionId)).toEqual([]);
+        expect(state.conversations.abort).not.toHaveBeenCalled();
+        expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+        expect(
+          (await state.store.getMessage(state.sessionId, first.assistantMessageId))?.status,
+        ).toBe('pending');
+        expect(
+          (await state.store.getMessage(state.sessionId, next.assistantMessage.id))?.status,
+        ).toBe('pending');
+        if (stage === 'deleted') await state.host.deleteSession({ sessionId: state.sessionId });
+        finishLookup();
+        await settle();
+        expect(state.background.startTurn).not.toHaveBeenCalled();
+        expect(state.host.isReady).toBe(true);
+      } finally {
+        finishLookup();
+        await state.host.close();
+      }
+    },
+  );
+
+  test('keeps non-validation observation failures fatal', async () => {
+    const state = fixture();
+    await state.reserve('running');
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await expect(state.host.initialize()).rejects.toThrow('Storage unavailable');
+      expect(state.conversations.resume).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('does not turn observation validation after cancellation into successful startup', async () => {
+    const state = fixture();
+    await state.reserve('running');
+    let rejectObservation!: (error: unknown) => void;
+    let observing!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      observing = resolve;
+    });
+    jest.spyOn(state.conversations, 'observe').mockImplementation(() => {
+      observing();
+      return new Promise((_resolve, reject) => {
+        rejectObservation = reject;
+      });
+    });
+    const controller = new AbortController();
+    const initializing = state.host.initialize(controller.signal);
+    await entered;
+    controller.abort(new Error('Host replaced'));
+    rejectObservation(new ZodError([]));
+    await expect(initializing).rejects.toThrow('Host replaced');
+    await state.host.close();
+    expect(state.conversations.resume).not.toHaveBeenCalled();
+  });
+
+  test('retries isolated data when a fresh runtime generation can observe it', async () => {
+    const state = fixture();
+    await state.reserve('running');
+    jest.spyOn(state.conversations, 'observe').mockRejectedValueOnce(new ZodError([]));
+    try {
+      await state.host.initialize();
+      await state.host.suspend();
+      await state.host.resumeSuspended();
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      expect(state.host.isReady).toBe(true);
+      observation.unsubscribe();
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test.each(['runtime-metadata', 'stored-parts'] as const)(
     'isolates invalid %s at startup without rewriting it or relaxing backup reads',
     async (source) => {

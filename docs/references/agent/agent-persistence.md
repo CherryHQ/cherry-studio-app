@@ -364,6 +364,16 @@ projection:
   read or that repair fails validation, startup skips settlement for the affected Session rather
   than exposing a partially repaired chain; other Sessions still recover. Output validation after
   the parent repair continues to isolate individual reservations.
+  Startup observation is a separate validation boundary: when an unfinished copy cannot be
+  observed, the Host isolates its entire Session for that runtime generation. It releases any
+  sibling observations, leaves that Session's Cherry reservations and parent links unchanged,
+  and rejects new submissions and model/tool execution through the existing execution-owner
+  ports. Healthy Sessions still recover and accept work. Pi scheduling remains global and may
+  record internal failure outcomes; isolation is not a per-conversation scheduler pause or a
+  compatibility migration. Backups and runtime-cache clearing remain strict. A fresh runtime
+  generation retries the original data; ordinary refresh does not repeat the same failed attach.
+  The affected Session reports `SESSION_RECOVERY_FAILED` with translated new-conversation and
+  diagnostic guidance. Non-validation observation errors and startup cancellation remain fatal.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a

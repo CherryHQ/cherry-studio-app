@@ -20,6 +20,8 @@ import {
 } from '@earendil-works/pi-durable';
 import { ZodError } from 'zod';
 
+import { AgentProtocolError } from '@/shared/contracts/agent';
+
 import {
   buildAgentSystemPrompt,
   buildInitialSkillInstructions,
@@ -189,6 +191,34 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('an isolated execution owner reaches no provider while another Session can answer', async () => {
+    const state = fixture();
+    state.ports.assertExecutionAllowed = jest.fn(async (owner) => {
+      if (owner.sessionId === lane.sessionId)
+        throw new AgentProtocolError({
+          code: 'SESSION_RECOVERY_FAILED',
+          message: 'Stored execution could not be observed.',
+          retryable: false,
+        });
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('isolated'), 'failed');
+      expect(state.requests).toHaveLength(0);
+      expect((await runtime.message(lane, 'answer-isolated'))?.turn.status).toBe('failed');
+
+      const healthy = runtimeLane('healthy-session');
+      await runtime.ensureConversation({ ...seed, lane: healthy });
+      await submitAndWait(runtime, input('healthy'), 'completed', healthy);
+      expect(state.requests).toHaveLength(1);
+      expect((await runtime.message(healthy, 'answer-healthy'))?.turn.status).toBe('completed');
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test.each([1, 2])(
     'a final boundary preserves the order of %s steers before a follow-up, including after reopening',
     async (count) => {
