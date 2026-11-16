@@ -31,9 +31,9 @@ export function SubscriptionOnboardingScreen() {
   const loading =
     state.phase === 'loading' ||
     state.isRefreshing ||
-    models.isFetching ||
+    models.isRefreshing ||
     models.isPending ||
-    providers.isFetching ||
+    providers.isRefreshing ||
     providers.isPending;
   const failed = state.phase === 'error' || models.isError || providers.isError;
   const retry = () =>
