@@ -370,13 +370,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
       onPress={handleSelect}
       style={trailingInset === undefined ? undefined : { paddingRight: trailingInset }}
     >
-      <View
-        className={cn(
-          'h-6 justify-center',
-          density === 'compact' ? 'w-6' : 'w-7',
-          badges.length > 0 && 'self-start',
-        )}
-      >
+      <View className={cn('h-6 justify-center', density === 'compact' ? 'w-6' : 'w-7')}>
         <ModelAvatar
           artwork={density === 'compact' ? 'brand' : 'model'}
           model={item.model}
@@ -405,12 +399,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </View>
         ) : null}
       </View>
-      <View
-        className={cn(
-          'size-6 shrink-0 items-center justify-center',
-          badges.length > 0 && 'self-start',
-        )}
-      >
+      <View className="size-6 shrink-0 items-center justify-center">
         {multiple ? (
           <SelectionIndicator className="size-5" selected={isSelected} />
         ) : isSelected ? (
