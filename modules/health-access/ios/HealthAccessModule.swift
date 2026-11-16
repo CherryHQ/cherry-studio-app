@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import HealthKit
+import HealthKitUI
 import UIKit
 
 public class HealthAccessModule: Module {
