@@ -407,6 +407,7 @@
   "chat.builtinTool.health.listWorkouts": "Find workout records",
   "chat.builtinTool.health.queryData": "ヘルスケアデータを読み取る",
   "chat.builtinTool.health.summary": "Get health summary",
+  "chat.builtinTool.http.request": "HTTP リクエスト",
   "chat.builtinTool.library.findFolders": "フォルダーを検索",
   "chat.builtinTool.library.listTrash": "最近削除した項目を表示",
   "chat.builtinTool.library.move": "ファイルまたはフォルダーを移動",

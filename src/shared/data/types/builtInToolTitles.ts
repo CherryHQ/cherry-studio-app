@@ -87,6 +87,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   generate_image: 'chat.builtinTool.media.generateImage',
   web_search: 'chat.builtinTool.web.search',
   web_fetch: 'chat.builtinTool.web.fetch',
+  http_request: 'chat.builtinTool.http.request',
   run_js: 'chat.builtinTool.code.runJs',
   // Pi's Code Mode executes the JavaScript capability.
   codemode: 'chat.builtinTool.code.runJs',

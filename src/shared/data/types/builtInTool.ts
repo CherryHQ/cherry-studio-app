@@ -60,6 +60,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'health_list_data_types',
   'health_query_data',
   'health_get_record',
+  'http_request',
   'inspect_office_file',
   'location_get_current',
   'read_file',
@@ -236,6 +237,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresWebSearchCapability: 'fetchUrls',
     effect: 'read',
   }),
+  describe('http_request', 'ask'),
   describe('generate_image', 'ask', {
     autoApprovalEligible: false,
     requiresPaintingModel: true,

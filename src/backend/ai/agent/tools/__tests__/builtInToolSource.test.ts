@@ -63,6 +63,7 @@ describe('createSystemCapabilitySource', () => {
       'list_installed_skills',
       'ask_user_question',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -76,6 +77,11 @@ describe('createSystemCapabilitySource', () => {
       'read_file',
       'write_file',
     ]);
+    expect(tools.find((tool) => tool.providerName === 'http_request')).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: true,
+      deferred: true,
+    });
   });
 
   test('offers MCP configuration only with the shared mutation owner and preserves read/write policy', async () => {
@@ -355,6 +361,7 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',

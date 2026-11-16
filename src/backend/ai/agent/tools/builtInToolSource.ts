@@ -68,6 +68,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createHttpRequestTool } from './httpRequestTool';
 import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
@@ -362,6 +363,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
+    createHttpRequestTool(),
     createGenerateImageTool(
       {
         ...deps.painting,

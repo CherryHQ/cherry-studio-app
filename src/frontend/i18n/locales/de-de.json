@@ -409,6 +409,7 @@
   "chat.builtinTool.health.listWorkouts": "Trainingsaufzeichnungen finden",
   "chat.builtinTool.health.queryData": "Gesundheitsdaten lesen",
   "chat.builtinTool.health.summary": "Gesundheitszusammenfassung abrufen",
+  "chat.builtinTool.http.request": "HTTP-Anfrage",
   "chat.builtinTool.library.findFolders": "Ordner suchen",
   "chat.builtinTool.library.listTrash": "Zuletzt gelöschte anzeigen",
   "chat.builtinTool.library.move": "Datei oder Ordner verschieben",

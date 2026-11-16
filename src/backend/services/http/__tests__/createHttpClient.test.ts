@@ -64,6 +64,35 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
+  it.each(['HEAD', 'OPTIONS'] as const)('supports ordinary %s requests', async (method) => {
+    const adapter = mockAdapter(async (config) => response(config, 204, ''));
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://example.com',
+    });
+    await expect(client.request({ method, path: '/' })).resolves.toMatchObject({
+      status: 204,
+      data: '',
+    });
+    expect(adapter.mock.calls[0][0].method).toBe(method);
+  });
+
+  it('preserves serialized JSON body bytes instead of applying Axios JSON transformation', async () => {
+    const body = ' { invalid JSON }\n';
+    const adapter = mockAdapter(async (config) => {
+      expect(config.data).toBe(body);
+      return response(config, 200, 'ok');
+    });
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://example.com',
+    });
+    await client.request({
+      method: 'POST',
+      path: '/',
+      body,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
   it('redacts capability paths and transport messages without changing the request destination', async () => {
     const reportId = '550e8400-e29b-41d4-a716-446655440000';
     const adapter = mockAdapter(async (config) => {
@@ -161,6 +190,7 @@ describe('createHttpClient', () => {
   it('lets public downloads inspect redirects without sending native cookies', async () => {
     const adapter = mockAdapter(async (config) => {
       expect(config.fetchOptions?.redirect).toBe('manual');
+      expect(config.fetchOptions?.credentials).toBe('omit');
       expect(config.withCredentials).toBe(false);
       return response(config, 302, '', new AxiosHeaders({ Location: '/article' }));
     });

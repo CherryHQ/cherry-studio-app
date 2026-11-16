@@ -411,6 +411,7 @@
   "chat.builtinTool.health.listWorkouts": "Găsiți înregistrările antrenamentului",
   "chat.builtinTool.health.queryData": "Citește datele de sănătate",
   "chat.builtinTool.health.summary": "Obțineți rezumatul sănătății",
+  "chat.builtinTool.http.request": "Cerere HTTP",
   "chat.builtinTool.library.findFolders": "Căutați foldere",
   "chat.builtinTool.library.listTrash": "Vedeți elementele șterse recent",
   "chat.builtinTool.library.move": "Mutați fișierul sau folderul",
