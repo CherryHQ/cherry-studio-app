@@ -144,6 +144,27 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 
+  test('offers Agent avatar and MCP binding workflows through the configured application owners', async () => {
+    const agentConfiguration: NonNullable<SystemCapabilityServices['agentConfiguration']> = {
+      avatars: { setAvatar: jest.fn() },
+      files: { resolve: jest.fn() },
+      bindings: { list: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
+      servers: { list: jest.fn(), getById: jest.fn() },
+    };
+    const tools = await resolve({}, { agentConfiguration });
+    expect(tools.find((tool) => tool.providerName === 'agent_list_mcp_servers')).toMatchObject({
+      approval: 'auto',
+      effect: 'read',
+      deferred: true,
+    });
+    for (const name of ['agent_set_avatar', 'agent_set_mcp_binding'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
+  });
+
   test('defers file tools without changing their read/mutation approval', async () => {
     const tools = await resolve({});
     const files = [
@@ -892,6 +913,7 @@ async function resolve(
     sessionId?: string;
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
+    agentConfiguration?: SystemCapabilityServices['agentConfiguration'];
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(

@@ -45,6 +45,10 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import {
+  createAgentConfigurationTools,
+  type AgentConfigurationAccess,
+} from './agentConfigurationTools';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
@@ -127,6 +131,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     platform: string;
     preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
+    agentConfiguration?: AgentConfigurationAccess;
   };
 
 /**
@@ -144,6 +149,7 @@ export type SystemCapabilityServices = {
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
+  agentConfiguration?: AgentConfigurationAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -305,6 +311,9 @@ function createCatalog(
   const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
+    ...(deps.agentConfiguration
+      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
+      : []),
     ...createAgentManagementTools(deps.agents, agentId),
     createEditFileTool(
       {
@@ -469,6 +478,7 @@ function resolveDependencies(
     voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
     trash: overrides.trash ?? services.trash,
+    agentConfiguration: overrides.agentConfiguration ?? services.agentConfiguration,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

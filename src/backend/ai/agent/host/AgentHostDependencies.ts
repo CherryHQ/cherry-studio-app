@@ -27,13 +27,17 @@ import {
 } from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
+import { agentService } from '@/backend/data/services/AgentService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
+import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { fileContent } from '@/backend/services/file/fileContent';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
@@ -255,6 +259,12 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
 
   get tools(): SystemCapabilitySource {
     return (this.lazyTools ??= createSystemCapabilitySource({
+      agentConfiguration: {
+        avatars: createAgentAvatars({ agents: agentService, images: agentAvatarImages }),
+        bindings: agentToolBindingService,
+        servers: mcpServerService,
+        files: fileContent,
+      },
       voice: this.voice,
       ai: this.aiService,
       model: modelService,

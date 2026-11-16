@@ -21,6 +21,9 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { AgentToolApproval } from './agentToolBinding';
 
 export const BUILT_IN_TOOL_CAPABILITY_IDS = [
+  'agent_set_avatar',
+  'agent_list_mcp_servers',
+  'agent_set_mcp_binding',
   'agent_create',
   'agent_get',
   'agent_list',
@@ -149,6 +152,9 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     autoApprovalEligible: false,
     platforms: ['ios', 'android'],
   }),
+  describe('agent_set_avatar', 'ask'),
+  describe('agent_list_mcp_servers', 'auto', { effect: 'read' }),
+  describe('agent_set_mcp_binding', 'ask'),
   describe('agent_create', 'ask'),
   describe('agent_get', 'auto', { effect: 'read' }),
   describe('agent_list', 'auto', { effect: 'read' }),
