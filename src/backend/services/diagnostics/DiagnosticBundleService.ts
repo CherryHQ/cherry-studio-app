@@ -11,6 +11,11 @@ import {
 } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { readDiagnosticPluginState } from '@/backend/data/services/diagnosticPluginState';
+import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
+import {
+  cleanupDiagnosticTemporaryDirectories,
+  createDiagnosticTemporaryDirectory,
+} from '@/backend/utils/diagnosticTemporaryFiles';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
   DiagnosticError,
@@ -28,7 +33,6 @@ import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { CherryDiagnosticUploadClient } from './CherryDiagnosticUploadClient';
-import { createDiagnosticTemporaryDirectory } from './diagnosticFiles';
 import { getDiagnosticReportStatus } from './diagnosticReportStatus';
 import {
   collectDiagnosticSources,
@@ -82,6 +86,14 @@ export class DiagnosticBundleService
     private readonly traces: { createDiagnosticSnapshot(): Promise<TraceDiagnosticSnapshot> },
   ) {
     super();
+  }
+
+  protected async onInit(): Promise<void> {
+    try {
+      await cleanupDiagnosticTemporaryDirectories();
+    } catch {
+      logger.warn('Failed to clean diagnostic temporary files');
+    }
   }
 
   protected async onStop(): Promise<void> {
@@ -166,6 +178,11 @@ export class DiagnosticBundleService
     let snapshot: TraceDiagnosticSnapshot | undefined;
     try {
       this.abort.signal.throwIfAborted();
+      const now = Date.now();
+      const submissionContext = {
+        capturedAt: new Date(now).toISOString(),
+        ...readDiagnosticContext(),
+      };
       tempRoot = createDiagnosticTemporaryDirectory(bundleId);
       // Adopt the selected screenshot before asynchronous collection. Only opaque IDs
       // from our capture directory are accepted, never arbitrary file paths.
@@ -183,7 +200,6 @@ export class DiagnosticBundleService
       }
       const fileName = `cherry-studio-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}-${bundleId}.zip`;
       const destination = new File(tempRoot, fileName);
-      const now = Date.now();
       const range: DiagnosticTimeRange = { fromMs: now - RANGE_DURATION_MS, toMs: now };
       const collected = await this.collect(range);
       snapshot = collected.snapshot;
@@ -275,6 +291,7 @@ export class DiagnosticBundleService
           ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
           : {}),
         system,
+        submissionContext,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
         crashDumps: { files: [], mode: 'inventory_only', totalBytes: 0 },

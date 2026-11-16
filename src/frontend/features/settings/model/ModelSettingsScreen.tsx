@@ -14,7 +14,9 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
+import { PolicyGroup, PolicySelectItem, withResourcePolicy } from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -28,7 +30,7 @@ function isNamingModelVisible(item: ModelPickerModelItem): boolean {
   return !item.provider.authMethods?.includes('external-cli');
 }
 
-export default function ModelSettingsScreen() {
+function ModelSettingsView() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { saveSelections, selections } = useModelSettingSelections();
@@ -92,9 +94,12 @@ export default function ModelSettingsScreen() {
         return {
           key: kind,
           disabled: isSaving,
+          empty: !selections[kind],
           label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
           onPress: () => setActiveKind(kind),
-          value: item?.model.name ?? t('settings.select.placeholder'),
+          value:
+            item?.model.name ??
+            t(selections[kind] ? 'settings.model.unavailable' : 'settings.select.placeholder'),
           valueLeading: item ? (
             <ModelAvatar model={item.model} provider={item.provider} />
           ) : undefined,
@@ -111,42 +116,46 @@ export default function ModelSettingsScreen() {
         contentClassName="gap-6"
         headerProps={{ title: t('settings.pages.model.title') }}
       >
-        <Section>
-          {items.map(({ key, ...item }) => (
-            <Section.SelectItem key={key} {...item} />
-          ))}
-        </Section>
-        <Section>
-          <Section.SwitchItem
-            disabled={isNamingSaving || isSaving}
-            label={t('settings.model.naming.enabled')}
-            onValueChange={(value) => {
-              void changeNamingEnabled(value);
-            }}
-            testID="settings-session-naming"
-            value={isNamingEnabled}
-          />
-          <Section.SelectItem
-            disabled={!isNamingEnabled || isNamingSaving || isSaving}
-            label={t('settings.model.naming.title')}
-            onPress={() => setActiveKind('naming')}
-            testID="settings-session-naming-model"
-            value={namingModelItem?.model.name ?? t('settings.model.naming.useDefault')}
-            valueLeading={
-              namingModelItem ? (
-                <ModelAvatar model={namingModelItem.model} provider={namingModelItem.provider} />
-              ) : undefined
-            }
-          />
-          {selections.naming !== null ? (
-            <Section.Item
-              disabled={!isNamingEnabled || isNamingSaving || isSaving}
-              label={t('settings.model.naming.useDefault')}
-              onPress={() => saveModelSelection('naming', null)}
-              testID="settings-session-naming-use-default"
+        <PolicyGroup contentClassName="gap-6">
+          <Section>
+            {items.map(({ key, ...item }) => (
+              <PolicySelectItem field="defaultModel" key={key} {...item} />
+            ))}
+          </Section>
+          <Section>
+            <Section.SwitchItem
+              locked={false}
+              disabled={isNamingSaving || isSaving}
+              label={t('settings.model.naming.enabled')}
+              onValueChange={(value) => {
+                void changeNamingEnabled(value);
+              }}
+              testID="settings-session-naming"
+              value={isNamingEnabled}
             />
-          ) : null}
-        </Section>
+            <PolicySelectItem
+              field="defaultModel"
+              disabled={!isNamingEnabled || isNamingSaving || isSaving}
+              label={t('settings.model.naming.title')}
+              onPress={() => setActiveKind('naming')}
+              testID="settings-session-naming-model"
+              value={namingModelItem?.model.name ?? t('settings.model.naming.useDefault')}
+              valueLeading={
+                namingModelItem ? (
+                  <ModelAvatar model={namingModelItem.model} provider={namingModelItem.provider} />
+                ) : undefined
+              }
+            />
+            {selections.naming !== null ? (
+              <Section.Item
+                disabled={!isNamingEnabled || isNamingSaving || isSaving}
+                label={t('settings.model.naming.useDefault')}
+                onPress={() => saveModelSelection('naming', null)}
+                testID="settings-session-naming-use-default"
+              />
+            ) : null}
+          </Section>
+        </PolicyGroup>
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer
@@ -163,3 +172,6 @@ export default function ModelSettingsScreen() {
     </>
   );
 }
+
+/** Enterprise sync writes these preferences; the organization owns the choice. */
+export default withResourcePolicy(ModelSettingsView, () => capabilityPolicy('modelSettings'));

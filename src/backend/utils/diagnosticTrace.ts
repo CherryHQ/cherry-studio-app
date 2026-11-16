@@ -31,7 +31,13 @@ export type TraceDiagnosticSnapshot = {
   files: { name: string; uri: string; size: number }[];
   metadata: {
     capture: 'metadata';
-    retention: { maxAgeMs: number; maxBytes: number; maxFiles: number };
+    retention: {
+      /** Absent on older snapshots whose limits applied only to the active profile. */
+      scope?: 'installation';
+      maxAgeMs: number;
+      maxBytes: number;
+      maxFiles: number;
+    };
     diagnostics: TraceStorageDiagnostics;
   };
   /** The diagnostic-package owner releases its private snapshot after consuming it. */

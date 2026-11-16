@@ -3,7 +3,7 @@ import { SkillsError, type SkillTextChange } from '@/shared/contracts/skills';
 import { type SkillPackageFiles, validateSkillPackage } from './skillPackage';
 
 /** Preserve the frontmatter bytes, line endings and every untouched package file. */
-export function adaptSkillPackage(
+export async function adaptSkillPackage(
   files: SkillPackageFiles,
   name: string,
   changes: readonly SkillTextChange[],
@@ -76,7 +76,7 @@ export function adaptSkillPackage(
     adapted = adapted.slice(0, range.start) + range.after + adapted.slice(range.end);
   const result = new Map(files);
   result.set('SKILL.md', new TextEncoder().encode(header[0] + adapted));
-  const validation = validateSkillPackage(result, { expectedName: name });
+  const validation = await validateSkillPackage(result, { expectedName: name });
   if (!validation.ok || !adapted.trim())
     throw new SkillsError('package-invalid', 'The adapted Skill package failed validation.');
   return { files: result, package: validation.package };
