@@ -1,10 +1,14 @@
+import { getRandomBytes } from 'expo-crypto';
 import nacl from 'tweetnacl';
 
-import { cloudSignatureHeaders, type CloudDevice } from '../cloudDevice';
+import { cloudSignatureHeaders, createCloudIdempotencyKey, type CloudDevice } from '../cloudDevice';
 
 jest.mock('expo-application', () => ({ getAndroidId: jest.fn() }));
 jest.mock('expo-secure-store', () => ({ AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'device-only' }));
-jest.mock('expo-crypto', () => ({ randomUUID: () => '018f47a2-7d3b-7c91-b8f5-8b3f4c6d2a10' }));
+jest.mock('expo-crypto', () => ({
+  getRandomBytes: jest.fn(),
+  randomUUID: () => '018f47a2-7d3b-7c91-b8f5-8b3f4c6d2a10',
+}));
 
 // RFC 8032 public fixture, also published in Cloud's device-signature-v2 protocol.
 const seed = Uint8Array.from(
@@ -23,6 +27,28 @@ const device: CloudDevice = {
 };
 
 afterEach(() => jest.restoreAllMocks());
+
+test('creates fresh canonical 32-byte keys with URL-safe encoding and no padding', () => {
+  const firstBytes = new Uint8Array(32).fill(251);
+  const secondBytes = new Uint8Array(32).fill(255);
+  jest.mocked(getRandomBytes).mockReturnValueOnce(firstBytes).mockReturnValueOnce(secondBytes);
+
+  const first = createCloudIdempotencyKey();
+  const second = createCloudIdempotencyKey();
+
+  expect(getRandomBytes).toHaveBeenNthCalledWith(1, 32);
+  expect(getRandomBytes).toHaveBeenNthCalledWith(2, 32);
+  for (const [value, bytes] of [
+    [first, firstBytes],
+    [second, secondBytes],
+  ] as const) {
+    expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(Buffer.from(value, 'base64url')).toEqual(Buffer.from(bytes));
+    expect(Buffer.from(value, 'base64url').toString('base64url')).toBe(value);
+  }
+  expect(first).not.toBe(second);
+});
+
 test('signs exact UTF-8 body bytes and the idempotency key using the published v2 vector', () => {
   jest.spyOn(Date, 'now').mockReturnValue(1710000000000);
   const body =
@@ -41,6 +67,8 @@ test('signs exact UTF-8 body bytes and the idempotency key using the published v
   expect(headers['Cherry-Signature']).toBe(
     'KLBGmwxKvF2sGoRzNxN_xOMX3gYL864mZp32sZKUITjEEpKm9i661GVtkdPJ6rrvSO4RlCtylFJXKCtjISduCw',
   );
+  expect(headers['Idempotency-Key']).toBe(device.machineCode);
+  expect(headers['Cherry-Request-ID']).toBe('018f47a2-7d3b-7c91-b8f5-8b3f4c6d2a10');
   expect(
     cloudSignatureHeaders(
       device,

@@ -1,5 +1,4 @@
 import { loggerService } from '@logger';
-import * as Crypto from 'expo-crypto';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as z from 'zod';
 
@@ -31,7 +30,7 @@ import {
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
-import { loadCloudDevice, type CloudDevice } from './cloudDevice';
+import { createCloudIdempotencyKey, loadCloudDevice, type CloudDevice } from './cloudDevice';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
 
@@ -280,7 +279,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         if (!lifetime.aborted) this.refreshedAt = 0;
       };
       try {
-        const signed = await session.headers('POST', path, body, Crypto.randomUUID());
+        const signed = await session.headers('POST', path, body, createCloudIdempotencyKey());
         linked.signal.throwIfAborted();
         const currentReason = cloudModelUnavailable(this.snapshot, modelId, use);
         if (currentReason) throw new CloudAccessError(currentReason);

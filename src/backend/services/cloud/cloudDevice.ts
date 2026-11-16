@@ -19,6 +19,11 @@ export interface CloudDevice {
   sign(value: string): string;
 }
 
+/** Cloud inference requires 32 random bytes in unpadded base64url (43 characters). */
+export function createCloudIdempotencyKey(): string {
+  return base64url(Crypto.getRandomBytes(32));
+}
+
 /** Installation identity and signing key are independent and never leave device-only storage. */
 export async function loadCloudDevice(): Promise<CloudDevice> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android')

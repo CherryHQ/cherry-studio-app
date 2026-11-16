@@ -11,6 +11,8 @@ import { cloudSnapshot } from './_cloudFixtures';
 const mockGet = jest.fn();
 const mockRevoke = jest.fn();
 const mockInference = jest.fn();
+const mockHeaders = jest.fn();
+const mockIdempotencyKey = jest.fn();
 const mockRefreshServices = jest.fn();
 const appStateListeners = new Set<(status: AppStateStatus) => void>();
 const mockProject = jest.fn(
@@ -24,7 +26,10 @@ const mockProject = jest.fn(
     return [];
   },
 );
-jest.mock('../cloudDevice', () => ({ loadCloudDevice: async () => ({}) }));
+jest.mock('../cloudDevice', () => ({
+  createCloudIdempotencyKey: () => mockIdempotencyKey(),
+  loadCloudDevice: async () => ({}),
+}));
 jest.mock('../projectCloudModels', () => ({
   projectCloudModels: (...args: Parameters<typeof mockProject>) => mockProject(...args),
 }));
@@ -39,8 +44,8 @@ jest.mock('../CloudSession', () => ({
     get(path: string) {
       return mockGet(this.identity.profileId, path, this.origin);
     }
-    async headers() {
-      return {};
+    async headers(...args: unknown[]) {
+      return mockHeaders(...args);
     }
     revoke() {
       mockRevoke(this.origin);
@@ -49,7 +54,6 @@ jest.mock('../CloudSession', () => ({
   },
 }));
 jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockInference(...args) }));
-jest.mock('expo-crypto', () => ({ randomUUID: () => '018f47a2-7d3b-7c91-b8f5-8b3f4c6d2a10' }));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
 jest.mock('@/backend/data/dataApiChanges', () => ({ publishDataApiChanges: jest.fn() }));
 
@@ -120,12 +124,69 @@ beforeEach(() => {
   mockProject.mockClear();
   mockRevoke.mockClear();
   mockInference.mockReset();
+  mockHeaders
+    .mockReset()
+    .mockImplementation(async (_method, _path, _body, key) => ({ 'Idempotency-Key': key }));
+  mockIdempotencyKey.mockReset().mockReturnValue('AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8');
   mockRefreshServices.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
   jest.restoreAllMocks();
   jest.useRealTimers();
 });
+
+test.each([
+  ['anthropic-messages', '/v1/messages', 'agent'],
+  ['anthropic-messages', '/v1/messages', 'general'],
+  ['openai-chat-completions', '/v1/chat/completions', 'agent'],
+  ['openai-chat-completions', '/v1/chat/completions', 'general'],
+] as const)(
+  'sends protocol idempotency keys for %s at %s with %s use',
+  async (endpoint, path, use) => {
+    mockGet.mockImplementation(async (account: string, resource: string) => {
+      if (resource !== '/v1/models') return reply(account, resource);
+      return {
+        data: cloudSnapshot(account).models.map((model) => ({ ...model, endpoint_type: endpoint })),
+      };
+    });
+    mockInference.mockImplementation(async () => new Response(null, { status: 200 }));
+    const keys = [
+      'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8',
+      '__________________________________________8',
+    ];
+    mockIdempotencyKey.mockReturnValueOnce(keys[0]).mockReturnValueOnce(keys[1]);
+    const { runtime } = await setup();
+    try {
+      await runtime.refresh();
+      const send = runtime.createModelFetch('cloud-model', use);
+      const body = JSON.stringify({
+        model: 'cloud-model',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: '你好' }],
+      });
+      for (const key of keys) {
+        await expect(
+          send(`https://cloud.example${path}`, {
+            method: 'POST',
+            body,
+            headers: {
+              'Idempotency-Key': 'caller-supplied-key',
+              ...(endpoint === 'anthropic-messages' ? { 'anthropic-version': '2023-06-01' } : {}),
+            },
+          }),
+        ).resolves.toMatchObject({ status: 200 });
+        const [url, init] = mockInference.mock.lastCall!;
+        expect(url).toBe(`https://cloud.example${path}`);
+        expect(init.body).toBe(body);
+        expect(init.headers.get('Idempotency-Key')).toBe(key);
+        expect(init.headers.get('Idempotency-Key')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(mockHeaders).toHaveBeenLastCalledWith('POST', path, body, key);
+      }
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
 
 test('account replacement immediately clears state and drops late responses even when cancellation is ignored', async () => {
   let finish!: (value: unknown) => void;
