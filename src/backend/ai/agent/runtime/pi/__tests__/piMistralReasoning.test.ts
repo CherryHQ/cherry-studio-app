@@ -1,4 +1,9 @@
-import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  Message,
+  Model,
+} from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/api/openai-completions';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
@@ -79,6 +84,32 @@ async function run(deltas: Record<string, unknown>[], provider?: string) {
   for (const delta of deltas) test.send(delta);
   return { events: test.events, result: await test.finish() };
 }
+async function replay(
+  message: AssistantMessage,
+  tail: Message[] = [{ role: 'user', content: 'Continue.', timestamp: 1 }],
+) {
+  const payloads: { messages: Record<string, unknown>[] }[] = [];
+  // Replay the persisted representation, including provider-owned reasoning metadata.
+  const saved = JSON.parse(JSON.stringify(message)) as AssistantMessage;
+  const result = await streamSimple(
+    model,
+    normalizeContext({
+      messages: [{ role: 'user', content: 'Calculate.', timestamp: 0 }, saved, ...tail],
+    }),
+    {
+      apiKey: 'fake',
+      maxRetries: 0,
+      fetch: async (_input, init) => {
+        payloads.push(JSON.parse(String(init?.body)));
+        return new Response(frame({ content: 'Continued.' }, 'stop') + 'data: [DONE]\n\n', {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      },
+    },
+  ).result();
+  expect(result.stopReason).toBe('stop');
+  return payloads[0]!.messages;
+}
 function totals(result: AssistantMessage) {
   return {
     thinking: result.content
@@ -126,7 +157,6 @@ test('delivers thinking before releasing the mixed transition and string answer'
     test.send({ content: '42.' });
     const result = await test.finish();
     expect(totals(result)).toEqual({ thinking: 'First. Last. ', text: 'Answer: 42.' });
-    expect(result.content[0]).toMatchObject({ thinkingSignature: undefined });
     expect(deltas(test.events)).toEqual([
       ['thinking_delta', 'First. ', 0],
       ['thinking_delta', 'Last. ', 0],
@@ -217,6 +247,11 @@ test('empty thinking chunks create no thinking block or start event', async () =
 test('array text alone creates only the answer block', async () => {
   const { result, events } = await run([{ content: [text('Answer: '), text('42.')] }]);
   expectAnswerOnly(result, events, 'Answer: 42.');
+  const messages = await replay(result);
+  expect(messages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'Answer: 42.',
+  });
 });
 
 test('empty array text before a string answer creates no text start or thinking block', async () => {
@@ -255,6 +290,12 @@ test('scalar reasoning suppresses same-delta array thinking and retains array te
     ['text_delta', 'answer', 1],
     ['thinking_delta', ' later', 0],
   ]);
+  const messages = await replay(result);
+  expect(messages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'answer',
+    reasoning_content: 'scalar later',
+  });
 });
 
 test.each(['', null, {}, [], 0])(
@@ -326,6 +367,12 @@ test('preserves reasoning_details alongside array thinking', async () => {
   if (block.type !== 'thinking') throw new Error('Missing thinking block');
   expect(block.thinking).toBe('visible');
   expect(JSON.parse(block.thinkingSignature!)).toEqual([detail]);
+  const messages = await replay(result);
+  expect(messages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'answer',
+    reasoning_details: [detail],
+  });
 });
 
 test('reasoning followed by streamed signed tool arguments keeps tool lifecycle and toolUse finish', async () => {
@@ -421,6 +468,99 @@ test('array reasoning and text alongside a tool call keep wire order and toolUse
     toolCall: result.content[2],
   });
   expect(result.stopReason).toBe('toolUse');
+});
+
+test('replays persisted array thinking and the complete answer on a follow-up', async () => {
+  const { result } = await run([
+    { content: [think('First. ')] },
+    { content: [think('Last.'), text('Answer: ')] },
+    { content: '42.' },
+  ]);
+  const messages = await replay(result);
+  expect(messages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: [think('First. Last.'), text('Answer: 42.')],
+  });
+});
+
+test.each(['reason', ''])(
+  'retains signature-only end chunks when the visible thinking is %p',
+  async (visible) => {
+    const { result } = await run([
+      { content: [{ ...think(visible), closed: false }] },
+      { content: [{ ...thinking(), signature: 'provider-signature', closed: true }] },
+      { content: 'answer' },
+    ]);
+    const messages = await replay(result);
+    expect(messages.find((message) => message.role === 'assistant')).toEqual({
+      role: 'assistant',
+      content: [
+        {
+          type: 'thinking',
+          thinking: visible ? [text(visible)] : [],
+          signature: 'provider-signature',
+          closed: true,
+        },
+        text('answer'),
+      ],
+    });
+  },
+);
+
+test('replays thinking with the tool call before sending its result', async () => {
+  const test = harness();
+  test.send({ content: [think('Look up Paris.')] });
+  test.send({
+    tool_calls: [
+      {
+        index: 0,
+        id: 'call_lookup',
+        type: 'function',
+        function: { name: 'lookup', arguments: '{"city":"Paris"}' },
+      },
+    ],
+  });
+  const result = await test.finish('tool_calls');
+  const messages = await replay(result, [
+    {
+      role: 'toolResult',
+      toolCallId: 'call_lookup',
+      toolName: 'lookup',
+      content: [{ type: 'text', text: 'Paris: 20 C' }],
+      isError: false,
+      timestamp: 1,
+    },
+  ]);
+  expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'tool']);
+  expect(messages[1]).toEqual({
+    role: 'assistant',
+    content: [think('Look up Paris.')],
+    tool_calls: [
+      {
+        id: 'call_lookup',
+        type: 'function',
+        function: { name: 'lookup', arguments: '{"city":"Paris"}' },
+      },
+    ],
+  });
+  expect(messages[2]).toMatchObject({
+    role: 'tool',
+    tool_call_id: 'call_lookup',
+    content: 'Paris: 20 C',
+  });
+});
+
+test.each([
+  ['provider', { provider: 'other' }],
+  ['model', { model: 'other' }],
+  ['API', { api: 'openai-responses' }],
+] as const)('omits thinking from a different %s on replay', async (_field, origin) => {
+  const { result } = await run([{ content: [think('private reasoning'), text('answer')] }]);
+  const messages = await replay({ ...result, ...origin });
+  expect(messages.find((message) => message.role === 'assistant')).toEqual({
+    role: 'assistant',
+    content: 'answer',
+  });
 });
 
 test('preserves literal object-string text arriving on the wire', async () => {

@@ -280,7 +280,7 @@ index 427df0a7054cc4b2071c8e5c2dc2ac1a82ea166a..978d1a4cfe85983fc7874cbb1a40bb20
  // ============================================================================
  // Auth & Headers
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb594dd805e9 100644
+index 12ec37eaf976340d2b29234dab2f17964ed56c91..d1e16bde6e6794787a83192bacb655d0a5635a2c 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,5 +1,6 @@
@@ -290,7 +290,30 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
  import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { shortHash } from "../utils/hash.js";
-@@ -412,8 +413,7 @@ export const stream = (model, context, options) => {
+@@ -99,6 +100,22 @@
+         return undefined;
+     }
+ }
++function parseMistralThinkingSignature(signature) {
++    if (!signature)
++        return undefined;
++    try {
++        const parsed = JSON.parse(signature);
++        if (parsed?.type !== "mistral-thinking")
++            return undefined;
++        return {
++            ...(typeof parsed.signature === "string" && parsed.signature.length > 0 ? { signature: parsed.signature } : {}),
++            ...(typeof parsed.closed === "boolean" ? { closed: parsed.closed } : {}),
++        };
++    }
++    catch {
++        return undefined;
++    }
++}
+ function parseLegacyEncryptedReasoningDetail(signature) {
+     if (!signature)
+         return undefined;
+@@ -412,8 +429,7 @@
                              appendOpenAIReasoningDetail(streamedReasoningDetails, detail);
                          }
                      }
@@ -300,7 +323,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
                          choice.delta.content.length > 0) {
                          const block = ensureTextBlock();
                          block.text += choice.delta.content;
-@@ -424,9 +424,48 @@ export const stream = (model, context, options) => {
+@@ -424,9 +440,60 @@
                              partial: output,
                          });
                      }
@@ -326,15 +349,27 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
 +                                        delta += child.text;
 +                                    }
 +                                }
-+                                if (delta.length > 0) {
-+                                    const block = ensureThinkingBlock(undefined);
-+                                    block.thinking += delta;
-+                                    stream.push({
-+                                        type: "thinking_delta",
-+                                        contentIndex: getContentIndex(block),
-+                                        delta,
-+                                        partial: output,
-+                                    });
++                                const hasSignature = typeof chunk.signature === "string" && chunk.signature.length > 0;
++                                if (delta.length > 0 || hasSignature || thinkingBlock) {
++                                    // Reuse Pi's persisted signature slot for the source format and replay metadata.
++                                    const block = ensureThinkingBlock(JSON.stringify({ type: "mistral-thinking" }));
++                                    const replay = parseMistralThinkingSignature(block.thinkingSignature);
++                                    if (replay) {
++                                        if (hasSignature)
++                                            replay.signature = chunk.signature;
++                                        if (typeof chunk.closed === "boolean")
++                                            replay.closed = chunk.closed;
++                                        block.thinkingSignature = JSON.stringify({ type: "mistral-thinking", ...replay });
++                                    }
++                                    if (delta.length > 0) {
++                                        block.thinking += delta;
++                                        stream.push({
++                                            type: "thinking_delta",
++                                            contentIndex: getContentIndex(block),
++                                            delta,
++                                            partial: output,
++                                        });
++                                    }
 +                                }
 +                            }
 +                        }
@@ -349,7 +384,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
                              if (!block.id && toolCall.id) {
                                  block.id = toolCall.id;
                                  toolCallBlocksById.set(toolCall.id, block);
-@@ -484,7 +523,13 @@ export const stream = (model, context, options) => {
+@@ -484,7 +551,13 @@
                  }
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -364,7 +399,28 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
              // Some providers via OpenRouter give additional information in this field.
              // normalizeProviderError already stringifies the parsed body (error.error)
              // into errorMessage, so only append the raw metadata when it is not already
-@@ -1021,6 +1066,9 @@ export function convertMessages(model, context, compat, options) {
+@@ -970,7 +1043,19 @@
+                 .filter((detail) => detail !== undefined);
+             const preservedReasoningDetails = signedReasoningDetails ?? (legacyReasoningDetails.length > 0 ? legacyReasoningDetails : undefined);
+             const nonEmptyThinkingBlocks = thinkingBlocks.filter((block) => block.thinking.trim().length > 0);
+-            if (nonEmptyThinkingBlocks.length > 0) {
++            const mistralThinkingChunks = thinkingBlocks.flatMap((block) => {
++                const replay = parseMistralThinkingSignature(block.thinkingSignature);
++                return replay ? [{
++                    type: "thinking",
++                    thinking: block.thinking.length > 0 ? [{ type: "text", text: sanitizeSurrogates(block.thinking) }] : [],
++                    ...replay,
++                }] : [];
++            });
++            if (mistralThinkingChunks.length > 0 && !compat.requiresThinkingAsText) {
++                // transformMessages has already removed thinking from a different provider, model or API.
++                assistantMsg.content = [...mistralThinkingChunks, ...assistantTextParts];
++            }
++            else if (nonEmptyThinkingBlocks.length > 0) {
+                 if (compat.requiresThinkingAsText) {
+                     // Convert thinking blocks to plain text (no tags to avoid model mimicking them)
+                     const thinkingText = nonEmptyThinkingBlocks
+@@ -1021,6 +1106,9 @@
                              },
                          };
                      }
@@ -374,7 +430,7 @@ index 12ec37eaf976340d2b29234dab2f17964ed56c91..0f0b2424af56882c89996fb21483cb59
                      return {
                          id: tc.id,
                          type: "function",
-@@ -1028,6 +1076,9 @@ export function convertMessages(model, context, compat, options) {
+@@ -1028,6 +1116,9 @@
                              name: tc.name,
                              arguments: JSON.stringify(tc.arguments),
                          },
