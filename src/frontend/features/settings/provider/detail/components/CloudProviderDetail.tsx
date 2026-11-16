@@ -3,6 +3,7 @@ import { ContentState, Section } from '@cherrystudio/ui/components';
 import { Redirect } from 'expo-router';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { useCloud } from '@/frontend/hooks/useCloud';
@@ -76,9 +77,13 @@ export function CloudProviderDetail() {
         <Section>
           {entitledModels.map((model) => (
             <Section.Item
-              description={model.modelId}
+              accessibilityLabel={model.name}
               key={model.id}
-              label={model.name}
+              label={
+                <Text className="text-base text-foreground" numberOfLines={1}>
+                  {model.name}
+                </Text>
+              }
               leading={<ModelAvatar model={model} provider={provider} />}
               showChevron={false}
             />

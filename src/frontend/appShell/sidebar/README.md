@@ -140,7 +140,13 @@ pagination, selection and menu presentation consume catalog summaries and bound 
 The original local sidebar is the visual and interaction baseline for both sources. Agent headers
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
 group. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
-settings row, without subscription, entitlement or quota badges. Row gutters,
+settings row. Community accounts with a confirmed, currently effective paid subscription also show
+the existing dashed plan badge beside the nickname; free, expired, signed-out, unavailable and
+enterprise accounts keep it hidden. Plan names come from plan metadata; remaining percentages use
+the account quota snapshot, matched to the plan by allocation ID. Exhausted quotas still show 0%.
+The badge cycles the plan name for four seconds and each quota for three seconds through CherryUI
+`TextAnimation.Rotating`. Rotation stops while the drawer is hidden, the app is backgrounded, or
+selection is active; Reduce Motion shows the plan and first remaining percentage statically. Row gutters,
 text columns, selection/pressed surfaces, empty/loading/error spacing and pagination feedback
 follow the local presentation. Avatar rendering is shared; desktop emoji is preserved, while a source without avatar metadata uses
 the common fallback.
