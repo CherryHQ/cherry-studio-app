@@ -6,11 +6,11 @@ surfaces.
 
 ## Public Interface
 
-- `AgentListScreen` is the root page. `edit/AgentEditScreen` is shared by the edit and create route
-  adapters.
+- `AgentListScreen` is the root page. `edit/AgentEditScreen` adapts the edit and create routes to the shared
+  `AgentEditor` component. The chat header uses its sheet presentation.
 - The list header's plus action opens the create-Agent route.
-- Creating from the chat header's Agent picker opens a draft conversation with the saved Agent.
-  Creating from the management list returns to that list.
+- Creating from the management list returns to that list. The chat header edits the current Agent
+  from its name and switches Agents from the adjacent circle-user button.
 - Tapping a list row opens that Agent's editor.
 - Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
@@ -31,10 +31,11 @@ surfaces.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- The instructions input grows from 112 to a fixed maximum of 480 points, roughly filling the
-  remaining first-screen space on a typical phone without measuring the layout.
-  Longer instructions scroll internally without truncating the saved text. Native text selection
-  and scrolling stay owned by the input, while the outer scroll view moves the rest of the form.
+- Instructions show a five-line summary in both the page and chat details. Edit is the only entry
+  and opens the complete instructions directly. An independent full-height
+  instruction sheet keeps its header outside the scrolling body; the original form stays mounted
+  without expansion or scroll restoration. Done flushes existing auto-saves; new Agents keep their
+  instructions in the form draft until Save creates the record.
 - Built-in tools, including Health and Reminders, are available for user-directed conversation
   tasks when their model, system and service gates pass; they have no per-Agent switches. Health,
   reminders, calendar, location and image-generation tools load on demand through tool search.
@@ -54,10 +55,8 @@ surfaces.
 
 ## Organization
 
-- `edit/components/` contains the editor's Skill and MCP binding sections; they remain private to
-  the editor page.
-- `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
-  screen.
+- `edit/AgentEditScreen.tsx` only parses route parameters. The form, auto-save hook, binding sections
+  and pure helpers belong to [AgentEditor](../../components/AgentEditor/README.md).
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
   background. Create and edit render the same form — a centered
   avatar and underlined name, then instructions, mode/model and approval, and MCP

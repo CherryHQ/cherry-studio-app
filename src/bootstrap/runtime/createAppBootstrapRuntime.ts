@@ -1,4 +1,5 @@
 import { loggerService } from '@logger';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
@@ -15,6 +16,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { configureEnterpriseSessionAdmission } from '@/backend/data/services/managedResources';
 import {
   cleanupStorageAfterBoot,
   commitStorageBoot,
@@ -29,12 +31,14 @@ import { createLiveActivityPresenter } from '@/backend/services/backgroundActivi
 import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
 import { type BackupRuntime, validateRestoringStorage } from '@/backend/services/backup';
+import type { CloudRuntime } from '@/backend/services/cloud';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
+import type { EnterpriseSyncService } from '@/backend/services/enterprise';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import { resetFileTextCacheForRestore } from '@/backend/services/file/fileTextCache';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -51,6 +55,7 @@ import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
+import { installationAccount } from '@/bootstrap/profile/installationAccount';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
   publishForegroundActivityAttention,
@@ -61,8 +66,10 @@ import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingAct
 import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
+import { AccountError } from '@/shared/contracts/account';
 import { BackupError } from '@/shared/contracts/backup';
 import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -165,6 +172,35 @@ export function createAppBootstrapRuntime(
   const region = host.container.get<RegionService>('RegionService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
+  const account = installationAccount();
+  const cloud = host.container.get<CloudRuntime>('CloudRuntime');
+  cloud.configure(
+    {
+      getIdentity: account.getCommunityIdentity,
+      getTokens: account.getCommunityTokens,
+      refreshServices: account.refreshCommunityServices,
+      subscribe: account.subscribe,
+    },
+    Constants.expoConfig?.version ?? '0.0.0',
+  );
+  const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
+  enterpriseSync.configure(account.createEnterpriseSession);
+  configureEnterpriseSessionAdmission(account.admit);
+  // A refused session stops spending the organization's credentials at once. Interrupted turns
+  // reopen with the Agent Host and fail admission until the user signs in again.
+  let isSessionRefused = account.getState().needsSignIn;
+  const unsubscribeAccount = account.subscribe(() => {
+    const { needsSignIn } = account.getState();
+    if (needsSignIn && !isSessionRefused)
+      void agent
+        .interrupt(new AccountError('rejected'))
+        .catch((error: unknown) =>
+          loggerService
+            .withContext('Account')
+            .warn('Could not interrupt Agent work after the session was refused', error as Error),
+        );
+    isSessionRefused = needsSignIn;
+  });
   const services = createBackendServices({
     agent,
     ai,
@@ -208,6 +244,8 @@ export function createAppBootstrapRuntime(
     providerRegistryUpdater,
     region,
     trash,
+    account,
+    cloud,
   });
   backup.configure(
     () =>
@@ -217,6 +255,8 @@ export function createAppBootstrapRuntime(
       ssh.hasPendingStorageWork() ||
       providerCatalog.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
+      enterpriseSync.hasPendingStorageWork() ||
+      cloud.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
@@ -274,11 +314,13 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
+        unsubscribeAccount();
         await Promise.all([
           disposeSystemEntry(),
           disposeSkills(),
           disposeVoice(),
           disposeAppUpdate(),
+          enterpriseSync.stop(),
           disposeUuRemote(),
           disposeDiagnostics(),
         ]);
@@ -315,6 +357,10 @@ export function createAppBootstrapRuntime(
           resetFileTextCacheForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
+        // An enterprise profile opens offline from its last sync; only the very first sync blocks,
+        // and only for resources. Skill packages download after startup reconciles Skill storage.
+        if (isEnterpriseProfile() && !(await enterpriseSync.hasSynced()))
+          await measureStartupStage('startup.enterprise', () => enterpriseSync.syncResources());
         services.sshProfile.initialize();
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
@@ -344,6 +390,7 @@ export function createAppBootstrapRuntime(
       if (host.state !== 'ready') return;
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
+      void account.verify();
       const results = await Promise.allSettled([
         region.getCountry(),
         providerCatalog.ensureReady(),

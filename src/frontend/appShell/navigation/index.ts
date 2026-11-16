@@ -15,4 +15,5 @@ export {
   getTransparentHeaderStyle,
 } from './rootStackPlatform/rootStackPlatform';
 export { useFocusedBackPress } from './useFocusedBackPress';
+export { useFirstUseEligibility } from './useFirstUseEligibility';
 export { useOpenProviderSetup } from './useOpenProviderSetup';

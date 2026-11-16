@@ -32,7 +32,6 @@ jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => '#fff'
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   useConversationTarget: () => ({}),
-  useStartNewChat: () => jest.fn(),
   useChatSource: () => ({
     localChat: mockLocalChat,
     source: mockSource,

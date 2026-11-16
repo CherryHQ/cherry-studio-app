@@ -1,5 +1,7 @@
 import ExpoModulesCore
 import HealthKit
+import HealthKitUI
+import UIKit
 
 public class HealthAccessModule: Module {
   private let store = HKHealthStore()
@@ -21,10 +23,14 @@ public class HealthAccessModule: Module {
         supported.flatMap(\.authorization).compactMap { try? self.objectType($0) })
       let ordinary = Set(readTypes.filter { !$0.requiresPerObjectAuthorization() })
       if !ordinary.isEmpty {
-        try await self.store.requestAuthorization(toShare: [], read: ordinary)
+        try await self.withAuthorizationPresenter {
+          try await self.store.requestAuthorization(toShare: [], read: ordinary)
+        }
       }
       for type in readTypes where type.requiresPerObjectAuthorization() {
-        try await self.store.requestPerObjectReadAuthorization(for: type, predicate: nil)
+        try await self.withAuthorizationPresenter {
+          try await self.store.requestPerObjectReadAuthorization(for: type, predicate: nil)
+        }
         // This flag records that the selection sheet completed, never a read grant.
         UserDefaults.standard.set(true, forKey: self.requestedKey(type))
       }
@@ -57,6 +63,36 @@ public class HealthAccessModule: Module {
       try await HealthDataReader(store: self.store).workouts(
         start: healthDate(startDate), end: healthDate(endDate), limit: limit)
     }
+  }
+
+  @MainActor
+  private func withAuthorizationPresenter(
+    _ operation: @MainActor () async throws -> Void
+  ) async throws {
+    guard let presenter = appContext?.utilities?.currentViewController(),
+      presenter.viewIfLoaded?.window != nil
+    else { throw HealthDataException("No visible view controller for health authorization") }
+    store.authorizationViewControllerPresenter = presenter
+    defer { store.authorizationViewControllerPresenter = nil }
+
+    let result: Result<Void, Error>
+    do {
+      try await operation()
+      result = .success(())
+    } catch {
+      result = .failure(error)
+    }
+
+    // HealthKit can complete before its sheet finishes dismissing. Keep the presenter alive and
+    // the system-prompt queue occupied until UIKit removes the sheet, including after errors.
+    while presenter.presentedViewController != nil {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16)) {
+          continuation.resume()
+        }
+      }
+    }
+    try result.get()
   }
 
   private func getStatuses(_ types: [HealthTypeRecord]) async throws -> [String: [String: Any]] {

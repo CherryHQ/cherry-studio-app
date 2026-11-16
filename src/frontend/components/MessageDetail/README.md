@@ -6,6 +6,9 @@ a sheet or its open state.
 
 - `MessageDetailSection` supplies a localized, section-scoped copy action. Its `copyText` callback
   resolves the full original text only when pressed and reports clipboard outcomes through toast.
+- `useCopyDetailText` shares that same full-text copy and localized outcome feedback with compact
+  diagnostic actions that do not need a reading section. A callback resolves the original data on
+  press; callers own the action's label and layout.
 - `MessageDetailText` renders complete prose through CherryUI `MessagePart.TextBody`, or `CodeBlock`.
   Short prose keeps its natural height. Long prose uses bounded text blocks in a virtualized scroll
   viewport; native selection stays within one block, while the section action copies the original

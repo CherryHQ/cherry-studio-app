@@ -60,6 +60,7 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'health_list_data_types',
       'http_request',
@@ -67,6 +68,7 @@ describe('createSystemCapabilitySource', () => {
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
@@ -80,6 +82,26 @@ describe('createSystemCapabilitySource', () => {
       autoApprovalEligible: true,
       deferred: true,
     });
+  });
+
+  test('offers MCP configuration only with the shared mutation owner and preserves read/write policy', async () => {
+    const mcpManagement: NonNullable<SystemCapabilityServices['mcpManagement']> = {
+      servers: { list: jest.fn(), getById: jest.fn() },
+      mutations: { createServer: jest.fn(), updateServer: jest.fn() },
+    };
+    const tools = await resolve({}, { mcpManagement });
+    for (const name of ['mcp_list_servers', 'mcp_get_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'auto',
+        effect: 'read',
+        deferred: true,
+      });
+    for (const name of ['mcp_create_server', 'mcp_update_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
   });
 
   test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
@@ -130,6 +152,27 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 
+  test('offers Agent avatar and MCP binding workflows through the configured application owners', async () => {
+    const agentConfiguration: NonNullable<SystemCapabilityServices['agentConfiguration']> = {
+      avatars: { setAvatar: jest.fn() },
+      files: { resolve: jest.fn() },
+      bindings: { list: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
+      servers: { list: jest.fn(), getById: jest.fn() },
+    };
+    const tools = await resolve({}, { agentConfiguration });
+    expect(tools.find((tool) => tool.providerName === 'agent_list_mcp_servers')).toMatchObject({
+      approval: 'auto',
+      effect: 'read',
+      deferred: true,
+    });
+    for (const name of ['agent_set_avatar', 'agent_set_mcp_binding'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
+  });
+
   test('defers file tools without changing their read/mutation approval', async () => {
     const tools = await resolve({});
     const files = [
@@ -141,6 +184,7 @@ describe('createSystemCapabilitySource', () => {
     ];
     const management = {
       library_list_folders: 'auto',
+      library_create_folder: 'ask',
       library_move_item: 'ask',
       library_rename_item: 'ask',
       library_trash_item: 'ask',
@@ -312,6 +356,7 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
@@ -320,6 +365,7 @@ describe('createSystemCapabilitySource', () => {
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
@@ -874,13 +920,15 @@ async function resolve(
     askUser?: AskUserQuestion;
     platform?: string;
     ssh?: SystemCapabilityServices['ssh'];
+    mcpManagement?: SystemCapabilityServices['mcpManagement'];
     sessionId?: string;
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
+    agentConfiguration?: SystemCapabilityServices['agentConfiguration'];
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(
-    { ...SERVICES, ssh: options.ssh },
+    { ...SERVICES, ...options },
     {
       ...dependencies(scenario),
       platform: options.platform ?? 'ios',

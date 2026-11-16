@@ -21,10 +21,14 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { AgentToolApproval } from './agentToolBinding';
 
 export const BUILT_IN_TOOL_CAPABILITY_IDS = [
+  'agent_set_avatar',
+  'agent_list_mcp_servers',
+  'agent_set_mcp_binding',
   'agent_create',
   'agent_get',
   'agent_list',
   'agent_update',
+  'list_installed_skills',
   'ask_user_question',
   'calendar_create_event',
   'calendar_delete_event',
@@ -44,6 +48,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'library_search_files',
   'library_read_file',
   'library_list_folders',
+  'library_create_folder',
   'library_move_item',
   'library_rename_item',
   'library_trash_item',
@@ -77,6 +82,10 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'web_fetch',
   'web_search',
   'write_file',
+  'mcp_list_servers',
+  'mcp_get_server',
+  'mcp_create_server',
+  'mcp_update_server',
 ] as const;
 
 export type BuiltInToolCapabilityId = (typeof BUILT_IN_TOOL_CAPABILITY_IDS)[number];
@@ -146,10 +155,14 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     autoApprovalEligible: false,
     platforms: ['ios', 'android'],
   }),
+  describe('agent_set_avatar', 'ask'),
+  describe('agent_list_mcp_servers', 'auto', { effect: 'read' }),
+  describe('agent_set_mcp_binding', 'ask'),
   describe('agent_create', 'ask'),
   describe('agent_get', 'auto', { effect: 'read' }),
   describe('agent_list', 'auto', { effect: 'read' }),
   describe('agent_update', 'ask'),
+  describe('list_installed_skills', 'auto', { effect: 'read' }),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     permissionScopes: ['calendar.read'],
@@ -245,6 +258,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('library_search_files', 'auto', { effect: 'read' }),
   describe('library_read_file', 'auto', { effect: 'read' }),
   describe('library_list_folders', 'auto', { effect: 'read' }),
+  describe('library_create_folder', 'ask'),
   describe('library_move_item', 'ask'),
   describe('library_rename_item', 'ask'),
   describe('library_trash_item', 'ask'),
@@ -254,6 +268,10 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('transcribe_audio', 'auto', { platforms: ['android', 'ios'] }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
+  describe('mcp_list_servers', 'auto', { effect: 'read' }),
+  describe('mcp_get_server', 'auto', { effect: 'read' }),
+  describe('mcp_create_server', 'ask'),
+  describe('mcp_update_server', 'ask'),
 ];
 
 const HEALTH_TOOL_IDS = new Set<string>(

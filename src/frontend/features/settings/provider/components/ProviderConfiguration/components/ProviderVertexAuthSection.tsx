@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { ProviderVertexAuth } from '../types';
+import type { ProviderVertexAuth } from '@/frontend/types/providerConfiguration';
+
 import {
   parseVertexAuthEdit,
   VERTEX_AUTH_LABELS,

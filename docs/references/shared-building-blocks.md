@@ -25,10 +25,11 @@ it already exists.
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
+| Community service metadata for the current login | Backend-only `AccountRuntime.refreshCommunityServices`, backed by `bootstrap/profile/installationAccount`; refreshes only the saved region's product routing without replacing authentication |
 | OAuth discovery, registration, code exchange, refresh | MCP SDK functions over `createFetchBridge`, as in `src/backend/services/mcp/McpOAuthRuntime.ts` |
 | Google Cloud service-account signing and token exchange | `VertexAuthClient` in `src/backend/services/providers/vertex`, shared by model discovery and the pi-durable model resolver |
 | Vertex service-account field validation | `VertexAuthFieldsSchema` in `src/shared/utils/vertexAuth.ts`, shared by provider settings and backend configuration checks |
-| SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts` |
+| SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts`; `sha256HexChunks` incrementally hashes package bytes while yielding to the runtime |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Provider failure facts | `normalizeAiError` in `src/backend/ai/normalizeAiError.ts`; `piModelError.ts` adapts Pi terminal messages for turn projection and diagnostics |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
@@ -64,11 +65,14 @@ it already exists.
 | SSH commands, remote files, authentication and pooled native connections | `SshRuntime` in `src/backend/services/ssh` and `modules/ssh`; `sshFileStorage` owns bounded transfer staging and exact-byte library imports |
 | Durable SSH connection configuration | `SshProfileService` in `src/backend/data/services`, with a dedicated MMKV store and a validated portable backup snapshot; credentials remain in SecureStore |
 | Generating, checking, inventorying and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
+| Community subscription, quota and Cloud inference admission | `CloudRuntime` in `src/backend/services/cloud`; `Backend.cloud` and `useCloud` expose non-secret account state |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
 | Desktop scheduled-task metadata, conversation membership and association caching | `RemoteTaskCatalog` in `src/backend/services/remoteAgent`, exposed through the existing Agent source's read-only `tasks` capability |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
+| Diagnostic event identity and versions | `src/backend/utils/diagnosticContext.ts`; bootstrap supplies an in-memory reader, logs and traces capture it before persistence |
+| Diagnostic temporary files | `src/backend/utils/diagnosticTemporaryFiles.ts`; bundles and trace snapshots share a runtime-owned cache parent, startup reclaims previous runs |
 | Transient application checks and AI self-check workflow | `Backend.diagnostics.createSession` in `src/backend/services/diagnostics`; owns incident binding, freshness, fact reads, cancellation, and the declared Agent deadline |
 | Internal diagnostic Agent definition and execution | [Internal Diagnostic Agent](../../src/backend/ai/agent/diagnostics/README.md); `createDiagnosticAgent` binds runtime and usage delivery, while its JSON resource owns prompts, tool descriptions, and policy |
 | Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |
@@ -105,6 +109,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
+| Device permission actions and status presentation | `frontend/hooks/devicePermission`, shared by settings and onboarding; preserves the settings request scopes and per-item action, while the backend permission owner serializes native prompts |
 | Temporary local-file previews without library records | `src/frontend/appShell/filePreview`, handing cache leases to the existing files viewer through opaque navigation identities |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Feedback entry and context handoff | `useFeedbackActions`, `useFeedbackSource` and safe failure projection in `src/frontend/appShell/feedback`; settings owns the form |
@@ -115,9 +120,11 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Library folder browsing, creation, and selection for moves and Session workspaces | `FileFolderPicker` and `useCreateFileFolder` in `src/frontend/components/FileFolderPicker`; `FileFolderBreadcrumbs` owns the shared path navigation |
 | Optional conversation workspace association, including unsent drafts | `useFileWorkspace` in `src/frontend/hooks/file`; chat owns `FileWorkspaceSheet`, reusing the shared file pages and `FileEntryPreview` viewer |
 | Logical folder, file lineage, and workspace metadata | `FileLibraryService` and `fileLibraryRows` in `src/backend/data/services` |
+| Editing an Agent from management or the chat header | `AgentEditor` in `src/frontend/components/AgentEditor`; one auto-saving form with page and sheet presentations |
 | Choosing a new or existing conversation for an incoming share | `ConversationDestinationList` from `src/frontend/appShell/sidebar`, reusing the sidebar Agent groups; `systemEntry` owns the share handoff |
 | Choosing the Agent that receives a file or reference handed over from outside chat | `AgentMenu` in `src/frontend/components/AgentMenu`, rendered by CherryUI `ActionMenu` |
 | Agent choice sheets for local chat, desktop chat and SSH handoff | `AgentPickerSheet` in `src/frontend/components/AgentPicker`; callers own source catalogs, candidate filtering and navigation |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |
+| Applying what the user may change (organization-owned resources, profile capabilities) to UI: locked groups, locked controls and the organization mark | `PolicyScope`, `PolicyGroup`, `withPolicy` and the gates in `src/frontend/components/Policy`, over CherryUI `LockedGroup` and the components' `locked` variants |

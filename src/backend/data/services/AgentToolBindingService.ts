@@ -29,6 +29,7 @@ import {
   ResolvedAgentMcpToolBindingSchema,
 } from '@/shared/data/types/agentToolBinding';
 
+import { agentRowPolicy, denyUnless } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 const ResolveAgentMcpToolBindingInputSchema = z.strictObject({
@@ -48,12 +49,16 @@ export class AgentToolBindingService {
   }
 
   async list(agentId: string): Promise<{ items: AgentToolBinding[] }> {
-    await this.assertAgentWritable(this.db, agentId);
+    await this.assertAgentWritable(this.db, agentId, { read: true });
     const rows = await this.readRows(this.db, agentId);
     return ListAgentToolBindingsResponseSchema.parse({ items: rows.map(rowToBinding) });
   }
 
-  async upsert(agentId: string, input: WriteAgentToolBindingInput): Promise<AgentToolBinding> {
+  async upsert(
+    agentId: string,
+    input: WriteAgentToolBindingInput,
+    options: { expectedUpdatedAt?: string | null } = {},
+  ): Promise<AgentToolBinding> {
     const parsed = parseWriteBinding(input);
 
     const row = await this.dbService.withWriteTx(async (tx) => {
@@ -62,6 +67,7 @@ export class AgentToolBindingService {
       const existing = existingRows.find(
         (candidate) => bindingIdentity(candidate) === bindingIdentity(parsed),
       );
+      assertExpectedBindingVersion(existing, options.expectedUpdatedAt);
       await this.assertMcpTargetsExist(tx, [parsed], existingRows);
       return this.writeBindingTx(tx, agentId, parsed, existing);
     });
@@ -108,9 +114,17 @@ export class AgentToolBindingService {
     return ListAgentToolBindingsResponseSchema.parse({ items: rows.map(rowToBinding) });
   }
 
-  async delete(agentId: string, bindingId: string): Promise<DeleteAgentToolBindingResult> {
+  async delete(
+    agentId: string,
+    bindingId: string,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<DeleteAgentToolBindingResult> {
     return this.dbService.withWriteTx(async (tx) => {
       await this.assertAgentWritable(tx, agentId);
+      if (options.expectedUpdatedAt !== undefined) {
+        const existing = (await this.readRows(tx, agentId)).find((row) => row.id === bindingId);
+        assertExpectedBindingVersion(existing, options.expectedUpdatedAt);
+      }
       const [deleted] = await tx
         .delete(agentToolBindingTable)
         .where(
@@ -163,15 +177,20 @@ export class AgentToolBindingService {
     });
   }
 
-  private async assertAgentWritable(tx: Database, agentId: string): Promise<void> {
+  private async assertAgentWritable(
+    tx: Database,
+    agentId: string,
+    options: { read?: boolean } = {},
+  ): Promise<void> {
     const [agent] = await tx
-      .select({ id: agentTable.id })
+      .select({ id: agentTable.id, managedRemoteId: agentTable.managedRemoteId })
       .from(agentTable)
       .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
       .limit(1);
     if (!agent) {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
+    if (!options.read) denyUnless(agentRowPolicy(agent).canBind, 'agent.toolBindings');
   }
 
   private readRows(tx: Database, agentId: string): Promise<AgentToolBindingRow[]> {
@@ -263,6 +282,17 @@ export class AgentToolBindingService {
       .returning();
     return created;
   }
+}
+
+function assertExpectedBindingVersion(
+  row: AgentToolBindingRow | undefined,
+  expected: string | null | undefined,
+): void {
+  if (expected === undefined) return;
+  if (expected === null ? row !== undefined : !row || Date.parse(expected) !== row.updatedAt)
+    throw DataApiErrorFactory.conflict(
+      'The MCP binding changed. List current bindings and reconcile before retrying.',
+    );
 }
 
 function parseWriteBinding(input: WriteAgentToolBindingInput): WriteAgentToolBinding {

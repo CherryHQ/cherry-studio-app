@@ -13,6 +13,7 @@ import {
   useDesktopConnection,
   useDesktopConnectionActions,
 } from '@/frontend/hooks/useDesktopConnections';
+import { editionCapabilities } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
@@ -103,6 +104,11 @@ export function DeviceConnectionDetailScreen() {
     );
   }
 
+  const canOpenHome = connection.capabilities.includes('agent');
+  const canSyncConfiguration = connection.capabilities.includes('configuration');
+  // Enterprise providers come from the organization, never from a desktop: the entry stays locked.
+  const isConfigurationLocked = !editionCapabilities().desktopConfigImport;
+
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
@@ -149,17 +155,18 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' && connection.capabilities.length > 0 ? (
+      {connection.status === 'paired' && (canOpenHome || canSyncConfiguration) ? (
         <Section>
-          {connection.capabilities.includes('agent') ? (
+          {canOpenHome ? (
             <Section.Item
               label={t('settings.deviceConnections.openHome')}
               onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
             />
           ) : null}
-          {connection.capabilities.includes('configuration') ? (
+          {canSyncConfiguration ? (
             <Section.Item
               label={t('settings.deviceConnections.syncGuide.entry')}
+              locked={isConfigurationLocked}
               onPress={() =>
                 router.replace({
                   params: { connectionId: connection.id },

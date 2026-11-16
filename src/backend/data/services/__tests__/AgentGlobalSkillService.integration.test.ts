@@ -103,6 +103,24 @@ describe('AgentGlobalSkillService', () => {
     expect(second.nextCursor).toBeUndefined();
   });
 
+  it('counts the complete library with the same literal search as list, including disabled and unbound entries', async () => {
+    expect(await service.countLibrary()).toBe(0);
+    const disabled = await install(record('brief', 'Weekly notes'));
+    await install(record('status', 'Weekly status with 100% coverage'));
+    await install({ ...record('legacy', 'Weekly notes'), source: 'builtin', sourceUrl: null });
+    sqlite.prepare('UPDATE agent_global_skill SET is_enabled = 0 WHERE id = ?').run(disabled.id);
+
+    expect(await service.countLibrary()).toBe(2);
+    expect(await service.countLibrary(' brief ')).toBe(1);
+    expect(await service.countLibrary('Weekly')).toBe(2);
+    expect(await service.countLibrary('%')).toBe(1);
+    expect(await service.countLibrary('missing')).toBe(0);
+    for (const search of ['brief', 'Weekly', '%', 'missing']) {
+      const page = await service.list({ scope: 'library', search });
+      expect(await service.countLibrary(search)).toBe(page.items.length);
+    }
+  });
+
   it('keeps legacy built-in packages outside user library, binding, and runtime scopes', async () => {
     const agent = await agentService.create({ name: 'Writer' });
     const internal = await install(

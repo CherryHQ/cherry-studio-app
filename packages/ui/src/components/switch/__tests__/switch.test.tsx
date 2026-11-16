@@ -8,6 +8,9 @@ jest.mock('heroui-native/utils', () => {
   return { cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')) };
 });
 
+// A locked switch explains itself through the info popover, whose motion needs native Reanimated.
+jest.mock('../../info-popover', () => ({ InfoPopover: () => null }));
+
 jest.mock('../switch-control/switch-control', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');

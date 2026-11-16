@@ -4,6 +4,8 @@ export type BackupErrorCode =
   | 'cancelled'
   | 'invalid'
   | 'incompatible'
+  /** An enterprise backup selected outside the identity it was exported from. */
+  | 'other-account'
   | 'too-large'
   | 'disk-space'
   | 'missing-files'

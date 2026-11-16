@@ -228,9 +228,12 @@ importers:
       '@babel/runtime':
         specifier: ^7.29.2
         version: 7.29.7
+      '@cherryinternal/accounts-portal':
+        specifier: 0.2.1
+        version: 0.2.1
       '@cherrystudio/ai-core':
-        specifier: 2.4.9
-        version: 2.4.9(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.5.0
+        version: 2.5.0(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-runtime':
         specifier: workspace:*
         version: link:packages/ai-runtime
@@ -256,8 +259,8 @@ importers:
         specifier: workspace:*
         version: link:packages/mermaid-webview
       '@cherrystudio/provider-registry':
-        specifier: 0.5.0
-        version: 0.5.0(zod@4.4.3)
+        specifier: 0.6.1
+        version: 0.6.1(zod@4.4.3)
       '@cherrystudio/remote-protocol':
         specifier: 0.8.0
         version: 0.8.0(zod@4.4.3)
@@ -806,14 +809,14 @@ importers:
         specifier: ^2.0.53
         version: 2.0.53(zod@4.4.3)
       '@cherrystudio/ai-core':
-        specifier: 2.4.9
-        version: 2.4.9(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
+        specifier: 2.5.0
+        version: 2.5.0(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))
       '@cherrystudio/ai-sdk-provider':
         specifier: 0.1.12
         version: 0.1.12(@ai-sdk/anthropic@3.0.103(zod@4.4.3))(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai-compatible@2.0.72(patch_hash=8031406a82cb0dab3864a236e42e7d586f59c16a255c6d8196d0c4625afacd69)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(zod@4.4.3)
       '@cherrystudio/provider-registry':
-        specifier: 0.5.0
-        version: 0.5.0(zod@4.4.3)
+        specifier: 0.6.1
+        version: 0.6.1(zod@4.4.3)
       '@cherrystudio/universal':
         specifier: workspace:*
         version: link:../universal
@@ -876,8 +879,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: 0.2.7
-        version: 0.2.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 0.4.0
+        version: 0.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -1023,8 +1026,8 @@ importers:
   packages/universal:
     dependencies:
       '@cherrystudio/provider-registry':
-        specifier: 0.5.0
-        version: 0.5.0(zod@4.4.3)
+        specifier: 0.6.1
+        version: 0.6.1(zod@4.4.3)
       ai:
         specifier: 6.0.185
         version: 6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3)
@@ -1842,8 +1845,11 @@ packages:
   '@chainsafe/netmask@2.0.0':
     resolution: {integrity: sha512-I3Z+6SWUoaljh3TBzCnCxjlUyN8tA+NAk5L6m9IxvCf1BENQTePzPMis97CoN/iMW1St3WN+AWCCRp+TTBRiDg==}
 
-  '@cherrystudio/ai-core@2.4.9':
-    resolution: {integrity: sha512-/vz+lB/sJhBgg35plTI27JMz4ywwvNaSrK9j5kfEpurnKpCKLkSvfn1DWYRrlOz5kJS04NRMDcfce0jYOdZJTw==}
+  '@cherryinternal/accounts-portal@0.2.1':
+    resolution: {integrity: sha512-9OWqVKtmFXbW8pXxAlHRrIA5NGL7C3er+EhXWZNkXpkg4yPCrA8d+wzCfKCqr/9+BwuvW0TAmh7MqwMv4PwnFA==}
+
+  '@cherrystudio/ai-core@2.5.0':
+    resolution: {integrity: sha512-gqP9rvoBcHu6XlyiXFJ2E6nEZqyDyiwEBqkwF1xTvFKhreB2gHCAOuW4zLcYiPDHII/Xk2zHNpE9X16jHbqjTQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@ai-sdk/google': 3.0.132
@@ -1868,14 +1874,14 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@0.2.7':
-    resolution: {integrity: sha512-SUQcn6yq/u585fqW5N500tZfarOgPkcdBXeB6cvfU6IEq8zUGoVuueDUymk0VZ/0fKnAbV2odaoJnXvvFmyNFQ==}
+  '@cherrystudio/file-preview@0.4.0':
+    resolution: {integrity: sha512-ufqOH+B3QCXeosDOPKttjTe+9jsHqGRyx3nHYajrAltBKPAN+0IiCMJQZw3sWzdSPfzuiEUYy4Q/ATzaNdGjhQ==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/provider-registry@0.5.0':
-    resolution: {integrity: sha512-PMdAxIlHIZapiMnLKMiMJ2vEduvWXP6TuuiRYGNlxmro8I475znpSLffp1WixuvcMpnoriPtcjcOfbujApoigw==}
+  '@cherrystudio/provider-registry@0.6.1':
+    resolution: {integrity: sha512-8PVEZ3vJjUQdHFCPr+mdsd02UJ937XvqwapZ6iB20tE+DH6yq3xOknzCZfZsePrjGcWewaeI4W0Y6eKz4Rs2WQ==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -13030,7 +13036,9 @@ snapshots:
     dependencies:
       '@chainsafe/is-ip': 2.1.0
 
-  '@cherrystudio/ai-core@2.4.9(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
+  '@cherryinternal/accounts-portal@0.2.1': {}
+
+  '@cherrystudio/ai-core@2.5.0(@ai-sdk/google@3.0.132(patch_hash=e1ed914e6657f2ec2fd86ea9df41c67a630a58d7225b1cd5d8cbd0b9baa5968e)(zod@4.4.3))(@ai-sdk/openai@3.0.137(patch_hash=7cd708a3162bfef6a8fe5c7dc5039fcf14843cc09eb0499bb8fa14b23a42f28c)(zod@4.4.3))(ai@6.0.185(patch_hash=c7f9221d92bfa51c87b1039d64de27cf624951c8ad1b1261d12f96a53a256fa8)(zod@4.4.3))':
     dependencies:
       '@ai-sdk/anthropic': 3.0.103(zod@4.4.3)
       '@ai-sdk/azure': 3.0.148(zod@4.4.3)
@@ -13061,13 +13069,13 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@0.2.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@cherrystudio/file-preview@0.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       zod: 4.4.3
 
-  '@cherrystudio/provider-registry@0.5.0(zod@4.4.3)':
+  '@cherrystudio/provider-registry@0.6.1(zod@4.4.3)':
     dependencies:
       semver: 7.8.5
       zod: 4.4.3
