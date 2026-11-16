@@ -1150,16 +1150,14 @@ describe('normalized account service admission', () => {
     },
   );
 
-  it.each([{ issuer: undefined }, { issuer: 'invalid' }])(
-    'rejects a session without a valid issuer (%j)',
-    async (context) => {
-      const { runtime, options, select } = setup({ _tag: 'signedOut' });
-      select({ ...signedIn('enterprise'), ...context });
-      await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
-      expect(options.createApi).not.toHaveBeenCalled();
-      expect(options.profiles.setActive).not.toHaveBeenCalled();
-    },
-  );
+  it('rejects a candidate whose service context cannot be resolved', async () => {
+    const { runtime, options, select } = setup({ _tag: 'signedOut' });
+    select(signedIn('enterprise'));
+    options.resolveSessionContext.mockReturnValue(null);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+    expect(options.createApi).not.toHaveBeenCalled();
+    expect(options.profiles.setActive).not.toHaveBeenCalled();
+  });
 
   it.each([undefined, ''])(
     'rejects a candidate without an enterprise API (%s)',

@@ -243,6 +243,20 @@ test('requires the scopes that the installed SDK requests by default', async () 
   expect(mockCreatePortal).not.toHaveBeenCalled();
 });
 
+test.each([undefined, 'invalid', 'http://auth.cn.test'])(
+  'rejects a registration without a valid HTTPS issuer (%s)',
+  async (issuer) => {
+    const data = result();
+    mockRequest.mockResolvedValue({
+      status: 200,
+      data: { ...data, endpoints: { ...data.endpoints, issuer } },
+    });
+    await expect(launch().preparePortal()).rejects.toMatchObject({ code: 'response' });
+    expect(mockCreatePortal).not.toHaveBeenCalled();
+    expect(mockStore.size).toBe(0);
+  },
+);
+
 test('discovers missing community services for the saved region without replacing login or enterprise routing', async () => {
   const runtime = launch();
   await runtime.preparePortal();
