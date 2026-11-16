@@ -997,6 +997,30 @@ describe('AccountRuntime', () => {
 });
 
 describe('community Cloud identity admission', () => {
+  it('publishes refreshed service metadata through the existing community identity boundary', async () => {
+    const { options } = setup(signedIn('cloud'));
+    let context = AccountSessionContextSchema.parse(signedIn('cloud'));
+    const runtime = new AccountRuntime({
+      ...options,
+      resolveSessionContext: () => context,
+      refreshSessionContext: async (isCurrent) => {
+        if (isCurrent()) context = { ...context, cloudApiOrigin: 'https://new-cloud.test' };
+      },
+    });
+    await options.portal.ready;
+    const original = runtime.getCommunityIdentity()!;
+    let observed: string | undefined;
+    const unsubscribe = runtime.subscribe(() => {
+      observed = runtime.getCommunityIdentity()?.apiOrigin;
+    });
+    await runtime.refreshCommunityServices(original.key, new AbortController().signal);
+    expect(runtime.getCommunityIdentity()?.key).not.toBe(original.key);
+    expect(observed).toBe('https://new-cloud.test');
+    expect(runtime.getState().isSignedIn).toBe(true);
+    expect(options.reload).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it.each([
     { cloudApiOrigin: 'https://another-cloud.example.com' },
     { cloudWebUrl: 'https://billing.example.com/subscriptions' },

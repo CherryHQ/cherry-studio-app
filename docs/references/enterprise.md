@@ -92,13 +92,21 @@ under their existing identities. An existing enterprise profile reauthenticates 
 `AccountSessionContext` supplies product addresses for the selected session. The required
 `endpoints.api_base_url` is the enterprise API. The optional community subscription API origin
 and management webpage are separate. Config Service v1 currently supplies neither community
-address. Account login works, but subscription features need both addresses before rollout.
+address. Account login works, but community services require explicit product metadata before rollout;
+the enterprise API and admin webpage are never substitutes for community service addresses.
 
 `AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
 identity exposes the actual Cloud API origin and webpage URL. Its key includes those addresses,
 issuer, subject, product profile and sign-in generation. Reads
 check the key before and after awaiting the SDK, and sign-out withdraws the identity before waiting
 for the server. Subscription consumers use this account boundary without owning SDK storage or login.
+
+Community consumers may also request a backend-only service-metadata refresh. The installation
+adapter queries using the saved region and issuer, verifies the Portal and
+client binding, and persists only the community API/webpage fields. It keeps the SDK instance,
+authentication registration and enterprise routing. Late discovery cannot update a replaced login
+or a stopped consumer. Changed addresses notify the existing identity subscribers, allowing a
+consumer to recover missing metadata without requiring another sign-in.
 
 The account UI offers sign-in, organization switching, account switching and sign-out. The
 portal lists the community account and organizations to switch between; the app selects a local data profile only after admission succeeds. The settings page's profile header is the entry: it shows a sign-in button, the signed-in
