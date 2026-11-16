@@ -14,10 +14,14 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order. The contact-style index
-  floats in a narrow capsule centered in the model-list viewport, capped at 80% of that viewport's
-  current height. It grows with the sheet until all providers fit. Provider rows retain 48-point
-  targets and 20-point icons; overflow scrolls vertically without a visible scrollbar.
-  A press previews the provider name to the left; a completed tap jumps to its group. Native
+  floats in a narrow frosted-glass capsule centered in the model-list viewport, capped at 80% of
+  that viewport's current height. It grows with the sheet until all providers fit. Provider rows
+  retain 48-point targets and 20-point icons; overflow scrolls vertically without a visible scrollbar.
+  A press shows the private `ModelPickerProviderPreview` to the left: a separate glass identity
+  surface 152 points wide and at least 144 points tall, with a rounded 48-point provider avatar
+  and a two-line name. It reuses provider identity and uploaded-avatar resolution. The preview
+  remains next to the index and may temporarily cover list content or selection marks; it fades
+  out on release and respects reduced motion. A completed tap jumps to its group. Native
   scrolling cancels the preview and navigation candidate, and a touch that stops momentum does
   not navigate. The immediate native press excludes the sheet pan while recognizing simultaneously
   with the navigation scroller; dragging the index scrolls its contents instead of the sheet.
@@ -26,12 +30,16 @@ This module owns the model selection surface, model metadata UI, and model setti
   Model names stay on one line with middle truncation, retaining their identifying prefix and
   suffix. Brand marks align with the name's first line. Chat capability icons occupy a compact
   second line without chip backgrounds; provider management retains its default chip style.
+  The list supplies one `BlurTargetView` for the index and preview, rendered before both effects.
+  Android uses `dimezisBlurViewSdk31Plus`, with a translucent fallback on older systems. Material
+  overlays, borders, and foregrounds use the shared light/dark theme tokens.
   Rows span the sheet width, including their touch targets and neutral selected backgrounds,
-  without cards or outlines. Dark selection and press fills stay subdued against the raised sheet;
+  without cards or outlines. Dark selection retains a neutral fill against the raised sheet;
   the name weight and selection mark remain the primary cues. The provider index floats above the
-  rows instead of reserving a separate column. A fixed trailing slot holds the compact selection
-  mark in single and multiple selection; tapping the floating index navigates providers rather than
-  selecting the row beneath.
+  rows. While the index is visible, the list reserves its 48-point touch area plus an 8-point gap
+  inside each row's content; short lists keep their existing insets. A fixed trailing slot holds
+  the compact selection mark in single and multiple selection clear of the permanent index.
+  Tapping the floating index navigates providers rather than selecting the row beneath.
   The diagnostic panel also embeds this public list and `useModelPickerData` so model selection
   stays inside its existing full-height sheet.
   Embedded consumers use `contentInset="none"` when their container already owns the gutter;

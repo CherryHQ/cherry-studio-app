@@ -3,8 +3,11 @@
 The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
-Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
-before resuming. User stop aborts the selected Session. Route disposal only releases observation.
+Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
+reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
+stops its owning work instead of suspending it for restart, as specified in
+[Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
+selected Session. Route disposal only releases observation.
 
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
 cleanup.
@@ -124,8 +127,10 @@ or TanStack Query.
 
 User cancellation affects only the selected Session. Pi executes one input at a time within that
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
-Ordinary disposal and OS execution expiry suspend the Harness without a user-abort mark. The next
-Host reopens committed tasks and reconstructs current capabilities. An unsafe tool interrupted after
+Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
+the same only when no continued-processing or audio protection remains. The next Host reopens
+committed tasks and reconstructs current capabilities. Continued-processing revocation
+stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
