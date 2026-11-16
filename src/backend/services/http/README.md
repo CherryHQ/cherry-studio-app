@@ -178,3 +178,8 @@ not logged.
   Release metadata and checksum text still use this HTTP client.
 - Device discovery such as mDNS or UDP, raw TCP, platform local-network permissions, cleartext HTTP
   policy, and certificate trust remain outside this module.
+
+Community Cloud inference uses `CloudRuntime.createModelFetch` as a streaming exception. Its
+account-scoped boundary restricts origin/path/model, signs the exact request bytes, strips caller
+credentials, rejects redirects, and retains cancellation until the response body ends. Cloud
+product entry, refresh, revocation, account and catalog reads use `createHttpClient`.

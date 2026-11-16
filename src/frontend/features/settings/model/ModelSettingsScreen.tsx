@@ -159,6 +159,7 @@ function ModelSettingsView() {
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer
+          cloudUse={activeKind === 'default' ? 'agent' : 'general'}
           isModelVisible={activeKind === 'naming' ? isNamingModelVisible : undefined}
           modelType={activeKind === 'painting' ? 'image' : 'text'}
           open

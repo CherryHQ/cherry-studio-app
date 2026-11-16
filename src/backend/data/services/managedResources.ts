@@ -1,3 +1,4 @@
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
@@ -8,6 +9,12 @@ import {
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 const MANAGED = 'managed by the enterprise server';
+
+/** Cloud catalog configuration is supplied by the signed-in account, never by provider settings. */
+export function assertUserOwnedProvider(providerId: string): void {
+  if (providerId === CLOUD_PROVIDER_ID || providerId.startsWith(`${CLOUD_PROVIDER_ID}::`))
+    throw DataApiErrorFactory.invalidOperation('provider.edit', 'managed by Cherry Cloud');
+}
 
 let admitEnterpriseSession: () => Promise<void> = async () => {};
 

@@ -1,3 +1,4 @@
+import type { CloudUnavailableReason } from '@/shared/contracts/cloud';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -8,6 +9,8 @@ export type ModelPickerModelItem = {
   model: Model;
   modelId: UniqueModelId;
   provider: Provider;
+  cloudUnavailable?: CloudUnavailableReason;
+  isCloudFree?: boolean;
 };
 
 export type ModelPickerGroup = {
