@@ -8,7 +8,7 @@ import { installProviderRegistryTestSnapshot } from '@/backend/data/services/pro
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import { projectCloudModels } from '../projectCloudModels';
-import { cloudSnapshot } from './cloudFixtures';
+import { cloudSnapshot } from './_cloudFixtures';
 
 let db: TestDb;
 beforeEach(() => {
