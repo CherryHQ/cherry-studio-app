@@ -28,6 +28,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'agent_get',
   'agent_list',
   'agent_update',
+  'list_installed_skills',
   'ask_user_question',
   'calendar_create_event',
   'calendar_delete_event',
@@ -160,6 +161,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('agent_get', 'auto', { effect: 'read' }),
   describe('agent_list', 'auto', { effect: 'read' }),
   describe('agent_update', 'ask'),
+  describe('list_installed_skills', 'auto', { effect: 'read' }),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     permissionScopes: ['calendar.read'],

@@ -126,6 +126,21 @@ function escapeLike(term: string): string {
   return `%${term.replace(/[\\%_]/g, '\\$&')}%`;
 }
 
+function libraryConditions(search?: string): SQL[] {
+  // Built-in copies installed by earlier builds are not part of the user-managed library.
+  const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
+  if (search) {
+    const pattern = escapeLike(search);
+    conditions.push(
+      or(
+        sql`${agentGlobalSkillTable.name} LIKE ${pattern} ESCAPE '\\'`,
+        sql`${agentGlobalSkillTable.description} LIKE ${pattern} ESCAPE '\\'`,
+      )!,
+    );
+  }
+  return conditions;
+}
+
 /**
  * Persistence for the installed Skill library and Agent bindings.
  *
@@ -178,17 +193,7 @@ export class AgentGlobalSkillService {
    */
   async list(params: ListSkillsQueryParams): Promise<ListSkillsResult> {
     const query = ListSkillsQuerySchema.parse(params);
-    // Built-in copies installed by earlier builds are not part of the user-managed library.
-    const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
-    if (query.search) {
-      const pattern = escapeLike(query.search);
-      conditions.push(
-        or(
-          sql`${agentGlobalSkillTable.name} LIKE ${pattern} ESCAPE '\\'`,
-          sql`${agentGlobalSkillTable.description} LIKE ${pattern} ESCAPE '\\'`,
-        )!,
-      );
-    }
+    const conditions = libraryConditions(query.search);
     if (query.cursor) {
       const { name, id } = decodeCursor(query.cursor);
       conditions.push(
@@ -231,6 +236,16 @@ export class AgentGlobalSkillService {
       })),
       ...(rows.length > query.limit && last ? { nextCursor: encodeSkillCursor(last) } : {}),
     };
+  }
+
+  /** Count the same installed library without loading packages or Agent bindings. */
+  async countLibrary(search?: string): Promise<number> {
+    const query = ListSkillsQuerySchema.parse({ search, scope: 'library' });
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(agentGlobalSkillTable)
+      .where(and(...libraryConditions(query.search)));
+    return row?.count ?? 0;
   }
 
   private async readBindings(

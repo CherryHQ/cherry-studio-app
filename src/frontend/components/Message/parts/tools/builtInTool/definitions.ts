@@ -44,6 +44,7 @@ export const builtInToolIconNames = {
   find_skills: 'fileText',
   install_skill: 'fileText',
   list_local_skills: 'fileText',
+  list_installed_skills: 'fileText',
   load_skill: 'fileText',
   list_skill_files: 'fileText',
   read_skill_file: 'fileText',
