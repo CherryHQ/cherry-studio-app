@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
+import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
 
 import {
   getModelPickerBadges,
@@ -32,6 +33,7 @@ const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  disabled?: boolean;
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
   density?: ModelPickerDensity;
@@ -52,6 +54,7 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  disabled: boolean;
   contentInset: 'default' | 'none';
   density: ModelPickerDensity;
   selectedModelId: string | null;
@@ -60,8 +63,9 @@ type ModelPickerListExtraData = {
   trailingInset: number | undefined;
 };
 
-/** Every selectable model on the device, grouped by provider in the shared picker sheet. */
+/** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  disabled = false,
   contentInset = 'default',
   density = 'default',
   emptyAction,
@@ -136,6 +140,7 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      disabled,
       contentInset,
       density,
       selectedModelId,
@@ -146,6 +151,7 @@ export function ModelPickerList({
     [
       contentInset,
       density,
+      disabled,
       isFastScrollerVisible,
       maxSelectedCount,
       selectedModelId,
@@ -171,7 +177,11 @@ export function ModelPickerList({
         <ModelPickerRow
           contentInset={extraData.contentInset}
           density={extraData.density}
-          isDisabled={Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected}
+          isDisabled={
+            extraData.disabled ||
+            Boolean(item.item.cloudUnavailable) ||
+            (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected)
+          }
           isSelected={isSelected}
           item={item.item}
           multiple={Boolean(extraData.selectedModelIds)}
@@ -238,6 +248,7 @@ export function ModelPickerList({
         </Text>
         {!isLoading && emptyAction ? (
           <Button
+            disabled={disabled}
             onPress={emptyAction.onPress}
             size="sm"
             variant={emptyAction.variant ?? 'secondary'}
@@ -330,9 +341,13 @@ const ModelPickerRow = memo(function ModelPickerRow({
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
-  const badges = showBadges ? getModelPickerBadges(item.model) : [];
+  const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
+  const unavailable = item.cloudUnavailable
+    ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
+    : undefined;
   const accessibilityLabel = [
     item.model.name,
+    ...(unavailable ? [unavailable] : []),
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
   ].join(', ');
   return (
@@ -340,7 +355,9 @@ const ModelPickerRow = memo(function ModelPickerRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={multiple ? 'checkbox' : 'button'}
       accessibilityState={
-        multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
+        multiple
+          ? { checked: isSelected, disabled: isDisabled }
+          : { selected: isSelected, disabled: isDisabled }
       }
       className={cn(
         'flex-row items-center gap-3 active:bg-secondary-active dark:active:bg-secondary-active/50',
@@ -353,13 +370,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
       onPress={handleSelect}
       style={trailingInset === undefined ? undefined : { paddingRight: trailingInset }}
     >
-      <View
-        className={cn(
-          'h-6 justify-center',
-          density === 'compact' ? 'w-6' : 'w-7',
-          badges.length > 0 && 'self-start',
-        )}
-      >
+      <View className={cn('h-6 justify-center', density === 'compact' ? 'w-6' : 'w-7')}>
         <ModelAvatar
           artwork={density === 'compact' ? 'brand' : 'model'}
           model={item.model}
@@ -379,6 +390,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
         >
           {item.model.name}
         </Text>
+        {unavailable ? <Text className="text-xs text-muted-foreground">{unavailable}</Text> : null}
         {badges.length > 0 ? (
           <View className="h-4 flex-row items-center gap-1">
             {badges.map((badge) => (
@@ -387,12 +399,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </View>
         ) : null}
       </View>
-      <View
-        className={cn(
-          'size-6 shrink-0 items-center justify-center',
-          badges.length > 0 && 'self-start',
-        )}
-      >
+      <View className="size-6 shrink-0 items-center justify-center">
         {multiple ? (
           <SelectionIndicator className="size-5" selected={isSelected} />
         ) : isSelected ? (

@@ -9,8 +9,8 @@ const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
  * Always queries the unfiltered list so every caller shares one cache entry. The chat
  * composer and the settings list already hold `/providers`, so an `enabled`-scoped query
  * would fetch the same rows again under a second key — the model picker used to pay that
- * on every open. `ProviderService.list` filters on `isEnabled` and keeps the `orderKey`
- * ordering, which the filter below reproduces exactly.
+ * on every open. `ProviderService.list` pins Plan first and then keeps saved `orderKey`
+ * ordering; filtering on `isEnabled` below preserves that same order.
  */
 export function useProviders(query: { enabled?: boolean } = {}) {
   const providersQuery = useQuery('/providers');

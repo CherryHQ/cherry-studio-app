@@ -5,6 +5,7 @@ type StartupOperation =
   | 'startup.react_native.milestones'
   | 'startup.bootstrap'
   | 'startup.host'
+  | 'startup.enterprise'
   | 'startup.phase'
   | 'startup.service'
   | 'startup.database.open'

@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import type { AgentService } from '@/backend/data/services/AgentService';
 import type { AgentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type { AgentAvatars } from '@/backend/services/agents/createAgentAvatars';
@@ -54,6 +55,7 @@ const bindingSchema = z.strictObject({
 export function createAgentConfigurationTools(
   access: AgentConfigurationAccess,
   files: Pick<WorkspaceFileAccess, 'resolveEdit'>,
+  agents: Pick<AgentService, 'getById'>,
   currentAgentId?: string,
 ): RuntimeTool[] {
   function target(id: string) {
@@ -62,7 +64,7 @@ export function createAgentConfigurationTools(
       throw DataApiErrorFactory.validation({ agent_id: ['Use an exact Agent id.'] });
     return currentAgentId;
   }
-  function tool<T>(
+  function tool<T extends { agent_id: string }>(
     name: BuiltInToolCapabilityId,
     approval: 'auto' | 'ask',
     description: string,
@@ -82,6 +84,13 @@ export function createAgentConfigurationTools(
         if (!parsed.success) return failure('agent_invalid_input', z.prettifyError(parsed.error));
         signal.throwIfAborted();
         try {
+          const agent = await agents.getById(target(parsed.data.agent_id));
+          if (agent.isManaged)
+            return failure(
+              'agent_managed',
+              'This Agent is delivered by the user’s organization. Agent tools cannot read or change it.',
+            );
+          signal.throwIfAborted();
           return await execute(parsed.data, signal);
         } catch (error) {
           signal.throwIfAborted();

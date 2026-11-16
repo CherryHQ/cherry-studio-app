@@ -11,7 +11,10 @@ This module owns the model selection surface, model metadata UI, and model setti
   Focusing search expands the sheet from `large` to `full`. Clearing search, dismissing the keyboard,
   and changing filters retain that height; a downward drag can return to `large` without discarding
   the current conditions. A filtered empty state offers one action to clear search and filters.
-- `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
+- `ModelPickerList` renders the grouped selectable model rows inside that sheet and the onboarding
+  page. Onboarding supplies its own discovered or entitled candidates, including models not yet
+  saved or enabled; the list owns row visuals, avatars, capability badges, and selection marks.
+  Its `disabled` input prevents selection while a caller is saving. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order. The contact-style index
   floats in a narrow frosted-glass capsule centered in the model-list viewport, capped at 80% of
@@ -61,6 +64,15 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Organization
 
-- `components/` contains the model selection sheet, metadata, and filtering UI.
+- `components/` contains the model selection sheet, metadata, and filtering UI. Inside a
+  `PolicyScope` the sheet offers only the policy's allowed models (`useModelChoice`).
 - `hooks/` owns model picker data and preference-backed model selection state.
 - `utils/` contains pure model setting and model type helpers and tests.
+
+## Community Cloud availability
+
+The picker observes `Backend.cloud` through `useCloud`. Plan rows require effective paid model
+entitlements and receive unavailability reasons; exhausted or unauthorized rows cannot be selected.
+The `cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
+chat and translation rights). Selection is only a presentation check: the Cloud request boundary
+rechecks entitlement, expiry and quota before every send.

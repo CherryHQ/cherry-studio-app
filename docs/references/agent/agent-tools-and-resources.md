@@ -994,8 +994,10 @@ registered `provider::model` string; omitting it preserves the model on update. 
 clear a model; the user does that in the editor. Agent targets are strings validated locally as an
 exact Agent ID or `current`.
 
-`agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, and current Skill
+`agent_list` lists saved Agents with optional name filtering and pagination. Call with `{}` to browse
+without a name filter; a request to list Agents does not require asking the user for a search keyword.
+It returns at most 50 compact records per call and omits instructions.
+`agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -1008,7 +1010,8 @@ apply to future turns only.
 
 For avatar changes and version-only reads, `agent_get` accepts `view: summary`: it returns only
 `id`, `name`, and `updatedAt`, without instructions or Skill bindings. The definition view remains
-the required source before editing instructions.
+the required source before editing instructions. Both views and all three configuration tools
+refuse organization-delivered Agents before reading bindings, resolving images or changing state.
 
 A call saved before this contract, such as one still awaiting approval, fails validation without
 writing; the model reads the current definition and retries with the new form.

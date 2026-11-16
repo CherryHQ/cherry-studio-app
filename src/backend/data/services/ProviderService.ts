@@ -1,6 +1,6 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
 import { loggerService } from '@logger';
-import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, or, type SQL } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
@@ -11,6 +11,7 @@ import type {
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { ProviderListPageQuery } from '@/shared/data/api/schemas/providers';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -31,6 +32,12 @@ import {
 } from '@/shared/data/types/provider';
 import { resolveAuthOptional } from '@/shared/utils/providerAuth';
 
+import {
+  assertEnterpriseSessionAdmitted,
+  assertUserOwnedProvider,
+  guardMethods,
+  providerSettingsChecks,
+} from './managedResources';
 import {
   assertCustomProviderEndpointConfiguration,
   getRemovedConfiguredChatEndpoints,
@@ -251,7 +258,9 @@ function rowToProvider(row: UserProviderRow): Provider {
     },
     apiKeys,
     authMethods: metadata.authMethods,
-    authOptional: resolveAuthOptional(row.authConfig, metadata.authOptional),
+    authOptional:
+      row.providerId === CLOUD_PROVIDER_ID ||
+      resolveAuthOptional(row.authConfig, metadata.authOptional),
     authType,
     defaultChatEndpoint: row.defaultChatEndpoint ?? undefined,
     description: metadata.description,
@@ -318,6 +327,10 @@ function decodeProviderCursor(raw: string | undefined): ProviderCursor | null {
 }
 
 function afterProviderCursor(cursor: ProviderCursor): SQL {
+  const notPlan = ne(userProviderTable.providerId, CLOUD_PROVIDER_ID);
+  // Plan is pinned independently of its saved order key, so its cursor precedes every other row.
+  if (cursor.providerId === CLOUD_PROVIDER_ID) return notPlan;
+
   const afterWithinSection = or(
     gt(userProviderTable.orderKey, cursor.orderKey),
     and(
@@ -327,13 +340,16 @@ function afterProviderCursor(cursor: ProviderCursor): SQL {
   )!;
 
   if (cursor.isEnabled) {
-    return or(
-      eq(userProviderTable.isEnabled, false),
-      and(eq(userProviderTable.isEnabled, true), afterWithinSection),
+    return and(
+      notPlan,
+      or(
+        eq(userProviderTable.isEnabled, false),
+        and(eq(userProviderTable.isEnabled, true), afterWithinSection),
+      ),
     )!;
   }
 
-  return and(eq(userProviderTable.isEnabled, false), afterWithinSection)!;
+  return and(notPlan, eq(userProviderTable.isEnabled, false), afterWithinSection)!;
 }
 
 function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
@@ -433,12 +449,21 @@ export class ProviderService {
     await application.get('ProviderCatalogRuntime').ensureReady();
     const rows =
       query.enabled === undefined
-        ? await this.db.select().from(userProviderTable).orderBy(asc(userProviderTable.orderKey))
+        ? await this.db
+            .select()
+            .from(userProviderTable)
+            .orderBy(
+              desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
+              asc(userProviderTable.orderKey),
+            )
         : await this.db
             .select()
             .from(userProviderTable)
             .where(eq(userProviderTable.isEnabled, query.enabled))
-            .orderBy(asc(userProviderTable.orderKey));
+            .orderBy(
+              desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
+              asc(userProviderTable.orderKey),
+            );
 
     return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
   }
@@ -470,6 +495,7 @@ export class ProviderService {
       .from(userProviderTable)
       .where(and(...conditions))
       .orderBy(
+        desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
         desc(userProviderTable.isEnabled),
         asc(userProviderTable.orderKey),
         asc(userProviderTable.providerId),
@@ -544,6 +570,7 @@ export class ProviderService {
 
   /** Select a serving key and capture its non-secret identity atomically. */
   async resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey> {
+    await assertEnterpriseSessionAdmitted();
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {
@@ -796,6 +823,28 @@ export class ProviderService {
     await this.dbService.withWriteTx((tx) => batchUpsertProviders(tx, inputs));
   }
 }
+
+// The organization supplies an enterprise profile's providers.
+guardMethods(
+  ProviderService,
+  providerSettingsChecks<ProviderService>('provider', [
+    'create',
+    'update',
+    'replaceApiKeys',
+    'updateApiKey',
+    'delete',
+    'batchUpsert',
+  ]),
+);
+
+guardMethods(ProviderService, {
+  create: (input) => assertUserOwnedProvider(input.providerId),
+  update: (id) => assertUserOwnedProvider(id),
+  replaceApiKeys: (id) => assertUserOwnedProvider(id),
+  updateApiKey: (id) => assertUserOwnedProvider(id),
+  delete: (id) => assertUserOwnedProvider(id),
+  batchUpsert: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+});
 
 export const providerService = new ProviderService();
 

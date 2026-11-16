@@ -95,9 +95,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         throw new SkillsError('storage-unavailable', 'The installed package could not be read.');
       files.set(path, bytes);
     }
-    const adapted = adaptSkillPackage(files, skill.name, input.changes);
+    const adapted = await adaptSkillPackage(files, skill.name, input.changes);
     // Detect damaged files before replacing the current accepted package.
-    const original = validateSkillPackage(files, { expectedName: skill.name });
+    const original = await validateSkillPackage(files, { expectedName: skill.name });
+    signal?.throwIfAborted();
     if (!original.ok || original.package.contentHash !== skill.contentHash)
       throw new SkillsError('package-invalid', 'The installed package failed its integrity check.');
     return { skill, ...adapted, previousInstructions: original.package.instructions };
@@ -169,9 +170,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   }> {
     const acquisition = await sourceFor(candidate).acquire(candidate, signal);
     signal?.throwIfAborted();
-    const validation = validateSkillPackage(acquisition.files, {
+    const validation = await validateSkillPackage(acquisition.files, {
       expectedName: acquisition.expectedName,
     });
+    signal?.throwIfAborted();
     const publicCandidate = await toPublicCandidate(candidate);
     if (!validation.ok) {
       return {
@@ -392,7 +394,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     async create(input, signal) {
-      const { package: pkg, files } = authorSkillPackage(input, await deps.readAuthor());
+      const { package: pkg, files } = await authorSkillPackage(input, await deps.readAuthor());
       if (await deps.skills.findByFolderName(pkg.name))
         throw new SkillsError('already-installed', 'A Skill with this name already exists.');
       signal?.throwIfAborted();

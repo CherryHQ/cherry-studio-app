@@ -1,17 +1,13 @@
-import { Button, Section, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule } from '@/frontend/data';
-import type { PermissionStatuses } from '@/shared/contracts';
-
 import {
-  getPermissionAction,
-  getPermissionStatus,
   getPermissionStatusKey,
   type PermissionKind,
-  permissionConfig,
-} from '../permissionConfig';
+  useDevicePermissionAction,
+} from '@/frontend/hooks/devicePermission';
+import type { PermissionStatuses } from '@/shared/contracts';
+
 import { PermissionListLeading } from './PermissionListPresentation/PermissionListPresentation';
 
 export function PermissionSettingsItem({
@@ -24,40 +20,13 @@ export function PermissionSettingsItem({
   refresh: () => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
-  const { toast } = useToast();
-  const permissions = useBackendModule('permissions');
-  const [pending, setPending] = useState(false);
-  const config = permissionConfig[kind];
-  const status = getPermissionStatus(kind, statuses);
-  // An add-only calendar grant can still be upgraded by a system request.
-  const action = getPermissionAction(kind === 'calendar' ? statuses['calendar.read'] : status);
+  const { status, action, pending, handlePress } = useDevicePermissionAction({
+    kind,
+    statuses,
+    refresh,
+  });
   const label = t(`settings.permissions.type.${kind}`);
   const actionLabel = action ? t(`settings.permissions.action.${action}`) : '';
-
-  const handlePress = async () => {
-    if (pending || !action) return;
-    setPending(true);
-    try {
-      if (action === 'request') {
-        await permissions.request([...config.requestScopes]);
-      } else if (action === 'open-settings') {
-        if (kind === 'health') {
-          alert.show({
-            title: t('settings.permissions.health.manage'),
-            description: t('settings.permissions.health.appleInstructions'),
-          });
-        } else {
-          await permissions.openSystemSettings(config.permission);
-        }
-      }
-      await refresh();
-    } catch {
-      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
-    } finally {
-      setPending(false);
-    }
-  };
 
   return (
     <Section.Item

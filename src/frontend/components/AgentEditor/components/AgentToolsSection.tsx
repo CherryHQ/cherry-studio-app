@@ -1,0 +1,283 @@
+import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
+import { BottomSheet, Button, ContentState, Image, Section } from '@cherrystudio/ui/components';
+import { useQueries } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Keyboard, ScrollView, Text, View } from 'react-native';
+
+import { withPolicy } from '@/frontend/components/Policy';
+import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
+import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
+import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type { McpServer } from '@/shared/data/types/mcpServer';
+
+import {
+  type AgentMcpServerOptionStatus,
+  type AgentMcpToolBindingStatus,
+  buildAgentMcpServerOptions,
+  getAgentMcpToolBindingStatus,
+  isRunnableMcpServer,
+  type McpToolBindingDraft,
+  type McpToolCatalog,
+  removeAgentToolBinding,
+  setAgentMcpServerEnabled,
+} from '../utils/agentToolSettings';
+
+type AgentToolsSectionProps = {
+  bindings: readonly WriteAgentToolBinding[];
+  hasServersError: boolean;
+  isServersLoading: boolean;
+  onChange: (bindings: WriteAgentToolBinding[]) => void;
+  originalBindings: readonly AgentToolBinding[];
+  /** Shows only the stored bindings, with no add or remove actions. */
+  readOnly?: boolean;
+  servers: readonly McpServer[];
+};
+
+function ToolsSection({
+  bindings,
+  hasServersError,
+  isServersLoading,
+  onChange,
+  originalBindings,
+  readOnly = false,
+  servers,
+}: AgentToolsSectionProps) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const mcpIcon = useMcpIcon();
+  const [isAdding, setIsAdding] = useState(false);
+  const mcp = useBackendModule('mcp');
+  const serverOptions = useMemo(() => {
+    const options = buildAgentMcpServerOptions({ bindings, originalBindings, servers });
+    // A managed Agent's bindings belong to the enterprise server: show what is bound, nothing to add.
+    return readOnly ? options.filter((option) => option.binding !== undefined) : options;
+  }, [bindings, originalBindings, readOnly, servers]);
+  const perToolBindings = useMemo(
+    () =>
+      bindings.filter(
+        (binding) =>
+          (readOnly || binding.enabled) &&
+          binding.rawToolName !== undefined &&
+          !servers.some((server) => server.id === binding.serverId && server.origin === 'builtin'),
+      ),
+    [bindings, readOnly, servers],
+  );
+  const enabledServers = serverOptions.filter((option) => readOnly || option.binding?.enabled);
+  const availableServers = serverOptions.filter(
+    (option) =>
+      !option.binding?.enabled && option.server?.isEnabled && isRunnableMcpServer(option.server),
+  );
+  const hasServerOptions = !isServersLoading && !hasServersError && availableServers.length > 0;
+  const serversById = useMemo(
+    () => new Map(servers.map((server) => [server.id, server])),
+    [servers],
+  );
+  const catalogServerIds = useMemo(
+    () => [
+      ...new Set(
+        perToolBindings.flatMap((binding) => {
+          const server = serversById.get(binding.serverId);
+          return server?.isEnabled && isRunnableMcpServer(server) ? [server.id] : [];
+        }),
+      ),
+    ],
+    [perToolBindings, serversById],
+  );
+  const catalogQueryOptions = useMemo(
+    () =>
+      catalogServerIds.map((serverId) => ({
+        queryFn: () => mcp.listTools(serverId),
+        queryKey: queryKeys.mcpServers.tools(serverId),
+        retry: false,
+      })),
+    [catalogServerIds, mcp],
+  );
+  const catalogQueries = useQueries({ queries: catalogQueryOptions });
+  const catalogs = new Map<string, McpToolCatalog>(
+    catalogServerIds.map((serverId, index) => {
+      const query = catalogQueries[index];
+      const catalog: McpToolCatalog = query?.isError
+        ? { state: 'error' }
+        : query?.isPending
+          ? { state: 'loading' }
+          : {
+              names: new Set(query?.data?.map((tool) => tool.name) ?? []),
+              state: 'ready',
+            };
+      return [serverId, catalog] as const;
+    }),
+  );
+
+  if (readOnly && bindings.length === 0) return null;
+
+  return (
+    <View className="gap-6">
+      {enabledServers.length > 0 || !readOnly ? (
+        <Section title={enabledServers.length > 0 ? t('agent.tools.section') : undefined}>
+          {enabledServers.map((option) => {
+            const displayName = option.displayName || t('agent.tools.server');
+            const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
+              id: option.serverId,
+              server: displayName,
+              status: t(`agent.tools.serverStatus.${option.status}`),
+            });
+
+            return (
+              <Section.Item
+                key={option.serverId}
+                description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
+                label={displayName}
+                locked={readOnly}
+                accessibilityLabel={accessibilityLabel}
+                trailing={
+                  readOnly ? undefined : (
+                    <Button
+                      accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
+                        id: option.serverId,
+                        server: displayName,
+                      })}
+                      icon={<TrashIcon />}
+                      onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, false))}
+                      size="xs"
+                      variant="ghost"
+                    />
+                  )
+                }
+              />
+            );
+          })}
+          {readOnly ? null : (
+            <Section.Item
+              label={t('agent.tools.add')}
+              onPress={() => {
+                Keyboard.dismiss();
+                setIsAdding(true);
+              }}
+            />
+          )}
+        </Section>
+      ) : null}
+      {perToolBindings.length > 0 ? (
+        <Section title={t('agent.tools.existingToolRules')}>
+          {perToolBindings.map((binding) => {
+            const server = serversById.get(binding.serverId);
+            const status = getAgentMcpToolBindingStatus({
+              binding,
+              catalog: catalogs.get(binding.serverId),
+              server,
+            });
+            const displayName =
+              server?.name ?? binding.displayNameSnapshot ?? t('agent.tools.server');
+
+            return (
+              <Section.Item
+                key={toolBindingKey(binding)}
+                description={statusCaption(t, 'agent.tools.toolStatus', status)}
+                label={`${displayName} · ${binding.rawToolName}`}
+                locked={readOnly}
+                trailing={
+                  readOnly ? undefined : (
+                    <Button
+                      accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
+                        id: binding.serverId,
+                        server: displayName,
+                        status: t(`agent.tools.toolStatus.${status}`),
+                        tool: binding.rawToolName,
+                      })}
+                      icon={<TrashIcon />}
+                      onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
+                      size="xs"
+                      variant="ghost"
+                    />
+                  )
+                }
+              />
+            );
+          })}
+        </Section>
+      ) : null}
+      <BottomSheet
+        footer={
+          <Button
+            onPress={() => {
+              setIsAdding(false);
+              router.push('/plugins');
+            }}
+          >
+            {t('agent.tools.manage')}
+          </Button>
+        }
+        onClose={() => setIsAdding(false)}
+        open={!readOnly && isAdding}
+        size="medium"
+        title={t('agent.tools.add')}
+      >
+        <ScrollView
+          contentContainerClassName={hasServerOptions ? 'pt-2' : 'grow justify-center px-6 py-8'}
+          showsVerticalScrollIndicator={false}
+        >
+          {isServersLoading ? (
+            <ContentState.Loading title={t('agent.tools.loading')} />
+          ) : hasServerOptions ? (
+            <Section variant="plain">
+              {availableServers.map((option) => (
+                <Section.Item
+                  key={option.serverId}
+                  label={option.displayName || t('agent.tools.server')}
+                  onPress={() => {
+                    onChange(setAgentMcpServerEnabled(bindings, option, true));
+                    setIsAdding(false);
+                  }}
+                  showChevron={false}
+                />
+              ))}
+            </Section>
+          ) : (
+            <ContentState.Empty
+              icon={<Image className="size-12" contentFit="contain" source={mcpIcon} />}
+              title={t('agent.tools.empty')}
+            />
+          )}
+        </ScrollView>
+      </BottomSheet>
+    </View>
+  );
+}
+
+/**
+ * The editor lists enabled bindings. A loading catalog resolves on its own;
+ * only unavailable tools or connections need a caption.
+ */
+const QUIET_STATUSES: ReadonlySet<AgentMcpServerOptionStatus | AgentMcpToolBindingStatus> = new Set(
+  ['available', 'binding-disabled', 'catalog-loading', 'enabled'],
+);
+
+function statusCaption(
+  t: (key: string) => string,
+  translationPrefix: 'agent.tools.serverStatus' | 'agent.tools.toolStatus',
+  status: AgentMcpServerOptionStatus | AgentMcpToolBindingStatus,
+) {
+  if (QUIET_STATUSES.has(status)) {
+    return undefined;
+  }
+  return (
+    <Text className="text-error text-sm" selectable>
+      {t(`${translationPrefix}.${status}`)}
+    </Text>
+  );
+}
+
+function toolBindingKey(binding: McpToolBindingDraft): string {
+  return JSON.stringify([binding.serverId, binding.rawToolName]);
+}
+
+/**
+ * A managed Agent's bindings belong to the organization: the editor shows them read-only inside its
+ * locked group, so the editable section stays away.
+ */
+export const AgentToolsSection = withPolicy(ToolsSection, (policy, { readOnly }) =>
+  readOnly || policy.canBind ? {} : null,
+);

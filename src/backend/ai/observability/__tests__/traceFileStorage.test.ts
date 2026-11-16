@@ -1,5 +1,7 @@
 import { Directory, File } from 'expo-file-system';
 
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
+
 import { TRACE_RETENTION, traceFileStorage } from '../traceFileStorage';
 
 jest.mock('expo-crypto', () => {
@@ -147,7 +149,16 @@ const diagnostics = { droppedRecords: 0, writeFailures: 0 };
 const name = (timestamp: number, index = 1) =>
   `${timestamp}-00000000-0000-4000-8000-${index.toString().padStart(12, '0')}.jsonl`;
 
+function addProfile(index: number): string {
+  const root = 'file:///documents/profiles/';
+  const profile = `${root}10000000-0000-4000-8000-${index.toString().padStart(12, '0')}/`;
+  const trace = `${profile}Runtime/trace/v1/`;
+  for (const path of [root, profile, trace]) testState.directories.add(path);
+  return trace;
+}
+
 beforeEach(() => {
+  setActiveProfile(LOCAL_PROFILE);
   testState.directories.clear();
   testState.files.clear();
 });
@@ -215,13 +226,17 @@ describe('traceFileStorage', () => {
     expect(testState.files.get(path)).toBe('{"revision":1}\n{"interrupted":\n{"revision":2}\n');
   });
 
-  it('prunes only owned temporary and expired batches and enforces the file-count limit', async () => {
+  it('prunes owned temporary and expired batches across inactive profiles and limits total files', async () => {
     testState.directories.add(directory);
-    testState.files.set(`${directory}${name(now - TRACE_RETENTION.maxAgeMs - 1)}`, 'expired');
-    testState.files.set(`${directory}${name(now)}.tmp`, 'incomplete');
+    const inactive = addProfile(1);
+    testState.files.set(`${inactive}${name(now - TRACE_RETENTION.maxAgeMs - 1)}`, 'expired');
+    testState.files.set(`${inactive}${name(now)}.tmp`, 'incomplete');
     testState.files.set(`${directory}unrelated.txt`, 'keep');
     for (let index = 0; index <= TRACE_RETENTION.maxFiles; index += 1) {
-      testState.files.set(`${directory}${name(now - index, index)}`, 'current');
+      testState.files.set(
+        `${index % 2 ? inactive : directory}${name(now - index, index)}`,
+        'current',
+      );
     }
     await traceFileStorage.prune(now);
     expect(testState.files.size).toBe(TRACE_RETENTION.maxFiles + 1);
@@ -241,6 +256,45 @@ describe('traceFileStorage', () => {
     testState.files.set(`${directory}${name(now - 1)}`, 'older');
     await traceFileStorage.prune(now);
     expect([...testState.files.keys()]).toEqual([`${directory}${name(now)}`]);
+  });
+
+  it('shares the byte budget across profiles without touching profile data or unknown directories', async () => {
+    testState.directories.add(directory);
+    const first = addProfile(1);
+    const second = addProfile(2);
+    const firstFile = `${first}${name(now - 1)}`;
+    const secondFile = `${second}${name(now)}`;
+    testState.files.set(firstFile, 'a'.repeat(TRACE_RETENTION.maxBytes / 2));
+    testState.files.set(secondFile, 'b'.repeat(TRACE_RETENTION.maxBytes / 2));
+    testState.files.set(`${directory}${name(now - 2)}`, 'over installation budget');
+    const unrelated = [
+      'file:///documents/profiles/10000000-0000-4000-8000-000000000001/database/cherry.db',
+      `file:///documents/profiles/unknown/Runtime/trace/v1/${name(now - TRACE_RETENTION.maxAgeMs - 1)}`,
+    ];
+    testState.directories.add('file:///documents/profiles/unknown/');
+    for (const file of unrelated) testState.files.set(file, 'keep');
+    await traceFileStorage.prune(now);
+    expect([...testState.files.keys()].sort()).toEqual(
+      [firstFile, secondFile, ...unrelated].sort(),
+    );
+  });
+
+  it('exports only the active profile even though retention visits every profile', async () => {
+    testState.directories.add(directory);
+    const inactive = addProfile(1);
+    const localFile = `${directory}${name(now)}`;
+    const inactiveFile = `${inactive}${name(now - 1)}`;
+    testState.files.set(localFile, 'local record');
+    testState.files.set(inactiveFile, 'inactive record');
+    const snapshot = await traceFileStorage.snapshot(now, diagnostics);
+    expect(snapshot.metadata.retention).toMatchObject({
+      scope: 'installation',
+      maxBytes: 20 * 1024 * 1024,
+    });
+    const copies = snapshot.files.filter((file) => file.name.endsWith('.jsonl'));
+    expect(copies.map((file) => testState.files.get(file.uri))).toEqual(['local record']);
+    expect(testState.files.get(inactiveFile)).toBe('inactive record');
+    snapshot.dispose();
   });
 
   it('returns independent copies plus a manifest that remain stable after source retention', async () => {

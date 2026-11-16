@@ -79,11 +79,35 @@ function fixture() {
     },
   };
   const files = { resolveEdit: jest.fn(async () => fileId) };
-  const tools = createAgentConfigurationTools(access, files, agentId);
+  const agents = { getById: jest.fn(async () => agent) };
+  const tools = createAgentConfigurationTools(access, files, agents, agentId);
   const run = (name: string, input: RuntimeToolCall['input']) =>
     tools.find((tool) => tool.providerName === name)!.execute({ ...call, input });
-  return { access, files, run };
+  return { access, files, agents, run };
 }
+
+it.each([
+  ['agent_set_avatar', { expected_updated_at: version, file_entry_id: fileId }],
+  ['agent_list_mcp_servers', {}],
+  [
+    'agent_set_mcp_binding',
+    { server_id: serverId, state: 'enabled', expected_binding_updated_at: null },
+  ],
+] as const)(
+  'refuses organization-delivered Agents before accessing configuration: %s',
+  async (name, input) => {
+    const f = fixture();
+    f.agents.getById.mockResolvedValueOnce({ ...agent, isManaged: true });
+    expect(await f.run(name, { ...input, agent_id: 'current' })).toMatchObject({
+      failure: { scope: 'call', error: { code: 'agent_managed' } },
+    });
+    expect(f.files.resolveEdit).not.toHaveBeenCalled();
+    expect(f.access.avatars.setAvatar).not.toHaveBeenCalled();
+    expect(f.access.bindings.list).not.toHaveBeenCalled();
+    expect(f.access.bindings.upsert).not.toHaveBeenCalled();
+    expect(f.access.servers.list).not.toHaveBeenCalled();
+  },
+);
 
 it('resolves an authorized source before the normal avatar workflow and hides all file paths', async () => {
   const f = fixture();

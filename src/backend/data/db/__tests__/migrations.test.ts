@@ -839,6 +839,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'oauth',
+        'managed_remote_id',
       ]);
       expect(columnNames(database, 'plugin_authorization')).toEqual([
         'id',
@@ -924,6 +925,9 @@ describe('bundled SQLite migrations', () => {
         'deleted_at',
         'tool_approval_mode',
         'mode',
+        'managed_remote_id',
+        'default_model_id',
+        'allowed_model_ids',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
@@ -972,6 +976,7 @@ describe('bundled SQLite migrations', () => {
       ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual([
+        'mcp_server_managed_remote_id_idx',
         'mcp_server_builtin_idx',
         'mcp_server_is_active_idx',
       ]);

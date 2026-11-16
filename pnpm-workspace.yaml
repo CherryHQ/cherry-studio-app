@@ -16,6 +16,7 @@ minimumReleaseAge: 1440
 # First-party Cherry packages ship in lockstep with Desktop and are adopted on release.
 minimumReleaseAgeExclude:
   - '@cherrystudio/*'
+  - '@cherryinternal/*'
   # Explicit Pi upgrade: keep the release-age exception limited to this version.
   - '@earendil-works/chord@1.5.0'
   - '@earendil-works/pi-ai@1.5.0'

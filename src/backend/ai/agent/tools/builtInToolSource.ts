@@ -306,7 +306,7 @@ function createCatalog(
   const tools = [
     createAskUserQuestionTool(askUser),
     ...(deps.agentConfiguration
-      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, agentId)
+      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
       : []),
     ...createAgentManagementTools(deps.agents, agentId),
     createEditFileTool(

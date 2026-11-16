@@ -41,9 +41,10 @@ and is clamped to the available screen height. Product components choose semanti
 fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
 library.
 
-Expandable cards follow the native sheet's visible height on the UI thread, keeping their fixed
-footer on screen at every open height. Closing slides out the smallest card without collapsing its
-content. Single-height and keyboard-avoiding cards retain their own height rules.
+For multiple heights, the native position event drives the content layout on the UI thread. The
+scroll viewport and fixed footer follow the visible height during dragging and snapping, rather
+than laying out below the screen at the largest height. Opening and closing retain the smallest
+open layout; keyboard avoidance keeps its separate keyboard-driven layout.
 
 ```tsx
 <BottomSheet
@@ -93,6 +94,10 @@ preserves the default: centered with `closeAction`, start-aligned otherwise.
 With `backAction` and `titleAlign="center"`, equal action columns keep the title centered in the
 card while moving between levels.
 
+Pass `onBack` to handle system Back, web Escape, and accessibility escape without adding a header
+button. It takes precedence over the default system dismissal and `backAction`, including when
+`dismissible={false}`. Drag and scrim dismissal still follow `dismissible`.
+
 Set `avoidKeyboard` when the sheet holds a text field. The card then rises with the keyboard frame
 by frame and keeps its footer a small gap above it; once the card reaches the top inset, its body
 shrinks instead, so keep the field outside the scrolling body to keep it visible. Such a sheet has
@@ -119,7 +124,24 @@ const [size, setSize] = useState<BottomSheetSize>('large');
 ```
 
 Set `dismissible={false}` when a workflow must remain visible until it reaches an explicit outcome.
-The closed detent then becomes programmatic-only: drag, scrim, Android back, and accessibility
-escape cannot reach it, while changing `open` to `false` still performs the controlled close. Such a
-sheet hides its drag handle unless `sizes` still lets the user drag between heights; the handle's
+The closed detent then becomes programmatic-only: drag, scrim, and default system dismissal cannot
+reach it, while changing `open` to `false` still performs the controlled close. An explicit `onBack`
+or `backAction` can handle system Back separately. Such a sheet hides its drag handle unless
+`sizes` still lets the user drag between heights; the handle's
 space stays so the header does not move.
+
+## Covering overlays
+
+Use `presentation="overlay"` for a handle-only surface. `title` remains its accessible name; the
+visible heading and header actions are omitted. Nested sheets inherit this presentation and a
+minimum height equal to their parent, keeping the lower card covered. The parent stays mounted and
+becomes inactive while a nested sheet is presented. Sibling sheets coordinate the same behavior
+with `active={false}` on the covered sheet and `size="full"` on the child.
+
+`size="content"` wraps short content in a scroll view and measures the body, handle/header, footer
+and safe-area space, capped at the available height. Fixed and semantic sizes remain available.
+`initialFocusRef` selects the first focus target; `returnFocusRef` restores focus after dismissal.
+`onClose` reports an interactive dismissal once it settles. `onClosed` also runs for controlled
+closures, after focus restoration, so a caller can wait before opening a native picker or focusing
+its input. An overlay allocates its native portal on first opening and then keeps its content
+mounted during controlled hiding, preserving scroll state across file previews.
