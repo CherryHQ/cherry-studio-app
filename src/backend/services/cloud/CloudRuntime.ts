@@ -51,16 +51,19 @@ const CloudServiceConfigSchema = z.object({
     }
     return url.origin;
   }),
-  webUrl: z.url({ protocol: /^https$/ }).refine((value) => {
-    const url = new URL(value);
-    return !url.username && !url.password;
-  }, 'Subscription pages cannot contain credentials'),
+  webUrl: z
+    .url({ protocol: /^https$/ })
+    .refine((value) => {
+      const url = new URL(value);
+      return !url.username && !url.password;
+    }, 'Subscription pages cannot contain credentials')
+    .optional(),
 });
 type CloudServiceConfig = z.infer<typeof CloudServiceConfigSchema>;
 
 @Injectable('CloudRuntime')
 @ServicePhase(Phase.PostReady)
-@AppStatePolicy('foreground-refresh')
+@AppStatePolicy('continue')
 @DependsOn(['DbService'])
 export class CloudRuntime extends BaseService implements CloudModule {
   private snapshot = EMPTY;
@@ -99,10 +102,6 @@ export class CloudRuntime extends BaseService implements CloudModule {
     if (isEnterpriseProfile() || !this.source) return;
     this.started = true;
     this.registerDisposable(this.source.subscribe(() => this.changeIdentity()));
-    this.registerAppStateListener((status) => {
-      if (status === 'active') this.refreshInBackground();
-    });
-    this.registerInterval(() => this.refreshInBackground(), 60_000);
     // Also disable a previously persisted catalog on a signed-out cold start.
     this.project([], this.lifetime.signal);
     this.changeIdentity();
@@ -134,14 +133,19 @@ export class CloudRuntime extends BaseService implements CloudModule {
       key ? { ...EMPTY, phase: 'loading', webUrl: this.configuration?.webUrl ?? null } : EMPTY,
     );
     this.project([], this.lifetime.signal);
-    if (key) this.refreshInBackground();
+    // Restore once when the cold-start account becomes available; repeated identity notifications
+    // keep the same key. A newly signed-in account must load its own state as well.
+    if (key) void this.refreshState(true).catch(() => {});
   }
 
-  readonly refresh = async (): Promise<void> => {
+  readonly refresh = (): Promise<void> => this.refreshState(false);
+
+  private async refreshState(silent: boolean): Promise<void> {
     if (!this.started || this.stopped) return;
     const current = this.lifetime.signal;
     // Retry catalog withdrawal after a temporary storage freeze, including after sign-out.
     if (!this.identityKey) return this.project([], current);
+    if (!silent) this.publish({ ...this.snapshot, isRefreshing: true });
     if (!this.refreshing) {
       const attempt = this.load(current).finally(() => {
         if (this.refreshing === attempt) this.refreshing = undefined;
@@ -149,18 +153,26 @@ export class CloudRuntime extends BaseService implements CloudModule {
       this.refreshing = attempt;
     }
     return this.refreshing;
-  };
-
-  private refreshInBackground(): void {
-    void this.refresh().catch(() => {});
   }
 
   private async load(signal: AbortSignal): Promise<void> {
-    this.publish({ ...this.snapshot, isRefreshing: true });
     try {
       const identity = this.source?.getIdentity();
+      if (!this.source || !identity) throw new CloudAccessError('unavailable');
+      if (!this.configuration || this.snapshot.phase === 'error') {
+        try {
+          await this.source.refreshServices?.(identity.key, signal);
+        } catch (error) {
+          signal.throwIfAborted();
+          // Keep a known service usable when only configuration discovery is unavailable.
+          loggerService
+            .withContext('CloudRuntime')
+            .warn('Could not refresh Cloud service configuration', error as Error);
+        }
+      }
+      signal.throwIfAborted();
       const configuration = this.configuration;
-      if (!this.source || !identity || !configuration) throw new CloudAccessError('unavailable');
+      if (!configuration) throw new CloudAccessError('unavailable');
       this.device ??= loadCloudDevice().catch((error: unknown) => {
         this.device = undefined;
         throw error;
@@ -192,7 +204,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         account,
         plans,
         models,
-        webUrl: configuration.webUrl,
+        webUrl: configuration.webUrl ?? null,
       };
       const entitledModels = models.filter((model) =>
         ['agent', 'general'].some((use) => {
@@ -253,10 +265,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
         if (completed) return;
         completed = true;
         linked.dispose();
-        if (!lifetime.aborted) {
-          this.refreshedAt = 0;
-          this.refreshInBackground();
-        }
+        // Revalidate before the next model request without scheduling another display refresh.
+        if (!lifetime.aborted) this.refreshedAt = 0;
       };
       try {
         const signed = await session.headers('POST', path, body, Crypto.randomUUID());
