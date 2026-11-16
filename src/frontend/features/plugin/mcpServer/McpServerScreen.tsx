@@ -36,6 +36,7 @@ import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 import { PluginPage } from '../components/PluginPage';
 import { McpToolsSection } from './components/McpToolsSection';
 import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
+import { getMcpServerSaveErrorKey, resolveMcpServerName } from './mcpServerForm';
 
 const logger = loggerService.withContext('McpServerScreen');
 
@@ -282,6 +283,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         return;
       }
 
+      let connecting = false;
       try {
         setIsSaving(true);
         const needsOAuth =
@@ -333,11 +335,15 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           // Show the stored values, including a name filled in from the endpoint.
           setForm({ ...form, ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
         } else {
+          connecting = true;
           const serverInfo = await mcp.getServerInfo({
             endpointUrl: dto.value.endpointUrl,
             headers: dto.value.headers,
           });
-          const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
+          connecting = false;
+          const name = resolveMcpServerName(form.name, serverInfo, dto.value.name);
+          // A failed save leaves the resolved name editable instead of repeating a hidden collision.
+          if (isFocused.current) setForm((current) => ({ ...current, name }));
           await createServer({ ...dto.value, isEnabled: true, name });
           // The new server joins the Plugins page's MCP group; opening it from there edits it.
           if (isFocused.current) router.back();
@@ -355,8 +361,15 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           });
           return;
         }
-        logger.error('Failed to save MCP server', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        logger.error(connecting ? 'Failed to connect MCP server' : 'Failed to save MCP server', {
+          error,
+        });
+        toast.show({
+          label: t(
+            connecting ? 'settings.mcp.toast.connectFailed' : getMcpServerSaveErrorKey(error),
+          ),
+          variant: 'danger',
+        });
       } finally {
         setIsSaving(false);
       }
@@ -569,17 +582,16 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
               ) : null}
             </FormField>
           ) : null}
-          {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.name')}>
-              <Input
-                accessibilityLabel={t('settings.mcp.fields.name')}
-                autoCorrect={false}
-                onChangeText={(value) => updateField('name', value)}
-                placeholder={t('settings.mcp.fields.name')}
-                value={form.name}
-              />
-            </FormField>
-          ) : null}
+          <FormField label={t('settings.mcp.fields.name')}>
+            <Input
+              accessibilityLabel={t('settings.mcp.fields.name')}
+              autoCorrect={false}
+              editable={!isBusy}
+              onChangeText={(value) => updateField('name', value)}
+              placeholder={t('settings.mcp.fields.name')}
+              value={form.name}
+            />
+          </FormField>
           <FormField label={t('settings.mcp.fields.endpointUrl')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.endpointUrl')}

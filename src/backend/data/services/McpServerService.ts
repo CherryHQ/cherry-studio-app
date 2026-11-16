@@ -11,7 +11,7 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
 } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
@@ -324,7 +324,12 @@ export class McpServerService {
       .limit(1);
 
     if (existing) {
-      throw DataApiErrorFactory.conflict('MCP server name already exists', 'McpServer');
+      const message = 'MCP server name already exists';
+      throw DataApiErrorFactory.create(ErrorCode.CONFLICT, message, {
+        description: message,
+        resource: 'McpServer',
+        field: 'name',
+      });
     }
   }
 
