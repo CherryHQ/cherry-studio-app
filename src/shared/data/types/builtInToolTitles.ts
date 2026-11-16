@@ -37,6 +37,7 @@ export const BUILT_IN_TOOL_TITLE_KEYS = {
   library_search_files: 'library.search',
   library_read_file: 'library.read',
   library_list_folders: 'chat.builtinTool.library.findFolders',
+  library_create_folder: 'library.folders.create',
   library_move_item: 'chat.builtinTool.library.move',
   library_rename_item: 'chat.builtinTool.library.rename',
   library_trash_item: 'chat.builtinTool.library.trash',

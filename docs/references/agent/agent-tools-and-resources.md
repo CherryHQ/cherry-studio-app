@@ -273,12 +273,12 @@ not produce partial documents. See [Voice Input And Speech](../voice.md#audio-fi
 The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. They follow the shared approval rule: reads
 (`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
-`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+`auto`, while folder creation, move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
 Agent's approval mode decides whether a mutation waits for the user. A successful library read
 permits editing that source into a workspace copy during this turn and leaves the source unchanged.
 It does not grant `read_file` future outside-library access.
 
-Library search/read and the six management tools are deferred, alongside managed-file and workspace
+Library search/read and the seven management tools are deferred, alongside managed-file and workspace
 tools. The initial Tools On Demand section names them for `tool_search`; a loaded
 `library_search_files` also names the management tools.
 Both file readers carry their own complete parser, pagination and image-delivery instructions,
@@ -287,6 +287,11 @@ composed from the same definition; `library_read_file` does not require loading 
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
 rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_create_folder` creates one folder without requiring a Session workspace. It accepts a
+safe name and an exact parent id, or `null` (also the default) for the library root. The existing
+transaction validates the live parent, rejects duplicate names, observes cancellation and
+notifies folder subscribers. The result returns the saved id, parent id and name. It does not
+associate the folder with the conversation; workspace association remains a separate user action.
 `library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
 changes only its display name. The existing library service owns cycle prevention, active
 destinations, collision rules, transactions, and cache invalidation. Move results report any

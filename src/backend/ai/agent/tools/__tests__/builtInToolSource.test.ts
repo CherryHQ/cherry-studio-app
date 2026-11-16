@@ -66,6 +66,7 @@ describe('createSystemCapabilitySource', () => {
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
@@ -176,6 +177,7 @@ describe('createSystemCapabilitySource', () => {
     ];
     const management = {
       library_list_folders: 'auto',
+      library_create_folder: 'ask',
       library_move_item: 'ask',
       library_rename_item: 'ask',
       library_trash_item: 'ask',
@@ -355,6 +357,7 @@ describe('createSystemCapabilitySource', () => {
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
