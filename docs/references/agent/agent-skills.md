@@ -318,7 +318,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
-| `list_installed_skills` | App-wide installed metadata, including globally disabled and unbound Skills; optional name/description search, bounded cursor pagination, and current Agent binding state; does not load instructions or expand the turn scope |
+| `list_installed_skills` | App-wide installed metadata, including globally disabled and unbound Skills; `mode: count` returns only the total; lists default to 20 compact entries with opt-in descriptions and a 12,000-character serialized-value cap; optional name/description search and exact cursor continuation; does not load instructions or expand the turn scope |
 | `list_local_skills` | Unfiltered scoped automatic-invocation metadata, 20 results per page; the model judges task fit from names and complete descriptions; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
@@ -350,9 +350,14 @@ not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
 subset, even when either is zero, and distinguishes them from the app's installed library and explicit
-selections. App-wide inventory questions use `list_installed_skills`, following every page before
-reporting a complete list or count. It reads the same library service as the Skill page and returns
-global enablement, Agent binding state and invocation flags without package paths or instruction
+selections. App-wide inventory questions use `list_installed_skills`: `mode: count` queries the
+library total directly, with the same optional search and no package or binding materialization.
+Only a complete-list request follows every page. Lists return IDs, names, global enablement,
+Agent binding state and invocation flags; descriptions are included only with
+`include_descriptions: true`. The 12,000-character budget includes JSON escaping, metadata and
+the continuation cursor. A page may contain fewer than `limit` entries; its cursor resumes after
+the last returned entry, and only a null cursor completes the list. Descriptions remain complete.
+Both modes read the same library service as the Skill page, without package paths or instruction
 bodies. These are configuration facts, not proof of execution support or package readability.
 Current Agent inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its

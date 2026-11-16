@@ -239,7 +239,7 @@ The user selected the built-in create-skill workflow. Create a reusable Skill fr
   if (tools.some((tool) => tool.providerName === 'list_installed_skills')) {
     sections.push(`## Installed Skill Library
 
-For the app's complete installed Skill list or count, discover \`list_installed_skills\` through \`tool_search\` and follow all pages. It includes globally disabled and unbound Skills. \`list_local_skills\` counts only this Agent's enabled, bound and readable packages. Library metadata grants no instruction access or execution capability.`);
+For the app's installed Skills, discover \`list_installed_skills\` through \`tool_search\`: use \`mode: count\` for totals; follow all pages only for a complete list. Includes globally disabled and unbound Skills. \`list_local_skills\` covers this Agent's enabled, bound and readable packages. Library metadata grants no instruction access or execution capability.`);
   }
 
   return sections;

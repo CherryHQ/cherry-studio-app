@@ -124,7 +124,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
-    skillLibrary: Pick<AgentGlobalSkillService, 'list'>;
+    skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
