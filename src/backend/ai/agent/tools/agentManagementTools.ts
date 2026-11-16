@@ -38,7 +38,13 @@ const fields = UpdateAgentSchema.extend({
 const createSchema = fields.required({ name: true, instructions: true });
 const getSchema = z.strictObject({ agent_id: targetSchema });
 const listSchema = z.strictObject({
-  search: z.string().trim().min(1).max(255).optional(),
+  search: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .optional()
+    .describe('Optional name filter. Omit to list all saved Agents.'),
   page: z.number().int().positive().optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });
@@ -125,7 +131,7 @@ export function createAgentManagementTools(
   return [
     tool(
       'agent_list',
-      'Find saved Cherry Agents by name. Results omit instructions; use agent_get for a full definition. Follow pagination when needed. Names need not be unique: resolve ambiguous matches with the user before editing.',
+      'List saved Cherry Agents, optionally filtered by name. Call with {} to browse Agents; do not ask for a search keyword when the user wants a list. Results omit instructions; use agent_get for a full definition. Follow pagination when needed. Names need not be unique: resolve ambiguous matches with the user before editing.',
       listSchema,
       'auto',
       async (input) => {
