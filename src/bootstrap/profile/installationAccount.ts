@@ -72,7 +72,6 @@ function createAccount(): AccountRuntime {
           issuer: config.endpoints.issuer,
           enterpriseApiBaseUrl: config.endpoints.api_base_url,
           cloudApiOrigin: config.endpoints.cloud_api_origin,
-          cloudWebUrl: config.endpoints.cloud_web_url,
         }
       : null;
   const runtime = new AccountRuntime({
@@ -112,7 +111,6 @@ function createAccount(): AccountRuntime {
         endpoints: {
           ...previous.endpoints,
           cloud_api_origin: discovered.endpoints.cloud_api_origin,
-          cloud_web_url: discovered.endpoints.cloud_web_url,
         },
       };
       if (JSON.stringify(next) !== JSON.stringify(previous)) {

@@ -30,6 +30,7 @@ Each authorization sheet uses an explicitly retained, visible app view controlle
 The native request waits for the sheet to finish dismissing, including on errors, before starting
 another health sheet or releasing the application permission queue. HealthKit's authorization
 callback alone does not mean its presentation has finished.
+The module explicitly links HealthKitUI, which implements the HealthKit store's presenter property.
 
 The workout overview uses a bounded, newest-first sample query and preserves absent distance
 and energy as null. The seven-metric summary reads native statistics in fixed units (`unit`:

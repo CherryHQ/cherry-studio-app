@@ -134,7 +134,7 @@ const CAPABILITIES: Readonly<Record<string, ModelCapability>> = {
 
 const DEFAULT_SYNC_INTERVAL_MINUTES = 10;
 
-export type ManagedModel = Readonly<{
+type ManagedModel = Readonly<{
   id: UniqueModelId;
   /** Gateway model id, `<model>@<provider>`. */
   modelId: string;
@@ -147,7 +147,7 @@ export type ManagedModel = Readonly<{
   } | null;
 }>;
 
-export type ManagedProvider = Readonly<{
+type ManagedProvider = Readonly<{
   providerId: string;
   presetProviderId: string;
   name: string;
@@ -472,7 +472,7 @@ function gatewayModelId(providerId: string, modelId: string): string {
   return modelId.endsWith(suffix) ? modelId : `${modelId}${suffix}`;
 }
 
-export function managedModelId(providerId: string, modelId: string): UniqueModelId {
+function managedModelId(providerId: string, modelId: string): UniqueModelId {
   return createUniqueModelId(providerId, gatewayModelId(providerId, modelId));
 }
 

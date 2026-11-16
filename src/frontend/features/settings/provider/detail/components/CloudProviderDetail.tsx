@@ -10,7 +10,7 @@ import { useCloud } from '@/frontend/hooks/useCloud';
 import {
   CLOUD_PROVIDER_ID,
   CLOUD_PROVIDER_NAME,
-  cloudModelUnavailable,
+  isCloudModelListed,
 } from '@/shared/contracts/cloud';
 
 import { SettingsScrollPage } from '../../../components/SettingsScrollPage';
@@ -25,12 +25,7 @@ export function CloudProviderDetail() {
   useEffect(() => {
     void cloud.refresh().catch(() => {});
   }, [cloud]);
-  const entitledModels = models.filter((model) =>
-    (['agent', 'general'] as const).some((use) => {
-      const reason = cloudModelUnavailable(state, model.modelId, use);
-      return reason === undefined || reason === 'quota_exhausted';
-    }),
-  );
+  const entitledModels = models.filter((model) => isCloudModelListed(state, model.modelId));
   const isLoading = state.phase === 'loading' || providerQuery.isPending || modelsQuery.isPending;
   const refresh = async () => {
     await cloud.refresh().catch(() => {});

@@ -37,8 +37,9 @@ validation, so deriving the address cannot hide a malformed override or project 
 
 Connection checks probe the resolved service origin without credentials, reject redirects, cap response
 bodies and treat an HTTP response as evidence of reachability rather than successful authentication.
-Automatic checks do not list remote models or send a generation request. The retained explicit
-conversation-check capability requires separate caller confirmation and is not part of this panel.
+Automatic checks require a captured incident context and do not list remote models or send a
+generation request. The explicit AI diagnosis uses the chosen diagnostic model; there is no
+separate conversation-probe or context-free system-check path.
 
 AI self-check uses an independently selected tool-capable text model and the
 [internal diagnostic Agent](../../ai/agent/diagnostics/README.md), injected by bootstrap through the

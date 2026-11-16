@@ -1,38 +1,24 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button, Image, Input, TextField, useToast } from '@cherrystudio/ui/components';
-import { loggerService } from '@logger';
-import { useRef, useState } from 'react';
+import { Button, Image } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, type TextInputInstance, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AccountError, type AccountErrorCode } from '@/shared/contracts/account';
-
+import { AccountSignInFields } from './AccountSignInFields';
 import { organizationLabel } from './organizationLabel';
 import { useAccount } from './useAccount';
+import { useAccountSignInForm } from './useAccountSignInForm';
 
 const APP_LOGO = require('@/assets/cherry-studio-logo.png');
-const logger = loggerService.withContext('LoginScreen');
-
-export const ACCOUNT_ERROR_KEYS = {
-  unavailable: 'account.error.unavailable',
-  address: 'account.error.address',
-  connection: 'account.error.connection',
-  credentials: 'account.error.credentials',
-  failed: 'account.error.failed',
-  response: 'account.error.response',
-  rejected: 'account.error.rejected',
-} as const satisfies Record<AccountErrorCode, string>;
-
 /**
- * `first-use` may be skipped; `sign-in` and `switch` open from the profile and close back to it;
+ * `sign-in` and `switch` open from settings and close back to it;
  * `expired` replaces an organization whose session was refused and offers sign-out instead.
  */
-export type LoginPurpose = 'first-use' | 'sign-in' | 'switch' | 'expired';
+export type LoginPurpose = 'sign-in' | 'switch' | 'expired';
 
 type LoginScreenProps = {
   purpose: LoginPurpose;
-  /** Leaves without signing in: skips on first use, closes from the profile, signs out when expired. */
+  /** Closes from settings or signs out when expired. */
   onLeave: () => void;
   /** Called when sign-in keeps the app in place; another organization reloads it instead. */
   onSignedIn?: () => void;
@@ -41,36 +27,19 @@ type LoginScreenProps = {
 /** Cloud sign-in opens Accounts Portal; private deployments use their own password endpoint. */
 export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const insets = useSafeAreaInsets();
-  const { account, state } = useAccount();
+  const { state } = useAccount();
   const isExpired = purpose === 'expired';
   // An expired private session signs in again to the same server and, when known, the same user.
   const lockedAddress = isExpired ? state.privateAddress : undefined;
   const lockedUsername = lockedAddress ? state.privateUsername : undefined;
-  // The method page opens on the Cherry Studio account; the private form keeps the last address.
-  const [isPrivate, setIsPrivate] = useState(Boolean(lockedAddress));
-  const [address, setAddress] = useState(state.privateAddress ?? '');
-  const [username, setUsername] = useState(lockedUsername ?? '');
-  const [password, setPassword] = useState('');
-  const usernameInput = useRef<TextInputInstance>(null);
-  const passwordInput = useRef<TextInputInstance>(null);
-  const canSignIn =
-    !state.isBusy && (!isPrivate || Boolean(address.trim() && username.trim() && password));
+  const form = useAccountSignInForm({ expired: isExpired });
+  const { isPrivate, canSignIn } = form;
   const organization = organizationLabel(state);
-
   const signIn = () => {
-    if (!canSignIn) return;
-    void account
-      .signIn(isPrivate ? { address, username, password } : undefined)
-      .then((signedIn) => {
-        if (signedIn) onSignedIn?.();
-      })
-      .catch((error: unknown) => {
-        logger.error('Sign-in failed', error as Error, { operation: 'account.signIn' });
-        const code = error instanceof AccountError ? error.code : 'failed';
-        toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
-      });
+    void form.signIn().then((signedIn) => {
+      if (signedIn) onSignedIn?.();
+    });
   };
 
   const title = isExpired
@@ -132,77 +101,19 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
           </View>
         </View>
         <View className="gap-4 px-6">
-          {isPrivate ? (
-            <View className="gap-4">
-              <TextField disabled={state.isBusy || Boolean(lockedAddress)}>
-                <TextField.Label>{t('account.address')}</TextField.Label>
-                <Input
-                  accessibilityLabel={t('account.address')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  onChangeText={setAddress}
-                  onSubmitEditing={() => usernameInput.current?.focus()}
-                  returnKeyType="next"
-                  submitBehavior="submit"
-                  value={address}
-                />
-              </TextField>
-              <TextField disabled={state.isBusy || Boolean(lockedUsername)}>
-                <TextField.Label>{t('account.username')}</TextField.Label>
-                <Input
-                  accessibilityLabel={t('account.username')}
-                  autoCapitalize="none"
-                  autoComplete="username"
-                  autoCorrect={false}
-                  onChangeText={setUsername}
-                  onSubmitEditing={() => passwordInput.current?.focus()}
-                  ref={usernameInput}
-                  returnKeyType="next"
-                  submitBehavior="submit"
-                  textContentType="username"
-                  value={username}
-                />
-              </TextField>
-              <TextField disabled={state.isBusy}>
-                <TextField.Label>{t('account.password')}</TextField.Label>
-                <Input
-                  accessibilityLabel={t('account.password')}
-                  autoComplete="current-password"
-                  onChangeText={setPassword}
-                  onSubmitEditing={signIn}
-                  ref={passwordInput}
-                  returnKeyType="go"
-                  textContentType="password"
-                  type="password"
-                  value={password}
-                  visibilityAccessibilityLabels={{
-                    hide: t('account.hidePassword'),
-                    show: t('account.showPassword'),
-                  }}
-                />
-              </TextField>
-            </View>
-          ) : null}
+          {isPrivate ? <AccountSignInFields form={form} onSubmit={signIn} /> : null}
           <View className="gap-2">
             <Button disabled={!canSignIn} loading={state.isBusy} onPress={signIn} size="lg">
               {t(isExpired ? 'account.login.reSignIn' : 'account.login.signIn')}
             </Button>
             {!isExpired ? (
-              <Button
-                disabled={state.isBusy}
-                onPress={() => {
-                  setPassword('');
-                  setIsPrivate((value) => !value);
-                }}
-                variant="ghost"
-              >
+              <Button disabled={state.isBusy} onPress={form.switchMethod} variant="ghost">
                 {t(isPrivate ? 'account.login.cloud' : 'account.login.private')}
               </Button>
             ) : null}
-            {purpose === 'first-use' || isExpired ? (
+            {isExpired ? (
               <Button disabled={state.isBusy} onPress={onLeave} variant="ghost">
-                {t(isExpired ? 'account.signOut' : 'account.login.skip')}
+                {t('account.signOut')}
               </Button>
             ) : null}
           </View>

@@ -2,11 +2,7 @@ import type { AuthState, CompleteSignInOptions } from '@cherryinternal/accounts-
 
 import { ProfileRegistry } from '@/backend/data/profile/ProfileRegistry';
 import { HttpError } from '@/backend/services/http';
-import {
-  AccountError,
-  type AccountSessionContext,
-  AccountSessionContextSchema,
-} from '@/shared/contracts/account';
+import { AccountError, type AccountSessionContext } from '@/shared/contracts/account';
 import {
   type ActiveProfile,
   type EnterpriseIdentity,
@@ -91,8 +87,14 @@ function setup(
     portal,
     preparePortal: jest.fn(async () => portal),
     resolveSessionContext: jest.fn((state: AuthState) => {
-      const context = AccountSessionContextSchema.safeParse(state);
-      return context.success ? context.data : null;
+      const context = state as PortalState;
+      return context.issuer
+        ? {
+            issuer: context.issuer,
+            enterpriseApiBaseUrl: context.enterpriseApiBaseUrl,
+            cloudApiOrigin: context.cloudApiOrigin,
+          }
+        : null;
     }),
     active,
     profiles: {
@@ -147,7 +149,6 @@ const signedIn = (product: 'cloud' | 'enterprise'): Extract<PortalState, { _tag:
   issuer: 'https://auth',
   enterpriseApiBaseUrl: 'https://cse.example.com',
   cloudApiOrigin: 'https://cloud.example.com',
-  cloudWebUrl: 'https://cloud.example.com/subscription',
   subject: 'user-1',
   name: 'Ada',
   profile: { product, profileId: product === 'enterprise' ? 'org-1' : 'me' },
@@ -999,7 +1000,11 @@ describe('AccountRuntime', () => {
 describe('community Cloud identity admission', () => {
   it('publishes refreshed service metadata through the existing community identity boundary', async () => {
     const { options } = setup(signedIn('cloud'));
-    let context = AccountSessionContextSchema.parse(signedIn('cloud'));
+    const session = signedIn('cloud');
+    let context: AccountSessionContext = {
+      issuer: session.issuer!,
+      cloudApiOrigin: session.cloudApiOrigin,
+    };
     const runtime = new AccountRuntime({
       ...options,
       resolveSessionContext: () => context,
@@ -1023,8 +1028,7 @@ describe('community Cloud identity admission', () => {
 
   it.each([
     { cloudApiOrigin: 'https://another-cloud.example.com' },
-    { cloudWebUrl: 'https://billing.example.com/subscriptions' },
-    { cloudApiOrigin: undefined, cloudWebUrl: undefined },
+    { cloudApiOrigin: undefined },
     { issuer: 'https://another.identity.example.com' },
   ])(
     'discards credentials when the current session service context changes (%j)',
@@ -1034,7 +1038,6 @@ describe('community Cloud identity admission', () => {
       const identity = runtime.getCommunityIdentity()!;
       expect(identity).toMatchObject({
         apiOrigin: 'https://cloud.example.com',
-        webUrl: 'https://cloud.example.com/subscription',
       });
       let finish!: (value: { accessToken: string; idToken: string }) => void;
       options.portal.getIdentityTokens.mockImplementation(
@@ -1050,7 +1053,6 @@ describe('community Cloud identity admission', () => {
       await expect(pending).rejects.toMatchObject({ code: 'rejected' });
       expect(runtime.getCommunityIdentity()).toMatchObject({
         apiOrigin: next.cloudApiOrigin,
-        webUrl: next.cloudWebUrl,
       });
       expect(runtime.getCommunityIdentity()?.key).not.toBe(identity.key);
     },
@@ -1102,11 +1104,11 @@ describe('normalized account service admission', () => {
     delete session.issuer;
     delete session.enterpriseApiBaseUrl;
     delete session.cloudApiOrigin;
-    delete session.cloudWebUrl;
     const { options } = setup(session);
     options.resolveSessionContext.mockReturnValue({
       issuer: 'https://identity.example.com',
       enterpriseApiBaseUrl: 'https://enterprise.example.com/api',
+      cloudApiOrigin: undefined,
     });
     const runtime = new AccountRuntime(options);
 
@@ -1148,16 +1150,14 @@ describe('normalized account service admission', () => {
     },
   );
 
-  it.each([{ issuer: undefined }, { issuer: 'invalid' }])(
-    'rejects a session without a valid issuer (%j)',
-    async (context) => {
-      const { runtime, options, select } = setup({ _tag: 'signedOut' });
-      select({ ...signedIn('enterprise'), ...context });
-      await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
-      expect(options.createApi).not.toHaveBeenCalled();
-      expect(options.profiles.setActive).not.toHaveBeenCalled();
-    },
-  );
+  it('rejects a candidate whose service context cannot be resolved', async () => {
+    const { runtime, options, select } = setup({ _tag: 'signedOut' });
+    select(signedIn('enterprise'));
+    options.resolveSessionContext.mockReturnValue(null);
+    await expect(runtime.signIn()).rejects.toMatchObject({ code: 'unavailable' });
+    expect(options.createApi).not.toHaveBeenCalled();
+    expect(options.profiles.setActive).not.toHaveBeenCalled();
+  });
 
   it.each([undefined, ''])(
     'rejects a candidate without an enterprise API (%s)',

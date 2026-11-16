@@ -73,8 +73,6 @@ function createSession(markdown = 'Content') {
       sections: [{ id: 'document', blocks: [{ kind: 'markdown' as const, source: markdown }] }],
     },
     markdown,
-    previewDocument: () => '<p>Content</p>',
-    previewMarkdown: (text: string) => `<p>${text}</p>`,
     render: jest.fn(
       async (
         target: DocumentExportTarget,
@@ -132,9 +130,6 @@ test('Markdown preview exposes exact prepared source and filename without repars
   const session = createSession();
   const prepared = { ...markdownArtifact, text: 'Content\n![Photo](data:image/png;base64,AA==)' };
   session.render.mockResolvedValue(prepared);
-  session.previewMarkdown = jest.fn(() => {
-    throw new Error('Raw Markdown must not be reparsed');
-  });
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="markdown" />);
   });

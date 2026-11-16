@@ -1,14 +1,16 @@
+import { Button } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { cn } from '@cherrystudio/ui/utils';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
+import { ScrollView, Text, View, type ViewInstance } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, {
   FadeIn,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
+  useReducedMotion,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +18,7 @@ import Svg, { G, Path } from 'react-native-svg';
 
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 
+import { LogoDrawAnimation, type LogoDrawAnimationRef } from '../LogoDraw';
 import {
   LOGO_ASPECT_RATIO,
   LOGO_VIEWBOX_HEIGHT,
@@ -76,6 +79,8 @@ export function OnboardingPage({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const welcome = variant === 'welcome';
+  const reducedMotion = useReducedMotion();
+  const logo = useRef<LogoDrawAnimationRef>(null);
   // Only an entry from the welcome screen needs a measured, moving mark.
   const [hasHeroMotion, setHasHeroMotion] = useState(welcome);
   if (welcome && !hasHeroMotion) setHasHeroMotion(true);
@@ -86,6 +91,11 @@ export function OnboardingPage({
   const origin = useSharedValue({ x: 0, y: 0 });
   const destination = useSharedValue({ x: 0, y: 0 });
   const progress = useSharedValue(welcome ? 0 : 1);
+
+  useEffect(() => {
+    // Starting setup immediately settles the drawing before the existing dock transition.
+    if (!welcome || reducedMotion) logo.current?.finish();
+  }, [welcome, reducedMotion, measured]);
 
   useFocusedBackPress(onBack ?? (() => {}), Boolean(onBack));
   useEffect(() => {
@@ -177,14 +187,9 @@ export function OnboardingPage({
               <View className="min-w-0 shrink">
                 {headerAction ??
                   (onBack ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      className="min-h-12 justify-center pl-5 active:opacity-70"
-                      onPress={onBack}
-                      testID="onboarding-back"
-                    >
-                      <Text className="text-sm text-muted-foreground">{t('common.back')}</Text>
-                    </Pressable>
+                    <Button onPress={onBack} size="sm" variant="ghost" testID="onboarding-back">
+                      {t('common.back')}
+                    </Button>
                   ) : null)}
               </View>
             ) : null}
@@ -264,7 +269,7 @@ export function OnboardingPage({
               pointerEvents="none"
               style={[{ transformOrigin: 'top left' }, markStyle]}
             >
-              <OnboardingMark />
+              <LogoDrawAnimation ref={logo} autoPlay={welcome && !reducedMotion} size={HERO_SIZE} />
             </Animated.View>
           ) : null}
         </View>

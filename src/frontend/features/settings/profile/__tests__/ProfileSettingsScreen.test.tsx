@@ -34,7 +34,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 jest.mock('@/frontend/appShell/account', () => ({
-  ACCOUNT_ERROR_KEYS: {},
+  useAccountErrorReporter: () => jest.fn(),
   organizationLabel: jest.requireActual('@/frontend/appShell/account/organizationLabel')
     .organizationLabel,
   useAccount: () => ({

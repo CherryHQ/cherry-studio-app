@@ -180,7 +180,6 @@ test('the enterprise web URL never becomes the community billing URL', async () 
     issuer: 'https://auth.cn.test',
     enterpriseApiBaseUrl: 'https://api.cn.test/v2',
     cloudApiOrigin: undefined,
-    cloudWebUrl: undefined,
   });
   expect(runtime.resolveSessionContext({ _tag: 'signedOut' })).toBeNull();
   const data = result('GLOBAL');
@@ -203,7 +202,6 @@ test('the enterprise web URL never becomes the community billing URL', async () 
     issuer: data.endpoints.issuer,
     enterpriseApiBaseUrl: undefined,
     cloudApiOrigin: 'https://cloud.global.test',
-    cloudWebUrl: 'https://billing.global.test/account',
   });
 });
 
@@ -245,6 +243,20 @@ test('requires the scopes that the installed SDK requests by default', async () 
   expect(mockCreatePortal).not.toHaveBeenCalled();
 });
 
+test.each([undefined, 'invalid', 'http://auth.cn.test'])(
+  'rejects a registration without a valid HTTPS issuer (%s)',
+  async (issuer) => {
+    const data = result();
+    mockRequest.mockResolvedValue({
+      status: 200,
+      data: { ...data, endpoints: { ...data.endpoints, issuer } },
+    });
+    await expect(launch().preparePortal()).rejects.toMatchObject({ code: 'response' });
+    expect(mockCreatePortal).not.toHaveBeenCalled();
+    expect(mockStore.size).toBe(0);
+  },
+);
+
 test('discovers missing community services for the saved region without replacing login or enterprise routing', async () => {
   const runtime = launch();
   await runtime.preparePortal();
@@ -280,7 +292,6 @@ test('discovers missing community services for the saved region without replacin
     issuer: 'https://auth.cn.test',
     enterpriseApiBaseUrl: 'https://api.cn.test/v2',
     cloudApiOrigin: 'https://cloud.cn.test',
-    cloudWebUrl: 'https://billing.cn.test/account',
   });
   expect(mockRequest).toHaveBeenCalledTimes(2);
 });

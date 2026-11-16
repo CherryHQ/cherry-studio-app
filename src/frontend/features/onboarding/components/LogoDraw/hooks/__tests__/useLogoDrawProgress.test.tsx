@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useLogoDrawProgress } from '../useLogoDrawProgress';
 
 jest.mock('react-native-reanimated', () => ({
+  useReducedMotion: () => false,
   cancelAnimation: jest.fn(),
   Easing: { cubic: 'cubic', inOut: (curve: unknown) => curve },
   runOnJS: (callback: () => void) => callback,

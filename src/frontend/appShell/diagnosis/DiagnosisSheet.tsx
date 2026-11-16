@@ -108,14 +108,7 @@ export function DiagnosisSheet({
 
   async function settings(check = finding) {
     const controller = new AbortController();
-    const destination =
-      check?.id === 'data' || check?.id === 'storage'
-        ? '/settings/data'
-        : check?.id === 'plugins'
-          ? '/plugins'
-          : check?.id === 'permissions'
-            ? '/settings/permissions'
-            : undefined;
+    const destination = check?.id === 'data' ? '/settings/data' : undefined;
     if (check?.id === 'runtime') {
       feedback();
       return;
@@ -143,7 +136,7 @@ export function DiagnosisSheet({
   function recheck() {
     setView({ kind: 'checks' });
     setModel(undefined);
-    void workflow.check(true);
+    void workflow.check();
   }
 
   function showDetail(entry: DiagnosticCheck) {

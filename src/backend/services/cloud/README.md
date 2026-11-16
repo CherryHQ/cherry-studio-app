@@ -10,15 +10,15 @@ see their plan and remaining quota in the sidebar badge and use their models thr
 
 ## Configuration
 
-The account identity source supplies the current session's concrete `apiOrigin` and `webUrl`.
+The account identity source supplies the current session's concrete `apiOrigin`.
 `CloudRuntime` requires a validated API origin before account reads, model synchronization or
-inference. The management webpage is optional; its absence does not block subscription models.
+inference. Unused management-page metadata does not participate in authentication or admission.
 It does not read a regional address map or select a service from a region marker. A missing API
 origin or invalid supplied address makes Cloud unavailable without changing ordinary provider use
 or reusing the previous session's service. API origins must be HTTPS and cannot contain a path,
-query, fragment or credentials; supplied webpage URLs must be HTTPS and contain no credentials.
+query, fragment or credentials.
 
-The installation account adapter gets `endpoints.cloud_api_origin` and `endpoints.cloud_web_url`
+The installation account adapter gets `endpoints.cloud_api_origin`
 from the selected region's Config Service `POST /v1/resolve` response and persists the registration
 in SecureStore. A community-only region can omit both enterprise endpoints. When product metadata is missing
 or a Cloud read failed, its backend-only metadata refresh resolves the saved login region and issuer
@@ -29,9 +29,8 @@ outage keeps already configured product addresses usable. An address change ente
 identity-replacement boundary as an account change.
 
 Supply the Cloud product audience in the region's Config Service registration scopes.
-Models and subscription state come from the service. The configured webpage URL remains in the
-internal Cloud snapshot; the app exposes no subscription-management or purchase action. The old
-subscription route redirects to profile settings.
+Models and subscription state come from the service. The app exposes no subscription-management
+or purchase action. Plan details are display-only and never determine request admission.
 Subscription model availability is checked once when the community account is restored on a cold
 start. It does not depend on a purchase entry or browser-return trigger. Only confirmed service
 entitlements determine subscription status.
@@ -71,13 +70,18 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 
 ## Entitlements and model ownership
 
-- `/api/v1/account` is the admission and quota snapshot; `/api/v1/account/plans` supplies plan display details;
-  `/v1/models` supplies the catalog and features.
+- `/api/v1/account` is the admission and quota snapshot; `/v1/models` supplies the catalog and
+  features. Both are required for model admission. The separate `/api/v1/account/plans` read
+  supplies optional badge metadata after account/model readiness; a slow request, failed response
+  or invalid display payload cannot delay or reject inference. Admission revalidation does not
+  request this display metadata. Cold start and explicit refresh load it only for paid subscribers.
 - The sidebar badge requires a confirmed, currently effective paid entitlement, independently of
   quota exhaustion or model catalog availability. It hides for free, expired, signed-out,
   unavailable and enterprise accounts. Plan metadata supplies its name; remaining quotas come from
-  matching allocation IDs in the account snapshot. The profile exposes no purchase or management
-  action. The managed provider opens a read-only model list, without connection settings or model mutation actions.
+  matching allocation IDs in the account snapshot. When metadata is unavailable, the badge uses
+  its generic Cloud label and omits unconfirmed quota associations. The profile exposes no purchase
+  or management action. The managed provider opens a read-only model list, without connection
+  settings or model mutation actions.
   Accounts without any currently entitled Plan models do not see the provider in settings or
   the picker.
 - An active, currently effective paid entitlement and an available model feature are required. Free
@@ -89,7 +93,7 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
   `general`, requiring both `chat` and `translate`. Picker callers can select the same purpose;
   its default is `agent`, and translation model settings request `general`.
 - Rolling, calendar-day and paid-subscription-month windows retain their server timestamps.
-  Money quotas use 1,000,000 units per currency unit; price amounts use 100 minor units. Recovery
+  Money quotas use 1,000,000 units per currency unit. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
 - `cherryai-subscription` is the reserved, managed `Cherry Studio Plan` provider. Provider queries
   pin it first, including cursor pagination, so settings and model pickers share the same priority
@@ -107,7 +111,7 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
   Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
 - Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's
-  queries, inference and webpage use the new one. Catalog withdrawal disables old rows without
+  queries and inference use the new one. Catalog withdrawal disables old rows without
   writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
   Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
 

@@ -84,7 +84,6 @@ export const CloudModelSchema = z.object({
 export type CloudModel = z.infer<typeof CloudModelSchema>;
 export type CloudAccount = z.infer<typeof CloudAccountSchema>;
 export type CloudPlans = z.infer<typeof CloudPlansSchema>;
-export type CloudQuotaPool = z.infer<typeof CloudQuotaPoolSchema>;
 export type CloudQuotaWindow = z.infer<typeof CloudQuotaWindowSchema>;
 export type CloudUnavailableReason =
   | 'signed_out'
@@ -95,10 +94,9 @@ export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
   isRefreshing: boolean;
   account: CloudAccount | null;
+  /** Optional badge metadata; never controls model admission. */
   plans: CloudPlans | null;
   models: readonly CloudModel[];
-  /** Current SDK environment's configured subscription-management page. */
-  webUrl: string | null;
 }>;
 export interface CloudModule {
   getState(): CloudState;
@@ -106,18 +104,36 @@ export interface CloudModule {
   refresh(): Promise<void>;
 }
 
+function isEffectivePaidEntitlement(
+  entry: CloudAccount['entitlements'][number],
+  now: number,
+): boolean {
+  return (
+    entry.status === 'active' &&
+    !entry.is_free &&
+    (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
+    (!entry.expires_at || Date.parse(entry.expires_at) > now)
+  );
+}
+
+/** Quota exhaustion keeps a model visible; the selected use still determines its capabilities. */
+export function isCloudModelListed(
+  state: CloudState,
+  modelId: string,
+  uses: readonly CloudModelUse[] = ['agent', 'general'],
+): boolean {
+  return uses.some((use) => {
+    const reason = cloudModelUnavailable(state, modelId, use);
+    return reason === undefined || reason === 'quota_exhausted';
+  });
+}
+
 /** A current paid subscription, independent of remaining quota or catalog availability. */
 export function hasActiveCloudSubscription(state: CloudState, now = Date.now()): boolean {
   return (
     state.phase === 'ready' &&
     state.account?.account.status === 'active' &&
-    state.account.entitlements.some(
-      (entry) =>
-        entry.status === 'active' &&
-        !entry.is_free &&
-        (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
-        (!entry.expires_at || Date.parse(entry.expires_at) > now),
-    )
+    state.account.entitlements.some((entry) => isEffectivePaidEntitlement(entry, now))
   );
 }
 
@@ -136,12 +152,7 @@ export function cloudModelUnavailable(
   if (!model || !features.every((feature) => model.available_features.includes(feature)))
     return 'not_entitled';
   const entitled = state.account.entitlements.some(
-    (entry) =>
-      entry.status === 'active' &&
-      !entry.is_free &&
-      entry.model_ids.includes(modelId) &&
-      (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
-      (!entry.expires_at || Date.parse(entry.expires_at) > now),
+    (entry) => isEffectivePaidEntitlement(entry, now) && entry.model_ids.includes(modelId),
   );
   if (!entitled) return 'not_entitled';
   const pools = state.account.quota_pools.filter((pool) => pool.model_ids.includes(modelId));

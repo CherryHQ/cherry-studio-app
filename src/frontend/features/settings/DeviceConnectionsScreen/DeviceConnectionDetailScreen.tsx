@@ -13,7 +13,7 @@ import {
   useDesktopConnection,
   useDesktopConnectionActions,
 } from '@/frontend/hooks/useDesktopConnections';
-import { editionCapabilities } from '@/shared/data/managedPolicy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
@@ -107,7 +107,8 @@ export function DeviceConnectionDetailScreen() {
   const canOpenHome = connection.capabilities.includes('agent');
   const canSyncConfiguration = connection.capabilities.includes('configuration');
   // Enterprise providers come from the organization, never from a desktop: the entry stays locked.
-  const isConfigurationLocked = !editionCapabilities().desktopConfigImport;
+  const isConfigurationLocked =
+    !capabilityPolicy('desktopConfigImport').canEdit('desktopConfigImport');
 
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>

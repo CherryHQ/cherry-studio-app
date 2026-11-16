@@ -71,10 +71,10 @@ First-use selection starts at the recommended catalog entries, without a separat
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
 PC. Device details open the same sync page with a connection ID, skipping
-source selection. Dedicated onboarding routes also reuse this page with a route-owned
-`setupIntent="chat"`; successful import then opens onboarding's chat-model selection without marking
-setup complete. Entering synchronization and completing import use `replace`; settings import
-finishes at the provider list without preserving the import page in back history.
+source selection. Settings and the dedicated onboarding screen share `useDesktopProviderSync`
+for preview, selection and import. Settings import finishes at the provider list; onboarding import
+continues to model selection. Each entry owns its presentation and destination, using `replace`
+so the completed import page does not remain in back history.
 
 Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which

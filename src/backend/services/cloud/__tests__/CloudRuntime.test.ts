@@ -57,7 +57,8 @@ function reply(account: string, path: string) {
   const state = cloudSnapshot(account);
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
-  return { data: state.models };
+  if (path === '/v1/models') return { data: state.models };
+  throw new Error(`Unexpected Cloud endpoint: ${path}`);
 }
 
 function changeAppState(status: AppStateStatus): void {
@@ -67,14 +68,12 @@ function changeAppState(status: AppStateStatus): void {
 
 const service = {
   apiOrigin: 'https://cloud.example',
-  webUrl: 'https://cloud.example/account/plans',
 };
 const replacementService = {
   apiOrigin: 'https://replacement.example',
-  webUrl: 'https://replacement.example/account/plans',
 };
 
-async function setup(configuration: Pick<CloudIdentity, 'apiOrigin' | 'webUrl'> | null = service) {
+async function setup(configuration: Pick<CloudIdentity, 'apiOrigin'> | null = service) {
   let identity: CloudIdentity | null =
     configuration === null ? null : { key: 'a', profileId: 'account-a', ...configuration };
   let changed: () => void = () => {};
@@ -140,7 +139,7 @@ test('account replacement immediately clears state and drops late responses even
   const { runtime, change } = await setup();
   const previous = runtime.refresh().catch(() => {});
   change({ key: 'b', profileId: 'account-b', ...service });
-  expect(runtime.getState()).toMatchObject({ account: null, plans: null, models: [] });
+  expect(runtime.getState()).toMatchObject({ account: null, models: [] });
   await runtime.refresh();
   expect(runtime.getState().account?.account.id).toBe('account-b');
   finish(cloudSnapshot('account-a').account);
@@ -158,7 +157,6 @@ test('sign-out removes grants and invalidates previously resolved transports aft
     phase: 'signed_out',
     account: null,
     models: [],
-    webUrl: null,
   });
   await expect(
     fetch('https://cloud.example/v1/messages', { method: 'POST', body: '{}' }),
@@ -166,7 +164,7 @@ test('sign-out removes grants and invalidates previously resolved transports aft
   await runtime._doStop();
 });
 
-test('service address replacement switches API and webpage together, cancels old inference and drops late reads', async () => {
+test('service address replacement switches API, cancels old inference and drops late reads', async () => {
   const { runtime, change } = await setup();
   await runtime.refresh();
   const previousFetch = runtime.createModelFetch('cloud-model', 'agent');
@@ -188,9 +186,7 @@ test('service address replacement switches API and webpage together, cancels old
   change({ key: 'a', profileId: 'account-a', ...replacementService });
   expect(runtime.getState()).toMatchObject({
     account: null,
-    plans: null,
     models: [],
-    webUrl: replacementService.webUrl,
   });
   expect(mockRevoke).toHaveBeenCalledWith(service.apiOrigin);
   await expect(previousFetch('https://cloud.example/v1/messages')).rejects.toBeDefined();
@@ -214,12 +210,11 @@ test('service address replacement switches API and webpage together, cancels old
 });
 
 test.each([
-  { apiOrigin: undefined, webUrl: replacementService.webUrl },
-  { apiOrigin: 'http://replacement.example', webUrl: replacementService.webUrl },
-  { apiOrigin: 'https://replacement.example/api', webUrl: replacementService.webUrl },
-  { apiOrigin: replacementService.apiOrigin, webUrl: 'https://user:pass@replacement.example' },
+  { apiOrigin: undefined },
+  { apiOrigin: 'http://replacement.example' },
+  { apiOrigin: 'https://replacement.example/api' },
 ])(
-  'missing or invalid service addresses cannot reuse the previous API or webpage: %j',
+  'missing or invalid service addresses cannot reuse the previous API: %j',
   async (configuration) => {
     const { runtime, change } = await setup();
     await runtime.refresh();
@@ -231,18 +226,97 @@ test.each([
       phase: 'error',
       account: null,
       models: [],
-      webUrl: null,
     });
     await runtime._doStop();
   },
 );
 
-test('a subscription API can supply models without a management webpage', async () => {
-  const { runtime } = await setup({ apiOrigin: service.apiOrigin });
-  await runtime.refresh();
-  expect(runtime.getState()).toMatchObject({ phase: 'ready', webUrl: null });
-  expect(runtime.getState().models).toHaveLength(1);
-  await runtime._doStop();
+test.each(['unavailable', 'invalid'])(
+  'plan display metadata being %s does not reject model admission',
+  async (failure) => {
+    mockGet.mockImplementation(async (account: string, path: string) => {
+      if (path !== '/api/v1/account/plans') return reply(account, path);
+      if (failure === 'unavailable') throw new Error('Plan endpoint unavailable');
+      return { invalid: true };
+    });
+    mockInference.mockImplementation(async () => new Response(null, { status: 200 }));
+    const { runtime } = await setup();
+    await runtime.refresh();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(runtime.getState()).toMatchObject({ phase: 'ready', plans: null });
+    expect(runtime.getState().models).toHaveLength(1);
+    const send = runtime.createModelFetch('cloud-model', 'agent');
+    await expect(
+      send('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    await runtime._doStop();
+  },
+);
+
+test('pending plan metadata does not delay readiness or inference and is published when it arrives', async () => {
+  let finishPlans!: (value: unknown) => void;
+  const pendingPlans = new Promise((resolve) => {
+    finishPlans = resolve;
+  });
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    path === '/api/v1/account/plans' ? pendingPlans : reply(account, path),
+  );
+  mockInference.mockImplementation(async () => new Response(null, { status: 200 }));
+  const { runtime } = await setup();
+  let ready = false;
+  const refresh = runtime.refresh().then(() => {
+    ready = true;
+  });
+  try {
+    await jest.advanceTimersByTimeAsync(0);
+    expect(ready).toBe(true);
+    expect(runtime.getState()).toMatchObject({ phase: 'ready', plans: null });
+    const send = runtime.createModelFetch('cloud-model', 'agent');
+    await expect(
+      send('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    finishPlans(cloudSnapshot().plans);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(runtime.getState().plans).toEqual(cloudSnapshot().plans);
+  } finally {
+    finishPlans(cloudSnapshot().plans);
+    await refresh;
+    await runtime._doStop();
+  }
+});
+
+test('late plan metadata from a replaced account cannot overwrite the current display', async () => {
+  let finishPlans!: (value: unknown) => void;
+  const pendingPlans = new Promise((resolve) => {
+    finishPlans = resolve;
+  });
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    account === 'account-a' && path === '/api/v1/account/plans'
+      ? pendingPlans
+      : reply(account, path),
+  );
+  const { runtime, change } = await setup();
+  try {
+    await runtime.refresh();
+    change({ key: 'b', profileId: 'account-b', ...service });
+    await runtime.refresh();
+    await jest.advanceTimersByTimeAsync(0);
+    const current = runtime.getState().plans;
+    expect(current).toEqual(cloudSnapshot('account-b').plans);
+    finishPlans({ ...cloudSnapshot().plans, measured_at: '2026-01-01T00:00:00Z' });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(runtime.getState().account?.account.id).toBe('account-b');
+    expect(runtime.getState().plans).toEqual(current);
+  } finally {
+    finishPlans(cloudSnapshot().plans);
+    await runtime._doStop();
+  }
 });
 
 test.each(['paid', 'unsubscribed', 'failed'])(
@@ -256,7 +330,7 @@ test.each(['paid', 'unsubscribed', 'failed'])(
     });
     const { runtime } = await setup();
     await jest.advanceTimersByTimeAsync(0);
-    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockGet).toHaveBeenCalledTimes(result === 'paid' ? 3 : 2);
     expect(runtime.getState()).toMatchObject({
       phase: result === 'failed' ? 'error' : 'ready',
       isRefreshing: false,
@@ -266,7 +340,7 @@ test.each(['paid', 'unsubscribed', 'failed'])(
     changeAppState('background');
     changeAppState('active');
     await jest.advanceTimersByTimeAsync(120_000);
-    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockGet).toHaveBeenCalledTimes(result === 'paid' ? 3 : 2);
     await runtime._doStop();
   },
 );
@@ -331,7 +405,7 @@ test('inference completion defers entitlement revalidation until the next model 
   await jest.advanceTimersByTimeAsync(120_000);
   expect(mockGet).toHaveBeenCalledTimes(3);
   await request();
-  expect(mockGet).toHaveBeenCalledTimes(6);
+  expect(mockGet).toHaveBeenCalledTimes(5);
   await runtime._doStop();
 });
 
@@ -371,7 +445,6 @@ test('an outage keeps display data but fails closed, and unchanged refreshes do 
   expect(runtime.getState()).toMatchObject({
     phase: 'error',
     account: previous.account,
-    plans: previous.plans,
   });
   await runtime._doStop();
 });

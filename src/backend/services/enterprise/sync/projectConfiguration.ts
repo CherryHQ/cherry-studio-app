@@ -28,7 +28,7 @@ export type PublishedSkill = Readonly<
   { remoteId: string } & Omit<InsertAgentGlobalSkillRow, 'id' | 'managedRemoteId' | 'isEnabled'>
 >;
 
-export type ProjectionInput = Readonly<{
+type ProjectionInput = Readonly<{
   configuration: EnterpriseConfiguration;
   agents: readonly AgentSetup[];
   /** Listed Agents whose setup could not be read: they and what they bind stay as installed. */

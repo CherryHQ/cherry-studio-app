@@ -22,7 +22,6 @@ const active: CloudState = {
   },
   plans: null,
   models: [],
-  webUrl: null,
 };
 
 describe('active cloud subscriptions', () => {

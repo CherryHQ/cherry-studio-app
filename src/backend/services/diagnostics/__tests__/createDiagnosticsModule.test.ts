@@ -47,8 +47,6 @@ function fixture() {
     evidence: [],
     modelName: 'Diagnostic model',
   }));
-  const defaultModel = jest.fn(async () => model.id);
-  const checkChat = jest.fn(async () => ({ status: 'success' as const, latency: 10 }));
   const deps: Parameters<typeof createDiagnosticsModule>[0] = {
     bundle: {
       uploadBundle: async () => ({ status: 'busy' }),
@@ -62,14 +60,12 @@ function fixture() {
       }),
       getAuthConfig: async () => null,
     },
-    models: { checkChat },
     applicationData: async () => ({ missingCount: 0 }),
     runtimeStorage: async () => 'ready',
     resolveConnection: () => ({
       baseUrl: provider.endpointConfigs?.['openai-chat-completions']?.baseUrl ?? '',
     }),
     resolveServiceUrl: (baseUrl) => baseUrl,
-    defaultModel,
     language: () => 'en-US',
     oauthSignedIn: async () => false,
     plugins: async () => ({
@@ -78,10 +74,9 @@ function fixture() {
       truncated: false,
       connections: [],
     }),
-    permissions: async () => ({}),
     agent: { timeoutMs: 60000, run: runAgent },
   };
-  return { model, provider, context, deps, runAgent, defaultModel, checkChat };
+  return { model, provider, context, deps, runAgent };
 }
 
 test('an incident without model identity never checks the current default model', async () => {
@@ -92,7 +87,7 @@ test('an incident without model identity never checks the current default model'
     providerId: undefined,
     modelId: undefined,
   });
-  const report = await session.check({ network: true });
+  const report = await session.check({});
   expect(report.target).toBeUndefined();
   expect(report.checks).toEqual(
     expect.arrayContaining([
@@ -101,7 +96,6 @@ test('an incident without model identity never checks the current default model'
       { id: 'runtime', status: 'pass' },
     ]),
   );
-  expect(f.defaultModel).not.toHaveBeenCalled();
   await owner.dispose();
 });
 
@@ -128,7 +122,7 @@ test.each(['', 'https://aiplatform.googleapis.com/v1'])(
     const owner = createDiagnosticsModule(f.deps);
     const session = owner.module.createSession(f.context);
     try {
-      const report = await session.check({ network: true });
+      const report = await session.check({});
       expect(report.target).toMatchObject({
         endpointHost: 'us-central1-aiplatform.googleapis.com',
       });
@@ -159,7 +153,7 @@ test.each(['', 'https://aiplatform.googleapis.com/v1'])(
       resolveServiceUrl.mockImplementation(() => {
         throw new Error('The configured project does not match the service address.');
       });
-      const invalid = await session.check({ network: true });
+      const invalid = await session.check({});
       expect(invalid.target?.configurationIssue).toBe('invalid-endpoint');
       expect(invalid.checks).toContainEqual({
         id: 'endpoint',
@@ -177,14 +171,13 @@ test('desktop incidents do not run phone model probes or resolve its credentials
   const owner = createDiagnosticsModule(f.deps);
   const report = await owner.module
     .createSession({ ...f.context, executionSource: 'desktop' })
-    .check({ network: true });
+    .check({});
   expect(report.checks).toEqual(
     expect.arrayContaining([
       { id: 'model', status: 'skipped', issue: 'remote' },
       { id: 'endpoint', status: 'skipped', issue: 'configuration' },
     ]),
   );
-  expect(f.checkChat).not.toHaveBeenCalled();
   await owner.dispose();
 });
 
@@ -192,11 +185,9 @@ test('a provider configuration change invalidates a previous report before anoth
   const f = fixture();
   const owner = createDiagnosticsModule(f.deps);
   const session = owner.module.createSession(f.context);
-  await session.check({ network: true });
+  await session.check({});
   f.provider.endpointConfigs!['openai-chat-completions']!.baseUrl = 'https://changed.example/v1';
-  await expect(session.checkConversation()).rejects.toMatchObject({ reason: 'stale' });
   await expect(session.diagnose(f.model.id)).rejects.toMatchObject({ reason: 'stale' });
-  expect(f.checkChat).not.toHaveBeenCalled();
   expect(f.runAgent).not.toHaveBeenCalled();
   await owner.dispose();
 });
@@ -212,7 +203,7 @@ test('the incident model effective endpoint supplies both configuration and conn
   const owner = createDiagnosticsModule(f.deps);
   const session = owner.module.createSession(f.context);
   try {
-    const report = await session.check({ network: true });
+    const report = await session.check({});
     expect(report.target).toMatchObject({ endpointHost: 'actual.example' });
     expect(report.target?.configurationIssue).toBeUndefined();
     expect(report.checks).toContainEqual({ id: 'model', status: 'pass', issue: undefined });
@@ -337,7 +328,7 @@ test('host disposal aborts and joins an admitted AI run and rejects later admiss
   await admitted;
   await owner.dispose();
   await stopped;
-  expect(() => owner.module.createSession()).toThrow(DiagnosticSessionError);
+  expect(() => owner.module.createSession(f.context)).toThrow(DiagnosticSessionError);
   await expect(session.check()).rejects.toMatchObject({ reason: 'cancelled' });
 });
 
@@ -350,7 +341,7 @@ test('a stalled configuration lookup does not block local results or leave check
   try {
     const pending = owner.module
       .createSession(f.context)
-      .check({ network: true, onCheck: (check) => observed.push(check) });
+      .check({ onCheck: (check) => observed.push(check) });
     await jest.advanceTimersByTimeAsync(0);
     expect(observed).toEqual(
       expect.arrayContaining([
@@ -368,7 +359,6 @@ test('a stalled configuration lookup does not block local results or leave check
     );
     expect(report.checks.every((check) => check.status !== 'pending')).toBe(true);
     expect(f.runAgent).not.toHaveBeenCalled();
-    expect(f.checkChat).not.toHaveBeenCalled();
   } finally {
     await owner.dispose();
     jest.useRealTimers();
@@ -382,7 +372,7 @@ test('an uninitialized runtime is skipped independently of an unreadable applica
   };
   f.deps.runtimeStorage = async () => 'not_initialized';
   const owner = createDiagnosticsModule(f.deps);
-  const report = await owner.module.createSession(f.context).check({ network: true });
+  const report = await owner.module.createSession(f.context).check({});
   expect(report.checks).toEqual(
     expect.arrayContaining([
       { id: 'data', status: 'error', issue: 'unavailable' },

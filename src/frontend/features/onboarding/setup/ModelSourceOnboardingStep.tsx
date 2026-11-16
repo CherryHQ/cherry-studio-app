@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import { useAccount } from '@/frontend/appShell/account';
 import { useQuery } from '@/frontend/data';
 import { useCloud } from '@/frontend/hooks/useCloud';
-import { editionCapabilities } from '@/shared/data/managedPolicy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import {
   OnboardingButton,
@@ -22,7 +22,7 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
   const router = useRouter();
   const { state: account } = useAccount();
   const { cloud, state } = useCloud();
-  const organizationManaged = !editionCapabilities().providerOnboarding;
+  const organizationManaged = !capabilityPolicy('providerOnboarding').canEdit('providerOnboarding');
   const models = useQuery('/models', {
     enabled: account.hasPrompted && !organizationManaged,
     query: { enabled: true, isSystemSupported: true },

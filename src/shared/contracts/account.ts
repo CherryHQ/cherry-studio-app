@@ -1,14 +1,9 @@
-import * as z from 'zod';
-
-/** Normalized app input, independent of the SDK's field names and response structure. */
-export const AccountSessionContextSchema = z.object({
-  issuer: z.url({ protocol: /^https$/ }),
-  /** Each product validates its own service addresses before sending credentials. */
-  enterpriseApiBaseUrl: z.string().optional(),
-  cloudApiOrigin: z.string().optional(),
-  cloudWebUrl: z.string().optional(),
-});
-export type AccountSessionContext = z.infer<typeof AccountSessionContextSchema>;
+/** Normalized app input; product owners validate service addresses before sending credentials. */
+export type AccountSessionContext = {
+  issuer: string;
+  enterpriseApiBaseUrl?: string;
+  cloudApiOrigin?: string;
+};
 
 export type AccountErrorCode =
   /** Cloud login cannot obtain a registration for this installation. */
@@ -40,7 +35,7 @@ export type AccountState = Readonly<{
   isRestoringSession: boolean;
   /** The session was rejected, does not match this profile, or is being replaced by sign-in. */
   needsSignIn: boolean;
-  /** A new installation has seen the sign-in page, whether it signed in or not. */
+  /** The account entry has been completed or skipped during onboarding. */
   hasPrompted: boolean;
   isBusy: boolean;
   /** Display name; never use it as a stable identity or infer a login name from it. */
@@ -76,7 +71,7 @@ export interface AccountModule {
   receiveRedirect(url: string): Promise<boolean>;
   /** Ends the session. An enterprise or private account returns to the community data. */
   signOut(): Promise<void>;
-  /** Continues a new installation without signing in. */
+  /** Continues onboarding without signing in. */
   dismissPrompt(): void;
 }
 

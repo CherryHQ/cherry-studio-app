@@ -17,7 +17,6 @@ export interface CloudIdentity {
   key: string;
   profileId: string;
   apiOrigin?: string;
-  webUrl?: string;
 }
 export interface CloudIdentitySource {
   getIdentity(): CloudIdentity | null;
@@ -50,11 +49,7 @@ export class CloudSession {
   assertCurrent(): void {
     this.signal.throwIfAborted();
     const current = this.source.getIdentity();
-    if (
-      current?.key !== this.identity.key ||
-      current.apiOrigin !== this.identity.apiOrigin ||
-      current.webUrl !== this.identity.webUrl
-    )
+    if (current?.key !== this.identity.key || current.apiOrigin !== this.identity.apiOrigin)
       throw new CloudAccessError('signed_out');
   }
 
