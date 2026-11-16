@@ -32,7 +32,7 @@ export interface SkillFileSystem {
   isDirectory(path: readonly string[]): boolean;
   list(path: readonly string[]): string[];
   readBytes(path: readonly string[]): Promise<Uint8Array>;
-  writeBytes(path: readonly string[], bytes: Uint8Array): void;
+  writeBytes(path: readonly string[], bytes: Uint8Array): Promise<void>;
   createDirectory(path: readonly string[]): void;
   move(from: readonly string[], to: readonly string[]): Promise<void>;
   remove(path: readonly string[]): void;
@@ -79,7 +79,7 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
           }
           const segments = path.split('/');
           fs.createDirectory([...base, ...segments.slice(0, -1)]);
-          fs.writeBytes([...base, ...segments], bytes);
+          await fs.writeBytes([...base, ...segments], bytes);
         }
       } catch (error) {
         safeRemove(fs, base);
@@ -171,7 +171,7 @@ export const expoSkillFileSystem: SkillFileSystem = {
   isDirectory: (path) => new Directory(...path).exists,
   list: (path) => new Directory(...path).list().map((entry) => entry.name),
   readBytes: (path) => new File(...path).bytes(),
-  writeBytes: (path, bytes) => new File(...path).writeSync(bytes),
+  writeBytes: (path, bytes) => new File(...path).write(bytes),
   createDirectory: (path) => {
     const directory = new Directory(...path);
     if (!directory.exists) directory.create({ intermediates: true, idempotent: true });
