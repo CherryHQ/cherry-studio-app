@@ -29,10 +29,17 @@ pairing and configuration import.
   `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before
   reading and also counts streamed bytes when the server omits or misreports that header.
 - Bounded text callers can opt into `truncateResponse: true` to retain a prefix rather than reject
-  a large response. The transport reads incrementally, cancels unread bytes, and returns
-  `truncated`; one deadline and the caller's cancellation cover headers and body reading. Other
-  callers keep the existing reject-on-overflow default. Serialized string request bodies are sent
-  unchanged, including their whitespace and invalid JSON.
+  a large response. The shared fetch boundary reads Expo's actual native body incrementally before
+  giving Axios a finite text response, independent of the global `Response`'s stream support.
+  It returns `truncated` and explicitly aborts its native task after reading, truncation, or failure;
+  cancelling only the stream reader does not reliably stop native I/O on every platform. One
+  deadline and the caller's cancellation cover headers and body reading, and completion does not
+  abort the caller's signal. The cap bounds retained body bytes, not bytes already buffered by the
+  native network stack. Other callers keep the existing reject-on-overflow default. Serialized
+  string request bodies are sent unchanged, including their whitespace and invalid JSON.
+- `credentials: 'omit'` is passed directly to Expo's fetch options as well as Axios's credential
+  setting. This prevents RN's global `Request` capability detection from restoring native cookies.
+  Callers that omit this policy keep the existing native credential defaults.
 - Requests whose path contains a capability can provide `logPath` with a redacted route. It changes
   only transport logging, suppresses the raw transport message, and never changes the wire path.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,

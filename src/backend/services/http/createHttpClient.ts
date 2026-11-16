@@ -1,18 +1,12 @@
 import {
-  AxiosError,
   AxiosHeaders,
   create as createAxiosInstance,
   type AxiosAdapter,
   type AxiosInstance,
   type AxiosRequestConfig,
   type AxiosResponse,
-  type CreateAxiosDefaults,
   type InternalAxiosRequestConfig,
 } from 'axios';
-import { fetch as expoFetch } from 'expo/fetch';
-
-import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
-import { raceAbort } from '@/backend/utils/raceAbort';
 
 import type {
   HttpClient,
@@ -24,8 +18,13 @@ import type {
   HttpResponse,
 } from './HttpClient';
 import { HttpError, isHttpError } from './HttpError';
+import {
+  httpFetch,
+  type HttpFetchOptions,
+  HTTP_TEXT_RESPONSE_LIMIT,
+  HttpTextResponseLimit,
+} from './httpFetch';
 import { mapAxiosError } from './mapAxiosError';
-import { readHttpText } from './readHttpText';
 import { serializeHttpQuery } from './serializeHttpQuery';
 import { toHttpHeaders } from './toHttpHeaders';
 
@@ -42,8 +41,6 @@ const HTTP_METHODS = new Set<HttpMethod>([
   'PUT',
 ]);
 const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'arraybuffer']);
-
-type AxiosFetch = NonNullable<NonNullable<CreateAxiosDefaults['env']>['fetch']>;
 
 export interface CreateHttpClientOptions {
   baseUrl: string;
@@ -273,19 +270,30 @@ const dispatchRequestInterceptors = async (
     config.method = request.method;
     config.maxContentLength = request.truncateResponse ? -1 : (request.maxResponseBytes ?? -1);
     config.params = request.query;
-    config.responseType = request.truncateResponse ? 'stream' : request.responseType;
+    config.responseType = request.responseType;
     // Serialized bodies are already wire data, including intentionally invalid JSON.
     if (typeof request.body === 'string') config.transformRequest = [(data) => data];
     config.signal = request.signal;
-    config.fetchOptions = { redirect: request.redirect };
+    const fetchOptions: HttpFetchOptions = {
+      redirect: request.redirect,
+      // Pass this directly to Expo as well: RN's Request.prototype has no credentials property,
+      // so Axios can otherwise ignore withCredentials and restore native cookies.
+      credentials: request.credentials,
+    };
+    if (request.truncateResponse) {
+      fetchOptions[HTTP_TEXT_RESPONSE_LIMIT] = new HttpTextResponseLimit(
+        request.maxResponseBytes!,
+        request.timeoutMs ?? context.route.timeoutMs,
+        config,
+      );
+    }
+    config.fetchOptions = fetchOptions;
     if (request.credentials) config.withCredentials = false;
-    // Truncated responses keep one deadline through headers AND bounded stream reading below.
+    // The fetch boundary owns one deadline through headers and bounded body consumption.
     config.timeout = request.truncateResponse ? 0 : (request.timeoutMs ?? context.route.timeoutMs);
     config.url = request.path;
     config.validateStatus =
-      request.truncateResponse || context.route.statusPolicy === 'all'
-        ? acceptAllStatuses
-        : acceptSuccessfulStatus;
+      context.route.statusPolicy === 'all' ? acceptAllStatuses : acceptSuccessfulStatus;
     return config;
   } catch (error) {
     throw await dispatchError(error, { request, route: context.route });
@@ -304,32 +312,17 @@ const dispatchResponseInterceptors = async (response: AxiosResponse): Promise<Ax
     );
   }
 
+  const limit = (response.config.fetchOptions as HttpFetchOptions | undefined)?.[
+    HTTP_TEXT_RESPONSE_LIMIT
+  ];
   let httpResponse: HttpResponse<unknown> = {
     data: response.data,
     headers: toHttpHeaders(response.headers),
     status: response.status,
+    ...(limit ? { truncated: limit.truncated } : {}),
   };
 
   try {
-    if (context.request.truncateResponse) {
-      const bounded = await readHttpText(
-        response.data,
-        context.request.maxResponseBytes!,
-        context.request.signal!,
-      );
-      response.data = bounded.text;
-      httpResponse = { ...httpResponse, data: bounded.text, truncated: bounded.truncated };
-      // Settle status only after consuming/cancelling the stream, as the ordinary text adapter does.
-      if (context.route.statusPolicy === 'success' && !acceptSuccessfulStatus(response.status)) {
-        throw new AxiosError(
-          `Request failed with status ${response.status}`,
-          response.status >= 500 ? AxiosError.ERR_BAD_RESPONSE : AxiosError.ERR_BAD_REQUEST,
-          response.config,
-          response.request,
-          response,
-        );
-      }
-    }
     for (const interceptor of context.route.interceptors) {
       httpResponse = interceptor.onResponse
         ? await interceptor.onResponse(httpResponse, context.request)
@@ -337,7 +330,6 @@ const dispatchResponseInterceptors = async (response: AxiosResponse): Promise<Ax
       assertValidResponse(httpResponse);
     }
   } catch (error) {
-    if (context.request.truncateResponse) context.request.signal?.throwIfAborted();
     throw await dispatchError(error, context);
   }
 
@@ -362,7 +354,7 @@ function createAxiosTransport(adapter?: AxiosAdapter): AxiosInstance {
     adapter: adapter ?? 'fetch',
     allowAbsoluteUrls: false,
     env: {
-      fetch: expoFetch as unknown as AxiosFetch,
+      fetch: httpFetch,
     },
     paramsSerializer: { serialize: serializeHttpQuery },
     timeout: DEFAULT_TIMEOUT_MS,
@@ -408,37 +400,14 @@ function createHttpClientWithTransport(
     async request<TResponse, TBody = unknown>(
       request: HttpRequest<TBody>,
     ): Promise<HttpResponse<TResponse>> {
-      let routedRequest: HttpRequest<unknown> = {
+      const routedRequest: HttpRequest<unknown> = {
         ...request,
         headers: mergeHeaders(route.headers, request.headers),
       };
       assertValidRequest(routedRequest);
 
-      let disposeDeadline: () => void = () => undefined;
-      if (routedRequest.truncateResponse) {
-        const deadline = new AbortController();
-        const linked = linkAbortSignals(
-          routedRequest.signal ? [routedRequest.signal, deadline.signal] : [deadline.signal],
-        );
-        const timer = setTimeout(
-          () =>
-            deadline.abort(
-              new HttpError('HTTP request timed out.', {
-                code: 'REQUEST_TIMEOUT',
-                kind: 'timeout',
-              }),
-            ),
-          routedRequest.timeoutMs ?? route.timeoutMs,
-        );
-        disposeDeadline = () => {
-          clearTimeout(timer);
-          linked.dispose();
-        };
-        routedRequest = { ...routedRequest, signal: linked.signal };
-      }
-
       try {
-        const pending = transport.request<TResponse>({
+        const response = await transport.request<TResponse>({
           [HTTP_REQUEST]: routedRequest,
           [HTTP_ROUTE]: route,
           baseURL: route.baseUrl,
@@ -452,9 +421,6 @@ function createHttpClientWithTransport(
           timeout: routedRequest.timeoutMs ?? route.timeoutMs,
           url: routedRequest.path,
         } as RoutedAxiosRequestConfig);
-        const response = await (routedRequest.truncateResponse
-          ? raceAbort(pending, routedRequest.signal!)
-          : pending);
         const truncated = (response as RoutedAxiosResponse).truncated;
 
         return Object.freeze({
@@ -464,20 +430,11 @@ function createHttpClientWithTransport(
           ...(truncated === undefined ? {} : { truncated }),
         });
       } catch (error) {
-        if (routedRequest.truncateResponse && routedRequest.signal?.aborted) {
-          if (isHttpError(routedRequest.signal.reason)) throw routedRequest.signal.reason;
-          throw new HttpError('HTTP request was cancelled.', {
-            code: 'REQUEST_CANCELLED',
-            kind: 'cancelled',
-          });
-        }
         throw mapAxiosError(
           error,
           routedRequest.errorDecoder ?? route.errorDecoder,
           routedRequest.logPath,
         );
-      } finally {
-        disposeDeadline();
       }
     },
   });

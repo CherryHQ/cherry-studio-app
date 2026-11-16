@@ -1,6 +1,3 @@
-import { ReadableStream } from 'node:stream/web';
-import { TextDecoder } from 'node:util';
-
 import {
   AxiosError,
   AxiosHeaders,
@@ -25,14 +22,6 @@ const transportLogger = (
     loggerService: { withContext: (module: string) => { error: jest.Mock; warn: jest.Mock } };
   }
 ).loggerService.withContext('HttpTransport');
-
-const originalDecoder = globalThis.TextDecoder;
-beforeAll(() => {
-  globalThis.TextDecoder = TextDecoder as typeof globalThis.TextDecoder;
-});
-afterAll(() => {
-  globalThis.TextDecoder = originalDecoder;
-});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -75,53 +64,6 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
-  it.each(['success', 'all'] as const)(
-    'retains status policy %s when truncating a response',
-    async (statusPolicy) => {
-      const adapter = mockAdapter(async (config) => {
-        expect(config.responseType).toBe('stream');
-        expect(config.maxContentLength).toBe(-1);
-        expect(config.validateStatus?.(422)).toBe(true);
-        return response(
-          config,
-          422,
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new Uint8Array([65, 66, 67]));
-              controller.close();
-            },
-          }),
-          new AxiosHeaders({ 'X-Request-Id': 'request-422' }),
-        );
-      });
-      const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
-        baseUrl: 'https://example.com',
-        statusPolicy,
-      });
-      const pending = client.request({
-        method: 'GET',
-        path: '/',
-        responseType: 'text',
-        maxResponseBytes: 2,
-        truncateResponse: true,
-      });
-      if (statusPolicy === 'all') {
-        await expect(pending).resolves.toEqual({
-          data: 'AB',
-          status: 422,
-          headers: { 'x-request-id': 'request-422' },
-          truncated: true,
-        });
-      } else {
-        await expect(pending).rejects.toMatchObject({
-          kind: 'http',
-          status: 422,
-          requestId: 'request-422',
-        });
-      }
-    },
-  );
-
   it.each(['HEAD', 'OPTIONS'] as const)('supports ordinary %s requests', async (method) => {
     const adapter = mockAdapter(async (config) => response(config, 204, ''));
     const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
@@ -149,32 +91,6 @@ describe('createHttpClient', () => {
       body,
       headers: { 'Content-Type': 'application/json' },
     });
-  });
-
-  it('keeps the full-request deadline active after headers arrive', async () => {
-    jest.useFakeTimers();
-    try {
-      const adapter = mockAdapter(async (config) => response(config, 200, new ReadableStream()));
-      const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
-        baseUrl: 'https://example.com',
-      });
-      const pending = client.request({
-        method: 'GET',
-        path: '/',
-        timeoutMs: 100,
-        responseType: 'text',
-        maxResponseBytes: 2,
-        truncateResponse: true,
-      });
-      const assertion = expect(pending).rejects.toMatchObject({
-        kind: 'timeout',
-        code: 'REQUEST_TIMEOUT',
-      });
-      await jest.advanceTimersByTimeAsync(100);
-      await assertion;
-    } finally {
-      jest.useRealTimers();
-    }
   });
 
   it('redacts capability paths and transport messages without changing the request destination', async () => {
@@ -274,6 +190,7 @@ describe('createHttpClient', () => {
   it('lets public downloads inspect redirects without sending native cookies', async () => {
     const adapter = mockAdapter(async (config) => {
       expect(config.fetchOptions?.redirect).toBe('manual');
+      expect(config.fetchOptions?.credentials).toBe('omit');
       expect(config.withCredentials).toBe(false);
       return response(config, 302, '', new AxiosHeaders({ Location: '/article' }));
     });
