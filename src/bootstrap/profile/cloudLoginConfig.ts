@@ -56,6 +56,7 @@ export async function resolveCloudLogin(
   platform: string,
   redirectUri: string,
   expectedIssuer?: string,
+  options?: { region: CloudLoginConfig['region']; signal: AbortSignal },
 ): Promise<CloudLoginConfig> {
   if (platform !== 'ios' && platform !== 'android') throw new AccountError('unavailable');
   const http = createHttpClient({ baseUrl: origin, timeoutMs: 15_000 });
@@ -65,6 +66,7 @@ export async function resolveCloudLogin(
         method: 'POST',
         path: '/v1/resolve',
         body: { client: 'mobile', platform, ...(selected && { selected_region: selected }) },
+        signal: options?.signal,
         credentials: 'omit',
         redirect: 'error',
         maxResponseBytes: 32 * 1024,
@@ -74,6 +76,12 @@ export async function resolveCloudLogin(
       if (selected && result.region !== selected) throw new AccountError('response');
       return result;
     };
+    if (options) {
+      const result = await query(options.region);
+      if (expectedIssuer && result.endpoints.issuer !== expectedIssuer.replace(/\/+$/, ''))
+        throw new AccountError('unavailable');
+      return result;
+    }
     if (!expectedIssuer) return await query();
     // A pre-discovery enterprise profile only knows its issuer. Find its actual registration
     // without letting today's network select a different identity provider.

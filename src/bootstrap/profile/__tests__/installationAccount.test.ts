@@ -244,3 +244,104 @@ test('requires the scopes that the installed SDK requests by default', async () 
   await expect(launch().preparePortal()).rejects.toMatchObject({ code: 'response' });
   expect(mockCreatePortal).not.toHaveBeenCalled();
 });
+
+test('discovers missing community services for the saved region without replacing login or enterprise routing', async () => {
+  const runtime = launch();
+  await runtime.preparePortal();
+  const data = result();
+  mockRequest.mockResolvedValue({
+    status: 200,
+    data: {
+      ...data,
+      endpoints: {
+        ...data.endpoints,
+        api_base_url: 'https://another-enterprise.test',
+        cloud_api_origin: 'https://cloud.cn.test',
+        cloud_web_url: 'https://billing.cn.test/account',
+      },
+    },
+  });
+  const signal = new AbortController().signal;
+  await runtime.refreshSessionContext!(() => true, signal);
+  expect(mockRequest).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      body: { client: 'mobile', platform: expect.any(String), selected_region: 'CN' },
+      signal,
+    }),
+  );
+  expect(mockCreatePortal).toHaveBeenCalledTimes(1);
+  const session = {
+    _tag: 'signedIn',
+    subject: '1',
+    name: undefined,
+    profile: { product: 'cloud', profileId: '1' },
+  } as const;
+  expect(launch().resolveSessionContext(session)).toEqual({
+    issuer: 'https://auth.cn.test',
+    enterpriseApiBaseUrl: 'https://api.cn.test/v2',
+    cloudApiOrigin: 'https://cloud.cn.test',
+    cloudWebUrl: 'https://billing.cn.test/account',
+  });
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+});
+
+test.each(['login replacement', 'consumer stop'])(
+  'late discovery cannot persist metadata after %s',
+  async (action) => {
+    const runtime = launch();
+    await runtime.preparePortal();
+    let finish!: (value: unknown) => void;
+    mockRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let isCurrent = true;
+    const controller = new AbortController();
+    const refreshing = runtime.refreshSessionContext!(() => isCurrent, controller.signal);
+    if (action === 'login replacement') isCurrent = false;
+    else controller.abort();
+    const data = result();
+    finish({
+      status: 200,
+      data: {
+        ...data,
+        endpoints: { ...data.endpoints, cloud_api_origin: 'https://late.test' },
+      },
+    });
+    if (action === 'login replacement') await refreshing;
+    else await expect(refreshing).rejects.toBeDefined();
+    const saved = [...mockStore.values()].map((value) => JSON.parse(value));
+    expect(saved[0].endpoints.cloud_api_origin).toBeUndefined();
+    expect(mockCreatePortal).toHaveBeenCalledTimes(1);
+  },
+);
+
+test.each(['issuer', 'portal_url', 'oidc_client_id'])(
+  'automatic discovery cannot silently replace the authentication binding (%s)',
+  async (field) => {
+    const runtime = launch();
+    await runtime.preparePortal();
+    const data = result();
+    mockRequest.mockResolvedValue({
+      status: 200,
+      data: {
+        ...data,
+        ...(field === 'oidc_client_id' && { oidc_client_id: 'another-client' }),
+        endpoints: {
+          ...data.endpoints,
+          cloud_api_origin: 'https://cloud.cn.test',
+          ...(field !== 'oidc_client_id' && { [field]: 'https://another-auth.test' }),
+        },
+      },
+    });
+    await expect(
+      runtime.refreshSessionContext!(() => true, new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'unavailable' });
+    expect(mockCreatePortal).toHaveBeenCalledTimes(1);
+    expect(
+      [...mockStore.values()].map((value) => JSON.parse(value))[0].endpoints.cloud_api_origin,
+    ).toBeUndefined();
+  },
+);

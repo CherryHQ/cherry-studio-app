@@ -178,6 +178,7 @@ export function createAppBootstrapRuntime(
     {
       getIdentity: account.getCommunityIdentity,
       getTokens: account.getCommunityTokens,
+      refreshServices: account.refreshCommunityServices,
       subscribe: account.subscribe,
     },
     Constants.expoConfig?.version ?? '0.0.0',
