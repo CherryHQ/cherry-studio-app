@@ -8,8 +8,9 @@ Previously completed/skipped users and installations with saved models or Sessio
 
 ## Presentation
 
-`components/OnboardingPage` owns first-use headers, content insets, controls, fields, choices and
-footer actions. Privacy, permissions and the account entry use their dedicated first-use UI.
+`components/OnboardingPage` owns first-use headers, content insets and footer composition.
+Buttons, fields, selection marks and rows use CherryUI primitives. Privacy, permissions and the
+account entry retain their dedicated first-use presentation.
 Provider selection and connection mount the existing provider components inside this frame. The
 `content` variant leaves scrolling, content insets and keyboard handling with those components.
 Account/profile selection and system permission prompts still belong to their SDK/OS owners.
@@ -38,7 +39,7 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
 - Notification access is settled before sign-in when completion notifications are enabled. Prior OS
   decisions are not repeated. Background guidance is recorded before the SDK can change profiles.
   Login/profile switching remains in the account module; this feature supplies only its first-use
-  entry and the private-deployment inputs required by that module.
+  entry and consumes the shared account form, submission and error reporter.
 - `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.
   A paid, active, effective entitlement skips provider configuration and opens account-model selection.
   `OnboardingModelList` adapts both paths to the existing `ModelPickerList` and CherryUI `SearchField`,
@@ -66,5 +67,8 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   credential notice and recoverable previews. Imported configuration still continues to model setup.
   Plugin connections and per-tool approvals retain their existing owners.
 
-`components/LogoDraw` retains the supplied source artwork and its isolated draw-animation utility;
-first-use navigation now owns its own mark-position transition instead of the retired auto-play intro.
+`components/LogoDraw` owns the original welcome draw animation. The first welcome entry plays it;
+Start settles the drawing immediately and the page owns the existing measured dock transition.
+Reduced motion shows the complete artwork and docks without movement. Buttons remain available
+throughout. Settings and onboarding share `useDesktopProviderSync`; each entry owns its feedback
+and destination after import.

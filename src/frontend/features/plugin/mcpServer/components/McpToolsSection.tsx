@@ -1,5 +1,4 @@
 import { ContentState, Section, useIsInLockedGroup } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -37,25 +36,17 @@ function ToolsSection({
 
   return (
     <View className={nested ? 'gap-1 pt-3' : 'gap-3'}>
-      <View className={cn('flex-row items-baseline justify-between gap-3', nested && 'px-4')}>
-        <Text
-          accessibilityRole="header"
-          className={
-            nested
-              ? 'text-sm font-medium text-foreground-tertiary'
-              : 'text-base font-semibold text-foreground'
-          }
-        >
-          {t('settings.mcp.tools.title')}
-        </Text>
-        {tools.length > 0 ? (
-          <Text className="text-sm text-muted-foreground">
-            {t('settings.mcp.tools.enabledSummary', {
-              enabled: enabledCount,
-              total: tools.length,
-            })}
-          </Text>
-        ) : null}
+      <View className={nested ? 'px-4' : undefined}>
+        <Section.Header title={t('settings.mcp.tools.title')}>
+          {tools.length > 0 ? (
+            <Text className="text-sm text-muted-foreground">
+              {t('settings.mcp.tools.enabledSummary', {
+                enabled: enabledCount,
+                total: tools.length,
+              })}
+            </Text>
+          ) : null}
+        </Section.Header>
       </View>
       {toolsQuery.isLoading ? (
         <View className={nested ? 'px-4 py-3' : undefined}>

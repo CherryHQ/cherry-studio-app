@@ -18,17 +18,7 @@ export const DiagnosticFailureSchema = z.strictObject({
   statusCode: z.number().int().min(100).max(599).optional(),
 });
 
-export const DiagnosticCheckIdSchema = z.enum([
-  'data',
-  'runtime',
-  'model',
-  'endpoint',
-  'model_list',
-  'conversation',
-  'plugins',
-  'permissions',
-  'storage',
-]);
+export const DiagnosticCheckIdSchema = z.enum(['data', 'runtime', 'model', 'endpoint']);
 export const DiagnosticCheckStatusSchema = z.enum([
   'pass',
   'warn',
@@ -43,18 +33,10 @@ export const DiagnosticIssueSchema = z.enum([
   'not_initialized',
   'missing_model',
   'configuration',
-  'authentication',
-  'permission',
-  'quota',
-  'rate_limit',
   'network',
   'timeout',
-  'model',
   'unavailable',
-  'unsupported',
   'remote',
-  'storage',
-  'unknown',
 ]);
 export const DiagnosticCheckSchema = z.strictObject({
   id: DiagnosticCheckIdSchema,
@@ -199,11 +181,7 @@ export interface DiagnosticAgent {
 
 /** The diagnostic sheet owns this run; dispose cancels and joins admitted work. */
 export interface DiagnosticSession {
-  check(options?: {
-    network?: boolean;
-    onCheck?: (check: DiagnosticCheck) => void;
-  }): Promise<DiagnosticReport>;
-  checkConversation(): Promise<DiagnosticReport>;
+  check(options?: { onCheck?: (check: DiagnosticCheck) => void }): Promise<DiagnosticReport>;
   diagnose(
     modelId: UniqueModelId,
     onEvidence?: (evidence: DiagnosticEvidence) => void,

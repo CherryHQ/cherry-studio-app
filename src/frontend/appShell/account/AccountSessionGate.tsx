@@ -1,19 +1,15 @@
-import { ContentState, useToast } from '@cherrystudio/ui/components';
-import { loggerService } from '@logger';
+import { ContentState } from '@cherrystudio/ui/components';
 import { usePathname } from 'expo-router';
 import type { PropsWithChildren } from 'react';
-import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { AccountError } from '@/shared/contracts/account';
-
-import { ACCOUNT_ERROR_KEYS, LoginScreen } from './LoginScreen';
+import { LoginScreen } from './LoginScreen';
 import { useAccount } from './useAccount';
+import { useAccountErrorReporter } from './useAccountErrorReporter';
 
 /** Enterprise data is shown only after the restored session matches its profile. */
 export function AccountSessionGate({ children }: PropsWithChildren) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
+  const reportError = useAccountErrorReporter('AccountSessionGate');
   const { account, state } = useAccount();
   const pathname = usePathname();
   // The callback contains no enterprise data and must be able to repair a missing session.
@@ -34,11 +30,7 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
     <LoginScreen
       onLeave={() =>
         void account.signOut().catch((error: unknown) => {
-          loggerService.withContext('AccountSessionGate').error('Sign-out failed', error as Error, {
-            operation: 'account.signOut',
-          });
-          const code = error instanceof AccountError ? error.code : 'failed';
-          toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
+          reportError(error, 'account.signOut');
         })
       }
       purpose="expired"

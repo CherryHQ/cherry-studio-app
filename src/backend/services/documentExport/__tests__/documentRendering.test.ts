@@ -6,7 +6,7 @@ import {
 
 import { DEFAULT_CONTENT_LABELS } from '../contentPresentation';
 import { normalizeDocument } from '../normalizeDocument';
-import { renderDocumentPreview, renderHtml, renderMarkdownPreview } from '../renderHtml';
+import { renderHtml } from '../renderHtml';
 import { renderMarkdown } from '../renderMarkdown';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -69,7 +69,6 @@ test('message cards retain complete source for measured clipping while complete 
     },
   };
   const readImage = jest.fn(async () => new Uint8Array());
-  const preview = renderDocumentPreview(document, card);
   const { html } = await renderHtml(
     document,
     card,
@@ -78,7 +77,6 @@ test('message cards retain complete source for measured clipping while complete 
     new AbortController().signal,
   );
   expect(readImage).toHaveBeenCalledTimes(1);
-  expect(preview).toContain('Paragraph 99:');
   expect(html).toContain('Paragraph 0:');
   expect(html).toContain('Paragraph 99:');
   expect(html).toContain('data-share-card-max-height="3600"');
@@ -131,7 +129,7 @@ test('a short message card stays complete and does not claim it is an excerpt', 
   expect(html).not.toContain('is-clipped');
 });
 
-test('message image headers are frozen, escaped and precede the question without repeating the first author', () => {
+test('message image headers are frozen, escaped and precede the question without repeating the first author', async () => {
   const header = { title: 'Assistant <name>', avatar: 'C', date: '2026/11/09' };
   const document = normalizeDocument({
     kind: 'document',
@@ -149,10 +147,16 @@ test('message image headers are frozen, escaped and precede the question without
     },
   });
   header.title = 'Changed later';
-  const html = renderDocumentPreview(document, {
-    ...presentation,
-    imageFrame: { background: '#ffffff', label: 'Message', layout: 'single' },
-  });
+  const { html } = await renderHtml(
+    document,
+    {
+      ...presentation,
+      imageFrame: { background: '#ffffff', label: 'Message', layout: 'single' },
+    },
+    new Map(),
+    async () => new Uint8Array(),
+    new AbortController().signal,
+  );
   expect(html).toContain('Assistant &lt;name&gt;');
   expect(html).not.toContain('Changed later');
   expect(html).toContain('2026/11/09');
@@ -415,10 +419,17 @@ test('missing resources stay retryable, while successful bytes are reused for la
   expect(read).toHaveBeenCalledTimes(2);
 });
 
-test('Markdown previews display embedded PNG/JPEG without captions and reject active data formats', () => {
-  const html = renderMarkdownPreview(
-    '![internal-name.png](data:image/png;base64,AA==)\n\n![internal-name.jpg](data:image/jpeg;base64,AQ==)\n\n![bad](data:image/svg+xml;base64,PHN2Zz4=)',
+test('HTML displays embedded PNG/JPEG without captions and rejects active data formats', async () => {
+  const { html } = await renderHtml(
+    normalizeDocument({
+      kind: 'markdown',
+      markdown:
+        '![internal-name.png](data:image/png;base64,AA==)\n\n![internal-name.jpg](data:image/jpeg;base64,AQ==)\n\n![bad](data:image/svg+xml;base64,PHN2Zz4=)',
+    }),
     presentation,
+    new Map(),
+    async () => new Uint8Array(),
+    new AbortController().signal,
   );
   expect(html).toContain('src="data:image/png;base64,AA=="');
   expect(html).toContain('src="data:image/jpeg;base64,AQ=="');
@@ -671,29 +682,6 @@ test('four-column tables retain their rows, headers, alignment and media in imag
   expect(browser.html).not.toContain('data-label=');
   expect(renderMarkdown(document)).toBe(`${source}\n`);
   expect(read).not.toHaveBeenCalled();
-});
-
-test('Markdown preview keeps image references readable without image layout or loading', () => {
-  const source = [
-    '# Conversation',
-    '![三国名将阵营图](https://example.com/missing.png)',
-    'Explanation with **emphasis**.',
-    '| 阵营 | 核心名将 | 标签 | 说明 |\n| - | - | - | - |\n| 蜀汉 | 关张赵马黄 | 五虎上将 | 完整内容 |',
-    '```unknown\nconst answer = 42;\n```',
-  ].join('\n\n');
-  const html = renderMarkdownPreview(source, presentation);
-  expect(html).not.toContain('<img');
-  expect(html).toContain('href="https://example.com/missing.png"');
-  expect(html).toContain('三国名将阵营图');
-  expect(html).toContain('example.com');
-  expect(html).not.toContain('Image unavailable');
-  expect(html).toContain('<strong>emphasis</strong>');
-  expect(html).toContain('<table>');
-  expect(html).toContain('<th>核心名将</th>');
-  expect(html).not.toContain('table-wide');
-  expect(html).not.toContain('data-label=');
-  expect(html).toContain('完整内容');
-  expect(html).toContain('const answer = 42;');
 });
 
 test('localized resource fallbacks are frozen and never imply that a private attachment was embedded', async () => {

@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
@@ -156,35 +156,12 @@ function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-export default function ProviderCatalogScreen({
-  setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
+export default function ProviderCatalogScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-
   return (
     <>
-      <RouteHeader
-        onBack={setupIntent === 'chat' ? () => router.replace('/onboarding') : undefined}
-        title={t(
-          setupIntent === 'chat' ? 'onboarding.provider.title' : 'settings.provider.catalog.title',
-        )}
-      />
-      <ProviderCatalogContent
-        header={
-          setupIntent === 'chat' ? (
-            <View className="gap-2 px-4 pt-4 pb-2">
-              <Text className="text-xs text-muted-foreground">
-                {t('onboarding.step', { current: 1 })}
-              </Text>
-              <Text className="text-base text-foreground">
-                {t('onboarding.provider.description')}
-              </Text>
-            </View>
-          ) : undefined
-        }
-        setupIntent={setupIntent}
-      />
+      <RouteHeader title={t('settings.provider.catalog.title')} />
+      <ProviderCatalogContent />
     </>
   );
 }

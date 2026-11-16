@@ -7,29 +7,16 @@ export const issueKeys: Record<DiagnosticIssue, string> = {
   not_initialized: 'diagnosis.issue.not_initialized',
   missing_model: 'diagnosis.issue.missing_model',
   configuration: 'diagnosis.issue.configuration',
-  authentication: 'diagnosis.issue.authentication',
-  permission: 'diagnosis.issue.permission',
-  quota: 'diagnosis.issue.quota',
-  rate_limit: 'diagnosis.issue.rate_limit',
   network: 'diagnosis.issue.network',
   timeout: 'diagnosis.issue.timeout',
-  model: 'diagnosis.issue.model',
   unavailable: 'diagnosis.issue.unavailable',
-  unsupported: 'diagnosis.issue.unsupported',
   remote: 'diagnosis.issue.remote',
-  storage: 'diagnosis.issue.storage',
-  unknown: 'diagnosis.issue.unknown',
 };
 export const checkKeys: Record<DiagnosticCheck['id'], string> = {
   data: 'diagnosis.check.data',
   runtime: 'diagnosis.check.runtime',
   model: 'diagnosis.check.model',
   endpoint: 'diagnosis.check.endpoint',
-  model_list: 'diagnosis.check.model_list',
-  conversation: 'diagnosis.check.conversation',
-  plugins: 'diagnosis.check.plugins',
-  permissions: 'diagnosis.check.permissions',
-  storage: 'diagnosis.check.storage',
 };
 
 export const configurationIssueKeys = {

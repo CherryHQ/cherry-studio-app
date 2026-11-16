@@ -4,9 +4,9 @@ import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import HeartIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ListTodoIcon from '@cherrystudio/app-icons/icons/list-checks';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
-import { cn } from '@cherrystudio/ui/utils';
+import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import {
   getPermissionStatusKey,
@@ -110,26 +110,28 @@ function PermissionOption({
   );
 
   return (
-    <Pressable
+    <Section.Item
       accessibilityLabel={`${label}: ${statusText}, ${actionLabel}`}
-      accessibilityRole="button"
       accessibilityState={{ disabled: blocked, busy: pending }}
-      className={cn(
-        'min-h-20 flex-row items-center gap-4 rounded-2xl border border-border p-4 active:opacity-70',
-        (pending || disabled) && 'opacity-50',
-      )}
       disabled={blocked}
       onPress={() => void handlePress()}
       testID={`onboarding-permission-${kind}`}
+      density="comfortable"
+      inset="none"
+      showChevron={false}
     >
-      <Icon className="size-5 shrink-0 text-foreground" />
-      <View className="min-w-0 flex-1 gap-1">
-        <View className="flex-row items-center justify-between gap-3">
-          <Text className="shrink font-medium text-base text-foreground">{label}</Text>
-          {statusLabel}
+      <View className="flex-row items-center gap-4">
+        <Icon className="size-5 shrink-0 text-foreground" />
+        <View className="min-w-0 flex-1 gap-1">
+          <View className="flex-row items-center justify-between gap-3">
+            <Text className="shrink font-medium text-base text-foreground">{label}</Text>
+            {statusLabel}
+          </View>
+          <Text className="text-sm text-muted-foreground">
+            {t(`onboarding.permissions.${kind}`)}
+          </Text>
         </View>
-        <Text className="text-sm text-muted-foreground">{t(`onboarding.permissions.${kind}`)}</Text>
       </View>
-    </Pressable>
+    </Section.Item>
   );
 }

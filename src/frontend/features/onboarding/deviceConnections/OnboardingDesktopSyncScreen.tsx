@@ -1,16 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import {
-  useDesktopConnectionActions,
-  useDesktopConnections,
-} from '@/frontend/hooks/useDesktopConnections';
-import type {
-  DesktopImportPreview,
-  DesktopImportUnavailableReason,
-} from '@/shared/data/api/schemas/desktopConnections';
+import { useDesktopProviderSync } from '@/frontend/hooks/useDesktopProviderSync';
+import type { DesktopImportUnavailableReason } from '@/shared/data/api/schemas/desktopConnections';
 
 import {
   OnboardingButton,
@@ -36,83 +30,41 @@ export function OnboardingDesktopSyncScreen({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const devices = useDesktopConnections();
-  const actions = useDesktopConnectionActions();
-  const { preview } = actions;
-  const [loaded, setLoaded] = useState<{
-    id: string;
-    name: string;
-    preview: DesktopImportPreview;
-  } | null>(null);
-  const [error, setError] = useState<unknown>();
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const requested = useRef<string | null>(null);
-  const available = devices.connections.filter(
-    (connection) =>
-      connection.status === 'paired' &&
-      connection.capabilities.includes('configuration') &&
-      (!connectionId || connection.id === connectionId),
-  );
-  const singleId = available.length === 1 ? available[0]?.id : undefined;
-  const singleName = available.length === 1 ? available[0]?.name : undefined;
-  const load = useCallback(
-    async (id: string, name: string) => {
-      requested.current = id;
-      setError(undefined);
-      try {
-        const nextPreview = await preview(id);
-        if (!nextPreview) return;
-        setLoaded({ id, name, preview: nextPreview });
-        setSelected(
-          new Set(
-            nextPreview.providers
-              .filter((provider) => !provider.unavailableReason)
-              .map((provider) => provider.id),
-          ),
-        );
-      } catch (failure) {
-        setError(failure);
-      }
-    },
-    [preview],
-  );
-  useEffect(() => {
-    if (
-      !devices.isLoading &&
-      singleId &&
-      singleName &&
-      !loaded &&
-      !error &&
-      requested.current !== singleId
-    )
-      void load(singleId, singleName);
-  }, [devices.isLoading, singleId, singleName, loaded, error, load]);
-  const toggle = (id: string) =>
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const sync = useDesktopProviderSync(connectionId);
+  const {
+    availableConnections: available,
+    loadedPreview,
+    selectedProviderIds: selected,
+    toggleProvider: toggle,
+    loadPreview,
+    retryPreview,
+    previewError,
+  } = sync;
+  const [importError, setImportError] = useState<unknown>();
+  const error = importError ?? previewError;
+  const loaded = loadedPreview && {
+    id: loadedPreview.connection.id,
+    name: loadedPreview.connection.name,
+    preview: loadedPreview.preview,
+  };
   const retry = () => {
-    const connection = available.find((device) => device.id === requested.current);
-    if (connection) void load(connection.id, connection.name);
-    else void devices.refetch();
+    setImportError(undefined);
+    retryPreview();
   };
   const apply = async () => {
-    if (!loaded || actions.isImporting || selected.size === 0) return;
-    setError(undefined);
+    setImportError(undefined);
     try {
-      const result = await actions.importSelected(loaded.id, {
-        selections: [...selected].map((providerId) => ({ mode: 'provider-models', providerId })),
-      });
-      if (result)
-        router.replace({ pathname: '/onboarding/model', params: { connectionId: loaded.id } });
+      const result = await sync.apply();
+      if (result && loadedPreview)
+        router.replace({
+          pathname: '/onboarding/model',
+          params: { connectionId: loadedPreview.connection.id },
+        });
     } catch (failure) {
-      setError(failure);
+      setImportError(failure);
     }
   };
-  const busy = actions.isPreviewing || actions.isImporting;
+  const busy = sync.isPreviewing || sync.isImporting;
   return (
     <OnboardingPage
       description={
@@ -127,8 +79,8 @@ export function OnboardingDesktopSyncScreen({
               {t('settings.provider.desktopSync.credentialsNotice')}
             </Text>
             <OnboardingButton
-              disabled={selected.size === 0 || actions.isPreviewing}
-              loading={actions.isImporting}
+              disabled={selected.size === 0 || sync.isPreviewing}
+              loading={sync.isImporting}
               onPress={() => void apply()}
             >
               {t('settings.provider.desktopSync.apply', { count: selected.size })}
@@ -144,12 +96,12 @@ export function OnboardingDesktopSyncScreen({
       testID="onboarding-desktop-sync"
       title={t('settings.provider.desktopSync.title')}
     >
-      {devices.isLoading || actions.isPreviewing ? (
+      {sync.isLoading || sync.isPreviewing ? (
         <OnboardingMessage loading>{t('settings.provider.desktopSync.fetching')}</OnboardingMessage>
       ) : null}
-      {devices.error || error ? (
+      {sync.error || error ? (
         <View className="gap-3">
-          <OnboardingMessage>{errorMessage(error ?? devices.error)}</OnboardingMessage>
+          <OnboardingMessage>{errorMessage(error ?? sync.error)}</OnboardingMessage>
           <OnboardingButton onPress={retry}>{t('common.retry')}</OnboardingButton>
         </View>
       ) : null}
@@ -181,7 +133,7 @@ export function OnboardingDesktopSyncScreen({
             ))
           )}
         </View>
-      ) : !devices.isLoading && !devices.error && !actions.isPreviewing ? (
+      ) : !sync.isLoading && !sync.error && !sync.isPreviewing ? (
         <View className="gap-3">
           {available.length === 0 ? (
             <>
@@ -200,7 +152,7 @@ export function OnboardingDesktopSyncScreen({
             available.map((connection) => (
               <OnboardingOption
                 key={connection.id}
-                onPress={() => void load(connection.id, connection.name)}
+                onPress={() => void loadPreview(connection)}
                 title={connection.name}
               />
             ))

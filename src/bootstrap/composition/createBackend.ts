@@ -246,14 +246,12 @@ export function createBackend(
     resolveServiceUrl: resolveProviderServiceUrl,
     model: services.model,
     provider: services.provider,
-    models,
     applicationData: (context, signal) => readDiagnosticDataState(dbService, context, signal),
     runtimeStorage: async (signal) => {
       const runtime = infrastructure.languageServing.conversations;
       if (!runtime?.inspectStorage) throw new Error('Runtime storage inspection is unavailable');
       return runtime.inspectStorage(signal);
     },
-    defaultModel: () => services.preference.get('agent.default_model_id'),
     language: () =>
       resolveAppLanguage(
         services.preference.readCached('app.language'),
@@ -262,8 +260,6 @@ export function createBackend(
     oauthSignedIn: async (provider) =>
       infrastructure.providerAccounts.getCapabilities(provider).flow === 'interactive' &&
       (await infrastructure.providerAccounts.getStatus(provider.id)).signedIn,
-    permissions: () =>
-      services.devicePermissions.getStatuses(['camera.read', 'photos.write', 'location.read']),
     plugins: async () => {
       const { items } = await services.mcpServer.list({ isEnabled: true });
       const selected = items.slice(0, 200);

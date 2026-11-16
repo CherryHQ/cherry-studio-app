@@ -7,12 +7,15 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Keyboard, TextInput, View, type TextInputInstance } from 'react-native';
 
-import { ACCOUNT_ERROR_KEYS, organizationLabel, useAccount } from '@/frontend/appShell/account';
+import {
+  organizationLabel,
+  useAccount,
+  useAccountErrorReporter,
+} from '@/frontend/appShell/account';
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { AccountError } from '@/shared/contracts/account';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
@@ -74,11 +77,7 @@ export default function ProfileSettingsScreen() {
     Keyboard.dismiss();
   }, []);
 
-  const reportAccountError = (error: unknown) => {
-    logger.error('Account action failed', error as Error, { operation: 'account.action' });
-    const code = error instanceof AccountError ? error.code : 'failed';
-    toast.show({ label: t(ACCOUNT_ERROR_KEYS[code]), variant: 'danger' });
-  };
+  const reportAccountError = useAccountErrorReporter('ProfileSettingsScreen');
   const openSignIn = () => router.push('/login');
   const isSignedIn = state.isSignedIn || state.isEnterprise;
   // A cloud account switches organization through the portal, reusing its browser sign-in.

@@ -12,12 +12,12 @@ import {
 } from '@/shared/contracts/diagnosticSession';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
+export function useDiagnosticSession(context: DiagnosticFeedbackContext) {
   const module = useBackendModule('diagnostics');
   const session = useRef<DiagnosticSession>(undefined);
   const active = useRef(false);
   const busyRef = useRef(false);
-  const [busy, setBusy] = useState<'check' | 'conversation' | 'ai' | undefined>('check');
+  const [busy, setBusy] = useState<'check' | 'ai' | undefined>('check');
   const [report, setReport] = useState<DiagnosticReport>();
   const [checks, setChecks] = useState<DiagnosticCheck[]>([]);
   const [ai, setAi] = useState<DiagnosticAiReport>();
@@ -33,7 +33,6 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
     let firstCheck = true;
     void owned
       .check({
-        network: context !== undefined,
         onCheck: (check) => {
           if (current) {
             if (firstCheck) {
@@ -70,7 +69,7 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
   }, [module, context]);
 
   async function perform(
-    kind: 'check' | 'conversation' | 'ai',
+    kind: 'check' | 'ai',
     action: (owned: DiagnosticSession) => Promise<void>,
   ) {
     const owned = session.current;
@@ -106,7 +105,7 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
     evidence,
     error,
     cancel: () => session.current?.cancel(),
-    check: (network: boolean) =>
+    check: () =>
       perform('check', async (owned) => {
         setReport(undefined);
         setAi(undefined);
@@ -115,18 +114,12 @@ export function useDiagnosticSession(context?: DiagnosticFeedbackContext) {
         accept(
           owned,
           await owned.check({
-            network,
             onCheck: (check) => {
               if (active.current && session.current === owned)
                 setChecks((values) => [...values.filter((item) => item.id !== check.id), check]);
             },
           }),
         );
-      }),
-    checkConversation: () =>
-      perform('conversation', async (owned) => {
-        setAi(undefined);
-        accept(owned, await owned.checkConversation());
       }),
     diagnose: (modelId: UniqueModelId) =>
       perform('ai', async (owned) => {

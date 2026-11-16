@@ -108,6 +108,8 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
+| Account sign-in fields, submission and failure feedback | `AccountSignInFields`, `useAccountSignInForm` and `useAccountErrorReporter` in `frontend/appShell/account`; entries own continuation and navigation |
+| Desktop provider preview, selection and import | `frontend/hooks/useDesktopProviderSync`, over the existing desktop connection actions; entries own presentation, feedback and navigation |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Device permission actions and status presentation | `frontend/hooks/devicePermission`, shared by settings and onboarding; preserves the settings request scopes and per-item action, while the backend permission owner serializes native prompts |
 | Temporary local-file previews without library records | `src/frontend/appShell/filePreview`, handing cache leases to the existing files viewer through opaque navigation identities |

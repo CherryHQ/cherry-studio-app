@@ -96,14 +96,14 @@ address. Account login works, but community services require explicit product me
 the enterprise API and admin webpage are never substitutes for community service addresses.
 
 `AccountRuntime` exposes backend-only community identity and matched identity-token reads. The
-identity exposes the actual Cloud API origin and webpage URL. Its key includes those addresses,
+identity exposes the actual Cloud API origin. Its key includes that origin,
 issuer, subject, product profile and sign-in generation. Reads
 check the key before and after awaiting the SDK, and sign-out withdraws the identity before waiting
 for the server. Subscription consumers use this account boundary without owning SDK storage or login.
 
 Community consumers may also request a backend-only service-metadata refresh. The installation
 adapter queries using the saved region and issuer, verifies the Portal and
-client binding, and persists only the community API/webpage fields. It keeps the SDK instance,
+client binding, and persists only the community API origin. It keeps the SDK instance,
 authentication registration and enterprise routing. Late discovery cannot update a replaced login
 or a stopped consumer. Changed addresses notify the existing identity subscribers, allowing a
 consumer to recover missing metadata without requiring another sign-in.
@@ -118,18 +118,18 @@ status, quota details and managed models when Cloud is configured. An
 enterprise or private account's data is visible only while that account is signed in. In the local
 profile, only a community session counts as signed in.
 
-- **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) serves first use, sign-in and
-  switching from the profile, and an expired session. Cloud sign-in opens the portal in the external
+- **Sign-in page:** `LoginScreen` (`src/frontend/appShell/account`) serves sign-in and switching from settings, and an
+  expired session. Onboarding consumes the shared account form and owns first-use continuation. Cloud sign-in opens the portal in the external
   browser, where the user picks the community account or an organization. A private deployment
   enters its server address, username and password on the same page and signs in directly; an
   expired private session keeps its server and the server-returned username when known. A missing
   username remains editable; display names and user IDs never become login names.
 - **Organization name:** cloud enterprise sign-in reads the organization's display name from the
   portal's profile list and records it in the registry; failing to read it never blocks sign-in.
-- **New installation:** `FirstUseGate` shows `/login` before onboarding. Signing in to the community
-  account or choosing "Not now" continues to the existing provider setup; an enterprise account
-  reloads into its profile and skips onboarding. Installations with data never see the page; they
-  sign in from Settings → Account.
+- **New installation:** `FirstUseGate` sends an eligible local installation to `/onboarding` and
+  persists its progress through welcome, privacy, permissions, notifications and account setup.
+  The account step owns continuation to model setup; an enterprise sign-in reloads into its
+  profile. Existing installations sign in from Settings → Account and close back to settings.
 - **Enterprise sign-in:** reads `/configurations` once with the product token to learn the server
   id, resolves the profile and reloads into it.
 - **Cold start:** enterprise UI waits until stored credentials match the last profile, without

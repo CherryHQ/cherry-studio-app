@@ -1,5 +1,3 @@
-import { Paths } from 'expo-file-system';
-
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
@@ -21,8 +19,6 @@ import {
   type DiagnosticEndpointCheck,
   type DiagnosticPlugins,
 } from '@/shared/contracts/diagnosticSession';
-import type { ModelsModule } from '@/shared/contracts/models';
-import type { PermissionStatuses } from '@/shared/contracts/permissions';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
@@ -37,14 +33,11 @@ type Dependencies = {
   resolveServiceUrl(baseUrl: string, auth: AuthConfig | null): string;
   model: Pick<ModelService, 'getById'>;
   provider: Pick<ProviderService, 'getByProviderId' | 'listApiKeys' | 'getAuthConfig'>;
-  models: Pick<ModelsModule, 'checkChat'>;
-  defaultModel(): Promise<string | null>;
   language(): string;
   oauthSignedIn(provider: Provider): Promise<boolean>;
   plugins(): Promise<DiagnosticPlugins>;
-  permissions(): Promise<PermissionStatuses>;
   applicationData(
-    context: DiagnosticFeedbackContext | undefined,
+    context: DiagnosticFeedbackContext,
     signal: AbortSignal,
   ): Promise<{ missingCount: number }>;
   runtimeStorage(signal: AbortSignal): Promise<'ready' | 'not_initialized' | 'failed'>;
@@ -66,7 +59,7 @@ export function createDiagnosticsModule(dependencies: Dependencies) {
     getReportStatus: (id, signal) => dependencies.bundle.getReportStatus(id, signal),
     createSession(input) {
       if (stopped) throw new DiagnosticSessionError('unavailable');
-      const context = input ? DiagnosticFeedbackContextSchema.parse(input) : undefined;
+      const context = DiagnosticFeedbackContextSchema.parse(input);
       const session = createSession(dependencies, context, () => sessions.delete(session));
       sessions.add(session);
       return session;
@@ -83,7 +76,7 @@ export function createDiagnosticsModule(dependencies: Dependencies) {
 
 function createSession(
   deps: Dependencies,
-  context: DiagnosticFeedbackContext | undefined,
+  context: DiagnosticFeedbackContext,
   release: () => void,
 ): DiagnosticSession {
   let bound: Target | undefined;
@@ -95,13 +88,11 @@ function createSession(
     signal.throwIfAborted();
     const selected =
       id ??
-      (context
-        ? context.providerId && context.modelId
-          ? createUniqueModelId(context.providerId, context.modelId)
-          : null
-        : await raceAbort(deps.defaultModel(), signal));
+      (context.providerId && context.modelId
+        ? createUniqueModelId(context.providerId, context.modelId)
+        : null);
     signal.throwIfAborted();
-    if (!selected || context?.executionSource === 'desktop') return undefined;
+    if (!selected || context.executionSource === 'desktop') return undefined;
     const model = await raceAbort(deps.model.getById(selected), signal);
     if (!model) return undefined;
     signal.throwIfAborted();
@@ -277,7 +268,7 @@ function createSession(
             id: 'model',
             status: target ? (target.issue ? 'fail' : 'pass') : 'skipped',
             issue: !target
-              ? context?.executionSource === 'desktop'
+              ? context.executionSource === 'desktop'
                 ? 'remote'
                 : 'missing_model'
               : target.issue
@@ -311,63 +302,10 @@ function createSession(
             };
           }),
         ];
-        if (!context) {
-          tasks.push(
-            inspect('plugins', async () => {
-              const counts = await deps.plugins();
-              return {
-                id: 'plugins',
-                status: counts.connectedCount === counts.enabledCount ? 'pass' : 'warn',
-                facts: { enabledCount: counts.enabledCount, connectedCount: counts.connectedCount },
-              };
-            }),
-            inspect('permissions', async () => {
-              const permissions = await deps.permissions();
-              const values = Object.values(permissions).filter((value) => value !== undefined);
-              const missingCount = values.filter(
-                (value) => !['granted', 'limited', 'requested'].includes(value.state),
-              ).length;
-              return {
-                id: 'permissions',
-                status: missingCount ? 'warn' : 'pass',
-                facts: { missingCount },
-              };
-            }),
-            inspect('storage', async () => {
-              const freeBytes = Paths.availableDiskSpace;
-              if (!Number.isFinite(freeBytes) || freeBytes < 0)
-                throw new Error('Storage unavailable');
-              return {
-                id: 'storage',
-                status: freeBytes < 100 * 1024 * 1024 ? 'warn' : 'pass',
-                facts: { freeBytes },
-              };
-            }),
-          );
-        }
-        if (options.network)
-          tasks.push(configuration.then(() => inspect('endpoint', endpointCheck)));
+        tasks.push(configuration.then(() => inspect('endpoint', endpointCheck)));
         await Promise.all(tasks);
         signal.throwIfAborted();
         return report!;
-      });
-    },
-    checkConversation() {
-      return operation(async (signal) => {
-        await assertCurrent(signal);
-        if (!report || !bound || !isTextGenerationModel(bound.model))
-          throw new DiagnosticSessionError('unavailable');
-        const result = await deps.models.checkChat({ modelId: bound.model.id, signal });
-        await assertCurrent(signal);
-        return store(
-          result.status === 'success'
-            ? { id: 'conversation', status: 'pass', facts: { latencyMs: result.latency } }
-            : {
-                id: 'conversation',
-                status: 'fail',
-                issue: result.reason === 'rateLimit' ? 'rate_limit' : result.reason,
-              },
-        );
       });
     },
     diagnose(modelId, onEvidence) {
@@ -383,7 +321,7 @@ function createSession(
           model: diagnosticIdentifier(bound?.model.modelId) ?? null,
           endpointHost: diagnosticIdentifier(bound?.endpoint?.hostname) ?? null,
           configurationIssue: bound?.issue ?? null,
-          remoteExecution: context?.executionSource === 'desktop',
+          remoteExecution: context.executionSource === 'desktop',
         });
         return deps.agent.run({
           model,
@@ -393,7 +331,7 @@ function createSession(
           context: {
             configuration: configuration(),
             checks: report.checks,
-            incident: context?.error ?? null,
+            incident: context.error ?? null,
           },
           facts: {
             configuration: async (toolSignal) => {
