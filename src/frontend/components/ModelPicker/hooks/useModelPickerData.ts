@@ -53,19 +53,10 @@ export function useModelPickerData({
             ...group,
             items: group.items
               .filter((item) => cloud.models.some((model) => model.id === item.model.modelId))
-              .map((item) => {
-                const entitlements =
-                  cloud.account?.entitlements.filter(
-                    (entry) =>
-                      entry.status === 'active' && entry.model_ids.includes(item.model.modelId),
-                  ) ?? [];
-                return {
-                  ...item,
-                  cloudUnavailable: cloudModelUnavailable(cloud, item.model.modelId, cloudUse),
-                  isCloudFree:
-                    entitlements.length > 0 && entitlements.every((entry) => entry.is_free),
-                };
-              }),
+              .map((item) => ({
+                ...item,
+                cloudUnavailable: cloudModelUnavailable(cloud, item.model.modelId, cloudUse),
+              })),
           };
         })
         .filter((group) => group.items.length > 0),

@@ -81,7 +81,7 @@ export interface AccountRuntimeOptions {
 }
 
 /** Whether the server refused the session, as opposed to being unreachable. */
-export function isAuthenticationRejection(error: unknown): boolean {
+function isAuthenticationRejection(error: unknown): boolean {
   if (error instanceof AccountError) return error.code === 'rejected';
   if (isHttpError(error)) return error.status === 401 || error.status === 403;
   if (error instanceof Error && error.name === 'AccountsPortalError') {
@@ -335,12 +335,10 @@ export class AccountRuntime implements AccountModule {
         session.subject,
         session.profile.profileId,
         context.cloudApiOrigin,
-        context.cloudWebUrl,
         this.sessionRevision,
       ]),
       profileId: session.profile.profileId,
       apiOrigin: context.cloudApiOrigin,
-      webUrl: context.cloudWebUrl,
     };
   };
 

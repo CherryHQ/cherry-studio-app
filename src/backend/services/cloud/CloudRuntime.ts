@@ -21,8 +21,10 @@ import {
   CloudAccessError,
   CloudAccountSchema,
   CloudModelSchema,
-  cloudModelUnavailable,
   CloudPlansSchema,
+  cloudModelUnavailable,
+  hasActiveCloudSubscription,
+  isCloudModelListed,
   type CloudModelUse,
   type CloudModule,
   type CloudState,
@@ -39,7 +41,6 @@ const EMPTY: CloudState = {
   account: null,
   plans: null,
   models: [],
-  webUrl: null,
 };
 
 const CloudServiceConfigSchema = z.object({
@@ -51,13 +52,6 @@ const CloudServiceConfigSchema = z.object({
     }
     return url.origin;
   }),
-  webUrl: z
-    .url({ protocol: /^https$/ })
-    .refine((value) => {
-      const url = new URL(value);
-      return !url.username && !url.password;
-    }, 'Subscription pages cannot contain credentials')
-    .optional(),
 });
 type CloudServiceConfig = z.infer<typeof CloudServiceConfigSchema>;
 
@@ -76,6 +70,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private session: CloudSession | undefined;
   private device: Promise<CloudDevice> | undefined;
   private refreshing: Promise<void> | undefined;
+  private loadingPlans: Promise<void> | undefined;
   private projection: Promise<void> = Promise.resolve();
   private refreshedAt = 0;
   private started = false;
@@ -110,9 +105,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private changeIdentity(): void {
     if (this.stopped) return;
     const identity = this.source?.getIdentity();
-    const key = identity
-      ? JSON.stringify([identity.key, identity.apiOrigin, identity.webUrl])
-      : null;
+    const key = identity ? JSON.stringify([identity.key, identity.apiOrigin]) : null;
     if (key === this.identityKey) return;
     this.lifetime.abort();
     void this.session?.revoke().catch(() => {});
@@ -127,11 +120,10 @@ export class CloudRuntime extends BaseService implements CloudModule {
         .error('Cloud services are not configured correctly');
     this.identityKey = key;
     this.refreshing = undefined;
+    this.loadingPlans = undefined;
     this.refreshedAt = 0;
     this.projectedCatalog = undefined;
-    this.publish(
-      key ? { ...EMPTY, phase: 'loading', webUrl: this.configuration?.webUrl ?? null } : EMPTY,
-    );
+    this.publish(key ? { ...EMPTY, phase: 'loading' } : EMPTY);
     this.project([], this.lifetime.signal);
     // Restore once when the cold-start account becomes available; repeated identity notifications
     // keep the same key. A newly signed-in account must load its own state as well.
@@ -140,7 +132,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
 
   readonly refresh = (): Promise<void> => this.refreshState(false);
 
-  private async refreshState(silent: boolean): Promise<void> {
+  private async refreshState(silent: boolean, includePlans = true): Promise<void> {
     if (!this.started || this.stopped) return;
     const current = this.lifetime.signal;
     // Retry catalog withdrawal after a temporary storage freeze, including after sign-out.
@@ -152,7 +144,10 @@ export class CloudRuntime extends BaseService implements CloudModule {
       });
       this.refreshing = attempt;
     }
-    return this.refreshing;
+    await this.refreshing;
+    current.throwIfAborted();
+    if (includePlans && this.session && hasActiveCloudSubscription(this.snapshot))
+      this.refreshPlans(this.session, current);
   }
 
   private async load(signal: AbortSignal): Promise<void> {
@@ -188,38 +183,53 @@ export class CloudRuntime extends BaseService implements CloudModule {
         signal,
       );
       const session = this.session;
-      const [accountData, planData, modelData] = await Promise.all([
+      const [accountData, modelData] = await Promise.all([
         session.get('/api/v1/account'),
-        session.get('/api/v1/account/plans'),
         session.get('/v1/models'),
       ]);
       signal.throwIfAborted();
       const account = CloudAccountSchema.parse(accountData);
-      const plans = CloudPlansSchema.parse(planData);
       const { data: models } = z.object({ data: z.array(CloudModelSchema) }).parse(modelData);
       if (account.account.id !== identity.profileId) throw new CloudAccessError('unavailable');
       const next: CloudState = {
         phase: 'ready',
         isRefreshing: false,
         account,
-        plans,
+        plans: this.snapshot.plans,
         models,
-        webUrl: configuration.webUrl ?? null,
       };
-      const entitledModels = models.filter((model) =>
-        ['agent', 'general'].some((use) => {
-          const reason = cloudModelUnavailable(next, model.id, use as CloudModelUse);
-          return reason === undefined || reason === 'quota_exhausted';
-        }),
-      );
+      const entitledModels = models.filter((model) => isCloudModelListed(next, model.id));
       await this.project(entitledModels, signal);
       signal.throwIfAborted();
       this.refreshedAt = Date.now();
-      this.publish(next);
+      this.publish({ ...next, plans: this.snapshot.plans });
     } catch (error) {
       if (!signal.aborted) this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
       throw error;
     }
+  }
+
+  /** Badge metadata is optional and cannot delay account/model readiness or inference. */
+  private refreshPlans(session: CloudSession, signal: AbortSignal): void {
+    if (this.loadingPlans) return;
+    const attempt = session
+      .get('/api/v1/account/plans')
+      .then((data) => {
+        const plans = CloudPlansSchema.parse(data);
+        signal.throwIfAborted();
+        this.publish({ ...this.snapshot, plans });
+      })
+      .catch((error: unknown) => {
+        if (signal.aborted) return;
+        this.publish({ ...this.snapshot, plans: null });
+        loggerService
+          .withContext('CloudRuntime')
+          .warn('Could not load Cloud plan display metadata', error as Error);
+      })
+      .finally(() => {
+        if (this.loadingPlans === attempt) this.loadingPlans = undefined;
+      });
+    this.loadingPlans = attempt;
   }
 
   /** The closure belongs to the account selected during model resolution, including before send. */
@@ -232,7 +242,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
         throw new CloudAccessError('signed_out');
       if (Date.now() - this.refreshedAt > 30_000 || this.snapshot.phase !== 'ready') {
         try {
-          await this.refresh();
+          // Sending revalidates account/model admission without refreshing badge metadata.
+          await this.refreshState(false, false);
         } catch {
           lifetime.throwIfAborted();
           throw new CloudAccessError('unavailable');
@@ -381,6 +392,6 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.lifetime.abort();
     this.session = undefined;
     this.publish(EMPTY);
-    await Promise.allSettled([this.refreshing, this.projection]);
+    await Promise.allSettled([this.refreshing, this.loadingPlans, this.projection]);
   }
 }

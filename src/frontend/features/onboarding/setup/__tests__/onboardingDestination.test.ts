@@ -3,12 +3,11 @@ import type { CloudState } from '@/shared/contracts/cloud';
 import { getOnboardingDestination } from '../onboardingDestination';
 
 const cloud: CloudState = {
+  plans: null,
   phase: 'signed_out',
   isRefreshing: false,
   account: null,
-  plans: null,
   models: [],
-  webUrl: null,
 };
 const base = {
   account: { hasPrompted: true, isSignedIn: false },

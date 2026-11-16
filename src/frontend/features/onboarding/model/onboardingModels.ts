@@ -1,6 +1,6 @@
 import {
   CLOUD_PROVIDER_ID,
-  cloudModelUnavailable,
+  isCloudModelListed,
   hasActiveCloudSubscription,
   type CloudState,
 } from '@/shared/contracts/cloud';
@@ -49,9 +49,7 @@ export function getOnboardingSubscriptionModels(
         !isTextGenerationModel(model)
       )
         return false;
-      const reason = cloudModelUnavailable(cloud, model.modelId, 'agent');
-      // An exhausted quota does not revoke the model or the user's default selection.
-      return reason === undefined || reason === 'quota_exhausted';
+      return isCloudModelListed(cloud, model.modelId, ['agent']);
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }

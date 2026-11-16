@@ -15,7 +15,7 @@ import { Keyboard, View } from 'react-native';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
 import type { CloudModelUse } from '@/shared/contracts/cloud';
-import { editionCapabilities } from '@/shared/data/managedPolicy';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import {
@@ -211,7 +211,7 @@ function ModelPickerDrawerContent({
         ? groups
         : groups.flatMap((group) => {
             const items = group.items.filter((item) =>
-              matchesModelPickerBadges(item.model, [selectedBadge], item.isCloudFree),
+              matchesModelPickerBadges(item.model, [selectedBadge]),
             );
             return items.length > 0 ? [{ ...group, items }] : [];
           }),
@@ -244,7 +244,7 @@ function ModelPickerDrawerContent({
           },
           variant: 'text' as const,
         }
-      : onAddProvider && editionCapabilities().providerSettings
+      : onAddProvider && capabilityPolicy('providerSettings').canEdit('providerSettings')
         ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
         : undefined;
   const filterIcon =

@@ -24,7 +24,6 @@ function setup() {
         key: 'a',
         profileId: 'account-a',
         apiOrigin: 'https://cloud.example',
-        webUrl: 'https://cloud.example/account/plans',
       }),
     ),
     getTokens: jest.fn(async () => ({ accessToken: 'idp-access', idToken: 'idp-id' })),
@@ -127,10 +126,7 @@ test('a late product-entry response cannot reopen an account after replacement',
   await expect(pending).rejects.toMatchObject({ code: 'cloud_signed_out' });
 });
 
-test.each([
-  { apiOrigin: 'https://replacement.example' },
-  { webUrl: 'https://replacement.example/account/plans' },
-])(
+test.each([{ apiOrigin: 'https://replacement.example' }])(
   'a service address change invalidates a session even when the source identity key is unchanged: %j',
   async (service) => {
     const { session, source } = setup();

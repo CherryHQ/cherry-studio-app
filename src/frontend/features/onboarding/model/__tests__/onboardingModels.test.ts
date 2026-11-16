@@ -54,6 +54,7 @@ const accountModel = model('entitled', CLOUD_PROVIDER_ID, {
   isHidden: false,
 });
 const cloud: CloudState = {
+  plans: null,
   phase: 'ready',
   isRefreshing: false,
   account: {
@@ -74,8 +75,6 @@ const cloud: CloudState = {
       available_features: ['agent'],
     },
   ],
-  plans: null,
-  webUrl: null,
 };
 
 test('uses current account entitlements rather than stale saved subscription rows', () => {

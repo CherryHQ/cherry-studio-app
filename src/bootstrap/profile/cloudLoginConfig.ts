@@ -35,7 +35,6 @@ const registration = z.object({
     api_base_url: endpoint.optional(),
     // Separate optional community-service metadata. Enterprise URLs cannot serve cloud tokens.
     cloud_api_origin: endpoint.refine((value) => Boolean(configOrigin(value))).optional(),
-    cloud_web_url: endpoint.optional(),
   }),
   oidc_client_id: z.string().trim().min(1),
   redirect_uri: z.string(),
