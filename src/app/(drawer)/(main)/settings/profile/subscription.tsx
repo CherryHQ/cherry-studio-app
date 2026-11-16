@@ -1,1 +1,5 @@
-export { SubscriptionScreen as default } from '@/frontend/features/settings/profile/subscription';
+import { Redirect } from 'expo-router';
+
+export default function SubscriptionRoute() {
+  return <Redirect href="/settings/profile" />;
+}

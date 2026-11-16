@@ -11,7 +11,6 @@ import { ACCOUNT_ERROR_KEYS, organizationLabel, useAccount } from '@/frontend/ap
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-import { useCloud } from '@/frontend/hooks/useCloud';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { AccountError } from '@/shared/contracts/account';
 
@@ -194,7 +193,6 @@ export default function ProfileSettingsScreen() {
           }
         />
       </Section>
-      {isSignedIn && !state.isEnterprise ? <SubscriptionEntry /> : null}
       {isSignedIn ? (
         <Section
           // Only an organization's data leaves with its sign-out; a community account keeps it.
@@ -217,29 +215,5 @@ export default function ProfileSettingsScreen() {
         </Section>
       ) : null}
     </SettingsScrollPage>
-  );
-}
-
-function SubscriptionEntry() {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const { state } = useCloud();
-  const plans = state.plans?.entitlements
-    .filter((entry) => entry.state === 'active')
-    .map((entry) => entry.plan.display_name);
-  return (
-    <Section>
-      <Section.Item
-        label={t('cloud.title')}
-        description={
-          state.phase === 'error'
-            ? t('cloud.unavailable')
-            : state.phase === 'loading'
-              ? t('cloud.loading')
-              : plans?.join(', ') || t('cloud.noPlans')
-        }
-        onPress={() => router.push('/settings/profile/subscription')}
-      />
-    </Section>
   );
 }

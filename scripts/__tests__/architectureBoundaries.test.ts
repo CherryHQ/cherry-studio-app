@@ -57,6 +57,14 @@ describe('resolved architecture boundaries', () => {
       'src/frontend/hooks/probe.ts',
       "require('@src/frontend/components/ModelPicker/hooks/useModelPickerData');",
     ],
+    [
+      'src/frontend/features/agents/probe.ts',
+      "import '@/frontend/components/AgentEditor/hooks/useAgentAutoSave';",
+    ],
+    [
+      'src/frontend/appShell/header/probe.ts',
+      "import '@/frontend/components/AgentEditor/AgentEditor';",
+    ],
     ['src/shared/utils/probe.ts', "import '../../frontend/data';"],
     ['src/shared/data/probe.ts', "import 'react-native';"],
     ['src/shared/utils/probe.ts', "import 'expo-file-system';"],
@@ -105,6 +113,11 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/utils/probe.ts', "import '@cherrystudio/universal/ai/builtinTools';"],
     ['src/frontend/features/chat/probe.ts', "import './components/ChatInput/ChatInput';"],
     ['src/frontend/features/chat/probe.ts', "import '@/frontend/hooks/plugin';"],
+    [
+      'src/frontend/features/agents/probe.ts',
+      "import { AgentEditor } from '@/frontend/components/AgentEditor';",
+    ],
+    ['src/frontend/components/AgentEditor/hooks/probe.ts', "import '../utils/agentForm';"],
     ['src/frontend/features/plugin/probe.ts', "import '@/frontend/components/PluginIcon';"],
     ['src/frontend/features/chat/probe.ts', "import { useApiClient } from '@/frontend/data';"],
     ['src/frontend/data/hooks/probe.ts', "import '../DataApiProvider';"],

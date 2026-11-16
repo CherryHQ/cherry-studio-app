@@ -4,7 +4,7 @@ import type { Database } from '@/backend/data/db/DbService';
 import { userModelTable, userProviderTable } from '@/backend/data/db/schemas';
 import { inferCustomModelReasoning } from '@/backend/data/services/ProviderRegistryService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { CLOUD_PROVIDER_ID, type CloudModel } from '@/shared/contracts/cloud';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME, type CloudModel } from '@/shared/contracts/cloud';
 import {
   createUniqueModelId,
   MODEL_CAPABILITY,
@@ -32,7 +32,7 @@ export async function projectCloudModels(
   } else if (existing || models.length) {
     const provider = {
       providerId: CLOUD_PROVIDER_ID,
-      name: 'Cherry Cloud',
+      name: CLOUD_PROVIDER_NAME,
       presetProviderId: null,
       isEnabled: models.length > 0,
       endpointConfigs: {

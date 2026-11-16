@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { createAgentSkillBindingDraft } from '../agentSkillSettings';
+import { createAgentSkillBindingDraft } from '../../utils/agentSkillSettings';
 import { useAgentAutoSave } from '../useAgentAutoSave';
 
 const mockReplaceAgentSkills = jest.fn<Promise<void>, [string, readonly AgentSkillUpdate[]]>();
@@ -15,7 +15,6 @@ const mockSetAgentAvatar = jest.fn();
 const mockReplaceAgentToolBindings = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({ useToast: () => ({ toast: mockToast }) }));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentMutations: () => ({ updateAgent: mockUpdateAgent, setAgentAvatar: mockSetAgentAvatar }),
@@ -30,7 +29,7 @@ let snapshot: Snapshot;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe({ skills }: { skills: readonly SkillListItem[] }) {
-  const autoSave = useAgentAutoSave('agent-1');
+  const autoSave = useAgentAutoSave('agent-1', true);
   const bindings = createAgentSkillBindingDraft(skills, autoSave.skillBindingUpdates);
   useEffect(() => {
     snapshot = { ...autoSave, bindings };

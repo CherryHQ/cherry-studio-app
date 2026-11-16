@@ -4,8 +4,8 @@ import { useBackendModule } from '@/frontend/data';
 import type { CloudUnavailableReason } from '@/shared/contracts/cloud';
 
 export const CLOUD_UNAVAILABLE_KEYS = {
-  signed_out: 'cloud.signedOut',
-  unavailable: 'cloud.unavailable',
+  signed_out: 'account.notSignedIn',
+  unavailable: 'chat.errorPart.reason.providerUnavailable',
   not_entitled: 'cloud.notEntitled',
   quota_exhausted: 'cloud.quotaExhausted',
 } as const satisfies Record<CloudUnavailableReason, string>;

@@ -40,7 +40,7 @@ export function cloudSnapshot(accountId = 'account-a'): CloudState {
         },
       ],
     },
-    plans: { measured_at: '2026-10-31T00:00:00Z', entitlements: [] },
+    plans: { measured_at: '2026-10-31T00:00:00Z', available_plans: [], entitlements: [] },
     models: [
       {
         id: 'cloud-model',

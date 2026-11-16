@@ -3,8 +3,10 @@
 `CloudRuntime` owns community subscription state, device-bound Cloud sessions, the managed model
 catalog, and request admission. Bootstrap supplies its account identity source; this module does
 not import the enterprise implementation or read Accounts Portal's private storage keys.
-`Backend.cloud` exposes only status, subscription data, model metadata and refresh/subscription
-methods. Tokens and device secrets never reach the frontend or database.
+`Backend.cloud` exposes only status, subscription data, model metadata and refresh methods.
+Tokens and device secrets never reach the frontend or database. Community subscription and quota
+details are not displayed in the app; signed-in subscribers use their models through a managed
+`Cherry Studio Plan` provider.
 
 ## Configuration
 
@@ -26,9 +28,12 @@ outage keeps already configured product addresses usable. An address change ente
 identity-replacement boundary as an account change.
 
 Supply the Cloud product audience in the region's Config Service registration scopes.
-Prices, SKUs and models come from the service. Subscription display is checked once when the
-community account is restored on a cold start. It does not depend on an in-app purchase entry or a
-browser-return trigger. Only confirmed service entitlements determine subscription status.
+Models and subscription state come from the service. The configured webpage URL remains in the
+internal Cloud snapshot; the app exposes no subscription-management or purchase action. The old
+subscription route redirects to profile settings.
+Subscription model availability is checked once when the community account is restored on a cold
+start. It does not depend on a purchase entry or browser-return trigger. Only confirmed service
+entitlements determine subscription status.
 
 Accounts Portal 0.2.1 provides `getIdentityTokens()` without a local patch. It returns a matched
 access/ID pair after refresh and checks the SDK's session, profile and sign-in generations.
@@ -65,10 +70,15 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 
 ## Entitlements and model ownership
 
-- `/api/v1/account` is the admission snapshot; `/api/v1/account/plans` supplies display details;
+- `/api/v1/account` is the admission snapshot; `/api/v1/account/plans` supplies internal plan details;
   `/v1/models` supplies the catalog and features.
-- An active, currently effective entitlement and an available model feature are required. Every
-  window of a quota pool must have credit; any independent pool can admit the model. Reserved
+- The profile and sidebar expose no subscription, quota or entitlement indicators. The managed
+  provider opens a read-only model list, without connection settings or model mutation actions.
+  Accounts without any currently entitled Plan models do not see the provider in settings or
+  the picker.
+- An active, currently effective paid entitlement and an available model feature are required. Free
+  entitlements alone do not expose Plan models. Every window of a quota pool must have credit;
+  any independent pool can admit the model. Reserved
   units are already reflected in the server's remaining units. The gateway owns final admission,
   reservations and charging when requests race.
 - Agent conversations use `agent`. One-shot text generation (including translation) uses
@@ -77,9 +87,11 @@ cancellation. Both Pi language serving and the AI SDK provider adapter use this 
 - Rolling, calendar-day and paid-subscription-month windows retain their server timestamps.
   Money quotas use 1,000,000 units per currency unit; price amounts use 100 minor units. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
-- `cherryai-subscription` is a reserved, managed provider. The ordinary provider/model mutation
-  services reject edits to it. Projection writes no credentials. Revoked models are disabled and
-  hidden, keeping their IDs/names for history; user-configured providers and conversations remain.
+- `cherryai-subscription` is the reserved, managed `Cherry Studio Plan` provider. Provider queries
+  pin it first, including cursor pagination, so settings and model pickers share the same priority
+  without changing other providers' saved order keys. Ordinary provider/model mutation services
+  reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
+  keeping their IDs/names for history; user-configured providers and conversations remain.
 - Cold start checks subscription display once after account restoration. Repeated notifications
   for that identity do not issue another read. A newly signed-in/replaced account loads its own
   state, while signed-out installations make no subscription requests. Foreground transitions,

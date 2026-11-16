@@ -17,10 +17,18 @@ export type UserQuestionSheetProps = UserQuestionFormProps & {
   open: boolean;
   /** User-started forms may be cancelled; pending conversation questions stay non-dismissible. */
   onClose?: () => void;
+  onClosed?: () => void;
+  presentation?: 'default' | 'overlay';
 };
 
 /** Asks one question at a time and retains drafts while its owner hides the request. */
-export function UserQuestionSheet({ onClose, open, ...props }: UserQuestionSheetProps) {
+export function UserQuestionSheet({
+  onClose,
+  onClosed,
+  open,
+  presentation = 'default',
+  ...props
+}: UserQuestionSheetProps) {
   const { t } = useTranslation();
   const form = useUserQuestionForm(props);
   const { dismissInput } = useComposerPresentationActions();
@@ -124,8 +132,10 @@ export function UserQuestionSheet({ onClose, open, ...props }: UserQuestionSheet
         </View>
       }
       onClose={onClose ?? ignoreClose}
+      onClosed={onClosed}
       open={open}
-      size={hasTextChanges ? 'large' : 'medium'}
+      presentation={presentation}
+      size={presentation === 'overlay' ? 'full' : hasTextChanges ? 'large' : 'medium'}
       testID="user-question-sheet"
       // The question is the sheet's subject, so it titles the sheet and is never truncated.
       title={form.question.question}
@@ -139,6 +149,11 @@ export function UserQuestionSheet({ onClose, open, ...props }: UserQuestionSheet
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {presentation === 'overlay' ? (
+          <Text accessibilityRole="header" className="font-semibold text-base text-foreground">
+            {form.question.question}
+          </Text>
+        ) : null}
         {form.question.description ? (
           <Text className="text-sm text-muted-foreground" selectable>
             {form.question.description}

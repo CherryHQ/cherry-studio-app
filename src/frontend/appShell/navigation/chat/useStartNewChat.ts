@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 
+import { createChatComposerHandoff } from './chatComposerHandoff';
 import { type ChatRouteParamsInput, chatRouteParams, parseChatRoute } from './chatRoute';
 
 /** Opens a draft for the current available Agent, then falls back to the first Agent. */
@@ -26,6 +27,12 @@ export function useStartNewChat() {
       return;
     }
 
-    router.setParams(chatRouteParams({ agentId, kind: 'draft' }));
+    router.setParams(
+      chatRouteParams({
+        agentId,
+        kind: 'draft',
+        composerHandoff: createChatComposerHandoff({ attachments: [], draft: '' }),
+      }),
+    );
   }, [agents, currentAgentId, isLoading, refetch, router]);
 }

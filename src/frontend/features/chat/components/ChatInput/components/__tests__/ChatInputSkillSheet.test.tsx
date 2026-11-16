@@ -10,28 +10,14 @@ import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { ChatInputSkillPopover } from '../ChatInputSkillPopover';
+import { ChatInputSkillSheet } from '../ChatInputSkillSheet';
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/tool-case', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => ({
   Button: () => null,
-  Composer: {
-    Popover: ({
-      children,
-      content,
-      open,
-    }: {
-      children: ReactNode;
-      content: ReactNode;
-      open: boolean;
-    }) => (
-      <>
-        {children}
-        {open ? content : null}
-      </>
-    ),
-  },
+  BottomSheet: ({ children, open }: { children: ReactNode; open: boolean }) =>
+    open ? children : null,
 }));
 jest.mock('@/frontend/components/Composer', () => ({
   useComposerMeta: () => ({ inputRef: { current: null } }),
@@ -80,9 +66,13 @@ async function render(open: boolean) {
           <DataApiProvider dataApi={dataApi}>
             <SkillQueryBridge />
             <AgentSkillsProbe />
-            <ChatInputSkillPopover agentId="agent-1" onClose={onClose} open={open}>
-              {null}
-            </ChatInputSkillPopover>
+            <ChatInputSkillSheet
+              agentId="agent-1"
+              onAdd={onClose}
+              onClose={onClose}
+              onSelect={onClose}
+              open={open}
+            />
           </DataApiProvider>
         </BackendProvider>
       </QueryClientProvider>
