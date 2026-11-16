@@ -268,11 +268,15 @@ describe('McpServerService', () => {
     await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Dup' });
     await expect(
       service.create({ endpointUrl: 'https://b.example/mcp', name: 'Dup' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { resource: 'McpServer', field: 'name' },
+    });
 
     const other = await service.create({ endpointUrl: 'https://c.example/mcp', name: 'Other' });
     await expect(service.update(other.id, { name: 'Dup' })).rejects.toMatchObject({
       code: 'CONFLICT',
+      details: { resource: 'McpServer', field: 'name' },
     });
     // Renaming a server to the name it already has is not a conflict with itself.
     await expect(
