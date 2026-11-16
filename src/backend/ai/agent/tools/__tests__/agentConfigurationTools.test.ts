@@ -14,7 +14,7 @@ const version = '2026-01-01T00:00:00.000Z';
 const agent: Agent = {
   id: agentId,
   name: 'Writer',
-  instructions: '',
+  instructions: 'x'.repeat(64_000),
   mode: 'standard',
   model: null,
   modelName: null,
@@ -98,7 +98,11 @@ it('resolves an authorized source before the normal avatar workflow and hides al
     { sourceUri: 'file:///managed-image.png' },
     { expectedUpdatedAt: version },
   );
-  expect(result.value).toMatchObject({ status: 'updated', agent: { id: agentId } });
+  expect(result.value).toEqual({
+    status: 'updated',
+    agent: { id: agentId, name: agent.name, updatedAt: version },
+  });
+  expect(JSON.stringify(result).length).toBeLessThan(400);
   expect(JSON.stringify(result)).not.toContain('file:');
   expect(JSON.stringify(result)).not.toContain('private.webp');
 });
@@ -124,7 +128,7 @@ it('cannot use an out-of-scope file or a non-image as an avatar', async () => {
         file_entry_id: fileId,
       })
     ).value,
-  ).toMatchObject({ code: 'agent_avatar_image_required' });
+  ).toMatchObject({ status: 'error', error: { code: 'agent_avatar_image_required' } });
   expect(f.access.avatars.setAvatar).not.toHaveBeenCalled();
 });
 
@@ -181,12 +185,35 @@ it('removes only the server-wide binding, preserving per-tool rules and refusing
     expected_binding_updated_at: version,
   };
   expect(
-    (await f.run('agent_set_mcp_binding', { ...input, expected_binding_updated_at: null })).value,
-  ).toMatchObject({ code: 'CONFLICT' });
+    await f.run('agent_set_mcp_binding', { ...input, expected_binding_updated_at: null }),
+  ).toMatchObject({ failure: { scope: 'call', error: { code: 'CONFLICT', retryable: false } } });
   expect(f.access.bindings.delete).not.toHaveBeenCalled();
   await f.run('agent_set_mcp_binding', input);
   expect(f.access.bindings.delete).toHaveBeenCalledWith(agentId, 'default', {
     expectedUpdatedAt: version,
   });
   expect(f.access.bindings.upsert).not.toHaveBeenCalled();
+});
+
+it('marks validation, known resource errors and uncertain writes as failed calls without leaking source details', async () => {
+  const f = fixture();
+  const input = { agent_id: 'current', expected_updated_at: version, file_entry_id: fileId };
+  expect(
+    await f.run('agent_set_avatar', { ...input, file_entry_id: '/private/image.png' }),
+  ).toMatchObject({
+    failure: { scope: 'call', error: { code: 'agent_invalid_input' } },
+  });
+  f.access.files.resolve.mockResolvedValueOnce({
+    uri: 'file:///notes.txt',
+    entry: { id: fileId, mediaType: 'text/plain' },
+  } as ResolvedFile);
+  expect(await f.run('agent_set_avatar', input)).toMatchObject({
+    failure: { scope: 'call', error: { code: 'agent_avatar_image_required' } },
+  });
+  f.access.avatars.setAvatar.mockRejectedValueOnce(new Error('file:///private/secret.png'));
+  const result = await f.run('agent_set_avatar', input);
+  expect(result).toMatchObject({
+    failure: { scope: 'call', error: { code: 'agent_operation_unconfirmed', retryable: false } },
+  });
+  expect(JSON.stringify(result)).not.toContain('/private/secret.png');
 });

@@ -29,6 +29,13 @@ export const AgentToolRecordSchema = AgentSchema.pick({
   })
   .strip();
 
+/** Version checks and avatar receipts do not need the Agent's instructions or bindings. */
+export const AgentToolSummarySchema = AgentToolRecordSchema.pick({
+  id: true,
+  name: true,
+  updatedAt: true,
+});
+
 export const AgentMutationToolResultSchema = z.strictObject({
   status: z.enum(['created', 'updated']),
   // Historical tool outputs remain immutable when the Agent record fields change.

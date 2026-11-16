@@ -7,14 +7,14 @@ import type { AgentAvatars } from '@/backend/services/agents/createAgentAvatars'
 import type { fileContent } from '@/backend/services/file/fileContent';
 import { DataApiError, DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
-  AgentToolRecordSchema,
+  AgentToolSummarySchema,
   AgentToolTargetSchema,
 } from '@/shared/data/types/agentManagementTool';
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
-import type { RuntimeTool, RuntimeToolResult } from '../runtime';
+import { createCallErrorToolResult, type RuntimeTool, type RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
@@ -27,7 +27,9 @@ export type AgentConfigurationAccess = {
 
 const avatarSchema = z.strictObject({
   agent_id: AgentToolTargetSchema,
-  expected_updated_at: z.iso.datetime().describe('Copy updatedAt from a fresh agent_get.'),
+  expected_updated_at: z.iso
+    .datetime()
+    .describe('Copy updatedAt from a fresh agent_get with view: summary.'),
   file_entry_id: FileEntryIdSchema.describe(
     'A managed image reference, never a device path or URL.',
   ),
@@ -65,7 +67,7 @@ export function createAgentConfigurationTools(
     approval: 'auto' | 'ask',
     description: string,
     schema: z.ZodType<T>,
-    execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult['value']>,
+    execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult>,
   ): RuntimeTool {
     return {
       ref: { source: 'builtin', capabilityId: name },
@@ -77,29 +79,16 @@ export function createAgentConfigurationTools(
       inputSchema: toRuntimeInputSchema(schema),
       async execute({ input, signal }) {
         const parsed = schema.safeParse(input);
-        if (!parsed.success)
-          return {
-            value: {
-              status: 'error',
-              code: 'agent_invalid_input',
-              message: z.prettifyError(parsed.error),
-            },
-            artifacts: [],
-          };
+        if (!parsed.success) return failure('agent_invalid_input', z.prettifyError(parsed.error));
         signal.throwIfAborted();
         try {
-          return { value: await execute(parsed.data, signal), artifacts: [] };
+          return await execute(parsed.data, signal);
         } catch (error) {
           signal.throwIfAborted();
-          return {
-            value: {
-              status: 'error',
-              code: error instanceof DataApiError ? error.code : 'agent_operation_unconfirmed',
-              message:
-                'The operation could not be confirmed. Read agent_get or agent_list_mcp_servers before retrying. Reconcile conflicts with the latest saved state; do not assume a write was not saved.',
-            },
-            artifacts: [],
-          };
+          return failure(
+            error instanceof DataApiError ? error.code : 'agent_operation_unconfirmed',
+            'The operation could not be confirmed. Read agent_get with view: summary or agent_list_mcp_servers before retrying. Reconcile conflicts with the latest saved state; do not assume a write was not saved.',
+          );
         }
       },
     };
@@ -108,25 +97,24 @@ export function createAgentConfigurationTools(
     tool(
       'agent_set_avatar',
       'ask',
-      'Set a saved Cherry Agent’s avatar from a managed image explicitly attached to this conversation, generated in it, in its workspace, or read with library_read_file this turn. Never pass a device path or remote URL. Read agent_get first and copy updatedAt. The app normalizes and stores the avatar, updates the Agent, and removes the previous avatar only after saving. This does not edit or remove the source image. After an uncertain result inspect the Agent before another write.',
+      'Set a saved Cherry Agent’s avatar from a managed image explicitly attached to this conversation, generated in it, in its workspace, or read with library_read_file this turn. Never pass a device path or remote URL. Read agent_get with view: summary first and copy updatedAt. The app normalizes and stores the avatar, updates the Agent, and removes the previous avatar only after saving. This does not edit or remove the source image. After an uncertain result inspect the Agent before another write.',
       avatarSchema,
       async ({ agent_id, expected_updated_at, file_entry_id }, signal) => {
         const agentId = target(agent_id);
         const id = await files.resolveEdit({ file_entry_id });
         const source = await access.files.resolve(id);
         if (!source || !source.entry.mediaType.startsWith('image/'))
-          return {
-            status: 'error',
-            code: 'agent_avatar_image_required',
-            message: 'Use an available managed image.',
-          };
+          return failure('agent_avatar_image_required', 'Use an available managed image.');
         signal.throwIfAborted();
         const agent = await access.avatars.setAvatar(
           agentId,
           { sourceUri: source.uri },
           { expectedUpdatedAt: expected_updated_at },
         );
-        return { status: 'updated', agent: AgentToolRecordSchema.parse(agent) };
+        return {
+          value: { status: 'updated', agent: AgentToolSummarySchema.parse(agent) },
+          artifacts: [],
+        };
       },
     ),
     tool(
@@ -154,28 +142,31 @@ export function createAgentConfigurationTools(
         ];
         const start = (page - 1) * limit;
         return {
-          servers: ids.slice(start, start + limit).map((id) => {
-            const server = remote.find((item) => item.id === id);
-            const rules = bindings.filter((binding) => binding.serverId === id);
-            const binding = rules.find((item) => item.rawToolName === undefined);
-            return {
-              serverId: id,
-              name: server?.name ?? binding?.displayNameSnapshot ?? null,
-              serverExists: Boolean(server),
-              serverEnabled: server?.isEnabled ?? false,
-              binding: binding
-                ? {
-                    id: binding.id,
-                    enabled: binding.enabled,
-                    approval: binding.approval,
-                    updatedAt: binding.updatedAt,
-                  }
-                : null,
-              toolOverrideCount: rules.filter((item) => item.rawToolName !== undefined).length,
-            };
-          }),
-          total: ids.length,
-          nextPage: start + limit < ids.length ? page + 1 : null,
+          value: {
+            servers: ids.slice(start, start + limit).map((id) => {
+              const server = remote.find((item) => item.id === id);
+              const rules = bindings.filter((binding) => binding.serverId === id);
+              const binding = rules.find((item) => item.rawToolName === undefined);
+              return {
+                serverId: id,
+                name: server?.name ?? binding?.displayNameSnapshot ?? null,
+                serverExists: Boolean(server),
+                serverEnabled: server?.isEnabled ?? false,
+                binding: binding
+                  ? {
+                      id: binding.id,
+                      enabled: binding.enabled,
+                      approval: binding.approval,
+                      updatedAt: binding.updatedAt,
+                    }
+                  : null,
+                toolOverrideCount: rules.filter((item) => item.rawToolName !== undefined).length,
+              };
+            }),
+            total: ids.length,
+            nextPage: start + limit < ids.length ? page + 1 : null,
+          },
+          artifacts: [],
         };
       },
     ),
@@ -201,12 +192,10 @@ export function createAgentConfigurationTools(
         } else {
           const server = await access.servers.getById(server_id);
           if (server.origin === 'builtin')
-            return {
-              status: 'error',
-              code: 'agent_mcp_global_plugin',
-              message:
-                'Bundled plugins are available globally; manage their connection in Plugins.',
-            };
+            return failure(
+              'agent_mcp_global_plugin',
+              'Bundled plugins are available globally; manage their connection in Plugins.',
+            );
           signal.throwIfAborted();
           await access.bindings.upsert(
             agentId,
@@ -222,13 +211,20 @@ export function createAgentConfigurationTools(
         }
         publishDataApiChanges([`/agents/${agentId}/tool-bindings`]);
         return {
-          status: state === 'removed' ? 'removed' : 'updated',
-          agentId,
-          serverId: server_id,
-          state,
-          appliesToSubsequentTurns: true,
+          value: {
+            status: state === 'removed' ? 'removed' : 'updated',
+            agentId,
+            serverId: server_id,
+            state,
+            appliesToSubsequentTurns: true,
+          },
+          artifacts: [],
         };
       },
     ),
   ];
+}
+
+function failure(code: string, message: string): RuntimeToolResult {
+  return createCallErrorToolResult({ code, message, retryable: false, origin: 'tool' });
 }

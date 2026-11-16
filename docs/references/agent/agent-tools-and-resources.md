@@ -995,7 +995,7 @@ clear a model; the user does that in the editor. Agent targets are strings valid
 exact Agent ID or `current`.
 
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+and omits instructions. `agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -1006,6 +1006,10 @@ preserved; this does not change the Skill library's global enablement. Definitio
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
 apply to future turns only.
 
+For avatar changes and version-only reads, `agent_get` accepts `view: summary`: it returns only
+`id`, `name`, and `updatedAt`, without instructions or Skill bindings. The definition view remains
+the required source before editing instructions.
+
 A call saved before this contract, such as one still awaiting approval, fails validation without
 writing; the model reads the current definition and retries with the new form.
 
@@ -1015,12 +1019,14 @@ configured. List/read results remain in the process disclosure. Results omit man
 avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
 inspect current saved records before deciding whether another write is needed.
 
-`agent_set_avatar` accepts an exact Agent id (or `current`), a fresh `updatedAt`, and a managed
+`agent_set_avatar` accepts an exact Agent id (or `current`), a fresh `updatedAt` from
+`agent_get` with `view: summary`, and a managed
 image reference. The source must be attached, generated, inside the captured workspace, or read
 through `library_read_file` this turn. No device paths or remote URLs enter its schema. The normal
 avatar workflow normalizes a separate image, conditionally updates the Agent row, compensates the
 new image on a stale-write failure, and removes the previous avatar only after persistence. The
-original library image is unchanged; receipts omit avatar references and device-local paths.
+original library image is unchanged; successful receipts include only the Agent's id, name and
+new updatedAt, without instructions, avatar references or device-local paths.
 
 `agent_list_mcp_servers` reads saved remote servers and current bindings, including disabled servers
 and dangling bindings, with bounded pagination and no endpoint or credential values. It returns
@@ -1033,3 +1039,6 @@ denials are preserved. A disabled server stays disabled. Binding changes invalid
 binding query and enter subsequent tool catalogs; they do not expand the active turn's snapshot.
 These three tools are deferred, with automatic reads and the existing Agent approval preference
 for writes. They do not configure connections or perform external authorization.
+Validation, resource and persistence failures use the Runtime's call-failure envelope so Pi,
+Code Mode and transcript projection all preserve the failed outcome. Failure messages remain
+sanitized and uncertain writes require reading current state before another write.
