@@ -53,7 +53,11 @@ export class AgentToolBindingService {
     return ListAgentToolBindingsResponseSchema.parse({ items: rows.map(rowToBinding) });
   }
 
-  async upsert(agentId: string, input: WriteAgentToolBindingInput): Promise<AgentToolBinding> {
+  async upsert(
+    agentId: string,
+    input: WriteAgentToolBindingInput,
+    options: { expectedUpdatedAt?: string | null } = {},
+  ): Promise<AgentToolBinding> {
     const parsed = parseWriteBinding(input);
 
     const row = await this.dbService.withWriteTx(async (tx) => {
@@ -62,6 +66,7 @@ export class AgentToolBindingService {
       const existing = existingRows.find(
         (candidate) => bindingIdentity(candidate) === bindingIdentity(parsed),
       );
+      assertExpectedBindingVersion(existing, options.expectedUpdatedAt);
       await this.assertMcpTargetsExist(tx, [parsed], existingRows);
       return this.writeBindingTx(tx, agentId, parsed, existing);
     });
@@ -108,9 +113,17 @@ export class AgentToolBindingService {
     return ListAgentToolBindingsResponseSchema.parse({ items: rows.map(rowToBinding) });
   }
 
-  async delete(agentId: string, bindingId: string): Promise<DeleteAgentToolBindingResult> {
+  async delete(
+    agentId: string,
+    bindingId: string,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<DeleteAgentToolBindingResult> {
     return this.dbService.withWriteTx(async (tx) => {
       await this.assertAgentWritable(tx, agentId);
+      if (options.expectedUpdatedAt !== undefined) {
+        const existing = (await this.readRows(tx, agentId)).find((row) => row.id === bindingId);
+        assertExpectedBindingVersion(existing, options.expectedUpdatedAt);
+      }
       const [deleted] = await tx
         .delete(agentToolBindingTable)
         .where(
@@ -263,6 +276,17 @@ export class AgentToolBindingService {
       .returning();
     return created;
   }
+}
+
+function assertExpectedBindingVersion(
+  row: AgentToolBindingRow | undefined,
+  expected: string | null | undefined,
+): void {
+  if (expected === undefined) return;
+  if (expected === null ? row !== undefined : !row || Date.parse(expected) !== row.updatedAt)
+    throw DataApiErrorFactory.conflict(
+      'The MCP binding changed. List current bindings and reconcile before retrying.',
+    );
 }
 
 function parseWriteBinding(input: WriteAgentToolBindingInput): WriteAgentToolBinding {

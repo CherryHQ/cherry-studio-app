@@ -1,6 +1,16 @@
 import * as z from 'zod';
 
-import { AgentModeSchema, AgentSchema, DEFAULT_AGENT_MODE } from './agent';
+import { AgentIdSchema, AgentModeSchema, AgentSchema, DEFAULT_AGENT_MODE } from './agent';
+
+export const AgentToolTargetSchema = z
+  .string()
+  .refine(
+    (value) => value === 'current' || AgentIdSchema.safeParse(value).success,
+    'Invalid Agent id',
+  )
+  .describe(
+    'An exact id returned by agent_list/agent_get, or current for this conversation’s Agent.',
+  );
 
 /** Tool results expose configuration, never managed avatar paths or provider credentials. */
 export const AgentToolRecordSchema = AgentSchema.pick({

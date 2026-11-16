@@ -273,7 +273,15 @@ export class AgentService {
    * deliberately refuse managed file references: a caller must not be able to
    * point the column at an arbitrary string.
    */
-  async setAvatar(id: string, avatar: string): Promise<Agent> {
+  async setAvatar(
+    id: string,
+    avatar: string,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<Agent> {
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp))
+      throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [updated] = await tx
         .update(agentTable)
@@ -281,9 +289,21 @@ export class AgentService {
           avatar,
           updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
         })
-        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .where(
+          and(
+            eq(agentTable.id, id),
+            isNull(agentTable.deletedAt),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(agentTable.updatedAt, expectedTimestamp),
+          ),
+        )
         .returning();
       if (!updated) {
+        if (expectedTimestamp !== undefined)
+          throw DataApiErrorFactory.conflict(
+            'The Agent changed while saving its avatar. Read it again.',
+          );
         throw DataApiErrorFactory.notFound('Agent', id);
       }
       return updated as AgentRow;

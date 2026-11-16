@@ -239,6 +239,27 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('rejects a stale avatar replacement without changing the saved Agent or notifying subscribers', async () => {
+    const agent = await agentService.create({ name: 'Avatar' });
+    const renamed = await agentService.update(agent.id, { name: 'Newer' });
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      await expect(
+        agentService.setAvatar(agent.id, 'image-reference', { expectedUpdatedAt: agent.updatedAt }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(await agentService.getById(agent.id)).toEqual(renamed);
+      expect(changed).not.toHaveBeenCalled();
+      await expect(
+        agentService.setAvatar(agent.id, 'image-reference', {
+          expectedUpdatedAt: renamed.updatedAt,
+        }),
+      ).resolves.toMatchObject({ avatar: 'image-reference' });
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('publishes committed avatar, ordering, deletion, and initial Agent changes', async () => {
     const changed = jest.fn((_paths: readonly string[]) => ({
       inTransaction: sqlite.isTransaction,

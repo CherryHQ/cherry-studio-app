@@ -979,8 +979,8 @@ Agent management contains `agent_list`, `agent_get`, `agent_create`, and `agent_
 All four are deferred and loaded through `tool_search` for user-directed conversation tasks.
 There is no per-Agent switch and no OS permission requirement. Reads use automatic approval;
 writes start at `ask` and follow the current Agent's approval
-preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
-or change MCP bindings.
+preference, without a second confirmation flow. These definition tools do not delete Agents.
+Avatar and MCP binding changes use the dedicated application workflows described below.
 
 Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
 `AgentService` resolve the global default Agent model; omitted capability settings use the same
@@ -1014,3 +1014,22 @@ chat subscriber. Successful writes render a compact saved-Agent card with a Star
 configured. List/read results remain in the process disclosure. Results omit managed
 avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
 inspect current saved records before deciding whether another write is needed.
+
+`agent_set_avatar` accepts an exact Agent id (or `current`), a fresh `updatedAt`, and a managed
+image reference. The source must be attached, generated, inside the captured workspace, or read
+through `library_read_file` this turn. No device paths or remote URLs enter its schema. The normal
+avatar workflow normalizes a separate image, conditionally updates the Agent row, compensates the
+new image on a stale-write failure, and removes the previous avatar only after persistence. The
+original library image is unchanged; receipts omit avatar references and device-local paths.
+
+`agent_list_mcp_servers` reads saved remote servers and current bindings, including disabled servers
+and dangling bindings, with bounded pagination and no endpoint or credential values. It returns
+the server-wide binding's own `updatedAt`, or `null` when absent, and the number of per-tool
+overrides. Bundled plugins remain globally available and do not need per-Agent bindings.
+`agent_set_mcp_binding` enables, disables or removes one server-wide remote binding. It requires
+that binding version (or explicit `null` for creation), rechecks it in the write transaction, and
+preserves every unrelated binding and per-tool override. New bindings start at `ask`; existing
+denials are preserved. A disabled server stays disabled. Binding changes invalidate the Agent's
+binding query and enter subsequent tool catalogs; they do not expand the active turn's snapshot.
+These three tools are deferred, with automatic reads and the existing Agent approval preference
+for writes. They do not configure connections or perform external authorization.

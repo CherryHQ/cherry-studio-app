@@ -4,8 +4,10 @@ import type { AgentService } from '@/backend/data/services/AgentService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { UpdateAgentSchema } from '@/shared/data/api/schemas/agents';
 import { AgentSkillUpdateSchema, SKILLS_MAX_LIMIT } from '@/shared/data/api/schemas/skills';
-import { AgentIdSchema } from '@/shared/data/types/agent';
-import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
+import {
+  AgentToolRecordSchema,
+  AgentToolTargetSchema,
+} from '@/shared/data/types/agentManagementTool';
 import { UNIQUE_MODEL_ID_SEPARATOR, UniqueModelIdSchema } from '@/shared/data/types/model';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -17,15 +19,7 @@ export type AgentManagementData = Pick<
 >;
 // Model-facing properties keep a concrete type: OpenAI-compatible gateways that
 // translate tools for Gemini reject a property whose type hides inside a union.
-const targetSchema = z
-  .string()
-  .refine(
-    (value) => value === 'current' || AgentIdSchema.safeParse(value).success,
-    'Invalid Agent id',
-  )
-  .describe(
-    'An exact id returned by agent_list/agent_get, or current for the Agent in this conversation.',
-  );
+const targetSchema = AgentToolTargetSchema;
 // `UniqueModelIdSchema` is a zod custom type, which JSON Schema cannot represent.
 const modelIdSchema = z
   .templateLiteral([z.string().min(1), UNIQUE_MODEL_ID_SEPARATOR, z.string().min(1)])
@@ -182,7 +176,7 @@ export function createAgentManagementTools(
     ),
     tool(
       'agent_update',
-      'Edit a saved Cherry Agent after reading it with agent_get. Never invent model or Skill IDs. Only change mode, approval or Skill bindings when the user requests it. Changes to the current Agent apply to subsequent turns; this turn keeps its original configuration. Cannot delete Agents or change avatars or MCP bindings.',
+      'Edit a saved Cherry Agent after reading it with agent_get. Never invent model or Skill IDs. Only change mode, approval or Skill bindings when the user requests it. Changes to the current Agent apply to subsequent turns; this turn keeps its original configuration. Cannot delete Agents. Use the dedicated agent_set_avatar and agent_set_mcp_binding tools for avatar or MCP binding changes when offered.',
       updateSchema,
       'ask',
       async ({ agent_id, expected_updated_at, changes }, signal) => {
