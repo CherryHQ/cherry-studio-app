@@ -76,6 +76,26 @@ describe('createSystemCapabilitySource', () => {
     ]);
   });
 
+  test('offers MCP configuration only with the shared mutation owner and preserves read/write policy', async () => {
+    const mcpManagement: NonNullable<SystemCapabilityServices['mcpManagement']> = {
+      servers: { list: jest.fn(), getById: jest.fn() },
+      mutations: { createServer: jest.fn(), updateServer: jest.fn() },
+    };
+    const tools = await resolve({}, { mcpManagement });
+    for (const name of ['mcp_list_servers', 'mcp_get_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'auto',
+        effect: 'read',
+        deferred: true,
+      });
+    for (const name of ['mcp_create_server', 'mcp_update_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
+  });
+
   test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
     let target: SshTarget | null = null;
     const ssh: NonNullable<SystemCapabilityServices['ssh']> = {
@@ -868,13 +888,14 @@ async function resolve(
     askUser?: AskUserQuestion;
     platform?: string;
     ssh?: SystemCapabilityServices['ssh'];
+    mcpManagement?: SystemCapabilityServices['mcpManagement'];
     sessionId?: string;
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
   } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(
-    { ...SERVICES, ssh: options.ssh },
+    { ...SERVICES, ...options },
     {
       ...dependencies(scenario),
       platform: options.platform ?? 'ios',

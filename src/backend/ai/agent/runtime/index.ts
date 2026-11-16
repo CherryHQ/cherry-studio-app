@@ -75,6 +75,7 @@ export { FakeRuntime } from './FakeRuntime';
 export { raceAbort } from '@/backend/utils/raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';
 export {
+  createCallErrorToolResult,
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,

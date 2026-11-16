@@ -973,6 +973,28 @@ with a question-specific label and retains its keep-alive lease until the turn s
 background execution or recovery after the operating system terminates the app.
 
 
+## MCP Connection Management
+
+`mcp_list_servers`, `mcp_get_server`, `mcp_create_server`, and `mcp_update_server` are deferred
+application tools. Reads are automatic; writes follow the Agent's existing approval preference.
+They use the same saved connections and mutation owner as the MCP settings page, so endpoint or
+header changes retire the previous authenticated connection and release a replaced OAuth grant.
+Successful writes invalidate the connection Data API queries even without a visible chat subscriber.
+
+Creation supports remote Streamable HTTP configuration only: name, HTTP(S) endpoint, optional
+static headers, enablement and disabled tool names. An omitted enablement keeps the existing
+disabled-by-default creation behavior. Mobile does not install or run stdio executables.
+Updates require a fresh `updatedAt`; the write transaction rejects concurrent changes. Unspecified
+fields stay unchanged; supplying `headers` replaces the whole map. These tools cannot create
+OAuth grants, configure bundled plugin authorizations, or bind a connection to an Agent.
+
+Receipts expose endpoint origin, header names, enablement and version metadata, never full URLs,
+header values or OAuth references. Saving does not verify connectivity, authentication or execution.
+Unknown write outcomes direct the model to inspect saved state before another write.
+Validation, unsupported configuration and persistence failures use the Runtime's call-failure
+envelope, including sanitized error diagnostics. Pi and Code Mode therefore retain the failed
+outcome instead of treating an error-valued reply as a successful invocation.
+
 ## Agent Management
 
 Agent management contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.

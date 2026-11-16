@@ -12,7 +12,11 @@ import { isSameMcpConnectionConfig } from '@/shared/utils/mcpConnectionConfig';
 export type McpServerMutations = {
   createServer(input: CreateMcpServerDto): Promise<McpServer>;
   removeServer(id: string): Promise<void>;
-  updateServer(id: string, input: UpdateMcpServerDto): Promise<McpUpdateServerResult>;
+  updateServer(
+    id: string,
+    input: UpdateMcpServerDto,
+    options?: { expectedUpdatedAt?: string },
+  ): Promise<McpUpdateServerResult>;
 };
 
 type McpMutationRuntime = {
@@ -48,9 +52,9 @@ export function createMcpServerMutations(dependencies: {
         await runtime.forgetOAuthAuthorization(previous.oauth.authorizationId);
     },
 
-    async updateServer(id, input) {
+    async updateServer(id, input, options) {
       const previous = hasRuntimeRelevantPatch(input) ? await servers.getById(id) : undefined;
-      const server = await servers.update(id, input);
+      const server = await servers.update(id, input, options);
 
       // Reported so the client can drop its own cached tool list for this row.
       const toolsChanged = previous ? !isSameMcpConnectionConfig(previous, server) : false;

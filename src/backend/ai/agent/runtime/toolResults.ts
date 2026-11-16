@@ -25,6 +25,11 @@ export function createErrorToolResult(error: RuntimeError): RuntimeToolResult {
   };
 }
 
+/** A failed invocation must reach Pi diagnostics and transcript projection as an error. */
+export function createCallErrorToolResult(error: RuntimeError): RuntimeToolResult {
+  return { ...createErrorToolResult(error), failure: { error, scope: 'call' } };
+}
+
 /** Adapt an already normalized image request failure without changing retry policy. */
 export function createImageRequestErrorToolResult(
   detail: AiRequestError['detail'],

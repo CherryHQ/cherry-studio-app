@@ -76,6 +76,10 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'web_fetch',
   'web_search',
   'write_file',
+  'mcp_list_servers',
+  'mcp_get_server',
+  'mcp_create_server',
+  'mcp_update_server',
 ] as const;
 
 export type BuiltInToolCapabilityId = (typeof BUILT_IN_TOOL_CAPABILITY_IDS)[number];
@@ -252,6 +256,10 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('transcribe_audio', 'auto', { platforms: ['android', 'ios'] }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
+  describe('mcp_list_servers', 'auto', { effect: 'read' }),
+  describe('mcp_get_server', 'auto', { effect: 'read' }),
+  describe('mcp_create_server', 'ask'),
+  describe('mcp_update_server', 'ask'),
 ];
 
 const HEALTH_TOOL_IDS = new Set<string>(

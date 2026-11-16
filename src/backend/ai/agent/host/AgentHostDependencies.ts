@@ -18,6 +18,7 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { createMcpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import {
   AgentSqlDatabase,
@@ -196,7 +197,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly store: AgentSessionStore,
     private readonly aiService: AiService,
     private readonly preferenceService: PreferenceService,
-    mcpRuntime: McpRuntimeService,
+    private readonly mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
     readonly traces: TraceRecorder,
     private readonly textGenerator: RuntimeTextGenerator,
@@ -261,6 +262,13 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       webSearch: this.webSearchService,
       trash: this.trash,
       ssh: this.ssh,
+      mcpManagement: {
+        servers: mcpServerService,
+        mutations: createMcpServerMutations({
+          runtime: this.mcpRuntime,
+          servers: mcpServerService,
+        }),
+      },
     }));
   }
 
