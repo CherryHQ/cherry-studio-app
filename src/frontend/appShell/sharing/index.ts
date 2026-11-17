@@ -7,3 +7,4 @@ export {
   registerShareCleanup,
 } from './shareRequest';
 export { useShareFile, useShareFiles } from './useShareFile';
+export { useExportConversation } from './useExportConversation';

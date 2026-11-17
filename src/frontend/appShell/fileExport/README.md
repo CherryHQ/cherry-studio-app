@@ -87,6 +87,11 @@ original. Sheet dismissal does not establish recipient delivery.
 
 Native rendering, Photos saving and recipient delivery still require device acceptance.
 
+`shareTextFile` prepares a caller-supplied UTF-8 file only after system-sharing admission. It uses
+the same stable delivery copy, adds no watermark or library entry, and releases its temporary
+source after the chooser completes or preparation fails. Conversation data exports use this path
+without document rendering or image-resource reads.
+
 `prepareSharedFile` also accepts an already-finalized temporary ExportFile. It makes the same stable
 OS-cache copy without applying another watermark or creating a managed entry. Document image saving
 uses that copy before Photos starts, so the source request can be disposed safely. Raw temporary

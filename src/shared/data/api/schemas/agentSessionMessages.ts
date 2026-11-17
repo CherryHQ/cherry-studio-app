@@ -91,6 +91,12 @@ export type AgentTranscriptSelection = {
 };
 
 export type AgentSessionMessageSchemas = {
+  '/agent-sessions/:sessionId/messages/transcript': {
+    GET: {
+      params: { sessionId: string };
+      response: AgentTranscriptSelection;
+    };
+  };
   '/agent-sessions/:sessionId/messages/:messageId/translations': {
     PATCH: {
       params: { sessionId: string; messageId: string };

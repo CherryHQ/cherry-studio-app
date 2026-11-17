@@ -45,6 +45,13 @@ applicable conversions; authored HTML conversion keeps its separate browser-capt
 Closing a chooser does not claim delivery and leaves the panel open. Selection is changed by
 starting again from the source, not through an adjustment action inside the panel.
 
+The local sidebar's **Export conversation** action is separate text-data export, owned by
+`appShell/sharing`. It writes the complete current-path transcript to one Markdown file, including
+saved prose and reasoning in order, full quoted passages and their authors, citations, terminal
+status and attachment names. It omits tool inputs/outputs and diagnostics, does not bundle
+attachments, and opens the system chooser directly without a watermark or format selection.
+It does not use this renderer or its presentation limits.
+
 ## Preview and rendering
 
 The panel first shows lightweight readable content, then prepares asset-bearing HTML. An image

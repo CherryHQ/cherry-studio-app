@@ -273,6 +273,8 @@ export interface ConversationCatalog {
   readonly cacheScope?: QueryScope;
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
+  /** Local-only full-history data export, independent of mounted chat windows. */
+  readTranscript?(ref: ConversationRef, signal: AbortSignal): Promise<TranscriptSnapshot>;
   previewSession?(
     ref: ConversationRef,
     options?: { includeDescendants?: boolean },
