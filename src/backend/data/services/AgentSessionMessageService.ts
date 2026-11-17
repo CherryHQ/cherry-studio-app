@@ -193,10 +193,7 @@ export class AgentSessionMessageService {
 
   /** The selected path and its metadata come from one read, without the sharing selection limit. */
   async readTranscript(sessionId: string): Promise<AgentTranscriptSelection> {
-    const rows = await this.readTranscriptRows(
-      sessionId,
-      inArray(agentSessionMessageTable.id, messagePathIdsSql(sessionId)),
-    );
+    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId));
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     return {
       assistantName: rows[0].assistantName ?? undefined,
