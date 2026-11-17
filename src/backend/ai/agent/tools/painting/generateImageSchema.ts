@@ -142,6 +142,11 @@ export function buildGenerateImageToolDescription(strategy: PaintingGenerationSt
     instructions.push(
       'Generate a new image, illustration, logo, or icon from a prompt without image_ids.',
     );
+    if (strategy.acceptsImages) {
+      instructions.push(
+        'For new-image generation, omit image_ids when no reference is needed; an empty array is also treated as no reference. Do not pass null.',
+      );
+    }
   } else {
     instructions.push(
       'New-image generation without a reference is unavailable with this drawing model.',
@@ -228,12 +233,11 @@ export function buildGenerateImageToolSchema(
   if (strategy.acceptsImages) {
     const imageIds = z
       .array(z.string().trim().min(1))
-      .min(1)
       .max(MAX_INPUT_IMAGES)
       .describe(
-        `Reference image file entry id, not a message id, tool call id, or URL. ${strategy.canGenerate ? 'Omit only to generate a new image without a reference.' : 'Required for every call.'}`,
+        `Reference image file entry id, not a message id, tool call id, or URL. ${strategy.canGenerate ? 'Omit image_ids or pass [] to generate a new image without a reference. Do not pass null.' : 'Required for every call. Provide one non-empty reference image file entry id; empty arrays and null are invalid.'}`,
       );
-    inputShape.image_ids = strategy.canGenerate ? imageIds.optional() : imageIds;
+    inputShape.image_ids = strategy.canGenerate ? imageIds.optional() : imageIds.min(1);
   }
 
   return z.object(inputShape).strict();
