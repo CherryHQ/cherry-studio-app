@@ -48,8 +48,14 @@ type Drag = {
   isDropping: boolean;
   scroll: number;
   origin: number;
-  target?: { before?: string; after?: string };
+  pointerY?: number;
+  measurementTimer?: ReturnType<typeof setTimeout>;
 };
+
+// Native measurement may never call back after interruption; keep Done blocked for at most 300ms.
+const DROP_MEASUREMENT_TIMEOUT_MS = 300;
+// Allow only sub-point rounding differences between native window measurements.
+const FRAME_TOLERANCE = 1;
 
 /** Provider-specific bounded drag. No draft changes until a successful release.
  * The active row follows the pointer without timed/spring motion; interruption resets immediately.
@@ -76,7 +82,7 @@ export function ProviderModelReorderList({
   const momentum = useRef(false);
   const drag = useRef<Drag | undefined>(undefined);
   const focusId = useRef<string | undefined>(undefined);
-  const requestMoveFocus = useCallback((id: string) => {
+  const requestMoveFocus = useCallback((id: string | undefined) => {
     focusId.current = id;
   }, []);
   const restoreMoveFocus = useCallback((id: string, view: NativeView | null) => {
@@ -95,6 +101,7 @@ export function ProviderModelReorderList({
     latest.current = { models, order, onDragChange };
   });
   const cancelDrag = useCallback(() => {
+    clearTimeout(drag.current?.measurementTimer);
     drag.current = undefined;
     setFrozenModels(null);
     setTargetId(undefined);
@@ -111,7 +118,9 @@ export function ProviderModelReorderList({
   }, [cancelDrag]);
   useEffect(
     () => () => {
+      clearTimeout(drag.current?.measurementTimer);
       drag.current = undefined;
+      focusId.current = undefined;
       latest.current.onDragChange(false);
     },
     [],
@@ -203,10 +212,10 @@ export function ProviderModelReorderList({
       const source = current.rows.find((row) => row.id === id);
       if (!source) return;
       const y = absoluteY - current.origin + scroll.current;
+      current.pointerY = y;
       const others = current.rows.filter((row) => row.id !== id);
       if (!others.length) return;
       const next = others.find((row) => y < row.top + row.height / 2);
-      current.target = next ? { before: next.id } : { after: others.at(-1)!.id };
       setTargetId(next?.id ?? others.at(-1)!.id);
       const first = current.rows[0]!;
       const last = current.rows.at(-1)!;
@@ -220,7 +229,12 @@ export function ProviderModelReorderList({
   const endDrag = useCallback(
     (id: string, success: boolean) => {
       const current = drag.current;
-      if (current?.id !== id || current.isDropping) return;
+      if (current?.id !== id) return;
+      if (!success) {
+        cancelDrag();
+        return;
+      }
+      if (current.isDropping) return;
       // A refresh can rebase the hook while these rows are frozen. Discard this gesture rather
       // than applying a destination measured against a different inventory/order.
       const isCurrent = () =>
@@ -229,42 +243,77 @@ export function ProviderModelReorderList({
         current.scroll === scroll.current &&
         current.ids.join('\0') === latest.current.order.draftIds.join('\0') &&
         [...current.frames].every(([rowId, frame]) => frames.current.get(rowId) === frame);
-      if (!success || !current.target || !current.isMeasured || !isCurrent()) {
+      if (current.pointerY === undefined || !current.isMeasured || !isCurrent()) {
         cancelDrag();
         return;
       }
       current.isDropping = true;
       current.isMeasured = false;
-      // Layout events do not cover cell-wrapper movement. Re-measure every captured candidate
-      // at release and keep the draft frozen until all callbacks validate the same geometry.
-      viewport.current?.measureInWindow((_x, viewportY) => {
+      current.measurementTimer = setTimeout(cancelDrag, DROP_MEASUREMENT_TIMEOUT_MS);
+      // Layout events do not cover cell-wrapper movement. Collect a fresh, ordered measurement
+      // pass before validating the snapshot or choosing a destination. Await each callback so a
+      // delayed earlier candidate cannot be overtaken by measurements of later destinations.
+      viewport.current?.measureInWindow((_x, viewportY, _width, viewportHeight) => {
         if (drag.current !== current) return;
         if (!isCurrent() || viewportY !== current.origin) {
           cancelDrag();
           return;
         }
-        let pending = current.rows.length;
-        for (const row of current.rows) {
-          current.frames.get(row.id)!.view.measureInWindow((x, y, width, height) => {
+        const candidates = [...current.frames];
+        const fresh: MeasuredRow[] = [];
+        const measureNext = (index: number) => {
+          const candidate = candidates[index];
+          if (!candidate) {
+            const isConsistent =
+              isCurrent() &&
+              fresh.length === current.rows.length &&
+              fresh.every((row, index) => {
+                const captured = current.rows[index]!;
+                const previous = fresh[index - 1];
+                return (
+                  row.id === captured.id &&
+                  row.width > 0 &&
+                  row.height > 0 &&
+                  (!previous ||
+                    (previous.top < row.top &&
+                      previous.top + previous.height <= row.top + FRAME_TOLERANCE)) &&
+                  Math.abs(row.left - captured.left) < FRAME_TOLERANCE &&
+                  Math.abs(row.top - captured.top) < FRAME_TOLERANCE &&
+                  Math.abs(row.width - captured.width) < FRAME_TOLERANCE &&
+                  Math.abs(row.height - captured.height) < FRAME_TOLERANCE
+                );
+              });
+            try {
+              focusId.current = undefined;
+              if (isConsistent) {
+                const others = fresh.filter((row) => row.id !== id);
+                const next = others.find((row) => current.pointerY! < row.top + row.height / 2);
+                const last = others.at(-1);
+                if (fresh.some((row) => row.id === id) && last) {
+                  const target = next ? { before: next.id } : { after: last.id };
+                  requestMoveFocus(latest.current.order.moveModel(id, target) ? id : undefined);
+                }
+              }
+            } finally {
+              cancelDrag();
+            }
+            return;
+          }
+          const [rowId, frame] = candidate;
+          frame.view.measureInWindow((x, y, width, height) => {
             if (drag.current !== current) return;
-            if (
-              !isCurrent() ||
-              row.left !== x ||
-              row.top !== y - viewportY + current.scroll ||
-              row.width !== width ||
-              row.height !== height
-            ) {
-              cancelDrag();
-              return;
-            }
-            pending -= 1;
-            if (pending === 0) {
-              requestMoveFocus(id);
-              latest.current.order.moveModel(id, current.target!);
-              cancelDrag();
-            }
+            if (y + height > viewportY && y < viewportY + viewportHeight)
+              fresh.push({
+                id: rowId,
+                left: x,
+                top: y - viewportY + current.scroll,
+                width,
+                height,
+              });
+            measureNext(index + 1);
           });
-        }
+        };
+        measureNext(0);
       });
     },
     [cancelDrag, requestMoveFocus],
@@ -395,7 +444,7 @@ function ReorderModelRow({
   onStart: (id: string) => boolean;
   onUpdate: (id: string, absoluteY: number, translationY: number) => void;
   onEnd: (id: string, success: boolean) => void;
-  requestMoveFocus: (id: string) => void;
+  requestMoveFocus: (id: string | undefined) => void;
   restoreMoveFocus: (id: string, view: NativeView | null) => void;
 }) {
   const { t } = useTranslation();
@@ -444,8 +493,7 @@ function ReorderModelRow({
             accessibilityValue={accessibilityValue}
             accessibilityLabel={t('settings.provider.models.reorder.moveUp', { model: model.name })}
             onPress={() => {
-              requestMoveFocus(model.id);
-              order.moveUp(model.id);
+              requestMoveFocus(order.moveUp(model.id) ? model.id : undefined);
             }}
             icon={<ArrowUpIcon />}
           />
@@ -458,8 +506,7 @@ function ReorderModelRow({
               model: model.name,
             })}
             onPress={() => {
-              requestMoveFocus(model.id);
-              order.moveDown(model.id);
+              requestMoveFocus(order.moveDown(model.id) ? model.id : undefined);
             }}
             icon={<ArrowDownIcon />}
           />
@@ -498,10 +545,12 @@ function ReorderModelRow({
                     : []),
                 ]}
                 onAccessibilityAction={({ nativeEvent }) => {
-                  if (disabled) return;
-                  requestMoveFocus(model.id);
-                  if (nativeEvent.actionName === 'decrement') order.moveUp(model.id);
-                  if (nativeEvent.actionName === 'increment') order.moveDown(model.id);
+                  const didMove =
+                    !disabled &&
+                    (nativeEvent.actionName === 'decrement'
+                      ? order.moveUp(model.id)
+                      : nativeEvent.actionName === 'increment' && order.moveDown(model.id));
+                  requestMoveFocus(didMove ? model.id : undefined);
                 }}
               >
                 <MenuIcon className="size-5 text-muted-foreground" />

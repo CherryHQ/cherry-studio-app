@@ -109,21 +109,21 @@ export function useProviderModelOrder({
   };
   function moveModel(id: string, target: { before?: string; after?: string }) {
     const draft = latest.current.draft;
-    if (!draft || saving.current) return;
+    if (!draft || saving.current) return false;
     const draftIds = draft.ids;
     const anchor = target.before ?? target.after;
     if (!anchor || anchor === id || !groups.get(id) || groups.get(anchor) !== groups.get(id))
-      return;
+      return false;
     const ids = draftIds.filter((other) => other !== id && groups.get(other) === groups.get(id));
     const anchorIndex = ids.indexOf(anchor);
-    if (anchorIndex < 0) return;
+    if (anchorIndex < 0) return false;
     ids.splice(anchorIndex + (target.before ? 0 : 1), 0, id);
     // Replace only this group's slots; interleaved and omitted groups stay in canonical state.
     let index = 0;
     const next = draftIds.map((other) =>
       groups.get(other) === groups.get(id) ? ids[index++]! : other,
     );
-    if (next.every((other, index) => other === draftIds[index])) return;
+    if (next.every((other, index) => other === draftIds[index])) return false;
     updateDraft({ ids: next, serverKey: draft.serverKey });
     AccessibilityInfo.announceForAccessibility(
       t('settings.provider.models.reorder.moved', {
@@ -132,6 +132,7 @@ export function useProviderModelOrder({
         total: ids.length,
       }),
     );
+    return true;
   }
   const cancel = useCallback(() => {
     if (!saving.current) updateDraft(undefined);
@@ -213,11 +214,11 @@ export function useProviderModelOrder({
     moveModel,
     moveUp: (id: string) => {
       const previous = groupIds(id)[groupIds(id).indexOf(id) - 1];
-      if (previous) moveModel(id, { before: previous });
+      return previous ? moveModel(id, { before: previous }) : false;
     },
     moveDown: (id: string) => {
       const next = groupIds(id)[groupIds(id).indexOf(id) + 1];
-      if (next) moveModel(id, { after: next });
+      return next ? moveModel(id, { after: next }) : false;
     },
     canMoveUp,
     canMoveDown,

@@ -329,6 +329,32 @@ it('announces a successful draft move with its group position and size, but not 
   announce.mockRestore();
 });
 
+it('reports whether each move changed the draft, including boundaries and invalid targets', () => {
+  expect(order.moveDown('p::A')).toBe(false);
+  act(() => order.start());
+  const initial = order.draftIds;
+  expect(order.moveUp('p::A')).toBe(false);
+  expect(order.moveDown('p::C')).toBe(false);
+  expect(order.moveModel('p::A', { before: 'p::P1' })).toBe(false);
+  expect(order.moveModel('p::A', { before: 'missing' })).toBe(false);
+  expect(order.moveModel('p::A', { after: 'p::A' })).toBe(false);
+  expect(order.draftIds).toBe(initial);
+  act(() => {
+    expect(order.moveDown('p::A')).toBe(true);
+  });
+  const moved = order.draftIds;
+  expect(order.moveModel('p::A', { after: 'p::B' })).toBe(false);
+  expect(order.draftIds).toBe(moved);
+  act(() => {
+    expect(order.moveUp('p::A')).toBe(true);
+  });
+  expect(order.draftIds).toEqual(initial);
+  act(() => {
+    expect(order.moveModel('p::C', { before: 'p::A' })).toBe(true);
+  });
+  expect(order.draftIds).toEqual(['p::C', 'p::P1', 'p::A', 'p::P2', 'p::B']);
+});
+
 it('keeps the save lock after a sibling list failure until the authoritative provider list settles', async () => {
   const listKey = queryKeys.models.list({ providerId: 'p' });
   const siblingKey = queryKeys.models.list({ providerId: 'p', isSystemSupported: true });

@@ -1,5 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { type ReactElement, type ReactNode, useState } from 'react';
+import { type ReactElement, type ReactNode, useMemo, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -114,15 +114,21 @@ const baseline = ['A', 'B', 'C', 'P'].map((name) => ({
 type Order = ReturnType<typeof useProviderModelOrder>;
 function Harness() {
   const [ids, setIds] = useState<string[]>(baseline.map(({ id }) => id));
+  const [isDragging, setIsDragging] = useState(false);
+  const models = useMemo(() => ids.map((id) => baseline.find((model) => model.id === id)!), [ids]);
   const positionOf = (id: string) => {
     const group = ids.filter((other) => (other === 'p::P') === (id === 'p::P'));
     return { position: group.indexOf(id) + 1, total: group.length };
   };
   const move = (id: string, target: { before?: string; after?: string }) => {
-    mockMove(id, target);
+    const anchor = target.before ?? target.after;
+    if (!anchor || anchor === id || !ids.includes(anchor)) return false;
     const next = ids.filter((other) => other !== id);
-    next.splice(next.indexOf((target.before ?? target.after)!) + (target.after ? 1 : 0), 0, id);
+    next.splice(next.indexOf(anchor) + (target.after ? 1 : 0), 0, id);
+    if (next.every((other, index) => other === ids[index])) return false;
+    if (mockMove(id, target) === false) return false;
     setIds(next);
+    return true;
   };
   const order: Order = {
     canReorder: true,
@@ -140,12 +146,21 @@ function Harness() {
     moveDown: (id: string) => move(id, { after: ids[ids.indexOf(id) + 1] }),
   };
   return (
-    <ProviderModelReorderList
-      models={ids.map((id) => baseline.find((model) => model.id === id)!)}
-      provider={undefined}
-      order={order}
-      onDragChange={mockDragChange}
-    />
+    <>
+      <button
+        aria-label="Done"
+        disabled={isDragging || ids.every((id, index) => id === baseline[index]!.id)}
+      />
+      <ProviderModelReorderList
+        models={models}
+        provider={undefined}
+        order={order}
+        onDragChange={(active) => {
+          mockDragChange(active);
+          setIsDragging(active);
+        }}
+      />
+    </>
   );
 }
 type Frame = { x: number; y: number; width: number; height: number };
@@ -168,11 +183,11 @@ function layoutRow(id: string, change: Partial<Frame> = {}) {
 function gesture(id = 'p::A') {
   return row(id).findByType('mock-gesture').props.gesture;
 }
-function beginDrag() {
+function beginDrag(absoluteY = 125) {
   const current = gesture();
   act(() => current.onStartValue());
   expect(mockDragChange).toHaveBeenLastCalledWith(true);
-  act(() => current.onUpdateValue({ absoluteY: 125, translationY: 125 }));
+  act(() => current.onUpdateValue({ absoluteY, translationY: absoluteY }));
   return current;
 }
 function release(current: ReturnType<typeof gesture>) {
@@ -182,7 +197,9 @@ function release(current: ReturnType<typeof gesture>) {
   });
 }
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
+  mockMove.mockReset();
   mockHiddenIds.clear();
   nativeViews.clear();
   geometry.clear();
@@ -227,7 +244,23 @@ beforeEach(() => {
   });
   act(() => baseline.forEach((model) => layoutRow(model.id)));
 });
-afterEach(() => act(() => renderer.unmount()));
+afterEach(() => {
+  act(() => renderer.unmount());
+  jest.useRealTimers();
+});
+
+function expectDraft(ids = baseline.map(({ id }) => id)) {
+  expect(
+    renderer.root
+      .findByType('mock-list')
+      .props.data.filter((item: ProviderModelListItem) => item.type === 'model')
+      .map((item: { model: Model }) => item.model.id),
+  ).toEqual(ids);
+}
+function expectUsable() {
+  expect(mockDragChange).toHaveBeenLastCalledWith(false);
+  expect(renderer.root.findByType('mock-list').props.scrollEnabled).toBe(true);
+}
 
 it('cancels when a captured destination unregisters while the source stays mounted', () => {
   const current = beginDrag();
@@ -267,6 +300,8 @@ it('accepts a valid measured drop exactly once, including finalization', () => {
   release(beginDrag());
   expect(mockMove).toHaveBeenCalledTimes(1);
   expect(mockMove).toHaveBeenCalledWith('p::A', { after: 'p::C' });
+  expectDraft(['p::B', 'p::C', 'p::A', 'p::P']);
+  expectUsable();
 });
 it('waits for asynchronous drop measurements across finalization before moving once', () => {
   const current = beginDrag();
@@ -282,6 +317,197 @@ it('waits for asynchronous drop measurements across finalization before moving o
   act(() => finish());
   expect(mockMove).toHaveBeenCalledTimes(1);
   expect(mockDragChange).toHaveBeenLastCalledWith(false);
+});
+it('cancels when the destination moves while an earlier release measurement is pending', () => {
+  const current = beginDrag();
+  const candidate = nativeViews.get('p::B')!;
+  const measure = candidate.measureInWindow;
+  let finish!: () => void;
+  candidate.measureInWindow = (callback) => {
+    finish = () => measure(callback);
+  };
+  release(current);
+  // No onLayout: in the old parallel pass C was already measured before B returned.
+  geometry.get('p::C')!.y = 230;
+  act(() => finish());
+  expect(mockMove).not.toHaveBeenCalled();
+  expectDraft();
+  expectUsable();
+});
+it.each(['viewport', 'p::B'])(
+  'unfreezes Done after a missing %s release callback and ignores its late arrival',
+  (id) => {
+    // Start with a dirty draft, as the screen also disables Done when nothing has changed.
+    release(beginDrag());
+    const draft: Model['id'][] = ['p::B', 'p::C', 'p::A', 'p::P'];
+    act(() => draft.forEach((rowId, index) => layoutRow(rowId, { y: index * 50 })));
+    mockMove.mockClear();
+    const current = beginDrag(25);
+    const candidate = nativeViews.get(id)!;
+    const measure = candidate.measureInWindow;
+    let finish!: () => void;
+    candidate.measureInWindow = (callback) => {
+      finish = () => measure(callback);
+    };
+    release(current);
+    expect(renderer.root.findByProps({ 'aria-label': 'Done' }).props.disabled).toBe(true);
+    act(() => jest.advanceTimersByTime(299));
+    expect(mockDragChange).toHaveBeenLastCalledWith(true);
+    act(() => jest.advanceTimersByTime(1));
+    expectUsable();
+    expect(renderer.root.findByProps({ 'aria-label': 'Done' }).props.disabled).toBe(false);
+    expectDraft(draft);
+    expect(mockMove).not.toHaveBeenCalled();
+    // An expired measurement cannot apply a move to a later gesture either.
+    candidate.measureInWindow = measure;
+    const retry = beginDrag(25);
+    act(() => finish());
+    expect(mockMove).not.toHaveBeenCalled();
+    release(retry);
+    expect(mockMove).toHaveBeenCalledTimes(1);
+    expectUsable();
+  },
+);
+it('chooses the destination from fresh frames within the native rounding tolerance', () => {
+  const current = beginDrag();
+  // The pointer was exactly at C's old midpoint. A sub-point shift is valid but changes its side.
+  geometry.get('p::C')!.y += 0.5;
+  release(current);
+  expect(mockMove).toHaveBeenCalledWith('p::A', { before: 'p::C' });
+  expectDraft(['p::B', 'p::A', 'p::C', 'p::P']);
+  expectUsable();
+});
+it('rejects a non-monotone snapshot even when release measurements match it', () => {
+  // Overlap can be captured without onLayout during a wrapper transition.
+  geometry.get('p::B')!.y = 40;
+  release(beginDrag());
+  expect(mockMove).not.toHaveBeenCalled();
+  expectDraft();
+  expectUsable();
+});
+it('rejects a changed visible candidate set at release', () => {
+  // C is registered but initially outside the viewport; it enters without onLayout.
+  geometry.get('p::C')!.y = 600;
+  const current = beginDrag();
+  geometry.get('p::C')!.y = 100;
+  release(current);
+  expect(mockMove).not.toHaveBeenCalled();
+  expectDraft();
+  expectUsable();
+});
+it('cancels an interrupted release before a deferred measurement returns', () => {
+  const current = beginDrag();
+  const candidate = nativeViews.get('p::B')!;
+  const measure = candidate.measureInWindow;
+  let finish!: () => void;
+  candidate.measureInWindow = (callback) => {
+    finish = () => measure(callback);
+  };
+  release(current);
+  act(() => current.onFinalizeValue({}, false));
+  expectUsable();
+  act(() => finish());
+  expect(mockMove).not.toHaveBeenCalled();
+  expectDraft();
+  expect(jest.getTimerCount()).toBe(0);
+});
+it('cleans up a pending measurement on unmount and ignores late callbacks', () => {
+  const current = beginDrag();
+  const candidate = nativeViews.get('p::B')!;
+  const measure = candidate.measureInWindow;
+  let finish!: () => void;
+  candidate.measureInWindow = (callback) => {
+    finish = () => measure(callback);
+  };
+  release(current);
+  expect(jest.getTimerCount()).toBe(1);
+  act(() => renderer.unmount());
+  expect(mockDragChange).toHaveBeenLastCalledWith(false);
+  expect(jest.getTimerCount()).toBe(0);
+  act(() => finish());
+  expect(mockMove).not.toHaveBeenCalled();
+});
+it.each(['rejected', 'thrown'])(
+  'unfreezes and requests no focus after a %s draft move',
+  (outcome) => {
+    const focus = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus');
+    if (outcome === 'rejected') mockMove.mockReturnValueOnce(false);
+    else
+      mockMove.mockImplementationOnce(() => {
+        throw new Error('invalid move');
+      });
+    const current = beginDrag();
+    try {
+      if (outcome === 'rejected') release(current);
+      else
+        act(() => {
+          expect(() => current.onEndValue({}, true)).toThrow('invalid move');
+          current.onFinalizeValue({}, true);
+        });
+      expectUsable();
+      expectDraft();
+      act(() => renderer.update(<Harness />));
+      expect(focus).not.toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      focus.mockRestore();
+    }
+  },
+);
+it('does not steal focus after a boundary adjustment and an unrelated render', () => {
+  const focus = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus');
+  try {
+    act(() =>
+      row('p::A')
+        .findByProps({ accessibilityRole: 'adjustable' })
+        .props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } }),
+    );
+    expect(mockMove).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
+    act(() => renderer.update(<Harness />));
+    expect(focus).not.toHaveBeenCalled();
+    expectDraft();
+  } finally {
+    focus.mockRestore();
+  }
+});
+it('clears a pending focus request when a same-tick adjustment cannot move', () => {
+  const focus = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus');
+  const handle = row('p::A').findByProps({ accessibilityRole: 'adjustable' });
+  try {
+    act(() => {
+      handle.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } });
+      // The retained handler cannot apply the same move again before its render.
+      // The hook owns the no-op result; emulate that result at the list boundary.
+      mockMove.mockReturnValueOnce(false);
+      handle.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } });
+    });
+    expectDraft(['p::B', 'p::A', 'p::C', 'p::P']);
+    expect(focus).not.toHaveBeenCalled();
+    act(() => renderer.update(<Harness />));
+    expect(focus).not.toHaveBeenCalled();
+  } finally {
+    focus.mockRestore();
+  }
+});
+it('restores focus to the moved row after a real accessibility adjustment', () => {
+  const focus = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus');
+  try {
+    act(() =>
+      row('p::A')
+        .findByProps({ accessibilityRole: 'adjustable' })
+        .props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }),
+    );
+    expectDraft(['p::B', 'p::A', 'p::C', 'p::P']);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledWith(
+      nativeViews.get('handle:settings.provider.models.reorder.dragHandle:A')!._nativeTag,
+    );
+    act(() => renderer.update(<Harness />));
+    expect(focus).toHaveBeenCalledTimes(1);
+  } finally {
+    focus.mockRestore();
+  }
 });
 it('keeps singleton arrows disabled and omits its handle and adjustable actions', () => {
   const singleton = row('p::P');
