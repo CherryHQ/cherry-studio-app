@@ -55,13 +55,13 @@ describe('AutoCollapseProcessSetting', () => {
     expect(switchItem().props.value).toBe(true);
 
     await act(async () => switchItem().props.onValueChange(false));
-    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(false);
+    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(false, undefined);
     mockIsAutoCollapseEnabled = false;
     act(() => renderer!.update(<AutoCollapseProcessSetting />));
     expect(switchItem().props.value).toBe(false);
 
     await act(async () => switchItem().props.onValueChange(true));
-    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(true);
+    expect(mockSetAutoCollapseEnabled).toHaveBeenLastCalledWith(true, undefined);
     expect(mockToastShow).not.toHaveBeenCalled();
   });
 

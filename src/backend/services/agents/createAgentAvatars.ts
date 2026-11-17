@@ -1,5 +1,6 @@
 import type { AgentService } from '@/backend/data/services/AgentService';
 import type { UserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { SetAgentAvatarDto } from '@/shared/data/api/schemas/agents';
 import type { Agent } from '@/shared/data/types/agent';
 
@@ -8,7 +9,11 @@ import { replaceAgentAvatar, resolveAgentAvatarUri } from './agentAvatarStorage'
 type AgentAvatarData = Pick<AgentService, 'getById' | 'setAvatar'>;
 
 export type AgentAvatars = {
-  setAvatar(id: string, input: SetAgentAvatarDto): Promise<Agent>;
+  setAvatar(
+    id: string,
+    input: SetAgentAvatarDto,
+    options?: { expectedUpdatedAt?: string },
+  ): Promise<Agent>;
   withUri(agent: Agent): Promise<Agent>;
   withUris(agents: readonly Agent[]): Promise<Agent[]>;
 };
@@ -34,16 +39,23 @@ export function createAgentAvatars(dependencies: {
   });
 
   return {
-    async setAvatar(id, input) {
+    async setAvatar(id, input, options = {}) {
       // Read first: a missing agent fails before anything reaches disk, and the
       // replace needs to know which file it supersedes.
       const current = await agents.getById(id);
+      if (
+        options.expectedUpdatedAt !== undefined &&
+        current.updatedAt !== options.expectedUpdatedAt
+      )
+        throw DataApiErrorFactory.conflict(
+          'The Agent changed. Read it again before changing its avatar.',
+        );
       const updated = await replaceAgentAvatar(
         images,
         id,
         input.sourceUri,
         current.avatar,
-        (avatar) => agents.setAvatar(id, avatar),
+        (avatar) => agents.setAvatar(id, avatar, options),
       );
 
       return withUri(updated);

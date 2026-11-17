@@ -94,7 +94,7 @@ function MessageDetailCode({
   );
 }
 
-function useCopyDetailText() {
+export function useCopyDetailText() {
   const { t } = useTranslation();
   const { toast } = useToast();
 

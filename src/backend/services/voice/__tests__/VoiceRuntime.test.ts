@@ -57,12 +57,14 @@ function setup({
   selected = {},
   transcription,
   systemTranscription,
+  canSpeakInBackground,
 }: {
   transcription?: TranscriptionEngine;
   systemTranscription?: TranscriptionEngine;
   dictation?: Partial<Record<VoiceEngineId, DictationEngine>>;
   speech?: Partial<Record<VoiceEngineId, SpeechEngine>>;
   selected?: Partial<Record<'dictation' | 'speech' | 'transcription', VoiceEngineId>>;
+  canSpeakInBackground?: () => boolean;
 }) {
   let background: (() => void) | undefined;
   const runtime = createVoiceRuntime({
@@ -81,6 +83,7 @@ function setup({
     },
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
+    canSpeakInBackground,
     onBackground: (listener) => {
       background = listener;
       return () => {
@@ -263,6 +266,56 @@ describe('one voice activity at a time', () => {
     await expect(session.result).rejects.toBeDefined();
     await flush();
     expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+  });
+
+  test('reading continues after background opt-in and stops when that policy no longer allows it', async () => {
+    let allowed = true;
+    const speech = speechEngine();
+    const runtime = setup({
+      speech: { system: speech.engine },
+      canSpeakInBackground: () => allowed,
+    });
+    const reading = runtime.module.speak('hello');
+    await flush();
+    runtime.background();
+    expect(runtime.module.getActivity().kind).toBe('speaking');
+    allowed = false;
+    runtime.background();
+    await reading;
+    expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+    await runtime.dispose();
+  });
+
+  test('dictation waits for the replaced speech engine to finish native cleanup', async () => {
+    const entered = deferred();
+    const stopped = deferred();
+    const speech = speechEngine();
+    speech.engine.speak = jest.fn(
+      ({ signal }) =>
+        new Promise<void>((_resolve, reject) => {
+          entered.resolve();
+          signal.addEventListener('abort', () => {
+            void stopped.promise.then(() => reject(signal.reason));
+          });
+        }),
+    );
+    const dictation = dictationEngine();
+    const runtime = setup({
+      speech: { system: speech.engine },
+      dictation: { system: dictation.engine },
+      selected: { dictation: 'system' },
+    });
+    const reading = runtime.module.speak('hello');
+    await entered.promise;
+    const starting = runtime.module.startDictation();
+    await flush();
+    expect(dictation.engine.start).not.toHaveBeenCalled();
+    stopped.resolve();
+    const session = await starting;
+    await reading;
+    dictation.result.resolve('done');
+    await session.result;
+    await runtime.dispose();
   });
 
   test('disposal aborts the activity and waits for the engine to settle', async () => {

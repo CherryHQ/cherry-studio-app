@@ -3,12 +3,16 @@ import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import {
+  isPermissionSupported,
+  type PermissionKind,
+  permissionConfig,
+} from '@/frontend/hooks/devicePermission/permissionConfig';
 import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { visiblePermissionKinds } from './components/PermissionListPresentation/PermissionListPresentation';
 import { PermissionSettingsItem } from './components/PermissionSettingsItem';
-import { isPermissionSupported, type PermissionKind, permissionConfig } from './permissionConfig';
 
 export default function PermissionDetailsScreen() {
   const { permission } = useLocalSearchParams<{ permission: string }>();

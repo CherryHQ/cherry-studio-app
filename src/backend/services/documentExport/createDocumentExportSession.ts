@@ -252,16 +252,6 @@ export function createDocumentExportSession(
   const session: DocumentExportSession & { cancel(): void } = {
     document,
     markdown,
-    previewDocument: (presentation) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
-      const { renderDocumentPreview } = require('./renderHtml') as typeof import('./renderHtml');
-      return renderDocumentPreview(document, presentation);
-    },
-    previewMarkdown: (text, presentation) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy loading shared by Metro and CommonJS tests
-      const { renderMarkdownPreview } = require('./renderHtml') as typeof import('./renderHtml');
-      return renderMarkdownPreview(text, presentation, document.labels);
-    },
     render: (target, context) =>
       run(context?.signal, (signal) => render(target, signal, context?.onProgress)),
     save: (artifact, signal) =>

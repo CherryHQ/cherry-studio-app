@@ -35,6 +35,8 @@ boundaries around it.
 - `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound
   Runtime, without a persisted Session, history, or tools. Bootstrap injects it into the models
   workflow and records usage; only a closed failure category reaches the setup UI.
+- `agent/diagnostics/` runs one transient diagnostic turn with explicitly supplied read-only tools.
+  Pi owns the model/tool loop in memory; no ordinary Agent tools or conversation storage are used.
 - `agent/sessionStore/`, `agent/resources/`, and `agent/tools/` respectively own transcript
   persistence, managed turn resources, and executable Agent capabilities. The mobile provider/model
   adaptation required to construct Pi lives with Pi itself, in `agent/runtime/pi/`.

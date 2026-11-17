@@ -85,6 +85,92 @@ describe('SqliteAgentSessionStore conformance', () => {
     harness.cleanup();
   });
 
+  test('steered parent order survives context rebuild, repeated reconciliation and conversation forks', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original');
+    const waiting = await settleTurn(store, session.id, 'Waiting');
+    const guided = await settleTurn(store, session.id, 'Guided');
+    const inputs = [
+      {
+        userMessageId: waiting.userMessage.id,
+        assistantMessageId: waiting.assistantMessage.id,
+        parentMessageId: guided.assistantMessage.id,
+      },
+      {
+        userMessageId: guided.userMessage.id,
+        assistantMessageId: guided.assistantMessage.id,
+        parentMessageId: original.assistantMessage.id,
+      },
+    ];
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
+    const expected = [original, guided, waiting].flatMap((turn) => [
+      turn.userMessage.id,
+      turn.assistantMessage.id,
+    ]);
+    expect((await store.listMessages(session.id)).map((row) => row.id)).toEqual(expected);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(waiting.assistantMessage.id);
+    const context = await store.loadRuntimeTurnContext(session.id, guided.turnId);
+    expect(context.history.map((row) => row.id)).toEqual([
+      waiting.userMessage.id,
+      waiting.assistantMessage.id,
+    ]);
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: waiting.assistantMessage.id,
+    });
+    expect(fork.status).toBe('forked');
+    if (fork.status === 'forked') {
+      expect((await store.listMessages(fork.session.id)).map((row) => row.parts)).toEqual(
+        (await store.listMessages(session.id)).map((row) => row.parts),
+      );
+    }
+  });
+
+  test('relationship repair preserves selection unless the explicitly expected queue tail is still selected', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original');
+    const waiting = await settleTurn(store, session.id, 'Waiting');
+    const guided = await settleTurn(store, session.id, 'Guided');
+    const inputs = [
+      {
+        userMessageId: guided.userMessage.id,
+        assistantMessageId: guided.assistantMessage.id,
+        parentMessageId: original.assistantMessage.id,
+      },
+      {
+        userMessageId: waiting.userMessage.id,
+        assistantMessageId: waiting.assistantMessage.id,
+        parentMessageId: guided.assistantMessage.id,
+      },
+    ];
+    await store.syncInputParents(session.id, inputs);
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(guided.assistantMessage.id);
+    // A user chooses another answer while native reconciliation is pending.
+    await harness.raw
+      .prepare('UPDATE agent_session SET active_node_id = ? WHERE id = ?')
+      .run(original.assistantMessage.id, session.id);
+    await store.syncInputParents(session.id, inputs, {
+      from: guided.assistantMessage.id,
+      to: waiting.assistantMessage.id,
+    });
+    expect((await store.getSession(session.id))?.activeNodeId).toBe(original.assistantMessage.id);
+    expect(
+      (await store.listMessages(session.id, waiting.assistantMessage.id)).map((row) => row.id),
+    ).toEqual(
+      [original, guided, waiting].flatMap((turn) => [
+        turn.userMessage.id,
+        turn.assistantMessage.id,
+      ]),
+    );
+  });
+
   test('editing an answer commits text, search and revision together while clearing stale translation and context', async () => {
     const session = await harness.createEmptySession({ agentId });
     const previous = await settleTurn(store, session.id, 'Earlier');
@@ -1950,6 +2036,64 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     // Activity rewinds to the newest surviving row: a deleted turn is not
     // activity, and Session list ordering is recency.
     expect(readActivity()).toBe(keptActivity);
+  });
+
+  test('deletion uses surviving completion times when parallel answers finish out of order', async () => {
+    const { store } = harness;
+    const baseTime = 2_000_000_000_000;
+    jest.useFakeTimers({ now: baseTime });
+    try {
+      const session = await harness.createEmptySession({ agentId: await harness.makeAgentId() });
+      const older = await settleTurn(store, session.id, 'Earlier question');
+      jest.setSystemTime(baseTime + 100);
+      const parallel = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'question', type: 'text', text: 'Compare', state: 'done' }],
+        additionalReplies: [{ assistantMessageId: uuidv7(), ...RESERVATION_FACTS }],
+      });
+      const [second] = parallel.additionalAssistantMessages;
+      for (const { assistantMessageId, completedAt } of [
+        { assistantMessageId: second!.id, completedAt: baseTime + 200 },
+        { assistantMessageId: parallel.assistantMessage.id, completedAt: baseTime + 300 },
+      ]) {
+        jest.setSystemTime(completedAt);
+        await store.finalizeAssistantMessage({
+          assistantMessageId,
+          status: 'success',
+          parts: [],
+          usage: null,
+          error: null,
+          contextCheckpoint: null,
+          runtimeStats: { runtimeTiming: terminalTiming() },
+        });
+      }
+      const readActivity = () =>
+        (
+          harness.raw
+            .prepare('SELECT last_activity_at AS lastActivityAt FROM agent_session WHERE id = ?')
+            .get(session.id) as { lastActivityAt: number }
+        ).lastActivityAt;
+      expect(readActivity()).toBe(baseTime + 300);
+
+      await store.deleteTurn({ sessionId: session.id, turnId: older.turnId });
+
+      expect(readActivity()).toBe(baseTime + 300);
+      expect(
+        (await store.listTurnMessages(session.id, parallel.turnId)).map((row) => row.id),
+      ).toEqual([parallel.userMessage.id, parallel.assistantMessage.id, second!.id]);
+
+      await store.deleteTurn({
+        sessionId: session.id,
+        turnId: parallel.turnId,
+        messageId: parallel.assistantMessage.id,
+      });
+
+      expect(readActivity()).toBe(baseTime + 200);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('publishes the complete fork after commit and skips rejected forks', async () => {

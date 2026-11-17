@@ -203,10 +203,6 @@ export interface DocumentExportSession {
   readonly document: ExportDocument;
   /** Lightweight fallback Markdown without embedded assets or signatures; no files or resource reads. */
   readonly markdown: string;
-  /** Immediate structured card without resource reads; delivery resolves the retained images. */
-  previewDocument(presentation: ExportPresentation): string;
-  /** Styled view of prepared Markdown: embedded pictures display, remote links need no network read. */
-  previewMarkdown(text: string, presentation: ExportPresentation): string;
   render(
     target: DocumentExportTarget,
     context?: {

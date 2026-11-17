@@ -57,6 +57,11 @@ export function readKnownAiFinishReason(value: unknown): string | undefined {
 }
 
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
+  cloud_signed_out: 'auth',
+  cloud_unavailable: 'provider_unavailable',
+  cloud_not_entitled: 'permission',
+  cloud_quota_exhausted: 'quota',
+  quota_exhausted: 'quota',
   authentication_error: 'auth',
   content_filter: 'content_filter',
   content_policy_violation: 'content_filter',
@@ -72,6 +77,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   insufficient_credit: 'quota',
   insufficient_quota: 'quota',
   insufficient_user_quota: 'quota',
+  input_too_long: 'context_length',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
   image_too_large: 'payload_too_large',
@@ -151,6 +157,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase();
+  const cloudCode = /\bcloud_(?:signed_out|unavailable|not_entitled|quota_exhausted)\b/.exec(
+    text,
+  )?.[0];
+  if (cloudCode && CODE_REASONS[cloudCode]) return CODE_REASONS[cloudCode];
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,
   )?.[1];

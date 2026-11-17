@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cherry Studio",
     "slug": "cherry-studio",
-    "version": "0.5.5",
+    "version": "0.6.0",
     "locales": {
       "de": "./assets/permissions/locales/de.json",
       "el": "./assets/permissions/locales/el.json",
@@ -113,7 +113,8 @@
         "NSBonjourServices": ["_cherry-remote._tcp"],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "UIBackgroundModes": ["audio", "processing"]
       }
     },
     "android": {

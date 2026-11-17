@@ -24,8 +24,14 @@ function Consumer({ id }: { id: string }) {
   return null;
 }
 let sessions: ReturnType<typeof useConversationSessions>;
-function Sessions({ enabled = true }: { enabled?: boolean }) {
-  const current = useConversationSessions(undefined, enabled);
+function Sessions({
+  enabled = true,
+  includeBranches = false,
+}: {
+  enabled?: boolean;
+  includeBranches?: boolean;
+}) {
+  const current = useConversationSessions(undefined, enabled, { includeBranches });
   useEffect(() => {
     sessions = current;
   });
@@ -158,6 +164,40 @@ describe('catalog consumer ownership', () => {
       query.clear();
       jest.useRealTimers();
     }
+  });
+  it('switches between independent flat and grouped session caches', async () => {
+    mockSource = { ...mockSource, ref: { kind: 'local' } };
+    const root = { ref: { source: mockSource.ref, sessionId: 'root' }, title: 'Main' };
+    const branch = {
+      ref: { source: mockSource.ref, sessionId: 'branch' },
+      title: 'Branch',
+      forkedFromSessionId: 'root',
+    };
+    mockSource.catalog.listSessions = jest.fn(
+      async ({
+        includeBranches,
+      }: Parameters<ConversationSource['catalog']['listSessions']>[0]) => ({
+        items: includeBranches ? [branch, root] : [root],
+      }),
+    );
+    const renderSessions = (includeBranches: boolean) => (
+      <QueryClientProvider client={query}>
+        <Sessions includeBranches={includeBranches} />
+      </QueryClientProvider>
+    );
+    await act(async () => {
+      tree = create(renderSessions(false));
+    });
+    for (let i = 0; i < 20 && !sessions.isSuccess; i++) await act(tick);
+    expect(sessions.items).toEqual([root]);
+
+    await act(async () => tree.update(renderSessions(true)));
+    for (let i = 0; i < 20 && !sessions.isSuccess; i++) await act(tick);
+    expect(sessions.items).toEqual([branch, root]);
+
+    await act(async () => tree.update(renderSessions(false)));
+    expect(sessions.items).toEqual([root]);
+    expect(query.getQueryCache().getAll()).toHaveLength(2);
   });
   it.each(['synchronizing', 'offline', 'suspended'] as const)(
     'waits without loading while the source is %s, then loads after connecting',

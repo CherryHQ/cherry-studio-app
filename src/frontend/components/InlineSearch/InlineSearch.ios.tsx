@@ -11,8 +11,8 @@ import { InlineSearchField } from './InlineSearchField';
 export function InlineSearch(props: InlineSearchProps) {
   const isFormContentConstrained = useIsFormContentConstrained();
 
-  // Native header search spans the window, outside the form's width constraint.
-  return isFormContentConstrained ? (
+  // Embedded content owns its header; native search would create another navigation bar.
+  return props.layout === 'embedded' || isFormContentConstrained ? (
     <InlineSearchField {...props} />
   ) : (
     <NativeInlineSearch {...props} />

@@ -19,6 +19,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import {
+  agentGlobalSkillService,
+  type AgentGlobalSkillService,
+} from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -45,6 +49,10 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import {
+  createAgentConfigurationTools,
+  type AgentConfigurationAccess,
+} from './agentConfigurationTools';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
@@ -60,6 +68,8 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createHttpRequestTool } from './httpRequestTool';
+import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -70,6 +80,7 @@ import {
 } from './painting';
 import { createReadFileContentReader, createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createSkillInventoryTool } from './skill/skillInventoryTool';
 import { createSshFileTools } from './sshFileTools';
 import { createSshTool, type SshToolAccess } from './sshTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
@@ -119,6 +130,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
+    skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -126,6 +138,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     platform: string;
     preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
+    agentConfiguration?: AgentConfigurationAccess;
   };
 
 /**
@@ -135,6 +148,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  mcpManagement?: McpManagementAccess;
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
@@ -142,6 +156,7 @@ export type SystemCapabilityServices = {
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
+  agentConfiguration?: AgentConfigurationAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -188,6 +203,10 @@ export function createSystemCapabilitySource(
         acceptsImages,
         transcriptionReady ?? false,
       );
+      if (services.mcpManagement) {
+        for (const tool of createMcpManagementTools(services.mcpManagement))
+          catalog.set(tool.providerName, tool);
+      }
       if (sessionId && services.ssh?.isAvailable()) {
         const target = await services.ssh.resolveAgentTarget(sessionId);
         if (target) {
@@ -299,7 +318,11 @@ function createCatalog(
   const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
+    ...(deps.agentConfiguration
+      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
+      : []),
     ...createAgentManagementTools(deps.agents, agentId),
+    createSkillInventoryTool(deps.skillLibrary, agentId),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -340,6 +363,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
+    createHttpRequestTool(),
     createGenerateImageTool(
       {
         ...deps.painting,
@@ -462,7 +486,9 @@ function resolveDependencies(
   return {
     voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
+    skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,
+    agentConfiguration: overrides.agentConfiguration ?? services.agentConfiguration,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

@@ -8,3 +8,9 @@ export const appStateTable = sqliteTable('app_state', {
   description: text(), // Optional description field
   ...createUpdateTimestamps,
 });
+
+/** Enterprise sync bookkeeping; cleared when local data is restored into an enterprise profile. */
+export const ENTERPRISE_SYNC_STATE_KEY = 'enterprise.sync';
+
+/** The enterprise identity a backup database was exported from; only it may restore the backup. */
+export const BACKUP_PROFILE_KEY = 'backup.profile';

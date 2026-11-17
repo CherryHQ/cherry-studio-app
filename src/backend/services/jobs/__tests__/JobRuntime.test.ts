@@ -5,6 +5,7 @@ import { uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 import { JobService } from '@/backend/data/services/JobService';
+import type { KeepAliveTask } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { JOB_ERROR_CODES, type JobProgress } from '@/shared/data/api/schemas/jobs';
 
 import { JobExecutionError } from '../JobExecutionError';
@@ -665,6 +666,61 @@ describe('JobRuntime', () => {
     // microtask later in the execute pipeline's finally.
     await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
     expect(leases[0]?.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses local user intent and actual handler progress for continued processing through committed completion', async () => {
+    const gate = makeGate();
+    const release = jest.fn();
+    const update = jest.fn();
+    const acquire = jest.fn((_tag: string, _interrupt: unknown, _task?: KeepAliveTask) => ({
+      release,
+      update,
+    }));
+    const handler: JobHandler = {
+      executionClass: 'user-continued',
+      recovery: 'abandon',
+      continuedProcessing: () => ({ title: 'Image', subtitle: 'Generating' }),
+      async execute(ctx) {
+        ctx.reportProgress(25);
+        await gate.promise;
+        return 'image';
+      },
+    };
+    const { runtime } = await setup([['internal.userTask', handler]], { keepAlive: { acquire } });
+    const handle = await enqueueTest(runtime, 'internal.userTask', {});
+    await waitFor(() => update.mock.calls.length > 0);
+    expect(acquire).toHaveBeenCalledWith('job.internal.userTask', expect.any(Function), {
+      title: 'Image',
+      subtitle: 'Generating',
+      completedUnitCount: 0,
+      totalUnitCount: 100,
+    });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ completedUnitCount: 25 }));
+    expect(release).not.toHaveBeenCalled();
+    gate.release();
+    expect((await handle.finished).status).toBe('completed');
+    await waitFor(() => release.mock.calls.length > 0);
+    expect(release).toHaveBeenCalledWith('completed');
+  });
+
+  it('does not grant restored jobs a new continued-processing request', async () => {
+    const acquire = jest.fn(() => ({ release: jest.fn() }));
+    const handler = makeEchoHandler({
+      executionClass: 'user-continued',
+      recovery: 'retry',
+      continuedProcessing: () => ({ title: 'Image', subtitle: 'Generating' }),
+    });
+    const { db, runtime } = await setup([['internal.restored', handler]], {
+      keepAlive: { acquire },
+    });
+    await insertJob(db.database, {
+      type: 'internal.restored',
+      queue: 'internal.restored',
+      input: { message: 'restored' },
+    });
+    await runtime._doInit();
+    await waitFor(() => acquire.mock.calls.length > 0);
+    expect(acquire).toHaveBeenCalledWith('job.internal.restored', expect.any(Function));
   });
 
   it('keeps execution protected while claiming a queued user-continued successor', async () => {

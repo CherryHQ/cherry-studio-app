@@ -49,7 +49,7 @@ export type RuntimeDescriptor = {
 };
 
 export interface AgentRuntime {
-  /** Persistent production sessions; short-lived open() remains for isolated model probes. */
+  /** Persistent production sessions; open() isolates checks with explicitly supplied read tools. */
   readonly conversations?: import('./durableTypes').DurableAgentRuntime;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
@@ -328,6 +328,8 @@ export type RuntimeExecutionRequest = {
   resume?: RuntimeMessagePart[];
   /** Probe-only credential override. Never persist it or include it in traces or output events. */
   apiKeyOverride?: string;
+  /** Isolated-run budgets, enforced before dispatch/validation; rejected tool calls count too. */
+  limits?: { modelCalls: number; toolCalls: number };
   turnId: string;
   /**
    * Host-owned conversation identity. Providers that key requests on the conversation
@@ -461,6 +463,8 @@ export type RuntimeErrorContext = {
   finishReason?: string;
   responseBody?: string;
 };
+
+export const RUNTIME_EXECUTION_LIMIT_CODE = 'RUNTIME_EXECUTION_LIMIT';
 
 export type RuntimeError = {
   code: string;
