@@ -170,7 +170,7 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
       const result = await this.dbService.withWriteTx(async (tx) => {
         signal.throwIfAborted();
         storageMutationGate.assertWritable();
-        const agent = await this.agents.createTx(tx, { name: 'deepseek' });
+        const agent = await this.agents.createTx(tx, { name: 'DeepSeek' });
         let missingAttachments = 0;
         let completed = 0;
         for (const item of index) {

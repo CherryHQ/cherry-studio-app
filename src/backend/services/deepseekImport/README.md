@@ -32,7 +32,7 @@ source or fixtures. Native import acceptance and regression execution require us
 
 ## Persistence
 
-Each successful invocation creates a **new** agent named `deepseek`, reusing normal Agent creation
+Each successful invocation creates a **new** agent named `DeepSeek`, reusing normal Agent creation
 defaults, including the saved default model when available. It does not choose or configure a new
 provider. Every conversation is assigned to that new agent; importing again creates another agent.
 Existing agents and conversations are retained.
@@ -56,6 +56,11 @@ Agent creation and every conversation/message write share one transaction, so a 
 failed commit cannot leave an empty imported agent or a partial set of conversations. Image cleanup
 is best effort, matching the shared file owner. Cache cleanup cannot change a committed outcome.
 Conversation JSON is read one file at a time, avoiding a second full archive in JS memory.
+
+On success, failure or cancellation, the operation's finalizer attempts to remove its downloaded
+ZIP and extracted directory. The downloader also removes partial transfers and releases its native
+task/listener. Images referenced by committed conversations remain managed attachments. Cleanup
+failures are logged; this module has no startup sweep for remnants left by process termination.
 
 The settings tutorial is three localized operation diagrams: open settings, request export, copy
 the complete download link. It is not a screenshot of a user's account. All 13 locales are included.

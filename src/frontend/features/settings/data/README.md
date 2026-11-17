@@ -3,7 +3,7 @@
 The route groups backup, conversation import and local storage maintenance.
 
 The `data/deepseek` child page accepts a DeepSeek export download link above a three-step illustrated
-export guide. The backend validates and downloads the archive, creates a new `deepseek` Agent and
+export guide. The backend validates and downloads the archive, creates a new `DeepSeek` Agent and
 imports all conversations into it without a destination or model picker. The page owns its transient
 input and progress; leaving it cancels pending work. The signed link is never persisted. Existing
 data remains in place. See [DeepSeek import](../../../../backend/services/deepseekImport/README.md).

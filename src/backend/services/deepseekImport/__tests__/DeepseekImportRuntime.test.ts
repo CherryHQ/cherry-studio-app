@@ -92,15 +92,15 @@ afterEach(async () => {
   sqlite.close();
 });
 
-test('creates one new deepseek agent and assigns every conversation while preserving existing agents', async () => {
+test('creates one new DeepSeek agent and assigns every conversation while preserving existing agents', async () => {
   const result = await importer.importFromUrl(url, {
     signal: new AbortController().signal,
     onProgress: () => {},
   });
   expect(result).toMatchObject({ sessions: 2, messages: 4, missingAttachments: 0 });
   expect(sqlite.prepare('SELECT id, name FROM agent ORDER BY name').all()).toEqual([
+    { id: result.agentId, name: 'DeepSeek' },
     { id: 'existing', name: 'Existing' },
-    { id: result.agentId, name: 'deepseek' },
   ]);
   expect(sqlite.prepare('SELECT DISTINCT agent_id FROM agent_session').all()).toEqual([
     { agent_id: result.agentId },
