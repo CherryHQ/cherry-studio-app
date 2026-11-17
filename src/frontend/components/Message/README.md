@@ -52,6 +52,9 @@ history, message rows and parts, viewport following, and scroll restoration.
 - `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the
   shared process layout, including localized titles for group summaries. Without a provider, tools keep the local built-in dispatch. Source-owned
   renderers compose `MessagePart.Tool`; remote data never enters the local tool adapters.
+- `ReadOnlyToolContent` reuses the web-source cards, generic result body and normalized MCP result
+  content after a source has loaded its input/output. It accepts no Apps linkage or local MCP
+  resource source; local renderers keep those capabilities in their own shell.
 
 A feature composes an explicit role variant and gives `MessageList` a stable `renderMessage`.
 LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; changing the renderer

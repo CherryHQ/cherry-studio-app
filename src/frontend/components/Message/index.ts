@@ -9,6 +9,7 @@ export {
 } from './parts/MessageSelectionActionContext';
 export { useMessageProcessTitle } from './parts/ProcessGroupPart';
 export { ToolGroupPart } from './parts/tools/ToolGroupPart';
+export { ReadOnlyToolContent } from './parts/tools/ReadOnlyToolContent';
 export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
 export type { ToolMessagePart } from './parts/tools/toolPartState';
 export {
