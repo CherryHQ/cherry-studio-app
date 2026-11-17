@@ -32,6 +32,7 @@ import {
   type ProviderModelPurpose,
 } from '../models/utils/providerModelPurpose';
 import { CloudProviderDetail } from './components/CloudProviderDetail';
+import { DeepseekSafetySetting } from './components/DeepseekSafetySetting';
 import { ManagedProviderDetail } from './components/ManagedProviderDetail';
 import { ProviderDetailTabs } from './components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './components/ProviderDetailTabs/types';
@@ -242,15 +243,18 @@ function ProviderDetailSettings({
       {activeTab === 'configuration' ? (
         <ProviderConfiguration
           footer={
-            <Section>
-              <Section.Item
-                destructive
-                disabled={isDeleting || configuration.value?.isBusy}
-                label={t('settings.provider.deleteProvider')}
-                onPress={handleDelete}
-                showChevron={false}
-              />
-            </Section>
+            <>
+              {provider?.id === 'deepseek' ? <DeepseekSafetySetting /> : null}
+              <Section>
+                <Section.Item
+                  destructive
+                  disabled={isDeleting || configuration.value?.isBusy}
+                  label={t('settings.provider.deleteProvider')}
+                  onPress={handleDelete}
+                  showChevron={false}
+                />
+              </Section>
+            </>
           }
           testID="provider-configuration"
           value={configuration.value}

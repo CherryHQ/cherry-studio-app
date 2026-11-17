@@ -1,7 +1,6 @@
 import type { ConvertResult } from 'react-native-anydoc';
 import * as z from 'zod';
 
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import {
   FileAttachmentError,
   type DocumentJsonValue,
@@ -11,6 +10,7 @@ import {
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
+  isDeepseekOcrFileType,
 } from '@/shared/utils/documentFileTypes';
 import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -22,6 +22,7 @@ export type DocumentContentReader = {
   readDocumentText?(
     file: FileAttachmentFact,
     signal: AbortSignal,
+    mode?: DocumentParserMode,
   ): Promise<ExtractedDocumentText | undefined>;
 };
 
@@ -44,15 +45,12 @@ export async function parseDocument(
 ): Promise<Exclude<ParsedDocument, { parser: 'anydoc' }> | ParsedAnydocDocument> {
   const issue = { fileEntryId: file.fileEntryId, name: file.name };
   const type = documentFileTypeFromMediaType(file.mediaType);
-  const cloud =
-    getDeepseekServices().ocr &&
-    type !== undefined &&
-    ['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(type);
-  if (!type || (!cloud && mode === 'builtin' && type !== 'pdf' && !isBuiltinOfficeFileType(type))) {
+  const cloud = mode === 'deepseek' && type !== undefined && isDeepseekOcrFileType(type);
+  if (!type || (mode === 'builtin' && type !== 'pdf' && !isBuiltinOfficeFileType(type))) {
     throw new FileAttachmentError({ ...issue, code: 'parser-unsupported' });
   }
   if (type === 'pdf' || mode === 'builtin' || cloud) {
-    const output = await reader.readDocumentText?.(file, signal);
+    const output = await reader.readDocumentText?.(file, signal, mode);
     signal.throwIfAborted();
     if (!output) throw new FileAttachmentError({ ...issue, code: 'unavailable' });
     if (!output.text.trim()) throw new FileAttachmentError({ ...issue, code: 'document-empty' });

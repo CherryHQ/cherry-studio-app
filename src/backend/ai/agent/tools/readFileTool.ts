@@ -165,7 +165,8 @@ export function createReadFileContentReader(
       source,
       {
         readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
-        readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+        readDocumentText: (file, readSignal, mode) =>
+          files.readDocumentText(file, readSignal, mode),
         readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       },
       signal,

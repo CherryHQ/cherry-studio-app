@@ -1,11 +1,14 @@
+import { getBaseUrl } from '@cherrystudio/ai-runtime/provider';
+
 import { providerService } from '@/backend/data/services/ProviderService';
-import { DeepseekServicesSchema } from '@/shared/contracts/deepseek';
+import { deepseekServiceBaseUrl } from '@/backend/services/providers/deepseekConnection';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
+import type { Provider } from '@/shared/data/types/provider';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -138,7 +141,7 @@ export async function getRuntimeConfig(
 
 /**
  * `override` replaces independent settings so unsaved fields use the same lookup path.
- * An explicit live DeepSeek binding remains authoritative for its credentials and address.
+ * DeepSeek always reads credentials and its service address from the model provider.
  */
 export async function getProviderById<TProviderId extends WebSearchProvider['id']>(
   providerId: TProviderId,
@@ -149,21 +152,30 @@ export async function getProviderById<TProviderId extends WebSearchProvider['id'
   const preset = getWebSearchProviderPresetById(providerId);
   const provider = mergeWebSearchProviderPreset(preset, override ?? providerOverrides[providerId]);
 
-  const deepseek =
-    providerId === 'deepseek' ? await preferences.get('feature.deepseek.services') : undefined;
-  if (deepseek?.search && deepseek.providerId) {
-    const linked = await providerService.getByProviderId(deepseek.providerId);
-    const { keys } = await providerService.listApiKeys(deepseek.providerId, { enabled: true });
+  if (providerId === 'deepseek') {
+    let linked: Provider;
+    try {
+      linked = await providerService.getByProviderId('deepseek');
+    } catch (error) {
+      if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND)
+        return {
+          ...provider,
+          credentialsProviderId: 'deepseek',
+          apiKeys: [],
+        } as WebSearchProvider & { id: TProviderId };
+      throw error;
+    }
+    const { keys } = await providerService.listApiKeys('deepseek', { enabled: true });
     return {
       ...provider,
-      credentialsProviderId: deepseek.providerId,
+      credentialsProviderId: 'deepseek',
       apiKeys:
         linked.isEnabled && linked.authType === 'api-key'
           ? trimStringList(keys.map((entry) => entry.key))
           : [],
       capabilities: provider.capabilities.map((capability) => ({
         ...capability,
-        apiHost: DeepseekServicesSchema.shape.apiHost.parse(deepseek.apiHost),
+        apiHost: deepseekServiceBaseUrl(getBaseUrl(linked)),
       })),
     } as WebSearchProvider & { id: TProviderId };
   }

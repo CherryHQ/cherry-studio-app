@@ -1,11 +1,12 @@
 # Built-In Tools
 
-This page branch owns `/plugins/tools/web-search` and `/plugins/tools/fetch-urls`, the pages for the
-application-owned tools listed on the Plugins page.
+This page branch owns `/plugins/tools/web-search`, `/plugins/tools/fetch-urls`,
+`/plugins/tools/document-parser` and `/plugins/tools/ocr`, the capability settings listed under
+Plugins → Built-in tools. It does not register additional Agent tools.
 
 ## Public Interface
 
-- `index.ts` exports both route screens, the `BUILTIN_TOOLS` definitions the Plugins page lists, and
+- `index.ts` exports the four route screens, the `BUILTIN_TOOLS` definitions the Plugins page lists, and
   `getWebSearchProviderDisplayName`, which names the provider serving each listed tool.
 - API management components, context, hooks, and helpers remain private to this page branch.
 
@@ -13,6 +14,12 @@ application-owned tools listed on the Plugins page.
 
 - `BuiltinToolScreen.tsx` renders either tool: identity, its provider and credentials, and for web
   search the result count and compression settings.
+- `FileToolScreens.tsx` owns document parsing and OCR settings. AnyDoc remains the document default;
+  DeepSeek selects native document input for the DeepSeek Provider's `deepseek-flash`, and cloud
+  PDF/Word/PowerPoint text for other models. Other formats retain AnyDoc. The chosen parser travels
+  through the managed reader boundary with the operation. OCR independently chooses on-device or
+  DeepSeek image/PDF recognition without changing Office parser choices.
+  Shared credentials link to the existing DeepSeek model Provider; no separate service settings exist.
 - `apiService/` owns provider checks, the API key, API address, and basic-auth fields, and API key
   parsing.
 - `components/` contains controls owned by the tool pages.

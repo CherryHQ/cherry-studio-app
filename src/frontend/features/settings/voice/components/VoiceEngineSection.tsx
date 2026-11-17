@@ -1,10 +1,10 @@
 import { BottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform } from 'react-native';
 
+import { ProviderCredentialsLink } from '@/frontend/components/ProviderCredentialsLink';
 import { useBackendModule, usePreference } from '@/frontend/data';
 import { useDictationSetup } from '@/frontend/hooks/useDictationSetup';
 import {
@@ -25,7 +25,6 @@ export function VoiceEngineSection({
   children?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const router = useRouter();
   const { toast } = useToast();
   const voice = useBackendModule('voice');
   const queryClient = useQueryClient();
@@ -111,11 +110,7 @@ export function VoiceEngineSection({
         />
         {children}
         {effectiveEngine === 'deepseek' ? (
-          <Section.Item
-            label={t('deepseek.title')}
-            description={t('deepseek.voiceDescription')}
-            onPress={() => router.push('/settings/deepseek')}
-          />
+          <ProviderCredentialsLink providerId="deepseek" providerName="DeepSeek" />
         ) : null}
         {capability === 'transcription' && effectiveEngine !== 'deepseek' ? (
           <Section.Item

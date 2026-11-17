@@ -73,8 +73,10 @@ export const FileAttachmentReportSchema = z.strictObject({
 });
 export type FileAttachmentReport = z.infer<typeof FileAttachmentReportSchema>;
 
-export type DocumentParserMode = 'anydoc' | 'builtin';
+export type DocumentParserMode = 'anydoc' | 'builtin' | 'deepseek';
 export const DEFAULT_DOCUMENT_PARSER_MODE: DocumentParserMode = 'anydoc';
+
+export type OcrEngine = 'local' | 'deepseek';
 
 /** Opaque JSON, not a schema for a particular community IR version. */
 export type DocumentJsonValue =

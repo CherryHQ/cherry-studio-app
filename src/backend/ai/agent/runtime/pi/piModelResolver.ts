@@ -24,7 +24,6 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
@@ -196,12 +195,12 @@ export function createPiModelResolver(
         provider.presetProviderId === 'openrouter' ||
         isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
-      const deepseek = getDeepseekServices();
       const deepseekFiles =
         provider.authType === 'api-key' &&
-        deepseek.providerId === provider.id &&
-        modelId === 'deepseek-flash';
-      if (deepseekFiles && deepseek.files && adapter.api === 'anthropic-messages') {
+        provider.id === 'deepseek' &&
+        modelId === 'deepseek-flash' &&
+        application.get('PreferenceService').readCached('file.document_parser.mode') === 'deepseek';
+      if (deepseekFiles && adapter.api === 'anthropic-messages') {
         const existing = Object.keys(headers).find(
           (name) => name.toLowerCase() === 'anthropic-beta',
         );
@@ -370,7 +369,7 @@ export function createPiModelResolver(
             ? bearerKey
             : ''
           : (nativeKey ?? apiKey);
-        return withPiDeepseekFiles(stream, provider.id, servingKey);
+        return withPiDeepseekFiles(stream, provider.id, servingKey, connection.baseUrl);
       };
       const primaryStream = bindDocuments(
         await bindPiStream(adapter, streamBinding),
@@ -466,6 +465,11 @@ export function createPiModelResolver(
                 provider,
                 runtimeOptions,
               }),
+        deepseekSafetyCheck:
+          provider.id === 'deepseek' &&
+          provider.authType === 'api-key' &&
+          modelId === 'deepseek-flash' &&
+          application.get('PreferenceService').readCached('chat.deepseek.safety_check'),
         usageContext,
       };
     },
@@ -500,11 +504,9 @@ function resolveNativeWebTools({
   runtimeOptions: RuntimeOptions;
 }): PiNativeWebTools {
   if (!connection.endpointType) return NO_NATIVE_WEB_TOOLS;
-  const deepseek = getDeepseekServices();
   if (
-    deepseek.nativeTools &&
     provider.authType === 'api-key' &&
-    deepseek.providerId === provider.id &&
+    provider.id === 'deepseek' &&
     connection.wireModelId === 'deepseek-flash'
   ) {
     const dialect =

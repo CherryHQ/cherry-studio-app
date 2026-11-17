@@ -26,7 +26,7 @@ import { createVoiceRuntime } from './VoiceRuntime';
 
 type VoicePreferences = {
   get(key: (typeof VOICE_ENGINE_PREFERENCE)[VoiceCapability]): Promise<VoiceEngineId | null>;
-  get(key: 'feature.voice.system_voice'): Promise<string>;
+  get(key: 'feature.voice.system_voice' | 'feature.voice.deepseek_voice'): Promise<string>;
   readCached(key: 'app.background_audio.consent'): boolean | null;
 };
 
@@ -89,7 +89,7 @@ export function createVoice({
         sensevoice: bindDictation(createSenseVoiceDictationEngine(model, permissions)),
       },
       speech: {
-        deepseek: createDeepseekSpeech(),
+        deepseek: createDeepseekSpeech(() => preference.get('feature.voice.deepseek_voice')),
         system: createSystemSpeechEngine({
           voice: () => preference.get('feature.voice.system_voice'),
         }),

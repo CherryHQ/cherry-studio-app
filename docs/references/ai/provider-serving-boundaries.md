@@ -28,8 +28,9 @@ Image execution remains independent. It reuses Provider identity and connection 
 not consume a language request abstraction. Future embedding, rerank, audio, and video capabilities
 follow the same rule: share connection facts, then own their request and result semantics.
 
-DeepSeek's opt-in application services follow this boundary in Mobile: OCR, ASR and TTS use an
-explicit Provider reference and service address with `ProviderService` credential selection. File
+DeepSeek's application services follow this boundary in Mobile: OCR, ASR and TTS directly use the
+DeepSeek model Provider's address and `ProviderService` credential selection. Feature choices stay
+with built-in file tools and voice settings; no separate service binding is stored. File
 uploads belong to the managed-file service; the private Pi adapter supplies the credential of the
 actual model attempt and translates prepared references into native input blocks. This is separate
 from model listing/image execution and adds no shared package or alternate chat loop. See

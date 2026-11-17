@@ -1,10 +1,9 @@
 import { File } from 'expo-file-system';
 
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import { MAX_IMAGE_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
 import { readDeepseekOcr } from './deepseekOcr';
-import { readImageText } from './fileTextExtraction';
+import { getFileOcrEngine, readImageText } from './fileTextExtraction';
 import type { ExtractedDocumentText } from './officeText';
 
 export class ImageTextError extends Error {
@@ -24,7 +23,7 @@ export async function readImageUriText(
   if (!source.exists) throw new ImageTextError('unavailable');
   if (source.size > MAX_IMAGE_ATTACHMENT_BYTES) throw new ImageTextError('file-bytes');
   try {
-    const cloud = getDeepseekServices().ocr;
+    const cloud = getFileOcrEngine() === 'deepseek';
     const result = cloud ? await readDeepseekOcr(uri, signal) : await readImageText(source, signal);
     signal.throwIfAborted();
     if (result.ocrUnavailable) throw new ImageTextError('unsupported');

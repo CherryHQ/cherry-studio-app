@@ -13,7 +13,6 @@ import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
 
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
@@ -167,19 +166,15 @@ export function createPiDurableModels(
             search: configured?.search === 'server' && native?.search ? 'server' : 'none',
             fetch: configured?.fetch === 'server' && native?.fetch ? 'server' : 'none',
           };
-          const deepseekSettings = getDeepseekServices();
-          const safetyDialect =
-            deepseekSettings.safetyCheck &&
-            deepseekSettings.providerId === resolved.model.provider &&
-            resolved.model.id === 'deepseek-flash'
-              ? resolved.model.api === 'anthropic-messages'
-                ? 'deepseek-messages'
-                : resolved.model.api === 'openai-responses'
-                  ? 'deepseek-responses'
-                  : resolved.model.api === 'openai-completions'
-                    ? 'deepseek-chat'
-                    : undefined
-              : undefined;
+          const safetyDialect = resolved.deepseekSafetyCheck
+            ? resolved.model.api === 'anthropic-messages'
+              ? 'deepseek-messages'
+              : resolved.model.api === 'openai-responses'
+                ? 'deepseek-responses'
+                : resolved.model.api === 'openai-completions'
+                  ? 'deepseek-chat'
+                  : undefined
+            : undefined;
           const observationDialect = safetyDialect ?? native?.dialect;
           const web =
             observationDialect &&
@@ -209,11 +204,7 @@ export function createPiDurableModels(
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
                 let sent = (await onPayload?.(payload, wire)) ?? payload;
-                if (
-                  deepseekSettings.providerId === wire.provider &&
-                  wire.id === 'deepseek-flash' &&
-                  deepseekSettings.safetyCheck
-                )
+                if (resolved.deepseekSafetyCheck)
                   sent = { ...(sent as Record<string, unknown>), safety_check: { level: 'high' } };
                 // Replay follows routing: a deferred server tool returns only beside its definition.
                 const prepared = applyPiWebReplay(

@@ -33,6 +33,7 @@ export type PiModelResolution = {
   streamFn: PiStreamFn;
   supportsTools: boolean;
   nativeWebTools?: PiNativeWebTools;
+  deepseekSafetyCheck?: boolean;
   usageContext: RuntimeUsageContext;
 };
 

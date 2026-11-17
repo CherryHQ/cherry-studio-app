@@ -11,10 +11,10 @@
  * shape is asserted in `__tests__/preferenceUtils.test.ts` instead.
  */
 
-import { DEFAULT_DEEPSEEK_SERVICES, type DeepseekServices } from '@/shared/contracts/deepseek';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
+  type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import type { VoiceEngineId } from '@/shared/contracts/voice';
 import type {
@@ -91,11 +91,11 @@ export interface PreferenceSchema {
   'chat.web_search.model_tools_preferred': boolean;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
   'chat.input.enter_to_send': boolean;
+  'chat.deepseek.safety_check': boolean;
 
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
-  'feature.deepseek.services': DeepseekServices;
   /** Null disables voice input and keeps the composer's send action. */
   'feature.voice.dictation_engine': VoiceEngineId | null;
   /** Null follows the app language. */
@@ -108,8 +108,10 @@ export interface PreferenceSchema {
   'feature.voice.transcription_language': LanguageVarious | null;
   /** Empty uses the system default voice for the app language. */
   'feature.voice.system_voice': string;
+  'feature.voice.deepseek_voice': 'stella' | 'tide';
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.ocr.engine': OcrEngine;
   'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
@@ -160,15 +162,17 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
-  'feature.deepseek.services': DEFAULT_DEEPSEEK_SERVICES,
+  'chat.deepseek.safety_check': false,
   'feature.voice.dictation_engine': null,
   'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,
   'feature.voice.system_voice': '',
+  'feature.voice.deepseek_voice': 'stella',
   'feature.voice.transcription_engine': 'sensevoice',
   'feature.voice.transcription_language': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.ocr.engine': 'local',
   'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,
@@ -197,6 +201,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
   'file.document_parser.mode',
+  'file.ocr.engine',
   'file.export.watermark_enabled',
   'ui.font_size_step',
   'ui.library.view_mode',

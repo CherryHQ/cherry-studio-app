@@ -5,38 +5,46 @@ not been run for this change. The published Cherry Studio packages are unchanged
 
 ## Configuration And Ownership
 
-**Settings → DeepSeek services** stores `feature.deepseek.services`: an existing Provider ID,
-the service address, per-feature opt-ins and the selected speaking voice. It stores no copied
-API key. Provider records and `ProviderService.resolveApiKey` remain authoritative for enabled
-credentials and rotation. The settings route links to the selected Provider's key editor.
+The existing **Settings → Model providers → DeepSeek** record owns credentials and addresses for
+every DeepSeek capability. There is no separate service page, Provider binding or credential copy.
+`ProviderService.resolveApiKey` remains authoritative for enabled credentials and rotation.
+The service root comes from that Provider's configured endpoint, removing its standard `/v1` or
+`/anthropic[/v1]` protocol suffix while preserving a gateway prefix. Service paths supply their own
+API version. A gateway must implement these APIs; configuring its chat endpoint does not prove
+that it serves application tools.
 
-The service address defaults to `https://api.deepseek.com`, independently of the Provider's chat
-endpoints. The user must select an official DeepSeek account or a compatible gateway; selecting
-an arbitrary Provider does not give its keys access to DeepSeek. Address validation rejects
-embedded credentials, query parameters and fragments. Service paths supply their own API version.
+**Plugins → Built-in tools** owns separate **Document parsing** and **OCR** pages. Document parsing
+stores `file.document_parser.mode`; OCR stores `file.ocr.engine`. **Settings → Voice** owns the
+three engine selections and `feature.voice.deepseek_voice`. Enhanced content checks live in the
+ordinary DeepSeek model Provider page as `chat.deepseek.safety_check`.
 
-`services/providers/deepseekConnection.ts` receives live preferences from composition and resolves
-one credential per OCR/voice operation. `deepseekHttp.ts` uses the existing bounded, cancellable
+`services/providers/deepseekConnection.ts` resolves the live DeepSeek model Provider and one
+credential per OCR/voice operation. `deepseekHttp.ts` uses the existing bounded, cancellable
 HTTP client and ordered multipart fields. Domain services own their own results and lifecycles:
 
 | Capability | Mobile owner | Selection |
 | --- | --- | --- |
-| External Search/Fetch | `services/webSearch`, existing `@cherrystudio/web-search` | Enable key sharing and select DeepSeek on the built-in web tool pages |
-| OCR | `services/file/deepseekOcr.ts`, existing controlled readers | Enable cloud text extraction |
-| Model document input | Host attachment admission, Pi wire adapter, `services/file/deepseekFiles.ts` | Enable document input and select this Provider's exact `deepseek-flash` model |
+| External Search/Fetch | `services/webSearch`, existing `@cherrystudio/web-search` | Select DeepSeek on the built-in web tool pages; credentials and address automatically follow the model Provider |
+| OCR | `services/file/deepseekOcr.ts`, existing controlled readers | Select DeepSeek on Plugins → Built-in tools → OCR |
+| Model document input | Host attachment admission, Pi wire adapter, `services/file/deepseekFiles.ts` | Select DeepSeek on Document parsing and use the DeepSeek Provider's exact `deepseek-flash` model |
 | Dictation/audio transcription | `services/voice/deepseekRecognition.ts` | Select DeepSeek separately for each capability in Voice settings |
 | Read aloud | `services/voice/deepseekSpeech.ts` | Select the DeepSeek speech engine and Stella or Tide |
-| Native web tools/content checks | Existing Pi model payload/response owners | Per-feature opt-in for this Provider's exact `deepseek-flash` model |
+| Native web tools/content checks | Existing Pi model payload/response owners | Native tools follow existing web routing and permissions; enhanced checks are optional in the DeepSeek model Provider page |
 
-All cloud switches default off. A configured Provider does not automatically replace a voice
-engine or choose an external web provider. Missing credentials report unavailability; recognition
+Document parsing defaults to AnyDoc, OCR to on-device recognition, and enhanced checks to off.
+A configured Provider does not automatically replace a voice engine or choose an external web
+provider. Missing credentials report unavailability and link to the model Provider; recognition
 never silently switches between local and cloud engines. Automatic speech-engine selection
 excludes the cloud engine.
 
 ## Files And OCR
 
-Without the document opt-in, the existing local parser and bounded text/IR preparation remain.
-With it, the Host validates the managed reference and prepares a `provider-document` report rather
+AnyDoc and Built-in retain their existing bounded local text/IR preparation. Selecting DeepSeek
+uses native input for `deepseek-flash` on the DeepSeek Provider. Other models receive cloud-extracted
+text for PDF, Word and PowerPoint; formats outside that OCR API keep AnyDoc. The captured parser
+selection travels through attachment preparation and controlled file reads; it is not reread from
+live preferences halfway through an extraction. On the native route, the Host validates the managed reference and prepares a
+`provider-document` report rather
 than parsing supported PDF, Word, PowerPoint, Excel or EPUB attachments. The Runtime part carries
 the managed ID, media type and source revision. Pi keeps that application-owned metadata on a text
 part in its JSON history; plain user text cannot grant access to another file.
@@ -67,15 +75,17 @@ limit includes historical occurrences; ordinary attachment byte limits still app
 document text is not included in Pi's local text estimate, so the provider can reject a document
 context that exceeds its own limit instead of silently truncating it.
 
-Cloud OCR is a separate opt-in for controlled image/document text readers, including `read_file`.
-It replaces local parsing for admitted image, PDF, Word and PowerPoint inputs when text extraction
-is needed; direct vision input is unchanged. It checks complete page results and HTTP-200 error
+Cloud OCR is independently selected for controlled image and PDF text readers, including `read_file`.
+Direct vision input is unchanged. Office documents follow the document parser selection instead
+of being overridden by the OCR engine: selecting DeepSeek document parsing uses cloud text
+extraction for supported Office formats even if image OCR remains on-device.
+Cloud recognition checks complete page results and HTTP-200 error
 objects, removes OCR layout markers, bounds returned text, and reports the actual `deepseek-ocr`
 parser. Its content/credential-scoped entries reuse the existing bounded text cache. Cloud
-failures do not start a second local parser. OCR returns text only, including for Office files;
-it does not preserve their AnyDoc structure or embedded pixels.
+failures do not start a second local parser. OCR returns text only; it does not preserve AnyDoc
+structure or embedded pixels.
 
-Turning document input off stops future uploads, including references retained in a Pi working
+Selecting AnyDoc or Built-in stops future uploads, including references retained in a Pi working
 copy. Existing envelopes still identify the local original for an ordinary `read_file` operation;
 new attachments follow the current local preparation path. A rebuilt copy reparses visible
 historical attachments through that path as well.
@@ -99,7 +109,7 @@ raw web-call items at their output positions; Chat Completions retains full `ser
 and final-step reasoning. Signed link state is replayed only to the same Provider/model/protocol.
 Citation display converts DeepSeek's Unicode code-point indices without rewriting signed text.
 Native Chat tool progress commits a credential attempt before any answer text, preventing another
-key from repeating a search already started. Older native-tool declarations remain the default.
+key from repeating a search already started. Older native-tool declarations remain for other models.
 
 Enhanced content checks add `safety_check` to the selected model request. Both successful and
 failed terminal stream events honor a late refusal: displayed text and reasoning are replaced by

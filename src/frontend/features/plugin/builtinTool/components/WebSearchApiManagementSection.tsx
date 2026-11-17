@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePreference } from '@/frontend/data';
+import { ProviderCredentialsLink } from '@/frontend/components/ProviderCredentialsLink';
 import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
@@ -49,8 +49,7 @@ export function WebSearchApiManagementSection({
   const providerOverride = providerOverrides[provider.id];
   const providerCapability = getWebSearchProviderCapability(provider, capability);
   const { isChecking, startCheck } = useWebSearchProviderCheck(provider.id, capability);
-  const [deepseek] = usePreference('feature.deepseek.services');
-  const linkedDeepseek = provider.id === 'deepseek' && deepseek.search && deepseek.providerId;
+  const linkedDeepseek = provider.id === 'deepseek';
 
   const openZhipuApiKeySettings = useCallback(() => {
     router.push({
@@ -110,11 +109,10 @@ export function WebSearchApiManagementSection({
         {children}
         {linkedDeepseek
           ? [
-              <Section.Item
-                key="deepseek-services"
-                description={t('deepseek.searchLinked')}
-                label={t('deepseek.title')}
-                onPress={() => router.push('/settings/deepseek')}
+              <ProviderCredentialsLink
+                key="deepseek-keys"
+                providerId="deepseek"
+                providerName="DeepSeek"
               />,
               <Section.Item key="deepseek-check">
                 <Button

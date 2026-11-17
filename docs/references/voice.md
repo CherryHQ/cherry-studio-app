@@ -13,9 +13,10 @@
 | Reading an assistant reply aloud | Enabled with system voice | System text-to-speech or opt-in DeepSeek TTS |
 | Transcribing an audio file into a text document | Explicit file action or Agent tool; SenseVoice by default | Downloaded SenseVoiceSmall, system on-device recognition, or opt-in DeepSeek ASR |
 
-System and offline voice need no Cherry provider account. Users can also bind an existing
-Provider in **Settings → DeepSeek services**, then explicitly select DeepSeek for each voice
-capability. See [DeepSeek Services](./deepseek-services.md) for credentials, uploads and limits.
+System and offline voice need no Cherry provider account. DeepSeek directly uses the current keys
+and address in **Settings → Model providers → DeepSeek**. Users explicitly select it for each voice
+capability in **Settings → Voice**. See [DeepSeek Services](./deepseek-services.md) for credentials,
+uploads and limits.
 
 System engines do not guarantee offline execution: the configured recognition service, installed
 voices and language support determine whether the platform uses a network. The current adapters do
@@ -84,7 +85,8 @@ the generated text through the existing file commit boundary.
 - `deepseekRecognition.ts` consumes recorded/decoded WAV windows through ASR.
   `deepseekSpeech.ts` synthesizes bounded utterances, plays temporary WAV files through the shared
   audio session, and releases player/files on completion, error or cancellation. Missing cloud
-  configuration reports `needs-service` and links to its settings. See
+  configuration reports `needs-service` and links to the DeepSeek model Provider's settings. Voice
+  engine and voice selection stay in Settings → Voice. See
   [DeepSeek Services](./deepseek-services.md) for batch recognition and settled-answer boundaries.
 - `createVoice.ts` assembles the engines, model owner and background listener for the host. Adding a
   future engine requires an adapter, a `VOICE_ENGINES` entry and registration here.

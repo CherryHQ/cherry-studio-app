@@ -14,8 +14,8 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
   const { toast } = useToast();
   const voice = useBackendModule('voice');
   const [systemVoice, setSystemVoice] = usePreference('feature.voice.system_voice');
-  const [deepseek, setDeepseek] = usePreference('feature.deepseek.services');
-  const selected = engine === 'deepseek' ? deepseek.voice : systemVoice;
+  const [deepseekVoice, setDeepseekVoice] = usePreference('feature.voice.deepseek_voice');
+  const selected = engine === 'deepseek' ? deepseekVoice : systemVoice;
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const status = useQuery({
     queryKey: ['voice', 'engine-status', 'speech', engine],
@@ -34,7 +34,7 @@ export function SpeechVoiceSetting({ engine }: { engine: VoiceEngineId }) {
   const change = (value: string) => {
     const save =
       engine === 'deepseek' && (value === 'stella' || value === 'tide')
-        ? setDeepseek({ ...deepseek, voice: value })
+        ? setDeepseekVoice(value)
         : setSystemVoice(value);
     void save.catch(() => {
       toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });

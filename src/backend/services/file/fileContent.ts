@@ -213,8 +213,8 @@ export const fileContent = {
       currentFileEntryIds: input.fileEntryIds,
       readBytes: (file, readSignal) =>
         readFileUriBytes(resolved.get(file.fileEntryId)!.uri, readSignal),
-      readDocumentText: (file, readSignal) =>
-        readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
+      readDocumentText: (file, readSignal, mode) =>
+        readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal, mode),
       readImageText: (file, readSignal) =>
         readImageUriText(resolved.get(file.fileEntryId)!.uri, readSignal),
       signal,

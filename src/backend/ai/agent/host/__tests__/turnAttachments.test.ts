@@ -125,6 +125,43 @@ describe('turn attachments', () => {
     },
   );
 
+  test.each([
+    ['deepseek', 'deepseek-flash', 'deepseek', true],
+    ['deepseek', 'deepseek-flash', 'builtin', false],
+    ['other-provider', 'deepseek-flash', 'deepseek', false],
+    ['deepseek', 'deepseek-v4-pro', 'deepseek', false],
+  ] as const)(
+    'uses native documents only for the selected DeepSeek parser and eligible model (%s/%s/%s)',
+    async (providerId, modelId, mode, native) => {
+      const document = fact(FIRST_ID, 'report.pdf', 'application/pdf');
+      const facts = new Map([[FIRST_ID, document]]);
+      const resources = createTurnResourceLedger(facts, []);
+      const readDocumentText = jest.fn(async () => ({ text: 'Local PDF text', truncated: false }));
+      const files = resolver(facts, { readDocumentText });
+      const contents = await resolveRuntimeContentAttachments(
+        files,
+        [
+          {
+            type: 'file',
+            fileEntryId: FIRST_ID,
+            filename: document.name,
+            mediaType: document.mediaType,
+          },
+        ],
+        [],
+        resources,
+        new AbortController().signal,
+        TEXT_MODEL,
+        mode,
+        { providerId, modelId },
+      );
+      expect(contents.get(FIRST_ID)?.attachmentReport?.mode).toBe(
+        native ? 'provider-document' : 'document-text',
+      );
+      expect(readDocumentText).toHaveBeenCalledTimes(native ? 0 : 1);
+    },
+  );
+
   test('gives image-only documents a distinct user-facing rejection', async () => {
     const document = fact(FIRST_ID, 'scan.pdf', 'application/pdf');
     const facts = new Map([[FIRST_ID, document]]);

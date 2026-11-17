@@ -1,9 +1,6 @@
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
-import { configureDeepseekServices } from '@/backend/services/providers/deepseekConnection';
-import { DEFAULT_DEEPSEEK_SERVICES } from '@/shared/contracts/deepseek';
-
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
@@ -83,60 +80,51 @@ describe('Pi durable model bridge', () => {
   test.each(['done', 'error'] as const)(
     'clears DeepSeek refusal content before persisting a %s event',
     async (terminal) => {
-      configureDeepseekServices(() => ({
-        ...DEFAULT_DEEPSEEK_SERVICES,
-        providerId: reference.providerId,
-        safetyCheck: true,
-      }));
-      try {
-        const model = { ...wire, id: 'deepseek-flash' };
-        const bridge = setup(undefined, preflight, model);
-        const resolved = await bridge.resolveModel();
-        bridge.resolveModel.mockResolvedValueOnce({
-          ...resolved,
-          async streamFn(wire, _context, options) {
-            const payload = await options?.onPayload?.({ model: wire.id }, wire);
-            expect(payload).toMatchObject({ safety_check: { level: 'high' } });
-            const source = new AssistantMessageEventStream();
-            const partial: AssistantMessage = {
-              ...emptyAssistantMessage(wire),
-              content: [{ type: 'text', text: 'Already streamed' }],
-            };
-            source.push({ type: 'start', partial });
+      const model = { ...wire, id: 'deepseek-flash' };
+      const bridge = setup(undefined, preflight, model);
+      const resolved = await bridge.resolveModel();
+      bridge.resolveModel.mockResolvedValueOnce({
+        ...resolved,
+        deepseekSafetyCheck: true,
+        async streamFn(wire, _context, options) {
+          const payload = await options?.onPayload?.({ model: wire.id }, wire);
+          expect(payload).toMatchObject({ safety_check: { level: 'high' } });
+          const source = new AssistantMessageEventStream();
+          const partial: AssistantMessage = {
+            ...emptyAssistantMessage(wire),
+            content: [{ type: 'text', text: 'Already streamed' }],
+          };
+          source.push({ type: 'start', partial });
+          source.push({
+            type: 'text_delta',
+            contentIndex: 0,
+            delta: 'Already streamed',
+            partial,
+          });
+          await options?.onProviderStreamEvent?.(
+            { choices: [{ delta: {}, finish_reason: 'content_filter' }] },
+            wire,
+          );
+          if (terminal === 'done') source.push({ type: 'done', reason: 'stop', message: partial });
+          else
             source.push({
-              type: 'text_delta',
-              contentIndex: 0,
-              delta: 'Already streamed',
-              partial,
+              type: 'error',
+              reason: 'error',
+              error: { ...partial, stopReason: 'error' },
             });
-            await options?.onProviderStreamEvent?.(
-              { choices: [{ delta: {}, finish_reason: 'content_filter' }] },
-              wire,
-            );
-            if (terminal === 'done')
-              source.push({ type: 'done', reason: 'stop', message: partial });
-            else
-              source.push({
-                type: 'error',
-                reason: 'error',
-                error: { ...partial, stopReason: 'error' },
-              });
-            source.end();
-            return source;
-          },
-        });
-        await bridge.registerModel(reference);
-        const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
-          messages: [],
-        });
-        expect(result).toMatchObject({
-          stopReason: 'error',
-          rawStopReason: 'content_filter',
-          content: [],
-        });
-      } finally {
-        configureDeepseekServices(() => DEFAULT_DEEPSEEK_SERVICES);
-      }
+          source.end();
+          return source;
+        },
+      });
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+      expect(result).toMatchObject({
+        stopReason: 'error',
+        rawStopReason: 'content_filter',
+        content: [],
+      });
     },
   );
 

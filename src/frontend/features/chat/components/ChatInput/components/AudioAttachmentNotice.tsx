@@ -57,11 +57,20 @@ function TranscriptionAvailability() {
             variant="outline"
             onPress={() =>
               router.push(
-                status.data === 'needs-service' ? '/settings/deepseek' : '/settings/voice',
+                status.data === 'needs-service'
+                  ? {
+                      pathname: '/settings/provider/[providerId]',
+                      params: { providerId: 'deepseek', providerName: 'DeepSeek' },
+                    }
+                  : '/settings/voice',
               )
             }
           >
-            {t(status.data === 'needs-service' ? 'deepseek.title' : 'settings.voice.title')}
+            {t(
+              status.data === 'needs-service'
+                ? 'settings.items.modelService'
+                : 'settings.voice.title',
+            )}
           </Button>
         </View>
       ) : null}

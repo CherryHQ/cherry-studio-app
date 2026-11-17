@@ -1,15 +1,19 @@
 import { File } from 'expo-file-system';
 
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
+import {
+  DEFAULT_DOCUMENT_PARSER_MODE,
+  type DocumentParserMode,
+} from '@/shared/contracts/fileAttachment';
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
+  isDeepseekOcrFileType,
 } from '@/shared/utils/documentFileTypes';
 import { documentAttachmentByteLimit } from '@/shared/utils/fileAttachmentPolicy';
 
 import { readDeepseekOcr } from './deepseekOcr';
 import { readFileUriBytes } from './fileStorage';
-import { readPdfText } from './fileTextExtraction';
+import { getFileOcrEngine, readPdfText } from './fileTextExtraction';
 import type { ExtractedDocumentText } from './officeText';
 
 export type { ExtractedDocumentText } from './officeText';
@@ -26,13 +30,14 @@ export async function readDocumentUriText(
   uri: string,
   mediaType: string,
   signal: AbortSignal,
+  mode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
 ): Promise<ExtractedDocumentText> {
   signal.throwIfAborted();
   const type = documentFileTypeFromMediaType(mediaType);
   const cloud =
-    getDeepseekServices().ocr &&
     type !== undefined &&
-    ['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(type);
+    ((mode === 'deepseek' && isDeepseekOcrFileType(type)) ||
+      (type === 'pdf' && getFileOcrEngine() === 'deepseek'));
   if (!type || (!cloud && type !== 'pdf' && !isBuiltinOfficeFileType(type)))
     throw new DocumentTextError('invalid');
   const maxBytes = documentAttachmentByteLimit(mediaType);

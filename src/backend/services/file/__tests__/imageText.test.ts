@@ -1,9 +1,14 @@
-import { readImageText } from '../fileTextExtraction';
+import { readDeepseekOcr } from '../deepseekOcr';
+import { getFileOcrEngine, readImageText } from '../fileTextExtraction';
 import { readImageUriText } from '../imageText';
 
 const mockFile = { size: 12, exists: true };
 jest.mock('expo-file-system', () => ({ File: jest.fn(() => mockFile) }));
-jest.mock('../fileTextExtraction', () => ({ readImageText: jest.fn() }));
+jest.mock('../fileTextExtraction', () => ({
+  getFileOcrEngine: jest.fn(() => 'local'),
+  readImageText: jest.fn(),
+}));
+jest.mock('../deepseekOcr', () => ({ readDeepseekOcr: jest.fn() }));
 const result = {
   text: '  Receipt 🍒  ',
   totalPages: 1,
@@ -16,9 +21,24 @@ const result = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(getFileOcrEngine).mockReturnValue('local');
   mockFile.exists = true;
   mockFile.size = 12;
   jest.mocked(readImageText).mockResolvedValue(result);
+});
+
+test('uses the selected OCR engine and preserves cloud failure without a local retry', async () => {
+  jest.mocked(getFileOcrEngine).mockReturnValue('deepseek');
+  jest.mocked(readDeepseekOcr).mockResolvedValueOnce(result);
+  const read = () => readImageUriText('file:///receipt.png', new AbortController().signal);
+  await expect(read()).resolves.toEqual({
+    text: 'Receipt 🍒',
+    truncated: false,
+    parser: 'deepseek-ocr',
+  });
+  jest.mocked(readDeepseekOcr).mockRejectedValueOnce(new Error('cloud unavailable'));
+  await expect(read()).rejects.toMatchObject({ failure: 'failed' });
+  expect(readImageText).not.toHaveBeenCalled();
 });
 
 test('returns recognized text and rejects unreadable, unsupported and failed images distinctly', async () => {

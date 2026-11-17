@@ -1,10 +1,7 @@
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { uploadDeepseekDocument } from '@/backend/services/file/deepseekFiles';
-import {
-  createDeepseekConnection,
-  getDeepseekServices,
-} from '@/backend/services/providers/deepseekConnection';
+import { createDeepseekConnection } from '@/backend/services/providers/deepseekConnection';
 
 import type { PiStreamFn } from './piModelTypes';
 import { PiProviderDocumentSchema, type PiProviderDocument } from './piProviderDocument';
@@ -14,12 +11,9 @@ export function withPiDeepseekFiles(
   stream: PiStreamFn,
   providerId: string,
   apiKey: string,
+  baseUrl: string,
 ): PiStreamFn {
   return async (model, context, options) => {
-    const config = getDeepseekServices();
-    // Disabling uploads must not lock a conversation whose history still contains references.
-    if (!config.files || config.providerId !== providerId || model.id !== 'deepseek-flash')
-      return stream(model, context, options);
     const documents = context.messages.flatMap((message) =>
       message.role === 'user' && Array.isArray(message.content)
         ? message.content.flatMap((part) => {
@@ -38,7 +32,7 @@ export function withPiDeepseekFiles(
       onPayload: async (payload, wire) => {
         const sent = (await onPayload?.(payload, wire)) ?? payload;
         const signal = options?.signal ?? new AbortController().signal;
-        const connection = createDeepseekConnection(config, apiKey);
+        const connection = createDeepseekConnection(providerId, baseUrl, apiKey);
         const references = new Map<string, string>();
         const unique = new Map(documents.map((document) => [document.fileEntryId, document]));
         if (documents.length > 20)

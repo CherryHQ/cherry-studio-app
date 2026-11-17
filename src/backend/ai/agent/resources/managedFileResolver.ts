@@ -14,7 +14,7 @@ import {
   IMPORTED_IMAGE_MAX_BYTES,
   normalizeImportedImage,
 } from '@/backend/services/file/importedImageNormalization';
-import type { FileAttachmentFact } from '@/shared/contracts/fileAttachment';
+import type { DocumentParserMode, FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -69,6 +69,7 @@ export interface ManagedFileResolver {
   readDocumentText(
     file: ManagedFileFact,
     signal: AbortSignal,
+    mode?: DocumentParserMode,
   ): Promise<ExtractedDocumentText | undefined>;
   readImageText(
     file: ManagedFileFact,
@@ -95,11 +96,11 @@ export function createManagedFileResolver(
       if (!uri) return undefined;
       return readImageText(uri, signal);
     },
-    async readDocumentText(file, signal) {
+    async readDocumentText(file, signal, mode) {
       throwIfAborted(signal);
       const uri = getUri({ filename: file.name, id: file.fileEntryId });
       if (!uri) return undefined;
-      const result = await rejectOnAbort(readDocument(uri, file.mediaType, signal), signal);
+      const result = await rejectOnAbort(readDocument(uri, file.mediaType, signal, mode), signal);
       throwIfAborted(signal);
       return result;
     },

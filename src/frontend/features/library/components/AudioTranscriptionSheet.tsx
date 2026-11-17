@@ -70,13 +70,20 @@ export function AudioTranscriptionSheet({
               needsSettings
                 ? () => {
                     onClose();
-                    router.push(needsService ? '/settings/deepseek' : '/settings/voice');
+                    router.push(
+                      needsService
+                        ? {
+                            pathname: '/settings/provider/[providerId]',
+                            params: { providerId: 'deepseek', providerName: 'DeepSeek' },
+                          }
+                        : '/settings/voice',
+                    );
                   }
                 : onRetry
             }
           >
             {needsSettings
-              ? t(needsService ? 'deepseek.title' : 'settings.voice.title')
+              ? t(needsService ? 'settings.items.modelService' : 'settings.voice.title')
               : t('common.retry')}
           </Button>
         )

@@ -5,7 +5,6 @@
  */
 
 import { isDeepseekDocument } from '@/backend/services/file/deepseekFiles';
-import { getDeepseekServices } from '@/backend/services/providers/deepseekConnection';
 import {
   AgentProtocolError,
   AgentToolResultSchema,
@@ -236,10 +235,9 @@ export async function resolveRuntimeContentAttachments(
   documentParserMode: DocumentParserMode,
   selectedModel?: RuntimeModel,
 ): Promise<RuntimeAttachmentContents> {
-  const deepseek = getDeepseekServices();
   const providerDocuments =
-    deepseek.files &&
-    selectedModel?.providerId === deepseek.providerId &&
+    documentParserMode === 'deepseek' &&
+    selectedModel?.providerId === 'deepseek' &&
     selectedModel?.modelId === 'deepseek-flash';
   const currentFileEntryIds = input.flatMap((part) =>
     part.type === 'file' ? [part.fileEntryId] : [],
@@ -262,7 +260,7 @@ export async function resolveRuntimeContentAttachments(
       currentFileEntryIds,
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
-      readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+      readDocumentText: (file, readSignal, mode) => files.readDocumentText(file, readSignal, mode),
       readImageText: (file, readSignal) => files.readImageText(file, readSignal),
       signal,
       documentParserMode,

@@ -3,7 +3,6 @@ import { File, Paths } from 'expo-file-system';
 
 import { createHttpClient } from '@/backend/services/http';
 import {
-  getDeepseekServices,
   isDeepseekConfigured,
   resolveDeepseekConnection,
 } from '@/backend/services/providers/deepseekConnection';
@@ -65,7 +64,7 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
 }
 
 /** Complete answers are synthesized in bounded utterances through the existing voice activity. */
-export function createDeepseekSpeech(): SpeechEngine {
+export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine {
   return {
     async status(signal) {
       return (await isDeepseekConfigured(signal)) ? 'ready' : 'needs-service';
@@ -78,8 +77,10 @@ export function createDeepseekSpeech(): SpeechEngine {
       ];
     },
     async speak({ text, signal }) {
-      const settings = getDeepseekServices();
-      const connection = await resolveDeepseekConnection(signal, settings);
+      const voiceId = await voice();
+      if (voiceId !== 'stella' && voiceId !== 'tide')
+        throw new VoiceError('invalid-voice', 'The selected DeepSeek voice is unavailable.');
+      const connection = await resolveDeepseekConnection(signal);
       const api = createHttpClient({ baseUrl: connection.baseUrl, timeoutMs: 180_000 });
       const release = await voiceAudioSession.acquire('speech');
       try {
@@ -89,7 +90,7 @@ export function createDeepseekSpeech(): SpeechEngine {
           const response = await api.request<ArrayBuffer>({
             method: 'POST',
             path: '/v1/tools/tts',
-            body: { text: chunk, voice_id: settings.voice, format: 'wav', filter_markdown: false },
+            body: { text: chunk, voice_id: voiceId, format: 'wav', filter_markdown: false },
             headers: connection.headers,
             responseType: 'arraybuffer',
             maxResponseBytes: 16 * 1024 * 1024,

@@ -58,7 +58,10 @@ export function useDictation() {
   const report = useCallback(
     (error: unknown) => {
       if (error instanceof VoiceError && error.code === 'service-not-configured') {
-        router.push('/settings/deepseek');
+        router.push({
+          pathname: '/settings/provider/[providerId]',
+          params: { providerId: 'deepseek', providerName: 'DeepSeek' },
+        });
         return;
       }
       if (error instanceof VoiceError && error.code === 'recognition-not-configured') {
