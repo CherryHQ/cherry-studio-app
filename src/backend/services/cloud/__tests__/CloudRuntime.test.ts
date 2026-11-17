@@ -257,13 +257,14 @@ test('consumes non-streaming responses before releasing their account lifetime',
 });
 
 test.each([
-  ['anthropic-messages', '/v1/messages', 'agent'],
-  ['anthropic-messages', '/v1/messages', 'general'],
-  ['openai-chat-completions', '/v1/chat/completions', 'agent'],
-  ['openai-chat-completions', '/v1/chat/completions', 'general'],
+  ['anthropic-messages', '/v1/messages', '', 'agent'],
+  ['anthropic-messages', '/v1/messages', '', 'general'],
+  ['anthropic-messages', '/v1/messages', '?beta=true', 'agent'],
+  ['openai-chat-completions', '/v1/chat/completions', '', 'agent'],
+  ['openai-chat-completions', '/v1/chat/completions', '', 'general'],
 ] as const)(
-  'sends device and application signatures for %s at %s with %s use',
-  async (endpoint, path, use) => {
+  'sends device and application signatures for %s at %s%s with %s use',
+  async (endpoint, path, query, use) => {
     mockClientSignatureHeaders.mockResolvedValue({
       'X-Client-ID': 'cherry-studio',
       'X-Timestamp': '1710000000',
@@ -298,7 +299,7 @@ test.each([
       });
       for (const key of keys) {
         await expect(
-          send(`https://cloud.example${path}`, {
+          send(`https://cloud.example${path}${query}`, {
             method: 'POST',
             body,
             headers: {
@@ -327,12 +328,28 @@ test.each([
   },
 );
 
-test('does not sign or send inference to another origin', async () => {
+test.each([
+  ['anthropic-messages', 'https://other.example/v1/messages'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=false'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=true&extra=1'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=true&beta=true'],
+  ['openai-chat-completions', 'https://cloud.example/v1/chat/completions?beta=true'],
+] as const)('does not sign or send an unsupported %s request at %s', async (endpoint, url) => {
+  mockGet.mockImplementation(async (account: string, resource: string) =>
+    resource === '/v1/models'
+      ? {
+          data: cloudSnapshot(account).models.map((model) => ({
+            ...model,
+            endpoint_type: endpoint,
+          })),
+        }
+      : reply(account, resource),
+  );
   const { runtime } = await setup();
   try {
     await runtime.refresh();
     await expect(
-      runtime.createModelFetch('cloud-model', 'agent')('https://other.example/v1/messages', {
+      runtime.createModelFetch('cloud-model', 'agent')(url, {
         method: 'POST',
         body: JSON.stringify({ model: 'cloud-model' }),
       }),

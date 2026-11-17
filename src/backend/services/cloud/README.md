@@ -79,8 +79,10 @@ headers has not been verified.
 Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
 accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
 body model, strips caller credentials/control headers, signs the final body bytes, and uses
-`expo/fetch`. The account generation remains linked to cancellation until body completion or
-cancellation. Subscription conversations use the existing `PiDurableAgentRuntime` →
+`expo/fetch`. The Anthropic SDK's exact `?beta=true` marker is removed before signing and sending
+the canonical messages route; other queries remain rejected. The account generation remains linked
+to cancellation until body completion or cancellation. Subscription conversations use the existing
+`PiDurableAgentRuntime` →
 `createPiDurableModels` → `piModelResolver` → `bindPiStream` path. Cloud adds admission, signing and
 account-lifetime cancellation at the fetch boundary; Pi owns protocol parsing, retry classification
 and durable execution. Streaming responses retain Expo's original response object with a lazy,

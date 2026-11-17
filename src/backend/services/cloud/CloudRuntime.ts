@@ -259,6 +259,9 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const model = this.snapshot.models.find((entry) => entry.id === modelId)!;
       const path =
         model.endpoint_type === 'anthropic-messages' ? '/v1/messages' : '/v1/chat/completions';
+      // Pi's Anthropic SDK adds this marker; Cloud signs and serves the canonical messages route.
+      if (model.endpoint_type === 'anthropic-messages' && url.search === '?beta=true')
+        url.search = '';
       if (
         url.origin !== session.origin ||
         url.pathname !== path ||
