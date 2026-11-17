@@ -36,6 +36,7 @@ export const AgentSchema = z.strictObject({
   /** SOUL content projected by the Agent profile workflow; the field name is API compatibility. */
   instructions: z.string(),
   instructionsVersion: z.string().optional(),
+  sharedMemoryEnabled: z.boolean(),
   mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */

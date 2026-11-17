@@ -7,6 +7,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import { paintingService } from '@/backend/data/services/PaintingService';
+import type { AgentMemoryService } from '@/backend/services/agentMemory';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import type { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -31,7 +32,12 @@ export function jobHandlerEntry<K extends JobType>(
 /** Complete, immutable production handler registry assembled by the host. */
 @Injectable('JobHandlerRegistry')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AiService', 'BackgroundActivityManager', 'BackgroundActivityEnvironment'])
+@DependsOn([
+  'AiService',
+  'BackgroundActivityManager',
+  'BackgroundActivityEnvironment',
+  'AgentMemoryService',
+])
 @AppStatePolicy('not-applicable')
 export class JobHandlerRegistry extends BaseService {
   readonly entries: readonly JobHandlerEntry[];
@@ -40,9 +46,19 @@ export class JobHandlerRegistry extends BaseService {
     ai: PaintingAi,
     backgroundActivities: Pick<BackgroundActivityManager, 'startSession'>,
     environment: Pick<BackgroundActivityEnvironment, 'paintingPresenter' | 'translate'>,
+    memory: Pick<AgentMemoryService, 'runMaintenance'>,
   ) {
     super();
     this.entries = Object.freeze([
+      jobHandlerEntry('memory.maintain', {
+        executionClass: 'foreground-only',
+        recovery: 'abandon',
+        defaultQueue: () => 'memory',
+        defaultConcurrency: 1,
+        defaultRetryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0, backoff: 'none' },
+        defaultTimeoutMs: 120_000,
+        execute: (context) => memory.runMaintenance(context),
+      }),
       jobHandlerEntry(
         'painting.generate',
         createPaintingGenerateJobHandler({

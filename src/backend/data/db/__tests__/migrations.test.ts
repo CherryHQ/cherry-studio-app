@@ -6,34 +6,56 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
-  test('preserves existing Agent data and persists nullable onboarding completion independently', () => {
+  test('adds both memory controls in one migration while preserving user and managed Agent data', () => {
     const database = new DatabaseSync(':memory:');
     try {
       const files = readMigrationSqlFiles();
       const index = readMigrationJournal().entries.findIndex(
-        ({ tag }) => tag === '0015_agent_bootstrap',
+        ({ tag }) => tag === '0016_agent_memory',
       );
       expect(index).toBeGreaterThan(0);
       for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
       database.exec(`
         INSERT INTO agent (id, name, instructions, order_key, created_at, updated_at)
         VALUES ('legacy', 'Writer', 'Preserve the original role', 'a0', 1, 2);
+        INSERT INTO agent
+          (id, name, instructions, order_key, created_at, updated_at, managed_remote_id, default_model_id, allowed_model_ids)
+        VALUES ('managed', 'Enterprise writer', 'Preserve enterprise instructions', 'a1', 3, 4,
+          'remote-agent', 'provider::default', '["provider::default","provider::other"]');
       `);
-      const previous = database.prepare('SELECT * FROM agent').get();
-      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
-      expect(database.prepare('SELECT * FROM agent').get()).toEqual({
-        ...previous,
-        bootstrap_completed: null,
-      });
+      const previous = database.prepare('SELECT * FROM agent ORDER BY id').all();
+      applyMigrationSql(database, files[index]!);
+      expect(database.prepare('SELECT * FROM agent ORDER BY id').all()).toEqual(
+        previous.map((row) => ({ ...row, bootstrap_completed: null, shared_memory_enabled: 1 })),
+      );
       for (const completed of [1, 0]) {
-        database.prepare('UPDATE agent SET bootstrap_completed = ?').run(completed);
+        database
+          .prepare("UPDATE agent SET bootstrap_completed = ? WHERE id = 'legacy'")
+          .run(completed);
         expect(
-          database.prepare('SELECT name, instructions, bootstrap_completed FROM agent').get(),
+          database
+            .prepare(
+              "SELECT bootstrap_completed,shared_memory_enabled FROM agent WHERE id = 'legacy'",
+            )
+            .get(),
         ).toEqual({
-          name: 'Writer',
+          bootstrap_completed: completed,
+          shared_memory_enabled: 1,
+        });
+        database.exec("UPDATE agent SET shared_memory_enabled = 0 WHERE id = 'legacy'");
+        database.exec("UPDATE agent SET name = 'Renamed' WHERE id = 'legacy'");
+        expect(
+          database
+            .prepare(
+              "SELECT instructions,bootstrap_completed,shared_memory_enabled FROM agent WHERE id = 'legacy'",
+            )
+            .get(),
+        ).toEqual({
           instructions: 'Preserve the original role',
           bootstrap_completed: completed,
+          shared_memory_enabled: 0,
         });
+        database.exec("UPDATE agent SET shared_memory_enabled = 1 WHERE id = 'legacy'");
       }
     } finally {
       database.close();
@@ -873,6 +895,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'oauth',
+        'managed_remote_id',
       ]);
       expect(columnNames(database, 'plugin_authorization')).toEqual([
         'id',
@@ -958,7 +981,11 @@ describe('bundled SQLite migrations', () => {
         'deleted_at',
         'tool_approval_mode',
         'mode',
+        'managed_remote_id',
+        'default_model_id',
+        'allowed_model_ids',
         'bootstrap_completed',
+        'shared_memory_enabled',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
@@ -1007,9 +1034,15 @@ describe('bundled SQLite migrations', () => {
       ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual([
+        'mcp_server_managed_remote_id_idx',
         'mcp_server_builtin_idx',
         'mcp_server_is_active_idx',
       ]);
+      expect(indexNames(database, 'agent')).toContain('agent_managed_remote_id_idx');
+      expect(columnNames(database, 'agent_global_skill')).toContain('managed_remote_id');
+      expect(indexNames(database, 'agent_global_skill')).toContain(
+        'agent_global_skill_managed_remote_id_idx',
+      );
       expect(columnNames(database, 'job')).toContain('cancel_requested_at');
       expect(columnNames(database, 'user_model')).toContain('input_modalities_explicit');
       expect(indexNames(database, 'user_model')).toEqual(

@@ -15,6 +15,15 @@ export function ErrorPart({
 }) {
   const { t } = useTranslation();
   const report = useMessageFailureReport();
+  if (part.data.code === 'MEMORY_CONTEXT_CHANGED')
+    return (
+      <ContextMenuExclusion>
+        <MessagePart.Error
+          title={t('chat.memory.changed.title')}
+          message={t('chat.memory.changed.message')}
+        />
+      </ContextMenuExclusion>
+    );
   if (part.data.code === 'MESSAGE_UNREADABLE') {
     return (
       <ContextMenuExclusion>

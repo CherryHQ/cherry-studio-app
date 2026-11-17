@@ -110,8 +110,15 @@
     {
       "idx": 15,
       "version": "6",
-      "when": 1794560289404,
-      "tag": "0015_agent_bootstrap",
+      "when": 1794193403769,
+      "tag": "0015_managed_remote_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1794912164135,
+      "tag": "0016_agent_memory",
       "breakpoints": true
     }
   ]

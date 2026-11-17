@@ -16,6 +16,8 @@ import { createAiFailure } from '@/shared/utils/createAiFailure';
 import type { RuntimeApproval, RuntimeError, RuntimeOutputPart } from '../runtime';
 
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
+  if (error.code === 'MEMORY_CONTEXT_CHANGED')
+    return { code: 'MEMORY_CONTEXT_CHANGED', message: error.message, retryable: false };
   return { code: 'EXECUTION_FAILED', ...createAiFailure(error) };
 }
 

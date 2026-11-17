@@ -9,6 +9,8 @@ export function localConversationFailure(error: unknown): ConversationFailure {
   if (error instanceof AgentProtocolError) {
     const detail = { code: error.view.code };
     switch (error.view.code) {
+      case 'MEMORY_CONTEXT_CHANGED':
+        return { detail, code: 'conflict', retry: 'none' };
       case 'SESSION_BUSY':
       case 'MESSAGE_CONFLICT':
         return { detail, code: 'conflict', retry: 'read-again' };

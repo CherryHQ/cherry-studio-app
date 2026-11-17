@@ -21,7 +21,8 @@
       "@src/*": ["./src/*"],
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"],
-      "@logger": ["./src/shared/core/logger/LoggerService.ts"]
+      "@logger": ["./src/shared/core/logger/LoggerService.ts"],
+      "@cherrystudio/memory": ["./packages/memory/src/index.ts"]
     }
   },
   "include": [

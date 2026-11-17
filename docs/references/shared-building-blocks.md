@@ -64,7 +64,8 @@ it already exists.
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
-| Per-Agent private identity, facts, journal and conflict-checked memory writes | [Agent Memory](../../src/backend/services/agentMemory/README.md); `AgentMemoryService` supplies per-turn Host context and Agent-bound built-in tool operations |
+| Portable shared/private managed memory, receipts, forgetting, recovery and model planners | [Memory package](../../packages/memory/README.md), imported through `@cherrystudio/memory`; platform capabilities enter through ports |
+| Mobile memory storage, Agent authority, conversation context and foreground maintenance | [Agent Memory](../../src/backend/services/agentMemory/README.md); `AgentMemoryService` owns lifecycle and Agent-bound tool access |
 | Agent SOUL projection and persona creation/editing across API and tools | [Agent Profiles](../../src/backend/services/agents/README.md); `createAgentProfiles` coordinates Agent metadata and versioned memory without file I/O in data services |
 | Logging | `loggerService` in `src/shared/core/logger` |
 | Bounded diagnostic identifiers | `diagnosticIdentifier` in `src/shared/utils/diagnosticIdentifier.ts`, shared by trace export and feedback context |

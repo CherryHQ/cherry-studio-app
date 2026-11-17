@@ -48,6 +48,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     id: row.id,
     // SOUL content is projected by the application workflow, like the avatar URI.
     instructions: '',
+    sharedMemoryEnabled: row.sharedMemoryEnabled,
     mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,

@@ -1,7 +1,9 @@
-import { createAgentMemory } from '@/backend/services/agentMemory/createAgentMemory';
+import { createAgentMemory } from '@cherrystudio/memory';
+
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { Agent } from '@/shared/data/types/agent';
 import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { RuntimeJsonValue } from '../../runtime';
 import { createAgentManagementTools, type AgentManagementData } from '../agentManagementTools';
@@ -17,6 +19,7 @@ const agent: Agent = {
   avatarUri: null,
   disabledCapabilities: [],
   toolApprovalMode: 'auto',
+  sharedMemoryEnabled: true,
   orderKey: 'a0',
   createdAt: '2026-09-22T00:00:00.000Z',
   updatedAt: '2026-09-22T00:00:00.000Z',
@@ -47,6 +50,7 @@ function setup() {
   };
   const files = new Map<string, string>();
   const memory = createAgentMemory({
+    hash: sha256HexOfText,
     bootstrap: { read: async () => null, write: async () => {} },
     storage: {
       read: async (id, key) => files.get(`${id}/${key}`) ?? null,

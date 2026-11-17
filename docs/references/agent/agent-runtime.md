@@ -53,8 +53,10 @@ defined separately. The local Host never turns PC tools into `RuntimeTool` callb
 The Agent's SOUL persona, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
 Runtime rules, guidance for application capabilities that are actually present, and the
-response-language policy into the prepared application prompt. Full SOUL/USER/FACT snapshots enter
-their own replaceable identity section, including in minimal/no-tool turns. SOUL follows Desktop's
+response-language policy into the prepared application prompt. Full SOUL/USER snapshots enter
+their own replaceable identity section, including in minimal/no-tool turns. Managed shared/private
+memory uses a separate entry section, cached per product conversation; full reads and edits use
+the [memory service](../../../src/backend/services/agentMemory/README.md). SOUL follows Desktop's
 persona semantics and role fallback without a separate System Prompt; the legacy database
 instructions migrate into that file instead of another Agent Instructions section. Runtime adapters consume
 that policy without appending another application policy fragment; Pi appends only the
@@ -623,6 +625,13 @@ but uses the compact alternative for live and reconstructed model messages, so r
 do not appear twice in the request. MCP cannot supply either control field.
 The next Host configuration atomically clears contributions as it supplies the new scope's
 prepared instructions; reopening an existing working copy preserves them without reconfiguration.
+
+The optional process-local `resolveInstructions` port refreshes Host-owned sections before each
+model request, including queued/recovered work and requests after compaction. Pi merges these
+updates with the current retained document, removes earlier patches for only its native named
+instruction section, and supplies the current section once. It never searches or rewrites user
+text. Refresh failures stop the request. Live memory authority and forgetting checks remain
+Host-owned and run again at provider/tool boundaries; native transcript state is not permission.
 
 A non-artifact tool returns `artifacts: []`; an MCP
 adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.

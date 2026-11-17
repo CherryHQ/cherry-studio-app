@@ -1,5 +1,7 @@
+import { DreamingError } from '@cherrystudio/memory';
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
+import { estimateTokenCount } from 'tokenx';
 
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
@@ -28,6 +30,8 @@ import { materializeRemoteModels } from '@/backend/data/services/materializeRemo
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import { createMemoryModule } from '@/backend/services/agentMemory/createMemoryModule';
+import { createMemoryMaintenance } from '@/backend/services/agentMemory/memoryMaintenance';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
   type AgentAvatars,
@@ -87,7 +91,7 @@ import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExe
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
-import type { UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
@@ -132,6 +136,49 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const memory = infrastructure.agentHostDependencies.memory;
+  memory.configureMaintenance(
+    createMemoryMaintenance({
+      db: dbService,
+      memory,
+      preference: services.preference,
+      jobs: services.jobRuntime,
+      isIdle: () => !services.agent.hasPendingStorageWork(),
+      async model() {
+        const id = await services.preference.get('agent.default_model_id');
+        if (!id || !isUniqueModelId(id)) throw new DreamingError('model');
+        const selected = parseUniqueModelId(id);
+        const limits = await infrastructure.languageServing.preflightModel(selected);
+        if (limits.contextWindow < 4096) throw new DreamingError('budget');
+        return {
+          id,
+          contextWindow: limits.contextWindow,
+          maxInputTokens: limits.maxInputTokens,
+          maxOutputTokens: limits.maxOutputTokens,
+          countTokens: estimateTokenCount,
+          generate: (request) =>
+            infrastructure.languageServing.generateText(
+              {
+                model: selected,
+                instructions: request.instructions,
+                text: request.text,
+                options: { reasoningEffort: 'none', maxOutputTokens: request.maxOutputTokens },
+              },
+              {
+                signal: request.signal,
+                onUsage: (report) =>
+                  services.aiUsageRecord.recordInvocation({
+                    ...report,
+                    context: { ...report.context, messageRef: null, source: null },
+                    modality: 'language',
+                  }),
+              },
+            ),
+        };
+      },
+    }),
+  );
+
   infrastructure.providerAccounts.configure(
     new ProviderAccountService(dbService),
     [cherryInAccountDefinition],
@@ -425,6 +472,7 @@ export function createBackend(
       },
       mcp: services.mcpRuntime,
       models,
+      memory: createMemoryModule(memory),
       paintings,
       permissions: services.devicePermissions,
       plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.pluginAuthorizations),

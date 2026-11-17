@@ -17,6 +17,7 @@ export type AgentFormState = {
   avatarUri: string | null;
   instructions: string;
   mode: AgentMode;
+  sharedMemoryEnabled: boolean;
   model: UniqueModelId | null;
   name: string;
   toolApprovalMode: AgentToolApprovalMode;
@@ -32,6 +33,7 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
     avatarUri: agent?.avatarUri ?? null,
     instructions: agent?.instructions ?? '',
     mode: agent?.mode ?? DEFAULT_AGENT_MODE,
+    sharedMemoryEnabled: agent?.sharedMemoryEnabled ?? true,
     model: agent?.model ?? null,
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
@@ -53,6 +55,7 @@ export function buildAgentDto(
     value: {
       instructions: form.instructions,
       mode: form.mode,
+      sharedMemoryEnabled: form.sharedMemoryEnabled,
       ...(options.inheritDefaultModel ? {} : { model: form.model }),
       name,
       toolApprovalMode: form.toolApprovalMode,

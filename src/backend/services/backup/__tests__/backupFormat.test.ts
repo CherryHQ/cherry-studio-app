@@ -33,14 +33,25 @@ test('admits memory backups and earlier portable v1/v3 archives', () => {
   expect(validateManifest(manifest()).formatVersion).toBe(1);
 });
 
-test('admits only the four fixed memory paths for a valid Agent id', () => {
+test('admits declared identity, managed memory and bounded backup paths', () => {
   const root = 'agent-memory/10000000-0000-4000-8000-000000000001/';
-  for (const name of ['SOUL.md', 'USER.md', 'memory/FACT.md', 'memory/JOURNAL.jsonl'])
+  for (const name of ['SOUL.md', 'USER.md', 'MEMORY.md', '.memories/project.md'])
     expect(() => assertBackupPath(root + name)).not.toThrow();
+  for (const path of [
+    'shared-memory/MEMORY.md',
+    'shared-memory/.memories/preferences.md',
+    'memory-backups/shared/1000-10000000-0000-4000-8000-000000000001.json',
+    'memory-backups/agent/10000000-0000-4000-8000-000000000001/1000-10000000-0000-4000-8000-000000000001.json',
+  ])
+    expect(() => assertBackupPath(path)).not.toThrow();
   for (const path of [
     root + 'private.txt',
     root + 'memory/../FACT.md',
     root + 'memory/FACT.md.previous',
+    root + 'memory/FACT.md',
+    root + '.memories/../private.md',
+    'shared-memory/.memories/.hidden.md',
+    'memory-backups/shared/arbitrary.json',
     'agent-memory/not-an-agent/USER.md',
   ])
     expect(() => assertBackupPath(path)).toThrow();
@@ -75,7 +86,9 @@ test('rejects another product or a future format instead of attempting replaceme
   expect(() => validateManifest({ ...manifest(), product: 'cherry-desktop' })).toThrow(
     'incompatible',
   );
-  expect(() => validateManifest({ ...manifest(), formatVersion: 4 })).toThrow('incompatible');
+  expect(() =>
+    validateManifest({ ...manifest(), formatVersion: BACKUP_FORMAT_VERSION + 1 }),
+  ).toThrow('incompatible');
 });
 
 test('rejects experimental paired backups and never accepts a Pi cache as user backup data', () => {

@@ -47,12 +47,15 @@ export const agentGlobalSkillTable = sqliteTable(
       .$type<SkillInvocation>()
       .notNull()
       .default({ modelInvocable: true, userInvocable: true }),
+    // Enterprise remote id when the enterprise server owns this definition; NULL for user data.
+    managedRemoteId: text(),
     ...createUpdateTimestamps,
   },
   (t) => [
     uniqueIndex('agent_global_skill_folder_name_unique').on(t.folderName),
     index('agent_global_skill_source_idx').on(t.source),
     index('agent_global_skill_is_enabled_idx').on(t.isEnabled),
+    uniqueIndex('agent_global_skill_managed_remote_id_idx').on(t.managedRemoteId),
   ],
 );
 

@@ -1,5 +1,6 @@
-import { createAgentMemory } from '@/backend/services/agentMemory/createAgentMemory';
-import { memoryContext } from '@/backend/services/agentMemory/memoryContext';
+import { createAgentMemory, memoryContext } from '@cherrystudio/memory';
+
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { RuntimeJsonValue } from '../../runtime';
 import { createMemoryTools } from '../memoryTools';
@@ -11,6 +12,7 @@ function fixture() {
   let completed: boolean | null = false;
   let failStateWrite = false;
   const memory = createAgentMemory({
+    hash: sha256HexOfText,
     bootstrap: {
       read: async () => completed,
       write: async (_id, value) => {
@@ -27,7 +29,18 @@ function fixture() {
     assertAgent: async () => {},
     assertWritable: () => {},
   });
-  const tools = createMemoryTools(memory, ID);
+  const tools = createMemoryTools(
+    {
+      ...memory,
+      openManaged: () => {
+        throw new Error('No managed caller');
+      },
+      assertSafe: async () => new Map<string, string | null>(),
+      recall: async () => ({ hits: [], excerpts: [], truncated: false }),
+      resolveCaller: () => undefined,
+    },
+    ID,
+  );
   return {
     memory,
     files,

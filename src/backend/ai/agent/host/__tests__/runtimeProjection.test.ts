@@ -266,3 +266,18 @@ test.each(['unknown', 'content_filter', undefined])(
     expect(view).not.toHaveProperty('reasonCode');
   },
 );
+
+test('keeps a memory protection stop distinct from a retryable provider failure', () => {
+  expect(
+    toAgentErrorView({
+      code: 'MEMORY_CONTEXT_CHANGED',
+      message: 'Start a new conversation',
+      retryable: true,
+      origin: 'host',
+    }),
+  ).toEqual({
+    code: 'MEMORY_CONTEXT_CHANGED',
+    message: 'Start a new conversation',
+    retryable: false,
+  });
+});

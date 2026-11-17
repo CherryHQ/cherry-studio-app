@@ -1,9 +1,7 @@
+import { AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from '@cherrystudio/memory';
+import type { AgentMemoryOperations } from '@cherrystudio/memory';
+
 import type { AgentService } from '@/backend/data/services/AgentService';
-import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
-import {
-  AGENT_MEMORY_DOCUMENT_BYTES,
-  AgentMemoryError,
-} from '@/backend/services/agentMemory/memoryTypes';
 import type { CreateAgentDto, UpdateAgentDto } from '@/shared/data/api/schemas/agents';
 import type { Agent } from '@/shared/data/types/agent';
 

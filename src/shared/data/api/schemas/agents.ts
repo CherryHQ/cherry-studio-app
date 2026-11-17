@@ -11,6 +11,7 @@ import { type OrderEndpoints } from './endpointHelpers';
  */
 const AGENT_MUTABLE_FIELDS = {
   instructions: true,
+  sharedMemoryEnabled: true,
   mode: true,
   model: true,
   name: true,

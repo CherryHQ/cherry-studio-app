@@ -1,4 +1,4 @@
-import type { AgentMemorySnapshot } from './memoryTypes';
+import type { AgentMemorySnapshot } from './identityTypes';
 
 const SOUL_CONTENT_THRESHOLD = 50;
 
@@ -35,7 +35,7 @@ If the user wants to proceed:
 4. When you have enough information:
    - If a name was chosen, use agent_get for the current Agent, then agent_update with its latest updatedAt to save that name. Discover these tools through tool_search when needed.
    - Use memory_update with the latest document versions to save the role, personality, tone, principles and boundaries in SOUL, and user preferences and background in USER. Preserve unrelated valid content; do not duplicate known information or overwrite an established role without the user's direction.
-   - After the identity writes succeed, use memory_append with tags: ["bootstrap"] to log completion when available, then call memory_bootstrap with action: "complete".
+   - After the identity writes succeed, call memory_bootstrap with action: "complete".
    - If a write fails or is denied, do not claim setup was saved or mark it complete. Read the current state before retrying a write with an uncertain result.
 
 Keep the conversation natural and warm. Ask no more than 3-5 questions total, and do not interrogate. Respect the user's language preference. Record useful persona and user context in their respective documents, following the existing memory scopes. Future conversations use that saved identity after setup is complete.`;

@@ -64,6 +64,7 @@ import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import { createPiReplyEdits } from './piReplyEditing';
 import { PiToolBudget } from './piToolBudget';
+import { refreshRequestInstructions } from './piToolInstructions';
 import {
   PI_WEB_FAILURE_GROUP,
   resolvePiWebToolRoutes,
@@ -890,13 +891,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       hooks: [
         ...(extension.hooks ?? []),
         hook(GenerationTask, {
-          beforeRequest: async (_request, api, context) => {
+          beforeRequest: async (request, api, context) => {
             // The harness derives this context from the same invocation signal it forwards to Models.
             const signal = requireSignal(context);
-            this.requestOwners.set(signal, await this.taskIdentity(lane, api, context));
+            const owner = await this.taskIdentity(lane, api, context);
+            this.requestOwners.set(signal, owner);
             this.webRequests.delete(signal);
             if (nativeWeb && !(await this.webLookupFailed(key, api, context)))
               this.webRequests.set(signal, routes);
+            const resolve = this.requirePorts().resolveInstructions;
+            if (resolve) {
+              const updates = await resolve(owner, signal);
+              signal.throwIfAborted();
+              return {
+                messages: await refreshRequestInstructions(request.messages, updates, api, context),
+              };
+            }
           },
         }),
       ],

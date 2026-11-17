@@ -18,6 +18,19 @@ jest.mock('expo-file-system', () => {
       this.uri = uri(parts);
     }
     create() {}
+    list() {
+      const names = new Map<string, File | Directory>();
+      for (const path of mockFiles.keys()) {
+        if (!path.startsWith(this.uri + '/')) continue;
+        const remaining = path.slice(this.uri.length + 1);
+        const name = remaining.split('/')[0];
+        names.set(name, remaining.includes('/') ? new Directory(this, name) : new File(this, name));
+      }
+      return [...names.values()];
+    }
+    get name() {
+      return this.uri.slice(this.uri.lastIndexOf('/') + 1);
+    }
     get exists() {
       return [...mockFiles.keys()].some((path) => path.startsWith(this.uri + '/'));
     }
@@ -43,8 +56,11 @@ jest.mock('expo-file-system', () => {
       if (!this.exists) throw new Error('Missing file');
       return mockFiles.get(this.uri)!;
     }
-    write(content: string) {
-      mockFiles.set(this.uri, content);
+    write(content: string | Uint8Array) {
+      mockFiles.set(
+        this.uri,
+        typeof content === 'string' ? content : new TextDecoder().decode(content),
+      );
     }
     delete() {
       mockFiles.delete(this.uri);
@@ -68,23 +84,23 @@ beforeEach(() => {
 });
 
 test('keeps published memory when Expo mutates the staged File URI during a move', async () => {
-  await memoryStorage.replace(id, 'fact', 'First decision');
-  await memoryStorage.replace(id, 'fact', 'Revised decision');
-  expect(await memoryStorage.read(id, 'fact')).toBe('Revised decision');
-  expect([...mockFiles.keys()]).toEqual([`file:///store/Data/Agents/${id}/memory/FACT.md`]);
+  await memoryStorage.replace(id, 'user', 'First decision');
+  await memoryStorage.replace(id, 'user', 'Revised decision');
+  expect(await memoryStorage.read(id, 'user')).toBe('Revised decision');
+  expect([...mockFiles.keys()]).toEqual([`file:///store/Data/Agents/${id}/USER.md`]);
 });
 
 test('recovers the previous revision after interruption and includes it in portable backups', async () => {
-  await memoryStorage.replace(id, 'fact', 'Keep this decision');
+  await memoryStorage.replace(id, 'user', 'Keep this decision');
   mockState.failPublication = true;
-  await expect(memoryStorage.replace(id, 'fact', 'Unpublished decision')).rejects.toThrow();
-  expect(await memoryStorage.read(id, 'fact')).toBe('Keep this decision');
+  await expect(memoryStorage.replace(id, 'user', 'Unpublished decision')).rejects.toThrow();
+  expect(await memoryStorage.read(id, 'user')).toBe('Keep this decision');
   const { Directory } = jest.requireMock('expo-file-system');
   expect(captureMemoryPaths(new Directory('file:///store'), [id])).toEqual([
-    `agent-memory/${id}/memory/FACT.md`,
+    `agent-memory/${id}/USER.md`,
   ]);
   mockState.failPublication = false;
-  await memoryStorage.replace(id, 'fact', 'New committed decision');
-  expect(await memoryStorage.read(id, 'fact')).toBe('New committed decision');
-  expect([...mockFiles.keys()]).toEqual([`file:///store/Data/Agents/${id}/memory/FACT.md`]);
+  await memoryStorage.replace(id, 'user', 'New committed decision');
+  expect(await memoryStorage.read(id, 'user')).toBe('New committed decision');
+  expect([...mockFiles.keys()]).toEqual([`file:///store/Data/Agents/${id}/USER.md`]);
 });

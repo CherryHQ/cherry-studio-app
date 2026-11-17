@@ -1,6 +1,8 @@
+import { createAgentMemory } from '@cherrystudio/memory';
+
 import type { AgentService } from '@/backend/data/services/AgentService';
-import { createAgentMemory } from '@/backend/services/agentMemory/createAgentMemory';
 import type { Agent } from '@/shared/data/types/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { createAgentProfiles } from '../createAgentProfiles';
 
@@ -16,6 +18,7 @@ const AGENT: Agent = {
   avatarUri: null,
   disabledCapabilities: [],
   toolApprovalMode: 'auto',
+  sharedMemoryEnabled: true,
   orderKey: 'a0',
   createdAt: '2026-11-12T00:00:00.000Z',
   updatedAt: '2026-11-12T00:00:00.000Z',
@@ -26,6 +29,7 @@ function fixture() {
   let storageFailed = false;
   let row: Agent | null = null;
   const memory = createAgentMemory({
+    hash: sha256HexOfText,
     bootstrap: { read: async () => null, write: async () => {} },
     storage: {
       read: async (id, key) => files.get(`${id}/${key}`) ?? null,

@@ -181,6 +181,7 @@ export const AgentErrorViewSchema = z
       'MESSAGE_NOT_FOUND',
       'MESSAGE_UNREADABLE',
       'MESSAGE_CONFLICT',
+      'MEMORY_CONTEXT_CHANGED',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',

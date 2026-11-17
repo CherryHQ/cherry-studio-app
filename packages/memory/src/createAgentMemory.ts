@@ -1,18 +1,14 @@
-import { AgentIdSchema } from '@/shared/data/types/agent';
-import { sha256HexOfText } from '@/shared/utils/sha256';
-
-import { AGENT_MEMORY_DOCUMENT_KEYS } from './memoryFiles';
 import {
   AGENT_MEMORY_DOCUMENT_BYTES,
-  AGENT_MEMORY_JOURNAL_BYTES,
   AgentMemoryDocumentKeySchema,
   AgentMemoryError,
   type AgentMemoryDocumentKey,
   type AgentMemoryFile,
-  type AgentMemoryJournalEntry,
   type AgentMemoryKey,
   type AgentMemorySnapshot,
-} from './memoryTypes';
+} from './identityTypes';
+
+const AGENT_MEMORY_DOCUMENT_KEYS = ['soul', 'user'] as const;
 
 export interface MemoryStorage {
   read(agentId: string, key: AgentMemoryKey): Promise<string | null>;
@@ -22,12 +18,13 @@ export interface MemoryStorage {
 export type AgentMemory = ReturnType<typeof createAgentMemory>;
 export type AgentMemoryOperations = Pick<
   AgentMemory,
-  'read' | 'write' | 'snapshot' | 'append' | 'search' | 'setBootstrapCompleted' | 'withStorageWork'
+  'read' | 'write' | 'snapshot' | 'setBootstrapCompleted' | 'withStorageWork'
 >;
 
 /** Owns per-Agent ordering, revisions and limits independently of Expo and the model loop. */
 export function createAgentMemory(deps: {
   storage: MemoryStorage;
+  hash(text: string): string;
   bootstrap: {
     read(agentId: string): Promise<boolean | null>;
     write(agentId: string, completed: boolean): Promise<void>;
@@ -40,7 +37,6 @@ export function createAgentMemory(deps: {
   let closed = false;
 
   function run<T>(agentId: string, signal: AbortSignal | undefined, task: () => Promise<T>) {
-    AgentIdSchema.parse(agentId);
     if (closed) return Promise.reject(new AgentMemoryError('unavailable'));
     signal?.throwIfAborted();
     const pending = (queues.get(agentId) ?? Promise.resolve())
@@ -64,12 +60,12 @@ export function createAgentMemory(deps: {
   async function readFile(agentId: string, key: AgentMemoryKey): Promise<AgentMemoryFile> {
     const content = await deps.storage.read(agentId, key);
     const text = content ?? '';
-    const limit = key === 'journal' ? AGENT_MEMORY_JOURNAL_BYTES : AGENT_MEMORY_DOCUMENT_BYTES;
+    const limit = AGENT_MEMORY_DOCUMENT_BYTES;
     if (new TextEncoder().encode(text).length > limit) throw new AgentMemoryError('too-large');
     return {
       key,
       content: text,
-      version: content === null ? 'missing' : sha256HexOfText(text),
+      version: content === null ? 'missing' : deps.hash(text),
       truncated: false,
     };
   }
@@ -121,7 +117,7 @@ export function createAgentMemory(deps: {
     },
     snapshot(agentId: string, signal?: AbortSignal): Promise<AgentMemorySnapshot> {
       return run(agentId, signal, async () => {
-        const [soul, user, fact] = await Promise.all(
+        const [soul, user] = await Promise.all(
           AGENT_MEMORY_DOCUMENT_KEYS.map(async (key): Promise<AgentMemoryFile> => {
             try {
               return await readFile(agentId, key);
@@ -131,7 +127,7 @@ export function createAgentMemory(deps: {
             }
           }),
         );
-        return { soul, user, fact, bootstrapCompleted: await deps.bootstrap.read(agentId) };
+        return { soul, user, bootstrapCompleted: await deps.bootstrap.read(agentId) };
       });
     },
     setBootstrapCompleted(agentId: string, completed: boolean, signal?: AbortSignal) {
@@ -142,68 +138,10 @@ export function createAgentMemory(deps: {
         return completed;
       });
     },
-    append(agentId: string, text: string, tags: string[], signal?: AbortSignal) {
-      deps.assertWritable();
-      return run(agentId, signal, async () => {
-        const previous = await readFile(agentId, 'journal');
-        const entry: AgentMemoryJournalEntry = { ts: new Date().toISOString(), tags, text };
-        const separator = previous.content && !previous.content.endsWith('\n') ? '\n' : '';
-        const content = previous.content + separator + JSON.stringify(entry) + '\n';
-        if (new TextEncoder().encode(content).length > AGENT_MEMORY_JOURNAL_BYTES)
-          throw new AgentMemoryError('too-large');
-        await deps.assertAgent(agentId);
-        signal?.throwIfAborted();
-        deps.assertWritable();
-        await deps.storage.replace(agentId, 'journal', content);
-        return entry;
-      });
-    },
-    search(
-      agentId: string,
-      input: { query?: string; tag?: string; limit?: number },
-      signal?: AbortSignal,
-    ) {
-      return run(agentId, signal, async () => {
-        const journal = await readFile(agentId, 'journal');
-        const lines = journal.content.split('\n');
-        const matches: AgentMemoryJournalEntry[] = [];
-        const query = (input.query ?? '').toLowerCase();
-        const tag = (input.tag ?? '').toLowerCase();
-        const limit = Math.min(50, Math.max(1, input.limit ?? 20));
-        for (let index = lines.length - 1; index >= 0 && matches.length < limit; index--) {
-          signal?.throwIfAborted();
-          if (index % 100 === 0) await new Promise<void>((resolve) => setTimeout(resolve, 0));
-          try {
-            const entry: unknown = JSON.parse(lines[index]);
-            if (!isJournalEntry(entry)) continue;
-            if (query && !entry.text.toLowerCase().includes(query)) continue;
-            if (tag && !entry.tags.some((value) => value.toLowerCase() === tag)) continue;
-            matches.push(entry);
-          } catch {
-            // A damaged or interrupted JSONL entry must not hide valid earlier events.
-          }
-        }
-        return matches;
-      });
-    },
     hasPendingStorageWork: () => queues.size > 0 || storageWork.size > 0,
     async close() {
       closed = true;
       await Promise.allSettled([...queues.values(), ...storageWork]);
     },
   };
-}
-
-function isJournalEntry(value: unknown): value is AgentMemoryJournalEntry {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'ts' in value &&
-    typeof value.ts === 'string' &&
-    'text' in value &&
-    typeof value.text === 'string' &&
-    'tags' in value &&
-    Array.isArray(value.tags) &&
-    value.tags.every((tag) => typeof tag === 'string')
-  );
 }

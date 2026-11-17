@@ -1,3 +1,12 @@
+import {
+  AGENT_MEMORY_DOCUMENT_BYTES,
+  AgentMemoryDocumentKeySchema,
+  AgentMemoryError,
+  MemoryError,
+  assertMemoryTarget,
+  memoryContext,
+  type MemorySession,
+} from '@cherrystudio/memory';
 import * as z from 'zod';
 
 import type { RuntimeTool, RuntimeToolResult } from '@/backend/ai/agent/runtime';
@@ -5,85 +14,129 @@ import {
   toRuntimeInputSchema,
   toolValidationError,
 } from '@/backend/ai/agent/tools/runtimeToolSchema';
-import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
-import { memoryContext } from '@/backend/services/agentMemory/memoryContext';
-import {
-  AGENT_MEMORY_DOCUMENT_BYTES,
-  AgentMemoryDocumentKeySchema,
-  AgentMemoryError,
-} from '@/backend/services/agentMemory/memoryTypes';
+import type { AgentMemoryOperations, MemoryCaller } from '@/backend/services/agentMemory';
 
-export function createMemoryTools(memory: AgentMemoryOperations, agentId: string): RuntimeTool[] {
-  const readSchema = z.strictObject({ key: AgentMemoryDocumentKeySchema });
-  const updateSchema = readSchema.extend({
-    content: z
-      .string()
-      .max(AGENT_MEMORY_DOCUMENT_BYTES)
-      .describe(
-        'Complete replacement; preserve unrelated valid memory. Empty clears the document.',
-      ),
-    expected_version: z
-      .string()
-      .min(1)
-      .describe(
-        'Exact version from the current memory snapshot or memory_read. Read again on conflict.',
-      ),
+export function createMemoryTools(
+  memory: AgentMemoryOperations,
+  agentId: string,
+  resolveCaller?: () => MemoryCaller | undefined,
+): RuntimeTool[] {
+  const identityRead = z.strictObject({ key: AgentMemoryDocumentKeySchema });
+  const target = z
+    .string()
+    .max(512)
+    .refine((value) => {
+      try {
+        assertMemoryTarget(value);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  const managedRead = z.strictObject({ scope: z.enum(['private', 'shared']), path: target });
+  const readSchema = z.union([identityRead, managedRead]);
+  const updateSchema = z.union([
+    identityRead.extend({
+      content: z.string().max(AGENT_MEMORY_DOCUMENT_BYTES),
+      expected_version: z.string().min(1),
+    }),
+    managedRead.extend({ content: z.string().max(25_000), receipt: z.string().min(1) }),
+  ]);
+  const deleteSchema = managedRead.extend({ receipt: z.string().min(1) });
+  const listSchema = z.strictObject({ scope: z.enum(['private', 'shared']) });
+  const searchSchema = z.union([
+    z.strictObject({ query: z.string().trim().min(1).max(512) }),
+    z.strictObject({ conversationId: z.string().min(1), messageId: z.string().min(1) }),
+  ]);
+  // Gateways require an object at the root. Runtime parsing still enforces each exclusive mode.
+  const readInput = identityRead.partial().extend(managedRead.partial().shape);
+  const updateInput = readInput.extend({
+    content: z.string(),
+    expected_version: z.string().optional(),
+    receipt: z.string().optional(),
   });
-  const appendSchema = z.strictObject({
-    text: z.string().trim().min(1).max(8_000),
-    tags: z.array(z.string().max(64)).max(16).optional(),
+  const searchInput = z.strictObject({
+    query: z.string().optional(),
+    conversationId: z.string().optional(),
+    messageId: z.string().optional(),
   });
-  const searchSchema = z.strictObject({
-    query: z.string().max(512).optional(),
-    tag: z.string().max(64).optional(),
-    limit: z.int().min(1).max(50).optional(),
-  });
-  const bootstrapSchema = z.strictObject({ action: z.enum(['complete', 'reset']) });
-
+  const sessions = new Map<'private' | 'shared', MemorySession>();
+  const receipts = new Map<string, { scope: string; path: string }>();
+  let searchCalls = 0;
+  const session = (kind: 'private' | 'shared') => {
+    const caller = resolveCaller?.();
+    if (!caller)
+      throw new MemoryError('invalid-receipt', 'This request has no persistent memory owner');
+    let value = sessions.get(kind);
+    try {
+      value?.assertAuthorized();
+    } catch {
+      value?.dispose();
+      value = undefined;
+    }
+    if (!value) {
+      value = memory.openManaged(caller, kind);
+      sessions.set(kind, value);
+    }
+    return value;
+  };
+  const receipt = (input: { scope: 'private' | 'shared'; path: string; receipt: string }) => {
+    const read = receipts.get(input.receipt);
+    if (!read || read.scope !== input.scope || read.path !== input.path)
+      throw new MemoryError(
+        'invalid-receipt',
+        'Read the complete target in this turn before changing it',
+      );
+    return input.receipt;
+  };
   function tool<T>(
     name: string,
     description: string,
     schema: z.ZodType<T>,
     effect: 'read' | 'write',
     execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult>,
+    modelSchema: z.ZodType = schema,
   ): RuntimeTool {
     return {
       ref: { source: 'builtin', capabilityId: name },
       providerName: name,
       displayName: name,
       description,
-      inputSchema: toRuntimeInputSchema(schema),
+      inputSchema: toRuntimeInputSchema(modelSchema),
       effect,
-      // Turning off optional onboarding must not require another confirmation.
       approval: effect === 'read' || name === 'memory_bootstrap' ? 'auto' : 'ask',
       async execute(call) {
         const parsed = schema.safeParse(call.input);
         if (!parsed.success) return failure('invalid-input', toolValidationError(parsed.error));
         call.signal.throwIfAborted();
         try {
-          return await execute(parsed.data, call.signal);
+          const caller = resolveCaller?.();
+          if (resolveCaller && (!caller || (caller.turnId && caller.turnId !== call.turnId)))
+            throw new MemoryError(
+              'invalid-receipt',
+              'The tool call no longer owns this conversation turn',
+            );
+          if (caller) await memory.assertSafe(caller, call.signal);
+          const result = await execute(parsed.data, call.signal);
+          call.signal.throwIfAborted();
+          return result;
         } catch (error) {
           call.signal.throwIfAborted();
-          if (!(error instanceof AgentMemoryError))
-            return failure(
-              'unavailable',
-              'The memory operation could not be confirmed. Read current memory or search the journal before considering another write.',
-            );
+          if (error instanceof AgentMemoryError || error instanceof MemoryError)
+            return failure(error.code, error.message);
           return failure(
-            error.code,
-            error.code === 'conflict'
-              ? 'Read the current document and reconcile your change before retrying.'
-              : error.message,
+            'unavailable',
+            'The memory operation could not be confirmed. Read the current target before retrying.',
           );
         }
       },
     };
   }
-  return [
+  const tools = [
     tool(
       'memory_bootstrap',
-      'Control this Agent’s optional one-time persona and user setup. complete persists completion or the user’s request to skip, without changing identity files. reset re-enables setup for the next turn only when the user explicitly asks. Never mark a failed identity save complete.',
-      bootstrapSchema,
+      'Complete optional identity setup or persist the user’s request to skip without changing SOUL/USER. Reset only when explicitly requested; a failed identity save is not completed setup.',
+      z.strictObject({ action: z.enum(['complete', 'reset']) }),
       'write',
       async ({ action }, signal) => {
         const bootstrapCompleted = await memory.setBootstrapCompleted(
@@ -91,83 +144,138 @@ export function createMemoryTools(memory: AgentMemoryOperations, agentId: string
           action === 'complete',
           signal,
         );
-        const value = { bootstrapCompleted };
+        const fallback = { bootstrapCompleted, contextRefreshed: false };
         try {
+          const instructions = memoryContext(await memory.snapshot(agentId, signal));
           return {
-            value,
+            value: { bootstrapCompleted },
             artifacts: [],
-            // Completion removes old guidance now; reset starts on the next prepared turn.
-            instructions: memoryContext(await memory.snapshot(agentId, signal)),
-            instructionsFailureValue: { ...value, contextRefreshed: false },
+            instructions,
+            instructionsFailureValue: fallback,
           };
         } catch {
-          return { value: { ...value, contextRefreshed: false }, artifacts: [] };
+          return { value: fallback, artifacts: [] };
         }
       },
     ),
     tool(
       'memory_read',
-      'Read this Agent’s SOUL (persona), USER (user context) or FACT (durable facts), including its current write version.',
+      'Read SOUL/USER using key, or a complete managed memory file using scope and path. Managed reads return a caller-bound receipt; entry snapshots and snippets do not authorize editing.',
       readSchema,
       'read',
-      async ({ key }, signal) => ({
-        value: await memory.read(agentId, key, signal),
-        artifacts: [],
-      }),
+      async (input, signal) => {
+        if ('key' in input)
+          return { value: await memory.read(agentId, input.key, signal), artifacts: [] };
+        const value = await session(input.scope).read(input.path);
+        if (value.receipt) receipts.set(value.receipt, { scope: input.scope, path: input.path });
+        return { value, artifacts: [] };
+      },
+      readInput,
     ),
     tool(
       'memory_update',
-      'Replace a private memory document with a version check. SOUL: persona; USER: user context; FACT: durable knowledge. Keep unrelated useful content.',
+      'Replace SOUL/USER with its expected_version, or save a complete MEMORY.md/topic proposal using the receipt from this turn’s full read. Preserve unrelated content, conditions and dates. Personal shared information excludes project/customer knowledge. New files require a read confirming absence.',
       updateSchema,
       'write',
-      async ({ key, content, expected_version }, signal) => {
-        const file = await memory.write(
-          { agentId, key, content, expectedVersion: expected_version },
-          signal,
-        );
-        try {
-          const instructions = memoryContext(await memory.snapshot(agentId, signal), true);
-          return {
-            value: file,
-            artifacts: [],
-            instructions,
-            instructionsFailureValue: { status: 'saved', file, contextRefreshed: false },
-          };
-        } catch {
-          return { value: { status: 'saved', file, contextRefreshed: false }, artifacts: [] };
+      async (input, signal) => {
+        if ('key' in input) {
+          const file = await memory.write(
+            {
+              agentId,
+              key: input.key,
+              content: input.content,
+              expectedVersion: input.expected_version,
+            },
+            signal,
+          );
+          const fallback = { status: 'saved', file, contextRefreshed: false };
+          try {
+            return {
+              value: file,
+              artifacts: [],
+              instructions: memoryContext(await memory.snapshot(agentId, signal), true),
+              instructionsFailureValue: fallback,
+            };
+          } catch {
+            return { value: fallback, artifacts: [] };
+          }
         }
+        const result = await session(input.scope).commit(
+          [{ kind: 'write', receipt: receipt(input), content: input.content }],
+          async () => () => {
+            signal.throwIfAborted();
+            return undefined;
+          },
+        );
+        return committed(result);
       },
-    ),
-    tool(
-      'memory_append',
-      'Append a one-time event, completed task or session note to this Agent’s private journal.',
-      appendSchema,
-      'write',
-      async ({ text, tags }, signal) => ({
-        value: await memory.append(agentId, text, tags ?? [], signal),
-        artifacts: [],
-      }),
-    ),
-    tool(
-      'memory_search',
-      'Search this Agent’s journal by case-insensitive text and optional tag. Returns latest matches; FACT is already in context and is not searched.',
-      searchSchema,
-      'read',
-      async (input, signal) => ({
-        value: { entries: await memory.search(agentId, input, signal) },
-        artifacts: [],
-      }),
+      updateInput,
     ),
   ];
+  if (resolveCaller)
+    tools.push(
+      tool(
+        'memory_list',
+        'List managed memory entry and topic filenames in the authorized scope. Private means this Agent only. Backup, identity and legacy files are excluded.',
+        listSchema,
+        'read',
+        async ({ scope }) => ({ value: { paths: await session(scope).list() }, artifacts: [] }),
+      ),
+      tool(
+        'memory_delete',
+        'Delete the exact managed topic/file read in this turn, with approval, backup and version checks. Never delete a topic until its full content and all links have been preserved in a different topic.',
+        deleteSchema,
+        'write',
+        async (input, signal) =>
+          committed(
+            await session(input.scope).commit(
+              [{ kind: 'delete', receipt: receipt(input) }],
+              async () => () => {
+                signal.throwIfAborted();
+                return undefined;
+              },
+            ),
+          ),
+      ),
+      tool(
+        'memory_search',
+        'Recall this Agent’s own successful historical chats when current context and memory entries are insufficient. Use focused keywords, or conversationId and messageId to expand a hit. At most four calls per answer. The current question is excluded. User text is factual evidence; assistant text is context. A miss does not prove absence.',
+        searchSchema,
+        'read',
+        async (input, signal) => {
+          if (++searchCalls > 4)
+            return failure(
+              'limit',
+              'The four-call history recall budget is exhausted for this answer.',
+            );
+          return { value: await memory.recall(resolveCaller()!, input, signal), artifacts: [] };
+        },
+        searchInput,
+      ),
+    );
+  return tools;
 }
-
+function committed(value: {
+  error?: string;
+  files: readonly { outcome: string }[];
+}): RuntimeToolResult {
+  if (
+    value.error ||
+    value.files.some((file) => file.outcome === 'pending' || file.outcome === 'conflict')
+  )
+    return {
+      ...failure('conflict', value.error ?? 'The complete memory save could not be confirmed.'),
+      value: JSON.parse(JSON.stringify(value)),
+    };
+  return { value: JSON.parse(JSON.stringify(value)), artifacts: [] };
+}
 function failure(code: string, message: string): RuntimeToolResult {
   return {
     value: { status: 'error', code, message },
     artifacts: [],
     failure: {
       scope: 'call',
-      error: { code: `memory_${code}`, message, retryable: false, origin: 'tool' },
+      error: { code: 'memory_' + code, message, retryable: false, origin: 'tool' },
     },
   };
 }

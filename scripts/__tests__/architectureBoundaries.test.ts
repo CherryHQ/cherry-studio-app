@@ -56,6 +56,7 @@ describe('resolved architecture boundaries', () => {
     ['src/frontend/utils/probe.ts', "import 'drizzle-orm';"],
     ['src/frontend/utils/probe.ts', "import 'expo-sqlite';"],
     ['packages/universal/src/utils/probe.ts', "import '../../../../src/frontend/data';"],
+    ['packages/memory/src/probe.ts', "import '../../../src/backend/data/services/AgentService';"],
   ])('rejects a forbidden dependency from %s: %s', async (filePath, source) => {
     expect(await boundaryErrors(filePath, source)).not.toHaveLength(0);
   });
@@ -76,6 +77,8 @@ describe('resolved architecture boundaries', () => {
     ['src/backend/ai/agent/runtime/probe.ts', 'react'],
     ['src/backend/ai/agent/runtime/pi/probe.ts', 'expo-file-system'],
     ['packages/universal/src/utils/probe.ts', '@expo/vector-icons'],
+    ['packages/memory/src/probe.ts', 'expo-file-system'],
+    ['packages/memory/src/probe.ts', 'react-native'],
   ])('package boundary from %s to %s', (filePath, moduleId) => {
     it.each([
       `import '${moduleId}';`,

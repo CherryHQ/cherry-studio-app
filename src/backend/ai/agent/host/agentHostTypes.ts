@@ -1,3 +1,4 @@
+import type { MemoryCaller } from '@/backend/services/agentMemory';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
 
@@ -64,6 +65,12 @@ export type MobileAgentHostPorts = {
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
   memory?: {
+    managedContext?(
+      caller: MemoryCaller,
+      signal?: AbortSignal,
+    ): Promise<{ key: string; text: string }>;
+    assertSafe?(caller: MemoryCaller, signal?: AbortSignal): Promise<unknown>;
+    completed?(sessionId: string, replyId: string): void;
     context(
       agentId: string,
       signal?: AbortSignal,

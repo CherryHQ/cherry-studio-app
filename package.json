@@ -117,6 +117,7 @@
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",
+    "@cherrystudio/memory": "workspace:*",
     "@cherrystudio/mermaid-webview": "workspace:*",
     "@cherrystudio/provider-registry": "0.4.0",
     "@cherrystudio/remote-protocol": "0.7.0",

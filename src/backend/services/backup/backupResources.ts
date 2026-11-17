@@ -19,7 +19,12 @@ const RESOURCE_DIRECTORIES = {
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
   if (path === 'database/cherry.db') return new File(root, ...path.split('/'));
-  if (path.startsWith('agent-memory/')) return restoredMemoryFile(root, path);
+  if (
+    path.startsWith('agent-memory/') ||
+    path.startsWith('shared-memory/') ||
+    path.startsWith('memory-backups/')
+  )
+    return restoredMemoryFile(root, path);
   if (path.startsWith('skills/'))
     return new File(root, 'Data', 'Skills', ...path.slice(7).split('/'));
   const slash = path.lastIndexOf('/');
@@ -160,7 +165,11 @@ export async function validateResourceReferences(
   const memoryAgents = new Set(agentIds);
   for (const path of required) if (!available.has(path)) throw new BackupError('invalid');
   for (const entry of manifest.entries) {
-    if (entry.path.startsWith('agent-memory/') && !memoryAgents.has(entry.path.split('/')[1]))
+    if (
+      (entry.path.startsWith('agent-memory/') && !memoryAgents.has(entry.path.split('/')[1])) ||
+      (entry.path.startsWith('memory-backups/agent/') &&
+        !memoryAgents.has(entry.path.split('/')[2]))
+    )
       throw new BackupError('invalid');
     if (
       (entry.path.startsWith('files/') || entry.path.startsWith('skills/')) &&

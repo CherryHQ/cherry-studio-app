@@ -5,6 +5,7 @@ import {
   validateUserAnswers,
   AgentApprovalViewSchema,
   AgentErrorViewSchema,
+  AgentProtocolError,
   AgentFailureSnapshotSchema,
   AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
@@ -906,4 +907,18 @@ describe('local message quotes', () => {
       }).success,
     ).toBe(false);
   });
+});
+
+test('serializes a memory-boundary stop with a stable execution code and no retry grant', () => {
+  const view = {
+    code: 'MEMORY_CONTEXT_CHANGED' as const,
+    message: 'Start a new conversation',
+    retryable: false,
+  };
+  const error = new AgentProtocolError(view);
+  expect(error.code).toBe('MEMORY_CONTEXT_CHANGED');
+  expect(AgentErrorViewSchema.parse(JSON.parse(JSON.stringify(error.view)))).toEqual(view);
+  expect(
+    AgentMessagePartSchema.parse({ id: 'memory-stop', type: 'data-error', data: view }),
+  ).toMatchObject({ data: view });
 });

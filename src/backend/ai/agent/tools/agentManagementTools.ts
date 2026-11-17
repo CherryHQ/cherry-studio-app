@@ -1,12 +1,8 @@
+import { memoryContext, AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from '@cherrystudio/memory';
+import type { AgentMemoryOperations } from '@cherrystudio/memory';
 import * as z from 'zod';
 
 import type { AgentService } from '@/backend/data/services/AgentService';
-import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
-import { memoryContext } from '@/backend/services/agentMemory/memoryContext';
-import {
-  AGENT_MEMORY_DOCUMENT_BYTES,
-  AgentMemoryError,
-} from '@/backend/services/agentMemory/memoryTypes';
 import { createAgentProfiles } from '@/backend/services/agents/createAgentProfiles';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { UpdateAgentSchema } from '@/shared/data/api/schemas/agents';

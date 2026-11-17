@@ -68,6 +68,9 @@ export interface PreferenceSchema {
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
   'chat.input.enter_to_send': boolean;
 
+  'memory.generate.enabled': boolean;
+  'memory.organize.enabled': boolean;
+
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
@@ -128,6 +131,9 @@ export const PreferenceDefaults = {
   'chat.web_search.model_tools_preferred': true,
   'chat.web_search.provider_overrides': {},
   'chat.input.enter_to_send': false,
+
+  'memory.generate.enabled': true,
+  'memory.organize.enabled': true,
 
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,

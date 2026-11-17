@@ -27,12 +27,15 @@ export const mcpServerTable = sqliteTable(
      * an upgrade, and dropping its rule would silently re-enable it.
      */
     disabledTools: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
+    // Enterprise remote id when the enterprise server owns this definition; NULL for user data.
+    managedRemoteId: text(),
 
     ...createUpdateTimestamps,
   },
   (t) => [
     index('mcp_server_is_active_idx').on(t.isEnabled),
     uniqueIndex('mcp_server_builtin_idx').on(t.builtinId),
+    uniqueIndex('mcp_server_managed_remote_id_idx').on(t.managedRemoteId),
     check(
       'mcp_server_origin_check',
       sql`(${t.origin} = 'remote' and ${t.endpointUrl} is not null and ${t.builtinId} is null and ${t.authorizationId} is null) or (${t.origin} = 'builtin' and ${t.endpointUrl} is null and ${t.headers} is null and ${t.builtinId} is not null and ${t.authorizationId} is not null)`,

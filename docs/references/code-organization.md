@@ -21,6 +21,7 @@ independent consumer creates a broader owner.
 | Backend workflow, platform, and external capability | `src/backend/services` |
 | Mobile-native pure contract or helper used by frontend and backend | `src/shared` |
 | Desktop-mirrored portable AI contract or helper | `packages/universal` (dissolving; do not add new modules) |
+| Managed-memory algorithms explicitly extracted for Desktop alignment | `packages/memory`; platform adapters and lifecycle remain in `backend/services/agentMemory` |
 | Reusable platform-neutral product interaction component | `packages/ui` |
 | Web page bundled into the app and rendered in a WebView | `packages/<name>` with its own web toolchain |
 | Global or generated declaration | `src/types` |

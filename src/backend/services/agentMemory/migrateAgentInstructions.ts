@@ -1,7 +1,7 @@
-import { AgentIdSchema } from '@/shared/data/types/agent';
+import type { MemoryStorage } from '@cherrystudio/memory';
+import { AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from '@cherrystudio/memory';
 
-import type { MemoryStorage } from './createAgentMemory';
-import { AGENT_MEMORY_DOCUMENT_BYTES, AgentMemoryError } from './memoryTypes';
+import { AgentIdSchema } from '@/shared/data/types/agent';
 
 /** The legacy column is cleared only after its complete contents are confirmed on disk. */
 export async function migrateAgentInstructions(deps: {

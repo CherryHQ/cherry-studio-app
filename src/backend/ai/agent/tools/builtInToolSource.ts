@@ -282,7 +282,20 @@ function createCatalog(
   const tools = [
     createAskUserQuestionTool(askUser),
     ...createAgentManagementTools(deps.agents, agentId, deps.memory),
-    ...(agentId && deps.memory ? createMemoryTools(deps.memory, agentId) : []),
+    ...(agentId && deps.memory
+      ? createMemoryTools(
+          deps.memory,
+          agentId,
+          resolveUsageAttribution
+            ? () => {
+                const ref = resolveUsageAttribution().messageRef;
+                return ref?.kind === 'agent-session'
+                  ? deps.memory?.resolveCaller(agentId, ref.id)
+                  : undefined;
+              }
+            : undefined,
+        )
+      : []),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,

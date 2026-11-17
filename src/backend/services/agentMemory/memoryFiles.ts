@@ -1,23 +1,45 @@
-import { AgentIdSchema } from '@/shared/data/types/agent';
+import { assertMemoryTarget, type AgentMemoryKey } from '@cherrystudio/memory';
 
-import type { AgentMemoryKey } from './memoryTypes';
+import { AgentIdSchema } from '@/shared/data/types/agent';
 
 export const AGENT_MEMORY_FILES = {
   soul: ['SOUL.md'],
   user: ['USER.md'],
-  fact: ['memory', 'FACT.md'],
-  journal: ['memory', 'JOURNAL.jsonl'],
 } as const satisfies Record<AgentMemoryKey, readonly string[]>;
 
 export const AGENT_MEMORY_KEYS = Object.keys(AGENT_MEMORY_FILES) as AgentMemoryKey[];
-export const AGENT_MEMORY_DOCUMENT_KEYS = ['soul', 'user', 'fact'] as const;
 
 /** Also used by backup validation, without loading Expo or the running service. */
 export function isAgentMemoryArchivePath(path: string): boolean {
   const [prefix, agentId, ...parts] = path.split('/');
-  return (
-    prefix === 'agent-memory' &&
-    AgentIdSchema.safeParse(agentId).success &&
-    Object.values(AGENT_MEMORY_FILES).some((segments) => segments.join('/') === parts.join('/'))
-  );
+  const target = parts.join('/');
+  if (prefix === 'agent-memory' && AgentIdSchema.safeParse(agentId).success) {
+    if (target === 'SOUL.md' || target === 'USER.md') return true;
+    try {
+      assertMemoryTarget(target);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (prefix === 'shared-memory') {
+    try {
+      assertMemoryTarget([agentId, ...parts].join('/'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (prefix === 'memory-backups') {
+    const segments = path.split('/');
+    const file = segments.at(-1) ?? '';
+    return (
+      /^\d+-[0-9a-f-]{36}\.json$/.test(file) &&
+      ((segments.length === 3 && segments[1] === 'shared') ||
+        (segments.length === 4 &&
+          segments[1] === 'agent' &&
+          AgentIdSchema.safeParse(segments[2]).success))
+    );
+  }
+  return false;
 }

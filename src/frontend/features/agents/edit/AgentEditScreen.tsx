@@ -508,6 +508,12 @@ function AgentEditForm({
                 ) : undefined
               }
             />
+            <Section.SwitchItem
+              label={t('agent.form.sharedMemoryEnabled')}
+              description={t('agent.form.sharedMemoryDescription')}
+              value={form.sharedMemoryEnabled}
+              onValueChange={(value) => updateForm('sharedMemoryEnabled', value)}
+            />
             {form.mode === 'standard' ? (
               <Section.SelectItem
                 accessibilityHint={t(

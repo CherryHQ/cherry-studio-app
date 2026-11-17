@@ -107,6 +107,11 @@ export type RuntimeExecutionPorts = {
   onFailure?(error: RuntimeError): void;
   traceModel?(owner: RuntimeUsageOwner): Promise<TraceSpan | undefined>;
   assertExecutionAllowed(owner: RuntimeUsageOwner, signal: AbortSignal): Promise<void>;
+  /** Live Host-owned instructions; refreshed for each request, including queued/recovered turns. */
+  resolveInstructions?(
+    owner: RuntimeExecutionIdentity,
+    signal: AbortSignal,
+  ): Promise<readonly { key: string; text: string }[]>;
   resolveTool(
     identity: RuntimeExecutionIdentity,
     ref: RuntimeToolRef,
