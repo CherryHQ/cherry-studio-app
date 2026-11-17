@@ -54,6 +54,11 @@ defaults, including the saved default model when available. It does not choose o
 provider. Every conversation is assigned to that new agent; importing again creates another agent.
 Existing agents and conversations are retained.
 
+The new agent uses the bundled whale-girl avatar with a Cherry hair clip. Its `avatar` column
+stores the stable `builtin:deepseek` key; the shared `AgentAvatar` component renders the bundled
+image without a download or managed avatar file. A later custom image still takes precedence.
+Previously imported agents are not rewritten.
+
 All conversation/message IDs are remapped, all branches and the selected message are retained,
 and the original titles and historical timestamps are preserved. Import is the explicit
 historical timestamp exception; subsequent local mutations retain the ordinary timestamp rules.
