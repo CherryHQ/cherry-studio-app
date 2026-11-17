@@ -1,9 +1,10 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button } from '@cherrystudio/ui/components';
+import { randomUUID } from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
-import { useResolveClassNames } from 'uniwind';
+import { Text, View } from 'react-native';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
@@ -29,13 +30,16 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
+import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
+import { SshError } from '@/shared/data/types/ssh';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { useChatQuoteActions } from '../../quotes/ChatQuoteContext';
@@ -51,10 +55,7 @@ import { AudioAttachmentNotice } from './components/AudioAttachmentNotice';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
-import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
-import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
-import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
 import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
@@ -71,8 +72,7 @@ import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
-
-type ChatInputPicker = 'plugin' | 'prompt' | 'skill';
+import { readSshMentions } from './utils/sshMentions';
 
 type ChatInputProps = {
   agentId?: string;
@@ -83,11 +83,11 @@ type ChatInputProps = {
   /** Replaces the default prompt, as when it names the answer the next message continues. */
   placeholder?: string;
   sessionId?: string;
+  sshDraftId?: string;
   selectionHandoff?: string;
 };
 
 const logger = loggerService.withContext('ChatInput');
-const restingInputHeight = 32;
 
 export function ChatInput({
   agentId,
@@ -97,6 +97,7 @@ export function ChatInput({
   imageResult,
   placeholder,
   sessionId,
+  sshDraftId,
   selectionHandoff,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -288,6 +289,15 @@ export function ChatInput({
             onLinkPress={quoteActions?.previewQuote}
             canSend={editing ? canSendEdit && canSend : canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
+            menu={
+              <ChatInputMenu
+                key={agentId}
+                agentId={agentId}
+                enabled={!controls.isApprovalPending}
+                media="images"
+                prompts={[]}
+              />
+            }
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
             onGenerate={generateImage}
@@ -299,6 +309,7 @@ export function ChatInput({
         ) : (
           <TextChatInput
             sessionId={sessionId}
+            sshDraftId={sshDraftId}
             mode={mode}
             contextUsage={contextUsage}
             canSendEdit={canSendEdit}
@@ -329,6 +340,7 @@ function TextChatInput({
   mode,
   agentId,
   contextUsage,
+  sshDraftId,
   canSendEdit,
   edit,
   agentModelAnswersInParallel,
@@ -366,6 +378,10 @@ function TextChatInput({
 }) {
   const quoteActions = useChatQuoteActions();
   const { t } = useTranslation();
+  const router = useRouter();
+  const ssh = useBackendModule('ssh');
+  const sshContextId = sessionId ?? (sshDraftId ? `draft:${sshDraftId}` : undefined);
+  const [sshPickerContext, setSshPickerContext] = useState<string | null>(null);
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
   const { beginEditSend, commitEdit, editing, settleEditSend } = edit;
   const mcpApps = useMcpAppConversation();
@@ -379,43 +395,30 @@ function TextChatInput({
     selectedModelItem.modelId === contextUsage.modelId &&
     selectedModelItem.model.providerId === contextUsage.providerId &&
     selectedModelItem.model.modelId === contextUsage.providerModelId
-      ? deriveContextUsage(selectedModelItem.model.contextWindow, contextUsage.stats)
+      ? deriveContextUsage(
+          selectedModelItem.model.contextWindow,
+          contextUsage.tokens,
+          contextUsage.estimated,
+        )
       : undefined;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
-  // One picker at a time; each closes only itself, so a late close never hides the next one.
-  const [openPicker, setOpenPicker] = useState<ChatInputPicker | null>(null);
   const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
-  const [pickerAgentId, setPickerAgentId] = useState(agentId);
-  if (pickerAgentId !== agentId) {
-    setPickerAgentId(agentId);
-    if (openPicker === 'skill' || openPicker === 'prompt') setOpenPicker(null);
-  }
   const pluginCatalog = usePluginCatalog();
   const pluginConnections = usePluginConnections();
   const connectedPlugins =
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
-  const pluginMenuRef = useRef<ViewInstance>(null);
-  const closePicker = useCallback(
-    (picker: ChatInputPicker) => setOpenPicker((current) => (current === picker ? null : current)),
-    [],
-  );
-  const closePluginPicker = useCallback(() => closePicker('plugin'), [closePicker]);
-  const closeSkillPicker = useCallback(() => closePicker('skill'), [closePicker]);
-  const closePromptPicker = useCallback(() => closePicker('prompt'), [closePicker]);
-  const isPickerAvailable = mode === 'standard' && !isApprovalPending && !editing;
-  const isPluginPickerVisible = isPickerAvailable && openPicker === 'plugin';
-  const isSkillPickerVisible = isPickerAvailable && openPicker === 'skill' && Boolean(agentId);
-  const isPromptPickerVisible = isPickerAvailable && openPicker === 'prompt' && prompts.length > 0;
-  const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible;
-  if (openPicker && (!isPickerAvailable || (openPicker === 'prompt' && prompts.length === 0)))
-    setOpenPicker(null);
-  const { fontScale } = useWindowDimensions();
-  const inputTextStyle = useResolveClassNames('text-base');
-  const compactInputStyle = {
-    maxHeight: Math.max(restingInputHeight, (inputTextStyle.fontSize ?? 16) * fontScale * 2),
-  };
+  function prepareSshPicker() {
+    let contextId = sshContextId;
+    if (!contextId) {
+      const id = randomUUID();
+      router.setParams({ sshDraftId: id });
+      contextId = `draft:${id}`;
+    }
+    setSshPickerContext(contextId);
+  }
+  const isSshAvailable = mode === 'standard' && ssh.isAvailable();
   const modelPicker = useChatInputModelPicker({
     agentId,
     agentModelAnswersInParallel,
@@ -464,7 +467,6 @@ function TextChatInput({
       }
       const attempt = quoteActions?.capture(text);
       try {
-        setOpenPicker(null);
         const plugins =
           mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
         // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
@@ -477,13 +479,25 @@ function TextChatInput({
         } = mode === 'standard'
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+        const sshMentions = readSshMentions(prompt);
+        const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
+        if (
+          sshMentions.references.some(
+            (reference) =>
+              mode !== 'standard' ||
+              !selectedSsh ||
+              reference.id !== selectedSsh.profile.id ||
+              reference.revision !== selectedSsh.profile.revision,
+          )
+        )
+          throw new SshError('changed');
         // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
-        const selections = readSelectionMentions(prompt);
+        const selections = readSelectionMentions(sshMentions.text);
         const quoted = readQuoteMentions(selections.text, attempt?.fields.quotes);
         const shifted = <T extends { offset: number }>(references: T[]) =>
           references.map((reference) => ({
             ...reference,
-            offset: quoted.shift(selections.shift(reference.offset)),
+            offset: quoted.shift(selections.shift(sshMentions.shift(reference.offset))),
           }));
         const parts = attachMessageQuote(
           toAgentInputParts(
@@ -493,6 +507,10 @@ function TextChatInput({
             selections.selectionReferences.map((reference) => ({
               ...reference,
               offset: quoted.shift(reference.offset),
+            })),
+            sshMentions.sshReferences.map((reference) => ({
+              ...reference,
+              offset: quoted.shift(selections.shift(reference.offset)),
             })),
           ),
           quoted.quotes.length
@@ -544,10 +562,14 @@ function TextChatInput({
       replyModels,
       selectedModelId,
       sendMessage,
+      ssh,
+      sshContextId,
+      sshPickerContext,
     ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
+      if (error instanceof SshError) return sshErrorLabel(error, t);
       const key = getSendErrorLabelKey(error);
       return key ? t(key) : undefined;
     },
@@ -556,127 +578,81 @@ function TextChatInput({
 
   return (
     <>
-      <ChatInputPromptPopover
-        agentId={mode === 'standard' ? agentId : undefined}
-        onClose={closePromptPicker}
-        open={isPromptPickerVisible}
-        prompts={prompts}
-        returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
+      <View
+        accessibilityElementsHidden={isApprovalPending}
+        importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={isApprovalPending ? 'none' : 'auto'}
       >
-        <ChatInputSkillPopover
-          agentId={agentId}
-          onClose={closeSkillPicker}
-          open={isSkillPickerVisible}
-          returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
+        <ChatInputEffortOverlay
+          onChange={selectReasoningEffort}
+          reasoningEffort={reasoningEffort}
+          reasoningEfforts={reasoningEfforts}
         >
-          <ChatInputPluginPopover
-            plugins={connectedPlugins}
-            onClose={closePluginPicker}
-            open={isPluginPickerVisible}
-            returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
-          >
-            <View
-              accessibilityElementsHidden={isApprovalPending}
-              importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
-              pointerEvents={isApprovalPending ? 'none' : 'auto'}
+          {(effortGauge) => (
+            <ChatInputComposer
+              canSend={
+                selectedModelItem &&
+                (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                  ? canSendEdit && canSend
+                  : false
+              }
+              dismissKeyboardOnSend={dismissKeyboardOnSend}
+              getSendErrorLabel={getSendErrorLabel}
+              onSend={handleSendPress}
+              onStop={() => void cancel()}
+              streaming={isBusy}
+              testID="chat-composer"
             >
-              <ChatInputEffortOverlay
-                onChange={selectReasoningEffort}
-                reasoningEffort={reasoningEffort}
-                reasoningEfforts={reasoningEfforts}
-              >
-                {(effortGauge) => (
-                  <>
-                    <ChatInputComposer
-                      canSend={
-                        selectedModelItem &&
-                        (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
-                          ? canSendEdit
-                            ? canSend
-                            : false
-                          : false
-                      }
-                      dismissKeyboardOnSend={dismissKeyboardOnSend}
-                      getSendErrorLabel={getSendErrorLabel}
-                      onSend={handleSendPress}
-                      onStop={() => void cancel()}
-                      streaming={isBusy}
-                      testID="chat-composer"
-                    >
-                      <ChatInputAccessories>
-                        <View
-                          accessibilityElementsHidden={isPickerVisible}
-                          importantForAccessibility={
-                            isPickerVisible ? 'no-hide-descendants' : 'auto'
-                          }
-                          pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                          style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                        >
-                          <ComposerAttachments />
-                          <AudioAttachmentNotice />
-                          {mode === 'standard' ? <McpAppContextNotice /> : null}
-                        </View>
-                      </ChatInputAccessories>
-                      <ChatInputSurface
-                        attachmentMode={editing ? 'text-only' : undefined}
-                        contextUsage={compatibleUsage}
-                        contextUsageSessionId={sessionId}
-                        contextUsageMessageId={contextUsage?.messageId}
-                        onLinkPress={quoteActions?.previewQuote}
-                        streaming={isBusy}
-                        placeholder={
-                          skillAction
-                            ? t(
-                                skillAction === 'create'
-                                  ? 'skills.create.hint'
-                                  : 'skills.find.hint',
-                              )
-                            : placeholder
-                        }
-                        onStop={() => void cancel()}
-                        fieldStyle={isPickerVisible ? compactInputStyle : undefined}
-                        leadingAction={
-                          editing ? null : (
-                            <ChatInputMenu
-                              media={mode === 'minimal' ? 'images' : 'all'}
-                              onPickSkills={
-                                mode === 'standard' && agentId && !isParallel
-                                  ? () => setOpenPicker('skill')
-                                  : undefined
-                              }
-                              onPickPlugins={
-                                mode === 'standard' && !isParallel
-                                  ? () => setOpenPicker('plugin')
-                                  : undefined
-                              }
-                              onPickPrompts={
-                                mode === 'standard' && prompts.length > 0
-                                  ? () => setOpenPicker('prompt')
-                                  : undefined
-                              }
-                              triggerRef={pluginMenuRef}
-                            />
-                          )
-                        }
-                        secondaryAction={
-                          <ChatInputModelPill
-                            model={selectedModelItem}
-                            onClearReplyModels={clearReplyModels}
-                            onPress={modelPicker.open}
-                            replyModels={replyModels}
-                          />
-                        }
-                        trailingAction={effortGauge}
-                        dictation
-                      />
-                    </ChatInputComposer>
-                  </>
-                )}
-              </ChatInputEffortOverlay>
-            </View>
-          </ChatInputPluginPopover>
-        </ChatInputSkillPopover>
-      </ChatInputPromptPopover>
+              <ChatInputAccessories>
+                <View>
+                  <ComposerAttachments />
+                  <AudioAttachmentNotice />
+                  {mode === 'standard' ? <McpAppContextNotice /> : null}
+                </View>
+              </ChatInputAccessories>
+              <ChatInputSurface
+                attachmentMode={editing ? 'text-only' : undefined}
+                contextUsage={compatibleUsage}
+                contextUsageSessionId={sessionId}
+                contextUsageMessageId={contextUsage?.messageId}
+                onLinkPress={quoteActions?.previewQuote}
+                streaming={isBusy}
+                placeholder={
+                  skillAction
+                    ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
+                    : placeholder
+                }
+                onStop={() => void cancel()}
+                leadingAction={
+                  editing ? null : (
+                    <ChatInputMenu
+                      key={agentId}
+                      agentId={agentId}
+                      enabled={!isApprovalPending}
+                      onPickSsh={isSshAvailable ? prepareSshPicker : undefined}
+                      sshContextId={sshPickerContext ?? sshContextId}
+                      media={mode === 'minimal' ? 'images' : 'all'}
+                      plugins={mode === 'standard' && !isParallel ? connectedPlugins : undefined}
+                      prompts={prompts}
+                      skillAgentId={mode === 'standard' && !isParallel ? agentId : undefined}
+                    />
+                  )
+                }
+                secondaryAction={
+                  <ChatInputModelPill
+                    model={selectedModelItem}
+                    onClearReplyModels={clearReplyModels}
+                    onPress={modelPicker.open}
+                    replyModels={replyModels}
+                  />
+                }
+                trailingAction={effortGauge}
+                dictation
+              />
+            </ChatInputComposer>
+          )}
+        </ChatInputEffortOverlay>
+      </View>
       {modelPicker.isOpen ? (
         <ModelPickerDrawer
           // Parallel answers refuse image generation, so several models are chosen among text ones.
@@ -693,6 +669,3 @@ function TextChatInput({
     </>
   );
 }
-
-// Temporarily reserve space for the picker without unmounting the editor or its attachments.
-const foldedAttachmentsStyle = { height: 0, overflow: 'hidden' } as const;

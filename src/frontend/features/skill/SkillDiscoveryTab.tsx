@@ -1,6 +1,5 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { ActionMenu, Button, ContentState, Section } from '@cherrystudio/ui/components';
+import { Button, ContentState, Section, Tabs } from '@cherrystudio/ui/components';
 import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -124,7 +123,7 @@ export function useSkillDiscoverySearch(source: SkillDiscoverySource) {
               groups: [
                 {
                   key: 'url',
-                  items: detail.mobileSupport === 'supported' ? [fromCherryin(detail)] : [],
+                  items: [fromCherryin(detail)],
                 },
               ],
             };
@@ -200,29 +199,17 @@ export function SkillDiscoveryTab({
 
   return (
     <>
-      <View className="flex-row">
-        <ActionMenu
-          items={[
-            {
-              id: 'cherryin',
-              label: 'CherryIN',
-              checked: source === 'cherryin',
-              onPress: () => onSourceChange('cherryin'),
-            },
-            {
-              id: 'skills-sh',
-              label: 'skills.sh',
-              checked: source === 'skills-sh',
-              onPress: () => onSourceChange('skills-sh'),
-            },
-          ]}
-        >
-          <Button accessibilityLabel={t('skills.marketplace.source')} variant="ghost">
-            <Button.Label>{source === 'cherryin' ? 'CherryIN' : 'skills.sh'}</Button.Label>
-            <ChevronDownIcon className="size-4 text-muted-foreground" />
-          </Button>
-        </ActionMenu>
-      </View>
+      <Tabs
+        accessibilityLabel={t('skills.marketplace.source')}
+        items={[
+          { value: 'cherryin', label: 'CherryIN' },
+          { value: 'skills-sh', label: 'skills.sh' },
+        ]}
+        layout="hug"
+        onValueChange={onSourceChange}
+        value={source}
+        variant="chips"
+      />
       {current.isLoading ? (
         <ContentState.Loading title={t('skills.loading')} />
       ) : current.isError && !current.data ? (
@@ -234,32 +221,40 @@ export function SkillDiscoveryTab({
         <Section>
           {results.map((item) => (
             <Section.Item
+              accessibilityLabel={item.name}
+              density="comfortable"
               key={item.url}
-              label={item.name}
               onPress={() => open(item)}
-              description={
+            >
+              <View className="gap-2">
                 <View className="gap-1">
+                  <View className="flex-row items-start gap-2">
+                    <Text
+                      className="min-w-0 flex-1 font-medium text-base text-foreground"
+                      numberOfLines={2}
+                    >
+                      {item.name}
+                    </Text>
+                    <View className="min-h-6 shrink-0 flex-row items-center gap-1">
+                      {item.installs === undefined ? null : (
+                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                          {formatCompactNumber(item.installs)}
+                        </Text>
+                      )}
+                      <ChevronRightIcon className="size-4 text-muted-foreground" />
+                    </View>
+                  </View>
                   <Text className="text-sm text-muted-foreground" numberOfLines={2}>
                     {item.description}
                   </Text>
-                  {item.collection ? (
-                    <Text className="text-xs text-muted-foreground">
-                      {t('skills.marketplace.collection')}
-                    </Text>
-                  ) : null}
                 </View>
-              }
-              trailing={
-                <View className="flex-row items-center gap-1">
-                  {item.installs === undefined ? null : (
-                    <Text className="text-sm text-muted-foreground">
-                      {formatCompactNumber(item.installs)}
-                    </Text>
-                  )}
-                  <ChevronRightIcon className="size-5 text-muted-foreground" />
-                </View>
-              }
-            />
+                {item.collection ? (
+                  <Text className="text-xs text-muted-foreground">
+                    {t('skills.marketplace.collection')}
+                  </Text>
+                ) : null}
+              </View>
+            </Section.Item>
           ))}
         </Section>
       ) : (

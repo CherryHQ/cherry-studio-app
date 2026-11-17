@@ -268,6 +268,17 @@ export interface AgentSessionStore {
    */
   discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
 
+  /** Reconcile confirmed predecessors; selection moves only by an explicit old-tail compare-and-set. */
+  syncInputParents(
+    sessionId: string,
+    inputs: readonly {
+      userMessageId: string;
+      assistantMessageId: string;
+      parentMessageId: string | null;
+    }[],
+    selection?: { from: string; to: string },
+  ): Promise<void>;
+
   /** The ancestor chain ending at `through`, oldest first. */
   listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]>;
 

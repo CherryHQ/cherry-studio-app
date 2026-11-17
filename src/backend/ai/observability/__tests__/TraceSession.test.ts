@@ -1,3 +1,4 @@
+import { installDiagnosticContextReader } from '@/backend/utils/diagnosticContext';
 import { sanitizeTraceAttributes, traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { TraceSpanRecordSchema, type TraceSpanRecord } from '@/shared/data/types/trace';
@@ -33,6 +34,26 @@ function capture(traceId = 'a'.repeat(32)) {
 }
 
 describe('TraceSession', () => {
+  afterEach(() => installDiagnosticContextReader(() => ({})));
+
+  it('retains the initiating account on child spans and terminal revisions after account switching', () => {
+    let subject = 'user-a';
+    installDiagnosticContextReader(() => ({ accountSubjectId: subject, jsVersion: '0.5.1' }));
+    const first = capture();
+    subject = 'user-b';
+    first.root.startSpan('mcp.call_tool')?.end('ok');
+    first.root.end('ok');
+    const second = capture('b'.repeat(32));
+    second.root.end('ok');
+    expect(first.records).toHaveLength(4);
+    expect(first.records.every((record) => record.environment?.accountSubjectId === 'user-a')).toBe(
+      true,
+    );
+    expect(
+      second.records.every((record) => record.environment?.accountSubjectId === 'user-b'),
+    ).toBe(true);
+  });
+
   it('serializes correlated start/end revisions and measures elapsed time across clock changes', () => {
     const { root, records, advance } = capture();
     const child = root.startSpan('pi.generate_content');

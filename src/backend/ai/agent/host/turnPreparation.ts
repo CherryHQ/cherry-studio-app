@@ -548,6 +548,7 @@ export async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          sessionId: parsed.sessionId,
           workspaceFolderId: session.workspaceFolderId ?? null,
           agentId: agent.id,
           askUser: dependencies.askUser,

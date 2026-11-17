@@ -25,8 +25,8 @@ Read \`references/format.md\` first.
 `;
 
 describe('validateSkillPackage', () => {
-  it('accepts a conforming package and binds digests to every file', () => {
-    const result = validateSkillPackage(
+  it('accepts a conforming package and binds digests to every file', async () => {
+    const result = await validateSkillPackage(
       files({ 'SKILL.md': ENTRY, 'references/format.md': '# Format\n' }),
     );
     expect(result.ok).toBe(true);
@@ -49,7 +49,7 @@ describe('validateSkillPackage', () => {
       createHash('sha256').update(ENTRY).digest('hex'),
     );
 
-    const changedReference = validateSkillPackage(
+    const changedReference = await validateSkillPackage(
       files({ 'SKILL.md': ENTRY, 'references/format.md': '# Format v2\n' }),
     );
     expect(changedReference.ok && changedReference.package.contentHash).not.toBe(
@@ -57,7 +57,7 @@ describe('validateSkillPackage', () => {
     );
   });
 
-  it('matches the desktop directory content hash byte for byte', () => {
+  it('matches the desktop directory content hash byte for byte', async () => {
     // Reference value from desktop SkillInstaller.computeDirectoryHash over the same tree on disk.
     const encoder = new TextEncoder();
     const tree = new Map(
@@ -69,21 +69,21 @@ describe('validateSkillPackage', () => {
         'references/a.md': '# A\n',
       }).map(([path, text]) => [path, encoder.encode(text)]),
     );
-    expect(computeContentHash(tree)).toBe(
+    expect(await computeContentHash(tree)).toBe(
       'directory-sha256:47aa140032743ebb242a0432f60f4e94a506fd92abca25d954bfe0ac0b516c30',
     );
   });
 
-  it('reports distinct validation issues', () => {
-    expect(validateSkillPackage(files({ 'README.md': 'x' }))).toEqual({
+  it('reports distinct validation issues', async () => {
+    expect(await validateSkillPackage(files({ 'README.md': 'x' }))).toEqual({
       ok: false,
       issues: [{ code: 'entry-missing', subject: 'SKILL.md' }],
     });
-    expect(validateSkillPackage(files({ 'SKILL.md': '# no frontmatter' }))).toEqual({
+    expect(await validateSkillPackage(files({ 'SKILL.md': '# no frontmatter' }))).toEqual({
       ok: false,
       issues: [{ code: 'frontmatter-missing', subject: null }],
     });
-    const invalid = validateSkillPackage(
+    const invalid = await validateSkillPackage(
       files({
         'SKILL.md': '---\nname: Bad_Name\ndescription:\nhooks:\n  PreToolUse: x\n---\nRun !`ls`',
         '../escape.md': 'x',
@@ -110,16 +110,22 @@ describe('validateSkillPackage', () => {
     );
     // Spreadsheet error values end inline code with `!`; that is text, not `!`command``.
     expect(
-      validateSkillPackage(
-        files({
-          'SKILL.md': `${ENTRY}\nNever ship \`#REF!\` or \`#DIV/0!\`.\n\nKeep \`$#,##0\` formats.`,
-        }),
+      (
+        await validateSkillPackage(
+          files({
+            'SKILL.md': `${ENTRY}\nNever ship \`#REF!\` or \`#DIV/0!\`.\n\nKeep \`$#,##0\` formats.`,
+          }),
+        )
       ).ok,
     ).toBe(true);
     expect(
-      validateSkillPackage(files({ 'SKILL.md': `${ENTRY}\nSee \`#N/A\`, then run !\`date\`` })).ok,
+      (
+        await validateSkillPackage(
+          files({ 'SKILL.md': `${ENTRY}\nSee \`#N/A\`, then run !\`date\`` }),
+        )
+      ).ok,
     ).toBe(false);
-    const mismatch = validateSkillPackage(files({ 'SKILL.md': ENTRY }), {
+    const mismatch = await validateSkillPackage(files({ 'SKILL.md': ENTRY }), {
       expectedName: 'other',
     });
     expect(mismatch).toEqual({
@@ -143,8 +149,8 @@ describe('validateSkillPackage', () => {
     expect(parseSkillEntry('---\nname: x\n')).toEqual({ error: 'unterminated' });
   });
 
-  it('accepts standard YAML collections and keeps scripts and arbitrary metadata', () => {
-    const result = validateSkillPackage(
+  it('accepts standard YAML collections and keeps scripts and arbitrary metadata', async () => {
+    const result = await validateSkillPackage(
       files({
         'SKILL.md': `---
 name: pdf-notes
@@ -185,8 +191,10 @@ Run scripts/extract.py and follow references/format.md.
     'name: first\nname: duplicate\ndescription: d',
     'name: "unterminated\ndescription: d',
     '- name\n- description',
-  ])('rejects invalid frontmatter instead of guessing its values', (yaml) => {
-    expect(validateSkillPackage(files({ 'SKILL.md': `---\n${yaml}\n---\nBody` }))).toMatchObject({
+  ])('rejects invalid frontmatter instead of guessing its values', async (yaml) => {
+    expect(
+      await validateSkillPackage(files({ 'SKILL.md': `---\n${yaml}\n---\nBody` })),
+    ).toMatchObject({
       ok: false,
       issues: [{ code: 'frontmatter-invalid' }],
     });

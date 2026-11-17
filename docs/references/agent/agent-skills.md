@@ -65,13 +65,11 @@ plugin connection ownership and per-turn tool filtering.
 
 Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
 search in popularity order; the app offers no sort choice. Catalog and detail reads never download
-packages or require credentials. All CherryIN list requests send `mobileSupport=supported`;
-upstream owns this classification through the `mobileSupport` field (`supported` or `unsupported`).
-Search and pagination use the same server-filtered list. Pasted CherryIN
-links and market detail pages also hide entries whose `mobileSupport` is not `supported`. This is a
-discovery UI policy: backend detail resolution, installation and updates remain available regardless
-of that field, and installed Skills remain manageable in the library. The app does not maintain a
-mobile compatibility classifier or allowlist.
+packages or require credentials. CherryIN list requests do not filter by the upstream
+`mobileSupport` classification (`supported` or `unsupported`), so both kinds of entries are available
+through browsing, search, pagination, pasted links and market detail pages. This classification
+does not gate discovery, detail resolution, installation or updates, and installed Skills remain
+manageable in the library. The app does not maintain a mobile compatibility classifier or allowlist.
 
 CherryIN downloads are ZIP packages, bounded to 32 MiB compressed and expanded, with unsafe paths,
 symlinks, collisions and invalid checksums rejected before installation. Resolution discovers up to
@@ -320,6 +318,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
+| `list_installed_skills` | App-wide installed metadata, including globally disabled and unbound Skills; `mode: count` returns only the total; lists default to 20 compact entries with opt-in descriptions and a 12,000-character serialized-value cap; optional name/description search and exact cursor continuation; does not load instructions or expand the turn scope |
 | `list_local_skills` | Unfiltered scoped automatic-invocation metadata, 20 results per page; the model judges task fit from names and complete descriptions; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
@@ -329,10 +328,11 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are application built-ins. Skill metadata, instruction and package file readers are directly
-exposed; discovery, installation, adaptation and creation tools are deferred and found with
+exposed; app-wide inventory, discovery, installation, adaptation and creation tools are deferred and found with
 `tool_search` by exact name. When the Agent has no Skill packages, the Skills section keeps only
 the inventory, discovery and in-turn installation rules. A search for a generic Skill tool does not describe installed package
-availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
+availability: use `list_local_skills` for the current Agent's usable inventory, or
+`list_installed_skills` for the complete installed library. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
 
@@ -350,7 +350,16 @@ not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
 subset, even when either is zero, and distinguishes them from the app's installed library and explicit
-selections. Current inventory questions use `list_local_skills`
+selections. App-wide inventory questions use `list_installed_skills`: `mode: count` queries the
+library total directly, with the same optional search and no package or binding materialization.
+Only a complete-list request follows every page. Lists return IDs, names, global enablement,
+Agent binding state and invocation flags; descriptions are included only with
+`include_descriptions: true`. The 12,000-character budget includes JSON escaping, metadata and
+the continuation cursor. A page may contain fewer than `limit` entries; its cursor resumes after
+the last returned entry, and only a null cursor completes the list. Descriptions remain complete.
+Both modes read the same library service as the Skill page, without package paths or instruction
+bodies. These are configuration facts, not proof of execution support or package readability.
+Current Agent inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
 automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
 null with the same options. This also refreshes inventory after a conversation installation without

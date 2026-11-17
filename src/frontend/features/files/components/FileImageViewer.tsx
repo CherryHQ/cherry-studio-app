@@ -19,9 +19,9 @@ import { usePaneChrome } from '@/frontend/appShell/layout';
 import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { ArtifactImagePages, ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { queryKeys } from '@/frontend/data';
-import type { ResolvedFile } from '@/shared/contracts/file';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
 
+import type { FileViewerSource } from '../fileViewerSource';
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useFileImageEdit } from '../hooks/useFileImageEdit';
 import { readPngDimensions } from '../utils/readPngDimensions';
@@ -33,7 +33,7 @@ export function FileImageViewer({
   imageEditRequestId,
   sourceChat,
 }: {
-  file: ResolvedFile;
+  file: FileViewerSource;
   imageEditRequestId?: string;
   sourceChat?: ChatTarget;
 }) {
@@ -45,7 +45,7 @@ export function FileImageViewer({
   const isInPane = usePaneChrome() !== null;
   const { file } = editing;
   const saveToPhotos = useSaveImageToPhotos({ uri: file.uri });
-  const addToChat = useAddFileToChat(file, sourceChat);
+  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
   const [isZoomed, setIsZoomed] = useState(false);
   const [stillImageUri, setStillImageUri] = useState<string>();
   const [width, setWidth] = useState(0);

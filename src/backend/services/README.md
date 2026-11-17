@@ -29,9 +29,11 @@ suffix.
   feature-agnostic `JobRuntime`. The runtime itself depends only on the database, that registry,
   and the `KeepAliveSource` capability; it must not import paintings or background activity
   implementations directly.
-- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: a finite UIKit background
-  execution window on iOS and a foreground service on Android. Each consumer decides when to
-  acquire and how to handle expiry. `backgroundActivity` owns the feature-agnostic
+- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: official continued processing for
+  foreground user work on iOS 26+, finite UIKit time and consented audio fallback, and a foreground service on Android. Each consumer decides when to
+  acquire and how to handle expiry. Questions and approvals retain execution leases; the last
+  consumer's release stops shared protection immediately on both platforms. Local Agent execution owns stable
+  Session leases independently of reply presentation. `backgroundActivity` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state
   machine, content and icon derivation), and the painting job handler drives its own session.
@@ -50,6 +52,9 @@ suffix.
   Bootstrap injects a persistence service bound to that same database; list/detail reads remain
   in Data API. Its private Expo transport rejects redirects and keeps the deadline active through
   response-body consumption.
+- `ssh` owns native SSH command admission, host identity trust, device-only credentials, temporary
+  conversation grants and cleanup. Profile reads remain in Data API. See
+  [SSH connections](../../../docs/references/ssh.md) for boundaries and limits.
 - `analytics` owns anonymous product reporting through `@cherrystudio/analytics-client`. Its client
   exists only while data collection is consented under the current privacy policy, so revoking
   consent destroys it along with anything queued. It keeps the desktop-aligned client identity in

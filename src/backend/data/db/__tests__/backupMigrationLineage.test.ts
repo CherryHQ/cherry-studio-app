@@ -411,45 +411,50 @@ test('rebuilds a standard copy, preserving known records and defaulting missing 
   }
 });
 
-test.each([
-  'ALTER TABLE agent RENAME COLUMN name TO legacy_name',
-  'DROP TABLE preference',
-  `PRAGMA foreign_keys = OFF;
-   INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
-   VALUES ('orphan', 'missing-agent', 1, 1, 1)`,
-])(
-  'rejects missing required data or broken references without replacing the source: %s',
-  async (sql) => {
+describe.each(['export', 'restore'] as const)('%s normalization', (purpose) => {
+  test.each([
+    'ALTER TABLE agent RENAME COLUMN name TO legacy_name',
+    'ALTER TABLE agent_session RENAME COLUMN active_node_id TO legacy_active_node_id',
+    'ALTER TABLE agent_session_message RENAME COLUMN parent_id TO legacy_parent_id',
+    'ALTER TABLE agent_session_message RENAME COLUMN siblings_group_id TO legacy_siblings_group_id',
+    'DROP TABLE preference',
+    `PRAGMA foreign_keys = OFF;
+     INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+     VALUES ('orphan', 'missing-agent', 1, 1, 1)`,
+  ])(
+    'rejects missing required data or broken references without replacing the source: %s',
+    async (sql) => {
+      const path = join(workDirectory, 'cherry.db');
+      const database = createAppDatabase(path, currentBundle);
+      database.exec(sql);
+      database.close();
+      const before = readFileSync(path);
+
+      await expect(
+        normalizeBackupDatabase(new File(path), await captureVersion(currentBundle), purpose),
+      ).rejects.toMatchObject({ code: 'invalid' });
+      expect(readFileSync(path)).toEqual(before);
+    },
+  );
+
+  test('does not skip records that violate the standard constraints', async () => {
     const path = join(workDirectory, 'cherry.db');
     const database = createAppDatabase(path, currentBundle);
-    database.exec(sql);
+    database.exec(`
+      PRAGMA ignore_check_constraints = ON;
+      INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
+      INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session', 'agent', 1, 1, 1);
+      INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+      VALUES ('message', 'session', 'unknown-role', '{"parts":[]}', 'success', 1, 1);
+    `);
     database.close();
     const before = readFileSync(path);
 
     await expect(
-      normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
+      normalizeBackupDatabase(new File(path), await captureVersion(currentBundle), purpose),
     ).rejects.toMatchObject({ code: 'invalid' });
     expect(readFileSync(path)).toEqual(before);
-  },
-);
-
-test('does not skip records that violate the standard constraints', async () => {
-  const path = join(workDirectory, 'cherry.db');
-  const database = createAppDatabase(path, currentBundle);
-  database.exec(`
-    PRAGMA ignore_check_constraints = ON;
-    INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
-    INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session', 'agent', 1, 1, 1);
-    INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-    VALUES ('message', 'session', 'unknown-role', '{"parts":[]}', 'success', 1, 1);
-  `);
-  database.close();
-  const before = readFileSync(path);
-
-  await expect(
-    normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
-  ).rejects.toMatchObject({ code: 'invalid' });
-  expect(readFileSync(path)).toEqual(before);
+  });
 });
 
 test.each([
@@ -467,6 +472,140 @@ test.each([
     normalizeBackupDatabase(new File(path), await captureVersion(currentBundle)),
   ).rejects.toMatchObject({ code: 'incompatible' });
   expect(readFileSync(path)).toEqual(before);
+});
+
+test('rejects an unmigrated export while allowing its genuine old backup to upgrade', async () => {
+  const treeIndex = currentBundle.journal.entries.findIndex(
+    ({ tag }) => tag === '0012_message_tree',
+  );
+  expect(treeIndex).toBeGreaterThan(0);
+  const beforeTree = {
+    ...currentBundle,
+    journal: {
+      ...currentBundle.journal,
+      entries: currentBundle.journal.entries.slice(0, treeIndex),
+    },
+  };
+  const legacyPath = join(workDirectory, 'legacy.db');
+  const path = join(workDirectory, 'captured.db');
+  const legacy = createAppDatabase(legacyPath, beforeTree);
+  legacy.exec(`
+    INSERT INTO agent (id, name, order_key, created_at, updated_at)
+    VALUES ('agent', 'Agent', 'a0', 1, 1);
+    INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+    VALUES ('session', 'agent', 2, 1, 2);
+    INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+    VALUES ('question', 'session', 'user', '{"parts":[]}', 'success', 1, 1),
+           ('answer', 'session', 'assistant', '{"parts":[]}', 'success', 2, 2);
+  `);
+  legacy.close();
+  copyFileSync(legacyPath, path);
+  const captured = new DatabaseSync(path);
+  // Startup uses the latest timestamp, so an anomalous future entry can skip the tree migration.
+  captured.exec(
+    "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('unexpected', 9999999999999)",
+  );
+  captured.close();
+  const before = readFileSync(path);
+
+  await expect(
+    normalizeBackupDatabase(new File(path), await captureVersion(currentBundle), 'export'),
+  ).rejects.toMatchObject({ code: 'invalid' });
+  expect(readFileSync(path)).toEqual(before);
+
+  const file = new File(legacyPath);
+  await normalizeBackupDatabase(file, await captureVersion(beforeTree));
+  await prepareRestoredDatabase(file, []);
+  await validateBackupDatabase(file, await captureVersion(currentBundle));
+  const restored = new DatabaseSync(legacyPath);
+  try {
+    expect(restored.prepare('SELECT active_node_id FROM agent_session').get()).toEqual({
+      active_node_id: 'answer',
+    });
+    expect(
+      restored.prepare('SELECT id, parent_id FROM agent_session_message ORDER BY created_at').all(),
+    ).toEqual([
+      { id: 'question', parent_id: null },
+      { id: 'answer', parent_id: 'question' },
+    ]);
+  } finally {
+    restored.close();
+  }
+});
+
+test.each([
+  'DROP TABLE __drizzle_migrations',
+  'DELETE FROM __drizzle_migrations',
+  'DELETE FROM __drizzle_migrations WHERE created_at = (SELECT max(created_at) FROM __drizzle_migrations)',
+  'UPDATE __drizzle_migrations SET created_at = created_at - 1',
+  "UPDATE __drizzle_migrations SET hash = 'unexpected'",
+  "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('unexpected', 9999999999999)",
+])('exports current data and regenerates a nonstandard migration journal: %s', async (sql) => {
+  const originalPath = join(workDirectory, 'live.db');
+  const path = join(workDirectory, 'captured.db');
+  const database = createAppDatabase(originalPath, currentBundle);
+  database.exec(`
+    INSERT INTO agent (id, name, order_key, created_at, updated_at)
+    VALUES ('agent', 'Preserved agent', 'a0', 1, 1);
+    INSERT INTO agent_session (id, agent_id, active_node_id, last_activity_at, created_at, updated_at)
+    VALUES ('session', 'agent', 'message', 2, 1, 2);
+    INSERT INTO agent_session_message
+      (id, session_id, parent_id, siblings_group_id, role, data, status, created_at, updated_at)
+    VALUES ('question', 'session', NULL, 0, 'user', '{"parts":[]}', 'success', 1, 1),
+           ('message', 'session', 'question', 7, 'assistant', '{"parts":[]}', 'success', 2, 2);
+  `);
+  database.exec(sql);
+  database.close();
+  const original = readFileSync(originalPath);
+  copyFileSync(originalPath, path);
+  const file = new File(path);
+  const version = await captureVersion(currentBundle);
+
+  await normalizeBackupDatabase(file, version, 'export');
+  await validateBackupDatabase(file, version);
+  // A newly exported copy must also satisfy the unchanged restore path.
+  await normalizeBackupDatabase(file, version);
+  await prepareRestoredDatabase(file, []);
+
+  expect(readFileSync(originalPath)).toEqual(original);
+  const exported = new DatabaseSync(path);
+  try {
+    expect(
+      exported
+        .prepare('SELECT created_at, hash FROM __drizzle_migrations ORDER BY created_at')
+        .all(),
+    ).toEqual(version.migrations.map(({ when }) => ({ created_at: when, hash: '' })));
+    expect(exported.prepare('SELECT id, name FROM agent').all()).toEqual([
+      { id: 'agent', name: 'Preserved agent' },
+    ]);
+    expect(
+      exported.prepare('SELECT id, agent_id, active_node_id FROM agent_session').all(),
+    ).toEqual([{ id: 'session', agent_id: 'agent', active_node_id: 'message' }]);
+    expect(
+      exported
+        .prepare(
+          'SELECT id, session_id, parent_id, siblings_group_id, data FROM agent_session_message ORDER BY created_at',
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: 'question',
+        session_id: 'session',
+        parent_id: null,
+        siblings_group_id: 0,
+        data: '{"parts":[]}',
+      },
+      {
+        id: 'message',
+        session_id: 'session',
+        parent_id: 'question',
+        siblings_group_id: 7,
+        data: '{"parts":[]}',
+      },
+    ]);
+  } finally {
+    exported.close();
+  }
 });
 
 test('rejects a different migration lineage before opening the database', async () => {

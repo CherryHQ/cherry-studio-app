@@ -1,9 +1,14 @@
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
+import { createDiagnosticAgent } from '@/backend/ai/agent/diagnostics';
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
+import {
+  resolveProviderConnection,
+  resolveProviderServiceUrl,
+} from '@/backend/ai/provider/providerConnection';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -22,6 +27,7 @@ import type {
 } from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
+import { readDiagnosticDataState } from '@/backend/data/services/diagnosticDataState';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
@@ -35,10 +41,12 @@ import {
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
+import { DeepseekImportRuntime } from '@/backend/services/deepseekImport';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import { createDiagnosticsModule } from '@/backend/services/diagnostics';
 import {
   createDocumentExportDependencies,
   type DocumentExportRuntime,
@@ -65,6 +73,7 @@ import {
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
+import type { ScreenAwakePort } from '@/backend/services/screenAwake';
 import {
   createSkillMarketplace,
   createGithubSkillClients,
@@ -74,6 +83,7 @@ import {
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
@@ -81,9 +91,12 @@ import { createUuRemoteModule } from '@/backend/services/uuRemote';
 import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { AccountModule } from '@/shared/contracts/account';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
+import type { CloudModule } from '@/shared/contracts/cloud';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { profileScopedName } from '@/shared/data/activeProfile';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { resolveAppLanguage } from '@/shared/utils/languages';
@@ -92,11 +105,14 @@ export type BackendComposition = {
   backend: Backend;
   initializeSkills(): Promise<void>;
   hasPendingSkillStorageWork(): boolean;
+  hasPendingDeepseekImport(): boolean;
+  disposeDeepseekImport(): Promise<void>;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
   disposeUuRemote(): Promise<void>;
+  disposeDiagnostics(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -115,20 +131,25 @@ export function createBackend(
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
     resourceScopes: ResourceScopeCoordinator;
+    screenAwake: ScreenAwakePort;
     providerAccounts: ProviderAccountRuntime;
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
     desktopConnections: DesktopConnectionRuntime;
+    ssh: SshRuntime;
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
-    diagnostics: DiagnosticsModule;
+    diagnostics: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
     region: { getCountry(): Promise<string | null> };
     trash: Pick<TrashRuntime, 'trashFile'>;
+    account: AccountModule;
+    cloud: CloudModule;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const deepseekImport = new DeepseekImportRuntime(dbService, services.preference);
   infrastructure.providerAccounts.configure(
     new ProviderAccountService(dbService),
     [cherryInAccountDefinition],
@@ -140,13 +161,17 @@ export function createBackend(
     connections: infrastructure.desktopConnectionManager,
     files: services.fileContent,
     background: infrastructure.remoteBackground,
-    journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
+    journal: new RemoteAgentCommandJournal(
+      createMMKV({ id: profileScopedName('cherry-remote-agent-commands') }),
+    ),
   });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   const desktopStore = new DesktopConnectionService(dbService, (provider) =>
     infrastructure.providerAccounts.getCapabilities(provider),
   );
-  const connectionIntents = createMMKV({ id: 'cherry-desktop-connection-intents' });
+  const connectionIntents = createMMKV({
+    id: profileScopedName('cherry-desktop-connection-intents'),
+  });
   infrastructure.desktopConnectionManager.configure(desktopStore, {
     isDisconnected: (id) => connectionIntents.getBoolean(id) ?? false,
     setDisconnected: (id, disconnected) => {
@@ -218,6 +243,53 @@ export function createBackend(
       keys: async (id) => (await services.provider.listApiKeys(id)).keys,
       auth: (id) => services.provider.getAuthConfig(id),
     },
+  });
+  const diagnostics = createDiagnosticsModule({
+    bundle: infrastructure.diagnostics,
+    resolveConnection: resolveProviderConnection,
+    resolveServiceUrl: resolveProviderServiceUrl,
+    model: services.model,
+    provider: services.provider,
+    applicationData: (context, signal) => readDiagnosticDataState(dbService, context, signal),
+    runtimeStorage: async (signal) => {
+      const runtime = infrastructure.languageServing.conversations;
+      if (!runtime?.inspectStorage) throw new Error('Runtime storage inspection is unavailable');
+      return runtime.inspectStorage(signal);
+    },
+    language: () =>
+      resolveAppLanguage(
+        services.preference.readCached('app.language'),
+        getLocales().map((locale) => locale.languageTag),
+      ),
+    oauthSignedIn: async (provider) =>
+      infrastructure.providerAccounts.getCapabilities(provider).flow === 'interactive' &&
+      (await infrastructure.providerAccounts.getStatus(provider.id)).signedIn,
+    plugins: async () => {
+      const { items } = await services.mcpServer.list({ isEnabled: true });
+      const selected = items.slice(0, 200);
+      const states = services.mcpRuntime.getCachedConnectionStates(selected);
+      const connections = selected.map((server) => ({ state: states[server.id] ?? 'disabled' }));
+      return {
+        enabledCount: items.length,
+        connectedCount: connections.filter((entry) => entry.state === 'connected').length,
+        truncated: selected.length < items.length,
+        connections,
+      };
+    },
+    agent: createDiagnosticAgent({
+      runtime: infrastructure.languageServing,
+      onUsage: async (report) => {
+        try {
+          await services.aiUsageRecord.recordInvocation({
+            ...report,
+            context: { ...report.context, source: null, messageRef: null },
+            modality: 'language',
+          });
+        } catch {
+          loggerService.withContext('Diagnostics').warn('Failed to record diagnostic model usage');
+        }
+      },
+    }),
   });
   const paintings = createPaintingsModule({
     scopes: infrastructure.resourceScopes,
@@ -373,6 +445,9 @@ export function createBackend(
     disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
     disposeUuRemote: uuRemote.dispose,
+    disposeDiagnostics: diagnostics.dispose,
+    disposeDeepseekImport: deepseekImport.dispose,
+    hasPendingDeepseekImport: deepseekImport.hasPendingStorageWork,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -389,15 +464,19 @@ export function createBackend(
       }
     },
     backend: {
+      account: infrastructure.account,
+      cloud: infrastructure.cloud,
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
+      deepseekImport,
       systemEntry: systemEntry.module,
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
       uuRemote: uuRemote.module,
-      diagnostics: infrastructure.diagnostics,
+      ssh: infrastructure.ssh,
+      diagnostics: diagnostics.module,
       documentExport: infrastructure.documentExport,
       file: {
         observeFileOcr: services.fileContent.observeFileOcr,
@@ -442,6 +521,7 @@ export function createBackend(
         },
         preference: services.preference,
         models: services.model,
+        screenAwake: infrastructure.screenAwake,
       }),
       webSearch: services.webSearch,
       voice: voice.module,

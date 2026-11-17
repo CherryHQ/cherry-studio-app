@@ -1,11 +1,8 @@
 import { resolveGeneralIcon } from '../icons-webp/general';
 import { MODEL_ICONS, type ModelIconKey, resolveModelAssetIcon } from '../icons-webp/models';
+import { PROVIDER_ID_ALIASES } from '../icons-webp/provider-aliases';
 import { resolveProviderAssetIcon } from '../icons-webp/providers';
-import {
-  MODEL_ICON_PATTERNS,
-  MODEL_TO_PROVIDER_ICON_PATTERNS,
-  PROVIDER_ID_ALIASES,
-} from './desktop-routing';
+import { MODEL_ICON_PATTERNS, MODEL_TO_PROVIDER_ICON_PATTERNS } from './desktop-routing';
 import type { IconSource } from './types';
 
 export { resolveGeneralIcon };

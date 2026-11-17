@@ -15,6 +15,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 
 jest.mock('@cherrystudio/ui/utils', () => ({ cn: (...names: unknown[]) => names.join(' ') }));
+jest.mock('expo-blur', () => ({ BlurTargetView: jest.requireActual('react-native').View }));
 
 jest.mock('../ModelPickerFastScroller', () => ({ ModelPickerFastScroller: () => null }));
 

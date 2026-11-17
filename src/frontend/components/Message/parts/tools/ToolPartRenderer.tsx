@@ -14,6 +14,7 @@ import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRen
 import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
 import { isRunJsToolPart, RunJsToolPart } from './RunJsToolPart';
 import { SkillToolPart } from './SkillToolPart';
+import { SshToolPart } from './SshToolPart';
 import {
   getToolName,
   isAgentMutationToolPart,
@@ -89,6 +90,7 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
   if (isRunJsToolPart(part)) {
     return <RunJsToolPart part={part} />;
   }
+  if (getToolName(part) === 'ssh_execute') return <SshToolPart part={part} />;
 
   if (isGeneratingImageToolPart(part)) {
     // Tool input carries the canonical painting params, so it names the shape.

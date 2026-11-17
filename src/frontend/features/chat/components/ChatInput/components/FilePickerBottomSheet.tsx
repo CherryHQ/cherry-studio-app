@@ -1,8 +1,8 @@
 import UploadIcon from '@cherrystudio/app-icons/icons/upload';
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, type ViewInstance } from 'react-native';
 
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import {
@@ -10,6 +10,7 @@ import {
   createReadyAttachmentDraft,
   isComposerAttachmentReady,
 } from '@/frontend/components/Composer/utils/composerAttachments';
+import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import type { ResolvedFileEntry } from '@/frontend/hooks/file';
 import type { FileEntryId } from '@/shared/data/types/file';
 
@@ -17,14 +18,26 @@ import { FilePickerList } from './FilePickerList';
 
 type FilePickerBottomSheetProps = {
   onClose: () => void;
+  onClosed?: () => void;
+  onSelect: () => void;
   onUpload: () => void;
+  open: boolean;
+  returnFocusRef?: RefObject<ViewInstance | null>;
 };
 
 /** Selection belongs to the sheet, so collapsing or recycling a folder never drops its files. */
-export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomSheetProps) {
+export function FilePickerBottomSheet({
+  onClose,
+  onClosed,
+  onSelect,
+  onUpload,
+  open,
+  returnFocusRef,
+}: FilePickerBottomSheetProps) {
   const { t } = useTranslation();
   const { attachments } = useComposerState();
   const { addAttachments } = useComposerActions();
+  const { requestCreate, isCreating } = useCreateFileFolder(null);
   const [selection, setSelection] = useState<ReadonlyMap<FileEntryId, ComposerAttachmentReady>>(
     () => new Map(),
   );
@@ -52,21 +65,38 @@ export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomShe
   function addSelectedFiles() {
     if (selectedAttachments.length === 0) return;
     addAttachments(selectedAttachments);
-    onClose();
+    onSelect();
   }
 
   return (
     <BottomSheet
+      onClosed={onClosed}
       footer={
-        selectedAttachments.length > 0 ? (
-          <Button onPress={addSelectedFiles} testID="file-picker-add">
-            {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
-          </Button>
-        ) : undefined
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Button
+              disabled={isCreating}
+              onPress={requestCreate}
+              testID="file-picker-create-folder"
+              variant="secondary"
+            >
+              {t('library.folders.create')}
+            </Button>
+          </View>
+          {selectedAttachments.length > 0 ? (
+            <View className="flex-1">
+              <Button onPress={addSelectedFiles} testID="file-picker-add">
+                {t('chat.filePicker.addSelected', { count: selectedAttachments.length })}
+              </Button>
+            </View>
+          ) : null}
+        </View>
       }
       onClose={onClose}
-      open
-      size="full"
+      open={open}
+      presentation="overlay"
+      returnFocusRef={returnFocusRef}
+      sizes={['large', 'full']}
       testID="file-picker"
       title={t('chat.filePicker.title')}
       titleAlign="center"

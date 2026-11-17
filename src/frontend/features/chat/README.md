@@ -11,6 +11,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
 ## Public Interface
 
 - `ChatScreen` is exported from `index.ts`.
+- `RemoteChatScreen` and `ReadOnlyTaskSessionScreen` are the desktop chat and scheduled-result
+  transcript route entries.
 
 ## Organization
 
@@ -98,6 +100,11 @@ are submitted as file parts and stay separate from the text draft; text controls
 
 ## Local and remote presentation
 
+`remote/ReadOnlyTaskSessionScreen` verifies membership in the selected scheduled task before
+opening the transcript. `ReadOnlyRemoteChat` shares message/history rendering and read actions,
+but has no composer, Agent picker or conversation-creation action. Its Session exposes no send,
+cancel, approval, upload or undelivered-message capability. The task list belongs to `remoteTask/`.
+
 `remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
 retains a desktop ConversationSource, opens a route Session through the remote-only hooks in
 `@/frontend/appShell/conversation/remote`, reconciles live rows with the desktop's history revision
@@ -149,4 +156,6 @@ time and navigation invalidates the old handoff immediately. Pending/uncertain o
 recoverable and cannot redirect the new draft when their replies arrive.
 
 The runtime public boundary exports `selectContextUsageSource` and `ContextUsageSource` for
-selecting the latest eligible branch measurement.
+selecting the current working-context usage for the newest answer on the selected branch.
+`useLocalConversation` exposes the Session observation's `contextUsages`, including updates after
+background compaction. Persisted message token statistics do not supply composer occupancy.

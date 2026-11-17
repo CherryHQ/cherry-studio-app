@@ -7,6 +7,20 @@ history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describe
 persistent contract, storage, tools, presentation, and backup. The baseline below explains the
 legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
 Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
+Isolated requests may set `limits` for provider requests and model-issued tool calls. The probe
+counts requests before dispatch and every tool call before argument validation, including unknown
+tools and invalid arguments. An over-budget response executes none of its tool calls and ends with
+`RUNTIME_EXECUTION_LIMIT`; cancellation still joins the memory runtime. Ordinary model checks omit
+these limits and keep their existing behavior.
+The generation hook observes calls; execution and provider-request guards enforce the budget,
+because an ordinary hook exception is only reported by the Harness. A derived turn ceiling bounds
+the same isolated run without changing durable-conversation policy.
+On-demand AI diagnosis uses that interface with explicitly supplied automatic read-only tools.
+The [internal diagnostic Agent](../../../src/backend/ai/agent/diagnostics/README.md) owns its bundled
+definition, tool adaptation and final-answer parsing; the workflow supplies scoped fact readers
+through the shared `DiagnosticAgent` contract. Bootstrap alone binds the concrete implementation.
+The probe rejects write/approval capabilities, history, checkpoints and resume inputs; ordinary
+model health checks still pass an empty tool list. Neither path creates an application conversation.
 Translation and automatic naming use the separate `RuntimeTextGenerator` capability on the bound
 service: one text-only provider invocation sharing model resolution and OAuth, without the native
 loop or storage.
@@ -100,6 +114,12 @@ budgets, and persistence; adopting upstream releases does not require sharing de
 paths or changing application database fields.
 
 ## Descriptor and lifecycle
+
+`DurableAgentRuntime.inspectStorage(signal)` is an optional, read-only diagnostic capability. It
+reports `ready`, `not_initialized`, or `failed` for the existing storage connection. It never opens
+or initializes storage, starts tasks, resumes execution, or tests with writes. The Pi implementation
+reads the schema header and checks the current initialization or storage-session failure state; it does not claim
+that every historic task is recoverable. Normal task and approval waits are not storage failures.
 
 `RuntimeConversationConfiguration.webTools` carries the Host's `RuntimeWebTools` selection policy:
 `modelToolsPreferred`, `clientSearchAvailable`, and `clientFetchAvailable`. It is absent when the
@@ -239,6 +259,8 @@ type RuntimeToolCall = {
 type RuntimeExecutionRequest = {
   // Used only by isolated model probes; never persisted or included in traces or events.
   apiKeyOverride?: string
+  // Isolated-run budgets; rejected tool calls count too. Never a durable conversation policy.
+  limits?: { modelCalls: number; toolCalls: number }
   turnId: string
   // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
   instructions: string
@@ -322,7 +344,7 @@ live entry and managed blob before message reservation. The Host authorizes tool
 referenced by the current input and complete Session transcript, while it resolves attachment
 content only for the current input and checkpoint-visible history. A Runtime never reads the device
 filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
-10 MiB per file. There is no request-level image count or byte ceiling: every request replays the
+30 MiB per file. There is no request-level image count or byte ceiling: every request replays the
 checkpoint-visible history with its images, and Pi prices each image into the context window by the
 endpoint's documented formula (Anthropic, OpenAI, or Gemini) over the dimensions read from the
 image header, falling back to that dialect's typical cost. Compaction folds old images away like any
@@ -450,6 +472,11 @@ The Host stores the latest positive measured request input in the completed answ
 `stats.contextTokens`. It excludes the generated answer and is not necessarily the final request's
 size or a measurement after compaction. Other persisted token counts aggregate attributed calls for
 analytics and are not context-size measurements.
+
+The input-only `stats.contextTokens` is not the composer's current occupancy. The durable
+observation supplies a separate context usage value computed from Pi's effective `ContextView`
+with pi-ai's estimator, including the retained answer and changes after compaction. See
+[Rebuilding Model Context](./pi-durable-migration.md#rebuilding-model-context).
 
 On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
 summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;

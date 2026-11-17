@@ -1556,6 +1556,43 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test('input policy escalates an auto tool before execution and discloses bound approval context', async () => {
+    const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
+    const approve = jest.fn(async () => false);
+    const extension = capabilityExtension({
+      name: 'cherry',
+      tools: [
+        capability({
+          approval: 'auto',
+          requiresApproval: () => true,
+          approvalInput: () => ({ target: 'bound-host', command: 'bash -s', stdin: 'script' }),
+          execute,
+        }),
+      ],
+      approve,
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const id = await toolTask(conversation);
+      harness.resume();
+      await harness.waitForTask(id, BACKGROUND_CONTEXT);
+      expect(approve).toHaveBeenCalledWith(
+        expect.anything(),
+        { target: 'bound-host', command: 'bash -s', stdin: 'script' },
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('waits for approval before persisting intent or performing an effect', async () => {
     const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
     let release!: (approved: boolean) => void;

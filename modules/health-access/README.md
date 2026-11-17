@@ -26,6 +26,12 @@ reopen either selection, including when querying medication doses. The app recor
 selection was requested, never that reading was granted. Reselection shares the application
 permission queue with ordinary system requests.
 
+Each authorization sheet uses an explicitly retained, visible app view controller as its presenter.
+The native request waits for the sheet to finish dismissing, including on errors, before starting
+another health sheet or releasing the application permission queue. HealthKit's authorization
+callback alone does not mean its presentation has finished.
+The module explicitly links HealthKitUI, which implements the HealthKit store's presenter property.
+
 The workout overview uses a bounded, newest-first sample query and preserves absent distance
 and energy as null. The seven-metric summary reads native statistics in fixed units (`unit`:
 kcal, m, count/min, ms, count) so its values do not follow the person's display units, and pages

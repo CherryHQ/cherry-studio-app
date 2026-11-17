@@ -1,11 +1,16 @@
 import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { formatStorageSize, useBackupErrorReporter } from '@/frontend/appShell/backup';
+import {
+  backupContentNoticeKey,
+  formatStorageSize,
+  useBackupErrorReporter,
+} from '@/frontend/appShell/backup';
 import { useBackendModule } from '@/frontend/data/BackendProvider';
 import { useBackupState } from '@/frontend/hooks/useBackupState';
 
@@ -14,6 +19,7 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 /** Backup and local storage maintenance; the app-wide `BackupDialog` shows backup progress. */
 export function DataScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const report = useBackupErrorReporter();
   const { backup, state } = useBackupState();
   const [clearing, setClearing] = useState(false);
@@ -55,7 +61,7 @@ export function DataScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: t('settings.data.title') }}>
       <Section
         title={t('backup.title')}
-        footer={t(available ? 'backup.sensitive' : 'backup.unavailable')}
+        footer={t(available ? backupContentNoticeKey() : 'backup.unavailable')}
       >
         <Section.Item
           label={t('backup.create')}
@@ -68,6 +74,13 @@ export function DataScreen() {
           onPress={() => void select()}
           showChevron={false}
           disabled={!available || busy}
+        />
+      </Section>
+      <Section title={t('settings.data.import')}>
+        <Section.Item
+          label={t('settings.data.deepseek.title')}
+          onPress={() => router.push('/settings/data/deepseek')}
+          disabled={busy}
         />
       </Section>
       <StorageSection disabled={busy} onClearingChange={setClearing} />

@@ -5,6 +5,8 @@ channel routing, release discovery, update actions and one app-scoped APK transf
 consumes `AppUpdateModule`; it does not choose release servers, construct store links or own downloads.
 `bootstrap` constructs one instance and cancels/joins its transfer before disposing the host.
 The [app-shell integration](../../../frontend/appShell/appUpdate/README.md) owns reminders and decisions.
+The `runningUpdate` leaf is a public early-boot entry for the running native update identity;
+diagnostic recording can read it without constructing update services.
 [EAS Update](../../../../docs/guides/app-updates.md) separately delivers compatible code/assets.
 
 ## Distribution

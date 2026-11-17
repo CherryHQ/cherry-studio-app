@@ -47,7 +47,7 @@ export function useDiagnosticBundle(screenshotId?: string) {
 
   async function submit(
     description: string,
-    details?: Pick<DiagnosticReportInput, 'feedback' | 'context'>,
+    details?: Pick<DiagnosticReportInput, 'feedback' | 'context' | 'diagnosis'>,
   ) {
     if (busy.current) return;
     busy.current = true;

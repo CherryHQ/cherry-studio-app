@@ -11,3 +11,9 @@ server row edits. A created server returns to that list.
   disabling, and deleting live in the header's more menu.
 - `components/` contains the tools section, which keeps each tool to one compact row.
 - `hooks/` owns the tools query.
+
+New connections expose the local name before their first save. A typed name takes precedence over
+server discovery metadata; when left blank, discovery supplies the initial name and a failed save
+keeps it editable. The persistence owner still rejects duplicate names because tool namespaces must
+remain unique. A structured name conflict offers rename guidance, while stale-edit conflicts and
+connection-probe failures have separate translated outcomes.

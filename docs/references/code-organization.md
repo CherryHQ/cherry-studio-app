@@ -132,3 +132,6 @@ The existing composition exceptions remain explicit: `backend/core/application/s
 may name service implementations, and `piModelResolver.ts` bridges runtime-neutral requests to
 persisted configuration and native transport. Boundary regression cases live in
 `scripts/__tests__/architectureBoundaries.test.ts` and run in both local Jest and PR CI.
+
+Enterprise implementation lives under `backend/services/enterprise`. Common backend modules cannot
+import it; bootstrap and `serviceRegistry.ts` assemble it. See [Enterprise Edition](./enterprise.md).

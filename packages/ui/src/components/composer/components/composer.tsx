@@ -26,7 +26,6 @@ import {
 } from './composer-expansion';
 import { ComposerInput } from './composer-input';
 import { ComposerPill } from './composer-pill';
-import { ComposerPopover } from './composer-popover';
 import { ComposerSend } from './composer-send';
 import { ComposerToolbar } from './composer-toolbar';
 import { MorphMenu } from './morph-menu';
@@ -131,7 +130,6 @@ export const Composer = Object.assign(ComposerRoot, {
   Input: ComposerInput,
   Menu: MorphMenu,
   Pill: ComposerPill,
-  Popover: ComposerPopover,
   Send: ComposerSend,
   Toolbar: ComposerToolbar,
 });

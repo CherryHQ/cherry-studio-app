@@ -28,12 +28,33 @@ import { ThemeMode } from './preferenceTypes';
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
+/** These defaults are delivered by the organization in enterprise profiles. */
+export const ENTERPRISE_DEFAULT_MODEL_KEYS = [
+  'agent.default_model_id',
+  'agent.session_naming.model_id',
+  'feature.translate.model_id',
+] as const;
+export type EnterpriseDefaultModels = Pick<
+  PreferenceSchema,
+  (typeof ENTERPRISE_DEFAULT_MODEL_KEYS)[number]
+>;
+
 export interface PreferenceSchema {
   /** Device-local opt-in to foreground shake detection and feedback screenshots. */
   'app.feedback.shake_enabled': boolean;
   'app.feedback.shake_hint_decision': 'unseen' | 'accepted' | 'ignored';
+  'app.keep_screen_on.enabled': boolean;
   'app.language': LanguageVarious | null;
-  'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
+  'app.onboarding.status':
+    | 'unseen'
+    | 'welcome'
+    | 'privacy'
+    | 'pending'
+    | 'permissions'
+    | 'notifications'
+    | 'login'
+    | 'skipped'
+    | 'completed';
   /** Opt-out switch for anonymous product analytics. Only honoured under the current policy. */
   'app.privacy.data_collection.enabled': boolean;
   /**
@@ -52,6 +73,8 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'app.background_run_guidance.seen': boolean;
+  /** Device-local audio opt-in; null means unseen, and only explicit confirmation stores true. */
+  'app.background_audio.consent': boolean | null;
 
   /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
@@ -96,12 +119,14 @@ export interface PreferenceSchema {
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
+  'ui.sidebar.session_tree_enabled': boolean;
   'ui.theme_mode': ThemeMode;
 }
 
 export const PreferenceDefaults = {
   'app.feedback.shake_enabled': false,
   'app.feedback.shake_hint_decision': 'unseen',
+  'app.keep_screen_on.enabled': false,
   'app.language': null,
   'app.onboarding.status': 'unseen',
   'app.privacy.data_collection.enabled': true,
@@ -114,6 +139,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'app.background_run_guidance.seen': false,
+  'app.background_audio.consent': null,
 
   'chat.background_reply.enabled': true,
   'chat.completion_notifications.enabled': true,
@@ -150,19 +176,42 @@ export const PreferenceDefaults = {
   'ui.library.view_mode': 'grid',
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
+  'ui.sidebar.session_tree_enabled': true,
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
+
+/** Application choices inherited once by a newly created account/organization profile. */
+export const INHERITABLE_PREFERENCE_KEYS = [
+  'app.background_run_guidance.seen',
+  'app.feedback.shake_enabled',
+  'app.feedback.shake_hint_decision',
+  'app.language',
+  'app.onboarding.status',
+  'app.privacy.data_collection.enabled',
+  'app.privacy.policy_version',
+  'chat.background_reply.enabled',
+  'chat.completion_notifications.enabled',
+  'file.document_parser.mode',
+  'file.export.watermark_enabled',
+  'ui.font_size_step',
+  'ui.library.view_mode',
+  'ui.sidebar.collapsed',
+  'ui.sidebar.recent_view_mode',
+  'ui.theme_mode',
+] as const satisfies readonly PreferenceKeyType[];
 
 /**
  * Preferences that describe this device or its consent rather than the user's content.
  * Restoring a backup keeps the target device's values for these keys.
  */
 export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_audio.consent',
   'app.background_run_guidance.seen',
   'app.feedback.shake_enabled',
   'app.feedback.shake_hint_decision',
+  'app.keep_screen_on.enabled',
   'app.onboarding.status',
   'app.privacy.data_collection.enabled',
   'app.privacy.policy_version',

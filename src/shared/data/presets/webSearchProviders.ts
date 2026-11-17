@@ -50,7 +50,7 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
   zhipu: ['searchKeywords'],
   tavily: ['searchKeywords'],
   searxng: ['searchKeywords'],
-  exa: ['searchKeywords'],
+  exa: ['searchKeywords', 'fetchUrls'],
   'exa-mcp': ['searchKeywords', 'fetchUrls'],
   yuanbao: ['searchKeywords'],
   bocha: ['searchKeywords'],
@@ -63,6 +63,8 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
   serply: ['searchKeywords'],
   searchapi: ['searchKeywords'],
   desearch: ['searchKeywords'],
+  stepfun: ['searchKeywords'],
+  serpkite: ['searchKeywords'],
 };
 
 const remotePresets = Object.fromEntries(

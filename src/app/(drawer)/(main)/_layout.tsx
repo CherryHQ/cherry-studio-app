@@ -40,6 +40,7 @@ export default function MainStackLayout() {
         <Stack.Screen name="drawings" options={destination} />
         <Stack.Screen name="plugins" options={destination} />
         <Stack.Screen name="skills" options={destination} />
+        <Stack.Screen name="scheduled-tasks" options={destination} />
         <Stack.Screen name="library" options={destination} />
         {/* Settings owns a nested stack and draws its headers there. */}
         <Stack.Screen name="settings" options={destination} />

@@ -114,6 +114,26 @@ test('cached files must pass checksum verification before reuse', async () => {
   expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
 });
 
+test('caller-validated archives bypass hash reuse and still enforce the byte ceiling', async () => {
+  const { sha256: _sha256, ...base } = options();
+  await expect(downloadFile({ ...base, validation: 'caller' })).resolves.toBe(destination);
+  expect(hashLocalFile).not.toHaveBeenCalled();
+  expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(1);
+  expect(FileSystem.moveAsync).toHaveBeenCalledWith({
+    from: `${destination}.part`,
+    to: destination,
+  });
+
+  task.downloadAsync.mockImplementationOnce(async () => {
+    const callback = jest.mocked(FileSystem.createDownloadResumable).mock.calls.at(-1)![3]!;
+    callback({ totalBytesWritten: 101, totalBytesExpectedToWrite: -1 });
+    return { status: 200 };
+  });
+  await expect(downloadFile({ ...base, validation: 'caller' })).rejects.toMatchObject({
+    code: 'download',
+  });
+});
+
 test('cancellation keeps a late successful transfer from publishing and excludes concurrent writers', async () => {
   const controller = new AbortController();
   let finish!: (value: { status: number }) => void;

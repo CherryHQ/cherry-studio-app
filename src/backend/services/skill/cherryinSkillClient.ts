@@ -30,7 +30,6 @@ const pageSchema = z.object({
 
 export type CherryinSkillClient = ReturnType<typeof createCherryinSkillClient>;
 
-/** Cherry Mobile discovery uses upstream's mobile-support classification. */
 export function createCherryinSkillClient() {
   const client = createHttpClient({ baseUrl: CHERRYIN_SKILLS_URL, timeoutMs: 15_000 });
 
@@ -44,7 +43,6 @@ export function createCherryinSkillClient() {
         path: '/api/skills',
         query: {
           q: input.query?.trim() || undefined,
-          mobileSupport: 'supported',
           sort: 'popular',
           offset,
           limit: 20,

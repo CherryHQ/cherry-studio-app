@@ -104,3 +104,8 @@ The context usage ring stays on the right of the composer at rest and while edit
 primary action. It opens a compact anchored progress popover without dismissing the keyboard or
 changing the draft. The popover shows the measured percentage and total capacity in `k token`;
 outside taps and system back dismiss it. Dictation and send/stop actions remain available.
+Occupancy follows the selected branch's effective runtime context, including the retained answer,
+tool results and compaction summary. Committed compaction refreshes the ring and any open popover
+without another send. Without a Pi working copy, saved rebuild context supplies an estimate marked
+with `≈`; opening the composer does not create a copy or call a model. Old input counts or cumulative
+billing totals are never displayed directly as occupancy.

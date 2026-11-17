@@ -5,6 +5,9 @@ import type {
   ConversationMessage,
   ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
+import { useBackendModule } from '@/frontend/data';
+import { useSshTarget } from '@/frontend/hooks/ssh';
+import type { AgentContextUsage } from '@/shared/contracts/agent';
 
 import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
@@ -34,8 +37,11 @@ export function useLocalConversation(input: {
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
   messageWindow: ConversationHistoryView;
+  contextUsages?: readonly AgentContextUsage[];
 } {
   const { sessionId, title, navigation } = input;
+  const ssh = useBackendModule('ssh');
+  const sshTarget = useSshTarget(sessionId);
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const window = useAgentMessageHistoryWindow(sessionId, navigation, {
@@ -50,16 +56,17 @@ export function useLocalConversation(input: {
   const [owned, setOwned] = useState(() => ({
     sessionId,
     client,
+    ssh,
     projector: sessionId
-      ? createLocalConversationProjector({ client, sessionId, onSessionChanged })
+      ? createLocalConversationProjector({ client, sessionId, onSessionChanged, ssh })
       : undefined,
   }));
   let projector = owned.projector;
-  if (owned.sessionId !== sessionId || owned.client !== client) {
+  if (owned.sessionId !== sessionId || owned.client !== client || owned.ssh !== ssh) {
     projector = sessionId
-      ? createLocalConversationProjector({ client, sessionId, onSessionChanged })
+      ? createLocalConversationProjector({ client, sessionId, onSessionChanged, ssh })
       : undefined;
-    setOwned({ sessionId, client, projector });
+    setOwned({ sessionId, client, ssh, projector });
   }
   const { messages: history } = window;
   // Live rows can arrive or settle after the history already holds them, so
@@ -70,7 +77,7 @@ export function useLocalConversation(input: {
   const snapshot = useMemo<ConversationSnapshot>(
     () =>
       projector
-        ? projector.snapshot(state, title)
+        ? projector.snapshot(state, title, sshTarget)
         : {
             title: title ?? '',
             freshness: { state: 'loading' },
@@ -78,7 +85,7 @@ export function useLocalConversation(input: {
             executions: [],
             interactions: [],
           },
-    [projector, state, title],
+    [projector, state, title, sshTarget],
   );
   const historyMessages = useMemo(
     () => (projector ? projector.history(history, state) : []),
@@ -112,5 +119,10 @@ export function useLocalConversation(input: {
     () => ({ ...window, messages: historyMessages }),
     [window, historyMessages],
   );
-  return { snapshot, messages, messageWindow };
+  return {
+    snapshot,
+    messages,
+    messageWindow,
+    contextUsages: state.status === 'ready' ? state.contextUsages : undefined,
+  };
 }

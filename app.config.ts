@@ -55,6 +55,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
       bundleIdentifier,
+      infoPlist: {
+        ...config.ios?.infoPlist,
+        BGTaskSchedulerPermittedIdentifiers: [
+          ...(config.ios?.infoPlist?.BGTaskSchedulerPermittedIdentifiers ?? []),
+          `${bundleIdentifier}.continued-processing.*`,
+        ],
+      },
       entitlements: {
         ...config.ios?.entitlements,
         'com.apple.security.application-groups': [
@@ -83,6 +90,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       '@preeternal/react-native-file-hash',
       '@siteed/sherpa-onnx.rn',
       './plugins/withDiagnostics',
+      './plugins/withCloudSigning',
       './modules/crash-reporting/app.plugin.js',
       './scripts/withReportingAutolinking.js',
     ]
@@ -133,6 +141,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
+      configServiceOrigin: process.env.CONFIG_SERVICE_ORIGIN,
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Native APK installation capability is separately embedded by withAppUpdates.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',

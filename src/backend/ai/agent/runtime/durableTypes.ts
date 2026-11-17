@@ -210,23 +210,49 @@ export type RuntimeDurableTurn = {
   isPaused?: boolean;
 };
 
+/** Current retained model context, distinct from a turn's billed usage or measured input. */
+export type RuntimeContextUsage = Readonly<{
+  messageId: string;
+  tokens: number;
+  estimated?: boolean;
+}>;
+
+export type RuntimeInputParent = {
+  userMessageId: string;
+  assistantMessageId: string;
+  parentMessageId: string | null;
+};
+
+export type RuntimeQueueSelection = { from: string; to: string };
+
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
   contextStatus?: 'compacting' | 'compaction-failed' | null;
+  contextUsage?: RuntimeContextUsage | null;
 };
 
 export type RuntimeConversationEvent =
   | { type: 'snapshot'; snapshot: RuntimeConversationSnapshot }
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | { type: 'context.usage.updated'; usage: RuntimeContextUsage | null }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */
 export interface DurableAgentRuntime {
+  /** Inspect existing storage without opening it, scheduling tasks or resuming work. */
+  inspectStorage?(signal: AbortSignal): Promise<'ready' | 'not_initialized' | 'failed'>;
   drainUsage(): Promise<void>;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
+  /** Estimate a missing working copy from the same saved context a rebuild imports; no execution. */
+  estimateStoredContextUsage(input: {
+    model: RuntimeModel;
+    instructions: string;
+    history: RuntimeHistoryTurn[];
+    contextCheckpoint: RuntimeContextCheckpoint | null;
+  }): number;
   initialize(
     database: RuntimeSqlDatabase,
     ports: RuntimeExecutionPorts,
@@ -289,6 +315,18 @@ export interface DurableAgentRuntime {
     | undefined
   >;
   submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
+  steer(
+    lane: RuntimeLane,
+    requestId: string,
+  ): Promise<{
+    status: 'accepted' | 'already-started' | 'not-found';
+    selection?: RuntimeQueueSelection;
+  }>;
+  /** Confirmed predecessors read together from durable metadata, never from a display projection. */
+  inputParents(
+    lane: RuntimeLane,
+    userMessageIds: readonly string[],
+  ): Promise<readonly RuntimeInputParent[]>;
   observe(
     lane: RuntimeLane,
     listener: (event: RuntimeConversationEvent) => void,

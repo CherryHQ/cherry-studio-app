@@ -5,6 +5,7 @@ import type { DevicePermissionScope, SystemPermissionState } from '@/shared/cont
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import type { SshTarget } from '@/shared/data/types/ssh';
 
 import type { TurnToolResources } from '../../resources/managedFileResolver';
 import { managedFileResolver } from '../../resources/managedFileResolver';
@@ -59,12 +60,15 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
@@ -73,6 +77,100 @@ describe('createSystemCapabilitySource', () => {
       'read_file',
       'write_file',
     ]);
+    expect(tools.find((tool) => tool.providerName === 'http_request')).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: true,
+      deferred: true,
+    });
+  });
+
+  test('offers MCP configuration only with the shared mutation owner and preserves read/write policy', async () => {
+    const mcpManagement: NonNullable<SystemCapabilityServices['mcpManagement']> = {
+      servers: { list: jest.fn(), getById: jest.fn() },
+      mutations: { createServer: jest.fn(), updateServer: jest.fn() },
+    };
+    const tools = await resolve({}, { mcpManagement });
+    for (const name of ['mcp_list_servers', 'mcp_get_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'auto',
+        effect: 'read',
+        deferred: true,
+      });
+    for (const name of ['mcp_create_server', 'mcp_update_server'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
+  });
+
+  test('exposes SSH only for a selected target and preserves only its explicit scoped grant', async () => {
+    let target: SshTarget | null = null;
+    const ssh: NonNullable<SystemCapabilityServices['ssh']> = {
+      isAvailable: () => true,
+      resolveAgentTarget: async () => target,
+      executeForAgent: jest.fn(),
+      filesForAgent: jest.fn(),
+      downloadForAgent: jest.fn(),
+      uploadForAgent: jest.fn(),
+    };
+    const options = { ssh, sessionId: 'conversation' };
+    expect(capabilityIds(await resolve({}, options))).not.toContain('ssh_execute');
+    target = {
+      selectionId: 'selection',
+      profile: {
+        id: 'connection',
+        revision: 'revision',
+        name: 'Router',
+        host: 'router.local',
+        port: 22,
+        username: 'admin',
+        authMethod: 'password',
+        fingerprint: 'SHA256:key',
+        isEnabled: true,
+        remoteDirectory: '/srv/project',
+      },
+      grant: null,
+    };
+    const command = (tools: readonly RuntimeTool[]) =>
+      tools.find((tool) => tool.providerName === 'ssh_execute');
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'ask',
+      autoApprovalEligible: false,
+    });
+    target = { ...target, grant: { id: 'grant', expiresAt: Date.now() + 3600000 } };
+    expect(command(await resolve({}, options))).toMatchObject({
+      approval: 'auto',
+      autoApprovalEligible: false,
+    });
+    const fileTools = (await resolve({}, options)).filter(
+      (tool) => tool.providerName.startsWith('ssh_') && tool.providerName !== 'ssh_execute',
+    );
+    expect(fileTools).toHaveLength(5);
+    for (const tool of fileTools)
+      expect(tool).toMatchObject({ approval: 'ask', autoApprovalEligible: false });
+    expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
+  });
+
+  test('offers Agent avatar and MCP binding workflows through the configured application owners', async () => {
+    const agentConfiguration: NonNullable<SystemCapabilityServices['agentConfiguration']> = {
+      avatars: { setAvatar: jest.fn() },
+      files: { resolve: jest.fn() },
+      bindings: { list: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
+      servers: { list: jest.fn(), getById: jest.fn() },
+    };
+    const tools = await resolve({}, { agentConfiguration });
+    expect(tools.find((tool) => tool.providerName === 'agent_list_mcp_servers')).toMatchObject({
+      approval: 'auto',
+      effect: 'read',
+      deferred: true,
+    });
+    for (const name of ['agent_set_avatar', 'agent_set_mcp_binding'])
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        effect: 'write',
+        deferred: true,
+      });
   });
 
   test('defers file tools without changing their read/mutation approval', async () => {
@@ -86,6 +184,7 @@ describe('createSystemCapabilitySource', () => {
     ];
     const management = {
       library_list_folders: 'auto',
+      library_create_folder: 'ask',
       library_move_item: 'ask',
       library_rename_item: 'ask',
       library_trash_item: 'ask',
@@ -257,14 +356,17 @@ describe('createSystemCapabilitySource', () => {
       'agent_get',
       'agent_list',
       'agent_update',
+      'list_installed_skills',
       'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
       'health_list_data_types',
+      'http_request',
       'edit_file',
       'library_search_files',
       'library_read_file',
       'library_list_folders',
+      'library_create_folder',
       'library_move_item',
       'library_rename_item',
       'library_trash_item',
@@ -818,15 +920,23 @@ async function resolve(
   options: {
     askUser?: AskUserQuestion;
     platform?: string;
+    ssh?: SystemCapabilityServices['ssh'];
+    mcpManagement?: SystemCapabilityServices['mcpManagement'];
+    sessionId?: string;
     documentParserMode?: DocumentParserMode;
     acceptsImages?: boolean;
+    agentConfiguration?: SystemCapabilityServices['agentConfiguration'];
   } = {},
 ): Promise<readonly RuntimeTool[]> {
-  const source = createSystemCapabilitySource(SERVICES, {
-    ...dependencies(scenario),
-    platform: options.platform ?? 'ios',
-  });
+  const source = createSystemCapabilitySource(
+    { ...SERVICES, ...options },
+    {
+      ...dependencies(scenario),
+      platform: options.platform ?? 'ios',
+    },
+  );
   return source.getTools({
+    sessionId: options.sessionId,
     acceptsImages: options.acceptsImages ?? true,
     askUser: options.askUser ?? noAskUser,
     documentParserMode: options.documentParserMode ?? 'builtin',

@@ -20,6 +20,8 @@
  */
 
 export {
+  AgentContextUsageSchema,
+  type AgentContextUsage,
   AgentMessageDeltaSchema,
   AgentEventSchema,
   AgentSessionSnapshotSchema,

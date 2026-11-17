@@ -9,15 +9,20 @@ import { useSelectionSourceChat } from './useSelectionSourceChat';
  * Adds the previewed file to the chat that opened it, without sending.
  * A chat whose Agent cannot take the file offers no action.
  */
-export function useAddFileToChat(file: ResolvedFile, sourceChat: ChatTarget | undefined) {
-  const { isResolving, returnsToSourceChat } = useSelectionSourceChat(sourceChat);
+export function useAddFileToChat(
+  file: ResolvedFile | undefined,
+  sourceChat: ChatTarget | undefined,
+) {
+  const { isResolving, returnsToSourceChat } = useSelectionSourceChat(
+    file ? sourceChat : undefined,
+  );
   const returnToChat = useReturnToChat();
 
   return {
     isResolving,
     returnsToSourceChat,
     add: () => {
-      if (!sourceChat) return;
+      if (!file || !sourceChat) return;
       const attachment = createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`);
       returnToChat({ ...sourceChat, selectionHandoff: createChatSelectionHandoff({ attachment }) });
     },

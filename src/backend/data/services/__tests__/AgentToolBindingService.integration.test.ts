@@ -34,6 +34,33 @@ describe('AgentToolBindingService', () => {
     sqlite.close();
   });
 
+  it('protects binding creation, edits and removal with the binding version', async () => {
+    const agent = await agentService.create({ name: 'Researcher' });
+    const server = await mcpServerService.create({
+      name: 'Versioned',
+      endpointUrl: 'https://example.com/mcp',
+    });
+    const input = { source: 'mcp' as const, serverId: server.id };
+    const first = await bindingService.upsert(agent.id, input, { expectedUpdatedAt: null });
+    await expect(
+      bindingService.upsert(agent.id, input, { expectedUpdatedAt: null }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    const latest = await bindingService.upsert(
+      agent.id,
+      { ...input, enabled: false },
+      { expectedUpdatedAt: first.updatedAt },
+    );
+    await expect(
+      bindingService.upsert(agent.id, input, { expectedUpdatedAt: first.updatedAt }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(
+      bindingService.delete(agent.id, first.id, { expectedUpdatedAt: first.updatedAt }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect((await bindingService.list(agent.id)).items).toEqual([latest]);
+    await bindingService.delete(agent.id, latest.id, { expectedUpdatedAt: latest.updatedAt });
+    expect((await bindingService.list(agent.id)).items).toEqual([]);
+  });
+
   it('upserts stable identities and resolves specific MCP overrides before server defaults', async () => {
     const agent = await agentService.create({ name: 'Researcher' });
     const server = await mcpServerService.create({

@@ -1,0 +1,8 @@
+{
+  "name": "@cherrystudio/ssh",
+  "version": "1.0.0",
+  "description": "Bounded native SSH command operations backed by libssh2",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED"
+}

@@ -29,6 +29,13 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `components/ProviderConfiguration/` owns the configuration body shared by provider details,
   setup, creation and onboarding.
 
+In an enterprise profile the organization configures every provider and model. The list keeps its
+rows and locked switches inside one locked group, without creation or import. `detail/` renders
+`ManagedProviderDetail`: the same configuration and models tabs, with the keys (withheld) and
+addresses in a locked group, the connection check still available, and the model list in a locked
+group without sync, add or endpoint actions. A model opens the same details page with its settings
+locked and without its delete action.
+
 ## Provider List Motion
 
 The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows
@@ -55,14 +62,19 @@ item in the recommended section; preset rows keep their explicit Add action. Bot
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
 
+`catalog` also exports `ProviderCatalogContent` so an onboarding route can supply its own page
+frame while retaining this exact search, grouped list, import and selection flow. Onboarding's
+connection route mounts the original `ProviderConfiguration` through the `new` public entry.
+First-use selection starts at the recommended catalog entries, without a separate saved-services section.
+
 ## Desktop Provider Synchronization
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
 PC. Device details open the same sync page with a connection ID, skipping
-source selection. Dedicated onboarding routes also reuse this page with a route-owned
-`setupIntent="chat"`; successful import then opens onboarding's chat-model selection without marking
-setup complete. Entering synchronization and completing import use `replace`; settings import
-finishes at the provider list without preserving the import page in back history.
+source selection. Settings and the dedicated onboarding screen share `useDesktopProviderSync`
+for preview, selection and import. Settings import finishes at the provider list; onboarding import
+continues to model selection. Each entry owns its presentation and destination, using `replace`
+so the completed import page does not remain in back history.
 
 Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which

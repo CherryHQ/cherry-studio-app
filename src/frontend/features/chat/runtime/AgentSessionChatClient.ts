@@ -37,6 +37,7 @@ export type AgentSessionChatState = {
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
+  contextUsages?: AgentSessionSnapshot['contextUsages'];
   status: AgentSessionChatStatus;
 };
 
@@ -445,8 +446,8 @@ export class AgentSessionChatClient {
     }
 
     const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
-    // Observation supplies a question while an answer to it runs: settled history omits it then,
-    // even when a page read just before a regeneration still holds it.
+    // Keep the question and its answer versions while any answer runs: settled history omits
+    // their whole turn, even when a page read just before regeneration still holds those rows.
     const answeredLive = new Set(
       [...entry.liveMessages.values()].flatMap((message) =>
         message.role === 'assistant' && message.parentId && !isTerminalMessage(message)
@@ -460,6 +461,7 @@ export class AgentSessionChatClient {
       if (
         persistedMessage &&
         !answeredLive.has(messageId) &&
+        !(liveMessage.parentId && answeredLive.has(liveMessage.parentId)) &&
         persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
@@ -515,6 +517,10 @@ export class AgentSessionChatClient {
     const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
     await this.refresh(sessionId);
     return result;
+  }
+
+  async steerQueuedInput(sessionId: string, turnId: string) {
+    return this.protocol.steerQueuedInput({ sessionId, turnId });
   }
 
   async respondQuestion(
@@ -619,6 +625,7 @@ export class AgentSessionChatClient {
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
       contextStatus: snapshot.contextStatus,
+      contextUsages: snapshot.contextUsages,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -633,10 +640,14 @@ export class AgentSessionChatClient {
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;
+      case 'context.usage.updated':
+        this.updateState(entry, { ...entry.state, contextUsages: event.usages });
+        return;
       case 'runtime.failed':
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,
+          contextUsages: [],
           pendingApprovals: [],
           pendingQuestion: null,
           status: 'error',

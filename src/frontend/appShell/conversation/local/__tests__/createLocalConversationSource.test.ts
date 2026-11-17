@@ -45,7 +45,7 @@ function fixture() {
         changes.delete(listener);
       };
     },
-    get: jest.fn(async (path: string, _options?: { signal?: AbortSignal }) => {
+    get: jest.fn(async (path: string, _options?: { signal?: AbortSignal }): Promise<unknown> => {
       if (path === '/agents')
         return { items: [{ id: 'agent', name: 'Agent', model: 'model' }], total: 1 };
       if (path.endsWith('/path'))
@@ -122,6 +122,40 @@ test('lists Agents and Sessions as source-local addresses without opening transc
     failure: { code: 'retired' },
   });
 });
+
+test.each([false, true])(
+  'keeps flat and grouped session pages separate (includeBranches: %s)',
+  async (includeBranches) => {
+    const f = fixture();
+    const branch = { ...session, id: 'branch', forkedFromSessionId: session.id };
+    const items = includeBranches ? [branch, session] : [session];
+    f.api.get.mockResolvedValueOnce({ items, nextCursor: 'page-2' });
+
+    const page = await f.source.catalog.listSessions({ includeBranches }, undefined, f.signal);
+    expect(page.items.map((item) => item.ref.sessionId)).toEqual(items.map((item) => item.id));
+    expect(f.api.get).toHaveBeenLastCalledWith('/agent-sessions', {
+      query: {
+        agentId: undefined,
+        cursor: undefined,
+        ...(includeBranches ? {} : { groupBy: 'root' }),
+      },
+      signal: f.signal,
+    });
+    expect(page.next).toBeDefined();
+    await expect(
+      f.source.catalog.listSessions({ includeBranches: !includeBranches }, page.next, f.signal),
+    ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+    expect(f.api.get).toHaveBeenCalledTimes(1);
+
+    await f.source.catalog.listSessions({ includeBranches }, page.next, f.signal);
+    expect(f.api.get).toHaveBeenLastCalledWith(
+      '/agent-sessions',
+      expect.objectContaining({ query: expect.objectContaining({ cursor: 'page-2' }) }),
+    );
+    expect(f.protocol.observeSession).not.toHaveBeenCalled();
+    f.source.dispose();
+  },
+);
 
 test('loads only an expanded conversation’s direct children without opening a transcript', async () => {
   const f = fixture();

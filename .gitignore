@@ -45,6 +45,7 @@ yarn-error.*
 /ios
 /android
 /modules/*/android/build/
+/modules/ssh/.cache/
 
 .zed/*
 .idea/*
