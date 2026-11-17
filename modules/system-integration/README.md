@@ -4,10 +4,6 @@ This local Expo module owns Cherry Mobile's native share boundary and platform e
 `Backend.systemEntry`; it never imports this module directly. See the
 [architecture and behavior contract](../../docs/references/system-integration-design.md).
 
-`getAppIcon` and `setAppIcon` back the [App Icon workflow](../../src/backend/services/appIcon/README.md):
-UIKit alternate icons on iOS and launcher aliases on Android. `scripts/withAppIcons.js` embeds the
-resources and declarations, so the feature requires a new installation package.
-
 ## Native targets
 
 - Android: `ShareReceiverActivity` receives text, links, images, and files.

@@ -72,18 +72,6 @@ public class SystemIntegrationModule: Module {
     AsyncFunction("claimNextEntry") { try SystemEntryStore.claimNext() }
     AsyncFunction("releaseEntry") { (id: String) in SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") { (id: String) in try SystemEntryStore.complete(id) }
-    AsyncFunction("getAppIcon") { () -> [String: Any] in
-      let app = UIApplication.shared
-      return [
-        "isSupported": app.supportsAlternateIcons,
-        "icon": app.alternateIconName == "Enterprise" ? "enterprise" : "community"
-      ]
-    }.runOnQueue(.main)
-    AsyncFunction("setAppIcon") { (icon: String, promise: Promise) in
-      UIApplication.shared.setAlternateIconName(icon == "enterprise" ? "Enterprise" : nil) { error in
-        if let error { promise.reject(error) } else { promise.resolve() }
-      }
-    }.runOnQueue(.main)
     AsyncFunction("getBackgroundRunSettings") { () -> [String: Any] in
       ["batteryOptimizationExempt": NSNull(),
        "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,

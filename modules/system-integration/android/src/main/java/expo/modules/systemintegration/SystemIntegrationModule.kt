@@ -24,8 +24,6 @@ class SystemIntegrationModule : Module() {
     AsyncFunction("claimNextEntry") Coroutine { -> withContext(Dispatchers.IO) { SystemEntryStore.claimNext(context) } }
     AsyncFunction("releaseEntry") { id: String -> SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") Coroutine { id: String -> withContext(Dispatchers.IO) { SystemEntryStore.complete(context, id) } }
-    AsyncFunction("getAppIcon") { AppIcon.state(context) }
-    AsyncFunction("setAppIcon") { icon: String -> AppIcon.set(context, icon) }
     AsyncFunction("getBackgroundRunSettings") { BackgroundExecution.settings(context) }
     AsyncFunction("openBackgroundRunSettings") { BackgroundExecution.openSettings(context) }
     Function("getBackgroundTaskNotificationId") { key: String -> BackgroundExecution.notificationId(context, key) }

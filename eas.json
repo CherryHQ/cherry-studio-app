@@ -80,10 +80,7 @@
       },
       "android": {
         "channel": "production-google-play",
-        "env": {
-          "APK_UPDATES_ENABLED": "false",
-          "ANDROID_APP_ICON_SWITCHING_ENABLED": "false"
-        },
+        "env": { "APK_UPDATES_ENABLED": "false" },
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m --max-workers=2 --no-parallel"
       }

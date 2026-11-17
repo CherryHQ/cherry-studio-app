@@ -19,12 +19,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       `Invalid DOMESTIC_STORES_ENABLED: ${domesticStoresSetting}. Expected true or false.`,
     );
   }
-  const androidAppIconSetting = process.env.ANDROID_APP_ICON_SWITCHING_ENABLED ?? 'true';
-  if (!['true', 'false'].includes(androidAppIconSetting)) {
-    throw new Error(
-      `Invalid ANDROID_APP_ICON_SWITCHING_ENABLED: ${androidAppIconSetting}. Expected true or false.`,
-    );
-  }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
   const bundleIdentifier = `${config.ios!.bundleIdentifier}${suffix}`;
@@ -78,10 +72,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
-      [
-        './scripts/withAppIcons.js',
-        { androidEnabled: domesticStoresSetting !== 'true' && androidAppIconSetting === 'true' },
-      ] as [string, { androidEnabled: boolean }],
       [
         './scripts/withAppUpdates.js',
         {

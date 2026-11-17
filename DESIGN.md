@@ -103,9 +103,8 @@ system-rendered. Its accent is `#C74444`, `brand` red darkened below Android's 0
 threshold: on a lighter accent the system draws the mask black instead of the app icon's white. Do not repeat the app logo in the
 notification's large-icon content slot.
 
-Enterprise profiles use the official blue desktop artwork in `assets/enterprise-icon.png` and
-`assets/enterprise-logo.png`. App-shell `branding` selects it on sign-in, account and About surfaces,
-and supported launcher icons follow the selected account space without a setting. The native
+Enterprise profiles use the official blue desktop artwork in `assets/enterprise-logo.png`.
+App-shell `branding` selects it on sign-in, account and About surfaces. The launcher icon, native
 splash, its matching React cover, notification and Live Activity artwork stay unchanged.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
