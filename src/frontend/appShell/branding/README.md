@@ -6,6 +6,6 @@ existing community artwork. Sign-in, About, and the account page consume this bo
 launch screen and its matching React startup cover retain their shared artwork to avoid a brand
 jump during handoff. Notification artwork remains independently configured.
 
-`useAppIcon` observes `Backend.appIcon`. Launcher-icon consent belongs to the installation, not a
-profile preference or backup. General settings owns the explicit opt-in and turning it off restores
-the community icon. The backend/native boundary owns synchronization and capability detection.
+The backend/native App Icon workflow automatically synchronizes supported launcher icons with the
+selected account space. It has no settings control or separate preference. Returning to a community
+space restores the community icon; bootstrap owns synchronization and capability detection.

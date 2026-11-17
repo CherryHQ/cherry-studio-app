@@ -247,7 +247,6 @@ export function createAppBootstrapRuntime(
     region,
     trash,
     account,
-    appIcon,
     cloud,
   });
   backup.configure(

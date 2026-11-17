@@ -105,9 +105,10 @@ notification's large-icon content slot.
 
 Enterprise profiles use the official blue desktop artwork in `assets/enterprise-icon.png` and
 `assets/enterprise-logo.png` on account/About surfaces. App-shell `branding`
-owns that selection. Launcher changes require installation-wide opt-in through General settings;
-the native config plugin supplies full-background iOS and safe-area Android derivatives. This
-choice does not change the native splash, its matching React cover, notification or Live Activity artwork.
+owns that selection. Supported launcher icons automatically follow the selected account space
+without a settings control; the native config plugin supplies full-background iOS and safe-area
+Android derivatives. This behavior does not change the native splash, its matching React cover,
+notification or Live Activity artwork.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,

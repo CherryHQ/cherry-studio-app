@@ -447,7 +447,6 @@ describe('createAppBootstrapRuntime', () => {
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       account: mockEnterpriseAccount,
-      appIcon: mockAppIcon,
       cloud: mockCloud,
       languageServing: mockAgentRuntime,
       screenAwake: mockScreenAwake,

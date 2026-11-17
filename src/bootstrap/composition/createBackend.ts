@@ -91,7 +91,6 @@ import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { AccountModule } from '@/shared/contracts/account';
-import type { AppIconModule } from '@/shared/contracts/appIcon';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { CloudModule } from '@/shared/contracts/cloud';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
@@ -143,7 +142,6 @@ export function createBackend(
     region: { getCountry(): Promise<string | null> };
     trash: Pick<TrashRuntime, 'trashFile'>;
     account: AccountModule;
-    appIcon: AppIconModule;
     cloud: CloudModule;
   },
 ): BackendComposition {
@@ -461,7 +459,6 @@ export function createBackend(
     },
     backend: {
       account: infrastructure.account,
-      appIcon: infrastructure.appIcon,
       cloud: infrastructure.cloud,
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,

@@ -11,7 +11,6 @@ import { usePreference } from '@/frontend/data/hooks';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
-import { AppIconSetting } from './components/AppIconSetting';
 import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { EnterToSendSetting } from './components/EnterToSendSetting';
@@ -63,8 +62,6 @@ export default function AppearanceSettingsScreen() {
             />
           </Section.Item>
         </Section>
-
-        <AppIconSetting />
 
         <Section>
           <Section.SelectItem
