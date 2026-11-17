@@ -94,11 +94,15 @@ const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockDisposeUuRemote = jest.fn(async () => {});
 const mockDisposeDiagnostics = jest.fn(async () => {});
+const mockDisposeDeepseekImport = jest.fn(async () => {});
+const mockHasPendingDeepseekImport = jest.fn(() => false);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   initializeSkills: jest.fn(async () => undefined),
   hasPendingSkillStorageWork: () => false,
+  hasPendingDeepseekImport: mockHasPendingDeepseekImport,
+  disposeDeepseekImport: mockDisposeDeepseekImport,
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
@@ -215,6 +219,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAccountListeners.clear();
   mockProviderCatalog.hasPendingStorageWork.mockReturnValue(false);
+  mockHasPendingDeepseekImport.mockReturnValue(false);
   mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
@@ -223,6 +228,43 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
+  test('includes a pending DeepSeek import in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockHasPendingDeepseekImport.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockHasPendingDeepseekImport.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains DeepSeek import before uninstalling its database host', async () => {
+    let finish!: () => void;
+    mockDisposeDeepseekImport.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalled();
+    } finally {
+      finish?.();
+      await runtime.dispose();
+      uninstall.mockRestore();
+    }
+  });
+
   test('includes initial provider seeding in backup admission', async () => {
     const runtime = createRuntime();
     try {

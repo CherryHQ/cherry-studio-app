@@ -4,6 +4,7 @@ import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
 import type { CloudModule } from './cloud';
+import type { DeepseekImportModule } from './deepseekImport';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
@@ -31,6 +32,7 @@ export interface Backend {
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
+  readonly deepseekImport: DeepseekImportModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;

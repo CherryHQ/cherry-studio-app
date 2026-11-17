@@ -221,6 +221,8 @@ export function createAppBootstrapRuntime(
     disposeDiagnostics,
     initializeSkills,
     hasPendingSkillStorageWork,
+    hasPendingDeepseekImport,
+    disposeDeepseekImport,
   } = createBackend(services, {
     agentHostDependencies: host.container.get('AgentHostDependencies'),
     resourceScopes: host.container.get('ResourceScopeCoordinator'),
@@ -252,6 +254,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      hasPendingDeepseekImport() ||
       ssh.hasPendingStorageWork() ||
       providerCatalog.hasPendingStorageWork() ||
       mcpRuntime.hasPendingStorageWork() ||
@@ -323,6 +326,7 @@ export function createAppBootstrapRuntime(
           enterpriseSync.stop(),
           disposeUuRemote(),
           disposeDiagnostics(),
+          disposeDeepseekImport(),
         ]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host

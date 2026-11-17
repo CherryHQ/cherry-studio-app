@@ -41,6 +41,7 @@ import {
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
+import { DeepseekImportRuntime } from '@/backend/services/deepseekImport';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -104,6 +105,8 @@ export type BackendComposition = {
   backend: Backend;
   initializeSkills(): Promise<void>;
   hasPendingSkillStorageWork(): boolean;
+  hasPendingDeepseekImport(): boolean;
+  disposeDeepseekImport(): Promise<void>;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   disposeVoice(): Promise<void>;
@@ -146,6 +149,7 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const deepseekImport = new DeepseekImportRuntime(dbService, services.preference);
   infrastructure.providerAccounts.configure(
     new ProviderAccountService(dbService),
     [cherryInAccountDefinition],
@@ -442,6 +446,8 @@ export function createBackend(
     disposeAppUpdate: appUpdate.dispose,
     disposeUuRemote: uuRemote.dispose,
     disposeDiagnostics: diagnostics.dispose,
+    disposeDeepseekImport: deepseekImport.dispose,
+    hasPendingDeepseekImport: deepseekImport.hasPendingStorageWork,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -463,6 +469,7 @@ export function createBackend(
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
+      deepseekImport,
       systemEntry: systemEntry.module,
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,

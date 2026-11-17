@@ -2,12 +2,14 @@ import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import {
   type AgentRow,
   agentTable,
   monotonicUpdateTimestamp,
   userModelTable,
 } from '@/backend/data/db/schemas';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   type CreateAgentDto,
@@ -65,17 +67,21 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
 }
 
 export class AgentService {
+  constructor(
+    private readonly hostDbService?: DbService,
+    private readonly hostPreferenceService?: PreferenceService,
+  ) {}
+
   /**
-   * Resolved per call rather than injected once, so the instance holds no
-   * reference to a particular host generation and a replaced host cannot leave
-   * this singleton writing to a closed connection.
+   * Ordinary singleton calls resolve the current host. Long-lived imports may capture their
+   * originating services so cancellation cleanup cannot write into a replacement generation.
    */
   private get dbService() {
-    return application.get('DbService');
+    return this.hostDbService ?? application.get('DbService');
   }
 
   private get preferenceService() {
-    return application.get('PreferenceService');
+    return this.hostPreferenceService ?? application.get('PreferenceService');
   }
 
   private get db() {
@@ -162,7 +168,7 @@ export class AgentService {
   async create(dto: CreateAgentDto): Promise<Agent> {
     this.validateName(dto.name);
 
-    const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
+    const row = await this.dbService.withWriteTx((tx) => this.createTx(tx, dto));
     publishDataApiChanges(['/agents', `/agents/${row.id}`]);
 
     return rowToAgent(row, await this.getModelName(row.model));
@@ -181,7 +187,7 @@ export class AgentService {
         .from(agentTable)
         .where(isNull(agentTable.managedRemoteId))
         .limit(1);
-      return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
+      return existing ? null : this.createTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 
     if (!row) return null;
@@ -436,7 +442,9 @@ export class AgentService {
     return row ? preferred : null;
   }
 
-  private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
+  /** Atomic content imports reuse creation defaults; the caller publishes changes after commit. */
+  async createTx(tx: Database, dto: CreateAgentDto): Promise<AgentRow> {
+    this.validateName(dto.name);
     const modelId = await this.resolveCreateModelId(tx, dto.model);
     return (await insertWithOrderKey(
       tx,
