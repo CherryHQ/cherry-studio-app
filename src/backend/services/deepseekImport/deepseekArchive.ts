@@ -3,6 +3,11 @@ import { strFromU8 } from 'fflate';
 
 import { extractZipEntries, readZipDirectory } from '@/backend/utils/zipReader';
 import { DeepseekImportError } from '@/shared/contracts/deepseekImport';
+import { filenameExtension } from '@/shared/data/types/file';
+import {
+  imageMediaTypeFromExtension,
+  imageMediaTypeFromHeader,
+} from '@/shared/utils/imageFileTypes';
 
 import { DEEPSEEK_IMPORT_LIMITS, deepseekIndexSchema } from './deepseekFormat';
 
@@ -29,6 +34,19 @@ export async function readDeepseekJson(file: File): Promise<unknown> {
     return JSON.parse(await file.text());
   } catch (cause) {
     throw new DeepseekImportError('invalid', { cause });
+  }
+}
+
+/** Inspect only a bounded prefix; the archive's is_image remains the image identity. */
+export function readDeepseekImageMediaType(file: File): string {
+  const handle = file.open(FileMode.ReadOnly);
+  try {
+    return (
+      imageMediaTypeFromHeader(handle.readBytesSync(Math.min(file.size, 32))) ??
+      imageMediaTypeFromExtension(filenameExtension(file.name))
+    );
+  } finally {
+    handle.close();
   }
 }
 

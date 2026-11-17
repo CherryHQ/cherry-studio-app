@@ -94,6 +94,12 @@ export type DeepseekFile = z.infer<typeof file>;
 
 /** Parents precede their children in the official format; this also excludes cycles. */
 export function validateDeepseekTree(conversation: DeepseekConversation): void {
+  if (conversation.messages.length === 0) {
+    // The official exporter uses 0 when an empty conversation has no selected message.
+    if (conversation.current_message_id != null && conversation.current_message_id !== 0)
+      throw new DeepseekImportError('invalid');
+    return;
+  }
   const messages = [...conversation.messages].sort((a, b) => a.id - b.id);
   const seen = new Map<number, DeepseekConversation['messages'][number]>();
   for (const message of messages) {

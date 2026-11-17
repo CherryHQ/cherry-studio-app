@@ -19,11 +19,15 @@ import {
   type DeepseekImportResult,
 } from '@/shared/contracts/deepseekImport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { type FileEntry, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+import { type FileEntry, SafeNameSchema } from '@/shared/data/types/file';
 import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
-import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
 
-import { deepseekArchiveFile, readDeepseekJson, unpackDeepseekArchive } from './deepseekArchive';
+import {
+  deepseekArchiveFile,
+  readDeepseekImageMediaType,
+  readDeepseekJson,
+  unpackDeepseekArchive,
+} from './deepseekArchive';
 import { convertDeepseekConversation, deepseekFileKey } from './deepseekConversation';
 import {
   DEEPSEEK_IMPORT_LIMITS,
@@ -141,21 +145,18 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
               if (importedFiles.has(key) || !file.is_image || !file.export_path) continue;
               if (!file.export_path.startsWith(`chat_sessions/${item.id}_files/`))
                 throw new DeepseekImportError('invalid');
-              if (
-                !names.has(file.export_path) ||
-                !isImageFileExtension(filenameExtension(file.file_name))
-              )
-                continue;
+              if (!names.has(file.export_path)) continue;
               const name = SafeNameSchema.safeParse(file.file_name);
               if (!name.success) throw new DeepseekImportError('invalid');
               signal.throwIfAborted();
               storageMutationGate.assertWritable();
+              const source = deepseekArchiveFile(contents, file.export_path);
               const entry = await importManagedFile(
                 this.files,
                 {
-                  uri: deepseekArchiveFile(contents, file.export_path).uri,
+                  uri: source.uri,
                   name: name.data,
-                  mediaType: imageMediaTypeFromExtension(filenameExtension(name.data)),
+                  mediaType: readDeepseekImageMediaType(source),
                 },
                 signal,
               );

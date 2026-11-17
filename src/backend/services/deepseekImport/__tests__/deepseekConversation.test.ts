@@ -72,6 +72,21 @@ test('retains sibling answers and the selected older branch with remapped identi
   expect(selected.searchableText).toBe('Selected answer');
 });
 
+test.each([0, null, undefined])(
+  'retains an empty conversation with selected message %s',
+  (selected) => {
+    const result = convert({ ...fixture(), messages: [], current_message_id: selected });
+    expect(result.session).toMatchObject({ activeNodeId: null, name: 'Original title' });
+    expect(result.messages).toEqual([]);
+  },
+);
+
+test('rejects a nonzero selected message in an empty conversation', () => {
+  expect(() => convert({ ...fixture(), messages: [], current_message_id: 2 })).toThrow(
+    'DeepSeek import: invalid',
+  );
+});
+
 test.each([
   (value: ReturnType<typeof fixture>) => {
     value.messages[2].id = 2;
@@ -113,52 +128,58 @@ test('retains stopped answer text while excluding failure templates from model-v
   ]);
 });
 
-test('references only real managed images and preserves missing attachment names without fake file IDs', () => {
-  const file = {
-    id: 'image',
-    file_name: 'photo.png',
-    file_size: 20,
-    is_image: true,
-    export_path: 'chat_sessions/conversation_files/image_photo.png',
-  };
-  const value = fixture();
-  const source = {
-    ...value,
-    messages: [
-      {
-        ...value.messages[0],
-        fragments: [
-          {
-            type: 'FILE',
-            files: [
-              file,
-              {
-                ...file,
-                id: 'document',
-                is_image: false,
-                file_name: 'notes.pdf',
-                export_path: null,
-              },
-            ],
-          },
-        ],
-      },
-      ...value.messages.slice(1),
-    ],
-  };
-  const entry = FileEntrySchema.parse({
-    id: '00000000-0000-4000-8000-000000000001',
-    filename: 'photo.png',
-    mediaType: 'image/png',
-    size: 20,
-    provenance: 'imported',
-    createdAt: 1,
-    updatedAt: 1,
-  });
-  const result = convert(source, new Map([[deepseekFileKey(value.id, file), entry]]));
-  expect(result.missingAttachments).toBe(1);
-  expect(result.messages[0].data.parts).toEqual([
-    expect.objectContaining({ type: 'file', fileEntryId: entry.id }),
-    expect.objectContaining({ type: 'text', text: '📎 notes.pdf' }),
-  ]);
-});
+test.each([
+  ['photo.png', 'image/png'],
+  ['photo.jpg', 'image/jpeg'],
+])(
+  'uses canonical managed image metadata %s and preserves missing attachment names',
+  (filename, mediaType) => {
+    const file = {
+      id: 'image',
+      file_name: 'photo.png',
+      file_size: 20,
+      is_image: true,
+      export_path: 'chat_sessions/conversation_files/image_photo.png',
+    };
+    const value = fixture();
+    const source = {
+      ...value,
+      messages: [
+        {
+          ...value.messages[0],
+          fragments: [
+            {
+              type: 'FILE',
+              files: [
+                file,
+                {
+                  ...file,
+                  id: 'document',
+                  is_image: false,
+                  file_name: 'notes.pdf',
+                  export_path: null,
+                },
+              ],
+            },
+          ],
+        },
+        ...value.messages.slice(1),
+      ],
+    };
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-4000-8000-000000000001',
+      filename,
+      mediaType,
+      size: 20,
+      provenance: 'imported',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const result = convert(source, new Map([[deepseekFileKey(value.id, file), entry]]));
+    expect(result.missingAttachments).toBe(1);
+    expect(result.messages[0].data.parts).toEqual([
+      expect.objectContaining({ type: 'file', fileEntryId: entry.id, filename, mediaType }),
+      expect.objectContaining({ type: 'text', text: '📎 notes.pdf' }),
+    ]);
+  },
+);

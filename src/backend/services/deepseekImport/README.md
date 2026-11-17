@@ -23,6 +23,8 @@ import, the shared ZIP reader verifies central/local headers, sizes, CRC, paths 
 JSON validation then requires export format 3, an index that matches all conversation files,
 valid timestamps and a complete alternating-role message tree. The archive is bounded at 1 GiB
 compressed/expanded, 20,000 entries, 32 MiB per JSON file and 100,000 messages in total.
+Empty conversations may select message `0`, `null` or no message; they are retained with a null
+selected node when other conversations contain messages. An entirely empty archive is rejected.
 
 The format follows the official
 [DeepSeek importer](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/experimental/deepseek-chat-import/src/format.ts)
@@ -44,8 +46,12 @@ Search text is produced by the existing transcript index owner. Usage, inference
 checkpoints and provider replay signatures are not fabricated.
 
 Images actually present in the export use `importManagedFile`, including normal import-time image
-normalization. Missing or non-image attachment originals retain their names as source text and
-produce an import warning; no fake file handles are created. Search and read-link metadata become
+normalization. Image identity comes from `is_image` and the referenced archive entry, not a filename
+extension. A bounded file-header read identifies the media type; the extension is only a fallback,
+and unknown headers retain their image identity. Message parts use the managed entry's final name
+and media type, including any import-time normalization. Missing or non-image attachment originals
+retain their names as source text and produce an import warning; no fake file handles are created.
+Search and read-link metadata become
 validated HTTP(S) source parts, not executable historical tool calls. Unknown metadata fragments
 are ignored. Finished answers and stopped `INCOMPLETE` text are readable; failed/template replies
 retain their exported diagnostics in error parts, which do not enter model context. Stored reasoning

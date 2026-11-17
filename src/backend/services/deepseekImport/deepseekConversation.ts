@@ -74,7 +74,7 @@ export function convertDeepseekConversation(
                   id: createId(),
                   type: 'file',
                   fileEntryId: entry.id,
-                  filename: file.file_name,
+                  filename: entry.filename,
                   mediaType: entry.mediaType,
                   purpose: isUser ? 'input-attachment' : 'artifact',
                 });
@@ -142,7 +142,7 @@ export function convertDeepseekConversation(
     agentId: input.agentId,
     name: conversation.title ?? '',
     isNameManuallyEdited: true,
-    activeNodeId: selectedId === undefined ? null : ids.get(selectedId)!,
+    activeNodeId: selectedId === undefined ? null : (ids.get(selectedId) ?? null),
     lastActivityAt,
     createdAt: conversation.inserted_at,
     updatedAt: input.updatedAt,
