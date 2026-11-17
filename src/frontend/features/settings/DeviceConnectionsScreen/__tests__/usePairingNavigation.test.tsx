@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { usePairingNavigation } from '../usePairingNavigation';
@@ -19,7 +20,10 @@ jest.mock('expo-router', () => ({
 let renderer: ReactTestRenderer | undefined;
 let cancel: () => void;
 function Probe(props: Parameters<typeof usePairingNavigation>[0]) {
-  cancel = usePairingNavigation(props).cancel;
+  const navigation = usePairingNavigation(props);
+  useLayoutEffect(() => {
+    cancel = navigation.cancel;
+  });
   return null;
 }
 function render(props: Parameters<typeof usePairingNavigation>[0]) {
