@@ -1,5 +1,4 @@
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
-import { Button, Input, TextField, useToast } from '@cherrystudio/ui/components';
+import { Input, TextField, useToast } from '@cherrystudio/ui/components';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -14,7 +13,6 @@ import {
 import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
-import { DeepseekExportGuide } from './DeepseekExportGuide';
 
 const ERROR_KEYS = {
   invalid: 'settings.data.deepseek.error.invalid',
@@ -33,18 +31,15 @@ export function DeepseekImportScreen() {
   const { t } = useTranslation();
   return (
     <SettingsScrollPage
-      contentClassName="gap-8"
       headerProps={{ title: t('settings.data.deepseek.title') }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
       <ImportAction />
-      <DeepseekExportGuide />
     </SettingsScrollPage>
   );
 }
 
-/** Keep progress updates local so reading a large archive does not rerender the tutorial. */
 function ImportAction() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -101,7 +96,7 @@ function ImportAction() {
       }
     }
   };
-  let status = t('settings.data.deepseek.description');
+  let status: string | undefined;
   if (busy) {
     switch (progress?.phase) {
       case 'downloading':
@@ -127,7 +122,7 @@ function ImportAction() {
   }
   return (
     <View className="gap-3">
-      <TextField disabled={busy} invalid={Boolean(linkError)}>
+      <TextField disabled={busy || backupState.phase !== 'idle'} invalid={Boolean(linkError)}>
         <TextField.Label>{t('settings.data.deepseek.linkLabel')}</TextField.Label>
         <Input
           accessibilityLabel={t('settings.data.deepseek.linkLabel')}
@@ -145,21 +140,11 @@ function ImportAction() {
         />
         <TextField.Error>{linkError ? t(ERROR_KEYS[linkError]) : undefined}</TextField.Error>
       </TextField>
-      <Button
-        icon={<DownloadIcon />}
-        size="lg"
-        loading={busy}
-        disabled={busy || !url.trim() || backupState.phase !== 'idle'}
-        onPress={() => void importConversations()}
-      >
-        {t('settings.data.deepseek.import')}
-      </Button>
-      <Text accessibilityLiveRegion="polite" className="text-sm text-muted-foreground">
-        {status}
-      </Text>
-      <Text className="text-sm text-muted-foreground">
-        {t('settings.data.deepseek.missingAttachments')}
-      </Text>
+      {status ? (
+        <Text accessibilityLiveRegion="polite" className="text-sm text-muted-foreground">
+          {status}
+        </Text>
+      ) : null}
     </View>
   );
 }
