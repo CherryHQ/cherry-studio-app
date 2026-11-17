@@ -69,6 +69,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.host.quiesce();
   }
 
+  /** Stops spending provider credentials now, as a refused enterprise session requires. */
+  interrupt(reason: Error) {
+    return this.host.suspend(reason);
+  }
+
   getWorkingStorageSize = () => this.host.getWorkingStorageSize();
   clearWorkingStorage = () => this.host.clearWorkingStorage();
   readReasoning: AgentProtocol['readReasoning'] = (input) => this.host.readReasoning(input);
@@ -90,6 +95,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   cancelTurn: AgentProtocol['cancelTurn'] = (input) => this.host.cancelTurn(input);
   cancelQueuedInput: AgentProtocol['cancelQueuedInput'] = (input) =>
     this.host.cancelQueuedInput(input);
+  steerQueuedInput: AgentProtocol['steerQueuedInput'] = (input) =>
+    this.host.steerQueuedInput(input);
   cancelSubmission: AgentProtocol['cancelSubmission'] = (input) =>
     this.host.cancelSubmission(input);
   respondApproval: AgentProtocol['respondApproval'] = (input) => this.host.respondApproval(input);

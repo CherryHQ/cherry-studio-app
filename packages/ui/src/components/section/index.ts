@@ -1,4 +1,4 @@
-export { Section } from './section';
+export { Section, type SectionItemComponent, type SectionItemPressProps } from './section';
 export type {
   SectionHeaderProps,
   SectionItemProps,

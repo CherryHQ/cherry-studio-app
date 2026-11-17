@@ -111,6 +111,37 @@ export function createRemoteConversationSource(
     state,
     hasSubmission: (draftId) =>
       remote.getStarts().some((start) => start.draftId === draftId && !isUndelivered(start)),
+    tasks: {
+      list: (cursor, signal) =>
+        read(signal, async () => {
+          const page = await remote.tasks.list(
+            cursor ? catalogRefs.resolve(cursor, 'tasks').id : undefined,
+            signal,
+          );
+          return {
+            items: page.items,
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('tasks', page.next) } : {}),
+          };
+        }),
+      listSessions: (taskId, cursor, signal) =>
+        read(signal, async () => {
+          const kind = `task-sessions:${taskId}`;
+          const page = await remote.tasks.listSessions(
+            taskId,
+            cursor ? catalogRefs.resolve(cursor, kind).id : undefined,
+            signal,
+          );
+          return {
+            items: page.items.map((session) => ({
+              ref: { source: ref, sessionId: session.id },
+              agentId: session.agentId,
+              title: session.title,
+              updatedAt: session.updatedAt,
+            })),
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>(kind, page.next) } : {}),
+          };
+        }),
+    },
     catalog: {
       cacheScope,
       subscribe: (listener) => {
@@ -392,6 +423,23 @@ export function createRemoteConversationSource(
           assertSource,
           () => sessions.delete(session),
           !cached,
+        );
+        sessions.add(session);
+        return session;
+      }),
+    openTaskSession: (taskId, address, signal) =>
+      read(signal, async () => {
+        if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const initial = await remote.tasks.readSession(taskId, address.sessionId, signal);
+        const session = createRemoteConversationSession(
+          remote,
+          address,
+          initial,
+          assertSource,
+          () => sessions.delete(session),
+          true,
+          'read-only',
         );
         sessions.add(session);
         return session;

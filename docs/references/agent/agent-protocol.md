@@ -696,6 +696,38 @@ client to reconcile observation. Withdrawal cleans up only its own reservation, 
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
 retains its existing semantics.
 
+`steerQueuedInput({ sessionId, turnId })` promotes one waiting input to **Steer** (**引导** in
+Chinese). Pi replaces its follow-up submission with a steer submission in one native commit,
+preserving display message IDs and using a stable replacement request ID for deduplication.
+Acceptance removes the composer queue item and exposes its question followed by a pending
+assistant placeholder in the transcript. The current invocation finishes at Pi's execution
+boundary; subsequent output fills that same assistant message below the steer question. An input that
+already started returns `already-started` without aborting anything; a failed commit leaves the
+follow-up queued. Native admission handles the idle race by starting the accepted input.
+
+Accepted steers form an inbox prefix in their acceptance order. Pi uses `steeringMode: 'all'`
+and `followUpMode: 'one-at-a-time'`, so a final boundary can take that prefix and one follow-up
+without reversing the transcript. Inputs coalesced at the same boundary share generation;
+earlier empty assistant placeholders settle in place and output belongs to the last input.
+
+Parent links follow execution order, including steering a later queue item ahead of earlier ones.
+Live rendering, pagination, history reconstruction and forks use that order rather than reservation
+timestamps. Earlier output stays with its original question, and accepted steer questions remain
+visible across remounts while awaiting their execution boundary.
+
+Steering and confirmed withdrawal maintain predecessor metadata in the same Pi commit as the
+inbox mutation. Withdrawal resolves the current predecessor and repairs surviving successors;
+it does not reuse the parent captured before the operation. The Host reads these confirmed
+relationships directly, in per-lane ordered reconciliation, before writing Cherry history.
+Delayed observations cannot persist their older display parents. Display projection is not an
+authority for stored relationships, and recovery reconciles each execution chain independently.
+
+Relationship reconciliation does not infer or select a queue tail. A successful reorder may
+explicitly request an old-tail-to-new-tail selection change, applied with the relationship writes
+only if the old tail is still selected. Recovery and parallel model siblings preserve the user's
+selection. If Cherry persistence fails after native acceptance, the operation remains accepted;
+unsettled receipts allow subsequent reconciliation without submitting the input again.
+
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.
 

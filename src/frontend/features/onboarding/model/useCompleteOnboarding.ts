@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { useBackendModule, useMultiplePreferences, useMutation } from '@/frontend/data';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { type Agent, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { type Model, createUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -18,11 +19,12 @@ const ONBOARDING_PREFERENCES = {
 
 type OnboardingModelSelection =
   | { kind: 'catalog'; model: Model; isLocal: boolean }
+  | { kind: 'subscription'; model: Model }
   | { kind: 'manual'; modelId: string; provider: Provider };
 
 export function useCompleteOnboarding() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   const models = useBackendModule('models');
@@ -37,11 +39,11 @@ export function useCompleteOnboarding() {
   const createdAgentRef = useRef<Agent | undefined>(undefined);
   const preparedModelsRef = useRef(new Map<string, Model>());
   const requestRef = useRef<AbortController | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'preparing' | 'checking' | 'finishing'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      setPhase('idle');
+      setIsSaving(false);
       return () => {
         requestRef.current?.abort();
         requestRef.current = null;
@@ -50,11 +52,11 @@ export function useCompleteOnboarding() {
   );
 
   const complete = async (selection: OnboardingModelSelection) => {
-    if (requestRef.current) return;
+    if (requestRef.current) return false;
     const controller = new AbortController();
     requestRef.current = controller;
     const { signal } = controller;
-    setPhase('preparing');
+    setIsSaving(true);
     try {
       let modelId;
       let providerId;
@@ -79,26 +81,20 @@ export function useCompleteOnboarding() {
         modelId = model.id;
         providerId = model.providerId;
       } else {
+        if (selection.kind === 'subscription' && selection.model.providerId !== CLOUD_PROVIDER_ID)
+          throw new Error('Subscription setup requires an account model');
         modelId = selection.model.id;
         providerId = selection.model.providerId;
-        if (!selection.isLocal) await models.reconcile(providerId, { toAdd: [selection.model] });
+        if (selection.kind === 'catalog' && !selection.isLocal)
+          await models.reconcile(providerId, { toAdd: [selection.model] });
       }
       signal.throwIfAborted();
-      setPhase('checking');
-      const result = await models.checkChat({ modelId, signal });
-      signal.throwIfAborted();
-      if (result.status === 'failed') {
-        alert.show({
-          title: t('onboarding.check.failed'),
-          description: t(`onboarding.check.${result.reason}`),
-        });
-        return;
-      }
-      setPhase('finishing');
-      await Promise.all([
-        enableModel.trigger({ params: { uniqueModelId: modelId }, body: { isEnabled: true } }),
-        enableProvider.trigger({ params: { id: providerId }, body: { isEnabled: true } }),
-      ]);
+      // Account models are already enabled by Cloud and reject user configuration writes.
+      if (providerId !== CLOUD_PROVIDER_ID)
+        await Promise.all([
+          enableModel.trigger({ params: { uniqueModelId: modelId }, body: { isEnabled: true } }),
+          enableProvider.trigger({ params: { id: providerId }, body: { isEnabled: true } }),
+        ]);
       signal.throwIfAborted();
       const currentAgents = await agents.refetch();
       if (currentAgents.error) throw currentAgents.error;
@@ -125,16 +121,17 @@ export function useCompleteOnboarding() {
       await queryClient.invalidateQueries({ queryKey: ['/models'] });
       signal.throwIfAborted();
       router.replace(chatHref({ agentId: agent.id, kind: 'draft' }));
+      return true;
     } catch {
-      if (!signal.aborted)
-        alert.show({ title: t('onboarding.saveFailed'), description: t('onboarding.retryHint') });
+      if (!signal.aborted) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
+      return false;
     } finally {
       if (requestRef.current === controller) {
         requestRef.current = null;
-        setPhase('idle');
+        setIsSaving(false);
       }
     }
   };
 
-  return { complete, phase, cancel: () => requestRef.current?.abort() };
+  return { complete, isSaving, cancel: () => requestRef.current?.abort() };
 }

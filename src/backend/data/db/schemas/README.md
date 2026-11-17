@@ -19,6 +19,9 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
 - Mobile adds `agent_session_forked_from_created_id_idx` to paginate an expanded conversation's
   direct children in stable creation order. It changes no persisted session fields.
 
+- Native SSH connection configuration uses a dedicated MMKV store, outside the SQLite schema.
+  See [SSH connections](../../../../../docs/references/ssh.md).
+
 ## Migration Flow
 
 Released databases upgrade from the initial schema baseline through journaled migrations. See

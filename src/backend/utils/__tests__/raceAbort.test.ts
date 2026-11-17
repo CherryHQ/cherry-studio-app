@@ -1,4 +1,4 @@
-import { raceAbort } from '../raceAbort';
+import { raceAbort } from '@/backend/utils/raceAbort';
 
 describe('raceAbort', () => {
   test('releases the consumer with the AbortSignal reason', async () => {

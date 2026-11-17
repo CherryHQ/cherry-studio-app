@@ -110,6 +110,7 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
+  | { kind: 'approve'; sshDiagnosticsGrant: true }
   | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
@@ -121,6 +122,10 @@ export type ConversationInteraction = {
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Identified from the local tool reference, never from model-authored arguments. */
+  sshCommand?: boolean;
+  /** Only a locally bound, still-current SSH target can offer this narrower future grant. */
+  canGrantSshDiagnostics?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
@@ -223,6 +228,8 @@ export type AgentSummary = {
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
+  /** Delivered by the enterprise server; only local Agents can be managed. */
+  isManaged?: boolean;
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }
@@ -269,7 +276,7 @@ export interface ConversationCatalog {
     signal: AbortSignal,
   ): Promise<CatalogPage<AgentSummary>>;
   listSessions(
-    filter: { agent?: AgentRef },
+    filter: { agent?: AgentRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;

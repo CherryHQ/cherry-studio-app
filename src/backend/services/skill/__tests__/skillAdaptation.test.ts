@@ -18,21 +18,21 @@ const removal = {
   reason: 'Desktop clipboard is unavailable.',
 };
 
-test('changes only the exact body passage and preserves header, line endings and binary resources', () => {
-  const result = adaptSkillPackage(original, 'mobile-notes', [removal]);
+test('changes only the exact body passage and preserves header, line endings and binary resources', async () => {
+  const result = await adaptSkillPackage(original, 'mobile-notes', [removal]);
   expect(result.files.get('SKILL.md')).toEqual(
     new TextEncoder().encode(header + body.replace(removal.before, '')),
   );
   expect(result.files.get('assets/icon.bin')).toBe(original.get('assets/icon.bin'));
   expect(result.files.get('references/template.md')).toBe(original.get('references/template.md'));
   expect(original.get('SKILL.md')).toEqual(new TextEncoder().encode(header + body));
-  const validated = validateSkillPackage(original);
+  const validated = await validateSkillPackage(original);
   expect(validated.ok && result.package.contentHash !== validated.package.contentHash).toBe(true);
   expect(result.package.author).toBe('original');
 });
 
-test('matches the normalized instructions the model read without changing unrelated CRLF bytes', () => {
-  const result = adaptSkillPackage(original, 'mobile-notes', [
+test('matches the normalized instructions the model read without changing unrelated CRLF bytes', async () => {
+  const result = await adaptSkillPackage(original, 'mobile-notes', [
     { ...removal, before: removal.before.replaceAll('\r\n', '\n') },
   ]);
   expect(result.files.get('SKILL.md')).toEqual(
@@ -46,12 +46,15 @@ test.each([
   { changes: [{ ...removal, before: 'name: mobile-notes' }] },
   { changes: [{ ...removal, before: body }] },
   { changes: [removal, { ...removal, before: 'desktop clipboard.' }] },
-])('rejects absent, ambiguous, metadata, whole-body and overlapping changes', ({ changes }) => {
-  expect(() => adaptSkillPackage(original, 'mobile-notes', changes)).toThrow(SkillsError);
-});
+])(
+  'rejects absent, ambiguous, metadata, whole-body and overlapping changes',
+  async ({ changes }) => {
+    await expect(adaptSkillPackage(original, 'mobile-notes', changes)).rejects.toThrow(SkillsError);
+  },
+);
 
-test('revalidates the adapted package instead of allowing new unsupported semantics', () => {
-  expect(() =>
+test('revalidates the adapted package instead of allowing new unsupported semantics', async () => {
+  await expect(
     adaptSkillPackage(original, 'mobile-notes', [{ ...removal, after: '!`run-shell`' }]),
-  ).toThrow();
+  ).rejects.toThrow();
 });

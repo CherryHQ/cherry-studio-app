@@ -2,15 +2,13 @@ import { ContentState } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   readProviderSetupReturnTo,
-  type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
-import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -22,18 +20,11 @@ import {
 } from '../components/ProviderConfiguration';
 import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
 
-/**
- * Connecting a provider: a preset imported from the catalog, or a custom provider created
- * here. Both render the shared provider configuration; onboarding reuses this screen with a
- * step header and continues to model selection instead of provider setup.
- */
-export default function ProviderCreationScreen({
-  setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
+/** Regular settings presentation over the shared provider configuration. */
+export default function ProviderCreationScreen() {
   const {
     providerId,
     providerName,
-    connectionId: rawConnectionId,
     intent,
     issue,
     returnTo: rawReturnTo,
@@ -41,47 +32,26 @@ export default function ProviderCreationScreen({
     ProviderSetupRouteParamsInput & {
       providerId?: string;
       providerName?: string;
-      connectionId?: string | string[];
       intent?: string;
       issue?: ProviderConfigurationIssue;
     }
   >();
-  const connectionId = getSingleRouteParam(rawConnectionId);
   const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
 
   return providerId ? (
     <SavedProviderSetupScreen
-      connectionId={connectionId}
       intent={intent === 'sync' ? 'sync' : 'enable'}
       issue={issue}
       providerId={providerId}
       providerName={providerName}
       returnTo={returnTo}
-      setupIntent={setupIntent}
     />
   ) : (
-    <NewProviderScreen returnTo={returnTo} setupIntent={setupIntent} />
+    <NewProviderScreen returnTo={returnTo} />
   );
 }
 
-function OnboardingHeader() {
-  const { t } = useTranslation();
-
-  return (
-    <View className="gap-2 px-5 pt-5">
-      <Text className="text-xs text-muted-foreground">{t('onboarding.step', { current: 2 })}</Text>
-      <Text className="text-base text-foreground">{t('onboarding.connection.description')}</Text>
-    </View>
-  );
-}
-
-function NewProviderScreen({
-  returnTo,
-  setupIntent,
-}: {
-  returnTo: string;
-  setupIntent?: FirstUseSetupIntent;
-}) {
+function NewProviderScreen({ returnTo }: { returnTo: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const configuration = useNewProviderConfiguration();
@@ -89,19 +59,11 @@ function NewProviderScreen({
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: configuration.isDirty,
     isSaving: configuration.isCreating,
-    onClose: setupIntent === 'chat' ? () => router.replace('/onboarding') : undefined,
   });
   const handleContinue = useCallback(() => {
     void create().then((created) => {
       if (!created) return;
       allowNavigation();
-      if (setupIntent === 'chat') {
-        router.replace({
-          params: { providerId: created.providerId },
-          pathname: '/onboarding/model',
-        });
-        return;
-      }
       router.replace({
         params: {
           enableProvider: 'true',
@@ -113,7 +75,7 @@ function NewProviderScreen({
         pathname: '/settings/provider/[providerId]/model-add',
       });
     });
-  }, [allowNavigation, create, returnTo, router, setupIntent]);
+  }, [allowNavigation, create, returnTo, router]);
 
   return (
     <>
@@ -129,8 +91,7 @@ function NewProviderScreen({
             testID="provider-continue"
           />
         }
-        header={setupIntent === 'chat' ? <OnboardingHeader /> : undefined}
-        testID={setupIntent === 'chat' ? 'onboarding-connection' : 'provider-configuration'}
+        testID="provider-configuration"
         value={configuration.value}
       />
     </>
@@ -138,21 +99,17 @@ function NewProviderScreen({
 }
 
 function SavedProviderSetupScreen({
-  connectionId,
   intent,
   issue,
   providerId,
   providerName,
   returnTo,
-  setupIntent,
 }: {
-  connectionId?: string;
   intent: ProviderSetupIntent;
   issue?: ProviderConfigurationIssue;
   providerId: string;
   providerName?: string;
   returnTo: string;
-  setupIntent?: FirstUseSetupIntent;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -160,27 +117,14 @@ function SavedProviderSetupScreen({
   const configuration = useSavedProviderConfiguration(providerId);
   const displayedProviderName = configuration.provider?.name ?? providerName ?? '';
   const isBusy = isPreparing || (configuration.value?.isBusy ?? false);
-  const close = () => {
-    if (setupIntent === 'chat') router.replace('/onboarding');
-    else router.back();
-  };
+  const close = () => router.back();
   const handleContinue = useCallback(() => {
-    if (setupIntent === 'chat') {
-      router.replace({
-        params: connectionId ? { connectionId } : { providerId },
-        pathname: '/onboarding/model',
-      });
-      return;
-    }
     void openSetup(providerId, returnTo, intent, true);
-  }, [connectionId, intent, openSetup, providerId, returnTo, router, setupIntent]);
+  }, [intent, openSetup, providerId, returnTo]);
 
   return (
     <>
-      <RouteHeader
-        onBack={setupIntent === 'chat' ? close : undefined}
-        title={t('settings.provider.setup.title', { name: displayedProviderName })}
-      />
+      <RouteHeader title={t('settings.provider.setup.title', { name: displayedProviderName })} />
       {configuration.isError ? (
         <View className="flex-1 justify-center px-6 py-10">
           <ContentState.Error
@@ -204,8 +148,7 @@ function SavedProviderSetupScreen({
               testID="provider-continue"
             />
           }
-          header={setupIntent === 'chat' ? <OnboardingHeader /> : undefined}
-          testID={setupIntent === 'chat' ? 'onboarding-connection' : 'provider-configuration'}
+          testID="provider-configuration"
           value={configuration.value}
         />
       )}

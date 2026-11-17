@@ -247,6 +247,41 @@ describe('GIF parameter constraints', () => {
     },
   } satisfies ImageGenerationSupport;
   const mode = resolveImageGenerationMode(gifSupport, 'generate');
+  const defaultGifSupport = {
+    modes: {
+      generate: {
+        supports: {
+          ...gifSupport.modes.generate.supports,
+          outputFormat: { ...gifSupport.modes.generate.supports.outputFormat, default: 'gif' },
+        },
+      },
+    },
+  } satisfies ImageGenerationSupport;
+  const defaultGifMode = resolveImageGenerationMode(defaultGifSupport, 'generate');
+
+  it('submits the default GIF format with compatible initial controls', () => {
+    const draft = reconcileImageParamDraft(
+      { size: '1024x1024', background: 'transparent' },
+      defaultGifMode,
+    );
+    expect(draft).toEqual({ outputFormat: 'gif', size: 'auto', numImages: 1 });
+    expect(isImageParamDraftValid(draft, defaultGifMode)).toBe(true);
+    expect(prepareImageParamRequest(draft, defaultGifMode)).toEqual(draft);
+    expect(prepareImageParamRequest({}, defaultGifMode)).toEqual({ outputFormat: 'gif' });
+  });
+
+  it.each(['png', 'jpeg', 'webp'])(
+    'preserves an explicit %s choice over default GIF',
+    (outputFormat) => {
+      const draft = { outputFormat, size: '1024x1024', background: 'transparent' };
+      expect(reconcileImageParamDraft({ outputFormat }, defaultGifMode)).toEqual({
+        outputFormat,
+        size: '1024x1024',
+        numImages: 1,
+      });
+      expect(prepareImageParamRequest(draft, defaultGifMode)).toEqual(draft);
+    },
+  );
 
   it('uses automatic size and clears transparent background when selecting GIF', () => {
     const draft = reconcileImageParamDraft({ background: 'transparent' }, mode);

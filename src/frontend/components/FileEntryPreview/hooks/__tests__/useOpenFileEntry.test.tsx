@@ -9,7 +9,7 @@ import { useOpenFileEntry } from '../useOpenFileEntry';
 const mockPush = jest.fn();
 const mockOpen = jest.fn();
 const mockToast = jest.fn();
-const mockPrepareFileExport = jest.fn();
+const mockPrepareSharedFile = jest.fn();
 let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
 let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
@@ -17,7 +17,7 @@ let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
 jest.mock('@/frontend/appShell/pane/state', () => ({ useFilePane: () => mockPane }));
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
-  prepareFileExport: (...args: unknown[]) => mockPrepareFileExport(...args),
+  prepareSharedFile: (...args: unknown[]) => mockPrepareSharedFile(...args),
   useExportWatermark: () => () => ({ kind: 'cherry', signature: { brandName: 'Cherry Studio' } }),
 }));
 
@@ -62,7 +62,7 @@ beforeEach(() => {
   mockParams = {};
   mockPane = null;
   mockOpen.mockResolvedValue(undefined);
-  mockPrepareFileExport.mockImplementation(async ({ entry, uri }) => ({
+  mockPrepareSharedFile.mockImplementation(async ({ entry, uri }) => ({
     uri,
     filename: entry.filename,
     mediaType: entry.mediaType,
@@ -193,7 +193,7 @@ it('opens the branded image copy externally while retaining the original for in-
     entry: FileEntrySchema.parse({ ...entry, filename: 'drawing.jpg', mediaType: 'image/jpeg' }),
     uri: 'file:///managed/drawing.jpg',
   };
-  mockPrepareFileExport.mockResolvedValueOnce({
+  mockPrepareSharedFile.mockResolvedValueOnce({
     uri: 'file:///cache/drawing.png',
     filename: 'drawing.png',
     mediaType: 'image/png',

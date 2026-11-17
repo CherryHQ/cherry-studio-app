@@ -1,6 +1,12 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
+import {
+  parseSshProfileBackup,
+  SSH_PROFILE_BACKUP_PATH,
+  SSH_PROFILE_SNAPSHOT_MAX_BYTES,
+  sshProfileService,
+} from '@/backend/data/services/SshProfileService';
 import { captureMemoryPaths, restoredMemoryFile } from '@/backend/services/agentMemory/backup';
 import { BackupError } from '@/shared/contracts/backup';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
@@ -18,7 +24,8 @@ const RESOURCE_DIRECTORIES = {
 
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
-  if (path === 'database/cherry.db') return new File(root, ...path.split('/'));
+  if (path === 'database/cherry.db' || path === SSH_PROFILE_BACKUP_PATH)
+    return new File(root, ...path.split('/'));
   if (
     path.startsWith('agent-memory/') ||
     path.startsWith('shared-memory/') ||
@@ -144,6 +151,21 @@ export async function captureResources(
     await input.copy(output);
     copied.push(path);
   }
+  signal.throwIfAborted();
+  // Capture the portable metadata, never the MMKV files or device credential references.
+  const snapshot = sshProfileService.exportSnapshot();
+  const snapshotBytes = new TextEncoder().encode(snapshot).length;
+  if (
+    copied.length + 1 > BACKUP_LIMITS.entries ||
+    totalBytes + snapshotBytes > BACKUP_LIMITS.expandedBytes
+  )
+    throw new BackupError('too-large');
+  requireDiskSpace(snapshotBytes);
+  const output = archiveFile(target, SSH_PROFILE_BACKUP_PATH);
+  output.parentDirectory.create({ intermediates: true, idempotent: true });
+  output.create();
+  output.writeSync(snapshot);
+  copied.push(SSH_PROFILE_BACKUP_PATH);
   return { paths: copied, counts: description.counts };
 }
 
@@ -161,6 +183,16 @@ export async function validateResourceReferences(
   )
     throw new BackupError('invalid');
   const available = new Set(manifest.entries.map((entry) => entry.path));
+  // Older portable backups have no SSH payload and restore an empty connection list.
+  if (available.has(SSH_PROFILE_BACKUP_PATH)) {
+    const snapshot = archiveFile(root, SSH_PROFILE_BACKUP_PATH);
+    if (snapshot.size > SSH_PROFILE_SNAPSHOT_MAX_BYTES) throw new BackupError('too-large');
+    try {
+      parseSshProfileBackup(await snapshot.text());
+    } catch {
+      throw new BackupError('invalid');
+    }
+  }
   const required = new Set(requiredPaths);
   const memoryAgents = new Set(agentIds);
   for (const path of required) if (!available.has(path)) throw new BackupError('invalid');

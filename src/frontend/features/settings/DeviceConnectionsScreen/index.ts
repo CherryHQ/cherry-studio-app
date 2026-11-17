@@ -3,3 +3,8 @@ export { DeviceConnectionScannerScreen } from './DeviceConnectionScannerScreen';
 export { DeviceConnectionsScreen } from './DeviceConnectionsScreen';
 export { DesktopPairingProvider } from './DesktopPairingProvider';
 export { DeviceConnectionPairingScreen } from './DeviceConnectionPairingScreen';
+export { useDesktopPairingInput } from './DesktopPairingProvider';
+export { useDesktopPairing } from './useDesktopPairing';
+export { usePairingInvitationInput } from './usePairingInvitationInput';
+export { useScannerPermissions } from './useScannerPermissions';
+export { desktopConnectionErrorMessage } from '../desktopConnectionError';

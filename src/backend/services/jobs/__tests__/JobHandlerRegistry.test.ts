@@ -15,6 +15,7 @@ describe('JobHandlerRegistry', () => {
         translate: (key: string) => key,
       } as never,
       { runMaintenance: jest.fn(async () => {}) },
+      { acquire: jest.fn() } as never,
     );
 
     expect(registry.entries).toHaveLength(2);

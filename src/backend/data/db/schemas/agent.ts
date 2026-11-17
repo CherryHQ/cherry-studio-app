@@ -31,7 +31,7 @@ export const agentTable = sqliteTable(
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    // Legacy migration source only. Active persona is stored in the Agent's SOUL.md.
+    // Server-owned for managed Agents; local Agents migrate their persona to SOUL.md.
     instructions: text().notNull().default(''),
     // NULL uses Desktop's legacy SOUL-content check; false explicitly requests onboarding.
     bootstrapCompleted: integer({ mode: 'boolean' }),

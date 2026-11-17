@@ -330,12 +330,10 @@ describe('AnyDoc attachment preparation', () => {
   );
 
   test('respects the combined image byte ceiling and model context reserve', async () => {
-    const assets = [png('one', MAX_IMAGE_ATTACHMENT_BYTES), png('two', MAX_IMAGE_ATTACHMENT_BYTES)];
+    const imageBytes = 10 * 1024 * 1024;
+    const assets = [png('one', imageBytes), png('two', imageBytes)];
     jest.mocked(parseAnydocDocument).mockResolvedValue({ status: 'ok', ir, assets, warnings: [] });
-    const request = input([
-      document,
-      { ...image, fileEntryId: SECOND_ID, size: MAX_IMAGE_ATTACHMENT_BYTES },
-    ]);
+    const request = input([document, { ...image, fileEntryId: SECOND_ID, size: imageBytes }]);
     const result = await prepareFileAttachments({ ...request, documentParserMode: 'anydoc' });
     expect(result.get(FILE_ID)?.content).toMatchObject({
       assetDelivery: [{ status: 'sent' }, { status: 'budget' }],

@@ -4,6 +4,7 @@ import {
   runOnJS,
   type SharedValue,
   useAnimatedReaction,
+  useReducedMotion,
   withSequence,
   withSpring,
   withTiming,
@@ -37,6 +38,7 @@ export function useLogoDrawProgress({
   autoPlay,
   onSettle,
 }: UseLogoDrawProgressOptions): { play: () => void; finish: () => void } {
+  const reducedMotion = useReducedMotion();
   // Keep the settle callback identity-stable so play() and the animated
   // reaction never rebuild when the caller passes a fresh closure.
   const settleRef = useRef(onSettle);
@@ -50,6 +52,11 @@ export function useLogoDrawProgress({
       return;
     }
     cancelAnimation(progress);
+    if (reducedMotion) {
+      progress.value = 1;
+      settle();
+      return;
+    }
     progress.value = 0;
     progress.value = withSequence(
       withTiming(LOGO_DRAW_SEGMENTS.check.from, logoDrawTiming),
@@ -59,7 +66,7 @@ export function useLogoDrawProgress({
         }
       }),
     );
-  }, [controlled, progress, settle]);
+  }, [controlled, progress, reducedMotion, settle]);
 
   const finish = useCallback(() => {
     if (controlled) {
@@ -75,6 +82,13 @@ export function useLogoDrawProgress({
       play();
     }
   }, [autoPlay, controlled, play]);
+
+  useEffect(
+    () => () => {
+      if (!controlled) cancelAnimation(progress);
+    },
+    [controlled, progress],
+  );
 
   useAnimatedReaction(
     () => progress.value >= 1,

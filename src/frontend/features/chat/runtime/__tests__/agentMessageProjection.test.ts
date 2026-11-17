@@ -393,11 +393,18 @@ describe('agentMessageProjection', () => {
     expect(restored?.status).toBe('pending');
   });
 
-  test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
-    const pluginReferences = [
-      { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
-    ];
-    const input = { type: 'text' as const, text: '飞书 查找文档', pluginReferences };
+  test.each([
+    {
+      type: 'text' as const,
+      text: '飞书 查找文档',
+      pluginReferences: [{ type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 }],
+    },
+    {
+      type: 'text' as const,
+      text: 'SSH · guoxu 这台机器有什么',
+      sshReferences: [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }],
+    },
+  ])('keeps the inline display snapshot in pending and persisted user messages: $text', (input) => {
     const [pending] = createPendingChatMessages({
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -416,7 +423,7 @@ describe('agentMessageProjection', () => {
         type: 'text',
         text: input.text,
         state: 'done',
-        providerMetadata: { cherry: { references: pluginReferences } },
+        providerMetadata: { cherry: { references: input.pluginReferences ?? input.sshReferences } },
       },
     ]);
   });
@@ -928,6 +935,48 @@ describe('agentMessageProjection', () => {
     const assistant = message('019ec992-a000-7000-8000-000000000002', { status: 'success' });
 
     expect(mergeAgentMessageViews([assistant], [user])).toEqual([user, assistant]);
+  });
+
+  test('parent order survives steering an older reservation and retry timestamps', () => {
+    const user = message('user', { role: 'user', parentId: null });
+    const first = message('first', { parentId: user.id, createdAt: '2026-08-25T00:00:05.000Z' });
+    const steer = message('steer', {
+      role: 'user',
+      parentId: first.id,
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const reply = message('reply', { parentId: steer.id });
+    const followup = message('followup', { role: 'user', parentId: reply.id });
+    const expected = [user, first, steer, reply, followup];
+    expect(mergeAgentMessageViews([], [followup, reply, steer, first, user])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, steer, followup], [reply, first])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, followup, steer, first, reply], [])).toEqual(expected);
+  });
+
+  test('successive steer questions keep acceptance order before either answer exists', () => {
+    const original = message('original', { parentId: null, createdAt: '2026-08-25T00:00:00.000Z' });
+    const laterQueued = message('later-queued', {
+      role: 'user',
+      parentId: original.id,
+      createdAt: '2026-08-25T00:00:02.000Z',
+    });
+    const earlierQueued = message('earlier-queued', {
+      role: 'user',
+      parentId: 'guided-answer',
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const answer = message('guided-answer', { parentId: laterQueued.id });
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued])).toEqual([
+      original,
+      laterQueued,
+      earlierQueued,
+    ]);
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued, answer])).toEqual([
+      original,
+      laterQueued,
+      answer,
+      earlierQueued,
+    ]);
   });
 
   test('keeps the saved position of a retried answer when its live creation time differs', () => {

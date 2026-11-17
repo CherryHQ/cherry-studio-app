@@ -19,6 +19,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import {
+  agentGlobalSkillService,
+  type AgentGlobalSkillService,
+} from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
@@ -46,6 +50,10 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import {
+  createAgentConfigurationTools,
+  type AgentConfigurationAccess,
+} from './agentConfigurationTools';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
@@ -61,6 +69,8 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createHttpRequestTool } from './httpRequestTool';
+import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
 import { createMemoryTools } from './memoryTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
@@ -72,6 +82,9 @@ import {
 } from './painting';
 import { createReadFileContentReader, createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createSkillInventoryTool } from './skill/skillInventoryTool';
+import { createSshFileTools } from './sshFileTools';
+import { createSshTool, type SshToolAccess } from './sshTool';
 import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -102,6 +115,7 @@ export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
     workspaceFolderId?: string | null;
+    sessionId?: string;
     agentId?: string;
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
@@ -119,6 +133,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
     memory?: AgentMemoryOperations;
+    skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -126,6 +141,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     platform: string;
     preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
+    agentConfiguration?: AgentConfigurationAccess;
   };
 
 /**
@@ -136,12 +152,15 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  */
 export type SystemCapabilityServices = {
   memory?: AgentMemoryOperations;
+  mcpManagement?: McpManagementAccess;
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
+  ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
+  agentConfiguration?: AgentConfigurationAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -151,6 +170,7 @@ export function createSystemCapabilitySource(
   return {
     async getTools({
       workspaceFolderId,
+      sessionId,
       agentId,
       askUser,
       model,
@@ -187,13 +207,34 @@ export function createSystemCapabilitySource(
         acceptsImages,
         transcriptionReady ?? false,
       );
+      if (services.mcpManagement) {
+        for (const tool of createMcpManagementTools(services.mcpManagement))
+          catalog.set(tool.providerName, tool);
+      }
+      if (sessionId && services.ssh?.isAvailable()) {
+        const target = await services.ssh.resolveAgentTarget(sessionId);
+        if (target) {
+          for (const tool of [
+            createSshTool(services.ssh, sessionId, target),
+            ...createSshFileTools(services.ssh, sessionId, target, fileAccess),
+          ]) {
+            catalog.set(tool.providerName, tool);
+          }
+        }
+      }
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
         return policy && tool
           ? [
               bindTurnResources(
-                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                {
+                  ...tool,
+                  ...policy,
+                  effect: descriptor.effect ?? 'write',
+                  // Only this explicitly scoped user grant can promote SSH approval.
+                  ...(descriptor.capabilityId === 'ssh_execute' ? { approval: tool.approval } : {}),
+                },
                 resources,
               ),
             ]
@@ -276,11 +317,15 @@ function createCatalog(
   workspaceName: string | undefined,
   acceptsImages: boolean,
   transcriptionReady: boolean,
-): ReadonlyMap<string, RuntimeTool> {
+): Map<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
+    ...(deps.agentConfiguration
+      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
+      : []),
+    createSkillInventoryTool(deps.skillLibrary, agentId),
     ...createAgentManagementTools(deps.agents, agentId, deps.memory),
     ...(agentId && deps.memory
       ? createMemoryTools(
@@ -336,6 +381,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
+    createHttpRequestTool(),
     createGenerateImageTool(
       {
         ...deps.painting,
@@ -459,7 +505,9 @@ function resolveDependencies(
     voice: overrides.voice ?? services.voice,
     memory: overrides.memory ?? services.memory,
     agents: overrides.agents ?? agentService,
+    skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,
+    agentConfiguration: overrides.agentConfiguration ?? services.agentConfiguration,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

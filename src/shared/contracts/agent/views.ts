@@ -19,6 +19,7 @@ import {
   SkillActivationSchema,
   SkillTextReferenceSchema,
 } from '@/shared/data/types/skill';
+import { SshTextReferenceSchema } from '@/shared/data/types/ssh';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -183,6 +184,7 @@ export const AgentErrorViewSchema = z
       'MESSAGE_CONFLICT',
       'MEMORY_CONTEXT_CHANGED',
       'SESSION_BUSY',
+      'SESSION_RECOVERY_FAILED',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
       'ATTACHMENT_INVALID',
@@ -385,6 +387,7 @@ export const AgentMessagePartSchema = z.union([
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
       skillReferences: z.array(SkillTextReferenceSchema).optional(),
       selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
+      sshReferences: z.array(SshTextReferenceSchema).optional(),
       skillSelections: z.array(SkillActivationSchema).max(8).optional(),
       skillAction: SkillActionSchema.optional(),
       state: z.enum(['streaming', 'done']),
@@ -481,15 +484,17 @@ export const AgentInputPartSchema = z.union([
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
       skillReferences: z.array(SkillTextReferenceSchema).optional(),
       selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
+      sshReferences: z.array(SshTextReferenceSchema).optional(),
     })
     .refine(hasQuotePair, { message: 'Quote and author must occur together.' })
     .refine(
-      ({ text, pluginReferences, skillReferences, selectionReferences, quotes }) => {
+      ({ text, pluginReferences, skillReferences, selectionReferences, sshReferences, quotes }) => {
         let end = 0;
         return [
           ...(pluginReferences ?? []),
           ...(skillReferences ?? []),
           ...(selectionReferences ?? []),
+          ...(sshReferences ?? []),
           ...(quotes ?? []).flatMap((quote) => (quote.reference ? [quote.reference] : [])),
         ]
           .sort((left, right) => left.offset - right.offset)

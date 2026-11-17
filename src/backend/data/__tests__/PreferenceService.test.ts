@@ -1,6 +1,7 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
-import { PreferenceDefaults } from '@/shared/data/preference';
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
+import { ENTERPRISE_DEFAULT_MODEL_KEYS, PreferenceDefaults } from '@/shared/data/preference';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   DEFAULT_PREFERENCE_SCOPE: 'default',
@@ -27,6 +28,44 @@ type FakeDbService = DbService & {
 };
 
 describe('PreferenceService', () => {
+  afterEach(() => setActiveProfile(LOCAL_PROFILE));
+  test('rejects ordinary writes to enterprise defaults before changing any cache or row', async () => {
+    setActiveProfile({
+      id: 'enterprise',
+      identity: { deployment: 'server', subject: 'user', authentication: 'password' },
+      address: 'https://example.com',
+    });
+    const dbService = createFakeDbService();
+    const service = new PreferenceService(dbService);
+    await service._doInit();
+    for (const key of ENTERPRISE_DEFAULT_MODEL_KEYS) {
+      await expect(service.set(key, 'provider:model')).rejects.toThrow();
+      expect(service.readCached(key)).toBeNull();
+    }
+    await expect(
+      service.setMultiple({ 'ui.font_size_step': 1, 'agent.default_model_id': 'provider:model' }),
+    ).rejects.toThrow();
+    expect(service.readCached('ui.font_size_step')).toBe(0);
+    expect(dbService.writeCount).toBe(0);
+    await service.setMultiple({ 'ui.font_size_step': 1, 'agent.default_model_id': undefined });
+    expect(service.readCached('ui.font_size_step')).toBe(1);
+  });
+
+  test('a failed listener cannot reject a persisted update or block other listeners', async () => {
+    const service = new PreferenceService(createFakeDbService());
+    const listener = jest.fn();
+    await service._doInit();
+    service.subscribeChange('ui.font_size_step')(() => {
+      throw new Error('observer failed');
+    });
+    service.subscribeChange('ui.font_size_step')(listener);
+    await expect(
+      service.set('ui.font_size_step', 1, { optimistic: false }),
+    ).resolves.toBeUndefined();
+    expect(service.readCached('ui.font_size_step')).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   test('initializes cache from defaults and database values', async () => {
     const dbService = createFakeDbService([
       {

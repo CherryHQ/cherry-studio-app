@@ -31,6 +31,13 @@ clean install.
 - `verifyDepsBeforeRun: warn` keeps `pnpm run` and `pnpm exec` from starting implicit installs.
   Install dependencies explicitly when they change. EAS already installs before fingerprinting;
   an implicit install during prebuild can reapply native patches and change that fingerprint.
+- `virtualStoreDirMaxLength: 40` keeps patched dependency paths short enough to avoid
+  [Prefab #187](https://github.com/google/prefab/issues/187), which misparses `=` in package paths.
+  Keep the same setting on developer machines, GitHub build submitters, and EAS workers: native
+  autolinking paths contribute to the runtime fingerprint even when dependency versions match.
+  Do not override it with a different `PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH` in a shared build
+  environment. Recreate dependencies from a clean `node_modules` when adopting this setting in an
+  existing checkout; changing the configuration alone does not rename installed directories.
 - Do not run `pnpm rebuild`, and do not rebuild packages listed in `patchedDependencies`: pnpm
   12.2.1 reapplies patches to already patched files.
 - Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.

@@ -73,6 +73,185 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('withdrawal uses the current predecessor after a different queued input is steered', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const configuration = options();
+    const hold = defineTask({
+      name: 'test.idle-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' as const }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    configuration.registry.install({ name: 'test.idle-steer', tasks: [hold] });
+    const runtimeOptions = {
+      ...configuration,
+      settings: { afterFailedRun: 'keep' as const },
+    };
+    let runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['waiting', 'active-answer'],
+        ['guided', 'waiting-answer'],
+        ['last', 'guided-answer'],
+      ] as const) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id, content: id, whenBusy: 'followUp' },
+          {
+            requestId: id,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      // A caller captured waiting -> active before promotion. Withdrawal must not use it.
+      const stale = await runtime.submissionMetadata(
+        (await runtime.inputRecord(seed.sessionId, 'waiting'))!,
+      );
+      expect(stale).toMatchObject({ metadata: { parentMessageId: 'active-answer' } });
+      await runtime.steerInput(seed.sessionId, 'guided');
+      const fail = jest.spyOn(storage, 'commit').mockRejectedValueOnce(new Error('disk full'));
+      await expect(runtime.withdrawInput(seed.sessionId, 'waiting')).rejects.toThrow('disk full');
+      fail.mockRestore();
+      // Pi fences a storage-failed harness; recovery reopens its last committed state.
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+      expect((await runtime.inputRecord(seed.sessionId, 'waiting'))?.status).toBe('queued');
+      expect(await runtime.inputParents(seed.sessionId, ['last-user'])).toEqual([
+        {
+          userMessageId: 'last-user',
+          assistantMessageId: 'last-answer',
+          parentMessageId: 'waiting-answer',
+        },
+      ]);
+      expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('aborted');
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'last'))!),
+      ).toMatchObject({
+        metadata: { parentMessageId: 'guided-answer' },
+      });
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+      expect(await runtime.inputParents(seed.sessionId, ['guided-user', 'last-user'])).toEqual([
+        {
+          userMessageId: 'guided-user',
+          assistantMessageId: 'guided-answer',
+          parentMessageId: 'active-answer',
+        },
+        {
+          userMessageId: 'last-user',
+          assistantMessageId: 'last-answer',
+          parentMessageId: 'guided-answer',
+        },
+      ]);
+      expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('settled');
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('promotion after the run ends starts the steer without consuming an older follow-up', async () => {
+    const configuration = options();
+    const hold = defineTask({
+      name: 'test.idle-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' as const }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    configuration.registry.install({ name: 'test.idle-steer', tasks: [hold] });
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), {
+      ...configuration,
+      settings: { afterFailedRun: 'keep' },
+    });
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['waiting', 'active-answer'],
+        ['guided', 'waiting-answer'],
+      ] as const) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id, content: id, whenBusy: 'followUp' },
+          {
+            requestId: id,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      // Model an ended run whose inbox has not resumed yet.
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        for (const id of live.run!.inputs)
+          tx.settleSubmission(id, { status: 'unanswered', reason: 'interrupted' });
+        delete live.run;
+      }, BACKGROUND_CONTEXT);
+      expect(await runtime.steerInput(seed.sessionId, 'guided')).toMatchObject({
+        status: 'accepted',
+      });
+      const guided = await runtime.inputRecord(seed.sessionId, 'guided:steer');
+      expect(guided).toMatchObject({ entry: expect.any(Number) });
+      expect(await runtime.inputRecord(seed.sessionId, 'waiting')).toMatchObject({
+        status: 'queued',
+      });
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'waiting'))!),
+      ).toMatchObject({
+        metadata: { parentMessageId: 'guided-answer' },
+      });
+      const watch = await runtime.watch(seed.sessionId);
+      expect(watch.value.docs['pi.inbox']).toEqual({
+        items: [expect.objectContaining({ mode: 'followUp', content: 'waiting' })],
+      });
+      await watch.stop();
+      expect(await runtime.steerInput(seed.sessionId, 'guided')).toMatchObject({
+        status: 'accepted',
+      });
+      expect(await runtime.inputRecord(seed.sessionId, 'guided:steer')).toMatchObject({
+        id: guided!.id,
+        entry: guided!.entry,
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('reports recovered content without writing display estimates into execution history', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
@@ -109,6 +288,111 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(after.messages.at(-1)).toMatchObject({
         usage: { input: 100, output: 0, totalTokens: 100 },
       });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('steering atomically replaces one queued input, preserves display IDs and deduplicates clicks', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const hold = defineTask<Record<string, never>, { phase: 'wait' }, null>({
+      name: 'test.hold-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    const configuration = options();
+    configuration.registry.install({ name: 'test.steer', tasks: [hold] });
+    let runtime = await PiDurableRuntime.open(storage, configuration);
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['first', 'active-answer'],
+        ['second', 'first-answer'],
+      ]) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id!, content: id!, whenBusy: 'followUp' },
+          {
+            requestId: id!,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent! },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      const original = await runtime.inputRecord(seed.sessionId, 'second');
+      expect(original?.status).toBe('queued');
+      await expect(
+        Promise.all([
+          runtime.steerInput(seed.sessionId, 'second'),
+          runtime.steerInput(seed.sessionId, 'second'),
+        ]),
+      ).resolves.toEqual([
+        expect.objectContaining({ status: 'accepted' }),
+        expect.objectContaining({ status: 'accepted' }),
+      ]);
+      const replacement = await runtime.inputRecord(seed.sessionId, 'second:steer');
+      expect(replacement?.status).toBe('queued');
+      expect(await runtime.inputRecord(seed.sessionId, 'second')).toMatchObject({
+        status: 'unanswered',
+        reason: 'aborted',
+      });
+      expect(await runtime.submissionForMessage(seed.sessionId, 'second-answer')).toMatchObject({
+        record: { id: replacement!.id },
+      });
+      expect(await runtime.submissionMetadata(replacement!)).toMatchObject({
+        metadata: { steer: true, parentMessageId: 'active-answer' },
+      });
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'first'))!),
+      ).toMatchObject({ metadata: { parentMessageId: 'second-answer' } });
+      const watch = await runtime.watch(seed.sessionId);
+      expect(watch.value.docs['pi.inbox']).toEqual({
+        items: [
+          expect.objectContaining({ id: replacement!.id, mode: 'steer', content: 'second' }),
+          expect.objectContaining({ mode: 'followUp', content: 'first' }),
+        ],
+      });
+      await watch.stop();
+      const fail = jest.spyOn(storage, 'commit').mockRejectedValueOnce(new Error('disk full'));
+      await expect(runtime.steerInput(seed.sessionId, 'first')).rejects.toThrow('disk full');
+      fail.mockRestore();
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, configuration);
+      expect((await runtime.inputRecord(seed.sessionId, 'first'))?.status).toBe('queued');
+      expect(await runtime.inputRecord(seed.sessionId, 'first:steer')).toBeUndefined();
+      expect(await runtime.steerInput(seed.sessionId, 'first')).toMatchObject({
+        status: 'accepted',
+      });
+      expect(
+        await runtime.submissionMetadata(
+          (await runtime.inputRecord(seed.sessionId, 'second:steer'))!,
+        ),
+      ).toMatchObject({ metadata: { parentMessageId: 'active-answer' } });
+      expect(
+        await runtime.submissionMetadata(
+          (await runtime.inputRecord(seed.sessionId, 'first:steer'))!,
+        ),
+      ).toMatchObject({ metadata: { parentMessageId: 'second-answer' } });
     } finally {
       await runtime.close();
     }
@@ -172,7 +456,6 @@ describe('PiDurableRuntime identity and handoff', () => {
       await runtime.close();
     }
   });
-
   test('forks replace current source grants with the supplied history prefix grants', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {

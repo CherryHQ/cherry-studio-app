@@ -1,9 +1,12 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { AgentProtocolError } from '@/shared/contracts/agent';
+
 import type { AgentSessionChatState } from '../../runtime/AgentSessionChatClient';
 import { LocalRuntimeStatus } from '../LocalRuntimeStatus';
 
 let mockState: AgentSessionChatState;
+let mockPrimaryAction: unknown;
 jest.mock('../../runtime', () => ({
   useAgentChatClient: () => ({ client: { refresh: jest.fn() } }),
   useAgentSessionState: () => mockState,
@@ -11,7 +14,14 @@ jest.mock('../../runtime', () => ({
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@cherrystudio/ui/components', () => {
   const { Text } = jest.requireActual('react-native');
-  return { ContentState: { Error: ({ title }: { title: string }) => <Text>{title}</Text> } };
+  return {
+    ContentState: {
+      Error: ({ title, primaryAction }: { title: string; primaryAction?: unknown }) => {
+        mockPrimaryAction = primaryAction;
+        return <Text>{title}</Text>;
+      },
+    },
+  };
 });
 
 let renderer: ReactTestRenderer | undefined;
@@ -25,6 +35,7 @@ async function render() {
 }
 
 beforeEach(() => {
+  mockPrimaryAction = undefined;
   mockState = {
     activeTurn: null,
     queuedInputs: [],
@@ -89,6 +100,22 @@ test('runtime recovery replaces transient notices', async () => {
   await render();
   expect(text()).toContain('chat.runtime.failed');
   expect(text()).not.toContain('chat.runtime.retrying');
+  expect(mockPrimaryAction).toBeDefined();
+});
+
+test('explains isolated session data without offering an ineffective refresh loop', async () => {
+  mockState.status = 'error';
+  mockState.error = new AgentProtocolError({
+    code: 'SESSION_RECOVERY_FAILED',
+    message: 'private validation details',
+    retryable: false,
+  });
+
+  await render();
+
+  expect(text()).toContain('chat.runtime.sessionRecoveryFailed');
+  expect(text()).not.toContain('private validation details');
+  expect(mockPrimaryAction).toBeUndefined();
 });
 
 test('a paused execution takes precedence over retry and compaction until it resumes', async () => {

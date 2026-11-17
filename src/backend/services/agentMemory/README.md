@@ -15,7 +15,9 @@ Files under `storageDirectory()` own the actual content:
 - `Data/Agents/<uuid>/SOUL.md` and `USER.md`: persona and user identity/context.
 - `Data/MemoryBackups/shared/` and `agent/<uuid>/`: controlled-change recovery manifests.
 
-The product database owns access and progress, not another copy of memory bodies. Persisted
+The product database owns access and progress, not another copy of memory bodies. Organization
+Agents retain their server-owned instructions in the database: those instructions are neither
+migrated to SOUL nor exposed through identity-memory tools. Persisted
 `agent.shared_memory_enabled` defaults to true for Mobile Agents, matching Desktop's Agent
 default. Creation/update DTOs and the existing Agent editor expose it. Mobile has no separate
 Desktop Assistant entity. `app_state` stores conversation protection fingerprints, maintenance
@@ -83,8 +85,8 @@ SOUL check. Bootstrap guidance requires the necessary write tools. Declining doe
 Agent or change identity. `memory_bootstrap` stays a narrow auto-approved setup-state operation;
 document changes retain the existing approval policy.
 
-The shipped `agent.instructions` to SOUL migration remains: publish, read back, then clear the
-legacy column. Agent Profiles projects SOUL through the existing API/editor `instructions` field
+The shipped user-owned `agent.instructions` to SOUL migration remains: publish, read back, then clear the
+legacy column. Agent Profiles projects local SOUL through the existing API/editor `instructions` field
 with revisions. The unreleased FACT/JOURNAL experiment has no compatibility branch or active tools.
 
 Expo overwrite is not atomic. The adapter retains `.previous` until canonical publication; reads

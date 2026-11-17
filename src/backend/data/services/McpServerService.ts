@@ -11,7 +11,7 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
 } from '@/backend/data/db/schemas';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
@@ -19,6 +19,7 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import {
   McpOAuthReferenceSchema,
   McpServerSchema,
@@ -26,6 +27,7 @@ import {
   type RemoteMcpServer,
 } from '@/shared/data/types/mcpServer';
 
+import { denyUnless, guardMethods, managedRowPolicy } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 export type ListMcpServersQuery = {
@@ -45,6 +47,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     endpointUrl: row.endpointUrl,
     headers: row.headers ?? undefined,
     ...(row.origin === 'remote' && row.oauth && { oauth: row.oauth }),
+    ...(row.managedRemoteId !== null && { isManaged: true }),
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -131,8 +134,21 @@ export class McpServerService {
     return rowToMcpServer(row);
   }
 
-  async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
+  async update(
+    id: string,
+    dto: UpdateMcpServerDto,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<McpServer> {
     const existing = await this.getById(id);
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (
+      expectedTimestamp !== undefined &&
+      (!Number.isFinite(expectedTimestamp) || Date.parse(existing.updatedAt) !== expectedTimestamp)
+    )
+      throw DataApiErrorFactory.conflict(
+        'The MCP connection changed. Read it again before editing.',
+      );
     const parsed = UpdateMcpServerSchema.parse(dto);
     if (
       existing.origin === 'builtin' &&
@@ -174,10 +190,25 @@ export class McpServerService {
       if (name !== undefined) {
         await this.assertNameAvailable(tx, name, id);
       }
-      return tx.update(mcpServerTable).set(updates).where(eq(mcpServerTable.id, id)).returning();
+      return tx
+        .update(mcpServerTable)
+        .set({ ...updates, updatedAt: monotonicUpdateTimestamp(mcpServerTable.updatedAt) })
+        .where(
+          and(
+            eq(mcpServerTable.id, id),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(mcpServerTable.updatedAt, expectedTimestamp),
+          ),
+        )
+        .returning();
     });
 
     if (!row) {
+      if (expectedTimestamp !== undefined)
+        throw DataApiErrorFactory.conflict(
+          'The MCP connection changed while saving. Read it again.',
+        );
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
@@ -203,6 +234,7 @@ export class McpServerService {
           .select()
           .from(mcpServerTable)
           .where(eq(mcpServerTable.id, previous.id));
+        denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.saveOAuthConnection');
         if (
           !current ||
           current.origin !== 'remote' ||
@@ -237,19 +269,25 @@ export class McpServerService {
   }
 
   async disconnectOAuth(id: string): Promise<McpServer> {
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select({ managedRemoteId: mcpServerTable.managedRemoteId })
+        .from(mcpServerTable)
+        .where(eq(mcpServerTable.id, id));
+      denyUnless(managedRowPolicy(current).canEdit('oauth'), 'mcp.disconnectOAuth');
+      return tx
         .update(mcpServerTable)
         .set({ oauth: null, isEnabled: false })
         .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.origin, 'remote')))
-        .returning(),
-    );
+        .returning();
+    });
     if (!row) throw DataApiErrorFactory.notFound('McpServer', id);
     return rowToMcpServer(row);
   }
 
   async delete(id: string): Promise<void> {
-    if ((await this.getById(id)).origin === 'builtin') {
+    const existing = await this.getById(id);
+    if (existing.origin === 'builtin') {
       throw DataApiErrorFactory.validation({ origin: ['Disconnect this connection from Plugins'] });
     }
     await this.dbService.withWriteTx(async (tx) => {
@@ -286,7 +324,12 @@ export class McpServerService {
       .limit(1);
 
     if (existing) {
-      throw DataApiErrorFactory.conflict('MCP server name already exists', 'McpServer');
+      const message = 'MCP server name already exists';
+      throw DataApiErrorFactory.create(ErrorCode.CONFLICT, message, {
+        description: message,
+        resource: 'McpServer',
+        field: 'name',
+      });
     }
   }
 
@@ -304,5 +347,15 @@ export class McpServerService {
     }
   }
 }
+
+// A delivered MCP server is read-only.
+guardMethods(McpServerService, {
+  async update(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canEdit('server'), 'mcp.update');
+  },
+  async delete(id) {
+    denyUnless(managedResourcePolicy(await this.getById(id)).canDelete, 'mcp.delete');
+  },
+});
 
 export const mcpServerService = new McpServerService();

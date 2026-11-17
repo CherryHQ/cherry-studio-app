@@ -374,6 +374,8 @@ Plugin, Skill and Office selection references stay inline as an icon and name in
 color, using their recorded UTF-16 text ranges. A selection chip shows only its file and location
 label; its anchor and excerpt reach the model through runtime input. User messages do not show a
 separate Skill selection or revision caption.
+SSH references retain the input's link-colored label without an icon, using a recorded text range.
+Their display snapshot does not select a connection or grant command access.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
 the Skill's name and description. Instruction bodies, revision hashes and library navigation belong

@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
+import type { VertexAuthConfig } from '@/frontend/types/providerConfiguration';
 import { VertexAuthFieldsSchema } from '@/shared/utils/vertexAuth';
-
-import type { VertexAuthConfig } from '../types';
 
 const serviceAccountSchema = z.object({
   type: z.literal('service_account'),

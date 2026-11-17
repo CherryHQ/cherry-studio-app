@@ -30,6 +30,8 @@ type InputBaseProps = Omit<
   disabled?: boolean;
   invalid?: boolean;
   keyboardType?: InputKeyboardType;
+  /** The value belongs to someone else: shown filled and unfocusable, explained when pressed. */
+  locked?: boolean;
   onChangeText?: (value: string) => void;
   ref?: Ref<TextInputInstance>;
   returnKeyType?: InputReturnKeyType;

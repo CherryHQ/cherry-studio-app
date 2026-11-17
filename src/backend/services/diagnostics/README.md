@@ -1,5 +1,76 @@
 # Diagnostics
 
+## On-demand diagnosis
+
+Error Details → Diagnose this problem opens a shared full-height sheet and checks application
+data reads, the existing task-runtime storage, related configuration and endpoint reachability.
+It binds the producing model and incident metadata;
+it never substitutes the current default for a missing incident model. Desktop incidents remain
+explicitly remote: phone checks do not claim to diagnose the desktop execution.
+
+`createDiagnosticsModule` extends `Backend.diagnostics` with a caller-owned `DiagnosticSession`.
+The sheet disposes it on exit; bootstrap cancels and joins every remaining session before stopping
+the host. Nothing is stored in ordinary Agent conversations or diagnostic history. Checks have a
+30-second deadline; AI self-check has 60 seconds, at most eight tool-call attempts and nine model
+requests, 8 KiB per tool result,
+and bounded model output. Reports expire after five minutes, and paid work or a new probe refuses
+changed target configuration. User cancellation reaches the model and tool callbacks. Individual
+checks run independently with eight-second bounds; a failed configuration read does not prevent
+data and runtime checks. Uninitialized runtime storage is skipped, and normal task waits are not
+failures. Data reads inspect the schema, one application row and the incident's local Session/Agent
+association; they do not perform an exhaustive integrity scan or repair.
+
+Configuration revalidation and diagnostic-model reads also release their wait on cancellation or
+timeout. Late storage/credential reads cannot publish a target or admit an AI run. Actual admitted
+AI execution and usage delivery are still joined before host resources stop.
+The isolated runtime also releases a stalled model-registration preflight on cancellation;
+late configuration reads only finish populating its discarded in-memory model catalog.
+
+Configuration checks use the same resolved model connection as the endpoint probe, including
+per-model and gateway routing. Provider authentication checks keep their shared owner. An invalid
+model endpoint excludes that model from diagnostic selection; provider-wide authentication or
+disablement excludes the provider. Setup checks that do not supply a resolved connection retain
+their default-endpoint behavior.
+For Vertex, the probe address uses the same project/location URL resolver as model serving, including
+empty defaults and regional Google hosts. The original connection remains the input to configuration
+validation, so deriving the address cannot hide a malformed override or project mismatch.
+
+Connection checks probe the resolved service origin without credentials, reject redirects, cap response
+bodies and treat an HTTP response as evidence of reachability rather than successful authentication.
+Automatic checks require a captured incident context and do not list remote models or send a
+generation request. The explicit AI diagnosis uses the chosen diagnostic model; there is no
+separate conversation-probe or context-free system-check path.
+
+AI self-check uses an independently selected tool-capable text model and the
+[internal diagnostic Agent](../../ai/agent/diagnostics/README.md), injected by bootstrap through the
+pure `DiagnosticAgent` interface. The service supplies scoped `DiagnosticFactReader` callbacks;
+it does not assemble prompts, tool names/descriptions, model events, or answer parsing. The Agent's
+bundled definition owns its deadline and execution limits. The session enforces that declared deadline
+across configuration revalidation, model lookup and AI execution, keeping the same total time bound.
+The Agent receives the projected failure, check results and credential-free configuration summary.
+Four fixed-target read tools expose configuration, recent metadata logs, origin reachability and
+cached plugin states. They cannot select arbitrary URLs/files, read credentials or chat text, invoke
+plugins, reconnect them, modify settings, or mount normal Agent tools. Technical log reads inspect
+at most two 32 KiB tails and return at most twelve allowlisted records from the last 24 hours.
+The UI presents the one-shot cause, tool evidence and suggested next steps; it offers no chat input.
+
+The probe counts all model-issued tool calls before validation, including unknown tools and invalid
+arguments. A response that would exceed the budget executes no tools. Execution and request-entry
+guards enforce the decision independently of Pi's observational hooks; ordinary model checks omit
+the optional budgets. Native model/tool looping remains Pi-owned.
+
+`diagnosticSession` owns the shared schemas for initial AI context and the four typed tool results.
+Fact readers bind their result type to their evidence kind; the Agent validates the closed result
+before returning it to the model or UI. Oversized results have an explicit `result_limit` state.
+The existing log projector remains the only owner of its metadata fact allowlist; the shared log
+contract validates its bounded envelope. UI formats typed facts and serializes only for the raw-data
+view, without maintaining a second parser or private schemas.
+
+Feedback can attach the structured check statuses and whether AI finished. This attachment has
+closed identifiers and numeric facts; AI-generated text, endpoint names and tool output are not
+included in that upload field. The existing context switch controls both incident and check summary.
+The user's description and separately selected screenshot retain their existing consent rules.
+
 `DiagnosticBundleService` owns archive creation, submission, cancellation and cleanup. Frontend
 callers use `Backend.diagnostics`. Collection reads selected plugin configuration columns through `backend/data/services/diagnosticPluginState.ts`; it does not read chat tables or
 resolve credentials, refresh tokens, connect plugins or make discovery requests.
@@ -75,6 +146,19 @@ and a stable WebView source prevent status writes from reloading the page.
 
 - Warning/error summaries: timestamp, module, fixed message templates and allowlisted error facts.
   Arbitrary messages, stacks, causes and nested payloads are excluded before writing to disk.
+- Event context: native app version/build, JavaScript manifest version, platform and available OTA
+  runtime/update/channel identifiers. Logs capture this `environment` before buffering or repetition
+  aggregation. A request trace captures it once at initiation; every child and terminal revision keeps
+  that context even if a community account changes while the request is running.
+  `profileId`, `profileKind`, `profileSubjectId`, `deploymentId`, `organizationId` and
+  `profileIssuerHash` describe the selected data owner, including when its session is rejected.
+  `accountStatus` distinguishes unknown, restoring, signed-out, signed-in and sign-in-required states;
+  `accountSubjectId` and `accountIssuerHash` describe only the admitted account. Community accounts
+  share the local data profile but retain their own account identifiers. Private user IDs are scoped
+  by deployment; cloud user IDs are scoped by the SHA-256 hash of the issuer, with organization and
+  deployment identifiers for enterprise data. Issuer URLs, service addresses, display names, phone
+  numbers, email addresses and credentials are not read into this context. Unknown identity at early
+  boot stays unknown. IDs are technical metadata, not a claim of anonymity.
 - Startup metadata: JS entry, bootstrap, host/service phases, database open/configuration/migrations/
   seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
   minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
@@ -116,6 +200,11 @@ the fixed `Startup` / `Startup stage` and `PiDurableObserver` / `Pi durable cont
 info events. Other info logs remain excluded. Lifecycle events
 use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
+They remain installation-wide across account switches; an archive can contain multiple accounts'
+metadata. Bootstrap supplies the in-memory identity/version reader through
+`backend/utils/diagnosticContext`; common diagnostics and tracing code never import enterprise
+implementation or restore credentials. The `diagnosticRecording` leaf is the public early-boot entry,
+and `appUpdate/runningUpdate` supplies the optional native update identity without loading update services.
 Lifecycle events retain separate records without repetition aggregation, preserving retry timings.
 They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
 the buffer limit, or on explicit flush. Database stages run synchronously and would block the
@@ -123,7 +212,8 @@ timer, so each flushes its start before running. Warning/error writes first drai
 in the same append, so fatal exceptions remain synchronous. File inspection and history pruning
 start with the first flush, outside the ordinary startup logging call path.
 The first matching error is written immediately. Within a 30-second window, repeated records with
-matching level/module/template and stable error/context facts are summarized. Request/turn/message
+matching level/module/template and stable error/context facts are summarized.
+Identity, account state and version changes always split groups. Request/turn/message
 ids, elapsed time, token totals and cumulative storage counters do not split a group; summaries omit
 those per-occurrence values. `repetition.count` counts **additional** occurrences, with their first
 and last timestamps; add the separately written first record when counting the complete burst.
@@ -133,12 +223,18 @@ and submission; these flushes also drain pending startup events. An abrupt proce
 pending startup events and repeat counts, but not the already written first error occurrence.
 Collection limits are upper bounds, not a guarantee of seven days of history.
 
-Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Flushes append to
+Request traces retain at most 7 days / 20 MiB / 512 files **across the installation**, under each
+data profile's `Runtime/trace/v1`. Retention scans local and all UUID profile directories, including
+inactive profiles, and favors the newest files. This gives retained ordinary logs and traces a
+combined 40 MiB budget, excluding temporary bundle/snapshot copies. Flushes append to
 the current file, rotating at 1 MiB or a UTC day boundary instead of creating a file per request
 boundary. The 512-file guard remains for legacy files and exceptional histories. Submission flushes
 and copies stable trace snapshots, then releases them on success, failure or cancellation.
 Collection projects every record again through an explicit field allowlist and filters by the last
 24 hours. A terminal span uses its end timestamp; a running span uses its start.
+Captured identity/version context is validated again, never filled from the current account.
+Historical records without context remain unattributed. Traces retain their existing data-profile
+storage scope; exporting the current profile does not include other profiles' traces.
 New budget/count fields must remain nonnegative finite numbers; product reasons, retry scopes,
 estimate sources and serialized cap field names are validated again during export.
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
@@ -152,6 +248,8 @@ at 200 connections, with truncation reported. The manifest declares `privacy.cap
 for collected diagnostics.
 `privacy.containsUnredactedData` is true because the user-authored feedback is included verbatim
 (after trimming and newline normalization); `feedback` identifies its file and user origin.
+The optional `submissionContext` records identity/version context and its capture time when bundle
+preparation starts. It identifies the submitting session, not the owner of every historical event.
 Technical identifiers can still be private; the form describes the scope before submission.
 
 ## Upload
@@ -186,7 +284,14 @@ is temporary service unavailability, distinct from the IP frequency limit. Error
 request signatures and tracking IDs are not logged. Responses remain bounded to 64 KiB, and
 redirects are not followed.
 
-Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
+Each upload attempt owns its temporary directory under `Caches/Diagnostics/run-<runtime-id>/`.
+The shared `backend/utils/diagnosticTemporaryFiles` owner allocates the parent once per JS runtime
+for both bundles and trace snapshots. During PostReady initialization, the bundle service removes
+previous runs and the legacy flat UUID/`trace-<uuid>` directories left by interrupted attempts.
+It preserves the current runtime's parent even if capture or upload overlaps startup cleanup, and
+leaves unknown files/directories alone. Host replacement reuses the current parent. Cleanup failure
+is logged without disabling feedback; a later initialization retries it.
+A `finally` block removes the ZIP on success,
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
 remove staged files. There is no retained ZIP, save-original action, or automatic retry. The form
 retains its in-memory description and screenshot selection after a failed attempt; an uncertain

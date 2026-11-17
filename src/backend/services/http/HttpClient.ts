@@ -1,8 +1,8 @@
 import type { HttpError, HttpErrorDetails } from './HttpError';
 
-export type HttpBodylessMethod = 'GET';
+export type HttpBodylessMethod = 'GET' | 'HEAD';
 
-export type HttpBodyMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';
+export type HttpBodyMethod = 'DELETE' | 'OPTIONS' | 'PATCH' | 'POST' | 'PUT';
 
 export type HttpMethod = HttpBodylessMethod | HttpBodyMethod;
 
@@ -42,6 +42,8 @@ interface HttpRequestBase {
   readonly headers?: HttpHeaders;
   /** Positive response-size limit in bytes. Omit when the domain has no explicit cap. */
   readonly maxResponseBytes?: number;
+  /** Return a bounded text prefix instead of rejecting an oversized response. Requires text and a cap. */
+  readonly truncateResponse?: boolean;
   /** Relative API path beginning with `/`. Absolute URLs are rejected. */
   readonly path: string;
   /** Redacted route for logs when the real path contains a capability or other secret. */
@@ -54,7 +56,7 @@ interface HttpRequestBase {
   readonly timeoutMs?: number;
 }
 
-/** GET is bodyless; DELETE may carry a body when required by the upstream API. */
+/** GET and HEAD are bodyless; DELETE may carry a body when required by the upstream API. */
 export type HttpRequest<TBody = unknown> =
   | (HttpRequestBase & { readonly body?: never; readonly method: HttpBodylessMethod })
   | (HttpRequestBase & { readonly body?: TBody; readonly method: HttpBodyMethod });
@@ -64,6 +66,8 @@ export interface HttpResponse<TData = unknown> {
   /** Lowercase response header names mapped to string values. */
   readonly headers: HttpHeaders;
   readonly status: number;
+  /** Present only when the request opts into bounded text truncation. */
+  readonly truncated?: boolean;
 }
 
 type MaybePromise<T> = Promise<T> | T;

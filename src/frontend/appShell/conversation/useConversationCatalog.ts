@@ -10,10 +10,11 @@ import type {
 } from './contracts';
 import { useConversationSource, useConversationSourceState } from './ConversationSourceBoundary';
 
-function useCatalog<T>(
+export function useCatalog<T>(
   key: readonly string[],
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
+  options: { refetchInterval?: number | false } = {},
 ) {
   const kind = ['selected-session', 'session-children', 'session-path'].includes(key[0]!)
     ? 'sessions'
@@ -32,6 +33,10 @@ function useCatalog<T>(
     availability.state === 'disabled' &&
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const active = enabled && availability.state === 'enabled';
+  // Desktop-created conversations have no catalog notification; other catalogs own their policy.
+  const refetchInterval =
+    options.refetchInterval ??
+    (source.ref.kind === 'desktop' && key[0] === 'sessions' ? 15_000 : false);
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
@@ -40,7 +45,8 @@ function useCatalog<T>(
     enabled: active,
     retry: false,
     gcTime: shared ? 5 * 60_000 : 0,
-    staleTime: shared ? 30_000 : 0,
+    staleTime: refetchInterval ? 0 : shared ? 30_000 : 0,
+    refetchInterval,
     refetchOnMount: 'always',
   });
   useEffect(() => {
@@ -86,14 +92,20 @@ function useCatalog<T>(
   };
 }
 
-export function useConversationAgents() {
+export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
-  return useCatalog(['agents'], catalog.listAgents);
+  return useCatalog(['agents'], catalog.listAgents, enabled);
 }
-export function useConversationSessions(agent?: AgentRef) {
+export function useConversationSessions(
+  agent?: AgentRef,
+  enabled = true,
+  { includeBranches = false }: { includeBranches?: boolean } = {},
+) {
   const { catalog } = useConversationSource();
-  return useCatalog(['sessions', agent ?? ''], (cursor, signal) =>
-    catalog.listSessions({ agent }, cursor, signal),
+  return useCatalog(
+    ['sessions', agent ?? '', includeBranches ? 'all' : 'roots'],
+    (cursor, signal) => catalog.listSessions({ agent, includeBranches }, cursor, signal),
+    enabled,
   );
 }
 export function useConversationSessionChildren(parent: ConversationRef, enabled = true) {

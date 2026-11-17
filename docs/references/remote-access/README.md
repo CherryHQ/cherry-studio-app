@@ -64,9 +64,10 @@ native module ownership and the network-independent pairing migration.
 
 ## Shared packages
 
-- `@cherrystudio/remote-protocol@0.7.0` comes from npm. Its published exports include the Agent,
-  configuration, failure, connection, and v2/v3 pairing QR contracts; Mobile owns only its consumers and adapters.
-- `@cherrystudio/remote-transport@0.2.5` comes from npm and depends on the matching protocol
+- `@cherrystudio/remote-protocol@0.8.0` comes from npm. Its published exports include the Agent,
+  read-only Task, configuration, failure, connection, and v2/v3 pairing QR contracts; Mobile owns only
+  its consumers and adapters.
+- `@cherrystudio/remote-transport@0.2.6` comes from npm and depends on the matching protocol
   version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
   along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
   use the pure-JS entries. Android pairing and configuration sync were verified against the former
@@ -81,6 +82,11 @@ native module ownership and the network-independent pairing migration.
 shared protocol, receiver, historical decisions and remaining acceptance/release checks.
 [Managed Attachments](./managed-attachments-design.md) records the integrated simplification: mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable
 pending-message presentation. Desktop intake and attachment-draft tables are removed; mobile source-copy reduction remains pending.
+
+## Scheduled task results
+
+[Scheduled Task Result Conversations](./scheduled-task-results.md) describes how desktop-created
+task results appear in a separate, expandable Remote task list and a read-only transcript.
 
 ## Session read cache
 

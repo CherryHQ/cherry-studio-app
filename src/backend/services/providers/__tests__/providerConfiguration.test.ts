@@ -70,6 +70,22 @@ describe('provider configuration prerequisites', () => {
         auth,
       ),
     ).toBe('invalid-endpoint');
+    expect(
+      getProviderConfigurationIssue(
+        {
+          ...vertex,
+          endpointConfigs: {
+            'google-generate-content': {
+              baseUrl: 'https://example.com/v1/projects/other/locations/global',
+            },
+          },
+        },
+        [],
+        auth,
+        false,
+        { baseUrl: '' },
+      ),
+    ).toBeNull();
   });
   it('requires an enabled, non-blank credential when authentication is required', () => {
     expect(getProviderConfigurationIssue(provider, [])).toBe('missing-api-key');
@@ -114,6 +130,31 @@ describe('provider configuration prerequisites', () => {
         [key],
       ),
     ).toBe('invalid-endpoint');
+  });
+  it('checks the effective model connection independently of the provider default', () => {
+    const multiEndpoint = {
+      ...provider,
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'file:///invalid-default' },
+        'anthropic-messages': { baseUrl: 'https://anthropic.example' },
+      },
+    } as Provider;
+    expect(getProviderConfigurationIssue(multiEndpoint, [key])).toBe('invalid-endpoint');
+    expect(
+      getProviderConfigurationIssue(multiEndpoint, [key], null, false, {
+        baseUrl: 'https://anthropic.example',
+      }),
+    ).toBeNull();
+    expect(
+      getProviderConfigurationIssue(provider, [key], null, false, {
+        baseUrl: 'https://anthropic.example/v1/messages',
+      }),
+    ).toBe('invalid-endpoint');
+    expect(
+      getProviderConfigurationIssue(provider, [], null, false, {
+        baseUrl: 'https://anthropic.example',
+      }),
+    ).toBe('missing-api-key');
   });
   it('preserves fully configured cloud authentication instead of requiring an API key', () => {
     expect(

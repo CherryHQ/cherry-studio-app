@@ -3,7 +3,7 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+generation, plain HTTP requests, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
 `create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
@@ -292,12 +292,12 @@ not produce partial documents. See [Voice Input And Speech](../voice.md#audio-fi
 The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. They follow the shared approval rule: reads
 (`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
-`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+`auto`, while folder creation, move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
 Agent's approval mode decides whether a mutation waits for the user. A successful library read
 permits editing that source into a workspace copy during this turn and leaves the source unchanged.
 It does not grant `read_file` future outside-library access.
 
-Library search/read and the six management tools are deferred, alongside managed-file and workspace
+Library search/read and the seven management tools are deferred, alongside managed-file and workspace
 tools. The initial Tools On Demand section names them for `tool_search`; a loaded
 `library_search_files` also names the management tools.
 Both file readers carry their own complete parser, pagination and image-delivery instructions,
@@ -306,6 +306,11 @@ composed from the same definition; `library_read_file` does not require loading 
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
 rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_create_folder` creates one folder without requiring a Session workspace. It accepts a
+safe name and an exact parent id, or `null` (also the default) for the library root. The existing
+transaction validates the live parent, rejects duplicate names, observes cancellation and
+notifies folder subscribers. The result returns the saved id, parent id and name. It does not
+associate the folder with the conversation; workspace association remains a separate user action.
 `library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
 changes only its display name. The existing library service owns cycle prevention, active
 destinations, collision rules, transactions, and cache invalidation. Move results report any
@@ -953,6 +958,20 @@ desktop event labels or persistence shapes.
   side effects entering the transcript or non-terminal tool calls entering later model history.
 
 
+## Plain HTTP Requests
+
+`http_request` is a deferred built-in tool for ordinary API calls from the device. It takes a full
+HTTP(S) `url`, optional `method` (GET by default), string-valued `headers`, and a string `body`.
+GET and HEAD reject bodies; POST, PUT, PATCH, DELETE and OPTIONS can send one. It uses the shared
+HTTP service without native cookies, a 30-second deadline, and no automatic retries. The base
+approval is `ask` and follows the Agent's existing approval preference.
+
+Results contain the numeric `status`, response `headers`, raw text `body`, and `truncated` flag.
+All HTTP statuses are returned, including non-followed redirects and 4xx/5xx responses. At most
+64 KiB of response bytes are retained, dropping an incomplete trailing UTF-8 character. Network
+failures and timeouts do not prove that a write was not applied; the model must inspect resulting
+state before considering another write. No configuration page or credential management is added.
+
 ## User Questions
 
 `ask_user_question` is a core system tool, available when the model supports tool calls and the
@@ -988,9 +1007,31 @@ approvals: leaving a route does not cancel the turn, but cancellation, host disp
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
 A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
-with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+with a question-specific label and retains its keep-alive lease until the turn settles. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
+
+## MCP Connection Management
+
+`mcp_list_servers`, `mcp_get_server`, `mcp_create_server`, and `mcp_update_server` are deferred
+application tools. Reads are automatic; writes follow the Agent's existing approval preference.
+They use the same saved connections and mutation owner as the MCP settings page, so endpoint or
+header changes retire the previous authenticated connection and release a replaced OAuth grant.
+Successful writes invalidate the connection Data API queries even without a visible chat subscriber.
+
+Creation supports remote Streamable HTTP configuration only: name, HTTP(S) endpoint, optional
+static headers, enablement and disabled tool names. An omitted enablement keeps the existing
+disabled-by-default creation behavior. Mobile does not install or run stdio executables.
+Updates require a fresh `updatedAt`; the write transaction rejects concurrent changes. Unspecified
+fields stay unchanged; supplying `headers` replaces the whole map. These tools cannot create
+OAuth grants, configure bundled plugin authorizations, or bind a connection to an Agent.
+
+Receipts expose endpoint origin, header names, enablement and version metadata, never full URLs,
+header values or OAuth references. Saving does not verify connectivity, authentication or execution.
+Unknown write outcomes direct the model to inspect saved state before another write.
+Validation, unsupported configuration and persistence failures use the Runtime's call-failure
+envelope, including sanitized error diagnostics. Pi and Code Mode therefore retain the failed
+outcome instead of treating an error-valued reply as a successful invocation.
 
 ## Agent Management
 
@@ -998,8 +1039,8 @@ Agent management contains `agent_list`, `agent_get`, `agent_create`, and `agent_
 All four are deferred and loaded through `tool_search` for user-directed conversation tasks.
 There is no per-Agent switch and no OS permission requirement. Reads use automatic approval;
 writes start at `ask` and follow the current Agent's approval
-preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
-or change MCP bindings.
+preference, without a second confirmation flow. These definition tools do not delete Agents.
+Avatar and MCP binding changes use the dedicated application workflows described below.
 
 Creation accepts a name, optional `soul`/`user` text, and optional definition fields. Omitting `model` lets
 `AgentService` resolve the global default Agent model. SOUL carries persona and the role fallback;
@@ -1013,9 +1054,11 @@ registered `provider::model` string; omitting it preserves the model on update. 
 clear a model; the user does that in the editor. Agent targets are strings validated locally as an
 exact Agent ID or `current`.
 
-`agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits private memory. `agent_get` returns the editable definition, `updatedAt`, complete `soul`
-and `user` documents with their versions, and current Skill
+`agent_list` lists saved Agents with optional name filtering and pagination. Call with `{}` to browse
+without a name filter; a request to list Agents does not require asking the user for a search keyword.
+It returns at most 50 compact records per call and omits private memory.
+`agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, complete
+`soul` and `user` documents with their versions, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -1031,6 +1074,11 @@ uncertain or failed multi-field update requires reading current state before ano
 Successful edits to the current Agent's identity refresh its running context. Edits to another
 Agent never install that Agent's persona in the caller's context.
 
+For avatar changes and version-only reads, `agent_get` accepts `view: summary`: it returns only
+`id`, `name`, and `updatedAt`, without instructions or Skill bindings. The definition view remains
+the required source before editing instructions. Both views and all three configuration tools
+refuse organization-delivered Agents before reading bindings, resolving images or changing state.
+
 A call saved before this contract, such as one still awaiting approval, fails validation without
 writing; the model reads the current definition and retries with the new form.
 
@@ -1039,3 +1087,27 @@ chat subscriber. Successful writes render a compact saved-Agent card with a Star
 configured. List/read results remain in the process disclosure. Results omit managed
 avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
 inspect current saved records before deciding whether another write is needed.
+
+`agent_set_avatar` accepts an exact Agent id (or `current`), a fresh `updatedAt` from
+`agent_get` with `view: summary`, and a managed
+image reference. The source must be attached, generated, inside the captured workspace, or read
+through `library_read_file` this turn. No device paths or remote URLs enter its schema. The normal
+avatar workflow normalizes a separate image, conditionally updates the Agent row, compensates the
+new image on a stale-write failure, and removes the previous avatar only after persistence. The
+original library image is unchanged; successful receipts include only the Agent's id, name and
+new updatedAt, without instructions, avatar references or device-local paths.
+
+`agent_list_mcp_servers` reads saved remote servers and current bindings, including disabled servers
+and dangling bindings, with bounded pagination and no endpoint or credential values. It returns
+the server-wide binding's own `updatedAt`, or `null` when absent, and the number of per-tool
+overrides. Bundled plugins remain globally available and do not need per-Agent bindings.
+`agent_set_mcp_binding` enables, disables or removes one server-wide remote binding. It requires
+that binding version (or explicit `null` for creation), rechecks it in the write transaction, and
+preserves every unrelated binding and per-tool override. New bindings start at `ask`; existing
+denials are preserved. A disabled server stays disabled. Binding changes invalidate the Agent's
+binding query and enter subsequent tool catalogs; they do not expand the active turn's snapshot.
+These three tools are deferred, with automatic reads and the existing Agent approval preference
+for writes. They do not configure connections or perform external authorization.
+Validation, resource and persistence failures use the Runtime's call-failure envelope so Pi,
+Code Mode and transcript projection all preserve the failed outcome. Failure messages remain
+sanitized and uncertain writes require reading current state before another write.

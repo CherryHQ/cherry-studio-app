@@ -4,7 +4,7 @@ import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import type { ComponentType } from 'react';
 
-import type { PermissionKind } from '../../permissionConfig';
+import type { PermissionKind } from '@/frontend/hooks/devicePermission/permissionConfig';
 
 export const visiblePermissionKinds = [
   'location',

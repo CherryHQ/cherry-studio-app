@@ -43,6 +43,7 @@ export function assertBackupPath(path: string): void {
     path === 'manifest.json' ||
     path === 'database/cherry.db' ||
     isAgentMemoryArchivePath(path) ||
+    path === 'ssh/profiles.json' ||
     /^skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/[0-9a-f]{64}\/(?:[^/\\\x00-\x1f]+\/)*[^/\\\x00-\x1f]+$/.test(
       path,
     ) ||

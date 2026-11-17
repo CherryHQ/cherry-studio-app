@@ -1,4 +1,5 @@
 import type { InteractionResponse } from '../interaction';
+import type { RemoteTaskQueries } from './tasks';
 import type {
   RemoteAttachment,
   RemoteAttachmentDraftTarget,
@@ -20,6 +21,7 @@ import type {
 export interface RemoteAgentSource {
   readonly scope: string;
   readonly draftScope: string;
+  readonly tasks: RemoteTaskQueries;
   getState(): RemoteSourceState;
   subscribeState(listener: () => void): () => void;
   listAgents(

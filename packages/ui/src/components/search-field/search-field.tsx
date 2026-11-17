@@ -5,6 +5,12 @@ import { Pressable, StyleSheet, type TextInputInstance } from 'react-native';
 import { useFieldText } from '../input/use-field-text';
 import type { SearchFieldProps } from './search-field.types';
 
+const groupClassNames = {
+  default: 'min-h-10 rounded-full border border-border bg-field',
+  filled: 'min-h-12 rounded-full bg-card shadow-sm',
+  subtle: 'min-h-10 rounded-xl border border-border bg-card shadow-none dark:bg-background',
+} satisfies Record<NonNullable<SearchFieldProps['variant']>, string>;
+
 export function SearchField({
   accessibilityLabel,
   autoFocus = false,
@@ -38,13 +44,7 @@ export function SearchField({
         focusable={false}
         onPress={() => inputRef.current?.focus()}
       >
-        <HeroSearchField.Group
-          className={
-            variant === 'filled'
-              ? 'min-h-12 rounded-full bg-card shadow-sm'
-              : 'min-h-10 rounded-full border border-border bg-field'
-          }
-        >
+        <HeroSearchField.Group className={groupClassNames[variant]}>
           <HeroSearchField.SearchIcon />
           <HeroSearchField.Input
             ref={inputRef}

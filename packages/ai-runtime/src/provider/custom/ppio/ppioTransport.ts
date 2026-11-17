@@ -1,4 +1,4 @@
-import { DEFAULT_TIMEOUT } from '../../../constants';
+import { DEFAULT_IMAGE_REQUEST_TIMEOUT_MS, DEFAULT_TIMEOUT } from '../../../constants';
 import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../imageGenerationModel';
 import {
   createAbortError,
@@ -235,6 +235,7 @@ class PpioTransport implements ImageGenerationTransport {
         requestParams,
         'POST',
         {
+          timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
           signal: input.signal,
         },
       );
@@ -246,7 +247,7 @@ class PpioTransport implements ImageGenerationTransport {
       requestParams,
       'POST',
       {
-        timeout: 120000,
+        timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
         signal: input.signal,
       },
     );

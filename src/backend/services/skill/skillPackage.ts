@@ -21,7 +21,7 @@ import {
   type SkillManifestEntry,
   type SkillPackageIssue,
 } from '@/shared/data/types/skill';
-import { sha256Hex } from '@/shared/utils/sha256';
+import { sha256HexChunks } from '@/shared/utils/sha256';
 
 export const SKILL_PACKAGE_MAX_FILES = 200;
 export const SKILL_PACKAGE_MAX_BYTES = 8 * 1024 * 1024;
@@ -83,10 +83,10 @@ function hasShellInterpolation(body: string): boolean {
   });
 }
 
-export function validateSkillPackage(
+export async function validateSkillPackage(
   files: SkillPackageFiles,
   options: { expectedName?: string } = {},
-): SkillPackageValidation {
+): Promise<SkillPackageValidation> {
   const issues: SkillPackageIssue[] = [];
 
   if (files.size > SKILL_PACKAGE_MAX_FILES) {
@@ -183,9 +183,11 @@ export function validateSkillPackage(
   }
 
   const metadata = readMetadata(frontmatter.metadata);
-  const manifest = [...files]
-    .map(([path, bytes]) => ({ path, size: bytes.byteLength, digest: sha256Hex(bytes) }))
-    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const manifest: SkillManifestEntry[] = [];
+  for (const [path, bytes] of files) {
+    manifest.push({ path, size: bytes.byteLength, digest: await sha256HexChunks([bytes]) });
+  }
+  manifest.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return {
     ok: true,
     package: {
@@ -203,7 +205,7 @@ export function validateSkillPackage(
       instructions: body.trim(),
       frontmatter,
       manifest,
-      contentHash: computeContentHash(files),
+      contentHash: await computeContentHash(files),
     },
   };
 }
@@ -214,7 +216,7 @@ export function validateSkillPackage(
  * `D:<path bytes>:<path>`, a file `F:<path bytes>:<path>:<size>:<content>`.
  * The same package therefore has the same `content_hash` on both clients.
  */
-export function computeContentHash(files: SkillPackageFiles): string {
+export async function computeContentHash(files: SkillPackageFiles): Promise<string> {
   const encoder = new TextEncoder();
   const directories = new Set<string>();
   for (const path of files.keys()) {
@@ -249,13 +251,7 @@ export function computeContentHash(files: SkillPackageFiles): string {
     }
   };
   visit('');
-  const data = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    data.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return `${SKILL_CONTENT_HASH_PREFIX}${sha256Hex(data)}`;
+  return `${SKILL_CONTENT_HASH_PREFIX}${await sha256HexChunks(chunks)}`;
 }
 
 /**

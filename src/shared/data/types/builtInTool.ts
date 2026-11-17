@@ -21,10 +21,14 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { AgentToolApproval } from './agentToolBinding';
 
 export const BUILT_IN_TOOL_CAPABILITY_IDS = [
+  'agent_set_avatar',
+  'agent_list_mcp_servers',
+  'agent_set_mcp_binding',
   'agent_create',
   'agent_get',
   'agent_list',
   'agent_update',
+  'list_installed_skills',
   'ask_user_question',
   'calendar_create_event',
   'calendar_delete_event',
@@ -44,6 +48,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'library_search_files',
   'library_read_file',
   'library_list_folders',
+  'library_create_folder',
   'library_move_item',
   'library_rename_item',
   'library_trash_item',
@@ -55,6 +60,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'health_list_data_types',
   'health_query_data',
   'health_get_record',
+  'http_request',
   'inspect_office_file',
   'location_get_current',
   'memory_read',
@@ -73,9 +79,19 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'reminder_update_item',
   'run_js',
   'transcribe_audio',
+  'ssh_execute',
+  'ssh_list_files',
+  'ssh_read_file',
+  'ssh_write_file',
+  'ssh_download_file',
+  'ssh_upload_file',
   'web_fetch',
   'web_search',
   'write_file',
+  'mcp_list_servers',
+  'mcp_get_server',
+  'mcp_create_server',
+  'mcp_update_server',
 ] as const;
 
 export type BuiltInToolCapabilityId = (typeof BUILT_IN_TOOL_CAPABILITY_IDS)[number];
@@ -125,6 +141,29 @@ function describe(
  * mode.
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
+  describe('ssh_execute', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
+  describe('ssh_list_files', 'ask', {
+    effect: 'read',
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_read_file', 'ask', {
+    effect: 'read',
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_write_file', 'ask', { autoApprovalEligible: false, platforms: ['ios', 'android'] }),
+  describe('ssh_download_file', 'ask', {
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('ssh_upload_file', 'ask', {
+    autoApprovalEligible: false,
+    platforms: ['ios', 'android'],
+  }),
+  describe('agent_set_avatar', 'ask'),
+  describe('agent_list_mcp_servers', 'auto', { effect: 'read' }),
+  describe('agent_set_mcp_binding', 'ask'),
   describe('agent_create', 'ask'),
   describe('agent_get', 'auto', { effect: 'read' }),
   describe('agent_list', 'auto', { effect: 'read' }),
@@ -135,6 +174,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('memory_update', 'ask'),
   describe('memory_delete', 'ask'),
   describe('memory_bootstrap', 'auto'),
+  describe('list_installed_skills', 'auto', { effect: 'read' }),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     permissionScopes: ['calendar.read'],
@@ -209,6 +249,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresWebSearchCapability: 'fetchUrls',
     effect: 'read',
   }),
+  describe('http_request', 'ask'),
   describe('generate_image', 'ask', {
     autoApprovalEligible: false,
     requiresPaintingModel: true,
@@ -229,6 +270,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('library_search_files', 'auto', { effect: 'read' }),
   describe('library_read_file', 'auto', { effect: 'read' }),
   describe('library_list_folders', 'auto', { effect: 'read' }),
+  describe('library_create_folder', 'ask'),
   describe('library_move_item', 'ask'),
   describe('library_rename_item', 'ask'),
   describe('library_trash_item', 'ask'),
@@ -238,6 +280,10 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('transcribe_audio', 'auto', { platforms: ['android', 'ios'] }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
+  describe('mcp_list_servers', 'auto', { effect: 'read' }),
+  describe('mcp_get_server', 'auto', { effect: 'read' }),
+  describe('mcp_create_server', 'ask'),
+  describe('mcp_update_server', 'ask'),
 ];
 
 const HEALTH_TOOL_IDS = new Set<string>(

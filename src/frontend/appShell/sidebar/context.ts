@@ -11,10 +11,10 @@ export type SidebarActions = {
   openLibrary: () => void;
   openPlugins: () => void;
   openSkills: () => void;
+  openScheduledTasks: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   openSearch?: () => void;
-  startNewChat: () => void;
 };
 
 export const SidebarActionsContext = createContext<SidebarActions | null>(null);

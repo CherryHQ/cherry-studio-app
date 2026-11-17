@@ -434,12 +434,16 @@ working copies keep their native context, signatures and compaction state; conti
 after a restart never rebuilds it. Reconstruct dependencies for unfinished sessions, attach observers
 and only then resume scheduling.
 
-Ordinary shutdown and OS execution expiry close invocations without abort marks. Foreground startup
-reopens retained tasks. Explicit user stop invokes Pi abort. Unsafe tools do not automatically
-re-execute after interruption. Current accounts, tool implementations and approval policy are
-reconstructed; credentials are resolved at request time and never serialized. Native task demand,
-including background compaction, holds the KeepAlive lease. Usage has a durable idempotent outbox;
-compaction usage belongs to the session rather than an invented assistant turn.
+Ordinary shutdown closes invocations without abort marks. Finite UIKit window expiry does the same
+only when no continued-processing or audio protection remains. Foreground startup reopens retained
+tasks. Revocation of an iOS continued-processing task stops its owning work rather than suspending
+it for restart; see
+[Background Activity Presentation](../background-activity-presentation.md). Explicit user stop invokes
+Pi abort. Unsafe tools do not automatically re-execute after interruption. Current accounts, tool
+implementations and approval policy are reconstructed; credentials are resolved at request time and
+never serialized. Native task demand, including background compaction, holds the KeepAlive lease.
+Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
+invented assistant turn.
 
 ## Backup And Compatibility
 
@@ -540,6 +544,7 @@ delay remains unattributed.
 | Pi Durable `writeOutput` and store-commit budget | Host boundary: textual console overflow stays in the private working cache, with pending writes counted at admission and the merged store bounded atomically at script settlement; explicit image outputs use managed artifacts. Neither path exposes an unmanaged device path | [piDurableTools.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piDurableTools.test.ts); require an upstream host-output API with atomic store quotas and cancellation/artifact ownership preserved |
 | Pi AI structured diagnostics and retry | Product behavior: retain safe provider failure facts; subscription limits remain terminal and transient failures keep retry classification | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [PiDurableAgentRuntime.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/PiDurableAgentRuntime.test.ts); require candidate parity for those failure categories |
 | Pi AI Google signatures over Chat Completions | Protocol compatibility: capture streamed `extra_content.google.thought_signature` in the existing durable tool-call field and replay it only for the same provider, model and API; legacy encrypted reasoning remains in `reasoning_details` | [piApiAdapters.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piApiAdapters.test.ts); retire when upstream preserves Google tool signatures through streamed response parsing and replay, with cross-model isolation unchanged. Regression sources are added but unrun |
+| Pi AI Mistral thinking chunks over Chat Completions | Protocol compatibility: parse nested thinking/text chunk lists without coercion, retain optional reasoning signatures and closure metadata in Pi's existing signature field, and replay structured thinking only for the same provider, model and API; scalar reasoning and OpenRouter details keep their existing formats | [piMistralReasoning.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piMistralReasoning.test.ts); retire when upstream preserves streamed Mistral content and persisted reasoning through follow-up requests and tool continuations, with cross-model isolation unchanged. Replay regressions are added but unrun |
 | Pi AI legacy JSON preview fast path (retired) | No production caller found in Mobile or the six published 1.5.0 Pi packages; providers use upstream `ToolCallArgumentsStream`. Final arguments still use unchanged `parseToolCallArguments` | [piStreamingJson.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piStreamingJson.test.ts) now covers the consumed incremental path, string repair and final validation. Behavior and performance checks remain unrun |
 | Pi AI native OAuth; Pi Code Mode native exports | Platform compatibility: native code does not import Node/WASM launchers or discover credentials from a desktop environment | [piReactNativePatches.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts) and native OAuth adapter sources; require equivalent native exports and platform acceptance |
 | Pi AI Gemini fetch and Vertex bearer authentication | Platform compatibility: Gemini and host-authenticated Vertex use instance-scoped `httpOptions.fetch`, preserving native body-failure facts and cancellation without global fetch replacement. Vertex resolves service-account tokens per invocation without API-key placeholders or Node ADC. Google message, image, tool and thought-signature conversion stays upstream | [piProviderStreamErrors.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piProviderStreamErrors.test.ts), [piVertexNative.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piVertexNative.test.ts) and [piModelResolver.test.ts](../../../src/backend/ai/agent/runtime/pi/__tests__/piModelResolver.test.ts). Google GenAI is pinned to 2.23.0: its native `httpOptions.fetch` replaces the 2.21.0 transport patch; [the remaining Web patch](../../../patches/@google__genai@2.23.0.patch) only injects host authentication. Retire the Pi fetch wiring and Web auth hunks when upstream exposes equivalent behavior, followed by native acceptance |

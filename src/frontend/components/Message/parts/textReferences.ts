@@ -9,11 +9,13 @@ import {
   SkillTextReferenceSchema,
   type SkillTextReference,
 } from '@/shared/data/types/skill';
+import { SshTextReferenceSchema, type SshTextReference } from '@/shared/data/types/ssh';
 
 type TextReference =
   | PluginTextReference
   | SkillTextReference
   | SelectionTextReference
+  | SshTextReference
   | {
       type: 'quote';
       quote: MessageQuote;
@@ -48,6 +50,10 @@ export function splitTextReferences(
       else {
         const selection = SelectionTextReferenceSchema.safeParse(value);
         if (selection.success) references.push(selection.data);
+        else {
+          const ssh = SshTextReferenceSchema.safeParse(value);
+          if (ssh.success) references.push(ssh.data);
+        }
       }
     }
   }

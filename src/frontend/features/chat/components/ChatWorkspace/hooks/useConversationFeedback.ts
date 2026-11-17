@@ -49,23 +49,26 @@ export function useConversationFeedback({
   });
 
   return useCallback(
-    (messageId: string) => {
+    (messageId: string, destination: 'feedback' | 'diagnosis' = 'feedback') => {
       const message = latestMessages.current.find((item) => item.id === messageId);
       if (!message) return;
       const error = message.data.parts?.findLast((part) => part.type === 'data-error');
       const failure = error?.type === 'data-error' ? feedbackFailureContext(error.data) : undefined;
-      void openFeedback({
-        feature: 'chat',
-        executionSource,
-        agentId: diagnosticIdentifier(agentId),
-        sessionId: diagnosticIdentifier(sessionId),
-        turnId: diagnosticIdentifier(message.turnId),
-        messageId: diagnosticIdentifier(message.id),
-        messageCreatedAt: feedbackTimestamp(message.createdAt),
-        ...failure,
-        providerId: diagnosticIdentifier(message.model?.providerId) ?? failure?.providerId,
-        modelId: diagnosticIdentifier(message.model?.modelId) ?? failure?.modelId,
-      });
+      void openFeedback(
+        {
+          feature: 'chat',
+          executionSource,
+          agentId: diagnosticIdentifier(agentId),
+          sessionId: diagnosticIdentifier(sessionId),
+          turnId: diagnosticIdentifier(message.turnId),
+          messageId: diagnosticIdentifier(message.id),
+          messageCreatedAt: feedbackTimestamp(message.createdAt),
+          ...failure,
+          providerId: diagnosticIdentifier(message.model?.providerId) ?? failure?.providerId,
+          modelId: diagnosticIdentifier(message.model?.modelId) ?? failure?.modelId,
+        },
+        { destination },
+      );
     },
     [agentId, executionSource, openFeedback, sessionId],
   );

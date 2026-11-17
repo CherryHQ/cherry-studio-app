@@ -11,6 +11,7 @@ import {
   localConversationFailure,
 } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { SshModule } from '@/shared/contracts/ssh';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { editableReplyParts } from '@/shared/utils/assistantReply';
@@ -69,6 +70,7 @@ export function createLocalConversationProjector(input: {
     | 'selectMessage'
   >;
   sessionId: string;
+  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>;
   onSessionChanged?: (sessionId: string) => void;
 }) {
   const { client, sessionId } = input;
@@ -211,10 +213,28 @@ export function createLocalConversationProjector(input: {
         };
       return history.messages;
     },
-    snapshot(state: AgentSessionChatState, title: string | undefined): ConversationSnapshot {
+    snapshot(
+      state: AgentSessionChatState,
+      title: string | undefined,
+      currentSshTarget = input.ssh?.getTarget(sessionId),
+    ): ConversationSnapshot {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const sshCommand =
+          approval.toolRef.source === 'builtin' && approval.toolRef.capabilityId === 'ssh_execute';
+        const sshTarget = sshCommand ? currentSshTarget : null;
+        const boundInput =
+          approval.input && typeof approval.input === 'object' && !Array.isArray(approval.input)
+            ? approval.input
+            : null;
+        const canGrantSshDiagnostics = Boolean(
+          sshTarget &&
+          !sshTarget.grant &&
+          boundInput?.connection_id === sshTarget.profile.id &&
+          boundInput?.connection_revision === sshTarget.profile.revision &&
+          boundInput?.selection_id === sshTarget.selectionId,
+        );
         const isHealth = isHealthToolRef(approval.toolRef);
         const inference = isHealth
           ? state.liveMessages.find(
@@ -229,6 +249,8 @@ export function createLocalConversationProjector(input: {
           toolName:
             approval.toolRef.source === 'builtin' ? approval.toolRef.capabilityId : undefined,
           state: 'pending',
+          sshCommand,
+          canGrantSshDiagnostics,
           ...(isHealth
             ? {
                 healthDataSharing: {
@@ -254,6 +276,25 @@ export function createLocalConversationProjector(input: {
               JSON.stringify(current.input) !== inputKey
             )
               throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+            if (
+              decision.kind === 'approve' &&
+              'sshDiagnosticsGrant' in decision &&
+              decision.sshDiagnosticsGrant
+            ) {
+              if (!canGrantSshDiagnostics || !sshTarget || !input.ssh)
+                throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+              const grantedTarget = await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              try {
+                await client.respondApproval(sessionId, approval.id, decision.kind);
+              } catch (error) {
+                // A concurrent selection or grant replacement must not be revoked here.
+                await input.ssh
+                  .setCommandGrant(sessionId, grantedTarget, false)
+                  .catch(() => undefined);
+                throw error;
+              }
+              return;
+            }
             await client.respondApproval(sessionId, approval.id, decision.kind);
           }),
         };

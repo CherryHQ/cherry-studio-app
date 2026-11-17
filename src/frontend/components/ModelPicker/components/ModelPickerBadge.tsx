@@ -24,16 +24,22 @@ const badgeMeta = {
 export function ModelPickerBadge({
   badge,
   testIDPrefix = 'model-picker-badge',
+  variant = 'chip',
 }: {
   badge: ModelPickerBadgeValue;
   testIDPrefix?: string;
+  variant?: 'chip' | 'icon';
 }) {
   const { chipClassName, Icon, iconClassName } = badgeMeta[badge];
 
   return (
     <View
       accessibilityElementsHidden
-      className={`h-5 flex-row items-center justify-center rounded-lg px-1.5 ${chipClassName}`}
+      className={
+        variant === 'icon'
+          ? 'size-4 items-center justify-center'
+          : `h-5 flex-row items-center justify-center rounded-lg px-1.5 ${chipClassName}`
+      }
       importantForAccessibility="no-hide-descendants"
       style={styles.badge}
       testID={`${testIDPrefix}-${badge}`}

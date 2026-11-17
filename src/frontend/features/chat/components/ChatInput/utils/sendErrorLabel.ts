@@ -17,6 +17,7 @@ const SEND_ERROR_LABEL_KEYS: Partial<Record<AgentErrorView['code'], string>> = {
   INTERRUPTED: 'chat.errorPart.interrupted.message',
   SESSION_BUSY: 'chat.input.sendError.sessionBusy',
   MEMORY_CONTEXT_CHANGED: 'chat.memory.changed.message',
+  SESSION_RECOVERY_FAILED: 'chat.runtime.sessionRecoveryFailed',
   MESSAGE_CONFLICT: 'chat.messageActions.editConflict',
   SESSION_NOT_FOUND: 'chat.input.sendError.sessionNotFound',
   TOOL_CALLING_UNSUPPORTED: 'chat.input.sendError.toolCallingUnsupported',

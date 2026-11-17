@@ -84,6 +84,19 @@ test('creates a SOUL-backed profile without storing persona in Agent metadata', 
   expect((await f.profiles.list()).items[0].instructions).toBe(content);
 });
 
+test('projects an organization Agent from its current server instructions instead of local SOUL', async () => {
+  const f = fixture();
+  await f.profiles.create({ name: 'Writer', instructions: 'Local persona' });
+  Object.assign(f.row()!, { isManaged: true, instructions: 'Organization persona' });
+  expect((await f.profiles.getById(ID)).instructions).toBe('Organization persona');
+  expect((await f.profiles.list()).items[0].instructions).toBe('Organization persona');
+  expect(f.files.get(`${ID}/soul`)).toBe('Local persona');
+  Object.assign(f.row()!, { instructions: 'Updated organization persona' });
+  expect((await f.profiles.update(ID, { mode: 'minimal' })).instructions).toBe(
+    'Updated organization persona',
+  );
+});
+
 test('rejects an editor draft superseded by a memory write without changing other fields', async () => {
   const f = fixture();
   const original = await f.profiles.create({ name: 'Writer', instructions: 'Original' });

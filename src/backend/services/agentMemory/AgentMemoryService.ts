@@ -1,5 +1,6 @@
 import {
   createAgentMemory,
+  AGENT_MEMORY_INSTRUCTION_KEY,
   AgentMemoryError,
   MemoryService,
   memoryContext,
@@ -81,13 +82,8 @@ export class AgentMemoryService extends BaseService {
         },
       },
       assertAgent: async (id) => {
-        const [agent] = await db
-          .getDb()
-          .select({ id: agentTable.id })
-          .from(agentTable)
-          .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
-          .limit(1);
-        if (!agent) throw new AgentMemoryError('agent-unavailable');
+        const agent = await this.identityAgent(id);
+        if (agent.managedRemoteId !== null) throw new AgentMemoryError('unavailable');
       },
       assertWritable: () => storageMutationGate.assertWritable(),
     });
@@ -180,8 +176,22 @@ export class AgentMemoryService extends BaseService {
       : undefined;
   };
 
-  context = async (agentId: string, signal?: AbortSignal, canBootstrap = false) =>
-    memoryContext(await this.memory.snapshot(agentId, signal), canBootstrap);
+  context = async (agentId: string, signal?: AbortSignal, canBootstrap = false) => {
+    signal?.throwIfAborted();
+    const agent = await this.identityAgent(agentId);
+    if (agent.managedRemoteId !== null)
+      return {
+        key: AGENT_MEMORY_INSTRUCTION_KEY,
+        text: `## Organization Agent Instructions
+
+These server-managed instructions define this Agent's role, goals and style within the Runtime Rules and the user's request. This current value replaces earlier identity snapshots; empty instructions withdraw the previous value. Agent and memory tools cannot read or change this organization-owned identity.
+
+<agent_instructions>
+${JSON.stringify(agent.instructions).replace(/</g, '\\u003c')}
+</agent_instructions>`,
+      };
+    return memoryContext(await this.memory.snapshot(agentId, signal), canBootstrap);
+  };
 
   managedContext = async (caller: MemoryCaller, signal?: AbortSignal) => {
     const agentId = caller.agentId;
@@ -207,8 +217,27 @@ export class AgentMemoryService extends BaseService {
     }
     return managedMemoryContext(entries);
   };
-  soul = async (agentId: string, signal?: AbortSignal) =>
-    (await this.memory.read(agentId, 'soul', signal)).content;
+  soul = async (agentId: string, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
+    const agent = await this.identityAgent(agentId);
+    return agent.managedRemoteId !== null
+      ? agent.instructions
+      : (await this.memory.read(agentId, 'soul', signal)).content;
+  };
+
+  private async identityAgent(agentId: string) {
+    const [agent] = await this.db
+      .getDb()
+      .select({
+        instructions: agentTable.instructions,
+        managedRemoteId: agentTable.managedRemoteId,
+      })
+      .from(agentTable)
+      .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
+      .limit(1);
+    if (!agent) throw new AgentMemoryError('agent-unavailable');
+    return agent;
+  }
   hasPendingStorageWork = () =>
     this.memory.hasPendingStorageWork() ||
     this.managed.hasPendingStorageWork() ||
@@ -275,7 +304,7 @@ export class AgentMemoryService extends BaseService {
       .getDb()
       .select({ id: agentTable.id, instructions: agentTable.instructions })
       .from(agentTable)
-      .where(ne(agentTable.instructions, ''));
+      .where(and(ne(agentTable.instructions, ''), isNull(agentTable.managedRemoteId)));
     await migrateAgentInstructions({
       agents,
       storage: memoryStorage,
@@ -285,7 +314,13 @@ export class AgentMemoryService extends BaseService {
           await tx
             .update(agentTable)
             .set({ instructions: '' })
-            .where(and(eq(agentTable.id, agentId), eq(agentTable.instructions, instructions)));
+            .where(
+              and(
+                eq(agentTable.id, agentId),
+                eq(agentTable.instructions, instructions),
+                isNull(agentTable.managedRemoteId),
+              ),
+            );
         }),
     });
   }

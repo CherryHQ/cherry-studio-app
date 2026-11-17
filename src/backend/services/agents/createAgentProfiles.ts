@@ -7,9 +7,10 @@ import type { Agent } from '@/shared/data/types/agent';
 
 type AgentProfileData = Pick<AgentService, 'create' | 'delete' | 'getById' | 'list' | 'update'>;
 
-/** Keeps the shipped instructions API field as a SOUL projection, never a second stored prompt. */
+/** Local instructions project SOUL; organization instructions retain their server-owned source. */
 export function createAgentProfiles(agents: AgentProfileData, memory: AgentMemoryOperations) {
   async function project(agent: Agent, signal?: AbortSignal): Promise<Agent> {
+    if (agent.isManaged) return agent;
     const soul = await memory.read(agent.id, 'soul', signal);
     return { ...agent, instructions: soul.content, instructionsVersion: soul.version };
   }
@@ -21,7 +22,7 @@ export function createAgentProfiles(agents: AgentProfileData, memory: AgentMemor
     },
     async list(...args: Parameters<AgentProfileData['list']>) {
       const page = await agents.list(...args);
-      return { ...page, items: await Promise.all(page.items.map(project)) };
+      return { ...page, items: await Promise.all(page.items.map((agent) => project(agent))) };
     },
     async create(dto: CreateAgentDto, user?: string, signal?: AbortSignal) {
       return memory.withStorageWork(async () => {
@@ -66,6 +67,9 @@ export function createAgentProfiles(agents: AgentProfileData, memory: AgentMemor
       return memory.withStorageWork(async () => {
         const { instructions, expectedInstructionsVersion, ...metadata } = dto;
         signal?.throwIfAborted();
+        if ((await agents.getById(id)).isManaged) {
+          return agents.update(id, dto, options);
+        }
         const soul = instructions === undefined ? undefined : await memory.read(id, 'soul', signal);
         if (
           soul &&

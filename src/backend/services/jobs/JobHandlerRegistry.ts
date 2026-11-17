@@ -15,6 +15,7 @@ import {
   createPaintingGenerateJobHandler,
   type PaintingAi,
 } from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 
 import type { JobType } from './jobRegistry';
 import type { JobHandler, JobHandlerFor } from './types';
@@ -37,6 +38,7 @@ export function jobHandlerEntry<K extends JobType>(
   'BackgroundActivityManager',
   'BackgroundActivityEnvironment',
   'AgentMemoryService',
+  'ScreenAwakeRuntime',
 ])
 @AppStatePolicy('not-applicable')
 export class JobHandlerRegistry extends BaseService {
@@ -47,6 +49,7 @@ export class JobHandlerRegistry extends BaseService {
     backgroundActivities: Pick<BackgroundActivityManager, 'startSession'>,
     environment: Pick<BackgroundActivityEnvironment, 'paintingPresenter' | 'translate'>,
     memory: Pick<AgentMemoryService, 'runMaintenance'>,
+    screenAwake: ScreenAwakeRuntime,
   ) {
     super();
     this.entries = Object.freeze([
@@ -71,6 +74,7 @@ export class JobHandlerRegistry extends BaseService {
           },
           ai,
           paintings: paintingService,
+          screenAwake,
           storage: paintingFileStorage,
           translate: environment.translate,
         }),
