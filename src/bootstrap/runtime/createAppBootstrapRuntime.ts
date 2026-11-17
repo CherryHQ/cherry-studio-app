@@ -56,6 +56,7 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { installationAccount } from '@/bootstrap/profile/installationAccount';
+import { installationAppIcon } from '@/bootstrap/profile/installationAppIcon';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
   publishForegroundActivityAttention,
@@ -173,6 +174,7 @@ export function createAppBootstrapRuntime(
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const account = installationAccount();
+  const appIcon = installationAppIcon();
   const cloud = host.container.get<CloudRuntime>('CloudRuntime');
   cloud.configure(
     {
@@ -245,6 +247,7 @@ export function createAppBootstrapRuntime(
     region,
     trash,
     account,
+    appIcon,
     cloud,
   });
   backup.configure(
@@ -315,6 +318,7 @@ export function createAppBootstrapRuntime(
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
         unsubscribeAccount();
+        appIcon.stop();
         await Promise.all([
           disposeSystemEntry(),
           disposeSkills(),
@@ -390,6 +394,7 @@ export function createAppBootstrapRuntime(
       if (host.state !== 'ready') return;
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
+      appIcon.start();
       void account.verify();
       const results = await Promise.allSettled([
         region.getCountry(),

@@ -1,5 +1,6 @@
 import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
+import type { AppIconModule } from './appIcon';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
@@ -26,6 +27,7 @@ import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
   readonly account: AccountModule;
+  readonly appIcon: AppIconModule;
   readonly cloud: CloudModule;
   readonly ssh: SshModule;
   readonly backgroundExecution: BackgroundExecutionModule;

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
 
 import { useAppUpdateEntry } from '@/frontend/appShell/appUpdate';
+import { getAppLogo } from '@/frontend/appShell/branding';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -22,9 +23,6 @@ const APP_VERSION = Application.nativeApplicationVersion?.trim();
 const APP_BUILD = Application.nativeBuildVersion;
 const APP_PROFILE = Constants.expoConfig?.extra?.sentryEnvironment;
 const SUPPORT_EMAIL = 'support@cherry-ai.com';
-// Exact desktop `src/renderer/assets/images/logo.png`; the launcher icon is a
-// separate build asset with platform-safe transparent corners.
-const ABOUT_APP_LOGO = require('@/assets/cherry-studio-logo.png');
 const ABOUT_LINKS = {
   repository: 'https://github.com/CherryHQ/cherry-studio-app',
   website: 'https://www.cherry-ai.com/',
@@ -84,7 +82,7 @@ export default function AboutSettingsScreen() {
           <Image
             accessibilityIgnoresInvertColors
             className="size-20 rounded-2xl"
-            source={ABOUT_APP_LOGO}
+            source={getAppLogo()}
           />
           <View className="items-center gap-1">
             <Text className="text-xl font-semibold text-foreground">

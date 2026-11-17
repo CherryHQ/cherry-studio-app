@@ -72,6 +72,35 @@ public class SystemIntegrationModule: Module {
     AsyncFunction("claimNextEntry") { try SystemEntryStore.claimNext() }
     AsyncFunction("releaseEntry") { (id: String) in SystemEntryStore.release(id) }
     AsyncFunction("completeEntry") { (id: String) in try SystemEntryStore.complete(id) }
+    AsyncFunction("getAppIcon") { (promise: Promise) in
+      DispatchQueue.main.async {
+        let app = UIApplication.shared
+        let icons = Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any]
+        let alternates = icons?["CFBundleAlternateIcons"] as? [String: Any]
+        promise.resolve([
+          "isSupported": app.supportsAlternateIcons && alternates?["Enterprise"] != nil,
+          "icon": app.alternateIconName == "Enterprise" ? "enterprise" : "community"
+        ])
+      }
+    }
+    AsyncFunction("setAppIcon") { (icon: String, promise: Promise) in
+      DispatchQueue.main.async {
+        guard icon == "community" || icon == "enterprise" else {
+          promise.reject("ERR_APP_ICON", "Unknown app icon")
+          return
+        }
+        let app = UIApplication.shared
+        guard app.supportsAlternateIcons, app.applicationState == .active else {
+          promise.reject("ERR_APP_ICON", "App icon changes require an active supported app")
+          return
+        }
+        let name: String? = icon == "enterprise" ? "Enterprise" : nil
+        guard app.alternateIconName != name else { promise.resolve(); return }
+        app.setAlternateIconName(name) { error in
+          if let error { promise.reject(error) } else { promise.resolve() }
+        }
+      }
+    }
     AsyncFunction("getBackgroundRunSettings") { () -> [String: Any] in
       ["batteryOptimizationExempt": NSNull(),
        "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,

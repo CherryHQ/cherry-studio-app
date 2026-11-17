@@ -72,6 +72,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
+      ['./scripts/withAppIcons.js', { androidEnabled: domesticStoresSetting !== 'true' }] as [
+        string,
+        { androidEnabled: boolean },
+      ],
       [
         './scripts/withAppUpdates.js',
         {

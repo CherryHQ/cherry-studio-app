@@ -47,6 +47,7 @@ const mockEnterpriseAccount = {
     return () => mockAccountListeners.delete(listener);
   },
 };
+const mockAppIcon = { start: jest.fn(), stop: jest.fn() };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
@@ -132,6 +133,9 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 }));
 jest.mock('@/bootstrap/profile/installationAccount', () => ({
   installationAccount: () => mockEnterpriseAccount,
+}));
+jest.mock('@/bootstrap/profile/installationAppIcon', () => ({
+  installationAppIcon: () => mockAppIcon,
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
@@ -443,6 +447,7 @@ describe('createAppBootstrapRuntime', () => {
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       account: mockEnterpriseAccount,
+      appIcon: mockAppIcon,
       cloud: mockCloud,
       languageServing: mockAgentRuntime,
       screenAwake: mockScreenAwake,

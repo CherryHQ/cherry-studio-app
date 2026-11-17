@@ -27,6 +27,7 @@ import {
   sdkScopes,
   type CloudLoginConfig,
 } from './cloudLoginConfig';
+import { installationAppIcon } from './installationAppIcon';
 import { installationProfiles } from './installationProfiles';
 
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -140,7 +141,16 @@ function createAccount(): AccountRuntime {
       const result = await WebBrowser.openAuthSessionAsync(url, callbackUrl);
       return result.type === 'success' ? result.url : null;
     },
-    reload: () => reloadAppAsync('Switch data profile'),
+    reload: async () => {
+      await installationAppIcon()
+        .synchronize()
+        .catch((error: unknown) => {
+          loggerService
+            .withContext('AppIcon')
+            .warn('Could not update the icon after switching space', { error });
+        });
+      await reloadAppAsync('Switch data profile');
+    },
   });
   setDiagnosticAccountReader(() => {
     const state = runtime.getState();

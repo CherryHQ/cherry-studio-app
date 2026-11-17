@@ -12,6 +12,7 @@ import {
   useAccount,
   useAccountErrorReporter,
 } from '@/frontend/appShell/account';
+import { getAppLogo } from '@/frontend/appShell/branding';
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
@@ -19,7 +20,6 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
-const APP_LOGO = require('@/assets/cherry-studio-logo.png');
 const profileAvatarSize = 96;
 const logger = loggerService.withContext('ProfileSettingsScreen');
 
@@ -31,7 +31,7 @@ function AccountTile({ kind }: { kind: 'cherry' | 'organization' | 'server' }) {
       {Icon ? (
         <Icon className="size-5 text-foreground" />
       ) : (
-        <Image accessibilityIgnoresInvertColors className="size-10" source={APP_LOGO} />
+        <Image accessibilityIgnoresInvertColors className="size-10" source={getAppLogo()} />
       )}
     </View>
   );

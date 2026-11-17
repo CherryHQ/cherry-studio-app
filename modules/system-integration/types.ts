@@ -39,6 +39,9 @@ export interface SystemIntegrationNativeModule {
   claimNextEntry(): Promise<NativeSystemEntry | null>;
   releaseEntry(id: string): Promise<void>;
   completeEntry(id: string): Promise<void>;
+  /** Missing on older development clients; unsupported distributions report false. */
+  getAppIcon?(): Promise<{ isSupported: boolean; icon: 'community' | 'enterprise' | null }>;
+  setAppIcon?(icon: 'community' | 'enterprise'): Promise<void>;
   getBackgroundRunSettings?(): Promise<{
     batteryOptimizationExempt: boolean | null;
     lowPowerMode: boolean;

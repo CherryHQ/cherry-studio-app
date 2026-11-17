@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { getAppLogo } from '@/frontend/appShell/branding';
+
 import { AccountSignInFields } from './AccountSignInFields';
 import { organizationLabel } from './organizationLabel';
 import { useAccount } from './useAccount';
 import { useAccountSignInForm } from './useAccountSignInForm';
 
-const APP_LOGO = require('@/assets/cherry-studio-logo.png');
 /**
  * `sign-in` and `switch` open from settings and close back to it;
  * `expired` replaces an organization whose session was refused and offers sign-out instead.
@@ -88,7 +89,7 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
           <Image
             accessibilityIgnoresInvertColors
             className="size-20 rounded-2xl"
-            source={APP_LOGO}
+            source={getAppLogo()}
           />
           <View className="items-center gap-3">
             <Text
