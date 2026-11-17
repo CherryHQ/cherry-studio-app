@@ -179,7 +179,8 @@ profile, only a community session counts as signed in.
   matches hides the restricted content and opens `/login` for reauthentication (`AccountSessionGate`).
   The root navigator and its pages remain mounted, preserving unsent drafts and staged attachment
   references. The gate also hides content from accessibility and interaction until a public account
-  route is visible. Back cannot dismiss expired sign-in while the session is refused. Same-profile
+  route is visible. Portal sheets and menus close before login opens; a pending decision dialog is
+  answered first. Back cannot dismiss expired sign-in while the session is refused. Same-profile
   success closes login and callback to their original page; failure keeps expired sign-in available.
   Sign-out keeps data on the device and reloads into local data.
 - **Credential admission:** in an enterprise profile, resolving a provider key waits for the stored

@@ -27,6 +27,8 @@ data profile. Navigation never treats a community guest as an expired enterprise
 while a refused session is waiting to enter login, it covers the content and disables interaction
 and accessibility. Once the root navigator exists, refusal pushes `/login` with `purpose=expired`
 and the complete original route identity. It never replaces the page tree with a second login UI.
+Sheets, menus and dialogs render in portals above the cover, so the gate closes dismissible
+surfaces first and waits for a pending decision to be answered before opening login.
 An in-flight account activation settles before the gate requests expired login, so switching
 profiles does not create a spurious recovery page. The login route owns sign-out, back prevention
 and same-profile completion. System share delivery

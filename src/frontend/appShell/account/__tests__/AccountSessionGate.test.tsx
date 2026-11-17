@@ -18,7 +18,15 @@ jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
   useSegments: () => ['(drawer)', '(main)', '(chat)'],
 }));
-jest.mock('@cherrystudio/ui/components', () => ({ ContentState: { Loading: () => null } }));
+// The real controller keeps dismissal and decision semantics identical to the app's overlays.
+const { createOverlayNavigation } = jest.requireActual<
+  typeof import('../../../../../packages/ui/src/components/portal/overlay-navigation-controller')
+>('../../../../../packages/ui/src/components/portal/overlay-navigation-controller');
+let mockOverlays = createOverlayNavigation();
+jest.mock('@cherrystudio/ui/components', () => ({
+  ContentState: { Loading: () => null },
+  useOverlayNavigation: () => mockOverlays,
+}));
 jest.mock('../useAccount', () => ({ useAccount: () => ({ state: mockState }) }));
 
 let renderer: ReactTestRenderer | undefined;
@@ -37,8 +45,8 @@ function Draft() {
   );
   return null;
 }
-function render() {
-  act(() => {
+async function render() {
+  await act(async () => {
     const element = (
       <AccountSessionGate>
         <Draft />
@@ -62,17 +70,18 @@ beforeEach(() => {
   mockPathname = '/';
   mockNavigation = { key: 'root' };
   unmounts = 0;
+  mockOverlays = createOverlayNavigation();
 });
 afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
 });
 
-it('covers refused enterprise data and preserves the draft through same-profile reauthentication', () => {
-  render();
+it('covers refused enterprise data and preserves the draft through same-profile reauthentication', async () => {
+  await render();
   act(() => composer.setText('Unsent text'));
   mockState = { ...mockState, needsSignIn: true, isSignedIn: false };
-  render();
+  await render();
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/login',
     params: { purpose: 'expired', returnTo: '/?sessionId=session-1' },
@@ -81,43 +90,59 @@ it('covers refused enterprise data and preserves the draft through same-profile 
     renderer!.root.findAllByProps({ importantForAccessibility: 'no-hide-descendants' }),
   ).not.toHaveLength(0);
   mockPathname = '/login';
-  render();
+  await render();
   mockState = { ...mockState, needsSignIn: false, isSignedIn: true };
   mockPathname = '/';
-  render();
+  await render();
   expect(composer.text).toBe('Unsent text');
   expect(unmounts).toBe(0);
 });
 
-it('waits for the root navigator before requesting reauthentication', () => {
+it('waits for the root navigator before requesting reauthentication', async () => {
   mockState = { ...mockState, needsSignIn: true };
   mockNavigation = undefined;
-  render();
+  await render();
   expect(mockPush).not.toHaveBeenCalled();
   mockNavigation = { key: 'root' };
-  render();
+  await render();
   expect(mockPush).toHaveBeenCalledTimes(1);
 });
 
-it('covers a profile transition without opening expired login in the middle of activation', () => {
+it('covers a profile transition without opening expired login in the middle of activation', async () => {
   mockState = { ...mockState, needsSignIn: true, isBusy: true };
-  render();
+  await render();
   expect(mockPush).not.toHaveBeenCalled();
   mockState = { ...mockState, isBusy: false };
-  render();
+  await render();
   expect(mockPush).toHaveBeenCalledTimes(1);
 });
 
-it('allows a callback to repair the session and leaves community guests admitted', () => {
+it('allows a callback to repair the session and leaves community guests admitted', async () => {
   mockPathname = '/auth/callback';
   mockState = { ...mockState, needsSignIn: true, isRestoringSession: true };
-  render();
+  await render();
   expect(mockPush).not.toHaveBeenCalled();
   expect(
     renderer!.root.findAllByProps({ importantForAccessibility: 'no-hide-descendants' }),
   ).toHaveLength(0);
   mockPathname = '/';
   mockState = { ...mockState, isEnterprise: false, isRestoringSession: false, isSignedIn: false };
-  render();
+  await render();
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('closes portal sheets before login and leaves pending decisions to the user', async () => {
+  const dismissSheet = jest.fn();
+  let unregisterSheet = () => {};
+  dismissSheet.mockImplementation(() => unregisterSheet());
+  unregisterSheet = mockOverlays.register(dismissSheet);
+  const unregisterDecision = mockOverlays.register();
+  mockState = { ...mockState, needsSignIn: true, isSignedIn: false };
+  await render();
+  expect(dismissSheet).not.toHaveBeenCalled();
+  expect(mockPush).not.toHaveBeenCalled();
+
+  await act(async () => unregisterDecision());
+  expect(dismissSheet).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledTimes(1);
 });

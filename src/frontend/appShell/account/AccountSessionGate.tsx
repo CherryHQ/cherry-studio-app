@@ -1,4 +1,4 @@
-import { ContentState } from '@cherrystudio/ui/components';
+import { ContentState, useOverlayNavigation } from '@cherrystudio/ui/components';
 import {
   useGlobalSearchParams,
   usePathname,
@@ -6,7 +6,7 @@ import {
   useRouter,
   useSegments,
 } from 'expo-router';
-import { type PropsWithChildren, useEffect } from 'react';
+import { type PropsWithChildren, useEffect, useState, useSyncExternalStore } from 'react';
 import { View } from 'react-native';
 
 import { accountSessionReturnTo, accountSignInHref, isAccountRoute } from './accountRoute';
@@ -20,6 +20,10 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const segments = useSegments();
+  // Sheets and dialogs render in portals above this cover, so they must close before login opens.
+  const overlays = useOverlayNavigation();
+  const overlaysDismissible = useSyncExternalStore(overlays.subscribe, overlays.canNavigate);
+  const [attempt, setAttempt] = useState(0);
   const needsSignIn = state.isEnterprise && state.needsSignIn;
   const returnTo = accountSessionReturnTo(pathname, params, segments);
   // Callback redemption repairs credentials; other pages wait until restoration settles.
@@ -29,17 +33,29 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (
-      navigation?.key &&
-      !state.isRestoringSession &&
-      !state.isBusy &&
-      needsSignIn &&
-      !isAccountRoute(pathname)
-    ) {
-      router.push(accountSignInHref(returnTo, 'expired'));
-    }
+      !navigation?.key ||
+      state.isRestoringSession ||
+      state.isBusy ||
+      !needsSignIn ||
+      isAccountRoute(pathname) ||
+      // A pending decision stays with the user; login opens once it has been answered.
+      !overlaysDismissible
+    )
+      return;
+    const controller = new AbortController();
+    void overlays.prepareForNavigation(controller.signal).then((ready) => {
+      if (controller.signal.aborted) return;
+      if (ready) router.push(accountSignInHref(returnTo, 'expired'));
+      // A surface opened during dismissal; close it on the next pass.
+      else setAttempt((count) => count + 1);
+    });
+    return () => controller.abort();
   }, [
+    attempt,
     navigation?.key,
     needsSignIn,
+    overlays,
+    overlaysDismissible,
     pathname,
     returnTo,
     router,
