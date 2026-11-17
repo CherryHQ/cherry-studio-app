@@ -1,4 +1,6 @@
-import type { CitationSource } from '@/frontend/utils/messageCitations';
+import { File } from 'expo-file-system';
+
+import { citationIds, type CitationSource } from '@/frontend/utils/messageCitations';
 import type {
   RemoteAttachment,
   RemoteAgentSource,
@@ -17,6 +19,7 @@ import type {
   OperationOutcome,
   QueryScope,
   ResourceRead,
+  ResourceValue,
 } from '../contracts';
 import {
   createConversationReferences,
@@ -531,13 +534,61 @@ export function createRemoteConversationSession(
           selected.some((message) => message.state === 'streaming' || message.role === 'system')
         )
           throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
-        // Revalidate after the last page; metadata and selected bytes belong to this immutable revision.
+        const messages = [];
+        for (const message of selected.toReversed()) {
+          const transcript = remoteTranscriptMessage(message);
+          const row = projectHistory(message);
+          const ids = citationIds(row.display.data.parts ?? []);
+          const sources: CitationSource[] = [];
+          if (ids.length) {
+            for (const tool of row.tools ?? [])
+              sources.push(...(await readToolCitations(tool, signal)));
+            const known = new Set([
+              ...sources.map((source) => source.id),
+              ...message.parts.flatMap((part) =>
+                part.kind === 'presentation' && part.part.type === 'source-url'
+                  ? [part.part.sourceId]
+                  : [],
+              ),
+            ]);
+            const missing = ids.filter((id) => !known.has(id));
+            if (missing.length)
+              sources.push(...(await handle.history.readCitations!(message.id, missing, signal)));
+          }
+          transcript.citationSources = sources;
+          for (const part of transcript.parts) {
+            if (part.type !== 'prepared-file' || !part.mediaType.toLowerCase().startsWith('image/'))
+              continue;
+            const attachment = row.attachments?.find((item) => item.key === part.id);
+            if (!attachment?.resource) continue;
+            let value: ResourceValue;
+            try {
+              value =
+                attachment.resource.kind === 'inline'
+                  ? attachment.resource.value
+                  : await attachment.resource.read(signal);
+            } catch (error) {
+              if (
+                error instanceof ConversationReadError &&
+                error.failure.code === 'resource-unavailable'
+              )
+                // Metadata-only or evicted remote images leave `base64` unset so export renders a placeholder.
+                continue;
+              throw error;
+            }
+            if (value.kind !== 'file') continue;
+            part.base64 = await new File(value.uri).base64();
+            signal.throwIfAborted();
+          }
+          messages.push(transcript);
+        }
+        // Revalidate after preparing all source bytes; no export format retains a desktop reader.
         const current = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
         if (current.historyVersion !== fixed.historyVersion)
           throw new ConversationReadError({ code: 'version-expired', retry: 'read-again' });
         return {
           title: fixed.title,
-          messages: selected.toReversed().map(remoteTranscriptMessage),
+          messages,
         };
       },
     },

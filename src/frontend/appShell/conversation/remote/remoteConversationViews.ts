@@ -306,14 +306,20 @@ export function remoteMessage(
 }
 export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptMessage {
   const parts: TranscriptMessage['parts'] = [];
-  const attachments: NonNullable<TranscriptMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
     if (part.kind === 'text' || part.kind === 'reasoning') {
       if (!part.complete) throw new Error('Incomplete transcript content');
       parts.push({ type: part.kind, id: part.id, text: part.text, state: 'done' });
-    } else if (part.kind === 'tool')
+    } else if (part.kind === 'presentation') parts.push({ ...part.part, id: part.id });
+    else if (part.kind === 'tool')
       parts.push({ type: 'tool-summary', id: part.id, displayName: part.name });
-    else if (part.kind === 'file') attachments.push({ name: part.name, mediaType: part.mediaType });
+    else if (part.kind === 'file')
+      parts.push({
+        type: 'prepared-file',
+        id: part.id,
+        filename: part.name,
+        mediaType: part.mediaType ?? 'application/octet-stream',
+      });
   }
   if (message.failure)
     parts.push({
@@ -326,7 +332,7 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
     role: message.role,
     status: message.state,
     parts,
-    attachments,
+    modelName: message.model?.name,
     stats: null,
   };
 }

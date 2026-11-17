@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ConversationHistoryView,
@@ -118,12 +118,16 @@ export function useLocalConversation(input: {
     if (window.hasNewerMessages) return historyMessages;
     return branchMessages.map((message) => projector.message(message, state));
   }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
+  const liveMessagesRef = useRef(state.liveMessages);
+  useEffect(() => {
+    liveMessagesRef.current = state.liveMessages;
+  }, [state.liveMessages]);
   const readCitations = useCallback<NonNullable<ConversationHistoryView['readCitations']>>(
     async (messageId, ids, signal) => {
       if (!sessionId) return [];
       const missing = new Set(ids);
       const sources: CitationSource[] = [];
-      let before = state.liveMessages.some(
+      let before = liveMessagesRef.current.some(
         (message) => message.id === messageId && message.status === 'streaming',
       );
       let query: ListAgentSessionMessagesQueryParams = before
@@ -153,7 +157,7 @@ export function useLocalConversation(input: {
       }
       return sources;
     },
-    [apiClient, sessionId, state.liveMessages],
+    [apiClient, sessionId],
   );
   const messageWindow = useMemo<ConversationHistoryView>(
     () => ({ ...window, messages: historyMessages, readCitations }),
