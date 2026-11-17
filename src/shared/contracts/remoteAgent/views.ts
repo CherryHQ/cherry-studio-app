@@ -1,3 +1,4 @@
+import type { AgentMessagePart } from '@/shared/contracts/agent';
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { FileEntryId } from '@/shared/data/types/file';
 
@@ -80,6 +81,14 @@ export type RemoteSessionView = {
 };
 export type RemoteResource = string;
 export type RemoteMessagePart =
+  | {
+      id: string;
+      kind: 'presentation';
+      part: Extract<
+        AgentMessagePart,
+        { type: 'source-url' | 'data-compaction-anchor' | 'data-search-suggestions' }
+      >;
+    }
   | {
       id: string;
       kind: 'text' | 'reasoning';

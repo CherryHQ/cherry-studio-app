@@ -203,6 +203,11 @@ export function remoteMessage(
   const tools: ConversationTool[] = [];
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
+    if (part.kind === 'presentation') {
+      parts.push(part.part);
+      keys.push(part.id);
+      continue;
+    }
     if (part.kind === 'file') {
       attachments.push({
         key: part.id,

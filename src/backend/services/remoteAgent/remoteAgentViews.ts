@@ -13,6 +13,8 @@ import type {
   RemoteSessionView,
 } from '@/shared/contracts/remoteAgent';
 
+import { readPresentationPart } from './remotePresentation';
+
 export const projectSession = (session: AgentSession): RemoteSessionView => ({
   id: session.sessionId,
   agentId: session.agentId,
@@ -41,6 +43,8 @@ function projectPart(
   issueResource: ResourceIssuer,
 ): RemoteMessagePart {
   const resource = () => issueResource(sessionId, { kind: 'part', part });
+  const presentation = readPresentationPart(part);
+  if (presentation) return { id: part.partId, kind: 'presentation', part: presentation };
   if (part.kind === 'text' || part.kind === 'reasoning') {
     const complete = 'text' in part.content;
     return {
