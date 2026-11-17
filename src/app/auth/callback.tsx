@@ -1,1 +1,1 @@
-export { AccountCallbackScreen as default } from '@/frontend/features/settings/account';
+export { AccountCallbackRoute as default } from '@/frontend/appShell/account';

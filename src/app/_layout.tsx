@@ -164,7 +164,17 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="login"
+        getId={() => 'login'}
+        options={({ route }) => ({
+          headerShown: false,
+          animation:
+            (route.params as { purpose?: string } | undefined)?.purpose === 'expired'
+              ? 'none'
+              : undefined,
+        })}
+      />
       <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen

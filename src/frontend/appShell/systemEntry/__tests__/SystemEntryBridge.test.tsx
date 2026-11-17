@@ -9,6 +9,7 @@ import { useSystemEntryClaims } from '../useSystemEntryClaims';
 
 let mockPathname = '/';
 let mockNavigation: { key: string } | undefined;
+let mockNeedsSignIn = false;
 const mockRouter = {
   back: jest.fn(),
   canGoBack: jest.fn(() => true),
@@ -29,6 +30,12 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => ({}) }));
+jest.mock('@/frontend/appShell/account', () => ({
+  isAccountRoute: jest.requireActual('@/frontend/appShell/account/accountRoute').isAccountRoute,
+  useAccount: () => ({
+    state: { isEnterprise: true, needsSignIn: mockNeedsSignIn, isRestoringSession: false },
+  }),
+}));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   createChatComposerHandoff: jest.fn(() => 'share-handoff'),
@@ -100,6 +107,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/';
   mockNavigation = { key: 'root' };
+  mockNeedsSignIn = false;
 });
 
 afterEach(() => {
@@ -117,6 +125,37 @@ it('opens the destination page without modifying a composer or putting content i
   expect(claimsProps().isReady).toBe(false);
   expect(createChatComposerHandoff).not.toHaveBeenCalled();
   expect(mockRouter.dismissTo).not.toHaveBeenCalled();
+});
+
+it('keeps shares queued until enterprise reauthentication has completed', () => {
+  mockNeedsSignIn = true;
+  render();
+  expect(claimsProps().isReady).toBe(false);
+  expect(deliver(share('Wait for sign-in'))).toBe(false);
+  expect(mockRouter.push).not.toHaveBeenCalled();
+  mockNeedsSignIn = false;
+  render();
+  expect(claimsProps().isReady).toBe(true);
+});
+
+it('retains an in-progress share selection while sign-in covers its route', () => {
+  render();
+  deliver(share('Pending selection'));
+  enterDestination();
+  mockNeedsSignIn = true;
+  mockPathname = '/login';
+  render();
+  expect(destination.isPending).toBe(true);
+  mockNeedsSignIn = false;
+  render();
+  expect(destination.isPending).toBe(true);
+  enterDestination();
+  act(() => destination.select({ kind: 'draft', agentId: 'chosen-agent' }));
+  expect(createChatComposerHandoff).toHaveBeenCalledWith(
+    expect.objectContaining({
+      draft: 'Pending selection',
+    }),
+  );
 });
 
 it.each([
