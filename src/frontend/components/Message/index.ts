@@ -1,6 +1,7 @@
 export { MessageList } from './MessageList';
 export { useMessageListDisclosureToggle } from './list/MessageListDisclosureContext';
 export { MessageFailureReportProvider } from './parts/MessageFailureReportContext';
+export { MessageFileRendererProvider } from './parts/MessageFileRendererContext';
 export { MessagePartRenderer } from './parts/MessagePartRenderer';
 export {
   MessageSelectionActionProvider,

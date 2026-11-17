@@ -7,18 +7,21 @@ import type { ConversationMessage, ResourceValue } from '@/frontend/appShell/con
 import { ConversationMessageContent, ConversationAttachments } from '../ConversationMessageContent';
 
 const mockModule = { open: jest.fn() };
+const mockOpenPreview = jest.fn();
+const mockPreparePreview = jest.fn(async (_source: unknown, _signal: AbortSignal) => ({
+  uri: 'file:///cache/FilePreviews/photo.png',
+  release: jest.fn(),
+}));
 let mockSheetContent: ReactNode;
 
-jest.mock('@/frontend/components/ArtifactPreview', () => {
-  const { Image } = jest.requireActual('react-native');
-  return {
-    ArtifactImageViewer: ({ uri }: { uri: string }) => (
-      <Image testID="image-viewer" source={{ uri }} />
-    ),
-  };
-});
+jest.mock('@/frontend/appShell/filePreview', () => ({
+  openTemporaryFilePreview: (...args: unknown[]) => mockOpenPreview(...args),
+  prepareTemporaryFilePreview: (source: unknown, signal: AbortSignal) =>
+    mockPreparePreview(source, signal),
+}));
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
 jest.mock('@/frontend/components/Message', () => ({
+  MessageFileRendererProvider: ({ children }: { children: ReactNode }) => children,
   getBuiltInToolDisplay: () => undefined,
   ReadOnlyToolContent: ({ output, failed }: { output: unknown; failed?: boolean }) => {
     const { Text } = jest.requireActual('react-native');
@@ -265,7 +268,13 @@ it('shows a remote image thumbnail and opens the same downloaded image', async (
     });
     expect(row.root.findByProps({ testID: 'image-thumbnail' }).props.source).toEqual({ uri });
     await act(async () => row.root.findByProps({ testID: 'attachment' }).props.onPress());
-    expect(row.root.findByProps({ testID: 'image-viewer' }).props.source).toEqual({ uri });
+    expect(mockPreparePreview).toHaveBeenCalledWith(
+      { uri, filename: 'photo.png', mediaType: 'image/png' },
+      expect.any(AbortSignal),
+    );
+    expect(mockOpenPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: 'file:///cache/FilePreviews/photo.png' }),
+    );
   } finally {
     await act(async () => row?.unmount());
     client.clear();

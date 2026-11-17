@@ -209,6 +209,14 @@ export function remoteMessage(
       continue;
     }
     if (part.kind === 'file') {
+      // This is an opaque desktop resource reference, never a mobile managed-file ID.
+      parts.push({
+        type: 'file',
+        url: part.resource,
+        filename: part.name,
+        mediaType: part.mediaType ?? 'application/octet-stream',
+      });
+      keys.push(part.id);
       attachments.push({
         key: part.id,
         name: part.name,

@@ -98,6 +98,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
                 initialImageAspectRatio={initialImageAspectRatio}
                 key={getMessagePartKey(message, item.part, item.index)}
                 parts={[item.part]}
+                partKeys={[getMessagePartKey(message, item.part, item.index)]}
               />
             ) : (
               <MessagePartRenderer
@@ -132,7 +133,12 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
             : null}
           {/* Downloadable files collect in the footer once the answer settles.
           Images stay in the body as soon as their file part arrives. */}
-          {isSettled && files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
+          {isSettled && files.length > 0 ? (
+            <GeneratedFileStrip
+              parts={files}
+              partKeys={files.map((part) => getMessagePartKey(message, part, parts.indexOf(part)))}
+            />
+          ) : null}
         </View>
       ) : null}
       {isWaitingForResponse ? (

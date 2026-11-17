@@ -44,6 +44,10 @@ history, message rows and parts, viewport following, and scroll restoration.
   attachment reports. A pending reply's `inputFileEntryIds` lets it name that wait.
   Its `quote` slot renders under the bubble in the same right-aligned column. The explicit
   `selection` variant uses the narrower design-specified bubble column without changing normal rows.
+- `MessageFileRendererProvider` lets a source render file parts by their stable part keys. The
+  shared partition still decides image position and non-image footer placement. Desktop file parts
+  carry opaque resource references without mobile `fileEntryId` metadata; the source owns download,
+  cancellation and preview. User input attachments retain their explicit slot.
 - `MessageSelectionActionProvider` adds one feature action beside Copy in the native menu of
   selected Markdown in a message body; the action receives the message id and the selected plain
   text. Text outside a message body (translations, previews, user plain text) offers none.

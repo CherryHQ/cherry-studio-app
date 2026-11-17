@@ -211,14 +211,20 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
     },
     resource,
   );
-  expect(projected.display.data.partKeys).toEqual(['call', 'reply:text:1']);
+  expect(projected.display.data.partKeys).toEqual(['call', 'reply:text:1', 'file']);
   expect(projected.display.data.parts?.[0]).toMatchObject({ state: 'input-streaming' });
   expect(projected.attachments?.[0]).toMatchObject({
     key: 'file',
     name: 'result.png',
     mediaType: 'image/png',
   });
-  expect(JSON.stringify(projected.display)).not.toContain('pc-file');
+  expect(projected.display.data.parts?.[2]).toEqual({
+    type: 'file',
+    filename: 'result.png',
+    mediaType: 'image/png',
+    url: 'pc-file',
+  });
+  expect(JSON.stringify(projected.display)).not.toContain('fileEntryId');
 });
 
 it('ends streaming for each completed text part and reuses unchanged part projections', () => {
