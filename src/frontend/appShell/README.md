@@ -6,6 +6,7 @@ page.
 - `account/` owns the Accounts Portal sign-in page, its `/login` route and the gate that returns an
   enterprise profile with a rejected session to sign-in.
 - `appUpdate/` owns the package-update dialog, cold-start offer and entry state across channels.
+- [`branding/`](./branding/README.md) selects profile-aware in-app artwork.
 - `fileExport/` owns watermark preparation, system file sharing and photo saving.
 - `documentExport/` owns the source-neutral document export navigation handoff.
 - `header/` owns the app-wide main and route header adapters.
