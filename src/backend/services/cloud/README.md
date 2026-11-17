@@ -64,11 +64,32 @@ nonce. Each inference request generates a separate 32-byte random idempotency ke
 43 unpadded base64url characters; the same value is signed and sent in `Idempotency-Key`.
 `Cherry-Request-ID` remains a UUID. Redirects and cookies are disabled.
 
+When `CHERRY_CLOUD_CLIENT_SECRET` is provisioned, inference also sends application HMAC headers
+`X-Client-ID`, `X-Timestamp` and `X-Signature`. The canonical text follows the Cloud client helper:
+uppercase method, path, empty query, `cherry-studio`, Unix timestamp and the exact request body,
+joined with newlines. The native signer uses the unmodified UTF-8 Cloud credential, independently
+of the CherryAI diagnostics credential and suffix. `MAIN_VITE_CHERRY_CLOUD_CLIENT_SECRET` is an
+accepted build-name fallback. The credential stays out of Expo's public config and JavaScript;
+`modules/cloud-signing` owns native signing. This applies only to the validated inference routes,
+with existing Product Session and device-signature headers retained. Login and account reads are
+unchanged. Provisioning requires a new native build; older clients or builds without the optional
+credential retain device-only authentication. Live gateway acceptance of the additional application
+headers has not been verified.
+
 Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
 accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
 body model, strips caller credentials/control headers, signs the final body bytes, and uses
-`expo/fetch`. The account generation remains linked to cancellation until body completion or
-cancellation. Both Pi language serving and the AI SDK provider adapter use this boundary.
+`expo/fetch`. The Anthropic SDK's exact `?beta=true` marker is removed before signing and sending
+the canonical messages route; other queries remain rejected. The account generation remains linked
+to cancellation until body completion or cancellation. Subscription conversations use the existing
+`PiDurableAgentRuntime` →
+`createPiDurableModels` → `piModelResolver` → `bindPiStream` path. Cloud adds admission, signing and
+account-lifetime cancellation at the fetch boundary; Pi owns protocol parsing, retry classification
+and durable execution. Streaming responses retain Expo's original response object with a lazy,
+replaceable body wrapper so Pi's existing transport adapter can compose over it. React Native's
+global `Response` constructor cannot carry a `ReadableStream` and must not reconstruct this response.
+Both Pi language serving and the AI SDK provider adapter read this native body, including finite JSON
+responses. They use the same boundary without buffering the response or constructing a replacement.
 
 ## Entitlements and model ownership
 

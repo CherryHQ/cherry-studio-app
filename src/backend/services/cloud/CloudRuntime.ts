@@ -30,6 +30,7 @@ import {
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
+import { cloudClientSignatureHeaders } from './cloudClientSignature';
 import { createCloudIdempotencyKey, loadCloudDevice, type CloudDevice } from './cloudDevice';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
@@ -258,6 +259,9 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const model = this.snapshot.models.find((entry) => entry.id === modelId)!;
       const path =
         model.endpoint_type === 'anthropic-messages' ? '/v1/messages' : '/v1/chat/completions';
+      // Pi's Anthropic SDK adds this marker; Cloud signs and serves the canonical messages route.
+      if (model.endpoint_type === 'anthropic-messages' && url.search === '?beta=true')
+        url.search = '';
       if (
         url.origin !== session.origin ||
         url.pathname !== path ||
@@ -280,10 +284,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
       };
       try {
         const signed = await session.headers('POST', path, body, createCloudIdempotencyKey());
+        const clientHeaders = await cloudClientSignatureHeaders('POST', path, body);
         linked.signal.throwIfAborted();
         const currentReason = cloudModelUnavailable(this.snapshot, modelId, use);
         if (currentReason) throw new CloudAccessError(currentReason);
-        const headers = new Headers(signed);
+        const headers = new Headers({ ...signed, ...clientHeaders });
         headers.set('content-type', 'application/json');
         // Only protocol headers cross this boundary; SDK keys and arbitrary extra headers do not.
         const anthropicVersion = request.headers.get('anthropic-version');
@@ -307,34 +312,45 @@ export class CloudRuntime extends BaseService implements CloudModule {
           complete();
           return response;
         }
-        const reader = response.body.getReader();
-        const stream = new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            try {
-              const chunk = await reader.read();
-              linked.signal.throwIfAborted();
-              if (chunk.done) {
-                controller.close();
+        const source = response.body;
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+        const stream = new ReadableStream<Uint8Array>(
+          {
+            async pull(controller) {
+              try {
+                linked.signal.throwIfAborted();
+                reader ??= source.getReader();
+                const chunk = await reader.read();
+                linked.signal.throwIfAborted();
+                if (chunk.done) {
+                  controller.close();
+                  reader.releaseLock();
+                  complete();
+                } else controller.enqueue(chunk.value);
+              } catch (error) {
+                controller.error(error);
+                reader?.releaseLock();
                 complete();
-              } else controller.enqueue(chunk.value);
-            } catch (error) {
-              controller.error(error);
-              complete();
-            }
+              }
+            },
+            async cancel(reason) {
+              try {
+                await (reader ? reader.cancel(reason) : source.cancel(reason));
+              } finally {
+                reader?.releaseLock();
+                complete();
+              }
+            },
           },
-          async cancel(reason) {
-            try {
-              await reader.cancel(reason);
-            } finally {
-              complete();
-            }
-          },
+          { highWaterMark: 0 },
+        );
+        // RN's Response constructor stringifies streams. Preserve Expo's response, as Pi's
+        // transport adapter does, and allow that adapter to wrap the body for retry classification.
+        Object.defineProperty(response, 'body', {
+          configurable: true,
+          value: stream,
         });
-        return new Response(stream, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        });
+        return response;
       } catch (error) {
         complete();
         throw error;

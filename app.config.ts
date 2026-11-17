@@ -90,6 +90,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       '@preeternal/react-native-file-hash',
       '@siteed/sherpa-onnx.rn',
       './plugins/withDiagnostics',
+      './plugins/withCloudSigning',
       './modules/crash-reporting/app.plugin.js',
       './scripts/withReportingAutolinking.js',
     ]

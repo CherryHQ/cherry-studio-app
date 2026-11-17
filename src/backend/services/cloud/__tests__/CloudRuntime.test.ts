@@ -1,3 +1,6 @@
+import { ReadableStream, type ReadableStreamDefaultController } from 'node:stream/web';
+import { TextDecoder, TextEncoder } from 'node:util';
+
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
@@ -13,6 +16,7 @@ const mockRevoke = jest.fn();
 const mockInference = jest.fn();
 const mockHeaders = jest.fn();
 const mockIdempotencyKey = jest.fn();
+const mockClientSignatureHeaders = jest.fn();
 const mockRefreshServices = jest.fn();
 const appStateListeners = new Set<(status: AppStateStatus) => void>();
 const mockProject = jest.fn(
@@ -29,6 +33,9 @@ const mockProject = jest.fn(
 jest.mock('../cloudDevice', () => ({
   createCloudIdempotencyKey: () => mockIdempotencyKey(),
   loadCloudDevice: async () => ({}),
+}));
+jest.mock('../cloudClientSignature', () => ({
+  cloudClientSignatureHeaders: (...args: unknown[]) => mockClientSignatureHeaders(...args),
 }));
 jest.mock('../projectCloudModels', () => ({
   projectCloudModels: (...args: Parameters<typeof mockProject>) => mockProject(...args),
@@ -76,6 +83,42 @@ const service = {
 const replacementService = {
   apiOrigin: 'https://replacement.example',
 };
+
+function inferenceResponse() {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const cancel = jest.fn();
+  const source = new ReadableStream<Uint8Array>(
+    {
+      start(value) {
+        controller = value;
+      },
+      cancel,
+    },
+    { highWaterMark: 0 },
+  );
+  // Expo supplies a native body even though RN's global Response cannot construct one.
+  const response = new Response(null, { headers: { 'content-type': 'text/event-stream' } });
+  Object.defineProperty(response, 'body', { configurable: true, value: source });
+  return {
+    response,
+    source,
+    cancel,
+    push: (text: string) => controller.enqueue(new TextEncoder().encode(text)),
+    close: () => controller.close(),
+  };
+}
+
+const originalStreamingGlobals = {
+  ReadableStream: globalThis.ReadableStream,
+  TextDecoder: globalThis.TextDecoder,
+  TextEncoder: globalThis.TextEncoder,
+};
+beforeAll(() => {
+  Object.assign(globalThis, { ReadableStream, TextDecoder, TextEncoder });
+});
+afterAll(() => {
+  Object.assign(globalThis, originalStreamingGlobals);
+});
 
 async function setup(configuration: Pick<CloudIdentity, 'apiOrigin'> | null = service) {
   let identity: CloudIdentity | null =
@@ -128,6 +171,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (_method, _path, _body, key) => ({ 'Idempotency-Key': key }));
   mockIdempotencyKey.mockReset().mockReturnValue('AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8');
+  mockClientSignatureHeaders.mockReset().mockResolvedValue({});
   mockRefreshServices.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
@@ -135,14 +179,102 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+test('keeps Cloud cancellation linked after streaming headers arrive', async () => {
+  const upstream = inferenceResponse();
+  mockInference.mockResolvedValue(upstream.response);
+  const { runtime, change } = await setup();
+  try {
+    await runtime.refresh();
+    const response = await runtime.createModelFetch('cloud-model', 'agent')(
+      'https://cloud.example/v1/messages',
+      {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model', stream: true }),
+      },
+    );
+    expect(response).toBe(upstream.response);
+    expect(upstream.source.locked).toBe(false);
+    change(null);
+    expect(mockInference.mock.lastCall![1].signal.aborted).toBe(true);
+    await expect(response.body!.getReader().read()).rejects.toBeDefined();
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('cancels an unread stream and releases the old account lifetime', async () => {
+  const upstream = inferenceResponse();
+  mockInference.mockResolvedValue(upstream.response);
+  const { runtime, change } = await setup();
+  try {
+    await runtime.refresh();
+    const response = await runtime.createModelFetch('cloud-model', 'agent')(
+      'https://cloud.example/v1/messages',
+      {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model', stream: true }),
+      },
+    );
+    await response.body!.cancel('stop');
+    expect(upstream.cancel).toHaveBeenCalledWith('stop');
+    expect(upstream.source.locked).toBe(false);
+    change(null);
+    expect(mockInference.mock.lastCall![1].signal.aborted).toBe(false);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('consumes non-streaming responses before releasing their account lifetime', async () => {
+  const upstream = inferenceResponse();
+  const payload = { choices: [{ message: { role: 'assistant', content: '你好' } }] };
+  upstream.response.headers.set('content-type', 'application/json');
+  upstream.push(JSON.stringify(payload));
+  upstream.close();
+  mockInference.mockResolvedValue(upstream.response);
+  const { runtime, change } = await setup();
+  try {
+    await runtime.refresh();
+    const response = await runtime.createModelFetch('cloud-model', 'general')(
+      'https://cloud.example/v1/messages',
+      {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model', stream: false }),
+      },
+    );
+    expect(response).toBe(upstream.response);
+    const reader = response.body!.getReader();
+    const chunk = await reader.read();
+    expect(JSON.parse(new TextDecoder().decode(chunk.value))).toEqual(payload);
+    expect((await reader.read()).done).toBe(true);
+    reader.releaseLock();
+    expect(upstream.source.locked).toBe(false);
+    change(null);
+    expect(mockInference.mock.lastCall![1].signal.aborted).toBe(false);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
 test.each([
-  ['anthropic-messages', '/v1/messages', 'agent'],
-  ['anthropic-messages', '/v1/messages', 'general'],
-  ['openai-chat-completions', '/v1/chat/completions', 'agent'],
-  ['openai-chat-completions', '/v1/chat/completions', 'general'],
+  ['anthropic-messages', '/v1/messages', '', 'agent'],
+  ['anthropic-messages', '/v1/messages', '', 'general'],
+  ['anthropic-messages', '/v1/messages', '?beta=true', 'agent'],
+  ['openai-chat-completions', '/v1/chat/completions', '', 'agent'],
+  ['openai-chat-completions', '/v1/chat/completions', '', 'general'],
 ] as const)(
-  'sends protocol idempotency keys for %s at %s with %s use',
-  async (endpoint, path, use) => {
+  'sends device and application signatures for %s at %s%s with %s use',
+  async (endpoint, path, query, use) => {
+    mockClientSignatureHeaders.mockResolvedValue({
+      'X-Client-ID': 'cherry-studio',
+      'X-Timestamp': '1710000000',
+      'X-Signature': 'native-cloud-signature',
+    });
+    mockHeaders.mockImplementation(async (_method, _path, _body, key) => ({
+      authorization: 'Bearer product-session',
+      'Cherry-Signature': 'device-signature',
+      'Idempotency-Key': key,
+    }));
     mockGet.mockImplementation(async (account: string, resource: string) => {
       if (resource !== '/v1/models') return reply(account, resource);
       return {
@@ -158,6 +290,7 @@ test.each([
     const { runtime } = await setup();
     try {
       await runtime.refresh();
+      expect(mockClientSignatureHeaders).not.toHaveBeenCalled();
       const send = runtime.createModelFetch('cloud-model', use);
       const body = JSON.stringify({
         model: 'cloud-model',
@@ -166,11 +299,12 @@ test.each([
       });
       for (const key of keys) {
         await expect(
-          send(`https://cloud.example${path}`, {
+          send(`https://cloud.example${path}${query}`, {
             method: 'POST',
             body,
             headers: {
               'Idempotency-Key': 'caller-supplied-key',
+              'X-Signature': 'caller-supplied-signature',
               ...(endpoint === 'anthropic-messages' ? { 'anthropic-version': '2023-06-01' } : {}),
             },
           }),
@@ -181,12 +315,68 @@ test.each([
         expect(init.headers.get('Idempotency-Key')).toBe(key);
         expect(init.headers.get('Idempotency-Key')).toMatch(/^[A-Za-z0-9_-]{43}$/);
         expect(mockHeaders).toHaveBeenLastCalledWith('POST', path, body, key);
+        expect(mockClientSignatureHeaders).toHaveBeenLastCalledWith('POST', path, body);
+        expect(init.headers.get('X-Client-ID')).toBe('cherry-studio');
+        expect(init.headers.get('X-Timestamp')).toBe('1710000000');
+        expect(init.headers.get('X-Signature')).toBe('native-cloud-signature');
+        expect(init.headers.get('Authorization')).toBe('Bearer product-session');
+        expect(init.headers.get('Cherry-Signature')).toBe('device-signature');
       }
     } finally {
       await runtime._doStop();
     }
   },
 );
+
+test.each([
+  ['anthropic-messages', 'https://other.example/v1/messages'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=false'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=true&extra=1'],
+  ['anthropic-messages', 'https://cloud.example/v1/messages?beta=true&beta=true'],
+  ['openai-chat-completions', 'https://cloud.example/v1/chat/completions?beta=true'],
+] as const)('does not sign or send an unsupported %s request at %s', async (endpoint, url) => {
+  mockGet.mockImplementation(async (account: string, resource: string) =>
+    resource === '/v1/models'
+      ? {
+          data: cloudSnapshot(account).models.map((model) => ({
+            ...model,
+            endpoint_type: endpoint,
+          })),
+        }
+      : reply(account, resource),
+  );
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    await expect(
+      runtime.createModelFetch('cloud-model', 'agent')(url, {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).rejects.toMatchObject({ code: 'cloud_unavailable' });
+    expect(mockClientSignatureHeaders).not.toHaveBeenCalled();
+    expect(mockInference).not.toHaveBeenCalled();
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('does not send an inference request when configured application signing fails', async () => {
+  mockClientSignatureHeaders.mockRejectedValue(new Error('Native signing failed'));
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    await expect(
+      runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).rejects.toThrow('Native signing failed');
+    expect(mockInference).not.toHaveBeenCalled();
+  } finally {
+    await runtime._doStop();
+  }
+});
 
 test('account replacement immediately clears state and drops late responses even when cancellation is ignored', async () => {
   let finish!: (value: unknown) => void;
