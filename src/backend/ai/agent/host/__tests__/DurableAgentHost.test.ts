@@ -23,14 +23,15 @@ import {
   type DurableAgentRuntime,
   type RuntimeArtifact,
   type RuntimeConversationEvent,
+  type RuntimeConversationSeed,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
   type RuntimeError,
   type RuntimeSqlDatabase,
   type RuntimeTool,
   type RuntimeToolResult,
+  type RuntimeWebTools,
 } from '../../runtime';
-import { PiConfigurationSchema } from '../../runtime/pi/piDurableProjection';
 import {
   createSqliteStoreHarness,
   type SqliteStoreHarness,
@@ -1127,12 +1128,14 @@ describe('durable tool diagnostics', () => {
     [undefined, 'disabled'],
   ] as const)(
     'equal normalized web policies keep a queued turn admissible (%s/%s)',
-    async (legacy, modelTools) => {
+    async (legacy, policy) => {
+      // Pi projection tests cover legacy row parsing; the host receives normalized configuration.
+      const modelTools = legacy === undefined ? policy : legacy ? 'preferred' : 'fallback';
       const readiness = { clientSearchAvailable: true, clientFetchAvailable: false };
-      let currentPolicy = { ...readiness, modelTools };
+      let currentPolicy: RuntimeWebTools = { ...readiness, modelTools };
       const f = fixture({ webTools: async () => currentPolicy });
       await f.reserve('running');
-      const stored = PiConfigurationSchema.parse({
+      const stored: RuntimeConversationSeed['configuration'] & { version: 2 } = {
         ...configuration,
         version: 2,
         instructions: buildAgentSystemPrompt({
@@ -1140,12 +1143,9 @@ describe('durable tool diagnostics', () => {
           appLanguage: 'zh-CN',
           tools: [],
         }),
-        webTools: {
-          ...readiness,
-          ...(legacy === undefined ? { modelTools } : { modelToolsPreferred: legacy }),
-        },
-      });
-      jest.spyOn(f.conversations, 'configuration').mockResolvedValue({ ...stored, tools: [] });
+        webTools: { ...readiness, modelTools },
+      };
+      jest.spyOn(f.conversations, 'configuration').mockResolvedValue(stored);
       await f.host.initialize();
       const submit = () =>
         f.host.submitMessage({
