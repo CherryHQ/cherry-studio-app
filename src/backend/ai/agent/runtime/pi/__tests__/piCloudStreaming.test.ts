@@ -2,6 +2,8 @@ import { ReadableStream, type ReadableStreamDefaultController } from 'node:strea
 import { TextDecoder, TextEncoder } from 'node:util';
 
 import type { Model as PiModel } from '@earendil-works/pi-ai';
+import { streamSimple as streamSimpleAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
+import { streamSimple as streamSimpleCompletions } from '@earendil-works/pi-ai/api/openai-completions';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { DbService } from '@/backend/data/db/DbService';
@@ -9,6 +11,7 @@ import { cloudSnapshot } from '@/backend/services/cloud/__tests__/_cloudFixtures
 import { CloudRuntime } from '@/backend/services/cloud/CloudRuntime';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
+import type { PiStreamFn } from '../piModelTypes';
 
 const service = { apiOrigin: 'https://cloud.example' };
 const mockGet = jest.fn();
@@ -118,6 +121,7 @@ afterAll(() => {
 test.each([
   {
     endpoint: 'anthropic-messages',
+    streamSimple: streamSimpleAnthropic,
     first:
       anthropicEvent('message_start', {
         message: {
@@ -147,6 +151,7 @@ test.each([
   },
   {
     endpoint: 'openai-chat-completions',
+    streamSimple: streamSimpleCompletions,
     first: `data: ${JSON.stringify({
       id: 'reply',
       choices: [{ index: 0, delta: { role: 'assistant', content: '你好' }, finish_reason: null }],
@@ -158,7 +163,7 @@ test.each([
   },
 ] as const)(
   'streams $endpoint through the existing Pi binding before EOF',
-  async ({ endpoint, first, last }) => {
+  async ({ endpoint, streamSimple, first, last }) => {
     mockGet.mockImplementation(async (account: string, path: string) =>
       path === '/v1/models'
         ? {
@@ -177,6 +182,10 @@ test.each([
       const send = runtime.createModelFetch('cloud-model', 'agent');
       let cloudResponse: Response | undefined;
       const adapter = resolvePiApiAdapter(endpoint);
+      // Jest cannot evaluate the adapter's lazy import; Metro bundles it.
+      jest
+        .spyOn(adapter, 'loadStreamSimple')
+        .mockResolvedValue(streamSimple as unknown as PiStreamFn);
       const streamFn = await bindPiStream(adapter, {
         apiKey: '',
         fetch: async (input, init) => {
