@@ -16,7 +16,7 @@ it already exists.
 | IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; IPinfo Lite lookup independent of data-collection consent, ten-minute success cache and explicit unknown-country result |
 | Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress country, then device region, retaining the domestic default only when both are unavailable |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
-| Verified remote file downloads | `downloadFile` in `src/backend/services/download`; native streaming, progress, cancellation and SHA-256 for APK updates and offline models |
+| Remote file downloads | `downloadFile` in `src/backend/services/download`; bounded native transfer, progress and cancellation; mandatory SHA-256 for APK/models and explicit caller validation for private archives |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |
 | Remote web-search provider protocols and metadata | `@cherrystudio/web-search`; mobile transport and policy adapters in `src/backend/services/webSearch` |
 | Identifying outbound headers | `defaultAppHeaders` in `src/backend/utils/defaultAppHeaders.ts` |
@@ -35,7 +35,7 @@ it already exists.
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
 | Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |
-| Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
+| Image media types, extensions and bounded-header identification | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `importManagedFile` in `src/backend/services/file/importManagedFile.ts`, used by `fileContent.createInternalEntry` and system share import |
 | Reading and writing ZIP archives | `readZipDirectory`, `extractZipEntries` in `src/backend/utils/zipReader.ts`; `writeZipFile` in `src/backend/utils/zipWriter.ts` |
 | Built-in tool display titles | `BUILT_IN_TOOL_TITLE_KEYS`, `getBuiltInToolTitleKey` in `src/shared/data/types/builtInToolTitles.ts`, read by the transcript and background activity |

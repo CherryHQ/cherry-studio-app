@@ -1,0 +1,262 @@
+import { DatabaseSync } from 'node:sqlite';
+
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { createTestDb } from '@/backend/data/services/__tests__/_testDb';
+import { downloadFile } from '@/backend/services/download';
+import { importManagedFile } from '@/backend/services/file/importManagedFile';
+import { FileEntrySchema } from '@/shared/data/types/file';
+
+import { DeepseekImportRuntime } from '../DeepseekImportRuntime';
+
+const mockConversations = new Map<string, unknown>();
+const mockArchiveNames = new Set<string>();
+const mockDeleteStaging = jest.fn();
+jest.mock('expo-file-system', () => {
+  class Entry {
+    uri: string;
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = parts.map((part) => (typeof part === 'string' ? part : part.uri)).join('/');
+    }
+    get exists() {
+      return true;
+    }
+    get size() {
+      return 100;
+    }
+    create() {}
+    delete() {
+      mockDeleteStaging();
+    }
+  }
+  return { File: Entry, Directory: Entry, Paths: { cache: 'file:///cache' } };
+});
+jest.mock('@/backend/services/download', () => ({
+  downloadFile: jest.fn(async () => 'file:///cache/export.zip'),
+  FileDownloadError: class extends Error {},
+}));
+jest.mock('@/backend/services/file/fileStorage', () => ({
+  discardInternalEntries: jest.fn(async () => {}),
+}));
+jest.mock('@/backend/services/file/importManagedFile', () => ({ importManagedFile: jest.fn() }));
+jest.mock('../deepseekArchive', () => ({
+  deepseekArchiveFile: (_root: unknown, path: string) => ({ uri: path }),
+  readDeepseekImageMediaType: () => 'image/png',
+  readDeepseekJson: async (file: { uri: string }) => mockConversations.get(file.uri),
+  unpackDeepseekArchive: async () => ({
+    index: ['first', 'second'].map((id) => ({ id, inserted_at: 1, updated_at: 2 })),
+    names: mockArchiveNames,
+  }),
+}));
+
+const url =
+  'https://deepseek-chat-history-exports-prod.obs.cn-east-3.myhuaweicloud.com/00000000-0000-4000-8000-000000000001.zip?response-content-disposition=attachment%3B%20filename%3Ddeepseek_data-2026-11-17.zip&Expires=4102444800&AccessKeyId=EXAMPLE&Signature=example%3D';
+let sqlite: DatabaseSync;
+let db: ReturnType<typeof createTestDb>;
+let importer: DeepseekImportRuntime;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(importManagedFile).mockReset();
+  mockArchiveNames.clear();
+  sqlite = new DatabaseSync(':memory:');
+  db = createTestDb(sqlite);
+  importer = new DeepseekImportRuntime(db.dbService, {
+    get: async () => null,
+  } as unknown as PreferenceService);
+  sqlite.exec(
+    "INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('existing', 'Existing', 'a0', 1, 1)",
+  );
+  mockConversations.clear();
+  for (const id of ['first', 'second'])
+    mockConversations.set(`chat_sessions/${id}.json`, {
+      id,
+      title: id,
+      current_message_id: 2,
+      inserted_at: '2026-11-01T00:00:00Z',
+      messages: [
+        {
+          id: 1,
+          parent_id: null,
+          role: 'USER',
+          status: 'FINISHED',
+          inserted_at: '2026-11-01T00:00:00Z',
+          fragments: [{ type: 'REQUEST', content: `Question ${id}` }],
+        },
+        {
+          id: 2,
+          parent_id: 1,
+          role: 'ASSISTANT',
+          status: 'FINISHED',
+          inserted_at: '2026-11-01T00:00:01Z',
+          fragments: [{ type: 'RESPONSE', content: `Answer ${id}` }],
+        },
+      ],
+    });
+});
+afterEach(async () => {
+  await importer.dispose();
+  sqlite.close();
+});
+
+test('creates one new DeepSeek agent and assigns every conversation while preserving existing agents', async () => {
+  const result = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+  expect(result).toMatchObject({ sessions: 2, messages: 4, missingAttachments: 0 });
+  expect(sqlite.prepare('SELECT id, name FROM agent ORDER BY name').all()).toEqual([
+    { id: result.agentId, name: 'DeepSeek' },
+    { id: 'existing', name: 'Existing' },
+  ]);
+  expect(sqlite.prepare('SELECT DISTINCT agent_id FROM agent_session').all()).toEqual([
+    { agent_id: result.agentId },
+  ]);
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+    count: 4,
+  });
+  expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  const second = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+  expect(second.agentId).not.toBe(result.agentId);
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 3 });
+});
+
+test('imports a mixed archive without letting an empty conversation block other messages', async () => {
+  mockConversations.set('chat_sessions/first.json', {
+    id: 'first',
+    title: 'Empty conversation',
+    current_message_id: 0,
+    inserted_at: '2026-11-01T00:00:00Z',
+    messages: [],
+  });
+  const result = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+  expect(result).toMatchObject({ sessions: 2, messages: 2 });
+  expect(
+    sqlite
+      .prepare('SELECT active_node_id FROM agent_session WHERE name = ?')
+      .get('Empty conversation'),
+  ).toEqual({ active_node_id: null });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+    count: 2,
+  });
+});
+
+test('rejects an entirely empty archive without creating an imported agent', async () => {
+  for (const id of ['first', 'second'])
+    mockConversations.set(`chat_sessions/${id}.json`, {
+      id,
+      title: id,
+      current_message_id: 0,
+      inserted_at: '2026-11-01T00:00:00Z',
+      messages: [],
+    });
+  await expect(
+    importer.importFromUrl(url, { signal: new AbortController().signal, onProgress: () => {} }),
+  ).rejects.toMatchObject({ code: 'empty' });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session').get()).toEqual({ count: 0 });
+});
+
+test.each(['scan', 'photo.txt', 'photo.PNG'])(
+  'imports a present image named %s and stores its canonical file metadata',
+  async (filename) => {
+    const path = `chat_sessions/first_files/image_${filename}`;
+    mockArchiveNames.add(path);
+    mockConversations.set('chat_sessions/first.json', {
+      id: 'first',
+      title: 'Image conversation',
+      current_message_id: 1,
+      inserted_at: '2026-11-01T00:00:00Z',
+      messages: [
+        {
+          id: 1,
+          parent_id: null,
+          role: 'USER',
+          status: 'FINISHED',
+          inserted_at: '2026-11-01T00:00:00Z',
+          fragments: [
+            {
+              type: 'FILE',
+              files: [{ id: 'image', file_name: filename, is_image: true, export_path: path }],
+            },
+          ],
+        },
+      ],
+    });
+    const entry = FileEntrySchema.parse({
+      id: '00000000-0000-4000-8000-000000000001',
+      filename: 'scan.jpg',
+      mediaType: 'image/jpeg',
+      size: 700_000,
+      provenance: 'imported',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    jest.mocked(importManagedFile).mockResolvedValue(entry);
+    const result = await importer.importFromUrl(url, {
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+    expect(result).toMatchObject({ sessions: 2, messages: 3, missingAttachments: 0 });
+    expect(importManagedFile).toHaveBeenCalledWith(
+      expect.anything(),
+      { uri: path, name: filename, mediaType: 'image/png' },
+      expect.anything(),
+    );
+    const row = sqlite
+      .prepare(`SELECT data FROM agent_session_message WHERE data LIKE '%fileEntryId%'`)
+      .get() as { data: string };
+    expect(JSON.parse(row.data).parts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        fileEntryId: entry.id,
+        filename: entry.filename,
+        mediaType: entry.mediaType,
+      }),
+    ]);
+  },
+);
+
+test('a failed commit rolls back the new agent and all conversations', async () => {
+  db.failWriteTxCommit(new Error('disk failure'));
+  await expect(
+    importer.importFromUrl(url, { signal: new AbortController().signal, onProgress: () => {} }),
+  ).rejects.toMatchObject({ code: 'failed' });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session').get()).toEqual({ count: 0 });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+    count: 0,
+  });
+  expect(mockDeleteStaging).toHaveBeenCalled();
+});
+
+test('cancelling between conversations rolls back imported rows', async () => {
+  const controller = new AbortController();
+  await expect(
+    importer.importFromUrl(url, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (progress.phase === 'importing' && progress.completed === 1) controller.abort();
+      },
+    }),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session').get()).toEqual({ count: 0 });
+  expect(importer.hasPendingStorageWork()).toBe(false);
+});
+
+test('invalid links never start a download or create an agent', async () => {
+  await expect(
+    importer.importFromUrl('https://example.com/data.zip', {
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    }),
+  ).rejects.toMatchObject({ code: 'invalid-link' });
+  expect(downloadFile).not.toHaveBeenCalled();
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
+});
