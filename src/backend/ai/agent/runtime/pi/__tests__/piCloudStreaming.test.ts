@@ -197,7 +197,7 @@ test.each([
         reasoning: false,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       };
-      const events = streamFn(
+      const events = await streamFn(
         model,
         normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
       );
