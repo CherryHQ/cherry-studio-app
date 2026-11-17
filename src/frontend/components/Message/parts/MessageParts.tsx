@@ -40,7 +40,10 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   );
   // Parts keep their identity across renders (see the projection cache), so the
   // resolved text and source-number map stay stable for their consumers too.
-  const citations = useMemo(() => resolveMessageCitations(parts), [parts]);
+  const citations = useMemo(
+    () => resolveMessageCitations(parts, message.data.citationSources),
+    [parts, message.data.citationSources],
+  );
 
   const { boundaries, body, files, process } = partitionMessageParts(parts);
   const processItems = process.map(({ index, part }) => ({
@@ -58,7 +61,10 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
     message.status === 'paused' &&
     body.length === 0 &&
     files.length === 0;
-  const showSources = isSettled && parts.some((part) => part.type === 'source-url');
+  const showSources =
+    isSettled &&
+    (parts.some((part) => part.type === 'source-url') ||
+      message.data.citationSources?.some((source) => source.url));
   const initialImageAspectRatio = message.imageGeneration
     ? imageParamsAspectRatio(message.imageGeneration.paramValues)
     : undefined;
@@ -106,7 +112,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
             ),
           )}
           {showSources ? (
-            <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
+            <SourceGroup
+              citationNumberBySourceId={citations.sourceNumberById}
+              parts={parts}
+              additionalSources={message.data.citationSources}
+            />
           ) : null}
           {isSettled
             ? parts.flatMap((part, index) =>

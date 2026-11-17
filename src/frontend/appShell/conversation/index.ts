@@ -31,6 +31,7 @@ export type {
   WorkspaceSummary,
 } from './contracts';
 export { ConversationReadError } from './conversationState';
+export { readToolCitations } from './readToolCitations';
 export { localConversationFailure } from './local/localConversationFailure';
 export { ConversationProvider, useConversationSources } from './ConversationProvider';
 export {

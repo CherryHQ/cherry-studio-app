@@ -1,4 +1,5 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryToolMetadata } from '@/shared/data/types/uiParts';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
 const MARKDOWN_CODE_PATTERN = /```[\s\S]*?```|`[^`\n]*`/gm;
@@ -25,7 +26,7 @@ const CIRCLED_CITATION_MARKERS = [
   '⓴',
 ] as const;
 
-type CitationSource = {
+export type CitationSource = {
   content?: string;
   id: string;
   title: string;
@@ -45,8 +46,9 @@ export type ResolvedMessageCitations = {
 /** Resolve persisted citation markers from their message-local tool results. */
 export function resolveMessageCitations(
   parts: readonly CherryMessagePart[],
+  additionalSources: readonly CitationSource[] = [],
 ): ResolvedMessageCitations {
-  const sourceById = collectCitationSources(parts);
+  const sourceById = collectCitationSources(parts, additionalSources);
   if (sourceById.size === 0) {
     return { sourceNumberById: new Map(), textByPartIndex: new Map() };
   }
@@ -97,9 +99,17 @@ export function resolveMessageCitations(
   return { sourceNumberById, textByPartIndex };
 }
 
-function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string, CitationSource> {
+function collectCitationSources(
+  parts: readonly CherryMessagePart[],
+  additionalSources: readonly CitationSource[],
+): Map<string, CitationSource> {
   const sourceById = new Map<string, CitationSource>();
   const sourceByUrl = new Map<string, CitationSource>();
+  for (const source of additionalSources) {
+    const existing = source.url ? sourceByUrl.get(source.url) : undefined;
+    sourceById.set(source.id, existing ?? source);
+    if (source.url && !existing) sourceByUrl.set(source.url, source);
+  }
 
   for (const part of parts) {
     if (part.type === 'source-url') {
@@ -114,11 +124,21 @@ function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string
       continue;
     }
 
-    if (!isCompletedStaticToolPart(part)) continue;
-    const toolName = resolveToolName(part);
+    if (!('state' in part) || part.state !== 'output-available' || !('output' in part)) continue;
+    const toolName =
+      part.type === 'dynamic-tool'
+        ? citableToolName(
+            part.toolName,
+            part.input,
+            readCherryToolMetadata(part)?.tool?.type === 'builtin' ||
+              isCherryCitationOutput(part.output),
+          )
+        : part.type.startsWith('tool-')
+          ? citableToolName(part.type.slice(5), 'input' in part ? part.input : undefined, true)
+          : undefined;
     if (!toolName || !CITABLE_TOOL_NAMES.has(toolName)) continue;
 
-    for (const item of normalizeCitationOutput(toolName, part.output)) {
+    for (const item of toolCitationSources(toolName, part.output)) {
       const existing = item.url ? sourceByUrl.get(item.url) : undefined;
       const source = existing ?? item;
       sourceById.set(item.id, source);
@@ -129,25 +149,53 @@ function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string
   return sourceById;
 }
 
-function isCompletedStaticToolPart(part: CherryMessagePart): part is Extract<
-  CherryMessagePart,
-  { type: `tool-${string}` }
-> & {
-  output: unknown;
-  state: 'output-available';
-} {
-  return part.type.startsWith('tool-') && 'state' in part && part.state === 'output-available';
-}
-
-function resolveToolName(
-  part: Extract<CherryMessagePart, { type: `tool-${string}` }> & { input?: unknown },
+export function citableToolName(
+  name: string,
+  input?: unknown,
+  builtin = false,
 ): string | undefined {
-  const name = part.type.slice('tool-'.length);
-  if (name !== 'tool_invoke') return name;
-  return isRecord(part.input) && typeof part.input.name === 'string' ? part.input.name : undefined;
+  if (name === 'tool_call' || name === 'tool_invoke') {
+    return isRecord(input) && typeof input.name === 'string'
+      ? citableToolName(input.name, undefined, builtin)
+      : undefined;
+  }
+  if (builtin && CITABLE_TOOL_NAMES.has(name)) return name;
+  const match =
+    /^mcp__(?:cherry-tools|cherry_tools)__(web_search|web_fetch|kb_search|kb_read)$/.exec(name);
+  return match?.[1];
 }
 
-function normalizeCitationOutput(toolName: string, output: unknown): CitationSource[] {
+export function unwrapCitationOutput(output: unknown): unknown {
+  if (isRecord(output) && 'value' in output && Array.isArray(output.artifacts))
+    output = output.value;
+  if (!isRecord(output)) return output;
+  if (isRecord(output.$persistedToolOutput) && output.$persistedToolOutput.shape === 'entities')
+    return output.$persistedToolOutput.skeleton;
+  if (isRecord(output.$deferredToolResult) && 'skeleton' in output) return output.skeleton;
+  if (isRecord(output.metadata) && 'content' in output) return output.content;
+  return output;
+}
+
+export function isCherryCitationOutput(output: unknown): boolean {
+  if (!isRecord(output) || !isRecord(output.metadata)) return false;
+  return (
+    output.metadata.type === 'builtin' ||
+    output.metadata.serverId === 'cherry-tools' ||
+    output.metadata.serverName === 'cherry-tools'
+  );
+}
+
+export function canReadToolCitations(name: string): boolean {
+  return (
+    CITABLE_TOOL_NAMES.has(name) ||
+    Boolean(citableToolName(name)) ||
+    name === 'tool_call' ||
+    name === 'tool_invoke'
+  );
+}
+
+export function toolCitationSources(toolName: string, value: unknown): CitationSource[] {
+  const output = unwrapCitationOutput(value);
   if (toolName === 'kb_read') {
     const item = toCitationSource(output);
     return item ? [item] : [];
@@ -168,7 +216,17 @@ function toCitationSource(value: unknown): CitationSource | null {
   if (!isRecord(value) || (typeof value.id !== 'string' && typeof value.id !== 'number')) {
     return null;
   }
-  const url = typeof value.url === 'string' && value.url.startsWith('http') ? value.url : undefined;
+  let url: string | undefined;
+  if (typeof value.url === 'string') {
+    try {
+      const parsed = new URL(value.url);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password)
+        return null;
+      url = value.url;
+    } catch {
+      return null;
+    }
+  }
   const title =
     typeof value.title === 'string'
       ? value.title
