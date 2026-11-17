@@ -27,7 +27,10 @@ jest.mock('@/backend/services/cloud/projectCloudModels', () => ({
 }));
 jest.mock('@/backend/services/cloud/CloudSession', () => ({
   CloudSession: class {
-    constructor(readonly origin: string) {}
+    readonly origin: string;
+    constructor(origin: string) {
+      this.origin = origin;
+    }
     get(path: string) {
       return mockGet('account-a', path);
     }
