@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -586,7 +587,7 @@ describe('ModelService provider model ordering', () => {
   });
 
   it('preserves saved ids and fractional keys after closing and reopening a file database', async () => {
-    const directory = mkdtempSync('/private/tmp/cherry-model-order-');
+    const directory = mkdtempSync(join(tmpdir(), 'cherry-model-order-'));
     const path = join(directory, 'models.sqlite');
     let file: DatabaseSync | undefined = new DatabaseSync(path);
     try {

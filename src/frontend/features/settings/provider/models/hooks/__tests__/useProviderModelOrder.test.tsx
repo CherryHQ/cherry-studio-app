@@ -1,7 +1,10 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import { useLayoutEffect } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { queryKeys } from '@/frontend/data';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderModelOrder } from '../useProviderModelOrder';
@@ -9,13 +12,18 @@ import { useProviderModelOrder } from '../useProviderModelOrder';
 const mockTrigger = jest.fn();
 const mockRefresh = jest.fn();
 const mockToast = jest.fn();
-const mockInvalidate = jest.fn();
-const mockQueryClient = { invalidateQueries: mockInvalidate };
+const mockGet = jest.fn();
+let mockQueryClient: QueryClient;
+let mockModels: Model[];
 jest.mock('@/frontend/data', () => ({
   useMutation: () => ({ trigger: mockTrigger }),
+  useApiClient: () => ({ get: mockGet }),
   queryKeys: { models: { list: (query?: object) => ['/models', query] } },
 }));
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => mockQueryClient }));
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQueryClient: () => mockQueryClient,
+}));
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToast } }),
 }));
@@ -25,6 +33,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('../../utils/refreshProviderModelQueries', () => ({
+  ...jest.requireActual('../../utils/refreshProviderModelQueries'),
   refreshProviderModelQueries: (...args: unknown[]) => mockRefresh(...args),
 }));
 
@@ -56,6 +65,9 @@ function Probe({
   models?: Model[];
   render?: (result: Order) => null;
 }) {
+  useLayoutEffect(() => {
+    mockModels = models;
+  }, [models]);
   return render(useProviderModelOrder({ models, providerId: 'p' }));
 }
 function mount() {
@@ -73,11 +85,16 @@ async function commit() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockTrigger.mockResolvedValue(undefined);
-  mockRefresh.mockResolvedValue(undefined);
+  mockRefresh.mockReset().mockResolvedValue(undefined);
+  mockGet.mockReset().mockImplementation(async () => mockModels);
+  mockQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
   mount();
 });
 afterEach(() => {
   act(() => renderer.unmount());
+  mockQueryClient.clear();
 });
 
 it('edits only a draft, clamps group boundaries, and cancels without a request', () => {
@@ -133,6 +150,7 @@ it('sends the final plan once and waits for query refresh before leaving', async
   expect(mockRefresh).toHaveBeenCalledWith(expect.anything(), 'p', {
     refreshAgents: false,
     throwOnError: true,
+    waitForSettled: true,
   });
   expect(order.isReordering).toBe(false);
 });
@@ -204,20 +222,83 @@ it('does not reset edits when only model metadata changes', () => {
   expect(order.draftIds).toBe(draft);
 });
 
-it('refuses a retained commit built against a different observed order and rebases without sending', async () => {
+it('commits the latest draft through a retained commit after two successive moves', async () => {
+  act(() => renderer.update(<Probe models={[model('A'), model('B'), model('C')]} />));
   act(() => order.start());
-  act(() => order.moveDown('p::A'));
+  act(() => order.moveUp('p::B'));
   const retainedCommit = order.commit;
-  act(() => renderer.update(<Probe models={[model('C'), model('B'), model('A'), model('D')]} />));
-  let result: boolean | undefined;
+  act(() => order.moveModel('p::C', { before: 'p::B' }));
+  const latestDraft = ['p::C', 'p::B', 'p::A'];
+  expect(order.draftIds).toEqual(latestDraft);
   await act(async () => {
-    result = await retainedCommit();
+    expect(await retainedCommit()).toBe(true);
   });
-  expect(result).toBe(false);
-  expect(mockTrigger).not.toHaveBeenCalled();
-  expect(order.draftIds).toEqual(['p::B', 'p::A', 'p::C', 'p::D']);
-  expect(order.isReordering).toBe(true);
+  expect(mockTrigger).toHaveBeenCalledWith({
+    body: {
+      moves: [
+        { id: 'p::C', anchor: { before: 'p::B' } },
+        { id: 'p::A', anchor: { after: 'p::B' } },
+      ],
+    },
+  });
+  expect(order.isReordering).toBe(false);
+  expect(order.commit).toBe(retainedCommit);
 });
+
+it('refuses an authoritative order newer than the draft cache and rebases without a batch', async () => {
+  act(() => renderer.update(<Probe models={[model('A'), model('B'), model('C')]} />));
+  act(() => order.start());
+  act(() => order.moveUp('p::C'));
+  const newer = [model('B'), model('A'), model('C'), model('D')];
+  const key = queryKeys.models.list({ providerId: 'p' });
+  mockQueryClient.setQueryData(key, newer);
+  mockGet.mockResolvedValueOnce(newer);
+  expect(await commit()).toBe(false);
+  expect(mockTrigger).not.toHaveBeenCalled();
+  expect(mockGet).toHaveBeenCalledWith('/models', { query: { providerId: 'p' } });
+  expect(mockQueryClient.getQueryData(key)).toEqual(newer);
+  expect(order.draftIds).toEqual(['p::A', 'p::C', 'p::B', 'p::D']);
+  expect(order.isReordering).toBe(true);
+  expect(order.isSaving).toBe(false);
+});
+
+it('keeps a draft for retry when the authoritative read fails and locks before that read', async () => {
+  let failRead!: (error: Error) => void;
+  mockGet.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        failRead = reject;
+      }),
+  );
+  act(() => order.start());
+  act(() => order.moveUp('p::C'));
+  const draft = order.draftIds;
+  const key = queryKeys.models.list({ providerId: 'p' });
+  mockQueryClient.setQueryData(key, baseline);
+  let saving!: Promise<boolean>;
+  await act(async () => {
+    saving = order.commit();
+    expect(await order.commit()).toBe(false);
+    order.moveDown('p::A');
+  });
+  expect(order.isSaving).toBe(true);
+  expect(order.draftIds).toBe(draft);
+  await act(async () => {
+    failRead(new Error('read failed'));
+    expect(await saving).toBe(false);
+  });
+  expect(mockQueryClient.getQueryState(key)?.status).toBe('success');
+  expect(mockQueryClient.getQueryData(key)).toEqual(baseline);
+  expect(mockTrigger).not.toHaveBeenCalled();
+  expect(order.draftIds).toBe(draft);
+  expect(order.isSaving).toBe(false);
+  expect(mockToast).toHaveBeenLastCalledWith({
+    label: 'settings.provider.models.reorder.failed',
+    variant: 'danger',
+  });
+  expect(await commit()).toBe(true);
+});
+
 it('does not admit reorder when every visible group is a singleton, even with hidden models', () => {
   const hidden = { ...model('embedding'), capabilities: [MODEL_CAPABILITY.EMBEDDING] };
   act(() => renderer.update(<Probe models={[model('A'), model('P1', true), hidden]} />));
@@ -248,15 +329,37 @@ it('announces a successful draft move with its group position and size, but not 
   announce.mockRestore();
 });
 
-it('keeps editing and duplicate saves locked after a detail failure until the provider list settles', async () => {
-  let finishList!: () => void;
-  const list = new Promise<void>((resolve) => {
+it('keeps the save lock after a sibling list failure until the authoritative provider list settles', async () => {
+  const listKey = queryKeys.models.list({ providerId: 'p' });
+  const siblingKey = queryKeys.models.list({ providerId: 'p', isSystemSupported: true });
+  let finishList!: (models: Model[]) => void;
+  let failSibling!: (error: Error) => void;
+  const pendingList = new Promise<Model[]>((resolve) => {
     finishList = resolve;
   });
-  mockInvalidate
-    .mockImplementationOnce(() => Promise.reject(new Error('detail failed')))
-    .mockImplementationOnce(() => list)
-    .mockResolvedValue(undefined);
+  const pendingSibling = new Promise<Model[]>((_resolve, reject) => {
+    failSibling = reject;
+  });
+  let refreshing = false;
+  mockGet.mockImplementation(() => (refreshing ? pendingList : Promise.resolve(baseline)));
+  const listFn = () => mockGet();
+  const siblingFn = () => (refreshing ? pendingSibling : Promise.resolve(baseline));
+  await Promise.all([
+    mockQueryClient.fetchQuery({ queryKey: listKey, queryFn: listFn, staleTime: Infinity }),
+    mockQueryClient.fetchQuery({ queryKey: siblingKey, queryFn: siblingFn, staleTime: Infinity }),
+  ]);
+  const observers = [
+    new QueryObserver(mockQueryClient, { queryKey: listKey, queryFn: listFn, staleTime: Infinity }),
+    new QueryObserver(mockQueryClient, {
+      queryKey: siblingKey,
+      queryFn: siblingFn,
+      staleTime: Infinity,
+    }),
+  ];
+  const unsubscribes = observers.map((observer) => observer.subscribe(() => undefined));
+  mockTrigger.mockImplementationOnce(async () => {
+    refreshing = true;
+  });
   mockRefresh.mockImplementationOnce((...args: unknown[]) =>
     jest
       .requireActual('../../utils/refreshProviderModelQueries')
@@ -270,7 +373,17 @@ it('keeps editing and duplicate saves locked after a detail failure until the pr
     saving = order.commit();
   });
   try {
+    await act(async () => {
+      failSibling(new Error('supported model list failed'));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockQueryClient.getQueryState(listKey)?.fetchStatus).toBe('fetching');
+    expect(mockQueryClient.getQueryState(siblingKey)?.status).toBe('error');
     expect(order.isSaving).toBe(true);
+    expect(mockToast).not.toHaveBeenCalledWith({
+      label: 'settings.provider.models.reorder.refreshFailed',
+      variant: 'danger',
+    });
     act(() => {
       order.start();
       order.moveDown('p::A');
@@ -281,9 +394,10 @@ it('keeps editing and duplicate saves locked after a detail failure until the pr
     expect(mockTrigger).toHaveBeenCalledTimes(1);
   } finally {
     await act(async () => {
-      finishList();
+      finishList(baseline);
       await saving;
     });
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
   }
   expect(order.isSaving).toBe(false);
   expect(order.isReordering).toBe(false);
@@ -292,4 +406,200 @@ it('keeps editing and duplicate saves locked after a detail failure until the pr
     variant: 'danger',
   });
   expect(mockTrigger).toHaveBeenCalledTimes(1);
+});
+
+it('clears the saved draft and unlocks with a failure toast when refresh does not settle', async () => {
+  jest.useFakeTimers();
+  let finishList!: (models: Model[]) => void;
+  const pendingList = new Promise<Model[]>((resolve) => {
+    finishList = resolve;
+  });
+  let refreshing = false;
+  mockGet.mockImplementation(() => (refreshing ? pendingList : Promise.resolve(baseline)));
+  const listKey = queryKeys.models.list({ providerId: 'p' });
+  const listFn = () => mockGet();
+  await mockQueryClient.fetchQuery({ queryKey: listKey, queryFn: listFn, staleTime: Infinity });
+  const observer = new QueryObserver(mockQueryClient, {
+    queryKey: listKey,
+    queryFn: listFn,
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  mockTrigger.mockImplementationOnce(async () => {
+    refreshing = true;
+  });
+  mockRefresh.mockImplementationOnce((...args: unknown[]) =>
+    jest
+      .requireActual('../../utils/refreshProviderModelQueries')
+      .refreshProviderModelQueries(...args),
+  );
+  let saving!: Promise<boolean>;
+  try {
+    act(() => order.start());
+    act(() => order.moveUp('p::C'));
+    await act(async () => {
+      saving = order.commit();
+    });
+    expect(order.isSaving).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+    });
+    expect(mockQueryClient.getQueryState(listKey)?.fetchStatus).toBe('fetching');
+    expect(order.isSaving).toBe(false);
+    expect(order.isReordering).toBe(false);
+    expect(await saving).toBe(true);
+    expect(mockToast).toHaveBeenLastCalledWith({
+      label: 'settings.provider.models.reorder.refreshFailed',
+      variant: 'danger',
+    });
+  } finally {
+    await act(async () => {
+      finishList(baseline);
+      await saving;
+    });
+    unsubscribe();
+    jest.useRealTimers();
+  }
+});
+
+it('refuses and rebases against a direct snapshot instead of joining an older in-flight read', async () => {
+  const older = [model('A'), model('B'), model('C')];
+  act(() => renderer.update(<Probe models={older} />));
+  act(() => order.start());
+  act(() => order.moveUp('p::B'));
+  const key = queryKeys.models.list({ providerId: 'p' });
+  mockQueryClient.setQueryData(key, older);
+  let finishOlder!: (models: Model[]) => void;
+  mockGet.mockImplementationOnce(
+    () =>
+      new Promise<Model[]>((resolve) => {
+        finishOlder = resolve;
+      }),
+  );
+  const oldRead = mockQueryClient.fetchQuery({
+    queryKey: key,
+    queryFn: () => mockGet('/models', { query: { providerId: 'p' } }),
+    staleTime: 0,
+  });
+  expect(mockQueryClient.getQueryState(key)?.fetchStatus).toBe('fetching');
+  // The database loses A after the older read has already started.
+  const authoritative = [model('B'), model('C')];
+  mockGet.mockResolvedValue(authoritative);
+  let saving!: Promise<boolean>;
+  let refused: boolean | undefined;
+  await act(async () => {
+    saving = order.commit().then((result) => {
+      refused = result;
+      return result;
+    });
+  });
+  const published = mockQueryClient.getQueryData(key);
+  const rebased = order.draftIds;
+  const stillFetching = mockQueryClient.getQueryState(key)?.fetchStatus;
+  // Always settle the independent screen fetch, including in the negative control.
+  await act(async () => {
+    finishOlder(older);
+    await oldRead;
+    await saving;
+  });
+  expect(refused).toBe(false);
+  expect(mockTrigger).not.toHaveBeenCalled();
+  expect(published).toEqual(authoritative);
+  expect(rebased).toEqual(['p::B', 'p::C']);
+  expect(stillFetching).toBe('fetching');
+  expect(mockGet).toHaveBeenCalledTimes(2);
+  expect(order.isReordering).toBe(true);
+});
+
+it('unlocks a stalled preflight after the bound without a batch and preserves a retryable draft', async () => {
+  jest.useFakeTimers();
+  let finishRead!: (models: Model[]) => void;
+  mockGet.mockImplementationOnce(
+    () =>
+      new Promise<Model[]>((resolve) => {
+        finishRead = resolve;
+      }),
+  );
+  let saving!: Promise<boolean>;
+  try {
+    act(() => order.start());
+    act(() => order.moveUp('p::C'));
+    const draft = order.draftIds;
+    await act(async () => {
+      saving = order.commit();
+    });
+    expect(order.isSaving).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(9_999);
+    });
+    expect(order.isSaving).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(order.isSaving).toBe(false);
+    expect(await saving).toBe(false);
+    expect(mockTrigger).not.toHaveBeenCalled();
+    expect(order.draftIds).toEqual(draft);
+    expect(order.isReordering).toBe(true);
+    expect(mockToast).toHaveBeenLastCalledWith({
+      label: 'settings.provider.models.reorder.failed',
+      variant: 'danger',
+    });
+    // A late completion must not resume the expired commit or overwrite the screen cache.
+    await act(async () => {
+      finishRead([model('deleted')]);
+    });
+    expect(mockTrigger).not.toHaveBeenCalled();
+    expect(
+      mockQueryClient.getQueryData(queryKeys.models.list({ providerId: 'p' })),
+    ).toBeUndefined();
+    expect(await commit()).toBe(true);
+    expect(mockTrigger).toHaveBeenCalledTimes(1);
+  } finally {
+    // Also clean up the deliberately unbounded negative control without a hanging test.
+    await act(async () => {
+      finishRead(baseline);
+      await saving;
+    });
+    jest.useRealTimers();
+  }
+});
+
+it('unlocks a paused preflight without a batch and keeps cancel usable', async () => {
+  const key = queryKeys.models.list({ providerId: 'p' });
+  mockQueryClient.setQueryData(key, baseline);
+  mockQueryClient.getQueryCache().find({ queryKey: key })!.setState({ fetchStatus: 'paused' });
+  mockGet.mockImplementationOnce(() => new Promise<Model[]>(() => undefined));
+  act(() => order.start());
+  act(() => order.moveUp('p::C'));
+  const draft = order.draftIds;
+  expect(await commit()).toBe(false);
+  expect(order.isSaving).toBe(false);
+  expect(order.draftIds).toEqual(draft);
+  expect(mockTrigger).not.toHaveBeenCalled();
+  expect(mockToast).toHaveBeenLastCalledWith({
+    label: 'settings.provider.models.reorder.failed',
+    variant: 'danger',
+  });
+  act(() => order.cancel());
+  expect(order.isReordering).toBe(false);
+});
+
+it('composes two moves in one tick and commits the composed draft', async () => {
+  act(() => renderer.update(<Probe models={[model('A'), model('B'), model('C')]} />));
+  act(() => order.start());
+  act(() => {
+    order.moveUp('p::B');
+    order.moveModel('p::C', { before: 'p::B' });
+  });
+  expect(order.draftIds).toEqual(['p::C', 'p::B', 'p::A']);
+  expect(await commit()).toBe(true);
+  expect(mockTrigger).toHaveBeenCalledWith({
+    body: {
+      moves: [
+        { id: 'p::C', anchor: { before: 'p::B' } },
+        { id: 'p::A', anchor: { after: 'p::B' } },
+      ],
+    },
+  });
 });

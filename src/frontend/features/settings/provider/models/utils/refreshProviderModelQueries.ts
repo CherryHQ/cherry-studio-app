@@ -12,7 +12,8 @@ export async function refreshProviderModelQueries(
   {
     refreshAgents = true,
     throwOnError = false,
-  }: { refreshAgents?: boolean; throwOnError?: boolean } = {},
+    waitForSettled = false,
+  }: { refreshAgents?: boolean; throwOnError?: boolean; waitForSettled?: boolean } = {},
 ) {
   const refreshes = [
     queryClient.invalidateQueries(
@@ -35,15 +36,66 @@ export async function refreshProviderModelQueries(
     queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }, { throwOnError }),
     ...(refreshAgents ? [refreshAgentQueriesAfterModelRemoval(queryClient)] : []),
   ];
-  if (throwOnError) {
-    // Reorder admission stays locked until the authoritative list settles, even if an
-    // unrelated detail refetch fails first. Existing callers retain Promise.all behavior.
-    const results = await Promise.allSettled(refreshes);
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure?.status === 'rejected') throw failure.reason;
-  } else {
-    await Promise.all(refreshes);
+  const refresh: Promise<unknown> = throwOnError
+    ? Promise.allSettled(refreshes).then((results) => {
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure?.status === 'rejected') throw failure.reason;
+      })
+    : Promise.all(refreshes);
+  if (!waitForSettled) {
+    await refresh;
+    return;
   }
+  // Invalidation promises can reject before sibling queries finish. Reorder must also wait
+  // for the provider list prefix itself to settle, but a hung refresh must not trap the UI.
+  await waitForProviderModelOperation(queryClient, providerId, refresh, true);
+}
+
+/** Bound reorder reads and refreshes without cancelling the screen's independent queries. */
+export async function waitForProviderModelOperation<T>(
+  queryClient: QueryClient,
+  providerId: string,
+  operation: Promise<T>,
+  waitForIdle = false,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const cache = queryClient.getQueryCache();
+    let result: PromiseSettledResult<T> | undefined;
+    const finish = (outcome: PromiseSettledResult<T>) => {
+      clearTimeout(timer);
+      unsubscribe();
+      if (outcome.status === 'rejected') reject(outcome.reason);
+      else resolve(outcome.value);
+    };
+    const fail = () =>
+      finish({ status: 'rejected', reason: new Error('Model operation did not settle') });
+    const check = () => {
+      const queries = cache.findAll({ queryKey: queryKeys.models.list({ providerId }) });
+      if (queries.some((query) => query.state.fetchStatus === 'paused')) {
+        fail();
+        return;
+      }
+      if (
+        !result ||
+        (waitForIdle && queries.some((query) => query.state.fetchStatus === 'fetching'))
+      )
+        return;
+      finish(result);
+    };
+    const unsubscribe = cache.subscribe(check);
+    const timer = setTimeout(fail, 10_000);
+    void operation.then(
+      (value) => {
+        result = { status: 'fulfilled', value };
+        check();
+      },
+      (reason: unknown) => {
+        result = { status: 'rejected', reason };
+        check();
+      },
+    );
+    check();
+  });
 }
 
 /**

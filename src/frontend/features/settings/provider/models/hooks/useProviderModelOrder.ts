@@ -4,7 +4,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo } from 'react-native';
 
-import { useMutation } from '@/frontend/data';
+import { queryKeys, useApiClient, useMutation } from '@/frontend/data';
 import type { Model } from '@/shared/data/types/model';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -12,9 +12,39 @@ import {
   planProviderModelReorder,
   type ProviderModelOrderGroup,
 } from '../utils/providerModelOrder';
-import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
+import {
+  refreshProviderModelQueries,
+  waitForProviderModelOperation,
+} from '../utils/refreshProviderModelQueries';
 
 type Draft = { ids: readonly string[]; serverKey: string };
+
+function orderSnapshot(models: readonly Model[], providerId: string) {
+  const groups = new Map<string, ProviderModelOrderGroup | undefined>(
+    models.map((model) => [
+      model.id,
+      isTextGenerationModel(model)
+        ? 'chat'
+        : isImageGenerationModel(model)
+          ? 'painting'
+          : undefined,
+    ]),
+  );
+  return {
+    groups,
+    serverIds: models.map(({ id }) => id),
+    serverKey: JSON.stringify([providerId, models.map(({ id }) => [id, groups.get(id)])]),
+  };
+}
+
+function rebaseDraft(draft: Draft, snapshot: ReturnType<typeof orderSnapshot>): Draft {
+  const surviving = draft.ids.filter((id) => snapshot.groups.has(id));
+  const known = new Set(surviving);
+  return {
+    ids: [...surviving, ...snapshot.serverIds.filter((id) => !known.has(id))],
+    serverKey: snapshot.serverKey,
+  };
+}
 
 export function useProviderModelOrder({
   models,
@@ -30,31 +60,37 @@ export function useProviderModelOrder({
   const [draft, setDraft] = useState<Draft>();
   const [isSaving, setIsSaving] = useState(false);
   const saving = useRef(false);
-  const groups = new Map<string, ProviderModelOrderGroup | undefined>(
-    models.map((model) => [
-      model.id,
-      isTextGenerationModel(model)
-        ? 'chat'
-        : isImageGenerationModel(model)
-          ? 'painting'
-          : undefined,
-    ]),
-  );
-  const serverIds = models.map(({ id }) => id);
-  const serverKey = JSON.stringify([providerId, models.map(({ id }) => [id, groups.get(id)])]);
-  const observed = useRef({ serverKey, serverIds, groups });
-  useLayoutEffect(() => {
-    observed.current = { serverKey, serverIds, groups };
-  });
-  // Reconcile synchronously with query input so no event can submit stale inventory. Metadata-only
-  // updates leave the session intact. Hidden purposes remain in the draft but cannot be moved.
+  const api = useApiClient();
+  const inventory = orderSnapshot(models, providerId);
+  const { groups, serverIds, serverKey } = inventory;
+  // Reconcile changed query input synchronously. A commit-time read may arrive before its
+  // rendered props; do not rebase that fresh snapshot back onto unchanged, older input.
+  const [observedKey, setObservedKey] = useState(serverKey);
   let current = draft;
-  if (draft && draft.serverKey !== serverKey && !isSaving) {
-    const surviving = draft.ids.filter((id) => groups.has(id));
-    const known = new Set(surviving);
-    current = { ids: [...surviving, ...serverIds.filter((id) => !known.has(id))], serverKey };
-    setDraft(current);
+  if (observedKey !== serverKey && !isSaving) {
+    setObservedKey(serverKey);
+    if (draft && draft.serverKey !== serverKey) {
+      current = rebaseDraft(draft, inventory);
+      setDraft(current);
+    }
   }
+  const latest = useRef({
+    draft: current,
+    inventory,
+    providerId,
+    api,
+    queryClient,
+    trigger,
+    t,
+    toast,
+  });
+  useLayoutEffect(() => {
+    latest.current = { draft: current, inventory, providerId, api, queryClient, trigger, t, toast };
+  });
+  const updateDraft = useCallback((next: Draft | undefined) => {
+    latest.current.draft = next;
+    setDraft(next);
+  }, []);
   const draftIds = current?.ids ?? serverIds;
   const groupIds = (id: string) =>
     groups.get(id) ? draftIds.filter((other) => groups.get(other) === groups.get(id)) : [];
@@ -72,11 +108,13 @@ export function useProviderModelOrder({
     return { position: ids.indexOf(id) + 1, total: ids.length };
   };
   function moveModel(id: string, target: { before?: string; after?: string }) {
-    if (!current || saving.current) return;
+    const draft = latest.current.draft;
+    if (!draft || saving.current) return;
+    const draftIds = draft.ids;
     const anchor = target.before ?? target.after;
     if (!anchor || anchor === id || !groups.get(id) || groups.get(anchor) !== groups.get(id))
       return;
-    const ids = groupIds(id).filter((other) => other !== id);
+    const ids = draftIds.filter((other) => other !== id && groups.get(other) === groups.get(id));
     const anchorIndex = ids.indexOf(anchor);
     if (anchorIndex < 0) return;
     ids.splice(anchorIndex + (target.before ? 0 : 1), 0, id);
@@ -86,7 +124,7 @@ export function useProviderModelOrder({
       groups.get(other) === groups.get(id) ? ids[index++]! : other,
     );
     if (next.every((other, index) => other === draftIds[index])) return;
-    setDraft({ ids: next, serverKey });
+    updateDraft({ ids: next, serverKey: draft.serverKey });
     AccessibilityInfo.announceForAccessibility(
       t('settings.provider.models.reorder.moved', {
         model: models.find((model) => model.id === id)?.name,
@@ -96,60 +134,72 @@ export function useProviderModelOrder({
     );
   }
   const cancel = useCallback(() => {
-    if (!saving.current) setDraft(undefined);
-  }, []);
-  async function commit(): Promise<boolean> {
+    if (!saving.current) updateDraft(undefined);
+  }, [updateDraft]);
+  const commit = useCallback(async (): Promise<boolean> => {
     if (saving.current) return false;
-    if (!current) return true;
-    // Only reorderBatch rewrites existing order keys, transactionally in one local database/stack.
-    // Relative anchors compose with observed changes, so there is no revision token. A retained
-    // callback must still refuse a batch built against an older query snapshot.
-    const latest = observed.current;
-    if (current.serverKey !== latest.serverKey) {
-      const surviving = current.ids.filter((id) => latest.groups.has(id));
-      const known = new Set(surviving);
-      setDraft({
-        ids: [...surviving, ...latest.serverIds.filter((id) => !known.has(id))],
-        serverKey: latest.serverKey,
-      });
-      return false;
-    }
-    const visible = (ids: readonly string[]) => ids.filter((id) => groups.get(id));
-    const moves = planProviderModelReorder({
-      draftIds: visible(draftIds),
-      groupOf: (id) => groups.get(id) as ProviderModelOrderGroup,
-      originalIds: visible(serverIds),
-    });
-    if (moves.length === 0) {
-      cancel();
-      return true;
-    }
+    const { draft, inventory, providerId, api, queryClient, trigger, t, toast } = latest.current;
+    if (!draft) return true;
+    // This command is the only writer of existing order keys; reconcile only inserts. The app
+    // has one local database and one reorder surface, and this lock prevents overlapping commits.
+    // An authoritative read plus relative anchors is sufficient: a revision token would invent
+    // a rejection for a state this build cannot produce.
     saving.current = true;
     setIsSaving(true);
-    toast.show({ label: t('settings.provider.models.reorder.saving'), variant: 'default' });
     try {
-      await trigger({ body: { moves } });
-    } catch {
-      toast.show({ label: t('settings.provider.models.reorder.failed'), variant: 'danger' });
-      saving.current = false;
-      setIsSaving(false);
-      return false;
-    }
-    // A refresh failure after a committed write must never leave a retryable mutation draft.
-    try {
-      await refreshProviderModelQueries(queryClient, providerId, {
-        refreshAgents: false,
-        throwOnError: true,
-      });
-    } catch {
-      toast.show({ label: t('settings.provider.models.reorder.refreshFailed'), variant: 'danger' });
+      try {
+        // Joining an in-flight read is exactly the staleness this preflight must avoid.
+        // A cache-managed failure could also replace the reorder screen with the list error.
+        // A direct read plus setQueryData gives a snapshot, not a subscription.
+        const models = await waitForProviderModelOperation(
+          queryClient,
+          providerId,
+          api.get('/models', { query: { providerId } }),
+        );
+        queryClient.setQueryData(queryKeys.models.list({ providerId }), models);
+        const baseline = orderSnapshot(models, providerId);
+        latest.current.inventory = baseline;
+        if (draft.serverKey !== baseline.serverKey || inventory.serverKey !== baseline.serverKey) {
+          updateDraft(rebaseDraft(draft, baseline));
+          return false;
+        }
+        const visible = (ids: readonly string[]) => ids.filter((id) => baseline.groups.get(id));
+        const moves = planProviderModelReorder({
+          draftIds: visible(draft.ids),
+          groupOf: (id) => baseline.groups.get(id) as ProviderModelOrderGroup,
+          originalIds: visible(baseline.serverIds),
+        });
+        if (moves.length === 0) {
+          updateDraft(undefined);
+          return true;
+        }
+        toast.show({ label: t('settings.provider.models.reorder.saving'), variant: 'default' });
+        await trigger({ body: { moves } });
+      } catch {
+        toast.show({ label: t('settings.provider.models.reorder.failed'), variant: 'danger' });
+        return false;
+      }
+      // A refresh failure after a committed write must never leave a retryable mutation draft.
+      try {
+        await refreshProviderModelQueries(queryClient, providerId, {
+          refreshAgents: false,
+          throwOnError: true,
+          waitForSettled: true,
+        });
+      } catch {
+        toast.show({
+          label: t('settings.provider.models.reorder.refreshFailed'),
+          variant: 'danger',
+        });
+      }
+      updateDraft(undefined);
+      return true;
     } finally {
-      setDraft(undefined);
       saving.current = false;
       setIsSaving(false);
     }
-    return true;
-  }
+  }, [updateDraft]);
+
   return {
     canReorder,
     positionOf,
@@ -157,7 +207,7 @@ export function useProviderModelOrder({
     draftIds,
     isSaving,
     start: () => {
-      if (!saving.current && canReorder) setDraft({ ids: serverIds, serverKey });
+      if (!saving.current && canReorder) updateDraft({ ids: serverIds, serverKey });
     },
     cancel,
     moveModel,
