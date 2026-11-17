@@ -6,11 +6,15 @@ const {
   IOSConfig,
   withAndroidManifest,
   withDangerousMod,
+  withMainActivity,
   withXcodeProject,
 } = require('expo/config-plugins');
 
 const ENTERPRISE_BLUE = '#0C5DFF';
-const ALIASES = ['CommunityLauncher', 'EnterpriseLauncher'];
+const ALIASES = ['MainActivity', 'EnterpriseLauncher'];
+const HOST_ACTIVITY = '.MainActivityHost';
+const HOST_DECLARATION =
+  '\n// Always enabled behind the switchable launcher aliases.\nclass MainActivityHost : MainActivity()\n';
 const DENSITIES = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
 
 function launcherFilter() {
@@ -18,6 +22,24 @@ function launcherFilter() {
     action: [{ $: { 'android:name': 'android.intent.action.MAIN' } }],
     category: [{ $: { 'android:name': 'android.intent.category.LAUNCHER' } }],
   };
+}
+
+function isLauncherFilter(filter) {
+  return filter.category?.some(
+    (entry) => entry.$['android:name'] === 'android.intent.category.LAUNCHER',
+  );
+}
+
+// Expo's other mods locate .MainActivity by name; restore it before they read a prior prebuild.
+function restoreMainActivity(application) {
+  const host = application.activity?.find((entry) => entry.$['android:name'] === HOST_ACTIVITY);
+  if (!host) return false;
+  host.$['android:name'] = '.MainActivity';
+  host['intent-filter'] = [...(host['intent-filter'] ?? []), launcherFilter()];
+  application['activity-alias'] = application['activity-alias']?.filter(
+    (entry) => !ALIASES.some((name) => entry.$['android:name'] === `.${name}`),
+  );
+  return true;
 }
 
 async function enterpriseImage(projectRoot, size) {
@@ -29,36 +51,45 @@ async function enterpriseImage(projectRoot, size) {
 }
 
 function withAndroidAppIcons(config, enabled) {
+  config = withDangerousMod(config, [
+    'android',
+    async (mod) => {
+      const manifestPath = path.join(
+        mod.modRequest.platformProjectRoot,
+        'app/src/main/AndroidManifest.xml',
+      );
+      const manifest = await AndroidConfig.Manifest.readAndroidManifestAsync(manifestPath);
+      if (restoreMainActivity(AndroidConfig.Manifest.getMainApplicationOrThrow(manifest)))
+        await AndroidConfig.Manifest.writeAndroidManifestAsync(manifestPath, manifest);
+      return mod;
+    },
+  ]);
+  config = withMainActivity(config, (mod) => {
+    if (mod.modResults.language !== 'kt')
+      throw new Error('App icons require the Kotlin MainActivity.');
+    const source = mod.modResults.contents.replace(HOST_DECLARATION, '');
+    const declaration = /\b(?:open\s+)?class\s+MainActivity\b/;
+    if (!declaration.test(source)) throw new Error('Could not find the MainActivity declaration.');
+    mod.modResults.contents = `${source.replace(declaration, 'open class MainActivity').trimEnd()}\n${HOST_DECLARATION}`;
+    return mod;
+  });
   config = withAndroidManifest(config, (mod) => {
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(mod.modResults);
     const main = AndroidConfig.Manifest.getMainActivityOrThrow(mod.modResults);
-    application['activity-alias'] = (application['activity-alias'] ?? []).filter(
-      (entry) => !ALIASES.some((name) => entry.$['android:name'] === `.${name}`),
-    );
     const filters = main['intent-filter'] ?? [];
-    if (!enabled) {
-      if (
-        !filters.some((filter) =>
-          filter.category?.some(
-            (entry) => entry.$['android:name'] === 'android.intent.category.LAUNCHER',
-          ),
-        )
-      )
-        filters.push(launcherFilter());
-      main['intent-filter'] = filters;
-      return mod;
-    }
-    main['intent-filter'] = filters.filter(
-      (filter) =>
-        !filter.category?.some(
-          (entry) => entry.$['android:name'] === 'android.intent.category.LAUNCHER',
-        ),
+    AndroidConfig.Manifest.addMetaDataItemToMainApplication(
+      application,
+      'expo.modules.systemintegration.APP_ICON_SWITCHING_ENABLED',
+      String(enabled),
     );
+    main.$['android:name'] = HOST_ACTIVITY;
+    main['intent-filter'] = filters.filter((filter) => !isLauncherFilter(filter));
+    application['activity-alias'] ??= [];
     for (const [index, name] of ALIASES.entries()) {
       application['activity-alias'].push({
         $: {
           'android:name': `.${name}`,
-          'android:targetActivity': main.$['android:name'],
+          'android:targetActivity': HOST_ACTIVITY,
           'android:enabled': String(index === 0),
           'android:exported': 'true',
           'android:icon': index === 0 ? '@mipmap/ic_launcher' : '@mipmap/ic_launcher_enterprise',
@@ -68,7 +99,6 @@ function withAndroidAppIcons(config, enabled) {
     }
     return mod;
   });
-  if (!enabled) return config;
   return withDangerousMod(config, [
     'android',
     async (mod) => {

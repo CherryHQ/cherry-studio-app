@@ -40,6 +40,7 @@ test.each([
     {
       PROFILE: 'production',
       SENTRY_URL: 'https://sentry.io/',
+      ANDROID_APP_ICON_SWITCHING_ENABLED: 'false',
       ANDROID_COMPRESS_NATIVE_LIBS: 'false',
       APK_UPDATES_ENABLED: 'false',
       DOMESTIC_STORES_ENABLED: 'false',
@@ -102,6 +103,7 @@ test.each([
   for (const key of [
     'EAS_BUILD_PROFILE',
     'APK_UPDATES_ENABLED',
+    'ANDROID_APP_ICON_SWITCHING_ENABLED',
     'DOMESTIC_STORES_ENABLED',
     'EXPO_PUBLIC_STORYBOOK_ENABLED',
   ]) {
@@ -119,6 +121,10 @@ test.each([
     expect(local.plugins).toContainEqual([
       './scripts/withAppUpdates.js',
       { apkUpdatesEnabled: name === 'apk', domesticStoresEnabled: name === 'domestic-stores' },
+    ]);
+    expect(local.plugins).toContainEqual([
+      './scripts/withAppIcons.js',
+      { androidEnabled: name !== 'google-play' && name !== 'domestic-stores' },
     ]);
   } finally {
     process.env = originalEnv;

@@ -1,5 +1,7 @@
 import { AppIconRuntime } from '../AppIconRuntime';
 
+jest.mock('@logger', () => ({ loggerService: { withContext: () => ({ warn: jest.fn() }) } }));
+
 type AppIcon = 'community' | 'enterprise';
 
 function fixture() {
@@ -86,7 +88,7 @@ test('an unchanged enterprise profile does not repeat the system icon-change not
 test('a rejected native change does not poison automatic synchronization retries', async () => {
   const f = fixture();
   f.native.setAppIcon.mockRejectedValueOnce(new Error('OS refused'));
-  await expect(f.runtime.synchronize()).rejects.toThrow('OS refused');
+  await f.runtime.synchronize();
   expect(f.icon).toBe('community');
   await f.runtime.synchronize();
   expect(f.icon).toBe('enterprise');
@@ -124,35 +126,11 @@ test('foreground return repairs a deferred change, while stopping removes automa
   expect(f.icon).toBe('enterprise');
 });
 
-test('a profile change during the native operation settles on the latest selected profile', async () => {
+test('overlapping synchronization shares one native change', async () => {
   const f = fixture();
-  let finish!: () => void;
-  let started!: () => void;
-  const nativeStarted = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  f.native.setAppIcon.mockImplementationOnce(async (next) => {
-    started();
-    await new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    f.setIcon(next);
-  });
-  const pending = f.runtime.synchronize();
-  await nativeStarted;
-  f.selectEnterprise(false);
-  finish();
-  await pending;
-  expect(f.icon).toBe('community');
-});
-
-test('queued synchronization reads the selected profile when the work executes', async () => {
-  const f = fixture();
-  const first = f.runtime.synchronize();
-  f.selectEnterprise(false);
-  await Promise.all([first, f.runtime.synchronize()]);
-  expect(f.icon).toBe('community');
-  expect(f.native.setAppIcon).not.toHaveBeenCalled();
+  await Promise.all([f.runtime.synchronize(), f.runtime.synchronize()]);
+  expect(f.native.setAppIcon).toHaveBeenCalledTimes(1);
+  expect(f.icon).toBe('enterprise');
 });
 
 test('an inconsistent native launcher state is normalized even if a previous change was interrupted', async () => {

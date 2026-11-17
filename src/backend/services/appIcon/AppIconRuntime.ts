@@ -8,22 +8,17 @@ type Options = {
   foreground: { isActive(): boolean; subscribe(listener: () => void): () => void };
 };
 
-/** Keeps the installed launcher icon in sync with the selected account space. */
+/** Keeps the installed launcher icon in sync with the active account space. */
 export class AppIconRuntime {
-  private pending: Promise<void> = Promise.resolve();
+  private running?: Promise<void>;
   private unsubscribeForeground?: () => void;
 
   constructor(private readonly options: Options) {}
 
   start(): void {
     if (this.unsubscribeForeground) return;
-    const sync = () => {
-      void this.synchronize().catch((error: unknown) => {
-        loggerService.withContext('AppIcon').warn('Could not synchronize the app icon', { error });
-      });
-    };
-    this.unsubscribeForeground = this.options.foreground.subscribe(sync);
-    sync();
+    this.unsubscribeForeground = this.options.foreground.subscribe(() => void this.synchronize());
+    void this.synchronize();
   }
 
   stop(): void {
@@ -31,23 +26,24 @@ export class AppIconRuntime {
     this.unsubscribeForeground = undefined;
   }
 
-  /** Read the selected profile when work executes, including after a queued native change. */
-  readonly synchronize = (): Promise<void> => {
-    const result = this.pending.then(() => this.apply());
-    this.pending = result.catch(() => {});
-    return result;
-  };
+  /** Overlapping calls share one native round trip; failures retry on the next foreground. */
+  synchronize(): Promise<void> {
+    this.running ??= this.apply()
+      .catch((error: unknown) => {
+        loggerService.withContext('AppIcon').warn('Could not synchronize the app icon', { error });
+      })
+      .finally(() => {
+        this.running = undefined;
+      });
+    return this.running;
+  }
 
   private async apply(): Promise<void> {
     const native = this.options.native;
     if (!native?.getAppIcon || !native.setAppIcon) return;
-    while (true) {
-      const current = await native.getAppIcon();
-      if (!current.isSupported || !this.options.foreground.isActive()) return;
-      const target = this.options.isEnterprise() ? 'enterprise' : 'community';
-      if (current.icon !== target) await native.setAppIcon(target);
-      const latest = this.options.isEnterprise() ? 'enterprise' : 'community';
-      if (latest === target) return;
-    }
+    const current = await native.getAppIcon();
+    if (!current.isSupported || !this.options.foreground.isActive()) return;
+    const target = this.options.isEnterprise() ? 'enterprise' : 'community';
+    if (current.icon !== target) await native.setAppIcon(target);
   }
 }

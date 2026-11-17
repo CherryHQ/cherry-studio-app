@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 internal object AppIcon {
-  private val names = listOf("CommunityLauncher", "EnterpriseLauncher")
+  private val names = listOf("MainActivity", "EnterpriseLauncher")
 
   private fun components(context: Context) = names.map { ComponentName(context, "${context.packageName}.$it") }
 
@@ -19,17 +19,23 @@ internal object AppIcon {
 
   fun state(context: Context): Map<String, Any?> {
     val manager = context.packageManager
+    val allowsSwitching = manager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+      .metaData?.getBoolean("expo.modules.systemintegration.APP_ICON_SWITCHING_ENABLED", false) == true
     val components = components(context)
-    val supported = try {
-      components.forEach { manager.getActivityInfo(it, PackageManager.MATCH_DISABLED_COMPONENTS) }
-      true
+    val configured = try {
+      components.all {
+        manager.getActivityInfo(it, PackageManager.MATCH_DISABLED_COMPONENTS).targetActivity ==
+          "${context.packageName}.MainActivityHost"
+      }
     } catch (_: PackageManager.NameNotFoundException) { false }
-    val enabled = if (supported) components.map { isEnabled(manager, it) } else emptyList()
+    val enabled = if (configured) components.map { isEnabled(manager, it) } else emptyList()
     val icon = when (enabled) {
       listOf(true, false) -> "community"
       listOf(false, true) -> "enterprise"
       else -> null
     }
+    // Older Launcher3 versions delete pinned app entries instead of migrating a disabled alias.
+    val supported = configured && allowsSwitching && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     return mapOf("isSupported" to supported, "icon" to icon)
   }
 
@@ -47,7 +53,7 @@ internal object AppIcon {
         PackageManager.ComponentEnabledSetting(components[index], states[index], PackageManager.DONT_KILL_APP)
       })
     } else {
-      // Keep MainActivity enabled for deep links and notifications; only switch launcher aliases.
+      // MainActivityHost remains enabled for deep links, notifications and reloads.
       manager.setComponentEnabledSetting(components[selected], states[selected], PackageManager.DONT_KILL_APP)
       manager.setComponentEnabledSetting(components[1 - selected], states[1 - selected], PackageManager.DONT_KILL_APP)
     }

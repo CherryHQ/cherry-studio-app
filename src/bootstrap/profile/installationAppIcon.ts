@@ -1,9 +1,9 @@
 import { AppState } from 'react-native';
 
 import { AppIconRuntime } from '@/backend/services/appIcon';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import { getSystemIntegration } from '../../../modules/system-integration';
-import { installationProfiles } from './installationProfiles';
 
 let runtime: AppIconRuntime | undefined;
 
@@ -11,7 +11,7 @@ export function installationAppIcon(): AppIconRuntime {
   if (!runtime) {
     runtime = new AppIconRuntime({
       native: getSystemIntegration(),
-      isEnterprise: () => installationProfiles().getActive().identity !== null,
+      isEnterprise: isEnterpriseProfile,
       foreground: {
         isActive: () => AppState.currentState === 'active',
         subscribe(listener) {

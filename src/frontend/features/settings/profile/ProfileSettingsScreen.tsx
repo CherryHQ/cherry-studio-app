@@ -1,5 +1,3 @@
-import Building2Icon from '@cherrystudio/app-icons/icons/building-2';
-import ServerIcon from '@cherrystudio/app-icons/icons/server';
 import { Button, Image, Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
@@ -23,16 +21,11 @@ import { SettingsScrollPage } from '../components/SettingsScrollPage';
 const profileAvatarSize = 96;
 const logger = loggerService.withContext('ProfileSettingsScreen');
 
-/** The account kind: the Cherry Studio logo, an organization or a private server. */
-function AccountTile({ kind }: { kind: 'cherry' | 'organization' | 'server' }) {
-  const Icon = kind === 'organization' ? Building2Icon : kind === 'server' ? ServerIcon : null;
+/** Branding follows the active space; the card text names its account kind. */
+function AccountTile() {
   return (
     <View className="size-10 items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary">
-      {Icon ? (
-        <Icon className="size-5 text-foreground" />
-      ) : (
-        <Image accessibilityIgnoresInvertColors className="size-10" source={getAppLogo()} />
-      )}
+      <Image accessibilityIgnoresInvertColors className="size-10" source={getAppLogo()} />
     </View>
   );
 }
@@ -115,13 +108,11 @@ export default function ProfileSettingsScreen() {
   // One card for every account: what is signed in, and the way to sign in or switch.
   const card = !isSignedIn
     ? {
-        kind: 'cherry' as const,
         title: t('account.notSignedIn'),
         detail: t('account.signInDescription'),
       }
     : state.isEnterprise
       ? {
-          kind: organization?.kind ?? ('organization' as const),
           title: organization?.label ?? t('account.organization'),
           detail: [
             accountName,
@@ -130,7 +121,7 @@ export default function ProfileSettingsScreen() {
             .filter(Boolean)
             .join(' · '),
         }
-      : { kind: 'cherry' as const, title: t('account.cloudAccount'), detail: accountName };
+      : { title: t('account.cloudAccount'), detail: accountName };
 
   return (
     <SettingsScrollPage
@@ -173,7 +164,7 @@ export default function ProfileSettingsScreen() {
         <Section.Item
           description={card.detail || undefined}
           label={card.title}
-          leading={<AccountTile kind={card.kind} />}
+          leading={<AccountTile />}
           trailing={
             <Button
               disabled={state.isBusy}

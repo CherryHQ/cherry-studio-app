@@ -104,11 +104,9 @@ threshold: on a lighter accent the system draws the mask black instead of the ap
 notification's large-icon content slot.
 
 Enterprise profiles use the official blue desktop artwork in `assets/enterprise-icon.png` and
-`assets/enterprise-logo.png` on account/About surfaces. App-shell `branding`
-owns that selection. Supported launcher icons automatically follow the selected account space
-without a settings control; the native config plugin supplies full-background iOS and safe-area
-Android derivatives. This behavior does not change the native splash, its matching React cover,
-notification or Live Activity artwork.
+`assets/enterprise-logo.png`. App-shell `branding` selects it on sign-in, account and About surfaces,
+and supported launcher icons follow the selected account space without a setting. The native
+splash, its matching React cover, notification and Live Activity artwork stay unchanged.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,

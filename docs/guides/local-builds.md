@@ -111,6 +111,11 @@ Launcher icon appearance is independent of the splash screen and the in-app them
 Icon changes require a new native installation package; an EAS Update cannot replace launcher
 icons. See the [Expo app icon guide](https://docs.expo.dev/develop/user-interface/splash-screen-and-app-icon/#app-icon).
 
+`ANDROID_APP_ICON_SWITCHING_ENABLED` (default `true`) enables account-aware Android launcher
+icons. The Google Play profile sets it to `false` in `eas.json` so native generation and OTA
+fingerprinting agree; domestic builds always disable it. See the
+[App Icon workflow](../../src/backend/services/appIcon/README.md).
+
 ## iOS HTTP Connections
 
 Cherry accepts user-configured AI provider and MCP server addresses, including self-hosted HTTP

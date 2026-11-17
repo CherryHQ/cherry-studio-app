@@ -10,7 +10,6 @@ const mockBridge = jest.fn();
 const mockRequest = jest.fn();
 const mockStore = new Map<string, string>();
 const mockError = jest.fn();
-const mockSynchronizeIcon = jest.fn(async () => {});
 let mockScheme: string | undefined;
 let mockOrigin: unknown;
 let mockActive: { identity: null | { issuer: string } } = { identity: null };
@@ -18,9 +17,7 @@ let mockActive: { identity: null | { issuer: string } } = { identity: null };
 jest.mock('@cherryinternal/accounts-portal/client', () => ({
   createAccountsPortal: (options: unknown) => mockCreatePortal(options),
 }));
-jest.mock('@logger', () => ({
-  loggerService: { withContext: () => ({ error: mockError, warn: jest.fn() }) },
-}));
+jest.mock('@logger', () => ({ loggerService: { withContext: () => ({ error: mockError }) } }));
 jest.mock('expo', () => ({ reloadAppAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -51,9 +48,6 @@ jest.mock('@/backend/services/http', () => ({
 }));
 jest.mock('@/shared/data/activeProfile', () => ({ getActiveProfile: () => mockActive }));
 jest.mock('../installationProfiles', () => ({ installationProfiles: () => ({}) }));
-jest.mock('../installationAppIcon', () => ({
-  installationAppIcon: () => ({ synchronize: mockSynchronizeIcon }),
-}));
 jest.mock('../../runtime/diagnosticContext', () => ({ setDiagnosticAccountReader: jest.fn() }));
 
 function result(region = 'CN') {
@@ -91,14 +85,6 @@ beforeEach(() => {
   mockActive = { identity: null };
   mockCreatePortal.mockImplementation((opts) => ({ ready: Promise.resolve(), ...opts }));
   mockRequest.mockReset().mockImplementation(async () => ({ status: 200, data: result() }));
-  mockSynchronizeIcon.mockReset().mockResolvedValue(undefined);
-});
-
-test('profile activation still reloads when the optional system icon change fails', async () => {
-  const runtime = launch();
-  mockSynchronizeIcon.mockRejectedValueOnce(new Error('Icon unavailable'));
-  await expect(runtime.reload()).resolves.toBeUndefined();
-  expect(jest.requireMock('expo').reloadAppAsync).toHaveBeenCalledWith('Switch data profile');
 });
 
 test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
