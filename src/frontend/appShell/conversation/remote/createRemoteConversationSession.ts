@@ -22,7 +22,6 @@ import {
   createConversationState,
   ConversationReadError,
 } from '../conversationState';
-import { readRemoteTranscript } from './readRemoteTranscript';
 import type {
   ConversationInput,
   HistoryCursor,
@@ -37,6 +36,7 @@ import {
   remoteAvailability,
   remoteConversationFailure,
   remoteMessage,
+  remoteTranscriptMessage,
   undeliveredMessage,
 } from './remoteConversationViews';
 
@@ -476,15 +476,33 @@ export function createRemoteConversationSession(
         const ids = new Set(messageIds);
         if (!ids.size || ids.size !== messageIds.length || ids.size > 128)
           throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
-        return read(signal, (signal) =>
-          readRemoteTranscript(
-            source,
-            ref.sessionId,
-            signal,
-            () => assertCurrent(signal),
-            messageIds,
-          ),
-        );
+        const fixed = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
+        const selected = [];
+        let cursor: string | undefined;
+        const visited = new Set<string>();
+        do {
+          const page = await read(signal, (signal) =>
+            source.history(ref.sessionId, fixed.historyVersion, cursor, signal),
+          );
+          selected.push(...page.items.filter((message) => ids.has(message.id)));
+          cursor = page.next;
+          if (cursor && visited.has(cursor))
+            throw new ConversationReadError({ code: 'internal', retry: 'none' });
+          if (cursor) visited.add(cursor);
+        } while (cursor && selected.length < ids.size);
+        if (
+          selected.length !== ids.size ||
+          selected.some((message) => message.state === 'streaming' || message.role === 'system')
+        )
+          throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+        // Revalidate after the last page; metadata and selected bytes belong to this immutable revision.
+        const current = await read(signal, (signal) => source.readSession(ref.sessionId, signal));
+        if (current.historyVersion !== fixed.historyVersion)
+          throw new ConversationReadError({ code: 'version-expired', retry: 'read-again' });
+        return {
+          title: fixed.title,
+          messages: selected.toReversed().map(remoteTranscriptMessage),
+        };
       },
     },
     dispose: () => {

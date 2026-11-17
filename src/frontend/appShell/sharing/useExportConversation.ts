@@ -10,6 +10,7 @@ import { conversationToMarkdown, ConversationExportError } from './conversationM
 
 export function useExportConversation(ref: ConversationRef) {
   const source = useConversationSource();
+  const readTranscript = ref.source.kind === 'local' ? source.catalog.readTranscript : undefined;
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
@@ -23,7 +24,6 @@ export function useExportConversation(ref: ConversationRef) {
     };
   }, [source, ref.sessionId]);
   const exportConversation = useCallback(async () => {
-    const readTranscript = source.catalog.readTranscript;
     if (pending.current || !readTranscript) return;
     const controller = new AbortController();
     pending.current = controller;
@@ -71,6 +71,6 @@ export function useExportConversation(ref: ConversationRef) {
       if (pending.current === controller) pending.current = undefined;
       if (mounted.current) setIsExporting(false);
     }
-  }, [source, ref, t, toast]);
-  return { exportConversation, isExporting, canExport: Boolean(source.catalog.readTranscript) };
+  }, [readTranscript, ref, t, toast]);
+  return { exportConversation, isExporting, canExport: Boolean(readTranscript) };
 }

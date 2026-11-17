@@ -38,7 +38,13 @@ export function conversationToMarkdown(
     throw new ConversationExportError('unsettled');
   const priorSources = new Map<string, { title: string; url: string }>();
   const sections = messages.map((message) => {
-    const parts = message.parts.filter((part) => part.type !== 'tool-summary');
+    const parts = message.parts
+      .filter((part) => part.type !== 'tool-summary')
+      .map((part) =>
+        message.role === 'user' && part.type === 'text' && part.quotes?.length
+          ? { ...part, text: quotedUserText(part, labels.assistant) }
+          : part,
+      );
     const sources = collectChatExportSources(parts);
     for (const part of parts) {
       if (part.type !== 'text' && part.type !== 'reasoning') continue;
@@ -95,4 +101,31 @@ export function conversationToMarkdown(
     return blocks.join('\n\n');
   });
   return `# ${escapeMarkdown(snapshot.title?.trim() || labels.title)}\n\n${sections.join('\n\n---\n\n')}\n`;
+}
+
+/** Saved quote snapshots own the text; inline labels are only shortened display values. */
+function quotedUserText(
+  part: Extract<AgentMessageView['parts'][number], { type: 'text' }>,
+  assistant: string,
+): string {
+  const author = escapeMarkdown(part.quoteAuthor?.name?.trim() || assistant);
+  const leading: string[] = [];
+  let text = part.text;
+  const quotes = [...(part.quotes ?? [])].sort(
+    (left, right) => (right.reference?.offset ?? -1) - (left.reference?.offset ?? -1),
+  );
+  for (const quote of quotes) {
+    const block = `> **${author}**\n>\n${quote.text
+      .split(/\r?\n/)
+      .map((line) => (line ? `> ${line}` : '>'))
+      .join('\n')}`;
+    const reference = quote.reference;
+    if (
+      reference &&
+      text.slice(reference.offset, reference.offset + reference.label.length) === reference.label
+    ) {
+      text = `${text.slice(0, reference.offset)}\n\n${block}\n\n${text.slice(reference.offset + reference.label.length)}`;
+    } else leading.push(block);
+  }
+  return [...leading, text].filter(Boolean).join('\n\n');
 }

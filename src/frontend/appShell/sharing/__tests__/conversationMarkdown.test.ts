@@ -91,6 +91,107 @@ test('preserves portable citations, including a source cited again in a later me
   expect(markdown).toContain('[Documentation](<https://example.com/docs>)');
 });
 
+test('expands full saved quotes at their inline positions with the recorded author and citations', () => {
+  const firstLabel = '“Original excerpt…”';
+  const secondLabel = '“Another excerpt…”';
+  const text = `Before ${firstLabel} between ${secondLabel} after.`;
+  const longExcerpt = `Original excerpt ${'x'.repeat(256)}`;
+  const markdown = conversationToMarkdown(
+    {
+      messages: [
+        message('source', [
+          {
+            id: 'source-url',
+            type: 'source-url',
+            sourceId: 'page',
+            title: 'Documentation',
+            url: 'https://example.com/docs',
+          },
+        ]),
+        {
+          ...message('question', [
+            {
+              id: 'question-text',
+              type: 'text',
+              state: 'done',
+              text,
+              quotes: [
+                {
+                  id: 'first-quote',
+                  sourceMessageId: '00000000-0000-7000-8000-000000000001',
+                  text: `${longExcerpt}\nSaved source [cite:page].`,
+                  reference: { label: firstLabel, offset: text.indexOf(firstLabel) },
+                },
+                {
+                  id: 'second-quote',
+                  sourceMessageId: '00000000-0000-7000-8000-000000000002',
+                  text: 'Second complete snapshot.',
+                  reference: { label: secondLabel, offset: text.indexOf(secondLabel) },
+                },
+              ],
+              quoteAuthor: { role: 'assistant', name: 'Saved *Agent*' },
+            },
+          ]),
+          role: 'user',
+        },
+      ],
+    },
+    labels,
+  );
+
+  expect(markdown).toContain(
+    `Before \n\n> **Saved \\*Agent\\***\n>\n> ${longExcerpt}\n> Saved source [1](<https://example.com/docs>).\n\n between \n\n> **Saved \\*Agent\\***\n>\n> Second complete snapshot.\n\n after.`,
+  );
+  expect(markdown).not.toContain(firstLabel);
+  expect(markdown).not.toContain(secondLabel);
+});
+
+test('keeps older leading quotes in order when an attachment-only prompt has no text', () => {
+  const markdown = conversationToMarkdown(
+    {
+      messages: [
+        {
+          ...message('question', [
+            {
+              id: 'quoted-text',
+              type: 'text',
+              state: 'done',
+              text: '',
+              quotes: [
+                {
+                  id: 'first-quote',
+                  sourceMessageId: '00000000-0000-7000-8000-000000000001',
+                  text: 'First saved passage\n\n```ts\nconst value = 1;\n```',
+                },
+                {
+                  id: 'second-quote',
+                  sourceMessageId: '00000000-0000-7000-8000-000000000002',
+                  text: 'Second saved passage',
+                },
+              ],
+              quoteAuthor: { role: 'assistant' },
+            },
+            {
+              id: 'file',
+              type: 'file',
+              fileEntryId: '00000000-0000-7000-8000-000000000003',
+              filename: 'image.png',
+              mediaType: 'image/png',
+              purpose: 'input-attachment',
+            },
+          ]),
+          role: 'user',
+        },
+      ],
+    },
+    labels,
+  );
+
+  expect(markdown).toContain(
+    '> **Assistant**\n>\n> First saved passage\n>\n> ```ts\n> const value = 1;\n> ```\n\n> **Assistant**\n>\n> Second saved passage\n\n- File: image\\.png',
+  );
+});
+
 test('exports long conversations without the sharing selection or document rendering limits', () => {
   const messages = Array.from({ length: 300 }, (_, index) =>
     message(String(index), [
