@@ -95,6 +95,15 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
   const turnEntries = jest.fn(
     async (_session: string, record: SubmissionRecord) => history.get(record.id) ?? [],
   );
+  const contextUsageEstimate = jest.fn(
+    async (): Promise<{ tokens: number; estimated?: boolean }> => ({ tokens: 100 }),
+  );
+  const latestInput = jest.fn(async (_session: string, through: EntryId) => {
+    const record = [...stored.values()]
+      .filter((item) => item.entry !== undefined && item.entry <= through)
+      .sort((a, b) => Number(b.entry) - Number(a.entry))[0];
+    return record ? { record, metadata: metadata(record) } : undefined;
+  });
   const runtime = {
     observeSubmissions: async (_session: string, listener: typeof commit) => {
       commit = listener;
@@ -111,6 +120,8 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
       ids.map((id) => ({ record: stored.get(id)!, metadata: metadata(stored.get(id)!) })),
     submissionMetadata: async (record: SubmissionRecord) => metadata(record),
     turnEntries,
+    contextUsageEstimate,
+    latestInput,
   } as unknown as PiDurableRuntime;
   const events: RuntimeConversationEvent[] = [];
   const waiters: ((turn: RuntimeDurableTurn) => void)[] = [];
@@ -123,6 +134,8 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
     events,
     history,
     turnEntries,
+    contextUsageEstimate,
+    latestInput,
     detach,
     latest: () => events.findLast((event) => event.type === 'turn.updated')!.turn,
     advance: (value: ConversationView) =>
@@ -144,6 +157,105 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
       }),
   };
 }
+
+test('a steer owns subsequent streaming output while the preceding reply settles in place', async () => {
+  const first = input(1);
+  const second = input(3);
+  const state = attach(
+    view({ run }, [
+      { id: 1 as EntryId, conversationId, kind: 'pi.user' },
+      entry(2, 'Earlier answer'),
+    ]),
+    [first, second],
+  );
+  await state.observer.start();
+  await state.advance(
+    view(
+      {
+        run: { ...run, inputs: [first.id, second.id] },
+        generation: { attempt: 0, message: response('New answer') },
+      },
+      [{ id: 3 as EntryId, conversationId, kind: 'pi.user' }],
+    ),
+  );
+  const turns = state.events
+    .filter((event) => event.type === 'turn.updated')
+    .map((event) => event.turn);
+  const previous = turns.findLast((turn) => turn.userMessageId === 'user-1')!;
+  expect(previous.status).toBe('completed');
+  expect(JSON.stringify(previous.parts)).toContain('Earlier answer');
+  expect(JSON.stringify(previous.parts)).not.toContain('New answer');
+  expect(
+    JSON.stringify(turns.findLast((turn) => turn.userMessageId === 'user-3')!.parts),
+  ).toContain('New answer');
+  await state.observer.stop();
+});
+
+test('refreshes an idle context after background compaction and restores it on attachment', async () => {
+  const completed: SubmissionRecord = { ...input(), status: 'done', answer: 2 as EntryId };
+  const fixture = attach(view({}, [entry(2, 'Answer')]), [completed]);
+  fixture.contextUsageEstimate
+    .mockResolvedValueOnce({ tokens: 90_000 })
+    .mockResolvedValueOnce({ tokens: 12_000, estimated: true });
+  try {
+    expect(await fixture.observer.start()).toMatchObject({
+      activeTurn: null,
+      contextUsage: { messageId: 'assistant-1', tokens: 90_000 },
+    });
+    const compacted = view({}, [
+      { id: 10 as EntryId, conversationId, kind: 'pi.compaction', data: { reason: 'threshold' } },
+    ]);
+    await fixture.advance(compacted);
+    expect(fixture.events).toContainEqual({
+      type: 'context.usage.updated',
+      usage: { messageId: 'assistant-1', tokens: 12_000, estimated: true },
+    });
+    // A live-document-only frame must not reread the full retained context.
+    await fixture.advance(compacted);
+    expect(fixture.contextUsageEstimate).toHaveBeenCalledTimes(2);
+  } finally {
+    await fixture.observer.stop();
+  }
+});
+
+test('reanchors usage when a coalesced run commits before its submission notification', async () => {
+  const fixture = attach(view({}, [entry(2, 'Old answer')]), [
+    { ...input(), status: 'done', answer: 2 as EntryId },
+  ]);
+  try {
+    await fixture.observer.start();
+    await fixture.advance(view({}, [entry(4, 'New answer')]));
+    const terminal = fixture.terminal(3);
+    fixture.notify({ ...input(3), status: 'done', answer: 4 as EntryId });
+    await terminal;
+    expect(fixture.events).toContainEqual({
+      type: 'context.usage.updated',
+      usage: { messageId: 'assistant-3', tokens: 100 },
+    });
+  } finally {
+    await fixture.observer.stop();
+  }
+});
+
+test('retains the context anchor when a terminal notification precedes its watch frame', async () => {
+  const fixture = attach(view({}, [entry(2, 'Old answer')]), [
+    { ...input(), status: 'done', answer: 2 as EntryId },
+  ]);
+  try {
+    await fixture.observer.start();
+    const terminal = fixture.terminal(3);
+    fixture.notify({ ...input(3), status: 'done', answer: 4 as EntryId });
+    await terminal;
+    expect(fixture.events).toContainEqual({ type: 'context.usage.updated', usage: null });
+    await fixture.advance(view({}, [entry(4, 'New answer')]));
+    expect(fixture.events).toContainEqual({
+      type: 'context.usage.updated',
+      usage: { messageId: 'assistant-3', tokens: 100 },
+    });
+  } finally {
+    await fixture.observer.stop();
+  }
+});
 
 test('reads full uncommitted reasoning on demand without changing the status-only observation', async () => {
   const text = 'Keep the earliest thinking too.\n'.repeat(200);
@@ -576,6 +688,29 @@ test('settles several coalesced inputs independently and ignores continue submis
     expect((await first).parts).toMatchObject([{ text: 'one' }]);
     expect((await second).parts).toMatchObject([{ text: 'two' }]);
     expect(fixture.events.filter((event) => event.type === 'turn.updated')).toHaveLength(2);
+  } finally {
+    await fixture.observer.stop();
+  }
+});
+
+test('a completed coalesced batch settles empty earlier replies even without a live frame', async () => {
+  const fixture = attach();
+  fixture.history.set(inputId, [{ id: 1 as EntryId, conversationId, kind: 'pi.user' }]);
+  fixture.history.set(3 as SubmissionId, [entry(4, 'Combined answer')]);
+  try {
+    await fixture.observer.start();
+    const first = fixture.terminal(1);
+    const second = fixture.terminal(3);
+    fixture.notify(
+      { ...input(), status: 'done', answer: 4 as EntryId },
+      { ...input(3), status: 'done', answer: 4 as EntryId },
+    );
+    expect(await first).toMatchObject({ status: 'completed', hasAssistant: true, parts: [] });
+    expect(await second).toMatchObject({
+      status: 'completed',
+      hasAssistant: true,
+      parts: [{ type: 'text', text: 'Combined answer' }],
+    });
   } finally {
     await fixture.observer.stop();
   }

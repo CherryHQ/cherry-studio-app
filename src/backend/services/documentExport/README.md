@@ -6,9 +6,8 @@ Sessions own immutable source snapshots, prepared assets, cancellation, bounded 
 and explicit persistence. `session.markdown` needs no file or resource reads and remains unbranded.
 Markdown rendering embeds local/generated PNG/JPEG images as Base64 data URLs, reusing the image
 asset cache. Failed reads stay retryable and produce an explicit note; remote Markdown links remain
-authored. `session.previewMarkdown(text, presentation)` styles that exact prepared text and its
-signature: embedded images display without captions and remote references remain name/domain entries.
-`session.previewDocument(presentation)` provides the structured image preview without resource reads.
+authored. The shared structured preview renders the retained document, while delivery resolves
+images through the session's resource cache.
 Markdown rendering applies the optional target watermark; reuse requires matching complete text.
 HTML and image rendering share the resolved watermark independently of the image-only frame.
 The `none` variant omits the brand footer. Watermark options do not add file metadata.

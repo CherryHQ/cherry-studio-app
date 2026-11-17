@@ -65,8 +65,11 @@ test.each([
 
 test('cleanup after a restore removes the legacy database through file URIs', () => {
   const legacyDatabase = `${mockDocumentUri}/SQLite/cherry.db`;
+  const legacySsh = `${mockDocumentUri}/ssh`;
   mockExisting.add(legacyDatabase);
+  mockExisting.add(legacySsh);
 
   expect(() => cleanupStorageAfterBoot()).not.toThrow();
   expect(mockExisting.has(legacyDatabase)).toBe(false);
+  expect(mockExisting.has(legacySsh)).toBe(false);
 });

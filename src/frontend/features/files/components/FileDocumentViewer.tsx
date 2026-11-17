@@ -12,13 +12,13 @@ import {
 import { AgentMenu } from '@/frontend/components/AgentMenu';
 import { createReadyAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
 import { canPreviewDocument, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import type { ResolvedFile } from '@/shared/contracts/file';
 import type { Agent } from '@/shared/data/types/agent';
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
 
+import type { FileViewerSource } from '../fileViewerSource';
 import { useAddFileToChat } from '../hooks/useAddFileToChat';
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
 import { useReturnToChat } from '../hooks/useReturnToChat';
@@ -33,7 +33,7 @@ export function FileDocumentViewer({
   file,
   sourceChat,
 }: {
-  file: ResolvedFile;
+  file: FileViewerSource;
   sourceChat?: ChatTarget;
 }) {
   const { t } = useTranslation();
@@ -47,7 +47,7 @@ export function FileDocumentViewer({
   const [selection, setSelection] = useState<FilePreviewSelection | null>(null);
   const [revision, setRevision] = useState(file.entry.updatedAt);
   const returnToChat = useReturnToChat();
-  const addToChat = useAddFileToChat(file, sourceChat);
+  const addToChat = useAddFileToChat(file.kind === 'managed' ? file : undefined, sourceChat);
   const { isResolving: isResolvingSourceChat, returnsToSourceChat } = addToChat;
   if (revision !== file.entry.updatedAt) {
     setRevision(file.entry.updatedAt);
@@ -58,13 +58,16 @@ export function FileDocumentViewer({
   const documentType = documentFileTypeFromMediaType(file.entry.mediaType);
   const isPreviewing = status === 'preview' && !page.isError && Boolean(page.data);
   const canSelect =
-    isPreviewing && documentType !== undefined && isBuiltinOfficeFileType(documentType);
+    file.kind === 'managed' &&
+    isPreviewing &&
+    documentType !== undefined &&
+    isBuiltinOfficeFileType(documentType);
   const toggleSelection = () => {
     setSelection(null);
     setIsSelecting((value) => !value);
   };
   const createSelectionHandoff = () => {
-    if (!selection) return;
+    if (!selection || file.kind !== 'managed') return;
     const reference = officeSelectionReference(file, selection, (slide) =>
       t('fileViewer.selection.slide', { slide }),
     );

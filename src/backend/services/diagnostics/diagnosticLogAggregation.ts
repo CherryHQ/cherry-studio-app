@@ -68,7 +68,13 @@ export function createDiagnosticLogAggregator(write: (record: DiagnosticLog) => 
         .filter(([key]) => !OCCURRENCE_FIELDS.has(key))
         .sort(([left], [right]) => left.localeCompare(right)),
     );
-    const key = JSON.stringify([record.level, record.module, record.message, facts]);
+    const key = JSON.stringify([
+      record.level,
+      record.module,
+      record.message,
+      facts,
+      record.environment,
+    ]);
     const entry = groups.get(key);
     if (entry) {
       entry.firstRepeatedAt ??= record.timestamp;

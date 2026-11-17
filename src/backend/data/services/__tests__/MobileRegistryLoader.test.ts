@@ -236,7 +236,7 @@ describe('MobileRegistryLoader', () => {
     for (const modelId of ['gpt-image-2.6-flare', 'gpt-image-2.6-sunburst']) {
       const support = loader.findModel(modelId)?.imageGeneration;
       expect(support?.modes.generate?.supports).toMatchObject({
-        outputFormat: { type: 'enum', options: expect.arrayContaining(['gif']) },
+        outputFormat: { type: 'enum', options: expect.arrayContaining(['gif']), default: 'gif' },
         complexity: { type: 'enum', options: ['low', 'medium', 'high'] },
       });
       for (const mode of ['generate', 'edit'] as const) {
@@ -267,6 +267,7 @@ describe('MobileRegistryLoader', () => {
     const support = loader.findOverride('openai', 'gpt-image-2.6-flare')?.imageGeneration;
     expect(support?.modes.generate?.supports.outputFormat).toMatchObject({
       options: expect.arrayContaining(['gif']),
+      default: 'gif',
     });
     expect(support?.modes.generate?.supports.frameCount).toBeUndefined();
     expect(support?.modes.edit?.supports.outputFormat).toMatchObject({
@@ -386,6 +387,7 @@ describe('MobileRegistryLoader', () => {
       'ollama',
       'ovms',
       'new-api',
+      'rapid-mlx',
       'litellm',
       'omlx',
       'comfyui',

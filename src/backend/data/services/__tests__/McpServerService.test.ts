@@ -67,6 +67,48 @@ describe('McpServerService', () => {
     ).rejects.toBeDefined();
   });
 
+  it('rejects stale Agent configuration edits without overwriting a newer saved value', async () => {
+    const before = await service.create({
+      name: 'Versioned',
+      endpointUrl: 'https://example.com/mcp',
+    });
+    const updated = await service.update(
+      before.id,
+      { name: 'Newer' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    await expect(
+      service.update(before.id, { name: 'Stale' }, { expectedUpdatedAt: before.updatedAt }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await service.getById(before.id)).toEqual(updated);
+  });
+
+  it('rechecks the read version after waiting behind another configuration write', async () => {
+    const before = await service.create({ name: 'Queued', endpointUrl: 'https://example.com/mcp' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outer = dbService.withWriteTx(async () => gate);
+    const first = service.update(
+      before.id,
+      { name: 'First' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    const second = service.update(
+      before.id,
+      { name: 'Second' },
+      { expectedUpdatedAt: before.updatedAt },
+    );
+    const rejected = expect(second).rejects.toMatchObject({ code: 'CONFLICT' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await outer;
+    const saved = await first;
+    await rejected;
+    expect(await service.getById(before.id)).toEqual(saved);
+  });
+
   it('updates and clears custom HTTP headers', async () => {
     const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Headers' });
 
@@ -144,6 +186,27 @@ describe('McpServerService', () => {
     await expect(service.getById(server.id)).resolves.toEqual(updated);
   });
 
+  it('rejects OAuth attachment and disconnect after the organization takes ownership', async () => {
+    const server = await service.saveOAuthConnection(oauthInput, oauth);
+    // The authorization workflow may still hold a user-owned snapshot when sync acquires it.
+    sqlite
+      .prepare("UPDATE mcp_server SET managed_remote_id = 'managed' WHERE id = ?")
+      .run(server.id);
+    const managed = await service.getById(server.id);
+
+    await expect(
+      service.saveOAuthConnection(
+        { ...oauthInput, name: 'User replacement' },
+        { ...oauth, authorizationId: '00000000-0000-4000-8000-000000000002' },
+        server,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    await expect(service.disconnectOAuth(server.id)).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(service.getById(server.id)).resolves.toEqual(managed);
+  });
+
   it('checks the current grant after an authorization queued ahead of a header edit', async () => {
     const server = await service.create(oauthInput);
     let release!: () => void;
@@ -205,11 +268,15 @@ describe('McpServerService', () => {
     await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Dup' });
     await expect(
       service.create({ endpointUrl: 'https://b.example/mcp', name: 'Dup' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { resource: 'McpServer', field: 'name' },
+    });
 
     const other = await service.create({ endpointUrl: 'https://c.example/mcp', name: 'Other' });
     await expect(service.update(other.id, { name: 'Dup' })).rejects.toMatchObject({
       code: 'CONFLICT',
+      details: { resource: 'McpServer', field: 'name' },
     });
     // Renaming a server to the name it already has is not a conflict with itself.
     await expect(

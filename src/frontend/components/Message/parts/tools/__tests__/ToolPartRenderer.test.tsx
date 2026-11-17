@@ -29,6 +29,7 @@ jest.mock('../RunJsToolPart', () => ({
   isRunJsToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'run_js',
 }));
 jest.mock('../SkillToolPart', () => mockCreateToolPart('SkillToolPart'));
+jest.mock('../SshToolPart', () => mockCreateToolPart('SshToolPart'));
 jest.mock('../TranscribeAudioToolPart', () => mockCreateToolPart('TranscribeAudioToolPart'));
 jest.mock('../../PendingImagePart', () => mockCreateToolPart('PendingImagePart'));
 jest.mock('../UserQuestionPart', () => mockCreateToolPart('UserQuestionPart'));
@@ -48,6 +49,7 @@ describe('ToolPartRenderer', () => {
     ['read_file', 'ReadFileToolPart'],
     ['write_file', 'WriteFileToolPart'],
     ['run_js', 'RunJsToolPart'],
+    ['ssh_execute', 'SshToolPart'],
     ['transcribe_audio', 'TranscribeAudioToolPart'],
     ['ask_user_question', 'UserQuestionPart'],
     ['agent_create', 'AgentManagementToolPart'],

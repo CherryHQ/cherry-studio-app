@@ -5,7 +5,8 @@ store or `Documents/stores/<uuid>`. Database and managed file resolvers use the 
 cached for the lifetime of the JavaScript runtime. They never retarget a live database connection.
 
 The original store keeps its existing Expo SQLite location and Documents file layout. A new store
-contains `database/cherry.db`, `Data/Files`, `Data/Skills`, and the existing avatar directory names. Missing control
+contains `database/cherry.db`, `Data/Files`, `Data/Skills`, `ssh/` for durable MMKV connection
+configuration, and the existing avatar directory names. Missing control
 metadata or a missing selected database fails closed instead of creating an empty replacement.
 
 1. Import validates in cache, then copies and normalizes a separate candidate store.
@@ -14,8 +15,10 @@ metadata or a missing selected database fails closed instead of creating an empt
    automatically; iOS and Android restart failures display restart instructions.
 3. On a different native process, selection records `activating` before opening the candidate.
    A JavaScript reload in the staging process cannot activate it.
-4. Bootstrap verifies hashes, schema, references and required service initialization. Only then
-   does it commit `current = candidate`.
+4. Bootstrap verifies hashes, schema, references and required service initialization, including
+   loading SSH configuration into the candidate's MMKV store with fresh device credential references.
+   Older backups without SSH configuration start with no saved connections. Only then does it
+   commit `current = candidate`.
 5. A candidate rejected by validation has not been opened, so the same process continues on the
    current generation. A failure after the candidate opens requires another native restart. An
    interrupted activation automatically selects the current generation on the following native

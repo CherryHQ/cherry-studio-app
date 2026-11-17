@@ -6,17 +6,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
-
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
 import { pairingCancelDestination } from './pairingCancelDestination';
 import { useDesktopPairing } from './useDesktopPairing';
 
-export function DeviceConnectionPairingScreen({
-  setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
+export function DeviceConnectionPairingScreen() {
   const { input: pendingInput, setInput } = useDesktopPairingInput();
   const [input] = useState(pendingInput);
   const { connection, error, progress, repairConnectionId } = useDesktopPairing(input);
@@ -30,30 +26,18 @@ export function DeviceConnectionPairingScreen({
 
   const scanAgain = () =>
     router.replace({
-      pathname:
-        setupIntent === 'chat'
-          ? '/onboarding/device-connections/scan'
-          : '/settings/device-connections/scan',
+      pathname: '/settings/device-connections/scan',
       params: repairConnectionId ? { connectionId: repairConnectionId } : {},
     });
 
-  const cancel = () => router.replace(pairingCancelDestination(setupIntent, repairConnectionId));
+  const cancel = () => router.replace(pairingCancelDestination(repairConnectionId));
 
   const finish = () => {
     if (!connection) return;
-    if (setupIntent === 'chat' && connection.capabilities.includes('configuration')) {
-      router.replace({
-        pathname: '/onboarding/provider-sync',
-        params: { connectionId: connection.id },
-      });
-    } else if (setupIntent === 'chat') {
-      router.replace('/onboarding');
-    } else {
-      router.replace({
-        pathname: '/settings/device-connections/[connectionId]',
-        params: { connectionId: connection.id },
-      });
-    }
+    router.replace({
+      pathname: '/settings/device-connections/[connectionId]',
+      params: { connectionId: connection.id },
+    });
   };
 
   return (

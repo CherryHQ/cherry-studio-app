@@ -2,10 +2,15 @@
 import { ContentState } from '@cherrystudio/ui/components';
 import { Stack, useGlobalSearchParams, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import {
+  getTemporaryFilePreview,
+  retainTemporaryFilePreview,
+} from '@/frontend/appShell/filePreview';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   parseChatPreviewSource,
@@ -22,6 +27,7 @@ import { type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
 import { FileDocumentViewer } from './components/FileDocumentViewer';
 import { FileImageViewer } from './components/FileImageViewer';
 import { FileTextViewer } from './components/FileTextViewer';
+import type { FileViewerSource } from './fileViewerSource';
 
 export function FileViewerScreen() {
   const { t } = useTranslation();
@@ -30,10 +36,12 @@ export function FileViewerScreen() {
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     imageEditRequestId?: string | string[];
+    previewRequestId?: string | string[];
     sourceChat?: string | string[];
   }>();
   const sourceChat = parseChatPreviewSource(getSingleRouteParam(params.sourceChat));
   const imageEditRequestId = getSingleRouteParam(params.imageEditRequestId);
+  const previewRequestId = getSingleRouteParam(params.previewRequestId);
   const entryId = FileEntryIdSchema.safeParse(getSingleRouteParam(params.fileEntryId));
 
   if (!entryId.success) {
@@ -57,12 +65,20 @@ export function FileViewerScreen() {
         }}
       />
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <FileViewer
-        entryId={entryId.data}
-        imageEditRequestId={imageEditRequestId}
-        sourceChat={sourceChat}
-        key={`${entryId.data}:${imageEditRequestId ?? ''}`}
-      />
+      {previewRequestId ? (
+        <TemporaryFileViewer
+          entryId={entryId.data}
+          requestId={previewRequestId}
+          key={previewRequestId}
+        />
+      ) : (
+        <FileViewer
+          entryId={entryId.data}
+          imageEditRequestId={imageEditRequestId}
+          sourceChat={sourceChat}
+          key={`${entryId.data}:${imageEditRequestId ?? ''}`}
+        />
+      )}
     </>
   );
 }
@@ -93,7 +109,6 @@ function FileViewer({
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
   const file = query.data;
-  const kind = file ? fileEntryPreviewKind(file.entry) : 'document';
 
   return (
     <View className="flex-1 bg-background">
@@ -113,23 +128,65 @@ function FileViewer({
             )}
           </View>
         </>
-      ) : kind === 'image' ? (
-        <FileImageViewer
-          file={file}
-          imageEditRequestId={imageEditRequestId}
-          key={`${file.entry.updatedAt}:${file.uri}`}
-          sourceChat={sourceChat}
-        />
-      ) : kind === 'document' || kind === 'audio' ? (
-        <FileDocumentViewer file={file} sourceChat={sourceChat} key={file.entry.id} />
       ) : (
-        <FileTextViewer
-          file={file}
-          key={`${file.entry.updatedAt}:${file.uri}`}
-          kind={kind}
+        <FileViewerContent
+          file={{ ...file, kind: 'managed' }}
+          imageEditRequestId={imageEditRequestId}
           sourceChat={sourceChat}
         />
       )}
     </View>
+  );
+}
+
+function TemporaryFileViewer({ entryId, requestId }: { entryId: string; requestId: string }) {
+  const { t } = useTranslation();
+  const file = getTemporaryFilePreview(requestId, entryId);
+  useEffect(() => {
+    if (file) return retainTemporaryFilePreview(requestId);
+  }, [file, requestId]);
+
+  return (
+    <View className="flex-1 bg-background">
+      {file ? (
+        <FileViewerContent file={{ ...file, kind: 'temporary' }} />
+      ) : (
+        <>
+          <RouteHeader title={t('filePreview.unavailable')} />
+          <View className="flex-1 items-center justify-center p-6">
+            <ContentState.Error title={t('filePreview.unavailable')} />
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+function FileViewerContent({
+  file,
+  imageEditRequestId,
+  sourceChat,
+}: {
+  file: FileViewerSource;
+  imageEditRequestId?: string;
+  sourceChat?: ChatTarget;
+}) {
+  const kind = fileEntryPreviewKind(file.entry);
+  return kind === 'image' ? (
+    <FileImageViewer
+      file={file}
+      imageEditRequestId={imageEditRequestId}
+      key={`${file.entry.updatedAt}:${file.uri}`}
+      sourceChat={sourceChat}
+    />
+  ) : kind === 'document' || kind === 'audio' ? (
+    <FileDocumentViewer file={file} sourceChat={sourceChat} key={file.entry.id} />
+  ) : (
+    <FileTextViewer
+      file={file}
+      key={`${file.entry.updatedAt}:${file.uri}`}
+      kind={kind}
+      sourceChat={sourceChat}
+    />
   );
 }

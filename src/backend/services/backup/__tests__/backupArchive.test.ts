@@ -176,6 +176,7 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
   const database = strToU8('database fixture'.repeat(100));
   const filePath = 'files/10000000-0000-4000-8000-000000000002.png';
   const image = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  const sshSnapshot = strToU8(JSON.stringify({ version: 1, profiles: [] }));
   const manifest: BackupManifest = {
     product: 'cherry-mobile',
     formatVersion: 1,
@@ -188,12 +189,14 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
     entries: [
       { path: 'database/cherry.db', size: database.length, sha256: mockHash(database) },
       { path: filePath, size: image.length, sha256: mockHash(image) },
+      { path: 'ssh/profiles.json', size: sshSnapshot.length, sha256: mockHash(sshSnapshot) },
     ],
   };
   for (const [path, bytes] of [
     ['manifest.json', strToU8(JSON.stringify(manifest))],
     ['database/cherry.db', database],
     [filePath, image],
+    ['ssh/profiles.json', sshSnapshot],
   ] as const)
     new File(root, path).writeSync(bytes);
   const output = new File('file:///cache/export.zip');
@@ -201,7 +204,7 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
   await packBackup(root, manifest, output, new AbortController().signal, (done, total) =>
     progress.push([done, total]),
   );
-  const payloadBytes = database.length + image.length;
+  const payloadBytes = database.length + image.length + sshSnapshot.length;
   expect(progress[0]).toEqual([0, payloadBytes]);
   expect(progress.at(-1)).toEqual([payloadBytes, payloadBytes]);
   for (const [index, [done, total]] of progress.entries()) {
@@ -216,6 +219,7 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
     ['manifest.json', 8],
     ['database/cherry.db', 8],
     [filePath, 0],
+    ['ssh/profiles.json', 0],
   ]);
   expect(unzipSync(archive)[filePath]).toEqual(image);
   await expect(
@@ -227,6 +231,9 @@ test('round-trips a packed backup with deflated metadata and stored payloads', a
     ),
   ).resolves.toEqual(manifest);
   await expect(new File('file:///cache/restored', filePath).bytes()).resolves.toEqual(image);
+  await expect(new File('file:///cache/restored/ssh/profiles.json').bytes()).resolves.toEqual(
+    sshSnapshot,
+  );
 });
 
 test('rejects offsetting payload size changes after the manifest was built', async () => {

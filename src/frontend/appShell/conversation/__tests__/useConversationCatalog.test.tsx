@@ -4,7 +4,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ConversationSource, AgentSummary, CatalogPage } from '../contracts';
 import { createConversationState } from '../conversationState';
-import { useConversationAgents, useConversationSummary } from '../useConversationCatalog';
+import {
+  useConversationAgents,
+  useConversationSessions,
+  useConversationSummary,
+} from '../useConversationCatalog';
 
 let mockSource: ConversationSource;
 jest.mock('../ConversationSourceBoundary', () => ({
@@ -17,6 +21,20 @@ jest.mock('../ConversationSourceBoundary', () => ({
 const results = new Map<string, ReturnType<typeof useConversationAgents>>();
 function Consumer({ id }: { id: string }) {
   results.set(id, useConversationAgents());
+  return null;
+}
+let sessions: ReturnType<typeof useConversationSessions>;
+function Sessions({
+  enabled = true,
+  includeBranches = false,
+}: {
+  enabled?: boolean;
+  includeBranches?: boolean;
+}) {
+  const current = useConversationSessions(undefined, enabled, { includeBranches });
+  useEffect(() => {
+    sessions = current;
+  });
   return null;
 }
 let summary: ReturnType<typeof useConversationSummary>;
@@ -73,6 +91,114 @@ describe('catalog consumer ownership', () => {
       </QueryClientProvider>
     );
   }
+  it('discovers a desktop-created task result and refreshes again when its list reopens', async () => {
+    jest.useFakeTimers();
+    const result = {
+      ref: { source: mockSource.ref, sessionId: 'scheduled-result' },
+      agentId: 'a',
+      title: 'Daily scheduled report',
+      updatedAt: '2026-11-12T01:00:00.000Z',
+    };
+    const read = jest.fn(async () => ({ items: [] as (typeof result)[] }));
+    mockSource.catalog.listSessions = read;
+    const renderSessions = (enabled = true) => (
+      <QueryClientProvider client={query}>
+        <Sessions enabled={enabled} />
+      </QueryClientProvider>
+    );
+    try {
+      await act(async () => {
+        tree = create(renderSessions());
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+      read.mockResolvedValue({ items: [result] });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(15_000);
+      });
+      expect(read).toHaveBeenCalledTimes(2);
+      // Deliver Query's batched notification after the poll completes.
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1);
+      });
+      expect(sessions.items).toEqual([result]);
+      await act(async () => tree.update(renderSessions(false)));
+      const reads = read.mock.calls.length;
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(30_000);
+      });
+      expect(read).toHaveBeenCalledTimes(reads);
+      await act(async () => tree.update(renderSessions()));
+      expect(read).toHaveBeenCalledTimes(reads + 1);
+    } finally {
+      await act(async () => tree?.unmount());
+      query.clear();
+      jest.useRealTimers();
+    }
+  });
+  it('keeps local session lists on their existing event-driven refresh policy', async () => {
+    jest.useFakeTimers();
+    mockSource = { ...mockSource, ref: { kind: 'local' } };
+    const read = jest.fn(async () => ({ items: [] }));
+    mockSource.catalog.listSessions = read;
+    try {
+      await act(async () => {
+        tree = create(
+          <QueryClientProvider client={query}>
+            <Sessions />
+          </QueryClientProvider>,
+        );
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(45_000);
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => tree?.unmount());
+      query.clear();
+      jest.useRealTimers();
+    }
+  });
+  it('switches between independent flat and grouped session caches', async () => {
+    mockSource = { ...mockSource, ref: { kind: 'local' } };
+    const root = { ref: { source: mockSource.ref, sessionId: 'root' }, title: 'Main' };
+    const branch = {
+      ref: { source: mockSource.ref, sessionId: 'branch' },
+      title: 'Branch',
+      forkedFromSessionId: 'root',
+    };
+    mockSource.catalog.listSessions = jest.fn(
+      async ({
+        includeBranches,
+      }: Parameters<ConversationSource['catalog']['listSessions']>[0]) => ({
+        items: includeBranches ? [branch, root] : [root],
+      }),
+    );
+    const renderSessions = (includeBranches: boolean) => (
+      <QueryClientProvider client={query}>
+        <Sessions includeBranches={includeBranches} />
+      </QueryClientProvider>
+    );
+    await act(async () => {
+      tree = create(renderSessions(false));
+    });
+    for (let i = 0; i < 20 && !sessions.isSuccess; i++) await act(tick);
+    expect(sessions.items).toEqual([root]);
+
+    await act(async () => tree.update(renderSessions(true)));
+    for (let i = 0; i < 20 && !sessions.isSuccess; i++) await act(tick);
+    expect(sessions.items).toEqual([branch, root]);
+
+    await act(async () => tree.update(renderSessions(false)));
+    expect(sessions.items).toEqual([root]);
+    expect(query.getQueryCache().getAll()).toHaveLength(2);
+  });
   it.each(['synchronizing', 'offline', 'suspended'] as const)(
     'waits without loading while the source is %s, then loads after connecting',
     async (reason) => {

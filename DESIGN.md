@@ -92,7 +92,7 @@ Mobile follows desktop's neutral-first interface with green action emphasis. The
 - `--brand` is the fixed Cherry logo red (`#ff5757`), reserved for brand artwork. Actions, selections,
   links, and tool mentions must not consume it.
 
-App identity has two artwork variants: `assets/icon-light.png` (red) and `assets/icon-dark.png`
+Community identity has two artwork variants: `assets/icon-light.png` (red) and `assets/icon-dark.png`
 (the existing dark-mode mark). Reuse their original artwork, including on background-activity
 surfaces, with downsampled derivatives sized for platform limits. Artwork fidelity does not require
 identical file bytes or launcher-size bitmaps. Never substitute the legacy cherry-and-leaf logo or
@@ -102,6 +102,10 @@ monochrome notification mask remains
 system-rendered. Its accent is `#C74444`, `brand` red darkened below Android's 0.179 luminance
 threshold: on a lighter accent the system draws the mask black instead of the app icon's white. Do not repeat the app logo in the
 notification's large-icon content slot.
+
+Enterprise profiles use the official blue desktop artwork in `assets/enterprise-logo.png`.
+App-shell `branding` selects it on sign-in, account and About surfaces. The launcher icon, native
+splash, its matching React cover, notification and Live Activity artwork stay unchanged.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,

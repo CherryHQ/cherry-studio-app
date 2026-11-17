@@ -14,7 +14,14 @@ The route carries identity only. `FileEntryPreview` owns classification and the 
 this page and system opening, and shares file export actions with the painting viewer.
 This page owns reading, rendering, and copying.
 
-All file types use the header's Share action to open the common bottom sharing panel. Complete
+The same route also accepts an opaque `previewRequestId` from `appShell/filePreview` for a
+temporary cache source. This branch does not query or create file/library records and shares the
+existing image, text, HTML and document renderers. Its source metadata is not a managed entry;
+chat attachment, image editing, sharing conversion and Office reference actions are unavailable.
+Closing the last viewer releases its cache bytes. Unavailable/expired requests show the ordinary
+unavailable state instead of resolving an entry or accepting a URI from navigation.
+
+Managed file types use the header's Share action to open the common bottom sharing panel. Complete
 HTML offers Original, Image and PPT inside that same panel; the viewer has no parallel conversion
 actions or conversion progress layer. Capture scripts and temporary conversion lifetimes belong
 to `features/sharing`, using the shared HtmlCapture executor and Backend.documentExport.

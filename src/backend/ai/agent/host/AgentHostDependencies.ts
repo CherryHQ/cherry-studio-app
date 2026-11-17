@@ -18,6 +18,7 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { createMcpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import {
   AgentSqlDatabase,
@@ -26,17 +27,24 @@ import {
 } from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
+import { agentService } from '@/backend/data/services/AgentService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
+import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { fileContent } from '@/backend/services/file/fileContent';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
+import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
@@ -77,6 +85,9 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'BackgroundActivityEnvironment',
+  'SshRuntime',
+  'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   scriptSandbox() {
@@ -120,8 +131,41 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly skills;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
-  readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
-    this.keepAlive.acquire('agent.durable', onInterrupt);
+  readonly executionLease: NonNullable<MobileAgentHostPorts['executionLease']> = (
+    onInterrupt,
+    sessionId,
+  ) => {
+    const lease = this.keepAlive.acquire(
+      sessionId ? 'agent.session' : 'agent.durable',
+      onInterrupt,
+      sessionId
+        ? {
+            title: this.backgroundEnvironment.translate('chat.backgroundReply.assistant'),
+            subtitle: this.backgroundEnvironment.translate('chat.backgroundReply.preparing'),
+            completedUnitCount: 0,
+            totalUnitCount: 3,
+          }
+        : undefined,
+    );
+    if (!sessionId || !lease.update) return lease;
+    return {
+      ...lease,
+      update: (progress) =>
+        lease.update?.({
+          ...progress,
+          ...(progress.completedUnitCount !== undefined
+            ? {
+                subtitle: this.backgroundEnvironment.translate(
+                  progress.completedUnitCount >= 2
+                    ? 'chat.backgroundReply.responding'
+                    : 'chat.backgroundReply.thinking',
+                ),
+              }
+            : {}),
+        }),
+    };
+  };
+  readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
     size: () => agentDatabaseSize(),
@@ -157,12 +201,19 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly store: AgentSessionStore,
     private readonly aiService: AiService,
     private readonly preferenceService: PreferenceService,
-    mcpRuntime: McpRuntimeService,
+    private readonly mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
     readonly traces: TraceRecorder,
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
+      translate: (key) => key,
+    },
+    private readonly ssh?: SshRuntime,
+    private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
+      acquire: () => ({ release() {} }),
+    },
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({
@@ -208,12 +259,26 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
 
   get tools(): SystemCapabilitySource {
     return (this.lazyTools ??= createSystemCapabilitySource({
+      agentConfiguration: {
+        avatars: createAgentAvatars({ agents: agentService, images: agentAvatarImages }),
+        bindings: agentToolBindingService,
+        servers: mcpServerService,
+        files: fileContent,
+      },
       voice: this.voice,
       ai: this.aiService,
       model: modelService,
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      ssh: this.ssh,
+      mcpManagement: {
+        servers: mcpServerService,
+        mutations: createMcpServerMutations({
+          runtime: this.mcpRuntime,
+          servers: mcpServerService,
+        }),
+      },
     }));
   }
 

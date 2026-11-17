@@ -7,7 +7,6 @@ import {
   DOCUMENT_EXPORT_IMAGE_MAX_HEIGHT,
   type DocumentExportIssue,
   type ExportBlock,
-  type ExportContentLabels,
   type ExportDocument,
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
@@ -31,35 +30,14 @@ export async function renderHtml(
   readManagedImage: ReadManagedImage,
   signal: AbortSignal,
 ) {
-  const renderer = createHtmlRenderer(document, inputPresentation, 'embedded');
+  const renderer = createHtmlRenderer(document, inputPresentation);
   const prepared = await resolveDocumentAssets(renderer.sources, cache, readManagedImage, signal);
   const result = renderer.render(prepared.images, prepared.issues);
   signal.throwIfAborted();
   return result;
 }
 
-/** Render prepared Markdown without network reads or new files. Embedded PNG/JPEG stays visible. */
-export function renderMarkdownPreview(
-  source: string,
-  presentation: ExportPresentation,
-  labels?: ExportContentLabels,
-): string {
-  return createHtmlRenderer(
-    { labels, sections: [{ id: 'preview', blocks: [{ kind: 'markdown', source }] }] },
-    { ...presentation, imageFrame: undefined, watermark: { kind: 'none' } },
-    'links',
-  ).render(new Map(), []).html;
-}
-
-export function renderDocumentPreview(document: ExportDocument, presentation: ExportPresentation) {
-  return createHtmlRenderer(document, presentation, 'links').render(new Map(), []).html;
-}
-
-function createHtmlRenderer(
-  inputDocument: ExportDocument,
-  inputPresentation: ExportPresentation,
-  imagePresentation: 'embedded' | 'links',
-) {
+function createHtmlRenderer(inputDocument: ExportDocument, inputPresentation: ExportPresentation) {
   validatePresentation(inputPresentation);
   const presentation = {
     ...inputPresentation,
@@ -152,8 +130,7 @@ function createHtmlRenderer(
       }
     }
   };
-  if (imagePresentation === 'embedded')
-    document.sections.forEach((section) => visitBlocks(section.blocks));
+  document.sections.forEach((section) => visitBlocks(section.blocks));
   return { sources, render };
 
   function render(
@@ -163,24 +140,15 @@ function createHtmlRenderer(
     issues.push(...assetIssues);
     const resource = (name: string, kind: string, note: string, url?: string) =>
       `<span class="resource-card"><span class="resource-kind">${escapeHtml(kind)}</span><span class="resource-body"><span class="resource-heading">${link(name, url)}</span><span class="resource-note">${escapeHtml(note)}</span></span></span>`;
-    const image = (key: string, alt: string) => {
+    const image = (key: string) => {
       const data = isEmbeddedImage(key) ? key : images.get(key);
       if (data)
         return `<span class="export-image" data-export-unavailable="${escapeHtml(labels.imageUnavailable)}"><img src="${data}" alt="${escapeHtml(labels.image)}"></span>`;
-      if (imagePresentation === 'links') {
-        const url = safeExportUrl(key);
-        return resource(
-          alt || labels.image,
-          labels.image,
-          url ? new URL(url).hostname : labels.imageUnavailable,
-          url,
-        );
-      }
       return `<span class="image-unavailable">${escapeHtml(labels.imageUnavailable)}</span>`;
     };
     parser.renderer.rules.image = (tokens, index) => {
       const source = tokens[index].attrGet('src');
-      return image(typeof source === 'string' ? source : '', tokens[index].content);
+      return image(typeof source === 'string' ? source : '');
     };
     // Install table presentation after discovering resources in the original token tree.
     configureExportTables(parser, isImage, labels.table);
@@ -196,7 +164,7 @@ function createHtmlRenderer(
             case 'markdown':
               return `<div class="markdown">${parser.render(normalizeLatexDelimiters(block.source), { exportReferenceUrls: references })}</div>`;
             case 'image':
-              return image(`asset:${block.assetId}`, block.alt);
+              return image(`asset:${block.assetId}`);
             case 'attachment': {
               const url = block.url ? safeExportUrl(block.url) : undefined;
               return resource(

@@ -15,9 +15,7 @@ jest.mock('react-i18next', () => ({
 test('reports raw over-capacity percentages while clamping the drawn progress', () => {
   let renderer: ReactTestRenderer;
   act(() => {
-    renderer = create(
-      <ContextUsageProgress usage={deriveContextUsage(200_000, { contextTokens: 220_000 })!} />,
-    );
+    renderer = create(<ContextUsageProgress usage={deriveContextUsage(200_000, 220_000)!} />);
   });
   expect(renderer!.root.findAllByType(Text).map((text) => text.props.children)).toEqual([
     '110%',

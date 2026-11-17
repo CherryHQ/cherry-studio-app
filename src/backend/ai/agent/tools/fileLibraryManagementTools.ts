@@ -36,6 +36,14 @@ const foldersSchema = z.strictObject({
 const moveSchema = itemSchema.extend({
   destination_folder_id: z.uuid().nullable().describe('Folder id, or null for the library root.'),
 });
+const createFolderSchema = z.strictObject({
+  name: SafeNameSchema.describe('One folder name, not a path.'),
+  parent_id: z
+    .uuid()
+    .nullable()
+    .default(null)
+    .describe('Parent folder id from library_list_folders, or null for the library root.'),
+});
 const renameSchema = itemSchema.extend({ name: SafeNameSchema });
 const trashListSchema = z.strictObject({
   cursor: z.string().optional(),
@@ -87,6 +95,20 @@ export function createFileLibraryManagementTools(
   }
 
   return [
+    tool(
+      'library_create_folder',
+      'Create library folder',
+      'ask',
+      'Create a folder in the file library, even when this conversation has no workspace. Use an exact parent_id from library_list_folders, or null for the root. The parent must exist. A duplicate file or folder name is rejected; choose another name after a conflict. Use the returned saved name and id. This does not change the conversation workspace. After an uncertain result, inspect library_list_folders before retrying.',
+      createFolderSchema,
+      async ({ parent_id, name }, signal) => {
+        const folder = await library.createFolder(parent_id, name, undefined, signal);
+        return {
+          status: 'created',
+          folder: { id: folder.id, parentId: folder.parentId, name: folder.name },
+        };
+      },
+    ),
     tool(
       'library_list_folders',
       'Find library folders',

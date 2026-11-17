@@ -20,7 +20,9 @@ jest.mock('@/frontend/components/MessageDetail', () => {
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    Button: (props: object) => createElement('Button', props),
+    Button: Object.assign((props: object) => createElement('Button', props), {
+      Label: (props: object) => createElement('ButtonLabel', props),
+    }),
     ContextMenuExclusion: (props: object) => createElement('View', props),
     MessagePart: {
       Detail: (props: object) => createElement('MessagePartDetail', props),
@@ -55,6 +57,27 @@ describe('ErrorPart', () => {
     expect(props.title).toBe('chat.errorPart.reason.auth');
     expect(props.message).toBe('chat.errorPart.message.auth');
   });
+
+  test.each([true, false])(
+    'offers context reduction before retrying an oversized input (retryable: %s)',
+    (retryable) => {
+      const renderer = render(
+        <ErrorPart
+          part={errorPart({
+            code: 'EXECUTION_FAILED',
+            message: 'Request failed',
+            reasonCode: 'context_length',
+            retryable,
+            source: { layer: 'provider', code: 'input_too_long' },
+          })}
+        />,
+      );
+
+      const props = renderer.root.findByType('MessagePartError').props;
+      expect(props.title).toBe('chat.errorPart.reason.contextLength');
+      expect(props.message).toBe('chat.errorPart.message.contextLength');
+    },
+  );
 
   test('replaces app-owned diagnostic messages with translated copy', () => {
     const renderer = render(
@@ -137,7 +160,7 @@ describe('ErrorPart', () => {
 
     const detail = renderer.root.findByType('MessagePartDetail');
     expect(detail.props.title).toBe('chat.errorPart.detail.title');
-    const textSections = renderer.root.findAllByType('MessagePartTextSection');
+    const textSections = detail.findAllByType('MessagePartTextSection');
     expect(textSections.map((section) => [section.props.title, section.props.value])).toEqual([
       [
         'chat.errorPart.detail.message',
@@ -145,7 +168,7 @@ describe('ErrorPart', () => {
       ],
       ['chat.errorPart.detail.responseBody', '{"error":"insufficient_credit"}'],
     ]);
-    expect(renderer.root.findByType('MessagePartValueSection').props.value).toEqual({
+    expect(detail.findByType('MessagePartValueSection').props.value).toEqual({
       'chat.errorPart.detail.reason': 'quota',
       'chat.errorPart.detail.source': 'provider \u00B7 insufficient_credit',
       'chat.errorPart.detail.name': 'AI_APICallError',
@@ -158,7 +181,7 @@ describe('ErrorPart', () => {
     expect(renderer.root.findAllByType('MessagePartDetail')).toHaveLength(0);
   });
 
-  test('reports the failed message from its detail sheet only when the host supports it', () => {
+  test('opens feedback or diagnosis for the failed message only when the host supports it', () => {
     const failure = errorPart({
       code: 'EXECUTION_FAILED',
       message: 'timeout',
@@ -172,14 +195,20 @@ describe('ErrorPart', () => {
       </MessageFailureReportProvider>,
     );
     act(() => renderer.root.findByType('MessagePartError').props.onPress());
-    const action = renderer.root.findByType('MessagePartDetail').props.headerAction;
+    const detail = renderer.root.findByType('MessagePartDetail');
+    const action = detail.props.headerAction;
     expect(action.props.testID).toBe('error-part-detail-report');
     act(() => action.props.onPress());
-    expect(onReport).toHaveBeenCalledWith('message-1');
+    expect(onReport).toHaveBeenLastCalledWith('message-1', undefined);
+    const diagnosis = detail.props.footer;
+    expect(diagnosis.props.testID).toBe('error-part-detail-diagnose');
+    act(() => diagnosis.props.onPress());
+    expect(onReport).toHaveBeenLastCalledWith('message-1', 'diagnosis');
 
     const standalone = render(<ErrorPart messageId="message-1" part={failure} />);
     act(() => standalone.root.findByType('MessagePartError').props.onPress());
     expect(standalone.root.findByType('MessagePartDetail').props.headerAction).toBeUndefined();
+    expect(standalone.root.findByType('MessagePartDetail').props.footer).toBeUndefined();
   });
 
   test('never uses raw names or codes as the title', () => {

@@ -8,7 +8,9 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
 `avatars/{user,agents,providers}/<name>`, plus
-`skills/<folder>/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
+`skills/<folder>/<digest>/<package path>` for every live Skill package, and an optional
+`ssh/profiles.json` containing SSH configuration without device credential references.
+The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
@@ -30,7 +32,11 @@ silently skipping data. The live source database and the user's selected archive
 Normalization scratch databases stay inside the operation directory, so normal cleanup and the
 existing startup sweep of previous processes' backup directories also remove interrupted copies.
 
-Archives are unencrypted and include database-held model keys and remote server headers. They exclude
+An enterprise profile's archive keeps conversations and Agents and leaves out the organization's
+keys, instructions and other delivered resources. Each archive restores only into the data it came
+from: local data into the local profile, an enterprise archive into the same identity; see
+[Enterprise Edition](../../../../docs/references/enterprise.md#backup). Archives are unencrypted and
+include the user's own database-held model keys and remote server headers. They exclude
 SecureStore values, desktop pairing tokens, device permissions, caches, logs and extracted documents.
 System sharing presents save destinations; opening or dismissing the share sheet is not proof of
 successful saving.
@@ -81,7 +87,9 @@ selecting the backup again. Its database applies any remaining migrations to upg
 cancels unfinished jobs, marks partial replies interrupted, drops desktop pairing, rotates plugin credential references
 without copying their secret values, and retains the target device's identity/privacy/onboarding/
 background-notification preferences. Other settings and content come from the backup. Plugin rows
-and their tool bindings remain so users can reconnect them.
+and their tool bindings remain so users can reconnect them. SSH profiles are loaded into the new
+generation's dedicated MMKV store before activation commits. Their credential references and
+revisions are regenerated; users re-enter passwords or private keys even on the same device.
 
 After durable staging, Android restarts the native process automatically. iOS and Android clients
 without a working restart helper ask the user to completely close and reopen the application. The

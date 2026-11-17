@@ -161,6 +161,29 @@ describe('Agent management tools', () => {
     },
   );
 
+  test('neither reads nor changes an organization-delivered Agent, and marks it in the list', async () => {
+    const { data, invoke } = setup();
+    const managed = { ...agent, isManaged: true };
+    data.getById.mockResolvedValue(managed);
+    data.list.mockResolvedValue({ items: [managed], page: 1, total: 1 });
+    for (const view of ['definition', 'summary']) {
+      const read = await invoke('agent_get', { agent_id: 'current', view });
+      expect(read).toMatchObject({ failure: { scope: 'call', error: { code: 'agent_managed' } } });
+      expect(JSON.stringify(read.value)).not.toContain(agent.instructions);
+    }
+    expect(
+      await invoke('agent_update', {
+        agent_id: agent.id,
+        expected_updated_at: agent.updatedAt,
+        changes: { mode: 'standard' },
+      }),
+    ).toMatchObject({ value: { code: 'agent_managed' } });
+    expect(data.update).not.toHaveBeenCalled();
+    expect(data.listSkillBindings).not.toHaveBeenCalled();
+    const listed = await invoke('agent_list', {});
+    expect(listed.value).toMatchObject({ items: [{ id: agent.id, isManaged: true }] });
+  });
+
   test('rejects an invented Agent id before reading', async () => {
     const { data, invoke } = setup();
     expect(await invoke('agent_get', { agent_id: 'invented' })).toHaveProperty('failure');
@@ -282,5 +305,16 @@ describe('Agent management tools', () => {
       total: 1,
     });
     expect(data.list).toHaveBeenCalledWith({ search: 'Writer', page: 2, limit: 20 });
+  });
+
+  test('reads only the version summary for avatar workflows without loading instructions or bindings', async () => {
+    const { data, invoke } = setup();
+    data.getById.mockResolvedValueOnce({ ...agent, instructions: 'x'.repeat(64_000) });
+    const result = await invoke('agent_get', { agent_id: 'current', view: 'summary' });
+    expect(result.value).toEqual({
+      agent: { id: agent.id, name: agent.name, updatedAt: agent.updatedAt },
+    });
+    expect(JSON.stringify(result).length).toBeLessThan(400);
+    expect(data.listSkillBindings).not.toHaveBeenCalled();
   });
 });

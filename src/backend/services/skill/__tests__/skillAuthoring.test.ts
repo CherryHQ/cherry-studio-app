@@ -11,13 +11,13 @@ const draft = {
   instructions: '# Weekly notes\nKeep facts intact.',
 };
 
-test('serializes YAML safely and keeps user text in the body', () => {
+test('serializes YAML safely and keeps user text in the body', async () => {
   const input = {
     ...draft,
     description: 'Notes\nallowed-tools: Bash',
     instructions: '---\nname: other\n---\nText',
   };
-  const result = authorSkillPackage(input, 'Current user');
+  const result = await authorSkillPackage(input, 'Current user');
   expect(result.package.name).toBe(draft.name);
   expect(result.package.description).toBe(input.description);
   expect(result.package.instructions).toBe(input.instructions);
@@ -25,26 +25,29 @@ test('serializes YAML safely and keeps user text in the body', () => {
   expect([...result.files.keys()]).toEqual(['SKILL.md']);
 });
 
-test('records the current user in standard author metadata without fabricating a missing name', () => {
-  const created = authorSkillPackage(draft, ' Current user ');
+test('records the current user in standard author metadata without fabricating a missing name', async () => {
+  const created = await authorSkillPackage(draft, ' Current user ');
   expect(created.package.author).toBe('Current user');
   expect(created.package.frontmatter.metadata).toEqual({ author: 'Current user', version: '1.0' });
   expect(created.package.compatibility).toBe(CHERRY_SKILL_COMPATIBILITY);
   expect(created.package.license).toBeNull();
-  expect(authorSkillPackage(draft, '').package.author).toBeNull();
+  expect((await authorSkillPackage(draft, '')).package.author).toBeNull();
 });
 
-test('rejects unsafe names and bounds instructions by Unicode characters', () => {
-  expect(() => authorSkillPackage({ ...draft, name: '../notes' }, '')).toThrow();
-  expect(() => authorSkillPackage({ ...draft, instructions: '   ' }, '')).toThrow();
-  expect(() => authorSkillPackage({ ...draft, instructions: '🍒'.repeat(24_001) }, '')).toThrow();
+test('rejects unsafe names and bounds instructions by Unicode characters', async () => {
+  await expect(authorSkillPackage({ ...draft, name: '../notes' }, '')).rejects.toThrow();
+  await expect(authorSkillPackage({ ...draft, instructions: '   ' }, '')).rejects.toThrow();
+  await expect(
+    authorSkillPackage({ ...draft, instructions: '🍒'.repeat(24_001) }, ''),
+  ).rejects.toThrow();
   expect(
-    authorSkillPackage({ ...draft, instructions: '🍒'.repeat(24_000) }, '').package.instructions,
+    (await authorSkillPackage({ ...draft, instructions: '🍒'.repeat(24_000) }, '')).package
+      .instructions,
   ).toHaveLength(48_000);
 });
 
-test('serializes standard environment, tools, license and string-valued metadata', () => {
-  const created = authorSkillPackage(
+test('serializes standard environment, tools, license and string-valued metadata', async () => {
+  const created = await authorSkillPackage(
     {
       ...draft,
       compatibility: 'Requires iOS calendar access.',
@@ -66,16 +69,16 @@ test('serializes standard environment, tools, license and string-valued metadata
   });
 });
 
-test('bounds the complete compatibility field including the app-owned environment', () => {
+test('bounds the complete compatibility field including the app-owned environment', async () => {
   const remaining = SKILL_COMPATIBILITY_MAX_LENGTH - CHERRY_SKILL_COMPATIBILITY.length - 1;
   expect(
-    authorSkillPackage({ ...draft, compatibility: 'x'.repeat(remaining) }, '').package
+    (await authorSkillPackage({ ...draft, compatibility: 'x'.repeat(remaining) }, '')).package
       .compatibility,
   ).toHaveLength(SKILL_COMPATIBILITY_MAX_LENGTH);
-  expect(() =>
+  await expect(
     authorSkillPackage({ ...draft, compatibility: 'x'.repeat(remaining + 1) }, ''),
-  ).toThrow();
-  expect(() =>
+  ).rejects.toThrow();
+  await expect(
     authorSkillPackage({ ...draft, allowedTools: ['read_file allowed-tools:Bash'] }, ''),
-  ).toThrow();
+  ).rejects.toThrow();
 });

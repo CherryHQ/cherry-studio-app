@@ -11,7 +11,9 @@ export function ContextUsageProgress({ usage }: { usage: ContextUsage }) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const percent =
-    usage.ratio === undefined ? '—' : formatContextUsagePercent(usage.ratio, language);
+    usage.ratio === undefined
+      ? '—'
+      : formatContextUsagePercent(usage.ratio, language, usage.estimated);
   return (
     <View className="flex-row items-center gap-2.5">
       <View

@@ -165,6 +165,18 @@ describe('Turn Runtime input assembly', () => {
     expect(message.parts[0]).toEqual({ ...part, id: 'input-0', state: 'done' });
   });
 
+  test('SSH display spans leave the model prompt unchanged and validate their recorded range', () => {
+    const part = {
+      type: 'text' as const,
+      text: 'SSH · guoxu 这台机器有什么',
+      sshReferences: [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }],
+    };
+    expect(toRuntimeInputParts([part])).toEqual([{ type: 'text', text: part.text }]);
+    expect(() =>
+      runtimeUserText({ ...part, sshReferences: [{ ...part.sshReferences[0], offset: 1 }] }),
+    ).toThrow();
+  });
+
   test('expands selection chips into the selection-ref block desktop sends, after each label', () => {
     const selection = {
       file_entry_id: '00000000-0000-7000-8000-000000000001',

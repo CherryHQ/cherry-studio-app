@@ -19,3 +19,4 @@ export {
 } from './useConversationHistory';
 export { useConversationDraft } from './useConversationDraft';
 export { useRemoteConversationSource } from './useRemoteConversationSource';
+export { useRemoteTasks, useRemoteTaskSessions } from './useRemoteTaskCatalog';

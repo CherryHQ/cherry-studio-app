@@ -49,7 +49,7 @@ export function ErrorPart({
     <ContextMenuExclusion>
       <AiFailureMessage
         data={part.data}
-        onReport={report && messageId ? () => report(messageId) : undefined}
+        onReport={report && messageId ? (destination) => report(messageId, destination) : undefined}
       />
     </ContextMenuExclusion>
   );

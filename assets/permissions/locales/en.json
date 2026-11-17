@@ -3,6 +3,7 @@
     "NSCalendarsFullAccessUsageDescription": "Cherry Studio reads and manages calendar events you request in chat, such as reviewing today's schedule or rescheduling a meeting, and sends relevant event details to your selected AI service.",
     "NSCalendarsUsageDescription": "Cherry Studio reads and manages calendar events you request in chat, such as reviewing today's schedule or rescheduling a meeting, and sends relevant event details to your selected AI service.",
     "NSCalendarsWriteOnlyAccessUsageDescription": "Cherry Studio adds calendar events you request in chat, such as a meeting tomorrow at 10 AM, using details from your selected AI service.",
+    "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, MCP servers, and SSH devices such as routers and NAS on your local network.",
     "NSLocationWhenInUseUsageDescription": "Cherry Studio sends your current location and address, when requested, to your selected AI service to answer questions such as finding nearby restaurants, only while you use the app.",
     "NSRemindersFullAccessUsageDescription": "Cherry Studio reads and manages reminders you request in chat, such as listing today's tasks or adding a grocery reminder, and sends relevant reminder details to your selected AI service.",
     "NSRemindersUsageDescription": "Cherry Studio reads and manages reminders you request in chat, such as listing today's tasks or adding a grocery reminder, and sends relevant reminder details to your selected AI service."

@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "podspecPath": "Ssh.podspec", "modules": ["SshModule"] },
+  "android": { "modules": ["expo.modules.ssh.SshModule"] }
+}
