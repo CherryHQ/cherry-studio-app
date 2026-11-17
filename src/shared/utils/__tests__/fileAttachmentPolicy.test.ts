@@ -30,7 +30,7 @@ describe('attachment source byte limits', () => {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       20 * 1024 * 1024,
     ],
-    ['photo.png', 'image/png', 10 * 1024 * 1024],
+    ['photo.png', 'image/png', 30 * 1024 * 1024],
   ] as const)('admits %s at its ceiling and rejects one extra byte', (name, mediaType, limit) => {
     const file = { ...imageFact(0, limit), name, mediaType };
     expect(() => validateFileAttachments([file], MODEL)).not.toThrow();
