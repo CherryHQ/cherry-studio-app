@@ -1,7 +1,7 @@
 import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
 
 import { convertDeepseekConversation, deepseekFileKey } from '../deepseekConversation';
-import { deepseekConversationSchema, validateDeepseekTree } from '../deepseekFormat';
+import { deepseekConversationSchema } from '../deepseekFormat';
 
 const time = '2026-11-01T10:00:00.000Z';
 function fixture() {
@@ -43,11 +43,12 @@ function fixture() {
 }
 function convert(value: unknown, files: ReadonlyMap<string, FileEntry> = new Map()) {
   const conversation = deepseekConversationSchema.parse(value);
-  validateDeepseekTree(conversation);
   let id = 0;
   return convertDeepseekConversation(conversation, {
     agentId: 'agent',
+    conversationId: 'conversation',
     updatedAt: Date.parse(time),
+    now: 0,
     files,
     createId: () => `id-${++id}`,
   });
@@ -81,29 +82,67 @@ test.each([0, null, undefined])(
   },
 );
 
-test('rejects a nonzero selected message in an empty conversation', () => {
-  expect(() => convert({ ...fixture(), messages: [], current_message_id: 2 })).toThrow(
-    'DeepSeek import: invalid',
-  );
+test('falls back to the last message when the selected message does not exist', () => {
+  const result = convert({ ...fixture(), current_message_id: 999 });
+  expect(result.session.activeNodeId).toBe(result.messages[2].id);
+  expect(convert({ ...fixture(), messages: [], current_message_id: 2 }).session).toMatchObject({
+    activeNodeId: null,
+  });
 });
 
-test.each([
-  (value: ReturnType<typeof fixture>) => {
-    value.messages[2].id = 2;
-  },
-  (value: ReturnType<typeof fixture>) => {
-    value.messages[1].parent_id = 3;
-  },
-  (value: ReturnType<typeof fixture>) => {
-    value.messages[0].role = 'ASSISTANT';
-  },
-  (value: ReturnType<typeof fixture>) => {
-    value.current_message_id = 999;
-  },
-])('rejects an invalid message tree instead of silently dropping nodes', (damage) => {
+test('repairs a damaged tree into alternating questions and answers instead of rejecting it', () => {
   const value = fixture();
-  damage(value);
-  expect(() => convert(value)).toThrow('DeepSeek import: invalid');
+  value.messages.push(
+    { ...value.messages[2], id: 2, fragments: [{ type: 'RESPONSE', content: 'Duplicate' }] },
+    // An answer to an answer becomes another answer to the question above it.
+    { ...value.messages[2], id: 4, parent_id: 2 },
+    // A question below a question becomes a new root question.
+    { ...value.messages[0], id: 5, parent_id: 1 },
+    // A missing parent makes a question a root.
+    { ...value.messages[0], id: 6, parent_id: 99 },
+    // An answer without any question cannot be shown and is dropped; its child question remains.
+    { ...value.messages[2], id: 7, parent_id: 99 },
+    { ...value.messages[0], id: 8, parent_id: 7 },
+  );
+  const result = convert(value);
+  const question = result.messages[0];
+  expect(result.messages).toHaveLength(7);
+  expect(result.messages.map((message) => message.searchableText)).not.toContain('Duplicate');
+  for (const answer of result.messages.filter((message) => message.role === 'assistant')) {
+    expect(answer.parentId).toBe(question.id);
+    expect(answer.turnId).toBe(question.turnId);
+  }
+  const questions = result.messages.filter((message) => message.role === 'user');
+  expect(questions.map((message) => message.parentId)).toEqual([null, null, null, null]);
+  expect(new Set(questions.map((message) => message.turnId)).size).toBe(4);
+  expect(result.session.activeNodeId).toBe(result.messages[1].id);
+});
+
+test('drops malformed messages and fragments, accepts lowercase roles and fills missing times', () => {
+  const value = fixture();
+  const messages: unknown[] = [
+    { ...value.messages[0], role: 'user', inserted_at: undefined },
+    {
+      ...value.messages[1],
+      status: undefined,
+      fragments: [
+        { type: 'RESPONSE', content: 'Kept answer' },
+        { type: 'FILE', files: 'not a list' },
+        { type: 'FUTURE_FRAGMENT', data: 1 },
+        null,
+      ],
+    },
+    { id: 'broken', role: 'ASSISTANT' },
+    { ...value.messages[2], role: 'SYSTEM' },
+  ];
+  const result = convert({ ...value, inserted_at: 'not a time', messages });
+  expect(result.messages).toHaveLength(2);
+  expect(result.messages[1]).toMatchObject({ status: 'success', searchableText: 'Kept answer' });
+  expect(result.session).toMatchObject({
+    createdAt: Date.parse(time),
+    lastActivityAt: Date.parse(time),
+  });
+  expect(result.messages[0].createdAt).toBe(Date.parse(time));
 });
 
 test('retains stopped answer text while excluding failure templates from model-visible text', () => {

@@ -1959,7 +1959,7 @@
   "settings.data.deepseek.progress": "Импорт разговоров: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Чтение и подготовка разговоров…",
   "settings.data.deepseek.success": "Создан агент DeepSeek. Импортировано разговоров: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "Создан агент DeepSeek. Импортировано разговоров: {{sessions}}. Оригиналы некоторых вложений недоступны.",
+  "settings.data.deepseek.successPartial": "Создан агент DeepSeek. Импортировано разговоров: {{sessions}}. Некоторые разговоры или вложения не удалось импортировать.",
   "settings.data.deepseek.title": "Импорт данных DeepSeek",
   "settings.data.import": "Импорт разговоров",
   "settings.data.runtimeCache.clear": "Очистить кэш выполнения бесед",

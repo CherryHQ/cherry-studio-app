@@ -15,6 +15,8 @@ export type DeepseekImportResult = {
   sessions: number;
   messages: number;
   missingAttachments: number;
+  /** Conversations whose files could not be read; the rest are imported. */
+  skippedConversations: number;
 };
 
 export type DeepseekImportErrorCode =

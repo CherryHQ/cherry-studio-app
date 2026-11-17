@@ -1921,7 +1921,7 @@
   "settings.data.deepseek.progress": "Konuşmalar içe aktarılıyor: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Konuşmalar okunuyor ve hazırlanıyor…",
   "settings.data.deepseek.success": "DeepSeek oluşturuldu. İçe aktarılan konuşmalar: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "DeepSeek oluşturuldu. İçe aktarılan konuşmalar: {{sessions}}. Bazı eklerin asılları mevcut değildi.",
+  "settings.data.deepseek.successPartial": "DeepSeek oluşturuldu. İçe aktarılan konuşmalar: {{sessions}}. Bazı konuşmalar veya ekler içe aktarılamadı.",
   "settings.data.deepseek.title": "DeepSeek verilerini içe aktar",
   "settings.data.import": "Konuşmaları içe aktar",
   "settings.data.runtimeCache.clear": "Sohbet çalışma önbelleğini temizle",

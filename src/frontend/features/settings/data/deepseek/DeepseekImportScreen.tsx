@@ -73,14 +73,13 @@ function ImportAction() {
         onProgress: setProgress,
       });
       setUrl('');
+      const partial = result.missingAttachments > 0 || result.skippedConversations > 0;
       toast.show({
         label: t(
-          result.missingAttachments > 0
-            ? 'settings.data.deepseek.successWithMissing'
-            : 'settings.data.deepseek.success',
+          partial ? 'settings.data.deepseek.successPartial' : 'settings.data.deepseek.success',
           { sessions: result.sessions.toLocaleString(i18n.language) },
         ),
-        variant: result.missingAttachments > 0 ? 'warning' : 'success',
+        variant: partial ? 'warning' : 'success',
       });
     } catch (error) {
       if (!controller.signal.aborted)

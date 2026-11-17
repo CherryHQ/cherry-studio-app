@@ -1902,7 +1902,7 @@
   "settings.data.deepseek.progress": "Đang nhập cuộc trò chuyện: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Đang đọc và chuẩn bị cuộc trò chuyện…",
   "settings.data.deepseek.success": "Đã tạo DeepSeek. Số cuộc trò chuyện đã nhập: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "Đã tạo DeepSeek. Số cuộc trò chuyện đã nhập: {{sessions}}. Một số tệp đính kèm gốc không có sẵn.",
+  "settings.data.deepseek.successPartial": "Đã tạo DeepSeek. Số cuộc trò chuyện đã nhập: {{sessions}}. Không thể nhập một số cuộc trò chuyện hoặc tệp đính kèm.",
   "settings.data.deepseek.title": "Nhập dữ liệu DeepSeek",
   "settings.data.import": "Nhập cuộc trò chuyện",
   "settings.data.runtimeCache.clear": "Xóa bộ nhớ đệm chạy cuộc trò chuyện",
