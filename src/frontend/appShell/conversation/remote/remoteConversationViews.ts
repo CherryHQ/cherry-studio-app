@@ -281,6 +281,7 @@ export function remoteMessage(
       : 'complete',
     display: {
       id: message.id,
+      revision: message.version,
       usage: message.usage,
       ...(message.model
         ? {
@@ -333,6 +334,7 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
     status: message.state,
     parts,
     modelName: message.model?.name,
+    revision: message.version,
     stats: null,
   };
 }

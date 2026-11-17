@@ -392,6 +392,7 @@ export function createRemoteConversationSession(
   });
   const unoperations = isReadOnly ? () => {} : source.subscribeOperations(publish);
   const handle: RemoteConversationSession = {
+    readingAidScope: JSON.stringify([source.draftScope, ref.sessionId]),
     ref,
     scope,
     state,

@@ -4,6 +4,12 @@ This app-shell owner defines what the chat workspace, sidebar, Agent picker and 
 read from either conversation source, and it retains the catalog sources those consumers share.
 It does not own local execution or observation.
 
+Remote Session `readingAidScope` is a stable desktop-binding and Session namespace for phone-owned
+translations. Message revisions travel with display/export values. The common translation store
+runs both sources; local saves patch the owning Agent message, remote saves use the bounded mobile
+cache. Neither citation arrival nor opening a tool changes the original prose hash. Cached remote
+reading aids cannot cross a binding, Session, message revision, content hash or language.
+
 ## Shared contract
 
 `contracts.ts` is a read model plus interaction callbacks with no lifecycle:
