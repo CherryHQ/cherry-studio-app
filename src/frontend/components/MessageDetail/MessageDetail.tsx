@@ -98,9 +98,10 @@ export function useCopyDetailText() {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  return async (text: string | (() => string)) => {
+  return async (text: string | (() => string | Promise<string>)) => {
     try {
-      await Clipboard.setStringAsync(typeof text === 'function' ? text() : text);
+      const value = typeof text === 'function' ? await text() : text;
+      await Clipboard.setStringAsync(value);
       toast.show({ label: t('chat.tool.copied'), variant: 'success' });
     } catch {
       toast.show({ label: t('chat.tool.copyFailed'), variant: 'danger' });

@@ -1,10 +1,17 @@
-import { BackgroundPressArea, ContentState, MessagePart } from '@cherrystudio/ui/components';
+import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import {
+  BackgroundPressArea,
+  Button,
+  ContentState,
+  MessagePart,
+} from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { createContext, type PropsWithChildren, use, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
+import { useCopyDetailText } from '@/frontend/components/MessageDetail';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentReadReasoningInput } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -38,6 +45,14 @@ export function ReasoningDetailProvider({
   // A streamed part receives its committed ID on settlement; its phase position stays the same.
   const selected = openedPhase === undefined ? undefined : phases[openedPhase];
   const part = selected?.part.type === 'reasoning' ? selected.part : undefined;
+  const source =
+    selected && message.agentSessionId
+      ? {
+          sessionId: message.agentSessionId,
+          messageId: message.id,
+          partId: selected.key,
+        }
+      : undefined;
   const isThinking =
     message.status === 'pending' &&
     part?.state === 'streaming' &&
@@ -48,19 +63,16 @@ export function ReasoningDetailProvider({
       {children}
       {selected && part ? (
         <MessagePart.Detail
+          headerAction={<ReasoningCopyAction part={part} source={source} />}
           onClose={() => setOpenedPhase(undefined)}
           testID="reasoning-detail"
           title={t('chat.reasoningDetail.title')}
         >
-          {message.agentSessionId ? (
+          {source ? (
             <LocalReasoningContent
               key={`${message.agentSessionId}:${message.id}:${openedPhase}`}
               isStreaming={isThinking}
-              source={{
-                sessionId: message.agentSessionId,
-                messageId: message.id,
-                partId: selected.key,
-              }}
+              source={source}
             />
           ) : (
             <ReasoningText isStreaming={isThinking} text={part.text} />
@@ -131,6 +143,7 @@ export function ReasoningPart({ isStreaming, part, source, partId }: ReasoningPa
       </MessagePart.ToolGroup>
       {isDetailOpen ? (
         <MessagePart.Detail
+          headerAction={<ReasoningCopyAction part={part} source={source} />}
           onClose={() => setIsDetailOpen(false)}
           testID="reasoning-detail"
           title={t('chat.reasoningDetail.title')}
@@ -147,6 +160,36 @@ export function ReasoningPart({ isStreaming, part, source, partId }: ReasoningPa
         </MessagePart.Detail>
       ) : null}
     </>
+  );
+}
+
+function ReasoningCopyAction({ part, source }: Pick<ReasoningPartProps, 'part' | 'source'>) {
+  const { t } = useTranslation();
+  const agent = useBackendModule('agent');
+  const copy = useCopyDetailText();
+  const [isCopying, setIsCopying] = useState(false);
+  const hasText = Boolean(part.text || (source && readCherryMeta(part)?.hasText));
+
+  const handleCopy = async () => {
+    setIsCopying(true);
+    try {
+      await copy(source ? async () => (await agent.readReasoning(source)).text : part.text);
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
+  return (
+    <Button
+      accessibilityLabel={t('chat.tool.copyFullText')}
+      disabled={!hasText}
+      icon={<CopyIcon className="text-muted-foreground" />}
+      loading={isCopying}
+      onPress={() => void handleCopy()}
+      size="sm"
+      testID="reasoning-detail-copy"
+      variant="ghost"
+    />
   );
 }
 
