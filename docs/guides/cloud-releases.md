@@ -291,6 +291,116 @@ The build job waits for a production IPA, then passes its exact build ID to a se
 job. `eas submit --id ... --wait --no-auto-testflight-setup` uploads it to App Store Connect and
 waits for submission completion. The workflow does not attach the IPA to a public release.
 
+Production cloud iOS builds run `scripts/uploadIosSymbols.ts` through `eas-build-on-success`
+after archive/export. Gym is configured with `GYM_ARCHIVE_PATH=./build/CherryStudio.xcarchive`
+(relative to `ios/`); the hook requires that pinned archive and the sole `ios/build/*.ipa`.
+It reads the distributed main app and every embedded app/extension, including widget and share,
+and matches every UUID/architecture to the original archive dSYMs and archive bundle identities.
+Missing or stale symbols, disabled reporting, invalid credentials, upload errors, and failed
+remote verification fail the hook. The existing in-Xcode upload stays enabled.
+
+A successful CLI exit is not upload confirmation. The gate requires a remote Mach-O record with
+the exact UUID/architecture and the exact `debug` feature for every distributed executable slice,
+including app/extension/framework executables and embedded dylibs. The API supplies architecture
+as `cpuName` and features as `data.features`; unsupported schemas fail closed.
+A stripped executable record containing only `symtab` and `unwind` does not qualify; a full-debug
+record may qualify alongside a stripped sibling. Remote checks are bounded and fail closed on an
+unsupported symbol API schema or symbol authentication error.
+
+Before contacting Sentry, the hook prepares a complete package under `ios/build/ios-symbols`:
+original `dsyms.zip`, `archive-info.plist`, `manifest.json`, and `verification.json`. It validates
+the ZIP against copied original dSYM bytes and keeps pending/failed evidence in a separate `attempt-*`
+directory. After upload and remote verification pass, it prepares a sibling package and runs the
+same verifier used by the post-build check before atomically switching `package.complete`.
+Readers require that marker; a failed retry leaves the previously selected verified package intact.
+Manifest changes and their receipt hash are published together. Attempt receipts use atomic file
+replacement. Packaging failure retains copied original dSYMs under the staging directory for recovery.
+The manifest records build/source identity, IPA/image identities, tool versions, original DWARF
+checksums, local features per slice, and package checksums, including `archive-info.plist` size and
+SHA-256. Local `sentry-cli debug-files check --json` must confirm `debug` for every required
+UUID/architecture; a stripped DWARF duplicate does not provide recovery coverage.
+Symbol evidence is mandatory. Project/DSN identity is verified when the token can read it:
+the authenticated [project read](https://docs.sentry.io/api/projects/retrieve-a-project/) compares
+the numeric project ID, then the [client-key list](https://docs.sentry.io/api/projects/list-a-projects-client-keys/)
+checks the DSN's public key and host against an active key's public DSN. A successful read that
+mismatches fails the build. A 401/403/404 project read records `identityUnverified: "project-scope"`;
+a 401/403/404 client-key list records `identityUnverified: "client-key-scope"`. Only these
+statuses continue to mandatory symbol upload and verification. Identity-endpoint 429, 5xx,
+redirects, timeouts, and malformed responses fail the build. The additional identity read permission is optional,
+not a release-token prerequisite. Without that scope, a DSN for another project/host cannot be
+detected by the unreadable identity checks; a readable numeric project check still detects an ID
+mismatch even when client keys are unreadable. Neither the DSN nor any client key is recorded or
+printed. All iOS cloud profiles starting with `production` are gated;
+`development*`, `preview*`, non-iOS, local builds, and plain non-EAS invocations explicitly skip.
+Incomplete or contradictory cloud identity fails preflight.
+The verification receipt records preflight/upload/remote statuses and timestamps, CLI exit status,
+sanitized failure codes, and each qualifying remote record's validated ID/type/features/observation time.
+It keeps staged originals and a failed receipt if later verification fails. EAS extra-artifact
+collection is best effort and occurs after the hook, including on hook failure.
+
+After a successful build, run the post-build check manually on a macOS workstation:
+
+```bash
+# Run pnpm exec eas build:download --build-id <id> --all-artifacts --json
+# through a wrapper so download errors cannot print signed URLs.
+CHERRY_BUILD_ID='<build-id>' node --import tsx --input-type=module - <<'NODE'
+import { runCommand, sanitizeDiagnostic } from './scripts/uploadIosSymbols.ts';
+const result = await runCommand('pnpm', [
+  'exec', 'eas', 'build:download', '--build-id', process.env.CHERRY_BUILD_ID, '--all-artifacts', '--json',
+], { timeoutMs: 30 * 60_000 });
+if (result.exitCode !== 0 || result.signal || result.timedOut || result.spawnError) {
+  console.error(sanitizeDiagnostic(`${result.stdout}\n${result.stderr ?? ''}`));
+  process.exitCode = 1;
+} else {
+  console.log(result.stdout);
+}
+NODE
+```
+
+Take the downloaded `buildArtifacts` path from the CLI's JSON output and use it as `<artifact>`
+in the verifier command. Use the same build ID in both steps.
+
+```bash
+node --import tsx scripts/verifyIosSymbolPackage.ts '<artifact>' '<build-id>'
+```
+
+Run from the repository root and replace the quoted placeholders, keeping the quotes.
+`CHERRY_BUILD_ID` passes the exact successful build ID to the download wrapper as environment data;
+use the same ID for the verifier. The download wrapper exits non-zero on failure; run the verifier
+only after a successful download. A failed build's extra artifacts may also be available, subject to collection and
+retrieval; EAS [uploads extra artifacts even on failure](https://docs.expo.dev/eas/json/#buildartifactpaths).
+The post-build check is meaningful for a released build only when run against that successful build's
+artifacts. This step is not yet wired into `build-ios`.
+Use `pnpm exec eas` to select the repository-pinned CLI version. The download requires macOS
+because this CLI extracts the production IPA with `tar`, which needs ZIP-capable bsdtar; Ubuntu's GNU tar cannot extract it.
+Missing `buildArtifacts` or a verifier failure means the manual check failed.
+The verifier requires `package.complete`, checks the selected package's build ID, `dsyms.zip`
+size/SHA-256, `manifest.json` SHA-256 against `verification.json`, `archive-info.plist` size/SHA-256
+against the manifest, and original DWARF identities and checksums. It requires local full-debug
+coverage for distributed-image UUID/architecture pairs using the repository-pinned native
+`@sentry/cli` installed for `pnpm exec`: it resolves `getPath()` and directly runs
+`sentry-cli debug-files check --json` on extracted staged DWARF objects, thinning fat objects
+per architecture with `xcrun lipo` as the hook does. Only the exact `debug` feature for the
+required UUID/architecture qualifies. Missing/unusable tools, failed commands and invalid JSON
+fail the check. This native toolchain is also why the verifier runs on macOS with the repository
+installed. Unrelated dSYMs need matching identities and bytes. ZIP/tar reading and Mach-O identity
+inspection remain in-process.
+The verifier contacts no Sentry endpoint.
+
+UUID coverage of a staged dSYM alone does not prove it contains full DWARF, since an existing Sentry record can satisfy remote verification; the post-build check must inspect the package itself, not just its name.
+
+Record the stable retrieval reference, actor/date, and evidenced expiry in the per-build recovery
+record. Download verification proves current retrievability; expiry stays `unknown` without
+retention evidence, and signed URL expiry does not establish retention. If retrieval fails, record
+`unavailable` with the attempted retrieval and error. Keep a verified external copy when the
+required retention window exceeds evidenced EAS availability. The hook receipt stays
+`pending-post-build-check`; save the manual verifier output as the separate post-build verification result.
+
+The real worker's archive-path behavior, API response schema/token scope, and extra-artifact
+retrieval/expiry still require cloud acceptance on a new build. See
+[iOS symbol recovery records](../references/ios-symbol-recovery.md) for the unresolved build 59
+finding and the per-build evidence template. A rebuild cannot recover a shipped binary's symbols.
+
 A successful workflow means the upload completed. Apple processing, compliance questions, tester
 groups, invitations, and any external beta review remain in App Store Connect. The workflow does
 not configure groups or submit the app for an App Store public release.
