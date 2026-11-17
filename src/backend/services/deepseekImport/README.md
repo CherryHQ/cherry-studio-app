@@ -76,9 +76,10 @@ remains readable and follows the existing policy that omits unsigned thinking du
 Images are prepared before the conversation transaction and removed on failure/cancellation.
 Agent creation and every conversation/message write share one transaction, so a failed commit
 cannot leave an empty imported agent or a partial set of conversations. A large export may hold
-the write queue for a long time; other writes wait rather than fail. Both loops yield to the app
-after at most 50 ms of work and check cancellation, so the screen stays responsive and leaving the
-page rolls the transaction back promptly. Image cleanup
+the write queue for a long time; other writes wait rather than fail. Both loops check cancellation
+at every conversation, image and 40-row batch, and yield to the app there once 50 ms of work has
+accumulated, so the screen stays responsive and leaving the page rolls the transaction back
+promptly. Parsing one conversation is not split; the 32 MiB JSON bound limits that pause. Image cleanup
 is best effort, matching the shared file owner. Cache cleanup cannot change a committed outcome.
 Conversation JSON is read one file at a time, avoiding a second full archive in JS memory.
 

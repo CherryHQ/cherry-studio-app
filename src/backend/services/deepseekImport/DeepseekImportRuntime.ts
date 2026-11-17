@@ -248,7 +248,7 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
   }
 }
 
-/** Keeps a long import responsive: yields to the app at most every 50 ms of synchronous work. */
+/** Called at each unit of work: checks cancellation and yields to the app once 50 ms have passed. */
 function createTimeSlice(signal: AbortSignal) {
   let started = Date.now();
   return async () => {
