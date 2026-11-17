@@ -1,16 +1,19 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
 import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
-import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
-import type {
-  CreateModelDto,
-  ModelListQuery,
-  UpdateModelDto,
+import { DataApiErrorFactory, ErrorCode, toDataApiError } from '@/shared/data/api/errors';
+import {
+  type CreateModelDto,
+  type ModelListQuery,
+  type ModelOrderMove,
+  ReorderModelsRequestSchema,
+  type UpdateModelDto,
 } from '@/shared/data/api/schemas/models';
 import {
   createUniqueModelId,
@@ -29,7 +32,7 @@ import {
   mergePresetModel,
   providerRegistryService,
 } from './ProviderRegistryService';
-import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+import { applyMoves, insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 const sqliteBatchSize = 500;
 const sqliteMaxVariables = 999;
@@ -873,6 +876,47 @@ export class ModelService {
     });
   }
 
+  async reorderBatch(moves: readonly ModelOrderMove[]): Promise<void> {
+    if (moves.length === 0) return;
+
+    // Direct callers share the command's identity, anchor and duplicate-target validation.
+    let parsedMoves: ModelOrderMove[];
+    try {
+      parsedMoves = ReorderModelsRequestSchema.parse({ moves }).moves;
+    } catch (error) {
+      throw toDataApiError(error, 'model.reorderBatch');
+    }
+
+    await this.dbService.withWriteTx(async (tx) => {
+      const ids = parsedMoves.map(({ id }) => id);
+      const targets: { id: string; providerId: string }[] = [];
+      for (const idChunk of chunks(ids, sqliteBatchSize)) {
+        // react-doctor-disable-next-line async-await-in-loop -- bound each target lookup's statement size
+        targets.push(
+          ...(await tx
+            .select({ id: userModelTable.id, providerId: userModelTable.providerId })
+            .from(userModelTable)
+            .where(inArray(userModelTable.id, idChunk))),
+        );
+      }
+      const found = new Set(targets.map(({ id }) => id));
+      const missing = ids.find((id) => !found.has(id));
+      if (missing) throw DataApiErrorFactory.notFound('user_model', missing);
+
+      const providerId = targets[0]!.providerId;
+      if (targets.some((target) => target.providerId !== providerId)) {
+        throw DataApiErrorFactory.validation({ moves: ['Targets must share one provider'] });
+      }
+      assertUserOwnedProvider(providerId);
+      await applyMoves(tx, userModelTable, parsedMoves, {
+        monotonicUpdatedAtColumn: userModelTable.updatedAt,
+        pkColumn: userModelTable.id,
+        scope: eq(userModelTable.providerId, providerId),
+      });
+    });
+    publishDataApiChanges(['/models', ...parsedMoves.map(({ id }) => `/models/${id}`)]);
+  }
+
   private async assertNotUsedAsDefault(id: string, operation: string): Promise<void> {
     if ((await this.getUserDefaultModelIds()).has(id)) {
       throw DataApiErrorFactory.invalidOperation(operation, modelInUseAsDefaultReason);
@@ -905,6 +949,7 @@ guardMethods(
     'bulkDelete',
     'reconcileProviderModels',
     'createFromRegistry',
+    'reorderBatch',
   ]),
 );
 

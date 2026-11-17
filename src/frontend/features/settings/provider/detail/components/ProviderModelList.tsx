@@ -11,6 +11,7 @@ import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderModelListContent } from '../../models/components/ProviderModelListContent';
+import type { ProviderModelListContentProps } from '../../models/components/ProviderModelListContent';
 import { useProviderModelEndpointUpdate } from '../../models/hooks/useProviderModelEndpointUpdate';
 import type { useProviderModelManagement } from '../../models/hooks/useProviderModelManagement';
 import {
@@ -20,6 +21,7 @@ import {
 } from '../../models/utils/providerModelEndpoint';
 
 type ProviderModelListProps = {
+  reorder?: ProviderModelListContentProps['reorder'];
   groupByPurpose?: boolean;
   isEndpointSelectionDisabled?: boolean;
   isFiltered?: boolean;
@@ -33,6 +35,7 @@ type ProviderModelListProps = {
 };
 
 export function ProviderModelList({
+  reorder,
   groupByPurpose = false,
   isEndpointSelectionDisabled = false,
   isFiltered = false,
@@ -46,6 +49,8 @@ export function ProviderModelList({
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [selectedModel, setSelectedModel] = useState<Model>();
+  const isReordering = Boolean(reorder);
+  const endpointModel = isReordering ? undefined : selectedModel;
   const { updateEndpoint, updatingModelId } = useProviderModelEndpointUpdate(provider?.id ?? '');
   const hasNoVisibleModels = !isLoading && models.length === 0;
   const closeEndpointPicker = useCallback(() => setSelectedModel(undefined), []);
@@ -56,16 +61,17 @@ export function ProviderModelList({
   );
   const handleEndpointChange = useCallback(
     (selection: ProviderModelEndpointSelection) => {
-      if (selectedModel) {
-        void updateEndpoint(selectedModel, selection);
+      if (endpointModel) {
+        void updateEndpoint(endpointModel, selection);
       }
     },
-    [selectedModel, updateEndpoint],
+    [endpointModel, updateEndpoint],
   );
 
   return (
     <>
       <ProviderModelListContent
+        reorder={reorder}
         groupByPurpose={groupByPurpose}
         management={management}
         supportedModelIds={supportedModelIds}
@@ -110,14 +116,14 @@ export function ProviderModelList({
         provider={provider}
         updatingModelId={updatingModelId}
       />
-      {selectedModel ? (
+      {endpointModel ? (
         <OptionPickerBottomSheet
           helperText={t('settings.provider.models.endpoint.helper')}
           onClose={closeEndpointPicker}
           onValueChange={handleEndpointChange}
           open
           options={endpointOptions}
-          selectedValue={getProviderModelEndpointSelection(selectedModel)}
+          selectedValue={getProviderModelEndpointSelection(endpointModel)}
           size="compact"
           title={t('settings.provider.models.endpoint.title')}
         />

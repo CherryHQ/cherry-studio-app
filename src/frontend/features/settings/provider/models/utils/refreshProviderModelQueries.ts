@@ -6,19 +6,44 @@ import { queryKeys } from '@/frontend/data';
  * Refresh management/detail queries, enabled-model checks, and the cross-provider picker.
  * Prefix predicates cover concrete detail paths, which do not share the list query key.
  */
-export async function refreshProviderModelQueries(queryClient: QueryClient, providerId: string) {
-  await Promise.all([
-    queryClient.invalidateQueries({
-      predicate: ({ queryKey }) =>
-        typeof queryKey[0] === 'string' && queryKey[0].startsWith('/models/'),
-    }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.models.list({ providerId }) }),
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.models.list({ enabled: true, providerId }),
-    }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
-    refreshAgentQueriesAfterModelRemoval(queryClient),
-  ]);
+export async function refreshProviderModelQueries(
+  queryClient: QueryClient,
+  providerId: string,
+  {
+    refreshAgents = true,
+    throwOnError = false,
+  }: { refreshAgents?: boolean; throwOnError?: boolean } = {},
+) {
+  const refreshes = [
+    queryClient.invalidateQueries(
+      {
+        predicate: ({ queryKey }) =>
+          typeof queryKey[0] === 'string' && queryKey[0].startsWith('/models/'),
+      },
+      { throwOnError },
+    ),
+    queryClient.invalidateQueries(
+      { queryKey: queryKeys.models.list({ providerId }) },
+      { throwOnError },
+    ),
+    queryClient.invalidateQueries(
+      {
+        queryKey: queryKeys.models.list({ enabled: true, providerId }),
+      },
+      { throwOnError },
+    ),
+    queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }, { throwOnError }),
+    ...(refreshAgents ? [refreshAgentQueriesAfterModelRemoval(queryClient)] : []),
+  ];
+  if (throwOnError) {
+    // Reorder admission stays locked until the authoritative list settles, even if an
+    // unrelated detail refetch fails first. Existing callers retain Promise.all behavior.
+    const results = await Promise.allSettled(refreshes);
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
+  } else {
+    await Promise.all(refreshes);
+  }
 }
 
 /**
