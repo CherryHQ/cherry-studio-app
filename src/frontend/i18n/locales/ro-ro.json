@@ -1940,7 +1940,7 @@
   "settings.data.deepseek.progress": "Se importă conversațiile: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Se citesc și se pregătesc conversațiile…",
   "settings.data.deepseek.success": "Agentul DeepSeek a fost creat. Conversații importate: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "Agentul DeepSeek a fost creat. Conversații importate: {{sessions}}. Unele atașamente originale nu au fost disponibile.",
+  "settings.data.deepseek.successPartial": "Agentul DeepSeek a fost creat. Conversații importate: {{sessions}}. Unele conversații sau atașamente nu au putut fi importate.",
   "settings.data.deepseek.title": "Importă date din DeepSeek",
   "settings.data.import": "Importă conversații",
   "settings.data.runtimeCache.clear": "Golește memoria cache de execuție a conversațiilor",

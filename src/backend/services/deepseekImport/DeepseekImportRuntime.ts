@@ -23,17 +23,14 @@ import { type FileEntry, SafeNameSchema } from '@/shared/data/types/file';
 import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
 
 import {
+  type DeepseekArchiveConversation,
   deepseekArchiveFile,
   readDeepseekImageMediaType,
   readDeepseekJson,
   unpackDeepseekArchive,
 } from './deepseekArchive';
 import { convertDeepseekConversation, deepseekFileKey } from './deepseekConversation';
-import {
-  DEEPSEEK_IMPORT_LIMITS,
-  deepseekConversationSchema,
-  validateDeepseekTree,
-} from './deepseekFormat';
+import { DEEPSEEK_IMPORT_LIMITS, deepseekConversationSchema } from './deepseekFormat';
 
 const logger = loggerService.withContext('DeepseekImport');
 
@@ -116,9 +113,10 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
       signal.throwIfAborted();
       progress({ phase: 'reading', completed: 0, total: archive.size });
       let percentage = -1;
-      const { index, names } = await unpackDeepseekArchive(
+      const contents = new Directory(root, 'contents');
+      const { conversations, names } = await unpackDeepseekArchive(
         archive,
-        new Directory(root, 'contents'),
+        contents,
         signal,
         (completed, total) => {
           const next = Math.floor((completed / total) * 100);
@@ -128,78 +126,92 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
           }
         },
       );
-      const contents = new Directory(root, 'contents');
+      const slice = createTimeSlice(signal);
       const importedFiles = new Map<string, FileEntry>();
+      const readable: DeepseekArchiveConversation[] = [];
       let messageCount = 0;
-      for (const item of index) {
-        signal.throwIfAborted();
+      for (const item of conversations) {
+        await slice();
         const conversation = await this.readConversation(contents, item.id);
+        if (!conversation) continue;
+        readable.push(item);
         messageCount += conversation.messages.length;
-        if (messageCount > DEEPSEEK_IMPORT_LIMITS.messages)
-          throw new DeepseekImportError('too-large');
         for (const message of conversation.messages) {
           for (const fragment of message.fragments) {
-            if (fragment?.type !== 'FILE') continue;
+            if (fragment.type !== 'FILE') continue;
             for (const file of fragment.files) {
               const key = deepseekFileKey(item.id, file);
               if (importedFiles.has(key) || !file.is_image || !file.export_path) continue;
-              if (!file.export_path.startsWith(`chat_sessions/${item.id}_files/`))
-                throw new DeepseekImportError('invalid');
               if (!names.has(file.export_path)) continue;
-              const name = SafeNameSchema.safeParse(file.file_name);
-              if (!name.success) throw new DeepseekImportError('invalid');
-              signal.throwIfAborted();
+              await slice();
               storageMutationGate.assertWritable();
-              const source = deepseekArchiveFile(contents, file.export_path);
-              const entry = await importManagedFile(
-                this.files,
-                {
-                  uri: source.uri,
-                  name: name.data,
-                  mediaType: readDeepseekImageMediaType(source),
-                },
-                signal,
-              );
-              createdFiles.push(entry);
-              importedFiles.set(key, entry);
+              try {
+                const source = deepseekArchiveFile(contents, file.export_path);
+                const entry = await importManagedFile(
+                  this.files,
+                  {
+                    uri: source.uri,
+                    name: attachmentName(file.file_name, file.export_path),
+                    mediaType: readDeepseekImageMediaType(source),
+                  },
+                  signal,
+                );
+                createdFiles.push(entry);
+                importedFiles.set(key, entry);
+              } catch (error) {
+                signal.throwIfAborted();
+                // The message keeps the attachment's name as text, like a file absent from the export.
+                logger.warn('Skipped an unreadable DeepSeek attachment', error as Error);
+              }
             }
           }
         }
       }
+      if (readable.length === 0) throw new DeepseekImportError('invalid');
       if (messageCount === 0) throw new DeepseekImportError('empty');
-      progress({ phase: 'importing', completed: 0, total: index.length });
+      progress({ phase: 'importing', completed: 0, total: readable.length });
+      const now = Date.now();
+      // One transaction keeps the import atomic. Other writes wait for it but are not blocked
+      // forever: the loop yields to the app regularly and leaving the page cancels and rolls back.
       const result = await this.dbService.withWriteTx(async (tx) => {
         signal.throwIfAborted();
         storageMutationGate.assertWritable();
         const agent = await this.agents.createTx(tx, { name: 'DeepSeek' });
         let missingAttachments = 0;
+        let sessions = 0;
         let completed = 0;
-        for (const item of index) {
-          signal.throwIfAborted();
+        for (const item of readable) {
+          await slice();
           const conversation = await this.readConversation(contents, item.id);
+          progress({ phase: 'importing', completed: ++completed, total: readable.length });
+          if (!conversation) continue;
           const converted = convertDeepseekConversation(conversation, {
             agentId: agent.id,
-            updatedAt: item.updated_at,
+            conversationId: item.id,
+            insertedAt: item.insertedAt,
+            updatedAt: item.updatedAt,
+            now,
             files: importedFiles,
             createId: createOrderedUuid,
           });
           await tx.insert(agentSessionTable).values(converted.session);
           // Stay under SQLite's historical bound on statement parameters.
           for (let offset = 0; offset < converted.messages.length; offset += 40) {
-            signal.throwIfAborted();
+            await slice();
             await tx
               .insert(agentSessionMessageTable)
               .values(converted.messages.slice(offset, offset + 40));
           }
           missingAttachments += converted.missingAttachments;
-          progress({ phase: 'importing', completed: ++completed, total: index.length });
+          sessions += 1;
         }
         signal.throwIfAborted();
         return {
           agentId: agent.id,
-          sessions: index.length,
+          sessions,
           messages: messageCount,
           missingAttachments,
+          skippedConversations: conversations.length - sessions,
         };
       });
       committed = true;
@@ -221,12 +233,39 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
     }
   }
 
+  /** An unreadable conversation is skipped rather than failing the whole import. */
   private async readConversation(root: Directory, id: string) {
-    const parsed = deepseekConversationSchema.safeParse(
-      await readDeepseekJson(deepseekArchiveFile(root, `chat_sessions/${id}.json`)),
-    );
-    if (!parsed.success || parsed.data.id !== id) throw new DeepseekImportError('invalid');
-    validateDeepseekTree(parsed.data);
-    return parsed.data;
+    try {
+      const parsed = deepseekConversationSchema.safeParse(
+        await readDeepseekJson(deepseekArchiveFile(root, `chat_sessions/${id}.json`)),
+      );
+      if (parsed.success) return parsed.data;
+    } catch (error) {
+      if (!(error instanceof DeepseekImportError)) throw error;
+    }
+    logger.warn('Skipped an unreadable DeepSeek conversation');
+    return undefined;
   }
+}
+
+/** Called at each unit of work: checks cancellation and yields to the app once 50 ms have passed. */
+function createTimeSlice(signal: AbortSignal) {
+  let started = Date.now();
+  return async () => {
+    signal.throwIfAborted();
+    if (Date.now() - started < 50) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    signal.throwIfAborted();
+    started = Date.now();
+  };
+}
+
+/** Archive names are display text; make them safe file names instead of rejecting them. */
+function attachmentName(name: string, exportPath: string): string {
+  const candidate = (name || exportPath.split('/').at(-1) || '')
+    .replace(/[\\/\0]/g, '_')
+    .trim()
+    .slice(0, 255);
+  const parsed = SafeNameSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : 'image';
 }

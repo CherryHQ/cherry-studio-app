@@ -1921,7 +1921,7 @@
   "settings.data.deepseek.progress": "Importing conversations: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Reading and preparing conversations…",
   "settings.data.deepseek.success": "Created DeepSeek. Imported conversations: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "Created DeepSeek. Imported conversations: {{sessions}}. Some attachment originals were unavailable.",
+  "settings.data.deepseek.successPartial": "Created DeepSeek. Imported conversations: {{sessions}}. Some conversations or attachments could not be imported.",
   "settings.data.deepseek.title": "Import from DeepSeek",
   "settings.data.import": "Import conversations",
   "settings.data.runtimeCache.clear": "Clear conversation runtime cache",

@@ -1902,7 +1902,7 @@
   "settings.data.deepseek.progress": "会話をインポート中：{{completed}} / {{total}}",
   "settings.data.deepseek.reading": "会話を読み込んで準備しています…",
   "settings.data.deepseek.success": "DeepSeek を作成しました。インポートした会話：{{sessions}}。",
-  "settings.data.deepseek.successWithMissing": "DeepSeek を作成しました。インポートした会話：{{sessions}}。一部の添付ファイルの原本がありませんでした。",
+  "settings.data.deepseek.successPartial": "DeepSeek を作成しました。インポートした会話：{{sessions}}。一部の会話または添付ファイルをインポートできませんでした。",
   "settings.data.deepseek.title": "DeepSeek データのインポート",
   "settings.data.import": "会話をインポート",
   "settings.data.runtimeCache.clear": "会話の実行キャッシュを消去",

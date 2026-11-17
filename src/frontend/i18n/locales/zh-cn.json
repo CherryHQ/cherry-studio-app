@@ -1902,7 +1902,7 @@
   "settings.data.deepseek.progress": "正在导入会话：{{completed}} / {{total}}",
   "settings.data.deepseek.reading": "正在读取并准备会话…",
   "settings.data.deepseek.success": "已创建 DeepSeek 智能体，导入 {{sessions}} 个会话。",
-  "settings.data.deepseek.successWithMissing": "已创建 DeepSeek 智能体，导入 {{sessions}} 个会话。部分附件缺少原文件。",
+  "settings.data.deepseek.successPartial": "已创建 DeepSeek 智能体，导入 {{sessions}} 个会话。部分会话或附件未能导入。",
   "settings.data.deepseek.title": "导入 DeepSeek 数据",
   "settings.data.import": "导入会话",
   "settings.data.runtimeCache.clear": "清理对话运行缓存",

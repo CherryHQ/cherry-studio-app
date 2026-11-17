@@ -1940,7 +1940,7 @@
   "settings.data.deepseek.progress": "Importation des conversations : {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Lecture et préparation des conversations…",
   "settings.data.deepseek.success": "DeepSeek a été créé. Conversations importées : {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "DeepSeek a été créé. Conversations importées : {{sessions}}. Certains fichiers joints originaux étaient indisponibles.",
+  "settings.data.deepseek.successPartial": "DeepSeek a été créé. Conversations importées : {{sessions}}. Certaines conversations ou pièces jointes n’ont pas pu être importées.",
   "settings.data.deepseek.title": "Importer les données DeepSeek",
   "settings.data.import": "Importer des conversations",
   "settings.data.runtimeCache.clear": "Vider le cache d'exécution des conversations",

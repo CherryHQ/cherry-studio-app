@@ -6,25 +6,41 @@ import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import { AgentMessagePartSchema, type AgentMessagePart } from '@/shared/contracts/agent';
 import type { FileEntry } from '@/shared/data/types/file';
 
-import type { DeepseekConversation, DeepseekFile } from './deepseekFormat';
+import { type DeepseekConversation, type DeepseekFile, repairDeepseekTree } from './deepseekFormat';
 
 export function deepseekFileKey(conversationId: string, file: DeepseekFile): string {
   return JSON.stringify([conversationId, file.id, file.export_path]);
 }
 
-/** Keep all branches; remap conversation-local numeric IDs into Cherry-owned identities. */
+/**
+ * Keep all branches of the repaired tree; remap conversation-local numeric IDs into Cherry-owned
+ * identities. A missing time falls back to the index, then to the surrounding messages, then `now`.
+ */
 export function convertDeepseekConversation(
   conversation: DeepseekConversation,
   input: {
     agentId: string;
-    updatedAt: number;
+    /** The archive key; also the conversation's attachment namespace. */
+    conversationId: string;
+    insertedAt?: number;
+    updatedAt?: number;
+    now: number;
     files: ReadonlyMap<string, FileEntry>;
     createId(): string;
   },
 ) {
   const { createId } = input;
   const sessionId = createId();
-  const ordered = [...conversation.messages].sort((a, b) => a.id - b.id);
+  const { messages: ordered, selectedId } = repairDeepseekTree(conversation);
+  let earliest: number | undefined;
+  let latest: number | undefined;
+  for (const { inserted_at: time } of ordered) {
+    if (time === undefined) continue;
+    earliest = Math.min(earliest ?? time, time);
+    latest = Math.max(latest ?? time, time);
+  }
+  const createdAt = conversation.inserted_at ?? input.insertedAt ?? earliest ?? input.now;
+  const lastActivityAt = Math.max(createdAt, latest ?? createdAt);
   const ids = new Map(ordered.map((message) => [message.id, createId()]));
   const turns = new Map(
     ordered.filter((message) => message.role === 'USER').map((message) => [message.id, createId()]),
@@ -37,7 +53,7 @@ export function convertDeepseekConversation(
     const excludedReply =
       !isUser &&
       (!['FINISHED', 'INCOMPLETE'].includes(message.status) ||
-        message.fragments.some((part) => part?.type === 'TEMPLATE_RESPONSE'));
+        message.fragments.some((part) => part.type === 'TEMPLATE_RESPONSE'));
     if (excludedReply) {
       // Export failure/template text is retained for details, never replayed as a model answer.
       parts.push({
@@ -51,7 +67,6 @@ export function convertDeepseekConversation(
       });
     } else {
       for (const fragment of message.fragments) {
-        if (!fragment) continue;
         switch (fragment.type) {
           case 'REQUEST':
           case 'RESPONSE':
@@ -68,7 +83,7 @@ export function convertDeepseekConversation(
             break;
           case 'FILE':
             for (const file of fragment.files) {
-              const entry = input.files.get(deepseekFileKey(conversation.id, file));
+              const entry = input.files.get(deepseekFileKey(input.conversationId, file));
               if (entry) {
                 parts.push({
                   id: createId(),
@@ -84,7 +99,7 @@ export function convertDeepseekConversation(
                 parts.push({
                   id: createId(),
                   type: 'text',
-                  text: `📎 ${file.file_name}`,
+                  text: `📎 ${file.file_name || file.export_path?.split('/').at(-1) || '?'}`,
                   state: 'done',
                 });
               }
@@ -128,15 +143,10 @@ export function convertDeepseekConversation(
       modelId: null,
       searchableText: toSearchableText(parts),
       // Imported creation times are historical facts, not new local mutation versions.
-      createdAt: message.inserted_at,
-      updatedAt: message.inserted_at,
+      createdAt: message.inserted_at ?? createdAt,
+      updatedAt: message.inserted_at ?? createdAt,
     });
   }
-  const lastActivityAt = ordered.reduce(
-    (time, message) => Math.max(time, message.inserted_at),
-    conversation.inserted_at,
-  );
-  const selectedId = conversation.current_message_id ?? ordered.at(-1)?.id;
   const session: InsertAgentSessionRow = {
     id: sessionId,
     agentId: input.agentId,
@@ -144,8 +154,8 @@ export function convertDeepseekConversation(
     isNameManuallyEdited: true,
     activeNodeId: selectedId === undefined ? null : (ids.get(selectedId) ?? null),
     lastActivityAt,
-    createdAt: conversation.inserted_at,
-    updatedAt: input.updatedAt,
+    createdAt,
+    updatedAt: input.updatedAt ?? lastActivityAt,
   };
   return { session, messages: rows, missingAttachments };
 }

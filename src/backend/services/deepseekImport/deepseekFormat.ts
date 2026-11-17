@@ -1,119 +1,118 @@
 import * as z from 'zod';
 
-import { DeepseekImportError } from '@/shared/contracts/deepseekImport';
-
 export const DEEPSEEK_IMPORT_LIMITS = {
   archiveBytes: 1024 * 1024 * 1024,
   expandedBytes: 1024 * 1024 * 1024,
-  entries: 20_000,
+  entries: 65_535,
   jsonBytes: 32 * 1024 * 1024,
-  messages: 100_000,
 } as const;
 
-const timestamp = z.string().transform((value, ctx) => {
-  const time = Date.parse(value);
-  if (!Number.isSafeInteger(time) || time < 0) {
-    ctx.addIssue({ code: 'custom', message: 'Invalid export timestamp' });
-    return z.NEVER;
-  }
-  return time;
-});
-const sessionId = z
-  .string()
-  .min(1)
-  .max(200)
-  .regex(/^[a-zA-Z0-9_-]+$/);
+/** ISO text or epoch seconds/milliseconds; anything else falls back to a neighbouring time. */
+const timestamp = z
+  .unknown()
+  .transform((value) => {
+    const time =
+      typeof value === 'number'
+        ? value < 1e12
+          ? value * 1000
+          : value
+        : typeof value === 'string'
+          ? Date.parse(value)
+          : NaN;
+    // 8.64e15 ms is the largest time a JavaScript Date can represent.
+    return time >= 0 && time <= 8.64e15 ? Math.round(time) : undefined;
+  })
+  .optional();
+const idText = z.union([z.string().min(1), z.number()]).transform(String);
+const optionalText = z.string().nullable().optional().catch(null);
 const file = z.object({
-  id: z.string().min(1),
-  file_name: z.string().min(1),
-  file_size: z.number().int().nonnegative().optional().default(0),
-  is_image: z.boolean(),
-  export_path: z.string().nullable(),
+  id: idText.catch(''),
+  file_name: z.string().catch(''),
+  is_image: z.boolean().catch(false),
+  export_path: optionalText,
 });
-const source = z.object({
-  url: z.string().nullable().optional(),
-  title: z.string().nullable().optional(),
-});
+const source = z.object({ url: optionalText, title: optionalText });
+const list = <T extends z.ZodType>(item: T) =>
+  z
+    .array(z.unknown())
+    .catch([])
+    .transform((items) =>
+      items.flatMap((value) => {
+        const parsed = item.safeParse(value);
+        return parsed.success ? [parsed.data as z.output<T>] : [];
+      }),
+    );
 
 const fragment = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('REQUEST'), content: z.string() }),
-  z.object({ type: z.literal('RESPONSE'), content: z.string() }),
-  z.object({ type: z.literal('THINK'), content: z.string() }),
-  z.object({ type: z.literal('TEMPLATE_RESPONSE'), content: z.string() }),
-  z.object({ type: z.literal('FILE'), files: z.array(file) }),
-  z.object({ type: z.literal('TOOL_SEARCH'), results: z.array(source) }),
-  z.object({
-    type: z.literal('TOOL_OPEN'),
-    url: z.string().nullable(),
-    title: z.string().nullable().optional(),
-  }),
-  z.object({ type: z.literal('READ_LINK'), results: z.array(source) }),
+  z.object({ type: z.literal('REQUEST'), content: z.string().catch('') }),
+  z.object({ type: z.literal('RESPONSE'), content: z.string().catch('') }),
+  z.object({ type: z.literal('THINK'), content: z.string().catch('') }),
+  z.object({ type: z.literal('TEMPLATE_RESPONSE'), content: z.string().catch('') }),
+  z.object({ type: z.literal('FILE'), files: list(file) }),
+  z.object({ type: z.literal('TOOL_SEARCH'), results: list(source) }),
+  z.object({ type: z.literal('TOOL_OPEN'), url: optionalText, title: optionalText }),
+  z.object({ type: z.literal('READ_LINK'), results: list(source) }),
 ]);
-const fragmentTypes = new Set(fragment.options.map((option) => option.shape.type.value));
-const envelope = z.looseObject({ type: z.string() }).transform((value, ctx) => {
-  if (!fragmentTypes.has(value.type as z.infer<typeof fragment>['type'])) return null;
-  const parsed = fragment.safeParse(value);
-  if (!parsed.success) {
-    ctx.addIssue({ code: 'custom', message: 'Invalid export fragment' });
-    return z.NEVER;
-  }
-  return parsed.data;
+
+const message = z.object({
+  id: z.number().int().nonnegative(),
+  parent_id: z.number().int().nonnegative().nullable().catch(null),
+  role: z
+    .string()
+    .transform((value) => value.toUpperCase())
+    .pipe(z.enum(['USER', 'ASSISTANT'])),
+  status: z.string().catch('FINISHED'),
+  inserted_at: timestamp,
+  fragments: list(fragment),
 });
 
-export const deepseekIndexSchema = z
-  .array(
-    z.object({
-      id: sessionId,
-      inserted_at: timestamp,
-      updated_at: timestamp,
-    }),
-  )
-  .max(DEEPSEEK_IMPORT_LIMITS.entries);
+/** Unreadable index rows are dropped; conversation files found in the archive are imported too. */
+export const deepseekIndexSchema = list(
+  z.object({ id: idText, inserted_at: timestamp, updated_at: timestamp }),
+);
 
+/** Lenient: malformed messages and fragments are dropped instead of rejecting the conversation. */
 export const deepseekConversationSchema = z.object({
-  id: sessionId,
-  title: z.string().nullable(),
+  title: optionalText,
   inserted_at: timestamp,
-  current_message_id: z.number().int().nonnegative().nullable().optional(),
-  messages: z
-    .array(
-      z.object({
-        id: z.number().int().nonnegative(),
-        parent_id: z.number().int().nonnegative().nullable(),
-        role: z.enum(['USER', 'ASSISTANT']),
-        status: z.string(),
-        inserted_at: timestamp,
-        fragments: z.array(envelope),
-      }),
-    )
-    .max(DEEPSEEK_IMPORT_LIMITS.messages),
+  current_message_id: z.number().int().nullable().optional().catch(null),
+  messages: list(message),
 });
 
 export type DeepseekConversation = z.infer<typeof deepseekConversationSchema>;
+export type DeepseekMessage = DeepseekConversation['messages'][number];
 export type DeepseekFile = z.infer<typeof file>;
 
-/** Parents precede their children in the official format; this also excludes cycles. */
-export function validateDeepseekTree(conversation: DeepseekConversation): void {
-  if (conversation.messages.length === 0) {
-    // The official exporter uses 0 when an empty conversation has no selected message.
-    if (conversation.current_message_id != null && conversation.current_message_id !== 0)
-      throw new DeepseekImportError('invalid');
-    return;
+/**
+ * Repairs the tree into the alternating question/answer shape the transcript requires. Parents
+ * that are missing or appear later become roots, a same-role parent is replaced by its nearest
+ * opposite-role ancestor, and duplicate IDs keep their first message. An answer with no question
+ * above it has nowhere to attach and is dropped; its children re-attach to the nearest kept
+ * ancestor. Returns messages in ID order and the selected message after repair.
+ */
+export function repairDeepseekTree(conversation: DeepseekConversation): {
+  messages: DeepseekMessage[];
+  selectedId: number | undefined;
+} {
+  const kept = new Map<number, DeepseekMessage>();
+  // Every seen ID resolves to itself or, when dropped, to the kept ancestor that replaces it.
+  const resolved = new Map<number, number | null>();
+  for (const original of [...conversation.messages].sort((a, b) => a.id - b.id)) {
+    if (resolved.has(original.id)) continue;
+    let parent = original.parent_id === null ? null : (resolved.get(original.parent_id) ?? null);
+    while (parent !== null && kept.get(parent)!.role === original.role)
+      parent = kept.get(parent)!.parent_id;
+    if (original.role === 'ASSISTANT' && parent === null) {
+      resolved.set(original.id, null);
+      continue;
+    }
+    resolved.set(original.id, original.id);
+    kept.set(original.id, { ...original, parent_id: parent });
   }
-  const messages = [...conversation.messages].sort((a, b) => a.id - b.id);
-  const seen = new Map<number, DeepseekConversation['messages'][number]>();
-  for (const message of messages) {
-    const parent = message.parent_id === null ? undefined : seen.get(message.parent_id);
-    if (
-      seen.has(message.id) ||
-      (message.parent_id === null
-        ? message.role !== 'USER'
-        : !parent || parent.role === message.role)
-    )
-      throw new DeepseekImportError('invalid');
-    seen.set(message.id, message);
-  }
-  if (conversation.current_message_id != null && !seen.has(conversation.current_message_id)) {
-    throw new DeepseekImportError('invalid');
-  }
+  const messages = [...kept.values()];
+  const selected =
+    conversation.current_message_id == null
+      ? undefined
+      : resolved.get(conversation.current_message_id);
+  return { messages, selectedId: selected ?? messages.at(-1)?.id };
 }

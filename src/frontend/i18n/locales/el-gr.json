@@ -1921,7 +1921,7 @@
   "settings.data.deepseek.progress": "Εισαγωγή συνομιλιών: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Ανάγνωση και προετοιμασία συνομιλιών…",
   "settings.data.deepseek.success": "Δημιουργήθηκε ο DeepSeek. Συνομιλίες που εισήχθησαν: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "Δημιουργήθηκε ο DeepSeek. Συνομιλίες που εισήχθησαν: {{sessions}}. Ορισμένα πρωτότυπα συνημμένα δεν ήταν διαθέσιμα.",
+  "settings.data.deepseek.successPartial": "Δημιουργήθηκε ο DeepSeek. Συνομιλίες που εισήχθησαν: {{sessions}}. Ορισμένες συνομιλίες ή συνημμένα δεν ήταν δυνατό να εισαχθούν.",
   "settings.data.deepseek.title": "Εισαγωγή δεδομένων DeepSeek",
   "settings.data.import": "Εισαγωγή συνομιλιών",
   "settings.data.runtimeCache.clear": "Εκκαθάριση προσωρινής μνήμης εκτέλεσης συνομιλιών",

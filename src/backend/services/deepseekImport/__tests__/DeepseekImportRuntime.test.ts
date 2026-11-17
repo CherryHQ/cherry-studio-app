@@ -43,7 +43,7 @@ jest.mock('../deepseekArchive', () => ({
   readDeepseekImageMediaType: () => 'image/png',
   readDeepseekJson: async (file: { uri: string }) => mockConversations.get(file.uri),
   unpackDeepseekArchive: async () => ({
-    index: ['first', 'second'].map((id) => ({ id, inserted_at: 1, updated_at: 2 })),
+    conversations: ['first', 'second'].map((id) => ({ id, insertedAt: 1, updatedAt: 2 })),
     names: mockArchiveNames,
   }),
 }));
@@ -103,7 +103,12 @@ test('creates one new DeepSeek agent and assigns every conversation while preser
     signal: new AbortController().signal,
     onProgress: () => {},
   });
-  expect(result).toMatchObject({ sessions: 2, messages: 4, missingAttachments: 0 });
+  expect(result).toMatchObject({
+    sessions: 2,
+    messages: 4,
+    missingAttachments: 0,
+    skippedConversations: 0,
+  });
   expect(sqlite.prepare('SELECT id, name FROM agent ORDER BY name').all()).toEqual([
     { id: result.agentId, name: 'DeepSeek' },
     { id: 'existing', name: 'Existing' },
@@ -144,6 +149,30 @@ test('imports a mixed archive without letting an empty conversation block other 
   expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
     count: 2,
   });
+});
+
+test.each([undefined, 'not json', { messages: 'not a list', title: 7 }])(
+  'skips an unreadable conversation %p and imports the rest',
+  async (content) => {
+    mockConversations.set('chat_sessions/first.json', content);
+    const result = await importer.importFromUrl(url, {
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+    const skipped = typeof content === 'object' ? 0 : 1;
+    expect(result).toMatchObject({ sessions: 2 - skipped, skippedConversations: skipped });
+    expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+      count: 2,
+    });
+  },
+);
+
+test('rejects an archive with no readable conversation without creating an agent', async () => {
+  mockConversations.clear();
+  await expect(
+    importer.importFromUrl(url, { signal: new AbortController().signal, onProgress: () => {} }),
+  ).rejects.toMatchObject({ code: 'invalid' });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
 });
 
 test('rejects an entirely empty archive without creating an imported agent', async () => {
@@ -221,6 +250,29 @@ test.each(['scan', 'photo.txt', 'photo.PNG'])(
     ]);
   },
 );
+
+test('an image that cannot be imported becomes a missing attachment instead of failing', async () => {
+  const path = 'elsewhere/photo.png';
+  mockArchiveNames.add(path);
+  const conversation = mockConversations.get('chat_sessions/first.json') as {
+    messages: { fragments: unknown[] }[];
+  };
+  conversation.messages[0].fragments.push({
+    type: 'FILE',
+    files: [{ id: 'image', file_name: 'a/b.png', is_image: true, export_path: path }],
+  });
+  jest.mocked(importManagedFile).mockRejectedValue(new Error('decode failed'));
+  const result = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+  expect(importManagedFile).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ uri: path, name: 'a_b.png' }),
+    expect.anything(),
+  );
+  expect(result).toMatchObject({ sessions: 2, missingAttachments: 1 });
+});
 
 test('a failed commit rolls back the new agent and all conversations', async () => {
   db.failWriteTxCommit(new Error('disk failure'));

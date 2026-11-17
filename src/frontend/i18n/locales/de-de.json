@@ -1921,7 +1921,7 @@
   "settings.data.deepseek.progress": "Unterhaltungen werden importiert: {{completed}} / {{total}}",
   "settings.data.deepseek.reading": "Unterhaltungen werden gelesen und vorbereitet…",
   "settings.data.deepseek.success": "DeepSeek wurde erstellt. Importierte Unterhaltungen: {{sessions}}.",
-  "settings.data.deepseek.successWithMissing": "DeepSeek wurde erstellt. Importierte Unterhaltungen: {{sessions}}. Einige Originalanhänge waren nicht verfügbar.",
+  "settings.data.deepseek.successPartial": "DeepSeek wurde erstellt. Importierte Unterhaltungen: {{sessions}}. Einige Unterhaltungen oder Anhänge konnten nicht importiert werden.",
   "settings.data.deepseek.title": "DeepSeek-Daten importieren",
   "settings.data.import": "Unterhaltungen importieren",
   "settings.data.runtimeCache.clear": "Laufzeit-Cache für Unterhaltungen leeren",

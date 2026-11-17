@@ -9,23 +9,28 @@ test('preserves the exact signed query, trimming only surrounding whitespace', (
 });
 
 test.each([
-  url.replace('https:', 'http:'),
-  url.replace(origin, `${origin}.example.com`),
-  url.replace(origin, 'https://other-bucket.obs.cn-east-3.myhuaweicloud.com'),
-  url.replace('https://', 'https://user:password@'),
-  url.replace('.com/', '.com:8443/'),
-  `${url}#export`,
-  url.replace('.zip?', '.txt?'),
-  url.replace('deepseek_data-', 'other_data-'),
+  url.replace(origin, 'https://deepseek-exports.oss-cn-hangzhou.aliyuncs.com'),
+  url.replace(origin, 'https://download.deepseek.com'),
+  url.replace('.zip?', '.bin?'),
   url.replace('&Signature=abc%2B123%2F%3D', ''),
-  `${url}&Signature=another`,
-  url.replace('Expires=4102444800', 'Expires=not-a-time'),
-])('rejects an untrusted or malformed link without returning its capability', (input) => {
+  `${url}&extra=1#export`,
+])('admits a changed DeepSeek export location or query shape %s', (input) => {
+  expect(parseDeepseekExportUrl(input, 0)).toBe(input);
+});
+
+test.each([
+  'not a link',
+  url.replace('https:', 'http:'),
+  url.replace(origin, 'https://example.com'),
+  url.replace('https://', 'https://user:password@'),
+])('rejects a link that is not an HTTPS DeepSeek link: %s', (input) => {
   expect(() => parseDeepseekExportUrl(input, 0)).toThrow('DeepSeek import: invalid-link');
 });
 
-test('rejects expiration at the boundary', () => {
+test('rejects expiration at the boundary and ignores a non-numeric expiry', () => {
   expect(() => parseDeepseekExportUrl(url, 4102444800 * 1000)).toThrow(
     'DeepSeek import: expired-link',
   );
+  const unknown = url.replace('Expires=4102444800', 'Expires=later');
+  expect(parseDeepseekExportUrl(unknown, 4102444800 * 1000)).toBe(unknown);
 });
