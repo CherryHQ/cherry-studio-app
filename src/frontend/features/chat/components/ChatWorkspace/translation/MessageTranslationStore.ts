@@ -4,10 +4,10 @@ import {
   type TranslationErrorCode,
   type TranslationModule,
 } from '@/shared/contracts/translation';
-import type { ApiClient } from '@/shared/data/api/types';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 import type { ChatShareTranslations } from '../../../share/chatShareTarget';
+import type { MessageTranslationPersistence } from './messageTranslationPersistence';
 import {
   messageTranslationSource,
   type MessageTranslationSource,
@@ -35,20 +35,25 @@ type ActiveTranslation = {
 
 /** Session-owned requests survive row virtualization. Only the translated row is notified. */
 export class MessageTranslationStore {
-  private states = new Map<string, { contentHash: string; state: MessageTranslationState }>();
+  private states = new Map<
+    string,
+    { contentHash: string; revision?: string; state: MessageTranslationState }
+  >();
   private listeners = new Map<string, Set<() => void>>();
   private active = new Map<string, ActiveTranslation>();
 
   constructor(
     private readonly translation: TranslationModule,
-    private readonly dataApi: Pick<ApiClient, 'patch'>,
-    private readonly sessionId: string,
+    private readonly persistence: MessageTranslationPersistence,
   ) {}
 
   get(source: MessageTranslationSource): MessageTranslationState {
     const current = this.states.get(source.messageId);
-    let state = current?.contentHash === source.contentHash ? current.state : EMPTY_TRANSLATION;
-    const saved = source.translations;
+    let state =
+      current?.contentHash === source.contentHash && current.revision === source.revision
+        ? current.state
+        : EMPTY_TRANSLATION;
+    const saved = this.persistence.read?.(source) ?? source.translations;
     if (saved?.sourceHash === source.contentHash) {
       const languages = Object.keys(saved.results) as AppLanguage[];
       if (languages.some((language) => saved.results[language] && !state.translations[language])) {
@@ -72,8 +77,16 @@ export class MessageTranslationStore {
             : { ...state, translations };
       }
     }
-    if (current?.state !== state || current?.contentHash !== source.contentHash)
-      this.states.set(source.messageId, { contentHash: source.contentHash, state });
+    if (
+      current?.state !== state ||
+      current?.contentHash !== source.contentHash ||
+      current?.revision !== source.revision
+    )
+      this.states.set(source.messageId, {
+        contentHash: source.contentHash,
+        revision: source.revision,
+        state,
+      });
     return state;
   }
 
@@ -88,7 +101,11 @@ export class MessageTranslationStore {
   }
 
   private publish(source: MessageTranslationSource, state: MessageTranslationState) {
-    this.states.set(source.messageId, { contentHash: source.contentHash, state });
+    this.states.set(source.messageId, {
+      contentHash: source.contentHash,
+      revision: source.revision,
+      state,
+    });
     for (const listener of this.listeners.get(source.messageId) ?? []) listener();
   }
 
@@ -99,10 +116,11 @@ export class MessageTranslationStore {
 
   getExpandedTranslations(): ChatShareTranslations {
     const translations: Record<string, ChatShareTranslations[string]> = {};
-    for (const [messageId, { contentHash, state }] of this.states) {
+    for (const [messageId, { contentHash, revision, state }] of this.states) {
       if (state.visible && state.language && state.content.trim())
         translations[messageId] = {
           sourceHash: contentHash,
+          ...(revision ? { revision } : {}),
           language: state.language,
           content: state.content,
         };
@@ -112,7 +130,11 @@ export class MessageTranslationStore {
 
   async start(source: MessageTranslationSource, language: AppLanguage) {
     const previous = this.active.get(source.messageId);
-    if (previous?.source.contentHash === source.contentHash && previous.language === language) {
+    if (
+      previous?.source.contentHash === source.contentHash &&
+      previous.source.revision === source.revision &&
+      previous.language === language
+    ) {
       this.publish(source, { ...this.get(source), visible: true });
       return;
     }
@@ -153,12 +175,7 @@ export class MessageTranslationStore {
         },
       );
       if (!isCurrent()) return;
-      await this.dataApi.patch(
-        `/agent-sessions/${this.sessionId}/messages/${source.messageId}/translations`,
-        {
-          body: { sourceHash: source.contentHash, language, content },
-        },
-      );
+      await this.persistence.save(source, language, content);
       if (!isCurrent()) return;
       const current = this.get(source);
       this.publish(source, {
@@ -191,7 +208,7 @@ export class MessageTranslationStore {
     for (const messageId of this.active.keys()) this.cancel(messageId);
   }
 
-  /** Cancel stale work; persisted results stay with the message until its text changes. */
+  /** Cancel stale work and discard visible state when its source text or revision changes. */
   reconcile(messages: readonly ConversationMessage[]) {
     for (const [messageId, request] of this.active) {
       const message = messages.find((candidate) => candidate.key === messageId);
@@ -199,10 +216,21 @@ export class MessageTranslationStore {
         message?.state === 'success' && message.completeness === 'complete'
           ? messageTranslationSource(message.display)
           : undefined;
-      if (source?.contentHash !== request.source.contentHash) this.cancel(messageId);
+      if (
+        source?.contentHash !== request.source.contentHash ||
+        source?.revision !== request.source.revision
+      )
+        this.cancel(messageId);
     }
     for (const message of messages) {
-      if (message.state === 'success' || !this.states.has(message.key)) continue;
+      const saved = this.states.get(message.key);
+      if (!saved) continue;
+      const source =
+        message.state === 'success' && message.completeness === 'complete'
+          ? messageTranslationSource(message.display)
+          : undefined;
+      if (source?.contentHash === saved.contentHash && source?.revision === saved.revision)
+        continue;
       this.states.delete(message.key);
       for (const listener of this.listeners.get(message.key) ?? []) listener();
     }

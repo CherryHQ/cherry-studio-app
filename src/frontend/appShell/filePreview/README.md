@@ -1,5 +1,9 @@
 # Temporary File Preview
 
+`prepareTemporaryFilePreview` copies a source-owned cache file into a preview-owned directory before
+that source can retire. Cancellation or copying failure removes the incomplete directory; the
+viewer receives its independent release callback. No database file entry is created.
+
 `openTemporaryFilePreview` sends a caller-owned cache file to the existing file viewer without
 creating a file entry or library record. Navigation carries only an opaque request id and display
 source id; cache URIs and release callbacks remain in memory. An unavailable request never resolves

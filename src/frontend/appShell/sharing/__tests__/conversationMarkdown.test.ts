@@ -91,6 +91,49 @@ test('preserves portable citations, including a source cited again in a later me
   expect(markdown).toContain('[Documentation](<https://example.com/docs>)');
 });
 
+test('adapts saved web-search results to shared citations without exporting tool bodies', () => {
+  const markdown = conversationToMarkdown(
+    {
+      messages: [
+        message('answer', [
+          {
+            id: 'search',
+            type: 'dynamic-tool',
+            toolCallId: 'call',
+            toolRef: { source: 'builtin', capabilityId: 'web_search' },
+            toolName: 'web_search',
+            state: 'output-available',
+            input: { query: 'private search query' },
+            output: {
+              value: {
+                details: {
+                  results: [
+                    {
+                      id: 'one',
+                      title: 'A',
+                      url: 'https://example.com/a',
+                      content: 'private body',
+                    },
+                    { id: 'two', title: 'B', url: 'https://example.com/b' },
+                  ],
+                },
+              },
+              artifacts: [],
+            },
+          },
+          { id: 'text', type: 'text', text: 'Answer [cite:two].', state: 'done' },
+        ]),
+      ],
+    },
+    labels,
+  );
+
+  expect(markdown).toContain('Answer [2](<https://example.com/b>).');
+  expect(markdown).toContain('1. [A](<https://example.com/a>)');
+  expect(markdown).toContain('2. [B](<https://example.com/b>)');
+  expect(markdown).not.toMatch(/private search query|private body|web_search/);
+});
+
 test('expands full saved quotes at their inline positions with the recorded author and citations', () => {
   const firstLabel = '“Original excerpt…”';
   const secondLabel = '“Another excerpt…”';

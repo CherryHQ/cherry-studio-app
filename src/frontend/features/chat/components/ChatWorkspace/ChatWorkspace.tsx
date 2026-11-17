@@ -13,6 +13,7 @@ import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/c
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { useChatEditing } from '../../context/ChatEditingProvider';
+import { useMessageCitationSources } from '../../hooks/useMessageCitationSources';
 import { type PendingChatSend } from '../../runtime';
 import { useChatShareSelectionActions } from '../../share/chatShareSelection';
 import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
@@ -59,7 +60,9 @@ type ChatWorkspaceProps = {
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
   sessionId?: string;
-  /** Translation is available only for locally owned Agent messages. */
+  /** Remote reading aids use this stable source-owned namespace instead of local persistence. */
+  readingAidScope?: string;
+  /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
@@ -70,7 +73,7 @@ export function ChatWorkspace({
   onQuoteWindowReady,
   onQuoteTakeover,
   snapshot: live,
-  messages: mergedMessages,
+  messages: sourceMessages,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -87,6 +90,7 @@ export function ChatWorkspace({
   isAssistantToolbarEnabled,
   sessionId,
   isTranslationEnabled = false,
+  readingAidScope,
   renderUsage,
 }: ChatWorkspaceProps) {
   const { beginSelection } = useChatShareSelectionActions();
@@ -104,6 +108,12 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
+  const mergedMessages = useMessageCitationSources(
+    sourceMessages,
+    dataKey || `${executionSource}:${sessionId ?? 'draft'}`,
+    messageWindow.readCitations,
+    messageWindow.revision,
+  );
   useConversationFeedbackHint(
     messageWindow.dataKey || sessionId || 'draft',
     live,
@@ -281,6 +291,7 @@ export function ChatWorkspace({
     <View className="flex-1" onTouchStart={onQuoteTakeover}>
       <MessageTranslationProvider
         isEnabled={isTranslationEnabled}
+        readingAidScope={readingAidScope}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >

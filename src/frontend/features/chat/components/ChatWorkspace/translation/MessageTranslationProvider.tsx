@@ -15,6 +15,10 @@ import type { MessageListItem } from '@/frontend/components/Message';
 import { useApiClient, useBackendModule } from '@/frontend/data';
 
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
+import {
+  localMessageTranslationPersistence,
+  remoteMessageTranslationPersistence,
+} from './messageTranslationPersistence';
 import { messageTranslationSource } from './messageTranslationSource';
 import { EMPTY_TRANSLATION, MessageTranslationStore } from './MessageTranslationStore';
 
@@ -23,19 +27,38 @@ const unsubscribeNothing = () => {};
 type ProviderProps = PropsWithChildren<{
   isEnabled: boolean;
   sessionId: string;
+  readingAidScope?: string;
   messages: readonly ConversationMessage[];
 }>;
 
 export function MessageTranslationProvider(props: ProviderProps) {
   if (!props.isEnabled)
     return <TranslationContext value={null}>{props.children}</TranslationContext>;
-  return <SessionTranslationProvider key={props.sessionId} {...props} />;
+  return (
+    <SessionTranslationProvider
+      key={JSON.stringify([props.readingAidScope, props.sessionId])}
+      {...props}
+    />
+  );
 }
 
-function SessionTranslationProvider({ children, sessionId, messages }: ProviderProps) {
+function SessionTranslationProvider({
+  children,
+  sessionId,
+  messages,
+  readingAidScope,
+}: ProviderProps) {
   const translator = useBackendModule('translation');
   const dataApi = useApiClient();
-  const [store] = useState(() => new MessageTranslationStore(translator, dataApi, sessionId));
+  const [store] = useState(
+    () =>
+      new MessageTranslationStore(
+        translator,
+        readingAidScope
+          ? remoteMessageTranslationPersistence(readingAidScope)
+          : localMessageTranslationPersistence(dataApi, sessionId),
+      ),
+  );
   useFocusEffect(useCallback(() => () => store.cancelAll(), [store]));
   useLayoutEffect(() => {
     store.reconcile(messages);

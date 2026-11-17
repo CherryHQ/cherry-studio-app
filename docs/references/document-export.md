@@ -34,6 +34,12 @@ one read. Resource preparation uses two concurrent slots and preserves source or
 remain retryable placeholders with explicit issues. Original source dimensions are still admitted;
 this is not a guarantee that arbitrarily large source images fit every device's decoder.
 
+Desktop transcript sources prepare image bytes before opening export, represented by the
+`prepared-image` asset. These bytes are independent of desktop connection and download-cache
+lifetime. They use the same PNG/JPEG header validation and unavailable-image handling as managed
+images; the document prose budget excludes binary image data. Citation resolution and code-example
+exclusion are shared with message display and copy; portable output uses ordinary HTTP(S) links.
+
 All nonempty chat selections offer Image, HTML and Markdown. Original file groups offer only
 applicable conversions; authored HTML conversion keeps its separate browser-capture strategy.
 Closing a chooser does not claim delivery and leaves the panel open. Selection is changed by

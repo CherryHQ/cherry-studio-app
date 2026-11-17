@@ -233,6 +233,8 @@ function RemoteChatSession() {
               ) : (
                 <ChatWorkspace
                   executionSource="desktop"
+                  isTranslationEnabled={Boolean(opened.session?.readingAidScope)}
+                  readingAidScope={opened.session?.readingAidScope}
                   feedbackHintBottomOffset={composerHeight}
                   renderUsage={renderRemoteUsage}
                   messages={messages}

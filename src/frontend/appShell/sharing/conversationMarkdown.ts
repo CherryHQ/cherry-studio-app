@@ -39,7 +39,7 @@ export function conversationToMarkdown(
   const priorSources = new Map<string, { title: string; url: string }>();
   const sections = messages.map((message) => {
     const parts = message.parts
-      .filter((part) => part.type !== 'tool-summary')
+      .filter((part) => part.type !== 'tool-summary' && part.type !== 'prepared-file')
       .map((part) =>
         message.role === 'user' && part.type === 'text' && part.quotes?.length
           ? { ...part, text: quotedUserText(part, labels.assistant) }

@@ -37,6 +37,7 @@ positions; older quotes without positions lead the request. Desktop conversation
 this action. Tool inputs, outputs and runtime diagnostics are omitted; attachments are not bundled.
 
 This data export bypasses document presentation and its selection/size limits. Existing message
-sharing remains final-answer-only. `frontend/utils/chatExportCitations` owns the citation conversion
-shared by both paths. Leaving the source cancels preparation, and chooser dismissal never claims
-recipient delivery. Native chooser behavior still requires authorized device acceptance.
+sharing remains final-answer-only. `frontend/utils/chatExportCitations` adapts saved local parts
+to the common source validation and conversion in `frontend/utils/messageCitations`. Leaving the
+source cancels preparation, and chooser dismissal never claims recipient delivery. Native chooser
+behavior still requires authorized device acceptance.

@@ -203,7 +203,20 @@ export function remoteMessage(
   const tools: ConversationTool[] = [];
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
+    if (part.kind === 'presentation') {
+      parts.push(part.part);
+      keys.push(part.id);
+      continue;
+    }
     if (part.kind === 'file') {
+      // This is an opaque desktop resource reference, never a mobile managed-file ID.
+      parts.push({
+        type: 'file',
+        url: part.resource,
+        filename: part.name,
+        mediaType: part.mediaType ?? 'application/octet-stream',
+      });
+      keys.push(part.id);
       attachments.push({
         key: part.id,
         name: part.name,
@@ -268,6 +281,7 @@ export function remoteMessage(
       : 'complete',
     display: {
       id: message.id,
+      revision: message.version,
       usage: message.usage,
       ...(message.model
         ? {
@@ -293,14 +307,20 @@ export function remoteMessage(
 }
 export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptMessage {
   const parts: TranscriptMessage['parts'] = [];
-  const attachments: NonNullable<TranscriptMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
     if (part.kind === 'text' || part.kind === 'reasoning') {
       if (!part.complete) throw new Error('Incomplete transcript content');
       parts.push({ type: part.kind, id: part.id, text: part.text, state: 'done' });
-    } else if (part.kind === 'tool')
+    } else if (part.kind === 'presentation') parts.push({ ...part.part, id: part.id });
+    else if (part.kind === 'tool')
       parts.push({ type: 'tool-summary', id: part.id, displayName: part.name });
-    else if (part.kind === 'file') attachments.push({ name: part.name, mediaType: part.mediaType });
+    else if (part.kind === 'file')
+      parts.push({
+        type: 'prepared-file',
+        id: part.id,
+        filename: part.name,
+        mediaType: part.mediaType ?? 'application/octet-stream',
+      });
   }
   if (message.failure)
     parts.push({
@@ -313,7 +333,8 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
     role: message.role,
     status: message.state,
     parts,
-    attachments,
+    modelName: message.model?.name,
+    revision: message.version,
     stats: null,
   };
 }
