@@ -2,6 +2,7 @@ import type {
   FileAttachmentContent,
   FileAttachmentReport,
 } from '@/shared/contracts/fileAttachment';
+import type { ModelWebToolsPreference } from '@/shared/data/preference';
 /**
  * Agent Runtime contract types.
  *
@@ -121,7 +122,7 @@ export type RuntimeOptions = {
 
 /** Host-authorized web access and local configuration, frozen for one turn. */
 export type RuntimeWebTools = {
-  modelToolsPreferred: boolean;
+  modelTools: ModelWebToolsPreference;
   clientSearchAvailable: boolean;
   clientFetchAvailable: boolean;
 };

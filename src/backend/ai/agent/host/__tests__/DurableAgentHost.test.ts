@@ -30,6 +30,7 @@ import {
   type RuntimeTool,
   type RuntimeToolResult,
 } from '../../runtime';
+import { PiConfigurationSchema } from '../../runtime/pi/piDurableProjection';
 import {
   createSqliteStoreHarness,
   type SqliteStoreHarness,
@@ -1119,6 +1120,54 @@ describe('durable tool diagnostics', () => {
       await f.host.close();
     }
   });
+
+  test.each([
+    [true, 'preferred'],
+    [false, 'fallback'],
+    [undefined, 'disabled'],
+  ] as const)(
+    'equal normalized web policies keep a queued turn admissible (%s/%s)',
+    async (legacy, modelTools) => {
+      const readiness = { clientSearchAvailable: true, clientFetchAvailable: false };
+      let currentPolicy = { ...readiness, modelTools };
+      const f = fixture({ webTools: async () => currentPolicy });
+      await f.reserve('running');
+      const stored = PiConfigurationSchema.parse({
+        ...configuration,
+        version: 2,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [],
+        }),
+        webTools: {
+          ...readiness,
+          ...(legacy === undefined ? { modelTools } : { modelToolsPreferred: legacy }),
+        },
+      });
+      jest.spyOn(f.conversations, 'configuration').mockResolvedValue({ ...stored, tools: [] });
+      await f.host.initialize();
+      const submit = () =>
+        f.host.submitMessage({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Next.' }],
+        });
+      try {
+        await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+        expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+        currentPolicy = {
+          ...readiness,
+          modelTools: modelTools === 'disabled' ? 'preferred' : 'disabled',
+        };
+        await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+      } finally {
+        await f.host.close();
+      }
+    },
+  );
 
   test('publishes the recovered queue to observations installed before initialization', async () => {
     const f = fixture();
@@ -2907,29 +2956,32 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('hands the frozen web policy to the Runtime with the conversation configuration', async () => {
-    const webTools = {
-      modelToolsPreferred: true,
-      clientSearchAvailable: true,
-      clientFetchAvailable: true,
-    };
-    const state = fixture({ webTools: async () => webTools });
-    const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
-    await state.host.initialize();
-    try {
-      await state.host.startSession({
-        sessionId: state.sessionId,
-        agentId: state.agentId,
+  test.each(['preferred', 'fallback', 'disabled'] as const)(
+    'hands the frozen web policy to the Runtime with the conversation configuration (%s)',
+    async (modelTools) => {
+      const webTools = {
+        modelTools,
+        clientSearchAvailable: true,
+        clientFetchAvailable: true,
+      };
+      const state = fixture({ webTools: async () => webTools });
+      const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
+      await state.host.initialize();
+      try {
+        await state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
 
-        userMessageId: uuid(),
-        assistantMessageId: uuid(),
-        parts: [{ type: 'text', text: 'Hello' }],
-      });
-      expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
-    } finally {
-      await state.host.close();
-    }
-  });
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Hello' }],
+        });
+        expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
 
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();

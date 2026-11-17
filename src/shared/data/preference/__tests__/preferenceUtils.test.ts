@@ -1,4 +1,10 @@
-import { getDefaultValue, getPreferenceKeys, isPreferenceKey, ThemeMode } from '..';
+import {
+  getDefaultValue,
+  getPreferenceKeys,
+  isPreferenceKey,
+  resolveModelWebToolsPreference,
+  ThemeMode,
+} from '..';
 import { DEVICE_LOCAL_PREFERENCE_KEYS } from '../preferenceSchema';
 
 describe('preference schema', () => {
@@ -71,4 +77,33 @@ test('dictation is opt-in and voice engine choices stay on the device', () => {
       'feature.voice.system_voice',
     ]),
   );
+});
+
+test('registers the three-state web-tools preference and retires the legacy key', () => {
+  expect(isPreferenceKey('chat.web_search.model_tools')).toBe(true);
+  expect(getDefaultValue('chat.web_search.model_tools')).toBe('preferred');
+  expect(isPreferenceKey('chat.web_search.model_tools_preferred')).toBe(false);
+  expect(getPreferenceKeys()).not.toContain('chat.web_search.model_tools_preferred');
+});
+
+test.each([
+  [undefined, 'preferred'],
+  ['preferred', 'preferred'],
+  ['fallback', 'fallback'],
+  ['disabled', 'disabled'],
+  [null, 'disabled'],
+  ['', 'disabled'],
+  ['preferred ', 'disabled'],
+  [' fallback', 'disabled'],
+  ['other', 'disabled'],
+  [0, 'disabled'],
+  [1, 'disabled'],
+  [true, 'disabled'],
+  [false, 'disabled'],
+  [[], 'disabled'],
+  [['preferred'], 'disabled'],
+  [{}, 'disabled'],
+  [{ value: 'preferred' }, 'disabled'],
+])('resolves invalid model-tools values to disabled without coercion (%p)', (value, expected) => {
+  expect(resolveModelWebToolsPreference(value)).toBe(expected);
 });

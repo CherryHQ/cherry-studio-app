@@ -82,10 +82,15 @@ export const PiConfigurationSchema = z
     tools: z.array(PiToolBlueprintSchema),
     webTools: z
       .object({
-        modelToolsPreferred: z.boolean(),
+        modelTools: z.enum(['preferred', 'fallback', 'disabled']).optional(),
+        modelToolsPreferred: z.boolean().optional(),
         clientSearchAvailable: z.boolean(),
         clientFetchAvailable: z.boolean(),
       })
+      .transform(({ modelTools, modelToolsPreferred, ...readiness }) => ({
+        modelTools: modelTools ?? (modelToolsPreferred === false ? 'fallback' : 'preferred'),
+        ...readiness,
+      }))
       .optional(),
     /** Selected with the configuration, so queued, retried and recovered requests share one route. */
     webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),

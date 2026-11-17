@@ -1,4 +1,8 @@
-import type { PreferenceKeyType, PreferenceSchema } from './preferenceSchema';
+import type {
+  ModelWebToolsPreference,
+  PreferenceKeyType,
+  PreferenceSchema,
+} from './preferenceSchema';
 import { PreferenceDefaults } from './preferenceSchema';
 
 /**
@@ -16,4 +20,10 @@ export function getDefaultValue<K extends PreferenceKeyType>(key: K): Preference
 
 export function getPreferenceKeys(): PreferenceKeyType[] {
   return Object.keys(PreferenceDefaults) as PreferenceKeyType[];
+}
+
+/** Missing values keep the default; malformed stored values never permit native tools. */
+export function resolveModelWebToolsPreference(value: unknown): ModelWebToolsPreference {
+  if (value === undefined) return 'preferred';
+  return value === 'preferred' || value === 'fallback' || value === 'disabled' ? value : 'disabled';
 }

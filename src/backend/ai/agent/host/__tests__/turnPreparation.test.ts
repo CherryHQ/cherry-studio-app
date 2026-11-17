@@ -719,23 +719,27 @@ describe('turn preparation', () => {
     expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
   });
 
-  test('freezes the web policy independently of Agent mode', async () => {
-    const harness = createHarness();
-    const policy = {
-      modelToolsPreferred: true,
-      clientSearchAvailable: true,
-      clientFetchAvailable: false,
-    };
-    harness.dependencies.webTools = async () => policy;
-    const prepare = async () =>
-      (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
+  test.each(['preferred', 'fallback', 'disabled'] as const)(
+    'freezes the web policy independently of Agent mode (%s)',
+    async (modelTools) => {
+      const harness = createHarness();
+      const policy = {
+        modelTools,
+        clientSearchAvailable: true,
+        clientFetchAvailable: false,
+      };
+      harness.dependencies.webTools = async () => policy;
+      const prepare = async () =>
+        (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal))
+          .webTools;
 
-    expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
-    expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT });
-    expect(await prepare()).toEqual(policy);
-  });
+      expect(await prepare()).toEqual(policy);
+      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+      expect(await prepare()).toEqual(policy);
+      harness.getAgent.mockResolvedValue({ ...AGENT });
+      expect(await prepare()).toEqual(policy);
+    },
+  );
 
   test('stops at session admission when the session does not exist', async () => {
     const harness = createHarness();
