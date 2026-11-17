@@ -38,7 +38,7 @@ test('rejects unavailable and oversized images before cache access', async () =>
     readImageUriText('file:///receipt.png', new AbortController().signal),
   ).rejects.toMatchObject({ failure: 'unavailable' });
   mockFile.exists = true;
-  mockFile.size = 10 * 1024 * 1024 + 1;
+  mockFile.size = 30 * 1024 * 1024 + 1;
   await expect(
     readImageUriText('file:///receipt.png', new AbortController().signal),
   ).rejects.toMatchObject({ failure: 'file-bytes' });

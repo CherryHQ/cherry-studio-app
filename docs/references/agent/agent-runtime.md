@@ -344,7 +344,7 @@ live entry and managed blob before message reservation. The Host authorizes tool
 referenced by the current input and complete Session transcript, while it resolves attachment
 content only for the current input and checkpoint-visible history. A Runtime never reads the device
 filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist and
-10 MiB per file. There is no request-level image count or byte ceiling: every request replays the
+30 MiB per file. There is no request-level image count or byte ceiling: every request replays the
 checkpoint-visible history with its images, and Pi prices each image into the context window by the
 endpoint's documented formula (Anthropic, OpenAI, or Gemini) over the dimensions read from the
 image header, falling back to that dialect's typical cost. Compaction folds old images away like any
