@@ -22,6 +22,7 @@ import {
   REMOTE_INPUT_POLICY,
   remoteInput,
 } from './createRemoteConversationSession';
+import { readRemoteTranscript } from './readRemoteTranscript';
 import type {
   ConversationDraft,
   ConversationInput,
@@ -161,6 +162,12 @@ export function createRemoteConversationSource(
             title: session.title,
             updatedAt: session.updatedAt,
           };
+        }),
+      readTranscript: (address, signal) =>
+        read(signal, async () => {
+          if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+            throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+          return readRemoteTranscript(remote, address.sessionId, signal, assertSource);
         }),
       listAgents: (cursor, signal) =>
         read(signal, async () => {

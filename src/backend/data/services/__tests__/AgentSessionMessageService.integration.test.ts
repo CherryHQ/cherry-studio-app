@@ -138,6 +138,34 @@ describe('AgentSessionMessageService persistence', () => {
       'm1500',
     ]);
     expect(selected.messages.map((row) => row.id)).toEqual(['m1', 'm1500', 'm3000']);
+    const transcript = await agentSessionMessageService.readTranscript('session-1');
+    expect(transcript.messages.map((row) => row.id)).toEqual(
+      Array.from({ length: count }, (_, index) => `m${index + 1}`),
+    );
+    expect(transcript.messages.some((row) => row.id === 'alternative')).toBe(false);
+  });
+
+  test('exports saved reasoning with the selected transcript without projecting it to a status-only list', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'question', text: 'Question', role: 'user' });
+    insertMessage(sqlite, { createdAt: 110, id: 'answer', text: 'Answer' });
+    sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?').run(
+      JSON.stringify({
+        parts: [
+          { id: 'thought', type: 'reasoning', text: 'Saved thinking', state: 'done' },
+          { id: 'answer-text', type: 'text', text: 'Saved answer', state: 'done' },
+        ],
+      }),
+      'answer',
+    );
+
+    const transcript = await agentSessionMessageService.readTranscript('session-1');
+
+    expect(transcript.assistantName).toBe('Agent');
+    expect(transcript.messages.map((row) => row.id)).toEqual(['question', 'answer']);
+    expect(transcript.messages[1].parts).toEqual([
+      { id: 'thought', type: 'reasoning', text: 'Saved thinking', state: 'done' },
+      { id: 'answer-text', type: 'text', text: 'Saved answer', state: 'done' },
+    ]);
   });
 
   test('merges concurrent languages into message data and returns them with history and selection', async () => {

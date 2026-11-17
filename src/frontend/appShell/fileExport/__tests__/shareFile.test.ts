@@ -1,7 +1,7 @@
 import type { ExportSignature, ExportWatermark } from '@/shared/contracts/fileExport';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { shareFile, shareFiles } from '../shareFile';
+import { shareFile, shareFiles, shareTextFile } from '../shareFile';
 
 const mockCopy = jest.fn();
 const mockShare = jest.fn();
@@ -10,6 +10,10 @@ const mockAvailable = jest.fn();
 const mockCreateDirectory = jest.fn();
 const mockRelease = jest.fn();
 const mockPrepareExport = jest.fn();
+const mockWrite = jest.fn();
+const mockDeleteDirectory = jest.fn();
+
+jest.mock('expo-crypto', () => ({ randomUUID: () => 'text-export' }));
 
 jest.mock('../prepareImageExport', () => ({
   prepareFileExport: (...args: unknown[]) => mockPrepareExport(...args),
@@ -18,10 +22,13 @@ jest.mock('../prepareImageExport', () => ({
 jest.mock('expo-file-system', () => ({
   Directory: jest.fn((...parts: string[]) => ({
     create: (options: unknown) => mockCreateDirectory(options),
+    exists: true,
+    delete: () => mockDeleteDirectory(parts.join('/')),
     uri: parts.join('/'),
   })),
   File: jest.fn((base: string | { uri: string }, name?: string) => ({
     copy: (destination: unknown, options: unknown) => mockCopy(destination, options),
+    writeSync: (text: string) => mockWrite(text),
     uri: [typeof base === 'string' ? base : base.uri, name].filter(Boolean).join('/'),
   })),
   Paths: { cache: 'file:///cache' },
@@ -69,6 +76,42 @@ beforeEach(() => {
     mediaType: entry.mediaType,
     release: mockRelease,
   }));
+});
+
+it('shares generated text verbatim and retains its delivery copy after cleaning the source', async () => {
+  const text = '# Conversation\n\nSaved reasoning and response.';
+  mockShare.mockImplementationOnce(async () => {
+    expect(mockDeleteDirectory).not.toHaveBeenCalled();
+  });
+
+  await shareTextFile(async () => ({
+    text,
+    filename: 'Conversation.md',
+    mediaType: 'text/markdown',
+  }));
+
+  expect(mockWrite).toHaveBeenCalledWith(text);
+  expect(mockPrepareExport).not.toHaveBeenCalled();
+  expect(mockShare).toHaveBeenCalledWith(
+    expect.stringMatching(/\/FileExports\/generated-[a-f0-9]+\/temporary\/Conversation\.md$/),
+    { dialogTitle: 'Conversation.md', mimeType: 'text/markdown' },
+  );
+  expect(mockDeleteDirectory).toHaveBeenCalledWith('file:///cache/TextExports/text-export');
+});
+
+it('does not read or generate a text export when system sharing is unavailable', async () => {
+  mockAvailable.mockResolvedValueOnce(false);
+  const source = jest.fn(async () => ({
+    text: 'content',
+    filename: 'chat.md',
+    mediaType: 'text/markdown',
+  }));
+
+  await expect(shareTextFile(source)).rejects.toThrow('unavailable');
+
+  expect(source).not.toHaveBeenCalled();
+  expect(mockWrite).not.toHaveBeenCalled();
+  expect(mockShare).not.toHaveBeenCalled();
 });
 
 it('shares a copy with the display filename and original media type, independent of the viewer limit', async () => {

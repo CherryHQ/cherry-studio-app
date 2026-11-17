@@ -1,14 +1,11 @@
+import { replaceChatCitations } from '@/frontend/utils/chatExportCitations';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { prepareChatExport } from '../prepareChatExport';
-import {
-  replaceChatCitations,
-  toChatExportDocument,
-  type ChatExportOptions,
-} from '../toChatExportDocument';
+import { toChatExportDocument, type ChatExportOptions } from '../toChatExportDocument';
 
 const options: ChatExportOptions = {
   title: 'Conversation',

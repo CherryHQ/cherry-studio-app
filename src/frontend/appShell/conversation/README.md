@@ -18,7 +18,9 @@ It does not own local execution or observation.
 - `ConversationCatalog`, `ConversationPreview` and the summaries: sidebar and Agent picker rows,
   optional selected-session metadata, lightweight status subscriptions and bound rename/delete.
 - `TranscriptMessage`/`TranscriptSnapshot`: pure export values.
-- `ConversationSource`: a catalog owner with availability state. It never opens a transcript.
+- `ConversationCatalog.readTranscript`: an optional one-shot complete current-path snapshot for
+  data export. It does not open chat observation or change the mounted history window.
+- `ConversationSource`: a catalog owner with availability state. It does not activate chat observation.
 
 `ConversationProvider` constructs the local catalog and the retained desktop sources
 (`createConversationSources`). `ConversationSourceBoundary` and the catalog hooks retain a source
@@ -27,12 +29,17 @@ disposes connection demand while metadata stays cached in Query for five minutes
 
 ## Local
 
-`local/createLocalConversationSource` is catalog only: Agent and Session lists, selected-session
-metadata, and row previews that map Host status and frontend read marks. It refreshes from the Data
+`local/createLocalConversationSource` owns Agent and Session lists, selected-session metadata,
+row previews and one-shot export reads. The previews map Host status and frontend read marks. It refreshes from the Data
 API change feed. Local chat observation, admission, history and message actions belong to the chat
 page (`features/chat/runtime`), which projects its own client state into the shared read model.
 Local execution settles in-process, so the shared contract never needs pending or interrupted
 outcomes, revisioned history windows or deferred content from this source.
+
+Local data export reads the selected message path and Session metadata in one SQLite snapshot,
+retaining full saved reasoning independently of the status-only list projection. Desktop data
+export walks every history page under one revision and revalidates that revision before returning.
+Both paths are independent of the message sharing selection limit.
 
 The local Session catalog lists root groups by default. `listSessions({ includeBranches: true })`
 instead lists every conversation by its own latest activity, including branches. These two list

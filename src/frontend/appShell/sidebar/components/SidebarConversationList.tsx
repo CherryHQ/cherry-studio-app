@@ -34,6 +34,7 @@ import {
 } from '@/frontend/appShell/conversation';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/appShell/navigation';
 import { conversationHref, useConversationTarget } from '@/frontend/appShell/navigation/chat';
+import { useExportConversation } from '@/frontend/appShell/sharing';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import { usePreference } from '@/frontend/data/hooks';
@@ -786,6 +787,7 @@ function SidebarSessionRow({
   const { rename, remove, status } = useConversationPreview(session.ref, {
     includeDescendants: branch?.expanded === false,
   });
+  const { exportConversation, isExporting, canExport } = useExportConversation(session.ref);
   const selection = useSidebarSelection();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
@@ -822,6 +824,13 @@ function SidebarSessionRow({
           },
         });
       },
+    });
+  if (canExport)
+    menu.push({
+      id: 'export',
+      label: t('session.export.action'),
+      disabled: isDeleting || isExporting,
+      onPress: () => void exportConversation(),
     });
   if (remove) {
     menu.push({

@@ -244,6 +244,38 @@ it('rejects retired callbacks and local-only input before crossing the remote bo
   });
 });
 
+it('exports the complete desktop history without opening an observation or stopping at a selection limit', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.history).mockImplementation(async (_id, _version, cursor) =>
+    cursor
+      ? { items: Array.from({ length: 100 }, (_, index) => message(`m${100 - index}`)) }
+      : {
+          items: Array.from({ length: 200 }, (_, index) => message(`m${300 - index}`)),
+          next: 'older',
+        },
+  );
+  const transcript = await test.source.catalog.readTranscript!(address, signal());
+
+  expect(transcript.messages).toHaveLength(300);
+  expect(transcript.messages[0].id).toBe('m1');
+  expect(transcript.messages.at(-1)?.id).toBe('m300');
+  expect(test.remote.observe).not.toHaveBeenCalled();
+  test.source.dispose();
+});
+
+it('rejects a full export when the desktop history revision changes during its read', async () => {
+  const test = fixture();
+  jest
+    .mocked(test.remote.readSession)
+    .mockResolvedValueOnce(session)
+    .mockResolvedValueOnce({ ...session, historyVersion: '2' });
+
+  await expect(test.source.catalog.readTranscript!(address, signal())).rejects.toMatchObject({
+    failure: { code: 'version-expired' },
+  });
+  test.source.dispose();
+});
+
 it('pins a history window and prepares a complete chronological selection before export', async () => {
   const test = fixture();
   const session = await test.source.openSession(address, signal());

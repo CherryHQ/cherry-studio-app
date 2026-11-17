@@ -172,28 +172,10 @@ export class AgentSessionMessageService {
   /** One SELECT holds SQLite's read snapshot for both selection and session metadata. */
   async readSelection(sessionId: string, ids: string[]): Promise<AgentTranscriptSelection> {
     const input = AgentTranscriptSelectionSchema.parse({ ids });
-    // Capture this generation before awaiting; never resolve a replacement host.
-    const db = this.db;
-    const order = messageTreeOrder(db, sessionId);
-    const rows = await db
-      .with(order)
-      .select({
-        session: agentSessionTable,
-        message: agentSessionMessageTable,
-        assistantName: agentTable.name,
-      })
-      .from(agentSessionTable)
-      .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
-      .leftJoin(
-        agentSessionMessageTable,
-        and(
-          eq(agentSessionMessageTable.sessionId, agentSessionTable.id),
-          inArray(agentSessionMessageTable.id, input.ids),
-        ),
-      )
-      .where(eq(agentSessionTable.id, sessionId))
-      .leftJoin(order, eq(order.id, agentSessionMessageTable.id))
-      .orderBy(asc(order.depth), asc(agentSessionMessageTable.id));
+    const rows = await this.readTranscriptRows(
+      sessionId,
+      inArray(agentSessionMessageTable.id, input.ids),
+    );
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     const messages = rows.flatMap(({ message }) => (message ? [message] : []));
     if (messages.length !== new Set(input.ids).size)
@@ -207,6 +189,44 @@ export class AgentSessionMessageService {
       session: toAgentSessionView(rows[0].session),
       messages: toReadableAgentMessageViews(messages),
     };
+  }
+
+  /** The selected path and its metadata come from one read, without the sharing selection limit. */
+  async readTranscript(sessionId: string): Promise<AgentTranscriptSelection> {
+    const rows = await this.readTranscriptRows(
+      sessionId,
+      inArray(agentSessionMessageTable.id, messagePathIdsSql(sessionId)),
+    );
+    if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+    return {
+      assistantName: rows[0].assistantName ?? undefined,
+      session: toAgentSessionView(rows[0].session),
+      messages: toReadableAgentMessageViews(
+        rows.flatMap(({ message }) => (message && message.role !== 'system' ? [message] : [])),
+      ),
+    };
+  }
+
+  private readTranscriptRows(sessionId: string, selection: SQL) {
+    // Capture this generation before awaiting; never resolve a replacement host.
+    const db = this.db;
+    const order = messageTreeOrder(db, sessionId);
+    return db
+      .with(order)
+      .select({
+        session: agentSessionTable,
+        message: agentMessageViewColumns,
+        assistantName: agentTable.name,
+      })
+      .from(agentSessionTable)
+      .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
+      .leftJoin(
+        agentSessionMessageTable,
+        and(eq(agentSessionMessageTable.sessionId, agentSessionTable.id), selection),
+      )
+      .where(eq(agentSessionTable.id, sessionId))
+      .leftJoin(order, eq(order.id, agentSessionMessageTable.id))
+      .orderBy(asc(order.depth), asc(agentSessionMessageTable.id));
   }
 
   private async readAround(
