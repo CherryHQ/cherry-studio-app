@@ -775,3 +775,37 @@ test('remote input rejects local SSH display metadata instead of silently droppi
     }),
   ).toThrow();
 });
+
+it('finds earlier tool sources independently of the visible window and excludes later results', async () => {
+  const test = fixture();
+  const toolMessage = (id: string, output: string) => ({
+    ...message(id),
+    parts: [
+      {
+        id: `${id}:tool`,
+        kind: 'tool' as const,
+        callId: `${id}:call`,
+        name: 'mcp__cherry-tools__web_search',
+        state: 'completed' as const,
+        output,
+      },
+    ],
+  });
+  jest
+    .mocked(test.remote.history)
+    .mockResolvedValueOnce({
+      items: [toolMessage('later', 'later-output'), message('answer')],
+      next: 'older',
+    })
+    .mockResolvedValueOnce({ items: [toolMessage('earlier', 'earlier-output')] });
+  jest.mocked(test.remote.readResource).mockImplementation(async (key) => ({
+    kind: 'text',
+    text: JSON.stringify([{ id: 'lookup-1', title: key, url: 'https://example.com' }]),
+  }));
+  const handle = await test.source.openSession(address, signal());
+  expect(await handle.history.readCitations!('answer', ['lookup-1'], signal())).toEqual([
+    { id: 'lookup-1', title: 'earlier-output', url: 'https://example.com' },
+  ]);
+  expect(test.remote.readResource).not.toHaveBeenCalledWith('later-output', expect.anything());
+  test.source.dispose();
+});

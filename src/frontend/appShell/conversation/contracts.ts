@@ -1,4 +1,5 @@
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type {
   AgentMessageView,
   AgentUserQuestions,
@@ -198,6 +199,8 @@ export type ConversationSnapshot = {
 /** One paginated transcript window as the workspace consumes it; each source owns its hook. */
 export type ConversationHistoryView = {
   dataKey: string;
+  /** Immutable history revision for source reads, independent of the visible window identity. */
+  revision?: string;
   messages: readonly ConversationMessage[];
   error?: Error;
   isLoadingInitial: boolean;
@@ -211,7 +214,14 @@ export type ConversationHistoryView = {
   loadNewer(): Promise<void>;
   retry(): Promise<void>;
   returnToLatest?: () => void;
+  /** Confirm earlier tool facts without moving the visible history window. */
+  readCitations?: ConversationCitationReader;
 };
+export type ConversationCitationReader = (
+  messageId: string,
+  ids: readonly string[],
+  signal: AbortSignal,
+) => Promise<readonly CitationSource[]>;
 export type TranscriptSnapshot = {
   title?: string;
   assistantName?: string;

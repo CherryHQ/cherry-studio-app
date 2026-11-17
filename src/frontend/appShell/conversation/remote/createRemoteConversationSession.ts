@@ -1,3 +1,4 @@
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type {
   RemoteAttachment,
   RemoteAgentSource,
@@ -22,6 +23,7 @@ import {
   createConversationState,
   ConversationReadError,
 } from '../conversationState';
+import { readToolCitations } from '../readToolCitations';
 import type {
   ConversationInput,
   HistoryCursor,
@@ -422,6 +424,40 @@ export function createRemoteConversationSession(
       publish();
     },
     history: {
+      readCitations: (messageId, ids, signal) =>
+        read(signal, async (signal) => {
+          const fixed = await source.readSession(ref.sessionId, signal);
+          const missing = new Set(ids);
+          const found: CitationSource[] = [];
+          // A running message is beyond persisted history. Otherwise skip every later row.
+          let before =
+            latest?.messages.some(
+              (message) => message.id === messageId && message.state === 'streaming',
+            ) ?? false;
+          let cursor: string | undefined;
+          const visited = new Set<string>();
+          do {
+            const page = await source.history(ref.sessionId, fixed.historyVersion, cursor, signal);
+            for (const message of page.items) {
+              if (message.id === messageId) {
+                before = true;
+                continue;
+              }
+              if (!before) continue;
+              for (const tool of projectHistory(message).tools ?? []) {
+                for (const source of await readToolCitations(tool, signal)) {
+                  if (missing.delete(source.id)) found.push(source);
+                }
+                if (!missing.size) return found;
+              }
+            }
+            cursor = page.next;
+            if (cursor && visited.has(cursor))
+              throw new ConversationReadError({ code: 'internal', retry: 'none' });
+            if (cursor) visited.add(cursor);
+          } while (cursor && missing.size);
+          return found;
+        }),
       peekLatest: () => {
         assertCurrent();
         const preview = source.peekSession(ref.sessionId)?.history;

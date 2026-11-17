@@ -43,7 +43,7 @@ export type ResolvedMessageCitations = {
   textByPartIndex: ReadonlyMap<number, ResolvedCitationText>;
 };
 
-/** Resolve persisted citation markers from their message-local tool results. */
+/** Resolve only confirmed sources; native numbering is local to this message. */
 export function resolveMessageCitations(
   parts: readonly CherryMessagePart[],
   additionalSources: readonly CitationSource[] = [],
@@ -54,34 +54,72 @@ export function resolveMessageCitations(
   }
 
   const numberBySource = new Map<CitationSource, number>();
+  const toolIds = new Set(collectToolCitationSources(parts).map((source) => source.id));
+  const native = parts.filter(
+    (part): part is Extract<CherryMessagePart, { type: 'source-url' }> =>
+      part.type === 'source-url' && !toolIds.has(part.sourceId),
+  );
+  const nativeByNumber = new Map<number, string>();
+  const unnumbered: { index: number; sourceId: string }[] = [];
+  native.forEach((part, index) => {
+    const number = nativeSourceNumber(part.sourceId);
+    if (number !== undefined) {
+      if (!nativeByNumber.has(number)) nativeByNumber.set(number, part.sourceId);
+    } else {
+      unnumbered.push({ index, sourceId: part.sourceId });
+    }
+  });
+  for (const item of unnumbered) {
+    if (!nativeByNumber.has(item.index + 1)) nativeByNumber.set(item.index + 1, item.sourceId);
+  }
   const textByPartIndex = new Map<number, ResolvedCitationText>();
   let nextNumber = 1;
 
   parts.forEach((part, index) => {
-    if (part.type !== 'text' || !part.text.includes('[cite:')) return;
+    if (part.type !== 'text') return;
 
     const replace = (content: string, markdown: boolean) =>
       mapMarkdownOutsideCode(content, (text) =>
-        text.replace(/\[cite:([\w-]+)\]/g, (rawMarker, id: string) => {
-          const source = sourceById.get(id);
-          if (!source) return rawMarker;
+        text
+          .replace(
+            /\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\](?![(:])|cite:))/g,
+            (marker, number: string) => {
+              const id = nativeByNumber.get(Number(number));
+              return id ? `[cite:${id}]` : marker;
+            },
+          )
+          .replace(/cite([^]+)/g, (marker, value: string) => {
+            const ids = value.split('');
+            return ids.every((id) => sourceById.has(id))
+              ? ids.map((id) => `[cite:${id}]`).join('')
+              : marker;
+          })
+          .replace(/\[cite:([^\]\n]+)\]/g, (marker, value: string) => {
+            const ids = value.split(/[\s,;]+/).map((id) => id.replace(/^cite:/, ''));
+            return ids.every((id) => /^[\w-]+$/.test(id))
+              ? ids.map((id) => `[cite:${id}]`).join('')
+              : marker;
+          })
+          .replace(/\[cite:([\w-]+)\]/g, (rawMarker, id: string) => {
+            const source = sourceById.get(id);
+            if (!source) return rawMarker;
 
-          let number = numberBySource.get(source);
-          if (!number) {
-            number = nextNumber++;
-            numberBySource.set(source, number);
-          }
+            let number = numberBySource.get(source);
+            if (!number) {
+              number = nextNumber++;
+              numberBySource.set(source, number);
+            }
 
-          const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
-          if (markdown && source.url) {
-            // encodeURIComponent leaves parentheses unescaped; Markdown treats them as delimiters.
-            const target = encodeURIComponent(source.url).replace(/[()]/g, (character) =>
-              character === '(' ? '%28' : '%29',
-            );
-            return `[${marker}](cite:${target})`;
-          }
-          return markdown ? marker : `[${number}]`;
-        }),
+            const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
+            if (markdown && source.url) {
+              // encodeURIComponent leaves parentheses unescaped; Markdown treats them as delimiters.
+              const target = encodeURIComponent(source.url).replace(/[()]/g, (character) =>
+                character === '(' ? '%28' : '%29',
+              );
+              return `[${marker}](cite:${target})`;
+            }
+            return markdown ? marker : `[${number}]`;
+          }),
       );
 
     textByPartIndex.set(index, {
@@ -124,7 +162,20 @@ function collectCitationSources(
       continue;
     }
 
-    if (!('state' in part) || part.state !== 'output-available' || !('output' in part)) continue;
+    for (const item of collectToolCitationSources([part])) {
+      const existing = item.url ? sourceByUrl.get(item.url) : undefined;
+      const source = existing ?? item;
+      sourceById.set(item.id, source);
+      if (item.url && !existing) sourceByUrl.set(item.url, source);
+    }
+  }
+
+  return sourceById;
+}
+
+export function collectToolCitationSources(parts: readonly CherryMessagePart[]): CitationSource[] {
+  return parts.flatMap((part) => {
+    if (!('state' in part) || part.state !== 'output-available' || !('output' in part)) return [];
     const toolName =
       part.type === 'dynamic-tool'
         ? citableToolName(
@@ -136,17 +187,45 @@ function collectCitationSources(
         : part.type.startsWith('tool-')
           ? citableToolName(part.type.slice(5), 'input' in part ? part.input : undefined, true)
           : undefined;
-    if (!toolName || !CITABLE_TOOL_NAMES.has(toolName)) continue;
+    return toolName ? toolCitationSources(toolName, part.output) : [];
+  });
+}
 
-    for (const item of toolCitationSources(toolName, part.output)) {
-      const existing = item.url ? sourceByUrl.get(item.url) : undefined;
-      const source = existing ?? item;
-      sourceById.set(item.id, source);
-      if (item.url && !existing) sourceByUrl.set(item.url, source);
-    }
+export function citationIds(parts: readonly CherryMessagePart[]): string[] {
+  const ids = new Set<string>();
+  for (const part of parts) {
+    if (part.type !== 'text') continue;
+    mapMarkdownOutsideCode(part.text, (text) => {
+      for (const match of text.matchAll(/\[cite:([^\]\n]+)\]/g))
+        for (const id of match[1].split(/[\s,;]+/).map((item) => item.replace(/^cite:/, '')))
+          if (/^[\w-]+$/.test(id)) ids.add(id);
+      for (const match of text.matchAll(/cite([^]+)/g))
+        for (const id of match[1].split('')) if (/^[\w-]+$/.test(id)) ids.add(id);
+      return text;
+    });
   }
+  return [...ids];
+}
 
-  return sourceById;
+/** Only earlier tool facts are eligible; native provider numbering never crosses a message. */
+export function conversationCitationSources(
+  messages: readonly {
+    id: string;
+    parts: readonly CherryMessagePart[];
+    sources: readonly CitationSource[];
+  }[],
+) {
+  const prior = new Map<string, CitationSource>();
+  const result = new Map<string, CitationSource[]>();
+  for (const message of messages) {
+    const own = [...collectToolCitationSources(message.parts), ...message.sources];
+    const sources = new Map(own.map((source) => [source.id, source]));
+    for (const id of citationIds(message.parts))
+      if (!sources.has(id) && prior.has(id)) sources.set(id, prior.get(id)!);
+    result.set(message.id, [...sources.values()]);
+    for (const source of own) prior.set(source.id, source);
+  }
+  return result;
 }
 
 export function citableToolName(
@@ -255,6 +334,13 @@ function mapMarkdownOutsideCode(content: string, transform: (text: string) => st
   }
 
   return result + transform(content.slice(cursor));
+}
+
+function nativeSourceNumber(sourceId: string): number | undefined {
+  const citation = /^citation-(\d+)$/.exec(sourceId);
+  if (citation) return Number(citation[1]) + 1;
+  const source = /^(?:source-)?([1-9]\d*)$/.exec(sourceId);
+  return source ? Number(source[1]) : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,6 +5,7 @@ import type {
   AgentRef,
   ConversationAction,
   ConversationCatalog,
+  ConversationCitationReader,
   ConversationExecution,
   ConversationFailure,
   ConversationMessage,
@@ -98,6 +99,7 @@ export type HistoryPreview = {
   complete: boolean;
 };
 export interface ConversationHistory {
+  readCitations?: ConversationCitationReader;
   peekLatest?: () => HistoryPreview | undefined;
   subscribePreview?: (listener: () => void) => () => void;
   openLatest(signal: AbortSignal): Promise<HistoryWindow>;
