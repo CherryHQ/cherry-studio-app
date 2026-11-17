@@ -7,7 +7,6 @@ import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
@@ -22,12 +21,11 @@ import { useDockMetrics } from '../hooks/useDockMetrics';
 import { useSidebarDestination } from '../hooks/useSidebarDestination';
 import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
+import { SidebarBranchScrollView } from './SidebarBranchScrollView';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
 
 type RegisterEndReachedHandler = (handler?: () => void) => void;
-
-const endReachedThreshold = 24;
 
 /**
  * The sidebar's only scroller: nav rows and the recent sessions scroll together
@@ -42,27 +40,19 @@ export function SidebarBody() {
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
   const headerInset = useSidebarHeaderTop() + appSidebar.headerRowHeight + appSidebar.headerGapY;
   const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
-  const wasNearEndRef = useRef(false);
   const registerEndReachedHandler = useCallback<RegisterEndReachedHandler>((handler) => {
     endReachedHandlerRef.current = handler;
   }, []);
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromEnd = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    const isNearEnd = distanceFromEnd <= endReachedThreshold;
-
-    if (isNearEnd && !wasNearEndRef.current) {
-      endReachedHandlerRef.current?.();
-    }
-    wasNearEndRef.current = isNearEnd;
-  }, []);
+  const handleEndReached = useCallback(() => endReachedHandlerRef.current?.(), []);
 
   return (
     <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">
       <ScrollInteractionBoundary>
         {(scrollHandlers) => (
-          <ScrollView
+          <SidebarBranchScrollView
             {...scrollHandlers}
+            topInset={headerInset}
+            onEndReached={handleEndReached}
             contentContainerStyle={{
               // Clears the floating dock at its shared composer-aligned position.
               paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
@@ -70,12 +60,10 @@ export function SidebarBody() {
               paddingTop: headerInset,
             }}
             contentInsetAdjustmentBehavior="never"
-            onScroll={handleScroll}
             showsVerticalScrollIndicator={false}
-            scrollEventThrottle={16}
           >
             <SidebarBodyContent registerEndReachedHandler={registerEndReachedHandler} />
-          </ScrollView>
+          </SidebarBranchScrollView>
         )}
       </ScrollInteractionBoundary>
     </ScrollShadow>

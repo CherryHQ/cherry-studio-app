@@ -13,7 +13,9 @@ from the module index.
 
 `PaintingInput` is the Agent-chat presentation: attachments above the field, then a toolbar with the
 + menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
-which permits switching between text and image models.
+which permits switching between text and image models. It also supplies `menu` to retain the chat
+tools sheet, including conversation workspace selection, while composing images. Without this slot,
+the image composer keeps its camera and photo-library menu.
 
 `PaintingWorkspaceInput` uses the shared compact-to-editing composer. At rest it keeps one row:
 the + menu, a reference thumbnail without a remove badge, the field, and send. The thumbnail focuses
@@ -62,3 +64,5 @@ generation. Sending hides the reference preview while preserving selection for f
 Parameter drafts retain invalid user edits for correction. First visits use mode defaults and legal
 shared values from the same model; returning to a mode restores its saved draft. Submission freezes
 and validates the selected model, actual mode, parameters, prompt and participating images.
+GPT Image 2.6 generation defaults to GIF, with automatic size and compatible background controls.
+Submission sends the default output format explicitly while preserving a user-selected static format.

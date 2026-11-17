@@ -18,6 +18,7 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
+import { PolicyEditable, PolicyGroup, PolicyScope } from '@/frontend/components/Policy';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import {
@@ -29,11 +30,13 @@ import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import { McpAuthorizationError, McpRedirectError } from '@/shared/contracts/mcp';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
+import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import { PluginPage } from '../components/PluginPage';
 import { McpToolsSection } from './components/McpToolsSection';
 import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
+import { getMcpServerSaveErrorKey, resolveMcpServerName } from './mcpServerForm';
 
 const logger = loggerService.withContext('McpServerScreen');
 
@@ -99,8 +102,115 @@ export function McpServerScreen() {
     );
   }
 
+  // A delivered server opens read-only.
   return (
-    <McpServerEditor key={server?.id ?? NEW_SERVER_SENTINEL} server={server} serverId={serverId} />
+    <PolicyScope policy={managedResourcePolicy(server)}>
+      <PolicyEditable
+        field="server"
+        fallback={server ? <ManagedMcpServerDetail server={server} /> : null}
+      >
+        <McpServerEditor
+          key={server?.id ?? NEW_SERVER_SENTINEL}
+          server={server}
+          serverId={serverId}
+        />
+      </PolicyEditable>
+    </PolicyScope>
+  );
+}
+
+/**
+ * A server the enterprise server delivers, laid out like the editor with everything locked. Its
+ * headers can carry credentials, so they stay withheld and the address shows only its origin.
+ * Nothing on the page can change, so there is no save action or menu.
+ */
+function ManagedMcpServerDetail({ server }: { server: RemoteMcpServer }) {
+  const { t } = useTranslation();
+  const summaryServers = useMemo(() => [server], [server]);
+  const { summaries } = useMcpServerRuntimeSummaries(summaryServers);
+
+  return (
+    <>
+      <RouteHeader title={server.name} />
+      <PluginPage testID="mcp-server">
+        <McpServerIdentity server={server} summary={summaries[server.id]} />
+        <PolicyGroup>
+          <View className="gap-4 px-4 pt-3 pb-2">
+            <FormField label={t('settings.mcp.oauth.authentication')}>
+              <Tabs
+                items={[
+                  { value: 'headers', label: t('settings.mcp.fields.headers') },
+                  { value: 'oauth', label: 'OAuth' },
+                ]}
+                onValueChange={ignoreChange}
+                value={server.oauth ? 'oauth' : 'headers'}
+              />
+            </FormField>
+            <FormField label={t('settings.mcp.fields.endpointUrl')}>
+              <Input
+                accessibilityLabel={t('settings.mcp.fields.endpointUrl')}
+                value={getEndpointOrigin(server.endpointUrl)}
+              />
+            </FormField>
+            <FormField label={t('settings.mcp.fields.headers')}>
+              <Input
+                accessibilityLabel={t('settings.mcp.fields.headers')}
+                placeholder={t('enterprise.managed.hidden')}
+                value=""
+              />
+            </FormField>
+          </View>
+          <McpToolsSection onToggleTool={ignoreChange} server={server} />
+        </PolicyGroup>
+      </PluginPage>
+    </>
+  );
+}
+
+function ignoreChange() {}
+
+function McpServerIdentity({
+  server,
+  summary,
+}: {
+  server: McpServer;
+  summary: McpServerRuntimeSummary | undefined;
+}) {
+  const { t } = useTranslation();
+  const mcpIcon = useMcpIcon();
+  const status = getServerStatus(server, summary);
+
+  return (
+    <View className="flex-row items-center gap-4">
+      <PluginIcon size="large" source={mcpIcon} />
+      <View className="min-w-0 flex-1 gap-1">
+        <View className="min-w-0 flex-row items-center gap-2">
+          <Text
+            accessibilityRole="header"
+            className="shrink text-2xl font-semibold text-foreground"
+            numberOfLines={1}
+          >
+            {server.name}
+          </Text>
+        </View>
+        <Text className="text-sm text-muted-foreground">
+          <Text
+            className={
+              status === 'connected'
+                ? 'text-success'
+                : status === 'error'
+                  ? 'text-error'
+                  : 'text-muted-foreground'
+            }
+          >
+            {t(`settings.mcp.list.status.${status}`)}
+          </Text>
+          {summary?.toolCount === undefined
+            ? null
+            : ` · ${t('settings.mcp.list.toolCount', { count: summary.toolCount })}`}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -173,6 +283,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         return;
       }
 
+      let connecting = false;
       try {
         setIsSaving(true);
         const needsOAuth =
@@ -224,11 +335,15 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           // Show the stored values, including a name filled in from the endpoint.
           setForm({ ...form, ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
         } else {
+          connecting = true;
           const serverInfo = await mcp.getServerInfo({
             endpointUrl: dto.value.endpointUrl,
             headers: dto.value.headers,
           });
-          const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
+          connecting = false;
+          const name = resolveMcpServerName(form.name, serverInfo, dto.value.name);
+          // A failed save leaves the resolved name editable instead of repeating a hidden collision.
+          if (isFocused.current) setForm((current) => ({ ...current, name }));
           await createServer({ ...dto.value, isEnabled: true, name });
           // The new server joins the Plugins page's MCP group; opening it from there edits it.
           if (isFocused.current) router.back();
@@ -246,8 +361,15 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           });
           return;
         }
-        logger.error('Failed to save MCP server', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        logger.error(connecting ? 'Failed to connect MCP server' : 'Failed to save MCP server', {
+          error,
+        });
+        toast.show({
+          label: t(
+            connecting ? 'settings.mcp.toast.connectFailed' : getMcpServerSaveErrorKey(error),
+          ),
+          variant: 'danger',
+        });
       } finally {
         setIsSaving(false);
       }
@@ -379,7 +501,6 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     [alert, handleDelete, handleToggleServer, isBusy, isDeleting, server, t],
   );
 
-  const status = server ? getServerStatus(server, summary) : undefined;
   const showHttpWarning = form.endpointUrl.trim().toLowerCase().startsWith('http://');
 
   return (
@@ -402,38 +523,23 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         }
         testID="mcp-server"
       >
-        <View className="flex-row items-center gap-4">
-          <PluginIcon size="large" source={mcpIcon} />
-          <View className="min-w-0 flex-1 gap-1">
-            <Text
-              accessibilityRole="header"
-              className="text-2xl font-semibold text-foreground"
-              numberOfLines={1}
-            >
-              {server ? server.name : t('settings.mcp.defaultName')}
-            </Text>
-            {status ? (
-              <Text className="text-sm text-muted-foreground">
-                <Text
-                  className={
-                    status === 'connected'
-                      ? 'text-success'
-                      : status === 'error'
-                        ? 'text-error'
-                        : 'text-muted-foreground'
-                  }
-                >
-                  {t(`settings.mcp.list.status.${status}`)}
-                </Text>
-                {summary?.toolCount === undefined
-                  ? null
-                  : ` · ${t('settings.mcp.list.toolCount', { count: summary.toolCount })}`}
+        {server ? (
+          <McpServerIdentity server={server} summary={summary} />
+        ) : (
+          <View className="flex-row items-center gap-4">
+            <PluginIcon size="large" source={mcpIcon} />
+            <View className="min-w-0 flex-1 gap-1">
+              <Text
+                accessibilityRole="header"
+                className="text-2xl font-semibold text-foreground"
+                numberOfLines={1}
+              >
+                {t('settings.mcp.defaultName')}
               </Text>
-            ) : (
               <Text className="text-sm text-muted-foreground">{t('plugins.custom.summary')}</Text>
-            )}
+            </View>
           </View>
-        </View>
+        )}
         <View className="gap-4">
           <FormField label={t('settings.mcp.oauth.authentication')}>
             <Tabs
@@ -476,17 +582,16 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
               ) : null}
             </FormField>
           ) : null}
-          {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.name')}>
-              <Input
-                accessibilityLabel={t('settings.mcp.fields.name')}
-                autoCorrect={false}
-                onChangeText={(value) => updateField('name', value)}
-                placeholder={t('settings.mcp.fields.name')}
-                value={form.name}
-              />
-            </FormField>
-          ) : null}
+          <FormField label={t('settings.mcp.fields.name')}>
+            <Input
+              accessibilityLabel={t('settings.mcp.fields.name')}
+              autoCorrect={false}
+              editable={!isBusy}
+              onChangeText={(value) => updateField('name', value)}
+              placeholder={t('settings.mcp.fields.name')}
+              value={form.name}
+            />
+          </FormField>
           <FormField label={t('settings.mcp.fields.endpointUrl')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.endpointUrl')}
@@ -543,6 +648,15 @@ function getServerStatus(
     return 'disabled';
   }
   return summary?.state ?? 'connecting';
+}
+
+/** Paths and query strings can carry tokens; the origin is enough to recognize the server. */
+function getEndpointOrigin(endpointUrl: string): string {
+  try {
+    return new URL(endpointUrl).origin;
+  } catch {
+    return '';
+  }
 }
 
 function createFormState(server?: McpServer): McpServerFormState {

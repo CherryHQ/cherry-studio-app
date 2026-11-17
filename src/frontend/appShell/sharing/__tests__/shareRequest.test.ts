@@ -40,8 +40,6 @@ function session(dispose = jest.fn(async () => {})) {
   return {
     document: { sections: [] },
     markdown: 'Content',
-    previewDocument: () => '<p>Content</p>',
-    previewMarkdown: () => '<p>Content</p>',
     render: jest.fn(),
     save: jest.fn(),
     dispose,

@@ -261,7 +261,7 @@ recency; no `orderKey`).
 
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
-| `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
+| `id` | text | PK, UUID v7 | Stable identity; transcript follows parent order, including queued inputs promoted to Steer |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
 | `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |
@@ -356,6 +356,24 @@ projection:
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
   native admission is interrupted with its saved parts retained.
+  At startup only, a reservation whose stored parts or native terminal projection fails schema
+  validation is logged as `ai.reconcile / invalid_reservation` and left unchanged while other
+  reservations recover. Ordinary Session commands and backup reconciliation remain strict;
+  cancellation, database and other non-validation failures still abort startup.
+  Native results are resolved before promoted input parents are repaired as a batch. If a native
+  read or that repair fails validation, startup skips settlement for the affected Session rather
+  than exposing a partially repaired chain; other Sessions still recover. Output validation after
+  the parent repair continues to isolate individual reservations.
+  Startup observation is a separate validation boundary: when an unfinished copy cannot be
+  observed, the Host isolates its entire Session for that runtime generation. It releases any
+  sibling observations, leaves that Session's Cherry reservations and parent links unchanged,
+  and rejects new submissions and model/tool execution through the existing execution-owner
+  ports. Healthy Sessions still recover and accept work. Pi scheduling remains global and may
+  record internal failure outcomes; isolation is not a per-conversation scheduler pause or a
+  compatibility migration. Backups and runtime-cache clearing remain strict. A fresh runtime
+  generation retries the original data; ordinary refresh does not repeat the same failed attach.
+  The affected Session reports `SESSION_RECOVERY_FAILED` with translated new-conversation and
+  diagnostic guidance. Non-validation observation errors and startup cancellation remain fatal.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a
@@ -383,9 +401,10 @@ projection:
   straight branch with sibling groups reset; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
-  "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
-  ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
-  preserves order while stamping "now" on every row would be visibly wrong in the UI.
+  "never set timestamps by hand" rule: copies retain the original history times rather than
+  appearing newly created. Transcript order follows the source parent chain, including steered
+  inputs whose execution order differs from reservation time; the copied rows reconnect that chain
+  with their reissued IDs.
   `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
   the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
   multi-row statements with ids generated in transcript order.
@@ -400,9 +419,12 @@ projection:
   checkpoint that may have absorbed the deleted content cannot be replayed without putting that
   content back in front of the model. The cost is a full replay, and usually a fresh compaction,
   on the next turn. The Session's own `forkBoundaryMessageId` is cleared when it names a deleted
-  row, and `lastActivityAt` rewinds to the newest surviving message, since a deleted turn is no
-  longer activity to sort by. The FTS delete trigger keeps the index consistent with no extra
-  work; `ai_usage_record` rows are a separate ledger and deliberately survive.
+  row, and `lastActivityAt` is recomputed as the maximum surviving message activity: an assistant's
+  `stats.runtimeTiming.completedAt` when present, otherwise the message's `createdAt`. Parallel
+  answers may finish out of creation order, so deleting an older turn retains their latest
+  completion; deleting the latest activity allows recency to rewind. The FTS delete trigger keeps
+  the index consistent with no extra work; `ai_usage_record` rows are a separate ledger and
+  deliberately survive.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

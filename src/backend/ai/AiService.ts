@@ -47,6 +47,7 @@ export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Image requests accept transport options only; text generation controls have no image meaning. */
 export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
+  requestTimeoutMs?: number;
   usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
@@ -249,6 +250,7 @@ export class AiService extends BaseService {
       paramValues: request.paramValues,
       provider,
       vendorBag: transportVendorBag,
+      requestTimeoutMs: request.requestTimeoutMs,
     });
     const inputImages = request.inputImages ?? [];
     const hasInputImages = inputImages.length > 0;

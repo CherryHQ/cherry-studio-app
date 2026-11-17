@@ -12,6 +12,7 @@ describe('getSendErrorLabelKey', () => {
     ['AGENT_MODEL_NOT_CONFIGURED', 'chat.input.sendError.modelNotConfigured'],
     ['SESSION_NOT_FOUND', 'chat.input.sendError.sessionNotFound'],
     ['SESSION_BUSY', 'chat.input.sendError.sessionBusy'],
+    ['SESSION_RECOVERY_FAILED', 'chat.runtime.sessionRecoveryFailed'],
     ['CAPABILITY_UNSUPPORTED', 'chat.input.sendError.unsupported'],
     ['TOOL_CALLING_UNSUPPORTED', 'chat.input.sendError.toolCallingUnsupported'],
     ['EXECUTION_UNAVAILABLE', 'chat.input.sendError.executionUnavailable'],

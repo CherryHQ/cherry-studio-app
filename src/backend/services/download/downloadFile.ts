@@ -18,7 +18,6 @@ export class FileDownloadError extends Error {
 type FileDownloadOptions = {
   url: string;
   destination: string;
-  sha256: string;
   /** Known model assets also require an exact byte count. */
   bytes?: number;
   maxBytes: number;
@@ -26,13 +25,18 @@ type FileDownloadOptions = {
   signal: AbortSignal;
   onProgress?(progress: FileDownloadProgress): void;
   reuseCached?: boolean;
-};
+} & (
+  | { sha256: string; validation?: never }
+  /** Private, uncached archives are validated by the domain before any content is imported. */
+  | { sha256?: never; validation: 'caller' }
+);
 
 const destinations = new Set<string>();
 const logger = loggerService.withContext('FileDownload');
 
 /**
- * Caller-owned native transfer. No file bytes cross JS; only verified files are published.
+ * Caller-owned native transfer. No file bytes cross JS. Assets require hash verification;
+ * explicit caller-validation mode returns a private archive for domain validation before import.
  * The caller owns retry/mirror policy, storage lifetime and joining cancellation on disposal.
  */
 export async function downloadFile(options: FileDownloadOptions): Promise<string> {
@@ -49,7 +53,7 @@ export async function downloadFile(options: FileDownloadOptions): Promise<string
     url.password ||
     !destination.startsWith('file:///') ||
     destination.endsWith('/') ||
-    !/^[a-f0-9]{64}$/.test(sha256) ||
+    (sha256 === undefined ? options.validation !== 'caller' : !/^[a-f0-9]{64}$/.test(sha256)) ||
     !Number.isSafeInteger(maxBytes) ||
     maxBytes <= 0 ||
     !Number.isSafeInteger(timeoutMs) ||
@@ -82,6 +86,7 @@ export async function downloadFile(options: FileDownloadOptions): Promise<string
     const cached = await FileSystem.getInfoAsync(destination);
     if (
       options.reuseCached !== false &&
+      sha256 !== undefined &&
       cached.exists &&
       !cached.isDirectory &&
       cached.size > 0 &&
@@ -121,10 +126,10 @@ export async function downloadFile(options: FileDownloadOptions): Promise<string
     if (!file.exists || file.isDirectory || file.size <= 0 || file.size > maxBytes)
       throw new FileDownloadError('download');
     verifying = true;
-    onProgress?.({ status: 'verifying' });
+    if (sha256 !== undefined) onProgress?.({ status: 'verifying' });
     if (
       (bytes !== undefined && file.size !== bytes) ||
-      (await hashLocalFile(partial, signal)) !== sha256
+      (sha256 !== undefined && (await hashLocalFile(partial, signal)) !== sha256)
     )
       throw new FileDownloadError('verification');
     signal.throwIfAborted();

@@ -60,6 +60,50 @@ describe('Agent file-library management', () => {
     return tool.execute({ input, signal, toolCallId: 'call', turnId: 'turn' });
   }
 
+  it('creates root and nested folders without a workspace and rejects duplicate names', async () => {
+    const changes: string[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => changes.push(...paths));
+    try {
+      const root = await call('library_create_folder', { name: 'Reports' });
+      const folder = (root.value as { folder: { id: string } }).folder;
+      const nested = await call('library_create_folder', {
+        parent_id: folder.id,
+        name: 'Drafts',
+      });
+      expect(root.value).toMatchObject({
+        status: 'created',
+        folder: { parentId: null, name: 'Reports' },
+      });
+      expect(nested.value).toMatchObject({
+        folder: { parentId: folder.id, name: 'Drafts' },
+      });
+      await expect(call('library_create_folder', { name: 'Reports' })).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(await library.folders()).toHaveLength(2);
+      expect(changes).toContain('/files/folders');
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('rejects missing or trashed parents, unsafe names and cancelled creation without saving', async () => {
+    const parent = await library.createFolder(null, 'Deleted');
+    await library.trashFolder(parent.id);
+    for (const parent_id of [id(900), parent.id]) {
+      await expect(
+        call('library_create_folder', { parent_id, name: 'Drafts' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    }
+    await expect(call('library_create_folder', { name: '../Drafts' })).rejects.toThrow();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      call('library_create_folder', { name: 'Cancelled' }, controller.signal),
+    ).rejects.toThrow();
+    expect(await library.folders()).toEqual([]);
+  });
+
   it('finds duplicate folder names with parent identities and bounded pages, excluding trash', async () => {
     const first = await library.createFolder(null, 'First');
     const second = await library.createFolder(null, 'Second');

@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as z from 'zod';
 
 import { ProviderAccountError } from '@/shared/contracts';
+import { profileScopedName } from '@/shared/data/activeProfile';
 
 import { ProviderOauthApplicationSchema, ProviderOauthTokensSchema } from './providerOauth';
 
@@ -46,7 +47,9 @@ const StoredPiAccountSchema = z.object({
 export type StoredPiAccount = z.infer<typeof StoredPiAccountSchema>;
 
 async function accountKey(providerId: string) {
-  return `provider-account.${await digestStringAsync(CryptoDigestAlgorithm.SHA256, providerId)}`;
+  return profileScopedName(
+    `provider-account.${await digestStringAsync(CryptoDigestAlgorithm.SHA256, providerId)}`,
+  );
 }
 
 async function read<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {

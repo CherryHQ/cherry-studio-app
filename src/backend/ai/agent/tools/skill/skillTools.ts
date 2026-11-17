@@ -129,7 +129,7 @@ export function createSkillTools(
       providerName: LIST_LOCAL_SKILLS_TOOL_NAME,
       displayName: 'List Skills',
       description:
-        'List this Agent’s enabled, bound, readable Skills with full descriptions, without keyword filtering. For complete inventory/counts use include_manual: true and total; otherwise manual-only packages are excluded. automaticTotal counts model-invocable Skills; returned counts this page. Follow nextCursor with the same include_manual until null before reporting completeness or no match. Compare task fit across languages, then call load_skill. Listing manual-only metadata does not authorize loading it.',
+        'List this Agent’s enabled, bound, readable Skills with full descriptions, without keyword filtering. For this Agent’s complete inventory/counts use include_manual: true and total; otherwise manual-only packages are excluded. To list the app’s entire installed library, including disabled or unbound Skills, discover list_installed_skills instead. automaticTotal counts model-invocable Skills; returned counts this page. Follow nextCursor with the same include_manual until null before reporting completeness or no match. Compare task fit across languages, then call load_skill. Listing manual-only metadata does not authorize loading it.',
       inputSchema: toRuntimeInputSchema(listInputSchema),
       approval: 'auto',
       async execute({ input }) {

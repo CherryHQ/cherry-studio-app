@@ -24,6 +24,7 @@ jest.mock('@/backend/data/db/backupDatabase', () => ({
   }),
   captureDatabase: async () => {},
   normalizeBackupDatabase: async () => {},
+  withBackupDatabase: async () => {},
 }));
 jest.mock('@/backend/services/file/fileHash', () => ({ hashLocalFile: jest.fn() }));
 jest.mock('../backupArchive', () => ({

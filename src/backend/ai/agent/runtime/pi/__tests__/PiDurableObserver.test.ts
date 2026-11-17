@@ -158,6 +158,39 @@ function attach(initial = view(), records: SubmissionRecord[] = []) {
   };
 }
 
+test('a steer owns subsequent streaming output while the preceding reply settles in place', async () => {
+  const first = input(1);
+  const second = input(3);
+  const state = attach(
+    view({ run }, [
+      { id: 1 as EntryId, conversationId, kind: 'pi.user' },
+      entry(2, 'Earlier answer'),
+    ]),
+    [first, second],
+  );
+  await state.observer.start();
+  await state.advance(
+    view(
+      {
+        run: { ...run, inputs: [first.id, second.id] },
+        generation: { attempt: 0, message: response('New answer') },
+      },
+      [{ id: 3 as EntryId, conversationId, kind: 'pi.user' }],
+    ),
+  );
+  const turns = state.events
+    .filter((event) => event.type === 'turn.updated')
+    .map((event) => event.turn);
+  const previous = turns.findLast((turn) => turn.userMessageId === 'user-1')!;
+  expect(previous.status).toBe('completed');
+  expect(JSON.stringify(previous.parts)).toContain('Earlier answer');
+  expect(JSON.stringify(previous.parts)).not.toContain('New answer');
+  expect(
+    JSON.stringify(turns.findLast((turn) => turn.userMessageId === 'user-3')!.parts),
+  ).toContain('New answer');
+  await state.observer.stop();
+});
+
 test('refreshes an idle context after background compaction and restores it on attachment', async () => {
   const completed: SubmissionRecord = { ...input(), status: 'done', answer: 2 as EntryId };
   const fixture = attach(view({}, [entry(2, 'Answer')]), [completed]);
@@ -655,6 +688,29 @@ test('settles several coalesced inputs independently and ignores continue submis
     expect((await first).parts).toMatchObject([{ text: 'one' }]);
     expect((await second).parts).toMatchObject([{ text: 'two' }]);
     expect(fixture.events.filter((event) => event.type === 'turn.updated')).toHaveLength(2);
+  } finally {
+    await fixture.observer.stop();
+  }
+});
+
+test('a completed coalesced batch settles empty earlier replies even without a live frame', async () => {
+  const fixture = attach();
+  fixture.history.set(inputId, [{ id: 1 as EntryId, conversationId, kind: 'pi.user' }]);
+  fixture.history.set(3 as SubmissionId, [entry(4, 'Combined answer')]);
+  try {
+    await fixture.observer.start();
+    const first = fixture.terminal(1);
+    const second = fixture.terminal(3);
+    fixture.notify(
+      { ...input(), status: 'done', answer: 4 as EntryId },
+      { ...input(3), status: 'done', answer: 4 as EntryId },
+    );
+    expect(await first).toMatchObject({ status: 'completed', hasAssistant: true, parts: [] });
+    expect(await second).toMatchObject({
+      status: 'completed',
+      hasAssistant: true,
+      parts: [{ type: 'text', text: 'Combined answer' }],
+    });
   } finally {
     await fixture.observer.stop();
   }

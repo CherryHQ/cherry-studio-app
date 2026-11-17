@@ -240,6 +240,8 @@ export type AgentSummary = {
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
+  /** Delivered by the enterprise server; only local Agents can be managed. */
+  isManaged?: boolean;
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }
@@ -286,7 +288,7 @@ export interface ConversationCatalog {
     signal: AbortSignal,
   ): Promise<CatalogPage<AgentSummary>>;
   listSessions(
-    filter: { agent?: AgentRef },
+    filter: { agent?: AgentRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;

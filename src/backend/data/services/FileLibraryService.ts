@@ -158,6 +158,7 @@ export class FileLibraryService {
     parentId: string | null,
     requestedName: string,
     workspaceFolderId?: string,
+    signal?: AbortSignal,
   ): Promise<FileFolder> {
     const folder = await this.mutate(async (tx) => {
       await requireWorkspaceDestination(tx, parentId, workspaceFolderId);
@@ -168,7 +169,7 @@ export class FileLibraryService {
         .returning();
       if (!row) throw new Error('Insert did not return a FileFolder');
       return folderView(row);
-    });
+    }, signal);
     publishDataApiChanges(['/files/folders']);
     return folder;
   }

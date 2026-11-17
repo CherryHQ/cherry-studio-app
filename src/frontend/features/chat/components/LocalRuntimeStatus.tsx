@@ -2,6 +2,8 @@ import { ContentState } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { AgentProtocolError } from '@/shared/contracts/agent';
+
 import { useAgentChatClient, useAgentSessionState } from '../runtime';
 
 /** Transient engine state; it never rewrites a turn that can resume from durable storage. */
@@ -10,6 +12,9 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
   const { client } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const failed = state.status === 'error';
+  const recoveryFailed =
+    state.error instanceof AgentProtocolError &&
+    state.error.view.code === 'SESSION_RECOVERY_FAILED';
   const retrying = state.activeTurn?.status === 'running' && state.activeTurn.isRetrying === true;
   const paused = state.activeTurn?.status === 'running' && state.activeTurn.isPaused === true;
   const notice = paused
@@ -26,13 +31,17 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
     <View className="px-4 py-2">
       {failed ? (
         <ContentState.Error
-          title={t('chat.runtime.failed')}
-          primaryAction={{
-            children: t('common.retry'),
-            onPress: () => {
-              void client.refresh(sessionId).catch(() => {});
-            },
-          }}
+          title={t(recoveryFailed ? 'chat.runtime.sessionRecoveryFailed' : 'chat.runtime.failed')}
+          primaryAction={
+            recoveryFailed
+              ? undefined
+              : {
+                  children: t('common.retry'),
+                  onPress: () => {
+                    void client.refresh(sessionId).catch(() => {});
+                  },
+                }
+          }
         />
       ) : (
         <Text

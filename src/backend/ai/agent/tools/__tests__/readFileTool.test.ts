@@ -612,14 +612,14 @@ describe('readFileTool', () => {
       },
       {
         name: 'exact image byte limit',
-        size: 10_485_760,
+        size: 31_457_280,
         startLine: 1,
         message: IMAGE_PAGING_MESSAGE,
         resolverCalls: 1,
       },
       {
         name: 'above image byte limit',
-        size: 10_485_761,
+        size: 31_457_281,
         startLine: 1,
         message: 'The image exceeds the attachment byte limit.',
         resolverCalls: 1,
@@ -641,7 +641,7 @@ describe('readFileTool', () => {
     );
 
     test('reads pixels without paging at the exact image byte limit', async () => {
-      const files = imageFiles({ size: 10_485_760 });
+      const files = imageFiles({ size: 31_457_280 });
       expect(
         await execute(createReadFileTool(files, IN_SCOPE), { file_entry_id: FILE_ID }),
       ).toEqual(IMAGE_SUCCESS);

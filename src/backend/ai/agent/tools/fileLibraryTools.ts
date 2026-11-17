@@ -63,7 +63,7 @@ export function createFileLibraryTools(
       deferred: true,
       approval: 'auto',
       description:
-        'Search active file names across the file library. An empty query lists files. In Code Mode, read result.value.files and use each fileEntryId; this result has no status field. Pass nextCursor as cursor to read the next page; null ends the list. Use library_read_file to read files outside the workspace. To organize the library, find library_list_folders, library_move_item, library_rename_item, library_trash_item, library_list_trash and library_restore_item through tool_search.',
+        'Search active file names across the file library. An empty query lists files. In Code Mode, read result.value.files and use each fileEntryId; this result has no status field. Pass nextCursor as cursor to read the next page; null ends the list. Use library_read_file to read files outside the workspace. To organize the library, find library_list_folders, library_create_folder, library_move_item, library_rename_item, library_trash_item, library_list_trash and library_restore_item through tool_search.',
       inputSchema: toRuntimeInputSchema(searchSchema),
       outputSchema: searchOutputSchema,
       async execute({ input }) {

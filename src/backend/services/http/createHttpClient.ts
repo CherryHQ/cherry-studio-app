@@ -5,10 +5,8 @@ import {
   type AxiosInstance,
   type AxiosRequestConfig,
   type AxiosResponse,
-  type CreateAxiosDefaults,
   type InternalAxiosRequestConfig,
 } from 'axios';
-import { fetch as expoFetch } from 'expo/fetch';
 
 import type {
   HttpClient,
@@ -20,6 +18,12 @@ import type {
   HttpResponse,
 } from './HttpClient';
 import { HttpError, isHttpError } from './HttpError';
+import {
+  httpFetch,
+  type HttpFetchOptions,
+  HTTP_TEXT_RESPONSE_LIMIT,
+  HttpTextResponseLimit,
+} from './httpFetch';
 import { mapAxiosError } from './mapAxiosError';
 import { serializeHttpQuery } from './serializeHttpQuery';
 import { toHttpHeaders } from './toHttpHeaders';
@@ -27,10 +31,16 @@ import { toHttpHeaders } from './toHttpHeaders';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const HTTP_ROUTE = Symbol('httpRoute');
 const HTTP_REQUEST = Symbol('httpRequest');
-const HTTP_METHODS = new Set<HttpMethod>(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
+const HTTP_METHODS = new Set<HttpMethod>([
+  'DELETE',
+  'GET',
+  'HEAD',
+  'OPTIONS',
+  'PATCH',
+  'POST',
+  'PUT',
+]);
 const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'arraybuffer']);
-
-type AxiosFetch = NonNullable<NonNullable<CreateAxiosDefaults['env']>['fetch']>;
 
 export interface CreateHttpClientOptions {
   baseUrl: string;
@@ -61,6 +71,7 @@ interface RoutedAxiosConfig {
 
 type RoutedAxiosRequestConfig = AxiosRequestConfig & RoutedAxiosConfig;
 type RoutedInternalAxiosRequestConfig = InternalAxiosRequestConfig & RoutedAxiosConfig;
+type RoutedAxiosResponse = AxiosResponse & { truncated?: boolean };
 
 interface HttpRequestContext {
   readonly request: HttpRequest<unknown>;
@@ -124,8 +135,8 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
-  if (request.method === 'GET' && request.body !== undefined) {
-    throw new HttpError('HTTP GET requests must not include a body.', {
+  if ((request.method === 'GET' || request.method === 'HEAD') && request.body !== undefined) {
+    throw new HttpError('HTTP GET and HEAD requests must not include a body.', {
       code: 'INVALID_REQUEST_BODY',
       kind: 'internal',
     });
@@ -151,6 +162,17 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
   if (request.responseType !== undefined && !HTTP_RESPONSE_TYPES.has(request.responseType)) {
     throw new HttpError('HTTP response type is invalid.', {
       code: 'INVALID_RESPONSE_TYPE',
+      kind: 'internal',
+    });
+  }
+
+  if (
+    (request.truncateResponse !== undefined && typeof request.truncateResponse !== 'boolean') ||
+    (request.truncateResponse &&
+      (request.responseType !== 'text' || request.maxResponseBytes === undefined))
+  ) {
+    throw new HttpError('HTTP response truncation requires a bounded text response.', {
+      code: 'INVALID_RESPONSE_TRUNCATION',
       kind: 'internal',
     });
   }
@@ -246,13 +268,29 @@ const dispatchRequestInterceptors = async (
     config.data = request.body;
     config.headers = AxiosHeaders.from(request.headers);
     config.method = request.method;
-    config.maxContentLength = request.maxResponseBytes ?? -1;
+    config.maxContentLength = request.truncateResponse ? -1 : (request.maxResponseBytes ?? -1);
     config.params = request.query;
     config.responseType = request.responseType;
+    // Serialized bodies are already wire data, including intentionally invalid JSON.
+    if (typeof request.body === 'string') config.transformRequest = [(data) => data];
     config.signal = request.signal;
-    config.fetchOptions = { redirect: request.redirect };
+    const fetchOptions: HttpFetchOptions = {
+      redirect: request.redirect,
+      // Pass this directly to Expo as well: RN's Request.prototype has no credentials property,
+      // so Axios can otherwise ignore withCredentials and restore native cookies.
+      credentials: request.credentials,
+    };
+    if (request.truncateResponse) {
+      fetchOptions[HTTP_TEXT_RESPONSE_LIMIT] = new HttpTextResponseLimit(
+        request.maxResponseBytes!,
+        request.timeoutMs ?? context.route.timeoutMs,
+        config,
+      );
+    }
+    config.fetchOptions = fetchOptions;
     if (request.credentials) config.withCredentials = false;
-    config.timeout = request.timeoutMs ?? context.route.timeoutMs;
+    // The fetch boundary owns one deadline through headers and bounded body consumption.
+    config.timeout = request.truncateResponse ? 0 : (request.timeoutMs ?? context.route.timeoutMs);
     config.url = request.path;
     config.validateStatus =
       context.route.statusPolicy === 'all' ? acceptAllStatuses : acceptSuccessfulStatus;
@@ -274,10 +312,14 @@ const dispatchResponseInterceptors = async (response: AxiosResponse): Promise<Ax
     );
   }
 
+  const limit = (response.config.fetchOptions as HttpFetchOptions | undefined)?.[
+    HTTP_TEXT_RESPONSE_LIMIT
+  ];
   let httpResponse: HttpResponse<unknown> = {
     data: response.data,
     headers: toHttpHeaders(response.headers),
     status: response.status,
+    ...(limit ? { truncated: limit.truncated } : {}),
   };
 
   try {
@@ -294,6 +336,8 @@ const dispatchResponseInterceptors = async (response: AxiosResponse): Promise<Ax
   response.data = httpResponse.data;
   response.headers = AxiosHeaders.from(httpResponse.headers);
   response.status = httpResponse.status;
+  if (httpResponse.truncated !== undefined)
+    (response as RoutedAxiosResponse).truncated = httpResponse.truncated;
   return response;
 };
 
@@ -310,7 +354,7 @@ function createAxiosTransport(adapter?: AxiosAdapter): AxiosInstance {
     adapter: adapter ?? 'fetch',
     allowAbsoluteUrls: false,
     env: {
-      fetch: expoFetch as unknown as AxiosFetch,
+      fetch: httpFetch,
     },
     paramsSerializer: { serialize: serializeHttpQuery },
     timeout: DEFAULT_TIMEOUT_MS,
@@ -377,11 +421,13 @@ function createHttpClientWithTransport(
           timeout: routedRequest.timeoutMs ?? route.timeoutMs,
           url: routedRequest.path,
         } as RoutedAxiosRequestConfig);
+        const truncated = (response as RoutedAxiosResponse).truncated;
 
         return Object.freeze({
           data: response.data,
           headers: toHttpHeaders(response.headers),
           status: response.status,
+          ...(truncated === undefined ? {} : { truncated }),
         });
       } catch (error) {
         throw mapAxiosError(

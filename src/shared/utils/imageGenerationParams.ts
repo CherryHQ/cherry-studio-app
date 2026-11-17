@@ -63,9 +63,13 @@ export function getImageParamFields(
     return [];
   }
 
+  const outputFormatSpec = resolvedMode.definition.supports.outputFormat;
+  const outputFormat =
+    values.outputFormat ||
+    (outputFormatSpec?.type === 'enum' ? outputFormatSpec.default : undefined);
   return Object.entries(resolvedMode.definition.supports).flatMap(([key, spec]) => {
     if (!spec) return [];
-    if (values.outputFormat === 'gif' && spec.type === 'enum') {
+    if (outputFormat === 'gif' && spec.type === 'enum') {
       if (key === 'size' && spec.options.includes('auto')) {
         // Still-image dimensions can exceed the default nine-frame GIF pixel budget.
         spec = { ...spec, options: ['auto'], default: 'auto' };
@@ -178,10 +182,10 @@ export function prepareImageParamValues(
   const parsed = buildParamsSchema(support, resolvedMode.mode).parse(draft);
   const values: Record<string, unknown> = {};
   const fields = getImageParamFields(resolvedMode, draft);
-  const supportedKeys = new Set(fields.map((field) => field.key));
 
-  for (const key of supportedKeys) {
-    const value = parsed[key];
+  for (const { key, spec } of fields) {
+    const value =
+      parsed[key] ?? (key === 'outputFormat' && spec.type === 'enum' ? spec.default : undefined);
     if (value !== undefined && value !== null && value !== '') {
       values[key] = value;
     }

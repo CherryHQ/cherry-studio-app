@@ -8,6 +8,7 @@ import { Text, View } from 'react-native';
 
 import { useBackupState } from '@/frontend/hooks/useBackupState';
 import type { BackupExport, BackupPreview, BackupState } from '@/shared/contracts/backup';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import { useBackupErrorReporter } from './useBackupErrorReporter';
 
@@ -177,6 +178,11 @@ function BackupSummary({ rows }: { rows: readonly (readonly [string, string])[] 
 
 const MEBIBYTE = 1024 * 1024;
 
+/** What a backup carries; an enterprise backup leaves the organization's own content out. */
+export function backupContentNoticeKey() {
+  return isEnterpriseProfile() ? 'backup.sensitiveEnterprise' : 'backup.sensitive';
+}
+
 export function formatStorageSize(bytes: number, t: TFunction, language: string): string {
   const inMegabytes = bytes >= MEBIBYTE;
   const size = (inMegabytes ? bytes / MEBIBYTE : bytes / 1024).toLocaleString(language, {
@@ -221,7 +227,7 @@ function BackupExportResult({
   return (
     <>
       <BackupSummary rows={rows} />
-      <Text className="text-sm text-muted-foreground">{t('backup.sensitive')}</Text>
+      <Text className="text-sm text-muted-foreground">{t(backupContentNoticeKey())}</Text>
       <View className="gap-2">
         <Button disabled={isPending} loading={pendingAction === 'save'} onPress={onSave}>
           {t('backup.saveToFiles')}
@@ -269,6 +275,10 @@ function BackupRestorePreview({
     <>
       <BackupSummary rows={rows} />
       <Text className="text-sm text-muted-foreground">{t('backup.confirm.description')}</Text>
+      {/* The restored profile opens only after its first sync, so a restore needs the network. */}
+      {isEnterpriseProfile() ? (
+        <Text className="text-sm text-muted-foreground">{t('backup.confirm.enterpriseSync')}</Text>
+      ) : null}
       <View className="gap-2">
         <Button onPress={onRestore} variant="destructive">
           {t('backup.apply')}

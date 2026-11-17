@@ -17,6 +17,7 @@ export function DocumentPagePreview({
   page,
   width: frameWidth,
   height: frameHeight,
+  bottomInset,
   isImage,
   layout,
   onPages,
@@ -26,6 +27,7 @@ export function DocumentPagePreview({
   page: ImagePageSlice;
   width: number;
   height: number;
+  bottomInset: number;
   isImage: boolean;
   layout: ExportImageLayout;
   onPages(pages: readonly ImagePageSlice[]): void;
@@ -39,14 +41,18 @@ export function DocumentPagePreview({
   const topInset = layout === 'single' ? 0 : IMAGE_PAGE_TOP_INSET;
   const pageHeight = page.height + topInset;
   const isPagedImage = isImage && layout === 'pages';
+  const availableHeight = Math.max(1, height - bottomInset);
   const scale = isPagedImage
-    ? Math.min(width / IMAGE_LAYOUT_WIDTH, height / pageHeight)
+    ? Math.min(width / IMAGE_LAYOUT_WIDTH, availableHeight / pageHeight)
     : width / IMAGE_LAYOUT_WIDTH;
   const viewportHeight = isPagedImage ? pageHeight : height / scale;
-  const position = `document.documentElement.style.overflow='hidden';document.body.style.cssText='margin:0;overflow:hidden;height:100%';var main=document.querySelector('main');if(main){main.style.cssText='position:absolute;left:0;top:${topInset - page.top}px;width:${IMAGE_LAYOUT_WIDTH}px;max-width:none;margin:0'}true;`;
+  // Preview-only clearance never changes the main element measured for exported pages.
+  const position = isPagedImage
+    ? `document.documentElement.style.overflow='hidden';document.body.style.cssText='margin:0;overflow:hidden;height:100%';var main=document.querySelector('main');if(main){main.style.cssText='position:absolute;left:0;top:${topInset - page.top}px;width:${IMAGE_LAYOUT_WIDTH}px;max-width:none;margin:0'}true;`
+    : `document.body.style.paddingBottom='${bottomInset / scale}px';true;`;
   useEffect(() => {
-    if (isPagedImage) web.current?.injectJavaScript(position);
-  }, [isPagedImage, position]);
+    web.current?.injectJavaScript(position);
+  }, [position]);
   return (
     <View
       className="flex-1 overflow-hidden bg-card"
@@ -62,7 +68,7 @@ export function DocumentPagePreview({
         style={{
           position: 'absolute',
           left: (width - IMAGE_LAYOUT_WIDTH * scale) / 2,
-          top: isPagedImage ? (height - pageHeight * scale) / 2 : 0,
+          top: isPagedImage ? (availableHeight - pageHeight * scale) / 2 : 0,
           width: IMAGE_LAYOUT_WIDTH,
           height: viewportHeight,
           transform: [{ scale }],
@@ -76,7 +82,7 @@ export function DocumentPagePreview({
           originWhitelist={['*']}
           scrollEnabled={!isPagedImage}
           showsVerticalScrollIndicator={isImage && layout === 'single'}
-          injectedJavaScript={isImage ? imageMeasurementScript(1, layout) : undefined}
+          injectedJavaScript={`${position}${isImage ? imageMeasurementScript(1, layout) : ''}`}
           onError={onError}
           onHttpError={onError}
           onShouldStartLoadWithRequest={(request) =>

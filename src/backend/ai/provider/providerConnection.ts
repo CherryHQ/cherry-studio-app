@@ -1,6 +1,7 @@
 import {
   getExtraHeaders,
   resolveEffectiveEndpoint,
+  resolveVertexUrls,
   resolveWireModelId,
   type ResolvedEndpoint,
 } from '@cherrystudio/ai-runtime/provider';
@@ -8,7 +9,7 @@ import type { EndpointType } from '@cherrystudio/provider-registry';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 export interface ResolvedProviderConnection {
   adapterFamily: string | undefined;
@@ -48,4 +49,11 @@ export function resolveProviderConnection(
     headers: { ...defaultAppHeaders(), ...getExtraHeaders(provider) },
     wireModelId: resolveWireModelId(model, endpointType),
   };
+}
+
+/** Resolve the service address without materializing credentials or making an auth request. */
+export function resolveProviderServiceUrl(baseUrl: string, auth: AuthConfig | null): string {
+  return auth?.type === 'iam-gcp'
+    ? resolveVertexUrls(baseUrl, auth.project.trim(), auth.location.trim()).serviceUrl
+    : baseUrl;
 }

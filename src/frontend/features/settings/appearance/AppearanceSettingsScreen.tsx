@@ -15,6 +15,7 @@ import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSett
 import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { EnterToSendSetting } from './components/EnterToSendSetting';
 import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
+import { SessionBranchTreeSetting } from './components/SessionBranchTreeSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -97,6 +98,7 @@ export default function AppearanceSettingsScreen() {
             value={isKeepScreenOnEnabled}
           />
           <MultiModelCardsSetting />
+          <SessionBranchTreeSetting />
           <DocumentParserSetting />
           <AutoCollapseProcessSetting />
         </Section>

@@ -333,9 +333,12 @@ so the AAB keeps uncompressed libraries: Google Play compresses the download its
 libraries in an AAB only slow installation and double on-device storage. Development builds keep
 uncompressed native libraries. The EAS Release commands pass `-Xmx4096m` as the Gradle JVM
 arguments, which also drops the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on
-local production builds. After changing native dependencies or packaging options, verify that a
-Release build starts and completes desktop QR pairing. Compare APK sizes using the same profile and
-architecture.
+local production builds. Production Android commands also use `--max-workers=2 --no-parallel`,
+including the inherited domestic APK command, so local and cloud builds retain the bounded Gradle
+concurrency used for 0.5.5. This mitigates resource pressure; the earlier daemon exit did not include
+proof of an out-of-memory failure. Development and preview concurrency remain unchanged.
+After changing native dependencies or packaging options, verify that a Release build starts and
+completes desktop QR pairing. Compare APK sizes using the same profile and architecture.
 
 Rebuild the native client after adding or changing native dependencies such as Sentry. Starting
 Metro again does not add a native module to an already installed client. Local and cloud EAS builds
