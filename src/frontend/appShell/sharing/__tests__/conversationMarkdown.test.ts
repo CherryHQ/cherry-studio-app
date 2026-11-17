@@ -102,6 +102,7 @@ test('adapts saved web-search results to shared citations without exporting tool
             toolCallId: 'call',
             toolRef: { source: 'builtin', capabilityId: 'web_search' },
             toolName: 'web_search',
+            title: 'Search the web',
             state: 'output-available',
             input: { query: 'private search query' },
             output: {
@@ -131,7 +132,7 @@ test('adapts saved web-search results to shared citations without exporting tool
   expect(markdown).toContain('Answer [2](<https://example.com/b>).');
   expect(markdown).toContain('1. [A](<https://example.com/a>)');
   expect(markdown).toContain('2. [B](<https://example.com/b>)');
-  expect(markdown).not.toMatch(/private search query|private body|web_search/);
+  expect(markdown).not.toMatch(/private search query|private body|web_search|Search the web/);
 });
 
 test('expands full saved quotes at their inline positions with the recorded author and citations', () => {
