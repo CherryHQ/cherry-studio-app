@@ -448,6 +448,25 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+`Section` styles only its own row kinds. A component that always renders exactly one of them, such
+as a wrapper choosing between a selectable and a read-only row, sets the static `sectionItem = true`
+(typed by `SectionItemComponent`) and passes `onPressedChange` through, so its separators follow
+press state like any row.
+
+Locked content belongs to someone else: it shows its value at full contrast, without the means to
+change it, and explains why when pressed. `LockedAppearanceProvider` supplies the owner's mark
+(`icon`, sized by `className`) and the `reason` shown in an `InfoPopover`; without a reason locks
+stay silent. `Switch`, `Tabs`, `Input`, `SelectionIndicator` and the `Section` rows take `locked`:
+they drop their edit affordances, and on their own carry the mark in its place. The switch draws a
+neutral track on both platforms, with the mark on its thumb when alone, because the iOS system
+switch cannot carry one. `LockedGroup` encloses a block in one outlined card headed by the mark and
+reason, locks the editable components inside and flattens the sections inside into
+its card, where their footers drop out. The header names the owner once, so nothing inside repeats
+the mark. A `Section.Item` locks only when it edits
+something; a row that only navigates or copies passes `locked={false}`. A virtualized list draws a
+group one item at a time with `LockedGroupSlice`; `LockedMark` and `LockedTrigger` serve custom
+controls.
+
 Use `inset="none"` when the containing surface already supplies the horizontal gutter; the default
 keeps the row's standard inset.
 
@@ -755,8 +774,7 @@ React Native touches too, and must still be allowed to open its menu.
 
 Cherry-rendered menus use an opaque `popover` surface with a soft external shadow, keeping the
 panel distinct from the composer and page. Dark mode layers a neutral `secondary` fill over that
-opaque base for separation from other dark surfaces. The private `MenuSurface` also supplies
-`Composer.Popover`; content clipping stays inside the shadow boundary. Leading icons sit in
+opaque base for separation from other dark surfaces. Content clipping stays inside the shadow boundary. Leading icons sit in
 40-point neutral circles within 56-point minimum rows; labels retain `popover-foreground` contrast,
 pressed rows use `secondary-active`, and trailing checkmarks and switches keep their state cues.
 
@@ -993,24 +1011,6 @@ switch action and render a private decorative indicator. `width` is a floor boun
 Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel, including when its
 content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
-`Composer.Popover` wraps the input surface and presents caller-owned `content` above it. It follows
-the anchor while the keyboard or composer height changes. `maxWidth` and `maxHeight` constrain a
-compact list while its content determines the natural height. It shares the menu's material, radius,
-interruptible lifecycle, and reduced-motion behavior. Outside taps include both side gutters and
-the bottom safe area; touching the composer closes the picker while preserving that touch's action.
-The entire picker content must scroll. When even a compact composer leaves too little room, the
-panel uses the viewport above the keyboard, temporarily overlapping the composer instead of
-collapsing to zero. Callers may fold attachments and constrain the editor while open, keeping both
-mounted so draft state and the caret survive.
-
-Mount `Portal.AccessibilityBoundary` around app content below the provider that owns the portal
-host. The popover hides background accessibility through its exit, focuses `initialFocusRef` after
-layout, then restores `returnFocusRef` and calls `onClosed` after dismissal. Omit `returnFocusRef`
-when continuing into another surface. `onClose` distinguishes outside, composer, and Back/Escape
-actions so touching the composer can cancel a pending focus restoration. Selection,
-connection state, translations, and post-dismissal actions remain in the feature. Resolve route
-and business contexts before passing content, because the portal host does not inherit them.
-No editor mention trigger is installed by this component.
 
 ## Motion
 

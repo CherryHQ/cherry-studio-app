@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.8` and
-`@cherrystudio/ai-sdk-provider@0.1.11` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.5.0` and
+`@cherrystudio/ai-sdk-provider@0.1.12` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.4.0` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.6.1` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline is `2.1.11`; device acceptance is separate from package
 and Metro checks.**
@@ -64,6 +64,10 @@ Version `2.4.8` includes the resolved model in non-streaming text and image plug
 removes the unused provider-utils runtime dependency, and requires the GPT Image 2.6-capable
 OpenAI adapter. The existing OpenRouter reranking-model factory remains available.
 
+Version `2.5.0` adds chunked context compaction, context-overflow detection, cancellation and
+summary completion checks. Mobile does not consume those compaction interfaces; its provider and
+image-generation paths are unchanged from `2.4.9`.
+
 ### `@cherrystudio/ai-sdk-provider`
 
 Mobile uses the published package for CherryIN and OpenAI-compatible provider behavior, including
@@ -75,7 +79,7 @@ continues to omit the unsupported strict-tool field. Mobile's conversation tools
 
 ### Dependency resolution
 
-The published `ai-core@2.4.8` and `ai-sdk-provider@0.1.11` require OpenAI SDK `3.0.137` or newer
+The published `ai-core@2.5.0` and `ai-sdk-provider@0.1.12` require OpenAI SDK `3.0.137` or newer
 within AI SDK 6. Mobile pins `3.0.137` with Azure `3.0.148`, which uses that same OpenAI version,
 and carries the matching image-URL response patch across all four published JavaScript entries.
 The shared SDK dependencies are pinned to `@ai-sdk/provider@3.0.19` and
@@ -86,7 +90,7 @@ by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.4.0` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.6.1` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.
@@ -96,6 +100,13 @@ checks, delegating model queries to the package. `mobileProviderCatalog.ts` adds
 OAuth metadata, adapter differences, and legacy flags. `providerRegistryProjection.ts` retains the
 existing persisted endpoint and feature shapes. Portable URL rules live in the existing
 `@cherrystudio/universal/utils/url` owner. Mobile does not retain the upstream source or generator.
+
+The `0.6.1` upgrade adds Gemini 4 Carbon/Hydrogen reasoning controls and Hydrogen native-tool
+eligibility and function-tool mixing rules. It also removes several Gemini TTS/Live models from
+the mixing list. Mobile consumes those rules through the existing registry and Pi adapters.
+The public types, trusted provider connections, v4 schema and `2.1.11` reader baseline are unchanged
+from `0.5.0`. Updated model metadata still arrives through the remote snapshot flow; the npm
+upgrade does not replace saved model data or user configuration.
 
 The saved Model schema retains the legacy `web-search` capability so existing user data remains
 readable. The published package models native search through `serverTools`; the Pi runtime consumes
@@ -161,7 +172,8 @@ The earlier registry behavior remains in place:
   corrections remain in `mobileProviderCatalog.ts`.
 
 Regression cases cover these Mobile adapters. Execution, type checking, Metro and device acceptance
-of this upgrade remain pending; dependency installation skipped lifecycle build scripts.
+of this upgrade remain pending; dependency resolution used `--lockfile-only --ignore-scripts`
+without installing packages or running lifecycle build scripts.
 
 ### Current migration ledger
 

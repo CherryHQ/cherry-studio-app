@@ -236,6 +236,12 @@ The user selected the built-in create-skill workflow. Create a reusable Skill fr
     sections.push(buildSkillsSection(skills));
   }
 
+  if (tools.some((tool) => tool.providerName === 'list_installed_skills')) {
+    sections.push(`## Installed Skill Library
+
+For the app's installed Skills, discover \`list_installed_skills\` through \`tool_search\`: use \`mode: count\` for totals; follow all pages only for a complete list. Includes globally disabled and unbound Skills. \`list_local_skills\` covers this Agent's enabled, bound and readable packages. Library metadata grants no instruction access or execution capability.`);
+  }
+
   return sections;
 }
 
@@ -250,12 +256,12 @@ function buildSkillsSection(skills: TurnSkillPlan): string {
   if (skills.scope.entries.length === 0)
     return `## Skills
 
-This Agent has no enabled, bound and readable Skill packages; this is not the app's installed total. For installed inventory/counts, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\` and report its \`total\`. Skill readers, including \`${LOAD_SKILL_TOOL_NAME}\`, are offered directly; do not search for them.`;
+This Agent has no enabled, bound and readable Skill packages; this is not the app's installed total. For this Agent's inventory/counts, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\` and report its \`total\`. Skill readers, including \`${LOAD_SKILL_TOOL_NAME}\`, are offered directly; do not search for them.`;
   const catalog = skills.scope.entries.filter((entry) => entry.invocation.modelInvocable);
   const lines = [
     `## Skills
 
-This Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills; this is not the app's installed total. For installed inventory/counts, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\` and report its \`total\`. Skill readers are built-in tools exposed directly to you; do not search for them.
+This Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills; this is not the app's installed total. For this Agent's inventory/counts, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\` and report its \`total\`. Skill readers are built-in tools exposed directly to you; do not search for them.
 
 Choose relevant Skills by meaning, including across languages; shared keywords are not required, and you need not use every one. Unless instructions are already active, call \`${LOAD_SKILL_TOOL_NAME}\` with \`skill_id\` and follow the complete workflow. Read references with \`list_skill_files\` and \`read_skill_file\`; package paths are not device paths. Skills grant no tools or runtimes; reading a script does not execute it. Explain unavailable steps and continue supported work. If available, \`adapt_skill\` can propose changes within its declared limits.`,
   ];

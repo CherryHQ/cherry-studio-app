@@ -1,0 +1,1 @@
+export { getAppLogo } from './appBranding';

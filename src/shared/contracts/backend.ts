@@ -1,7 +1,10 @@
+import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
+import type { CloudModule } from './cloud';
+import type { DeepseekImportModule } from './deepseekImport';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
@@ -23,10 +26,13 @@ import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly account: AccountModule;
+  readonly cloud: CloudModule;
   readonly ssh: SshModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
+  readonly deepseekImport: DeepseekImportModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;

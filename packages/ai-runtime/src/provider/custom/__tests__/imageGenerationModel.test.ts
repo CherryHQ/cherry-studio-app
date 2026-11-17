@@ -27,6 +27,16 @@ function makeOptions(
 }
 
 describe('createImageGenerationModel.doGenerate', () => {
+  it('separates timeout metadata without mutating provider options', async () => {
+    const submit = vi.fn().mockResolvedValue({ imageUrls: [] });
+    const model = createImageGenerationModel('m', { provider: 'ppio', transport: { submit } });
+    const bag = { requestTimeoutMs: 45000, cfg: 6 };
+    await model.doGenerate(makeOptions({ providerOptions: { ppio: bag } }));
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({ requestTimeoutMs: 45000, providerParams: { cfg: 6 } }),
+    );
+    expect(bag).toEqual({ requestTimeoutMs: 45000, cfg: 6 });
+  });
   it('returns urls for a terminal success (async submit → poll)', async () => {
     const transport: ImageGenerationTransport = {
       submit: vi.fn().mockResolvedValue({ taskId: 'task-1' }),

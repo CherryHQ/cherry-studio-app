@@ -9,7 +9,12 @@ const mockAgentHostDependencies = { configureVoice: jest.fn() };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockAgent = { kind: 'agent', quiesce: jest.fn(), hasPendingStorageWork: () => false };
+const mockAgent = {
+  kind: 'agent',
+  quiesce: jest.fn(),
+  interrupt: jest.fn(async (_reason: Error) => {}),
+  hasPendingStorageWork: () => false,
+};
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
@@ -17,6 +22,31 @@ const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
 const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
+const mockCloud = {
+  configure: jest.fn(),
+  hasPendingStorageWork: jest.fn(() => false),
+};
+const mockEnterpriseSync = {
+  configure: jest.fn(),
+  hasPendingStorageWork: jest.fn(() => false),
+  stop: jest.fn(async () => {}),
+};
+const mockAccountState = { isEnterprise: true, needsSignIn: false };
+const mockAccountListeners = new Set<() => void>();
+const mockEnterpriseAccount = {
+  kind: 'enterprise-account',
+  verify: jest.fn(async () => {}),
+  admit: jest.fn(async () => {}),
+  createEnterpriseSession: jest.fn(),
+  getCommunityIdentity: jest.fn(() => null),
+  getCommunityTokens: jest.fn(async () => ({ accessToken: 'access', idToken: 'identity' })),
+  refreshCommunityServices: jest.fn(async () => {}),
+  getState: () => mockAccountState,
+  subscribe: (listener: () => void) => {
+    mockAccountListeners.add(listener);
+    return () => mockAccountListeners.delete(listener);
+  },
+};
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
@@ -64,11 +94,15 @@ const mockDisposeVoice = jest.fn(async () => {});
 const mockDisposeAppUpdate = jest.fn(async () => {});
 const mockDisposeUuRemote = jest.fn(async () => {});
 const mockDisposeDiagnostics = jest.fn(async () => {});
+const mockDisposeDeepseekImport = jest.fn(async () => {});
+const mockHasPendingDeepseekImport = jest.fn(() => false);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   initializeSkills: jest.fn(async () => undefined),
   hasPendingSkillStorageWork: () => false,
+  hasPendingDeepseekImport: mockHasPendingDeepseekImport,
+  disposeDeepseekImport: mockDisposeDeepseekImport,
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
@@ -99,6 +133,9 @@ jest.mock('@/backend/services/file/fileTextCache', () => ({
 }));
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
+}));
+jest.mock('@/bootstrap/profile/installationAccount', () => ({
+  installationAccount: () => mockEnterpriseAccount,
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
@@ -164,6 +201,8 @@ const createRuntime = () =>
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
+    EnterpriseSyncService: mockEnterpriseSync,
+    CloudRuntime: mockCloud,
     JobRuntime: mockJobRuntime,
     ScreenAwakeRuntime: mockScreenAwake,
     McpRuntimeService: mockMcpRuntime,
@@ -178,7 +217,9 @@ const createRuntime = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAccountListeners.clear();
   mockProviderCatalog.hasPendingStorageWork.mockReturnValue(false);
+  mockHasPendingDeepseekImport.mockReturnValue(false);
   mockStorageBoot.mockReturnValue({ restoring: false, resetCaches: false });
 });
 
@@ -187,6 +228,43 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
+  test('includes a pending DeepSeek import in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockHasPendingDeepseekImport.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockHasPendingDeepseekImport.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains DeepSeek import before uninstalling its database host', async () => {
+    let finish!: () => void;
+    mockDisposeDeepseekImport.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalled();
+    } finally {
+      finish?.();
+      await runtime.dispose();
+      uninstall.mockRestore();
+    }
+  });
+
   test('includes initial provider seeding in backup admission', async () => {
     const runtime = createRuntime();
     try {
@@ -209,6 +287,42 @@ describe('createAppBootstrapRuntime', () => {
     } finally {
       mockMcpRuntime.hasPendingStorageWork.mockReturnValue(false);
       await runtime.dispose();
+    }
+  });
+
+  test('includes pending enterprise sync in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockEnterpriseSync.hasPendingStorageWork.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains first enterprise sync before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockEnterpriseSync.stop.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
     }
   });
 
@@ -370,6 +484,8 @@ describe('createAppBootstrapRuntime', () => {
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
+      account: mockEnterpriseAccount,
+      cloud: mockCloud,
       languageServing: mockAgentRuntime,
       screenAwake: mockScreenAwake,
       providerAccounts: mockProviderAccounts,
@@ -378,9 +494,36 @@ describe('createAppBootstrapRuntime', () => {
       trash: mockTrash,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
+    expect(mockCloud.configure).toHaveBeenCalledWith(
+      {
+        getIdentity: mockEnterpriseAccount.getCommunityIdentity,
+        getTokens: mockEnterpriseAccount.getCommunityTokens,
+        refreshServices: mockEnterpriseAccount.refreshCommunityServices,
+        subscribe: mockEnterpriseAccount.subscribe,
+      },
+      expect.any(String),
+    );
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);
     expect(runtime.preference).toBe(mockPreference);
+  });
+
+  test('interrupts Agent work once when the enterprise session is refused', async () => {
+    const runtime = createRuntime();
+    const notify = () => mockAccountListeners.forEach((listener) => listener());
+    mockAccountState.needsSignIn = true;
+    notify();
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    expect(mockAgent.interrupt.mock.calls[0]![0]).toMatchObject({ code: 'rejected' });
+    mockAccountState.needsSignIn = false;
+    notify();
+    await runtime.dispose();
+    expect(mockAccountListeners.size).toBe(0);
+    mockAccountState.needsSignIn = true;
+    notify();
+    expect(mockAgent.interrupt).toHaveBeenCalledTimes(1);
+    mockAccountState.needsSignIn = false;
   });
 
   test('applies the shared presentation switch only to iOS Live Activities', () => {

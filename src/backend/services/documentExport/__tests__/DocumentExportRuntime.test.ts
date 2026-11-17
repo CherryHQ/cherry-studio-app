@@ -27,8 +27,6 @@ test('backgrounding cancels active work and returning to the foreground permits 
   const session = {
     document: { sections: [] },
     markdown: 'Content',
-    previewDocument: () => '<p>Content</p>',
-    previewMarkdown: () => '<p>Content</p>',
     cancel,
     dispose: jest.fn(async () => {}),
     render: jest.fn(),
@@ -68,8 +66,6 @@ test('shutdown retains a closing session until its cleanup settles', async () =>
       return {
         document: { sections: [] },
         markdown: 'Content',
-        previewDocument: () => '<p>Content</p>',
-        previewMarkdown: () => '<p>Content</p>',
         render: jest.fn(),
         save: jest.fn(),
         cancel: jest.fn(),

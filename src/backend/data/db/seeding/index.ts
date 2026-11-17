@@ -1,5 +1,7 @@
 import type { ProviderEdition } from '@cherrystudio/provider-registry';
 
+import { editionCapabilities } from '@/shared/data/managedPolicy';
+
 import type { DbService } from '../DbService';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
@@ -15,6 +17,8 @@ export async function seedPresetProviders(
   dbService: DbService,
   getEdition: () => Promise<ProviderEdition>,
 ): Promise<void> {
+  // Enterprise providers are delivered by the organization, never seeded locally.
+  if (!editionCapabilities().providerSettings) return;
   await new SeedRunner(dbService).runAll([new PresetProviderSeeder(getEdition)]);
 }
 

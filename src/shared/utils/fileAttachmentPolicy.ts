@@ -15,7 +15,7 @@ export const MAX_TEXT_ATTACHMENT_TOTAL_CHARACTERS = 400_000;
 export const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_PAGES = 100;
-export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_IMAGE_ATTACHMENT_BYTES = 30 * 1024 * 1024;
 // Attached images have no request-level count or byte ceiling: the Runtime prices them into the
 // context window and compaction folds old ones. Only document-embedded images, which the user did
 // not pick one by one, draw from this bounded budget alongside the attached images.

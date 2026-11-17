@@ -47,6 +47,7 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
+| [Enterprise Edition](./references/enterprise.md) | Cloud/private accounts, data profiles, organization-owned resources, synchronization, and backup rules |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
 | [Office Tools Design](./references/agent/office-tools-design.md) | DOCX/XLSX/PPTX generation, bounded editing, preview selections and QuickJS/Pi Durable integration; acceptance pending |
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |

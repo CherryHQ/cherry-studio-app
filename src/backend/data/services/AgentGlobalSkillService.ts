@@ -33,6 +33,7 @@ import {
   type SkillSourceKind,
 } from '@/shared/data/types/skill';
 
+import { agentRowPolicy, denyUnless, managedRowPolicy } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 /** Persisted facts the installer commits; timestamps and ids are allocated here. */
@@ -84,6 +85,7 @@ export function rowToSkill(row: AgentGlobalSkillRow): Skill {
     profile: SkillProfileSchema.safeParse(row.profile).data ?? EMPTY_SKILL_PROFILE,
     invocation: row.invocation,
     isEnabled: row.isEnabled,
+    isManaged: row.managedRemoteId !== null,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
@@ -122,6 +124,21 @@ function decodeCursor(cursor: string): { id: string; name: string } {
 
 function escapeLike(term: string): string {
   return `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+}
+
+function libraryConditions(search?: string): SQL[] {
+  // Built-in copies installed by earlier builds are not part of the user-managed library.
+  const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
+  if (search) {
+    const pattern = escapeLike(search);
+    conditions.push(
+      or(
+        sql`${agentGlobalSkillTable.name} LIKE ${pattern} ESCAPE '\\'`,
+        sql`${agentGlobalSkillTable.description} LIKE ${pattern} ESCAPE '\\'`,
+      )!,
+    );
+  }
+  return conditions;
 }
 
 /**
@@ -176,17 +193,7 @@ export class AgentGlobalSkillService {
    */
   async list(params: ListSkillsQueryParams): Promise<ListSkillsResult> {
     const query = ListSkillsQuerySchema.parse(params);
-    // Built-in copies installed by earlier builds are not part of the user-managed library.
-    const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
-    if (query.search) {
-      const pattern = escapeLike(query.search);
-      conditions.push(
-        or(
-          sql`${agentGlobalSkillTable.name} LIKE ${pattern} ESCAPE '\\'`,
-          sql`${agentGlobalSkillTable.description} LIKE ${pattern} ESCAPE '\\'`,
-        )!,
-      );
-    }
+    const conditions = libraryConditions(query.search);
     if (query.cursor) {
       const { name, id } = decodeCursor(query.cursor);
       conditions.push(
@@ -229,6 +236,16 @@ export class AgentGlobalSkillService {
       })),
       ...(rows.length > query.limit && last ? { nextCursor: encodeSkillCursor(last) } : {}),
     };
+  }
+
+  /** Count the same installed library without loading packages or Agent bindings. */
+  async countLibrary(search?: string): Promise<number> {
+    const query = ListSkillsQuerySchema.parse({ search, scope: 'library' });
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(agentGlobalSkillTable)
+      .where(and(...libraryConditions(query.search)));
+    return row?.count ?? 0;
   }
 
   private async readBindings(
@@ -295,6 +312,7 @@ export class AgentGlobalSkillService {
     }
     const skillIds = [...byId.keys()];
     if (skillIds.length === 0) return;
+    await this.assertAgentWritable(tx, agentId);
     const liveRows = await tx
       .select({ id: agentGlobalSkillTable.id })
       .from(agentGlobalSkillTable)
@@ -391,6 +409,7 @@ export class AgentGlobalSkillService {
     record: SkillInstallRecord,
     expectedContentHash?: string,
   ): Promise<Skill> {
+    denyUnless((await this.skillPolicy(tx, skillId)).canEdit('skill'), 'skill.update');
     const [row] = await tx
       .update(agentGlobalSkillTable)
       .set({
@@ -420,6 +439,7 @@ export class AgentGlobalSkillService {
 
   /** Deletes the installation and its bindings; startup reconciliation removes the bytes. */
   async deleteTx(tx: Database, skillId: string): Promise<void> {
+    denyUnless((await this.skillPolicy(tx, skillId)).canDelete, 'skill.delete');
     await tx.delete(agentSkillTable).where(eq(agentSkillTable.skillId, skillId));
     const [row] = await tx
       .delete(agentGlobalSkillTable)
@@ -456,13 +476,22 @@ export class AgentGlobalSkillService {
 
   private async assertAgentWritable(tx: Database, agentId: string): Promise<void> {
     const [agent] = await tx
-      .select({ id: agentTable.id })
+      .select({ id: agentTable.id, managedRemoteId: agentTable.managedRemoteId })
       .from(agentTable)
       .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
       .limit(1);
     if (!agent) {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
+    denyUnless(agentRowPolicy(agent).canBind, 'agent.skills');
+  }
+
+  private async skillPolicy(tx: Database, skillId: string) {
+    const [skill] = await tx
+      .select({ managedRemoteId: agentGlobalSkillTable.managedRemoteId })
+      .from(agentGlobalSkillTable)
+      .where(eq(agentGlobalSkillTable.id, skillId));
+    return managedRowPolicy(skill);
   }
 }
 

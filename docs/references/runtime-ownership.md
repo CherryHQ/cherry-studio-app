@@ -3,8 +3,11 @@
 The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
-Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
-before resuming. User stop aborts the selected Session. Route disposal only releases observation.
+Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
+reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
+stops its owning work instead of suspending it for restart, as specified in
+[Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
+selected Session. Route disposal only releases observation.
 
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
 cleanup.
@@ -124,8 +127,10 @@ or TanStack Query.
 
 User cancellation affects only the selected Session. Pi executes one input at a time within that
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
-Ordinary disposal and OS execution expiry suspend the Harness without a user-abort mark. The next
-Host reopens committed tasks and reconstructs current capabilities. An unsafe tool interrupted after
+Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
+the same only when no continued-processing or audio protection remains. The next Host reopens
+committed tasks and reconstructs current capabilities. Continued-processing revocation
+stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
@@ -236,6 +241,7 @@ mutex or a distributed transaction.
 | Agent admission, tools and transcript projection | Host admission and per-execution signals; ordinary shutdown suspends; user stop aborts | Host tracks admissions, pending writes and settlements; workspace/file commits retain live guards | Busy during admitted work; `quiesce()` reconciles reservations, drains usage/naming and captures context; dependencies remain alive during close |
 | Painting admission and job execution | Module transaction then `JobRuntime`; user/scope/OS interruption aborts the execution | Admission scope covers commit/rollback; job actual-settlement promise covers terminal persistence; output writes never recreate a deleted receipt | Pending transaction verification, pump and actual executions count as busy; shutdown drains within its existing ceiling, then ledger recovery handles unfinished rows |
 | Skill installation/update publication | Caller may cancel download/staging; composition owns persistent publication admission | Publication and the row write are inside the counted write transaction; staging is disposable cache data | Busy during admitted publication; `disposeSkills()` rejects later writes and joins accepted transactions before host uninstall; later network completions fail admission and discard staging |
+| DeepSeek history import | Settings supplies a signed export link and caller cancellation; `DeepseekImportRuntime` owns download, staging and publication | Lenient link/ZIP/schema reading skips unreadable parts before atomic Agent/conversation publication; failure discards imported images and staging | Pending work including cleanup blocks backup; `disposeDeepseekImport()` aborts and joins it before host uninstall |
 | Trash marking/restore/purge/sweep | `TrashRuntime` immediately admits trash metadata transactions and serializes restore/purge/sweeps; stopping blocks new work | `trashWrites` retains marking transactions; `pending` and `tail` cover restore/purge plus best-effort byte cleanup; purge rechecks deletion timestamp | Busy while any accepted work is pending; sweeps skip a freeze; stop drains both marking writes and the tail before SQLite closes |
 | MCP OAuth completion | Service deduplicates by attempt ID; service lifetime and OAuth attempt signals cancel network work | Completion stays tracked through inspection, connection transaction and grant cleanup; lifetime checks run inside the connection transaction | Reject start while frozen; tracked completions count as busy; stop aborts OAuth/inspection, then joins completion and cleanup before persistence teardown |
 | MCP temporary inspection | Caller starts a bounded unsaved-server probe; service lifetime aborts it | No application row write; temporary-operation promise includes closing the client | May run during backup; stop cancels and joins it. A probe used by OAuth remains inside that completion's busy interval |

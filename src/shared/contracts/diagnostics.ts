@@ -166,7 +166,7 @@ export class DiagnosticError extends Error {
 }
 
 export interface DiagnosticsModule {
-  createSession(context?: DiagnosticFeedbackContext): DiagnosticSession;
+  createSession(context: DiagnosticFeedbackContext): DiagnosticSession;
   uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult>;
   getReportStatus(reportId: string, signal?: AbortSignal): Promise<DiagnosticReportStatusResult>;
 }

@@ -41,6 +41,7 @@ import {
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
+import { DeepseekImportRuntime } from '@/backend/services/deepseekImport';
 import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -90,9 +91,12 @@ import { createUuRemoteModule } from '@/backend/services/uuRemote';
 import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { AccountModule } from '@/shared/contracts/account';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
+import type { CloudModule } from '@/shared/contracts/cloud';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { profileScopedName } from '@/shared/data/activeProfile';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { resolveAppLanguage } from '@/shared/utils/languages';
@@ -101,6 +105,8 @@ export type BackendComposition = {
   backend: Backend;
   initializeSkills(): Promise<void>;
   hasPendingSkillStorageWork(): boolean;
+  hasPendingDeepseekImport(): boolean;
+  disposeDeepseekImport(): Promise<void>;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   disposeVoice(): Promise<void>;
@@ -138,9 +144,12 @@ export function createBackend(
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
     region: { getCountry(): Promise<string | null> };
     trash: Pick<TrashRuntime, 'trashFile'>;
+    account: AccountModule;
+    cloud: CloudModule;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const deepseekImport = new DeepseekImportRuntime(dbService, services.preference);
   infrastructure.providerAccounts.configure(
     new ProviderAccountService(dbService),
     [cherryInAccountDefinition],
@@ -152,13 +161,17 @@ export function createBackend(
     connections: infrastructure.desktopConnectionManager,
     files: services.fileContent,
     background: infrastructure.remoteBackground,
-    journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
+    journal: new RemoteAgentCommandJournal(
+      createMMKV({ id: profileScopedName('cherry-remote-agent-commands') }),
+    ),
   });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   const desktopStore = new DesktopConnectionService(dbService, (provider) =>
     infrastructure.providerAccounts.getCapabilities(provider),
   );
-  const connectionIntents = createMMKV({ id: 'cherry-desktop-connection-intents' });
+  const connectionIntents = createMMKV({
+    id: profileScopedName('cherry-desktop-connection-intents'),
+  });
   infrastructure.desktopConnectionManager.configure(desktopStore, {
     isDisconnected: (id) => connectionIntents.getBoolean(id) ?? false,
     setDisconnected: (id, disconnected) => {
@@ -237,14 +250,12 @@ export function createBackend(
     resolveServiceUrl: resolveProviderServiceUrl,
     model: services.model,
     provider: services.provider,
-    models,
     applicationData: (context, signal) => readDiagnosticDataState(dbService, context, signal),
     runtimeStorage: async (signal) => {
       const runtime = infrastructure.languageServing.conversations;
       if (!runtime?.inspectStorage) throw new Error('Runtime storage inspection is unavailable');
       return runtime.inspectStorage(signal);
     },
-    defaultModel: () => services.preference.get('agent.default_model_id'),
     language: () =>
       resolveAppLanguage(
         services.preference.readCached('app.language'),
@@ -253,8 +264,6 @@ export function createBackend(
     oauthSignedIn: async (provider) =>
       infrastructure.providerAccounts.getCapabilities(provider).flow === 'interactive' &&
       (await infrastructure.providerAccounts.getStatus(provider.id)).signedIn,
-    permissions: () =>
-      services.devicePermissions.getStatuses(['camera.read', 'photos.write', 'location.read']),
     plugins: async () => {
       const { items } = await services.mcpServer.list({ isEnabled: true });
       const selected = items.slice(0, 200);
@@ -437,6 +446,8 @@ export function createBackend(
     disposeAppUpdate: appUpdate.dispose,
     disposeUuRemote: uuRemote.dispose,
     disposeDiagnostics: diagnostics.dispose,
+    disposeDeepseekImport: deepseekImport.dispose,
+    hasPendingDeepseekImport: deepseekImport.hasPendingStorageWork,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -453,9 +464,12 @@ export function createBackend(
       }
     },
     backend: {
+      account: infrastructure.account,
+      cloud: infrastructure.cloud,
       appUpdate,
       backgroundExecution: infrastructure.backgroundExecution,
       backup: infrastructure.backup,
+      deepseekImport,
       systemEntry: systemEntry.module,
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,

@@ -210,6 +210,10 @@ bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do no
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
+Enterprise profiles seed preferences only; their providers and models come from organization
+synchronization. Keep this exception when adding seeders or import paths. See
+[Enterprise Edition](../enterprise.md) for profile scope and managed-resource write rules.
+
 Fresh-install recommendations and new-provider discovery share the same egress-country policy in
 all distributions, including domestic-store builds. A detected non-CN country permits global
 entries, including through an overseas VPN exit; detected CN selects domestic entries. An unknown

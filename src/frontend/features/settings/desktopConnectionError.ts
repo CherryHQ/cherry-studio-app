@@ -12,7 +12,11 @@ export function isMissingPairingConnection(error: unknown): boolean {
   );
 }
 
-export function desktopConnectionErrorMessage(error: unknown, t: TFunction): string {
+export function desktopConnectionErrorMessage(
+  error: unknown,
+  t: TFunction,
+  options?: { detail: 'summary' | 'diagnostic' },
+): string {
   const reason = error instanceof DataApiError ? error.details?.reason : undefined;
   if (typeof reason === 'string') {
     // iOS can deny every attempt while the Local Network permission is undetermined, which the
@@ -22,7 +26,11 @@ export function desktopConnectionErrorMessage(error: unknown, t: TFunction): str
         ? 'settings.desktopConnection.error.unreachable.ios'
         : `settings.desktopConnection.error.${reason}`;
     const translated = t(key);
-    if (reason === 'unreachable' && error instanceof DataApiError) {
+    if (
+      reason === 'unreachable' &&
+      error instanceof DataApiError &&
+      options?.detail !== 'summary'
+    ) {
       const failures = DesktopConnectionFailureSchema.array()
         .min(1)
         .max(32)

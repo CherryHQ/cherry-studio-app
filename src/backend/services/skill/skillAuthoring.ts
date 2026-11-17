@@ -10,7 +10,7 @@ import {
 import { validateSkillPackage } from './skillPackage';
 
 /** The app owns frontmatter and creator identity; model text is the instruction body. */
-export function authorSkillPackage(input: CreateSkillInput, author: string) {
+export async function authorSkillPackage(input: CreateSkillInput, author: string) {
   const parsed = CreateSkillInputSchema.safeParse(input);
   if (!parsed.success) throw new SkillsError('package-invalid', 'Invalid Skill name or content.');
   const { name, description, instructions, compatibility, license } = parsed.data;
@@ -34,7 +34,7 @@ export function authorSkillPackage(input: CreateSkillInput, author: string) {
   const files = new Map([
     ['SKILL.md', new TextEncoder().encode(`---\n${frontmatter}---\n\n${instructions}\n`)],
   ]);
-  const validation = validateSkillPackage(files, { expectedName: name });
+  const validation = await validateSkillPackage(files, { expectedName: name });
   if (!validation.ok)
     throw new SkillsError(
       'package-invalid',

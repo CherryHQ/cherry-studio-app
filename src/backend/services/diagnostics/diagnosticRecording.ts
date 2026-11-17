@@ -1,5 +1,6 @@
 import { File } from 'expo-file-system';
 
+import { readDiagnosticContext } from '@/backend/utils/diagnosticContext';
 import type { LogRecord, LogWriter } from '@/shared/core/logger/LoggerService';
 
 import { appendBytes, diagnosticDirectory, LOG_NAME } from './diagnosticFiles';
@@ -109,7 +110,7 @@ export function createDiagnosticLogWriter(): LogWriter {
   return Object.assign(
     (record: LogRecord) => {
       const safe = projectDiagnosticLog(record);
-      if (safe) aggregate(safe);
+      if (safe) aggregate({ ...safe, environment: readDiagnosticContext() });
     },
     {
       flush: () => {
