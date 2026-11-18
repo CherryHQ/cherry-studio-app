@@ -45,5 +45,9 @@ export function useChatInputSessionModelSelection(
     [onError, persist, sessionId],
   );
 
-  return { selectModel, selectedModelId: visible?.modelId ?? persisted?.model ?? null };
+  return {
+    selectModel,
+    pendingModelId: visible?.modelId,
+    selectedModelId: visible?.modelId ?? persisted?.model ?? null,
+  };
 }

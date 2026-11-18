@@ -51,6 +51,8 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  /** The model whose controls supplied the effort, if it was selected by the composer. */
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -77,6 +79,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -135,11 +138,12 @@ export const AgentEditUserMessageInputSchema = z.strictObject({
    * the edited text and carried file parts stay attached.
    */
   text: z.string().min(1),
-  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  /** Optional override for this edit while a conversation model selection is being saved. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,

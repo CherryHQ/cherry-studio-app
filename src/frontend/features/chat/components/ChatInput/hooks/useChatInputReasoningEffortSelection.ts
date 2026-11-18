@@ -39,7 +39,6 @@ export function useChatInputReasoningEffortSelection(
 ) {
   const [effortsByScope, setEffortsByScope] = usePersistCache('chat.reasoning_efforts');
   const sessionKey = sessionId ? `${SESSION_KEY_PREFIX}${sessionId}` : undefined;
-  const scopeKey = sessionKey ?? agentId ?? undefined;
   const cachedEffort =
     (sessionKey ? effortsByScope[sessionKey] : undefined) ??
     (agentId ? effortsByScope[agentId] : undefined);
@@ -49,29 +48,28 @@ export function useChatInputReasoningEffortSelection(
   );
 
   useEffect(() => {
-    if (!scopeKey || reasoningEfforts === undefined) return;
+    // An unsent draft adapts its display without rewriting the Agent's remembered choice.
+    if (!sessionKey || reasoningEfforts === undefined) return;
     setEffortsByScope((current) => {
-      const previous =
-        (sessionKey ? current[sessionKey] : undefined) ?? (agentId ? current[agentId] : undefined);
+      const previous = current[sessionKey] ?? (agentId ? current[agentId] : undefined);
       if (previous === undefined) return current;
       const next = resolveAvailableChatInputReasoningEffort(previous, reasoningEfforts);
-      if (current[scopeKey] === next) return current;
-      if (sessionKey && current[sessionKey] === undefined && next === previous) return current;
-      return setScopedEffort(current, { [scopeKey]: next });
+      if (next === previous) return current;
+      return setScopedEffort(current, { [sessionKey]: next });
     });
-  }, [agentId, reasoningEfforts, scopeKey, sessionKey, setEffortsByScope]);
+  }, [agentId, reasoningEfforts, sessionKey, setEffortsByScope]);
 
   const selectReasoningEffort = useCallback(
     (reasoningEffort: ChatInputReasoningEffort) => {
-      if (!scopeKey && !agentId) return;
+      if (!sessionKey && !agentId) return;
       setEffortsByScope((current) =>
         setScopedEffort(current, {
           ...(agentId ? { [agentId]: reasoningEffort } : {}),
-          ...(scopeKey ? { [scopeKey]: reasoningEffort } : {}),
+          ...(sessionKey ? { [sessionKey]: reasoningEffort } : {}),
         }),
       );
     },
-    [agentId, scopeKey, setEffortsByScope],
+    [agentId, sessionKey, setEffortsByScope],
   );
 
   return {

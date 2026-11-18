@@ -19,6 +19,7 @@ import {
   userModelTable,
 } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { agentRowPolicy } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
   messageTreeDepthsSql,
@@ -43,8 +44,6 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
-import { agentPolicy } from '@/shared/data/managedPolicy';
-import type { UniqueModelId } from '@/shared/data/types/model';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
@@ -219,34 +218,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   ): Promise<ReserveInitialSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       if (input.workspaceFolderId) await requireActiveFolder(tx, input.workspaceFolderId);
+      await assertReservationModelsAllowed(tx, input);
       let sessionModelId = input.sessionModelId;
       if (sessionModelId) {
-        const [agent] = await tx
-          .select({
-            managedRemoteId: agentTable.managedRemoteId,
-            allowedModelIds: agentTable.allowedModelIds,
-          })
-          .from(agentTable)
-          .where(and(eq(agentTable.id, input.agentId), isNull(agentTable.deletedAt)))
-          .limit(1);
-        if (!agent) {
-          throw new AgentProtocolError({
-            code: 'AGENT_NOT_FOUND',
-            message: `Agent does not exist: ${input.agentId}`,
-            retryable: false,
-          });
-        }
-        const { allowedModelIds } = agentPolicy({
-          isManaged: agent.managedRemoteId !== null,
-          allowedModelIds: (agent.allowedModelIds ?? undefined) as UniqueModelId[] | undefined,
-        });
-        if (allowedModelIds !== null && !allowedModelIds.includes(sessionModelId)) {
-          throw new AgentProtocolError({
-            code: 'CAPABILITY_UNSUPPORTED',
-            message: `Model is not in the Agent's allowed pool: ${sessionModelId}`,
-            retryable: false,
-          });
-        }
         const [registered] = await tx
           .select({ id: userModelTable.id })
           .from(userModelTable)
@@ -303,6 +277,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         if (!parent)
           throw new Error('The submission continues from a message that no longer exists.');
       }
+      await assertReservationModelsAllowed(tx, input);
       const { reservedAt, ...reserved } = await insertSubmission(tx, { ...input, parentMessageId });
       await tx
         .update(agentSessionTable)
@@ -330,6 +305,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .limit(1);
       if (!user || user.role !== 'user' || !user.turnId)
         throw new Error('The question to answer no longer exists.');
+      await assertReservationModelsAllowed(tx, input);
       const [assistantRow] = await tx
         .insert(agentSessionMessageTable)
         .values({
@@ -927,6 +903,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       ) {
         throw new Error('The retry source is not a settled leaf answer of this session.');
       }
+      await assertReservationModelsAllowed(tx, input);
       const turnId = createOrderedUuid();
       const [userRow] = await tx
         .update(agentSessionMessageTable)
@@ -1373,6 +1350,53 @@ async function clearCheckpointsFrom(
             AND message_order.message_order_depth < (SELECT message_order_depth FROM message_order WHERE message_order_id = ${firstRow.id}))`,
       ),
     );
+}
+
+/** Sync and reservation share the write queue, so a prepared model must still be allowed here. */
+async function assertReservationModelsAllowed(
+  tx: Database,
+  input: Pick<ReserveSubmissionInput, 'sessionId' | 'modelId' | 'additionalReplies'> &
+    Pick<Partial<ReserveInitialSubmissionInput>, 'agentId' | 'sessionModelId'>,
+): Promise<void> {
+  const owner = input.agentId
+    ? eq(agentTable.id, input.agentId)
+    : inArray(
+        agentTable.id,
+        tx
+          .select({ id: agentSessionTable.agentId })
+          .from(agentSessionTable)
+          .where(eq(agentSessionTable.id, input.sessionId)),
+      );
+  const [agent] = await tx
+    .select({
+      managedRemoteId: agentTable.managedRemoteId,
+      allowedModelIds: agentTable.allowedModelIds,
+    })
+    .from(agentTable)
+    .where(and(owner, isNull(agentTable.deletedAt)))
+    .limit(1);
+  if (!agent) {
+    throw new AgentProtocolError({
+      code: 'AGENT_NOT_FOUND',
+      message: 'The Agent no longer exists.',
+      retryable: false,
+    });
+  }
+  const { allowedModelIds } = agentRowPolicy(agent);
+  if (allowedModelIds === null) return;
+  const models = [
+    input.sessionModelId,
+    input.modelId,
+    ...(input.additionalReplies ?? []).map(({ modelId }) => modelId),
+  ];
+  const withdrawn = models.find((modelId) => modelId && !allowedModelIds.includes(modelId));
+  if (withdrawn) {
+    throw new AgentProtocolError({
+      code: 'CAPABILITY_UNSUPPORTED',
+      message: `Model is not in the Agent's allowed pool: ${withdrawn}`,
+      retryable: false,
+    });
+  }
 }
 
 async function insertSubmission(

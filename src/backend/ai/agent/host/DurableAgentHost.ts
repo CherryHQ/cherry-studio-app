@@ -1330,8 +1330,7 @@ export class DurableAgentHost implements AgentProtocol {
         fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
       const parts = editedUserInput(edited.parts, parsed.text);
       // Question editing is a normal new submission from an explicit parent.
-      // Omitted composer overrides use the Agent's current defaults, never a
-      // historical answer's inference snapshot.
+      // Omitted composer overrides follow the current conversation model.
       const edit: AgentSubmitMessageInput = {
         sessionId: session.id,
         userMessageId: uuidv7(),
@@ -1341,6 +1340,9 @@ export class DurableAgentHost implements AgentProtocol {
         ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
         ...(parsed.reasoningEffort !== undefined
           ? { reasoningEffort: parsed.reasoningEffort }
+          : {}),
+        ...(parsed.reasoningEffortModelId
+          ? { reasoningEffortModelId: parsed.reasoningEffortModelId }
           : {}),
         ...(parsed.imageGeneration ? { imageGeneration: parsed.imageGeneration } : {}),
         ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined

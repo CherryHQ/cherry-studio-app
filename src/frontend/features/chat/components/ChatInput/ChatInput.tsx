@@ -2,7 +2,7 @@ import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -138,7 +138,12 @@ export function ChatInput({
   const { data: session } = useAgentSession(sessionId);
   const { updateAgentSession } = useAgentSessionMutations(sessionId);
   const { allowedModelIds } = useModelChoice();
-  const [draftModel, setDraftModel] = useState<{ agentId: string; modelId: UniqueModelId }>();
+  const [draftModel, setDraftModel] = useState<{
+    agentId: string;
+    modelId: UniqueModelId;
+    followsDefault: boolean;
+  }>();
+  const submittedDraft = useRef<{ agentId: string; selection: typeof draftModel }>(undefined);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const isModelAvailable = useCallback(
     (modelId: UniqueModelId | undefined) =>
@@ -150,7 +155,10 @@ export function ChatInput({
     [allowedModelIds, modelPickerData],
   );
   const draftModelId =
-    draftModel && draftModel.agentId === agentId && isModelAvailable(draftModel.modelId)
+    draftModel &&
+    draftModel.agentId === agentId &&
+    !draftModel.followsDefault &&
+    isModelAvailable(draftModel.modelId)
       ? draftModel.modelId
       : undefined;
   const providerSetupReturnTo = sessionId
@@ -169,24 +177,62 @@ export function ChatInput({
     },
     [],
   );
-  const { selectModel: selectSessionModel, selectedModelId: sessionModelId } =
-    useChatInputSessionModelSelection(
-      sessionId,
-      session,
-      persistModel,
-      handleModelPersistenceError,
-    );
+  const {
+    selectModel: selectSessionModel,
+    pendingModelId,
+    selectedModelId: storedSessionModelId,
+  } = useChatInputSessionModelSelection(
+    sessionId,
+    session,
+    persistModel,
+    handleModelPersistenceError,
+  );
+  const sessionModelId =
+    storedSessionModelId && (allowedModelIds?.has(storedSessionModelId) ?? true)
+      ? storedSessionModelId
+      : undefined;
   // The first-send handoff keeps this composer mounted before the saved Session loads.
   const selectedModelId =
     (session ? sessionModelId : (sessionModelId ?? draftModelId)) ?? agent?.model ?? null;
+  const modelOverrideId = pendingModelId === sessionModelId ? pendingModelId : undefined;
   const selectModel = useCallback(
     (modelId: UniqueModelId) => {
       if (modelId === selectedModelId) return;
       if (sessionId) selectSessionModel(modelId);
-      else if (agentId) setDraftModel(modelId === agent?.model ? undefined : { agentId, modelId });
+      else if (agentId)
+        setDraftModel({ agentId, modelId, followsDefault: modelId === agent?.model });
     },
     [agent?.model, agentId, selectedModelId, selectSessionModel, sessionId],
   );
+  const submitMessage = useCallback<typeof sendMessage>(
+    async (input) => {
+      if (sessionId || !agentId) return sendMessage(input);
+      const submitted = { agentId, selection: draftModel };
+      submittedDraft.current = submitted;
+      try {
+        return await sendMessage(input);
+      } catch (error) {
+        if (submittedDraft.current === submitted) submittedDraft.current = undefined;
+        throw error;
+      }
+    },
+    [agentId, draftModel, sendMessage, sessionId],
+  );
+  useEffect(() => {
+    const submitted = submittedDraft.current;
+    if (!sessionId || !submitted) return;
+    submittedDraft.current = undefined;
+    // The first reply has its own snapshot. Save a later pick on the Session it created.
+    if (
+      draftModel &&
+      draftModel.agentId === submitted.agentId &&
+      draftModel.agentId === agentId &&
+      draftModel !== submitted.selection &&
+      isModelAvailable(draftModel.modelId)
+    ) {
+      selectSessionModel(draftModel.modelId);
+    }
+  }, [agentId, draftModel, isModelAvailable, selectSessionModel, sessionId]);
   // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
   const [replySelection, setReplySelection] = useState<{
     agentId: string | undefined;
@@ -259,7 +305,7 @@ export function ChatInput({
       }
       const attempt = imageAttempt.current;
       try {
-        const result = await sendMessage({
+        const result = await submitMessage({
           parts: attachMessageQuote(
             toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
             attempt?.fields ?? {},
@@ -285,9 +331,9 @@ export function ChatInput({
       mode,
       reasoningEfforts,
       reasoningSelection,
-      sendMessage,
       sessionId,
       settleEditSend,
+      submitMessage,
     ],
   );
   const cancelGeneration = useCallback(() => {
@@ -358,7 +404,7 @@ export function ChatInput({
             edit={edit}
             agentId={agentId}
             skillAction={skillAction}
-            controls={controls}
+            controls={{ ...controls, sendMessage: submitMessage }}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             placeholder={placeholder}
             providerSetupReturnTo={providerSetupReturnTo}
@@ -366,6 +412,7 @@ export function ChatInput({
             reasoningSelection={reasoningSelection}
             replyModels={replyModels}
             agentModelAnswersInParallel={Boolean(agentModel && isTextGenerationModel(agentModel))}
+            modelOverrideId={modelOverrideId}
             selectedModelId={selectedModelId}
             selectedModelItem={selectedModelItem}
             selectModel={selectModel}
@@ -395,6 +442,7 @@ function TextChatInput({
   reasoningEfforts,
   reasoningSelection,
   replyModels,
+  modelOverrideId,
   selectedModelId,
   selectedModelItem,
   selectModel,
@@ -413,6 +461,7 @@ function TextChatInput({
   replyModels: readonly UniqueModelId[] | null;
   /** Whether the current single model can also answer alongside others. */
   agentModelAnswersInParallel: boolean;
+  modelOverrideId?: UniqueModelId;
   /** The current conversation's single model. */
   selectedModelId: UniqueModelId | null;
   /** The model the composer shows, including the first parallel model when applicable. */
@@ -496,6 +545,7 @@ function TextChatInput({
               attachmentCount: attachments.length,
               mode,
               replyModels,
+              modelOverrideId,
               selectedModelId,
               reasoningEfforts,
               reasoningSelection,
@@ -564,7 +614,7 @@ function TextChatInput({
         const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
         for (const context of appContexts)
           parts.push({ type: 'text', text: toMcpAppContextText(context) });
-        const modelId = replyModels?.[0] ?? selectedModelId;
+        const modelId = replyModels?.[0] ?? modelOverrideId;
         const result = await sendMessage({
           parts,
           ...(!sessionId && draftModelId ? { sessionModelId: draftModelId } : {}),
@@ -572,8 +622,9 @@ function TextChatInput({
           ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
           ...(modelId ? { modelId } : {}),
           ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-          ...(reasoningEfforts.length > 0
+          ...(reasoningEfforts.length > 0 && selectedModelId
             ? {
+                reasoningEffortModelId: selectedModelId,
                 reasoningEffort: getChatInputReasoningEffortSnapshot(
                   reasoningEffort,
                   isReasoningEffortSelected,
@@ -603,6 +654,7 @@ function TextChatInput({
       isReasoningEffortSelected,
       mcpApps,
       mode,
+      modelOverrideId,
       reasoningEffort,
       reasoningEfforts,
       replyModels,

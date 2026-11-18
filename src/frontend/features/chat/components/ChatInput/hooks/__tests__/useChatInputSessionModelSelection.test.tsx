@@ -51,11 +51,13 @@ describe('session model selection', () => {
     await act(async () => selection.selectModel(saved.model));
     expect(persist).toHaveBeenCalledWith('a', saved.model);
     expect(selection.selectedModelId).toBe(saved.model);
+    expect(selection.pendingModelId).toBe(saved.model);
 
     await act(async () => write.resolve(saved));
     expect(selection.selectedModelId).toBe(saved.model);
     await act(async () => renderer.update(render(saved)));
     expect(selection.selectedModelId).toBe(saved.model);
+    expect(selection.pendingModelId).toBeUndefined();
   });
 
   test('does not let the previous selection failure replace a newer selection', async () => {

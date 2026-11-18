@@ -71,6 +71,28 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 }));
 
 describe('turn preparation', () => {
+  test('falls back after a conversation pick is withdrawn and ignores its model-specific effort', async () => {
+    const harness = createHarness();
+    const oldModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    const defaultModelId = createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId);
+    // A sync committed after the Session read but before the Agent read.
+    harness.getSession.mockResolvedValue({ ...SESSION, model: oldModelId });
+    harness.getAgent.mockResolvedValue({ ...AGENT, allowedModelIds: [defaultModelId] });
+    const signal = new AbortController().signal;
+    const input = {
+      ...textInput(),
+      reasoningEffort: 'high',
+      reasoningEffortModelId: oldModelId,
+    } as const;
+
+    const plan = await prepareTurn(harness.dependencies, input, signal);
+    expect(plan.inferenceSnapshot.model.uniqueModelId).toBe(defaultModelId);
+    expect(plan.inferenceSnapshot.reasoningEffort).toBe(AGENT.options.reasoningEffort);
+    await expect(
+      prepareTurn(harness.dependencies, { ...input, modelId: oldModelId }, signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
+
   test.each(['existing', 'initial', 'durable'] as const)(
     'standard %s chat remains available without function calling or tool discovery',
     async (kind) => {

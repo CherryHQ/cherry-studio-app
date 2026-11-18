@@ -20,6 +20,7 @@ export function buildEditUserMessageInput({
   attachmentCount,
   mode,
   replyModels,
+  modelOverrideId,
   selectedModelId,
   reasoningEfforts,
   reasoningSelection,
@@ -31,6 +32,7 @@ export function buildEditUserMessageInput({
   attachmentCount: number;
   mode: AgentMode;
   replyModels: readonly UniqueModelId[] | null;
+  modelOverrideId?: UniqueModelId;
   selectedModelId: UniqueModelId | null;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
@@ -54,7 +56,7 @@ export function buildEditUserMessageInput({
   }
   const { skills, skillAction } =
     mode === 'standard' ? readSkillMentions(text) : { skills: [], skillAction: undefined };
-  const modelId = replyModels?.[0] ?? selectedModelId;
+  const modelId = replyModels?.[0] ?? (imageGeneration ? selectedModelId : modelOverrideId);
   const { isReasoningEffortSelected, reasoningEffort } = reasoningSelection;
   return {
     sessionId,
@@ -64,8 +66,9 @@ export function buildEditUserMessageInput({
     ...(skillAction ? { skillAction } : {}),
     ...(modelId ? { modelId } : {}),
     ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-    ...(reasoningEfforts.length > 0
+    ...(reasoningEfforts.length > 0 && selectedModelId
       ? {
+          reasoningEffortModelId: selectedModelId,
           reasoningEffort: getChatInputReasoningEffortSnapshot(
             reasoningEffort,
             isReasoningEffortSelected,

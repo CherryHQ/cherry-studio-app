@@ -17,8 +17,12 @@ import type {
 } from '@/shared/contracts/agent';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
-import { createSqliteStoreHarness } from './_sqliteStoreHarness';
+import type {
+  AgentSessionStore,
+  FinalizeAssistantMessageInput,
+  ReserveSubmissionInput,
+} from '../AgentSessionStore';
+import { createSqliteStoreHarness, type SqliteStoreHarness } from './_sqliteStoreHarness';
 
 const INTERRUPTED: AgentErrorView = {
   code: 'INTERRUPTED',
@@ -54,6 +58,7 @@ type StoreHarness = {
   createEmptySession: (input: { agentId: string; name?: string }) => Promise<AgentSessionView>;
   /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
+  seedModel: SqliteStoreHarness['seedModel'];
   raw: DatabaseSync;
   cleanup: () => void;
 };
@@ -685,6 +690,59 @@ describe('SqliteAgentSessionStore conformance', () => {
         userParts: [{ id: 'input-0', type: 'text', text: 'Missing agent.', state: 'done' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
+  });
+
+  test('rejects a prepared reply withdrawn before the reservation commits', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original question');
+    const allowedModelId = 'mock-provider::allowed';
+    harness.seedModel(allowedModelId);
+    // The prepared model remains registered and can still be used by other Agents.
+    harness.raw
+      .prepare('UPDATE agent SET managed_remote_id = ?, allowed_model_ids = ? WHERE id = ?')
+      .run('remote-1', JSON.stringify([allowedModelId]), agentId);
+    const withdrawnError = { view: { code: 'CAPABILITY_UNSUPPORTED' } };
+    const parallel: Omit<ReserveSubmissionInput, 'sessionId'> = {
+      ...messageIds(),
+      modelId: allowedModelId,
+      inferenceSnapshot: {
+        ...INFERENCE_SNAPSHOT,
+        model: { ...INFERENCE_SNAPSHOT.model, uniqueModelId: allowedModelId, modelId: 'allowed' },
+      },
+      userParts: original.userMessage.parts,
+      additionalReplies: [{ ...RESERVATION_FACTS, assistantMessageId: uuidv7() }],
+    };
+    const newSessionId = uuidv7();
+    await expect(
+      store.reserveInitialSubmission({ ...parallel, sessionId: newSessionId, agentId }),
+    ).rejects.toMatchObject(withdrawnError);
+    expect(await store.getSession(newSessionId)).toBeNull();
+
+    await expect(
+      store.reserveSubmission({ ...parallel, sessionId: session.id }),
+    ).rejects.toMatchObject(withdrawnError);
+    await expect(
+      store.reserveAnswer({
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userMessageId: original.userMessage.id,
+        assistantMessageId: uuidv7(),
+      }),
+    ).rejects.toMatchObject(withdrawnError);
+    await expect(
+      store.reserveRetry({
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userMessageId: original.userMessage.id,
+        assistantMessageId: original.assistantMessage.id,
+        userParts: original.userMessage.parts,
+        assistantParts: [],
+      }),
+    ).rejects.toMatchObject(withdrawnError);
+    expect((await store.listMessages(session.id)).map(({ id }) => id)).toEqual([
+      original.userMessage.id,
+      original.assistantMessage.id,
+    ]);
   });
 
   test('conversation activity advances the Session row timestamp', async () => {

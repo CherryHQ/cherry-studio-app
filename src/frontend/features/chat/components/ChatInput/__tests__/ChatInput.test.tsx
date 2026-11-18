@@ -5,6 +5,7 @@ import type { ComposerSendPayload } from '@/frontend/components/Composer';
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { PolicyScope } from '@/frontend/components/Policy';
 import type { QuoteFields } from '@/shared/contracts/agent';
+import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -38,6 +39,14 @@ let mockFields: QuoteFields;
 let mockAgentModel: UniqueModelId | null | undefined;
 let mockHasLoadedCatalog = false;
 let mockCatalogModels = new Set<string>(['p::m']);
+let mockSession: Pick<AgentSessionEntity, 'model' | 'updatedAt'>;
+const mockUpdateAgentSession = jest.fn(
+  async (_id: string, patch: Pick<AgentSessionEntity, 'model'>) => ({
+    ...mockSession,
+    ...patch,
+    updatedAt: '2026-11-18T00:00:00.001Z',
+  }),
+);
 let mockPickerApi: {
   replyModels: readonly UniqueModelId[] | null;
   selectedModelId: UniqueModelId | null;
@@ -82,8 +91,8 @@ jest.mock('@/frontend/hooks/agent', () => ({
       ...(mockAgentModel !== undefined ? { model: mockAgentModel } : {}),
     },
   }),
-  useAgentSession: () => ({}),
-  useAgentSessionMutations: () => ({ updateAgentSession: mockNoop }),
+  useAgentSession: (id?: string) => ({ data: id ? mockSession : undefined }),
+  useAgentSessionMutations: () => ({ updateAgentSession: mockUpdateAgentSession }),
 }));
 jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
@@ -136,12 +145,6 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
-jest.mock('../hooks/useChatInputSessionModelSelection', () => ({
-  useChatInputSessionModelSelection: (sessionId?: string) => ({
-    selectModel: mockNoop,
-    selectedModelId: sessionId ? 'p::m' : null,
-  }),
-}));
 jest.mock('../hooks/useChatInputMcpPrompts', () => ({ useChatInputMcpPrompts: () => [] }));
 jest.mock('../hooks/useChatInputReasoningEfforts', () => ({
   useChatInputReasoningEfforts: () => [],
@@ -173,6 +176,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockImageMode = false;
   mockAgentModel = undefined;
+  mockSession = { model: 'p::m', updatedAt: '2026-11-18T00:00:00.000Z' };
   mockHasLoadedCatalog = false;
   mockCatalogModels = new Set(['p::m']);
   mockEditing = null;
@@ -206,6 +210,8 @@ test('text send captures one attempt, sends the primary quote, and clears only a
     } satisfies ComposerSendPayload);
   });
   expect(mockCapture).toHaveBeenCalledTimes(1);
+  // A cached Session model must not be sent as a per-turn override.
+  expect(mockSend.mock.calls[0][0]).not.toHaveProperty('modelId');
   expect(mockSend.mock.calls[0][0].parts).toEqual([
     {
       type: 'text',
@@ -387,6 +393,37 @@ test('entering question edit removes the tools menu and restores it on cancel', 
     renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
   );
   expect(surface().props.leadingAction).not.toBeNull();
+});
+
+test('keeps the first reply model and saves a later draft pick after the Session handoff', async () => {
+  mockAgentModel = 'p::default';
+  mockFields = {};
+  let finish!: () => void;
+  mockSend.mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)));
+  await act(async () => {
+    renderer = create(<ChatInput agentId="a" controls={mockControls as never} />);
+  });
+  await act(async () => mockPickerApi.selectModel('p::m'));
+  let sending!: Promise<unknown>;
+  act(() => {
+    sending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: 'First question',
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ sessionModelId: 'p::m' }));
+
+  await act(async () => mockPickerApi.selectModel('p::next'));
+  expect(mockUpdateAgentSession).not.toHaveBeenCalled();
+  await act(async () => {
+    renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />);
+    finish();
+    await sending;
+  });
+
+  expect(mockUpdateAgentSession).toHaveBeenCalledTimes(1);
+  expect(mockUpdateAgentSession).toHaveBeenCalledWith('s', { model: 'p::next' });
+  expect(mockPickerApi.selectedModelId).toBe('p::next');
 });
 
 test('falls back from removed or disallowed draftModel to agent.model and clears replyModels on Agent switch', async () => {

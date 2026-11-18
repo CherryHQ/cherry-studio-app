@@ -199,6 +199,9 @@ Agent and Session updates advance `updatedAt` with `max(previous + 1, wall clock
 serialized write transaction. The composer can therefore use it as a strict row version when
 reconciling optimistic model selection with concurrent edits, model removals, and inactive query
 caches.
+Each reply reservation checks its prepared model against the owning Agent's current organization
+pool in the same write transaction. A pool update committed during preparation can therefore reject
+the reservation before it records a new reply.
 
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568

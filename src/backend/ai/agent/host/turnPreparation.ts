@@ -396,17 +396,24 @@ export async function prepareResolvedTurn(
   signal: AbortSignal,
   scope: TurnScope = {},
 ): Promise<TurnPlan> {
-  const agent = applyTurnOverrides(configuredAgent, {
-    modelId: parsed.modelId ?? session.model ?? undefined,
-    reasoningEffort: parsed.reasoningEffort,
-  });
-  const resolvedModelId = createUniqueModelId(agent.model.providerId, agent.model.modelId);
-  if (
-    configuredAgent.allowedModelIds &&
-    !configuredAgent.allowedModelIds.includes(resolvedModelId)
-  ) {
+  const { allowedModelIds } = configuredAgent;
+  // Sync may have cleared the Session's override between reading it and the Agent row.
+  const sessionModel =
+    session.model && (allowedModelIds?.includes(session.model) ?? true) ? session.model : undefined;
+  const overrideModelId = parsed.modelId ?? sessionModel;
+  const resolvedModelId =
+    overrideModelId ??
+    createUniqueModelId(configuredAgent.model.providerId, configuredAgent.model.modelId);
+  if (allowedModelIds && !allowedModelIds.includes(resolvedModelId)) {
     fail('CAPABILITY_UNSUPPORTED', `Model is not in the Agent's allowed pool: ${resolvedModelId}`);
   }
+  const agent = applyTurnOverrides(configuredAgent, {
+    modelId: overrideModelId,
+    reasoningEffort:
+      !parsed.reasoningEffortModelId || parsed.reasoningEffortModelId === resolvedModelId
+        ? parsed.reasoningEffort
+        : undefined,
+  });
   if (
     scope.readOnlyTools &&
     (parsed.imageGeneration || parsed.skillIds?.length || parsed.skillAction)
