@@ -147,6 +147,24 @@ export class CloudRuntime extends BaseService implements CloudModule {
 
   readonly refresh = (): Promise<void> => this.refreshState(false);
 
+  readonly refreshProvider = async (): Promise<void> => {
+    if (!this.started || this.stopped || !this.identityKey) return;
+    const { signal } = this.lifetime;
+    // An in-flight read may have taken its snapshot before the browser changed the account.
+    await Promise.allSettled([this.refreshing, this.loadingAmd]);
+    if (signal.aborted) return;
+
+    const catalog = this.refresh();
+    const status =
+      this.snapshot.account?.account.status === 'active'
+        ? this.refreshAmd()
+        : catalog.then(() => {
+            if (!signal.aborted && this.snapshot.account?.account.status === 'active')
+              return this.refreshAmd();
+          });
+    await Promise.all([catalog, status]);
+  };
+
   readonly refreshAmd = async (): Promise<void> => {
     if (!this.started || this.stopped || !this.identityKey) return;
     if (!this.loadingAmd) {

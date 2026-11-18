@@ -841,3 +841,51 @@ test('links existing AMD accounts and opens the usage page while registration is
     await runtime._doStop();
   }
 });
+
+test('refreshes AMD status and models on return even while pre-activation reads are pending', async () => {
+  const model: CloudModel = {
+    ...cloudSnapshot().models[0],
+    id: 'amd/free-model',
+    provider: 'amd',
+    endpoint_type: 'openai-chat-completions',
+  };
+  let activated = false;
+  let delayOldReads = false;
+  let releaseOldReads!: () => void;
+  const oldReads = new Promise<void>((resolve) => {
+    releaseOldReads = resolve;
+  });
+  mockGet.mockImplementation(async (account: string, path: string) => {
+    if (path !== '/v1/models' && path !== '/api/v1/amd/desktop/status') return reply(account, path);
+    const wasActivated = activated;
+    if (delayOldReads && !wasActivated) await oldReads;
+    return path === '/v1/models'
+      ? { data: [{ ...model, activation_required: !wasActivated }] }
+      : {
+          status: wasActivated ? 'registered' : 'unregistered',
+          action: wasActivated ? 'none' : 'login',
+          activated: wasActivated,
+          environment: 'test',
+        };
+  });
+
+  const { runtime } = await setup();
+  try {
+    await runtime.refreshProvider();
+    expect(runtime.getState().amd).toMatchObject({ status: { activated: false } });
+
+    delayOldReads = true;
+    const oldRefresh = Promise.all([runtime.refresh(), runtime.refreshAmd()]);
+    await jest.advanceTimersByTimeAsync(0);
+    activated = true;
+    const browserReturn = runtime.refreshProvider();
+    releaseOldReads();
+    await Promise.all([oldRefresh, browserReturn]);
+
+    expect(runtime.getState().amd).toMatchObject({ status: { activated: true } });
+    expect(mockProject.mock.lastCall?.[2]).toEqual([{ ...model, activation_required: false }]);
+  } finally {
+    releaseOldReads();
+    await runtime._doStop();
+  }
+});

@@ -4,14 +4,17 @@ import { TextDecoder, TextEncoder } from 'node:util';
 import type { Model as PiModel } from '@earendil-works/pi-ai';
 import { streamSimple as streamSimpleAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { streamSimple as streamSimpleCompletions } from '@earendil-works/pi-ai/api/openai-completions';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { cloudSnapshot } from '@/backend/services/cloud/__tests__/_cloudFixtures';
 import { CloudRuntime } from '@/backend/services/cloud/CloudRuntime';
+import { CLOUD_PROVIDER_ID, type CloudModel } from '@/shared/contracts/cloud';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
 import type { PiStreamFn } from '../piModelTypes';
+import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
 const service = { apiOrigin: 'https://cloud.example' };
 const mockGet = jest.fn();
@@ -250,3 +253,62 @@ test.each([
     }
   },
 );
+
+test.each([
+  { status: 403, code: 'AMD_ACCESS_DENIED' },
+  { status: 429, code: 'RATE_LIMITED' },
+])('preserves a terminal AMD $status through the OpenAI stream', async ({ status, code }) => {
+  const amd: CloudModel = {
+    ...cloudSnapshot().models[0],
+    id: 'amd/free-model',
+    provider: 'amd',
+    endpoint_type: 'openai-chat-completions',
+    activation_required: false,
+  };
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    path === '/v1/models' ? { data: [amd] } : reply(account, path),
+  );
+  mockInference.mockResolvedValue(new Response(JSON.stringify({ error: { code } }), { status }));
+  const runtime = await setup();
+  try {
+    await runtime.refresh();
+    const adapter = resolvePiApiAdapter(amd.endpoint_type);
+    jest
+      .spyOn(adapter, 'loadStreamSimple')
+      .mockResolvedValue(streamSimpleCompletions as unknown as PiStreamFn);
+    const stream = withPiStreamIdleTimeout(
+      await bindPiStream(adapter, {
+        apiKey: '',
+        fetch: runtime.createModelFetch(amd.id, 'agent'),
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 64,
+      }),
+    );
+    const model: PiModel<SupportedPiApi> = {
+      api: adapter.api,
+      provider: CLOUD_PROVIDER_ID,
+      id: amd.id,
+      name: amd.display_name,
+      baseUrl: adapter.formatBaseUrl(service.apiOrigin),
+      contextWindow: amd.context_window,
+      maxTokens: 64,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    const source = await stream(
+      model,
+      normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
+    );
+    const result = await source.result();
+    expect(result.stopReason).toBe('error');
+    expect(result.diagnostics?.at(-1)).toMatchObject({
+      error: { code },
+      details: { status, retryable: false },
+    });
+    expect(isRetryableAssistantError(result)).toBe(false);
+  } finally {
+    await runtime._doStop();
+  }
+});

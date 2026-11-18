@@ -126,6 +126,7 @@ export interface CloudModule {
   getState(): CloudState;
   subscribe(listener: () => void): () => void;
   refresh(): Promise<void>;
+  refreshProvider(): Promise<void>;
   refreshAmd(): Promise<void>;
   createAmdEntry(): Promise<string>;
 }

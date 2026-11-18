@@ -74,7 +74,7 @@ export function AiFailureMessage({
       code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
         ? 'cloud.amd.activationRequired'
         : code === 'amd_credential_invalid'
-          ? 'cloud.amd.credentialInvalid'
+          ? 'cloud.amd.checkStatus'
           : reasonCode === 'auth'
             ? 'chat.errorPart.message.auth'
             : reasonCode === 'context_length'

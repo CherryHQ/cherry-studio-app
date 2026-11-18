@@ -29,23 +29,22 @@ export function CloudProviderDetail() {
   const canLoadAmd =
     canLoad && state.phase === 'ready' && state.account?.account.status === 'active';
   const refresh = useCallback(() => {
-    if (!canLoad) return;
-    void cloud.refresh().catch(() => {});
-    void cloud.refreshAmd();
+    if (canLoad) void cloud.refreshProvider().catch(() => {});
   }, [canLoad, cloud]);
   useFocusEffect(
     useCallback(() => {
       if (!canLoad) return;
-      void cloud.refresh().catch(() => {});
+      refresh();
       const subscription = AppState.addEventListener('change', (appState) => {
         if (appState === 'active') refresh();
       });
       return () => subscription.remove();
-    }, [canLoad, cloud, refresh]),
+    }, [canLoad, refresh]),
   );
   useFocusEffect(
     useCallback(() => {
-      if (canLoadAmd) void cloud.refreshAmd();
+      // The account can become ready after the page first receives focus.
+      if (canLoadAmd && !cloud.getState().amd) void cloud.refreshAmd();
     }, [canLoadAmd, cloud]),
   );
 

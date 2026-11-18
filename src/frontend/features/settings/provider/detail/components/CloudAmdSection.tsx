@@ -31,7 +31,7 @@ export function CloudAmdSection({
   cloud: CloudModule;
 }) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const { toast } = useToast();
   const focus = useRef<AbortController | null>(null);
   const opening = useRef(false);
   const [isOpening, setIsOpening] = useState(false);
