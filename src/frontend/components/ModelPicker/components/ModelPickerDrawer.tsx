@@ -16,7 +16,13 @@ import { Keyboard, View } from 'react-native';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
-import type { CloudModelUse } from '@/shared/contracts/cloud';
+import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
+import {
+  CLOUD_PROVIDER_ID,
+  CLOUD_PROVIDER_NAME,
+  type CloudModelUse,
+} from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
@@ -25,15 +31,22 @@ import {
   matchesModelPickerBadges,
   type ModelPickerBadge,
 } from '../utils/modelPickerBadges';
-import type { ModelPickerModelItem } from '../utils/modelPickerData';
+import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
+import { ModelPickerCherryAiEntry } from './ModelPickerCherryAiEntry';
 import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat';
 
 const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
+const EMPTY_CHERRY_AI_GROUP: ModelPickerGroup = {
+  items: [],
+  key: `provider:${CLOUD_PROVIDER_ID}`,
+  provider: { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME },
+  title: CLOUD_PROVIDER_NAME,
+};
 
 type ModelPickerDrawerProps = {
   cloudUse?: CloudModelUse;
@@ -142,6 +155,7 @@ export function ModelPickerDrawer({
           isModelVisible={isModelVisible}
           modelType={modelType}
           onAddProvider={onAddProvider}
+          onClose={handleClose}
           onSelect={onSelect}
           onSearchFocus={handleSearchFocus}
           onSearchTextChange={setSearchText}
@@ -167,6 +181,7 @@ function ModelPickerDrawerContent({
   isModelVisible,
   modelType,
   onAddProvider,
+  onClose,
   onSelect,
   onSearchFocus,
   onSearchTextChange,
@@ -185,6 +200,7 @@ function ModelPickerDrawerContent({
   | 'emptyText'
   | 'modelType'
   | 'onAddProvider'
+  | 'onClose'
   | 'onSelect'
   | 'open'
   | 'providerId'
@@ -232,9 +248,36 @@ function ModelPickerDrawerContent({
         : filteredGroups,
     [allowedModelIds, filteredGroups, isModelVisible],
   );
-  const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasActiveFilters = selectedBadge !== null;
   const hasConditions = deferredSearchText.trim().length > 0 || hasActiveFilters;
+  const showCherryAiEntry =
+    variant === 'chat' &&
+    hasLoadedCatalog &&
+    !hasActiveFilters &&
+    !isEnterpriseProfile() &&
+    allowedModelIds === null &&
+    (!providerId || providerId === CLOUD_PROVIDER_ID) &&
+    matchesSearchKeywords(toSearchKeywords(deferredSearchText), [
+      CLOUD_PROVIDER_NAME,
+      t('cloud.amd.title'),
+    ]);
+  const hasCherryAiModels = visibleGroups.some((group) => group.provider.id === CLOUD_PROVIDER_ID);
+  const listItems = useMemo(
+    () =>
+      buildModelPickerListItems(
+        showCherryAiEntry && !hasCherryAiModels
+          ? [EMPTY_CHERRY_AI_GROUP, ...visibleGroups]
+          : visibleGroups,
+      ),
+    [hasCherryAiModels, showCherryAiEntry, visibleGroups],
+  );
+  const cherryAiEntry = useMemo(
+    () =>
+      showCherryAiEntry ? (
+        <ModelPickerCherryAiEntry hasModels={hasCherryAiModels} onClose={onClose} />
+      ) : undefined,
+    [hasCherryAiModels, onClose, showCherryAiEntry],
+  );
   const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =
     // Enterprise providers come from the organization and cannot be added here.
@@ -322,6 +365,7 @@ function ModelPickerDrawerContent({
           </View>
         ) : (
           <ModelPickerList
+            cherryAiEntry={cherryAiEntry}
             emptyAction={emptyAction}
             emptyIcon={
               hasLoadedCatalog ? (

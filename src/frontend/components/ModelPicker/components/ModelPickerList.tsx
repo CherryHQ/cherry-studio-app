@@ -12,6 +12,7 @@ import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-nati
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
 import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import {
   getModelPickerBadges,
@@ -33,6 +34,7 @@ const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  cherryAiEntry?: ReactNode;
   disabled?: boolean;
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
@@ -55,6 +57,7 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  cherryAiEntry?: ReactNode;
   disabled: boolean;
   contentInset: 'default' | 'none';
   density: ModelPickerDensity;
@@ -66,6 +69,7 @@ type ModelPickerListExtraData = {
 
 /** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  cherryAiEntry,
   disabled = false,
   contentInset = 'default',
   density = 'default',
@@ -142,6 +146,7 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      cherryAiEntry,
       disabled,
       contentInset,
       density,
@@ -151,6 +156,7 @@ export function ModelPickerList({
       trailingInset: isFastScrollerVisible ? MODEL_PICKER_FAST_SCROLLER_WIDTH + 8 : undefined,
     }),
     [
+      cherryAiEntry,
       contentInset,
       density,
       disabled,
@@ -168,7 +174,10 @@ export function ModelPickerList({
             contentInset={extraData.contentInset}
             isFirstGroup={item.isFirstGroup}
             title={item.title}
-          />
+            trailingInset={extraData.trailingInset}
+          >
+            {item.provider.id === CLOUD_PROVIDER_ID ? extraData.cherryAiEntry : undefined}
+          </ModelPickerGroupHeader>
         );
       }
 
@@ -237,6 +246,18 @@ export function ModelPickerList({
     },
     [fastScrollAnchors],
   );
+  const emptyButton =
+    !isLoading && emptyAction ? (
+      <Button
+        disabled={disabled}
+        onPress={emptyAction.onPress}
+        size="sm"
+        variant={emptyAction.variant ?? 'secondary'}
+      >
+        {emptyAction.label}
+      </Button>
+    ) : null;
+
   if (listItems.length === 0) {
     return (
       <View
@@ -254,16 +275,7 @@ export function ModelPickerList({
             title={emptyIcon ? emptyText : undefined}
           />
         )}
-        {!isLoading && emptyAction ? (
-          <Button
-            disabled={disabled}
-            onPress={emptyAction.onPress}
-            size="sm"
-            variant={emptyAction.variant ?? 'secondary'}
-          >
-            {emptyAction.label}
-          </Button>
-        ) : null}
+        {emptyButton}
       </View>
     );
   }
@@ -282,6 +294,11 @@ export function ModelPickerList({
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           keyExtractor={keyExtractor}
+          ListFooterComponent={
+            cherryAiEntry && modelCount === 0 && emptyButton ? (
+              <View className="items-center px-5 py-4">{emptyButton}</View>
+            ) : undefined
+          }
           maintainVisibleContentPosition={false}
           nestedScrollEnabled
           onFirstVisibleItemChanged={
@@ -306,19 +323,25 @@ export function ModelPickerList({
 }
 
 function ModelPickerGroupHeader({
+  children,
   contentInset,
   isFirstGroup,
   title,
+  trailingInset,
 }: {
+  children?: ReactNode;
   contentInset: 'default' | 'none';
   isFirstGroup: boolean;
   title: string;
+  trailingInset?: number;
 }) {
   return (
     <View
       className={cn('pb-1', contentInset === 'default' && 'px-5', isFirstGroup ? 'pt-1' : 'pt-3')}
+      style={children && trailingInset !== undefined ? { paddingRight: trailingInset } : undefined}
     >
       <Text className="font-medium text-muted-foreground text-xs">{title}</Text>
+      {children}
     </View>
   );
 }

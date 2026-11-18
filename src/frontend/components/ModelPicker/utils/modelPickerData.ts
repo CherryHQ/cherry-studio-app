@@ -16,7 +16,7 @@ export type ModelPickerModelItem = {
 export type ModelPickerGroup = {
   items: ModelPickerModelItem[];
   key: string;
-  provider: Provider;
+  provider: Pick<Provider, 'id' | 'name' | 'presetProviderId'>;
   title: string;
 };
 

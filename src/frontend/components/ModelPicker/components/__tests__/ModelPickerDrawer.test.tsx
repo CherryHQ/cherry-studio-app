@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PolicyScope } from '@/frontend/components/Policy';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
 import type { ModelPickerGroup } from '../../utils/modelPickerData';
@@ -109,6 +110,8 @@ jest.mock('../ModelPickerList', () => {
   };
 });
 
+jest.mock('../ModelPickerCherryAiEntry', () => ({ ModelPickerCherryAiEntry: () => null }));
+
 describe('ModelPickerDrawer', () => {
   let renderer: ReactTestRenderer;
 
@@ -132,6 +135,31 @@ describe('ModelPickerDrawer', () => {
 
   afterEach(() => {
     act(() => renderer.unmount());
+  });
+
+  test('keeps the built-in CherryAI group in chat without a provider record or selectable models', () => {
+    expect(mockListProps?.listItems).toEqual([]);
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+
+    expect(mockListProps?.listItems).toEqual([
+      expect.objectContaining({
+        provider: expect.objectContaining({ id: CLOUD_PROVIDER_ID }),
+        title: CLOUD_PROVIDER_NAME,
+        type: 'groupHeader',
+      }),
+    ]);
   });
 
   test('retains full height after blur and clearing, and preserves search on manual collapse', () => {

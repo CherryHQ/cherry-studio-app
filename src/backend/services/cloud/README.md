@@ -156,9 +156,10 @@ can access the same page to view usage. The app takes its full model list from `
 AMD usage stays on the web. The one-use URL remains transient.
 
 The AMD web page can return to mobile with `cherrystudio://navigate/settings/provider`. The native
-intent handler opens the CherryAI detail route using the installed app scheme. Development and
-preview use their existing `cherrystudio-dev` and `cherrystudio-preview` schemes. Opening the page
-or bringing it back to the foreground refreshes status and models after earlier reads settle.
+intent handler opens chat using the installed app scheme. Development and preview use their existing
+`cherrystudio-dev` and `cherrystudio-preview` schemes. A warm return keeps a visible chat mounted.
+The app shell refreshes status and models after browser return, so the picker can show newly
+available AMD models in the CherryAI group.
 
 AMD inference uses the existing streaming path and retries a gateway replay rejection with a fresh
 signature and the same idempotency key. It respects `Retry-After` and refreshes status or catalog on

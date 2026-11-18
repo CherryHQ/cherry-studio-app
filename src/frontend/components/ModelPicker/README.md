@@ -71,8 +71,12 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Community Cloud availability
 
-The picker observes `Backend.cloud` through `useCloud`. Plan rows require effective paid model
-entitlements and receive unavailability reasons; exhausted or unauthorized rows cannot be selected.
+The community `chat` drawer keeps the built-in CherryAI group visible with no selectable models when
+browsing or searching for CherryAI or AMD. The group offers sign-in or AMD setup when the current
+account needs it. Its model rows use the same confirmed account catalog as other pickers.
+
+The picker observes `Backend.cloud` through `useCloud`. Models receive unavailability reasons when
+the current account cannot use them. Exhausted or unauthorized rows cannot be selected.
 The `cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
 chat and translation rights). Selection is only a presentation check: the Cloud request boundary
 rechecks entitlement, expiry and quota before every send.
