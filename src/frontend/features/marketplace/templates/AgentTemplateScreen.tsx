@@ -108,7 +108,12 @@ function AgentTemplatePage({ language, template }: { language: string; template:
         >
           <View className="gap-4">
             <View className="flex-row items-center gap-4">
-              <MarketplaceIcon emoji={template.emoji} name={template.name} size="large" />
+              <MarketplaceIcon
+                emoji={template.emoji}
+                kind="template"
+                name={template.name}
+                size="large"
+              />
               <View className="min-w-0 flex-1 gap-1">
                 <Text
                   accessibilityRole="header"

@@ -29,7 +29,6 @@ const GLYPHS: Record<string, string> = {
   copy: `<rect width="14" height="14" x="8" y="8" rx="2" ry="2" ${stroke} stroke-width="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" ${stroke} stroke-width="2"/>`,
   'file-text': `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" ${stroke} stroke-width="2"/><path d="M14 2v4a2 2 0 0 0 2 2h4" ${stroke} stroke-width="2"/><path d="M10 9H8" ${stroke} stroke-width="2"/><path d="M16 13H8" ${stroke} stroke-width="2"/><path d="M16 17H8" ${stroke} stroke-width="2"/>`,
   languages: `<path d="m5 8 6 6" ${stroke} stroke-width="2"/><path d="m4 14 6-6 2-3" ${stroke} stroke-width="2"/><path d="M2 5h12" ${stroke} stroke-width="2"/><path d="M7 2h1" ${stroke} stroke-width="2"/><path d="m22 22-5-10-5 10" ${stroke} stroke-width="2"/><path d="M14 18h6" ${stroke} stroke-width="2"/>`,
-  'library-big': `<rect width="8" height="18" x="3" y="3" rx="1" ${stroke} stroke-width="2"/><path d="M7 3v18" ${stroke} stroke-width="2"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" ${stroke} stroke-width="2"/>`,
   camera: `<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" ${stroke} stroke-width="2"/><circle cx="12" cy="13" r="3" ${stroke} stroke-width="2"/>`,
 };
 

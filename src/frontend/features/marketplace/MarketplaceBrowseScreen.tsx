@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
@@ -96,7 +97,10 @@ function TemplateCategoryList({ category }: { category: TemplateCollectionId }) 
                 primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
               />
             ) : (
-              <ContentState.Empty title={t('marketplace.templates.empty')} />
+              <ContentState.Empty
+                icon={<EmptyIllustration scene="collection" size="section" />}
+                title={t('marketplace.templates.empty')}
+              />
             )
           }
           entries={templates.map(toEntry)}

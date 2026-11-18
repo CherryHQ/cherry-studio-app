@@ -1,8 +1,10 @@
 import { ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 
 import { MarketplaceList } from '../components/MarketplaceList';
 import { MarketplaceSection } from '../components/MarketplaceSection';
@@ -19,9 +21,14 @@ export const SKILL_SOURCE_TITLES = {
 } as const satisfies Record<SkillDiscoverySource, string>;
 
 /** Each source previews as a section; a pasted link resolves to its package on its own. */
-export function MarketplaceSkills({ query }: { query: string }) {
+export function MarketplaceSkills({
+  browseHeader,
+  query,
+}: {
+  browseHeader: ReactNode;
+  query: string;
+}) {
   const router = useRouter();
-  const { bottom } = useSafeAreaInsets();
   const search = useSettledQuery(query);
   const isSettling = query.trim() !== search;
   const isLink = isSkillLink(search);
@@ -33,6 +40,7 @@ export function MarketplaceSkills({ query }: { query: string }) {
   if (isLink)
     return (
       <MarketplaceList
+        bottomInset={0}
         empty={<SkillDiscoveryState discovery={discoveries.cherryin} isSettling={isSettling} />}
         entries={isSettling ? [] : discoveries.cherryin.entries}
         testID="marketplace-skills"
@@ -42,13 +50,13 @@ export function MarketplaceSkills({ query }: { query: string }) {
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-6 pt-2"
-      contentContainerStyle={{ paddingBottom: bottom + 24 }}
+      contentContainerClassName="gap-4 pt-2 pb-6"
       contentInsetAdjustmentBehavior="never"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       testID="marketplace-skills"
     >
+      {browseHeader}
       {(Object.keys(SKILL_SOURCE_TITLES) as SkillDiscoverySource[]).map((source) => (
         <MarketplaceSection
           entries={isSettling ? [] : discoveries[source].entries}
@@ -78,7 +86,7 @@ export function SkillDiscoveryState({
   isSettling?: boolean;
 }) {
   const { t } = useTranslation();
-  const { query } = discovery;
+  const { hasQuery, query } = discovery;
   return query.isPending || isSettling ? (
     <ContentState.Loading title={t('skills.loading')} />
   ) : query.isError ? (
@@ -87,6 +95,9 @@ export function SkillDiscoveryState({
       primaryAction={{ children: t('common.retry'), onPress: () => void query.refetch() }}
     />
   ) : (
-    <ContentState.Empty title={t('skills.discover.empty')} />
+    <ContentState.Empty
+      icon={<EmptyIllustration scene={hasQuery ? 'search' : 'collection'} size="panel" />}
+      title={t('skills.discover.empty')}
+    />
   );
 }

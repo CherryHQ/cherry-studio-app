@@ -1,3 +1,4 @@
+import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { cn } from '@cherrystudio/ui/utils';
 import { Text, View } from 'react-native';
 
@@ -6,37 +7,32 @@ const SIZES = {
   large: { frame: 'size-20 rounded-3xl', emoji: 'text-4xl', initial: 'text-3xl' },
 } as const;
 
-/**
- * A catalog item's mark: its emoji, or the name's initial, on a quiet rounded tile. The row or
- * page beside it carries the name, so the tile stays out of accessibility.
- */
-export function MarketplaceIcon({
-  emoji,
-  name,
-  size = 'default',
-}: {
-  emoji?: string;
-  name: string;
-  size?: keyof typeof SIZES;
-}) {
-  const styles = SIZES[size];
-  const mark = emoji?.trim() || Array.from(name.trim())[0]?.toLocaleUpperCase() || '';
+type MarketplaceIconProps =
+  | { kind: 'skill' }
+  | { kind: 'template'; emoji?: string; name: string; size?: keyof typeof SIZES };
+
+/** The surrounding row or page supplies the accessible name. */
+export function MarketplaceIcon(props: MarketplaceIconProps) {
+  const styles = SIZES[props.kind === 'template' ? (props.size ?? 'default') : 'default'];
+  const emoji = props.kind === 'template' ? props.emoji?.trim() : undefined;
+
   return (
     <View
       accessibilityElementsHidden
       className={cn(
-        'shrink-0 items-center justify-center border border-border-subtle bg-card border-continuous',
+        'shrink-0 items-center justify-center border-continuous',
         styles.frame,
+        props.kind === 'skill' ? 'bg-secondary' : 'bg-card',
       )}
       importantForAccessibility="no-hide-descendants"
     >
-      <Text
-        className={cn(
-          emoji?.trim() ? styles.emoji : cn(styles.initial, 'font-medium text-foreground'),
-        )}
-      >
-        {mark}
-      </Text>
+      {props.kind === 'skill' ? (
+        <ToolCaseIcon className="size-5 text-muted-foreground" />
+      ) : (
+        <Text className={emoji ? styles.emoji : cn(styles.initial, 'font-medium text-foreground')}>
+          {emoji || Array.from(props.name.trim())[0]?.toLocaleUpperCase()}
+        </Text>
+      )}
     </View>
   );
 }

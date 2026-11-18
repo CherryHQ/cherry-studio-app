@@ -124,10 +124,11 @@ export function useSkillDiscovery(source: SkillDiscoverySource, search: string) 
   ].map((item) => ({
     description: item.description,
     key: item.url,
+    kind: 'skill',
     onPress: () => open(item),
     testID: `marketplace-skill-${item.marketplaceId ?? item.url}`,
     title: item.name,
   }));
 
-  return { entries, query };
+  return { entries, hasQuery: search.trim().length > 0, query };
 }

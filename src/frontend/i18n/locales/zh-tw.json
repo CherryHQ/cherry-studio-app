@@ -1091,6 +1091,8 @@
   "marketplace.category.other": "更多",
   "marketplace.category.programming": "程式設計",
   "marketplace.category.writing": "寫作",
+  "marketplace.discover": "探索市集",
+  "marketplace.myAgents": "我的智能體",
   "marketplace.templates.cached": "目前顯示快取範本，目錄更新失敗。",
   "marketplace.templates.copied": "已複製指令",
   "marketplace.templates.copy": "複製指令",

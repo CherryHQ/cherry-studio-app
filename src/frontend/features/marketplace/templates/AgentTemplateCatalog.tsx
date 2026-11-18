@@ -1,9 +1,10 @@
 import { Button, ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 
@@ -13,10 +14,15 @@ import { TEMPLATE_COLLECTION_TITLE_KEYS, templateCollections } from './templateC
 import { useTemplateEntries } from './useTemplateEntries';
 
 /** Templates preview by category; a search lists every match in one place. */
-export function AgentTemplateCatalog({ query }: { query: string }) {
+export function AgentTemplateCatalog({
+  browseHeader,
+  query,
+}: {
+  browseHeader: ReactNode;
+  query: string;
+}) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { bottom } = useSafeAreaInsets();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const { catalog, error, isLoading, refetch } = useAgentTemplateCatalog(language);
   const toEntry = useTemplateEntries(language);
@@ -31,7 +37,10 @@ export function AgentTemplateCatalog({ query }: { query: string }) {
       primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
     />
   ) : (
-    <ContentState.Empty title={t('marketplace.templates.empty')} />
+    <ContentState.Empty
+      icon={<EmptyIllustration scene={keywords.length ? 'search' : 'collection'} size="panel" />}
+      title={t('marketplace.templates.empty')}
+    />
   );
   // Saved templates stay usable; a failed refresh is a quiet, repeatable note.
   const staleNote =
@@ -46,9 +55,10 @@ export function AgentTemplateCatalog({ query }: { query: string }) {
       </View>
     ) : null;
 
-  if (keywords.length || !catalog)
+  if (keywords.length)
     return (
       <MarketplaceList
+        bottomInset={0}
         empty={state}
         entries={templates
           .filter((template) =>
@@ -68,14 +78,15 @@ export function AgentTemplateCatalog({ query }: { query: string }) {
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-6 pt-2"
-      contentContainerStyle={{ paddingBottom: bottom + 24 }}
+      contentContainerClassName="gap-4 pt-2 pb-6"
       contentInsetAdjustmentBehavior="never"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       testID="marketplace-templates"
     >
+      {browseHeader}
       {staleNote}
+      {templates.length ? null : <View className="px-8 py-10">{state}</View>}
       {templateCollections(templates).map(({ id, templates: members }) => (
         <MarketplaceSection
           entries={members.map(toEntry)}

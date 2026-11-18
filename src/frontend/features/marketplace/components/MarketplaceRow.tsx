@@ -7,6 +7,7 @@ export type MarketplaceEntry = {
   description?: string;
   emoji?: string;
   key: string;
+  kind: 'skill' | 'template';
   onPress(): void;
   testID?: string;
   title: string;
@@ -23,7 +24,11 @@ export function MarketplaceRow({ entry }: { entry: MarketplaceEntry }) {
       onPress={entry.onPress}
       testID={entry.testID}
     >
-      <MarketplaceIcon emoji={entry.emoji} name={entry.title} />
+      {entry.kind === 'skill' ? (
+        <MarketplaceIcon kind="skill" />
+      ) : (
+        <MarketplaceIcon emoji={entry.emoji} kind="template" name={entry.title} />
+      )}
       <View className="min-w-0 flex-1 gap-0.5">
         <Text className="text-base font-medium text-foreground" numberOfLines={1}>
           {entry.title}

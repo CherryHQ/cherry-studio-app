@@ -444,10 +444,6 @@ Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains a
 composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
 8-point hit slop by default so its effective touch target remains usable.
 
-`SearchField` retains its controlled input, clear action and accessible labels in every variant.
-`inset` provides a 48-point, rounded rectangular field on a neutral fill for content catalogs;
-`default`, `filled` and `subtle` retain their existing appearance.
-
 `Section.Header` owns its intrinsic row, typography, and minimum height. A header nested directly in
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,

@@ -8,20 +8,24 @@ their existing routes.
 
 The page is one continuous surface, without cards or separators. Top to bottom:
 
-1. The Skills tab's library button opens installed Skills with the source conversation identity.
-   The sidebar's Agents destination opens the Agent list.
-2. `InlineSearch` searches the open tab. Each tab keeps its own query.
-3. Pill tabs (`Tabs variant="pill"`) choose Skills or Agents.
-4. Titled sections preview each collection with up to three rows per column. If the collection has
+1. Pill tabs (`Tabs variant="pill"`) choose Skills or Agents.
+2. My Skills or My Agents shows up to four entries from the corresponding local library query.
+   Each entry opens its existing detail or editor. The section title opens the management page.
+   My Skills carries the source conversation identity into that page.
+3. The discovery section previews each market collection with up to three rows per column. If it has
    more entries, its title opens `/skills/browse` with the full list.
+4. The shared `InlineSearch` uses its embedded layout at the bottom, above the safe area and
+   keyboard. Each tab keeps its own query. Typing shows market results and clearing the query
+   brings back the library preview.
 
 Phones use one column; windows wider than the form column use two (`useMarketplaceColumns`).
-`MarketplaceRow` shows a 48-point rounded mark (emoji or initial on `card`), a one-line name and a
-one-line purpose. Tapping anywhere on the row opens the entry's page. Sections and lists own the
-row gutter.
+`MarketplaceRow` shows a 48-point rounded mark, a one-line name and a one-line purpose. Skills use
+the shared tool-case glyph in both the market and My Skills. Templates use their emoji or initial.
+Tapping anywhere on the row opens the entry's page. Sections and lists own the row gutter.
 
 Loading, empty and failure states use `ContentState` in place of a section's rows or a list's
-content.
+content. Empty libraries and collections use the shared collection illustration. Searches with no
+matches use the shared search illustration.
 
 ## Skills
 

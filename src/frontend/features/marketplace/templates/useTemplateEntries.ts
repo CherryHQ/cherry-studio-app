@@ -10,6 +10,7 @@ export function useTemplateEntries(language: string) {
     description: template.description,
     emoji: template.emoji,
     key: template.id,
+    kind: 'template',
     onPress: () =>
       router.push({
         pathname: '/skills/templates/[templateId]',

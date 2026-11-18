@@ -1127,6 +1127,8 @@
   "marketplace.category.other": "Другое",
   "marketplace.category.programming": "Программирование",
   "marketplace.category.writing": "Письмо",
+  "marketplace.discover": "Обзор каталога",
+  "marketplace.myAgents": "Мои агенты",
   "marketplace.templates.cached": "Показаны сохранённые шаблоны. Не удалось обновить каталог.",
   "marketplace.templates.copied": "Инструкции скопированы",
   "marketplace.templates.copy": "Копировать инструкции",

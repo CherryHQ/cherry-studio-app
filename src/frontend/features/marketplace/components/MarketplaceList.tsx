@@ -6,11 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type MarketplaceEntry, MarketplaceRow } from './MarketplaceRow';
 import { useMarketplaceColumns } from './useMarketplaceColumns';
 
-// A 48pt mark and 12pt vertical padding.
+// A 48pt mark with 12pt above and below.
 const ROW_ESTIMATED_HEIGHT = 72;
 
 /** Every entry of one collection or search, flat and virtualized, in the same columns as sections. */
 export function MarketplaceList({
+  bottomInset,
   empty,
   entries,
   footer,
@@ -18,6 +19,7 @@ export function MarketplaceList({
   onEndReached,
   testID,
 }: {
+  bottomInset?: number;
   empty: ReactElement;
   entries: readonly MarketplaceEntry[];
   footer?: ReactElement | null;
@@ -32,7 +34,7 @@ export function MarketplaceList({
     <LegendList
       key={columns}
       alwaysBounceVertical={false}
-      contentContainerStyle={{ paddingBottom: bottom + 24, paddingTop: 4 }}
+      contentContainerStyle={{ paddingBottom: (bottomInset ?? bottom) + 24, paddingTop: 4 }}
       contentInsetAdjustmentBehavior="never"
       data={entries}
       estimatedItemSize={ROW_ESTIMATED_HEIGHT}

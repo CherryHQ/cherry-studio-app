@@ -34,7 +34,7 @@ export function MarketplaceSection({
   );
   const hasMoreEntries = preview.length < entries.length || hasNextPage;
   const heading = (
-    <Text accessibilityRole="header" className="text-lg font-semibold text-foreground">
+    <Text accessibilityRole="header" className="shrink text-sm font-medium text-muted-foreground">
       {title}
     </Text>
   );
@@ -51,7 +51,7 @@ export function MarketplaceSection({
           testID={testID ? `${testID}-open` : undefined}
         >
           {heading}
-          <ChevronRightIcon className="size-5 text-muted-foreground" />
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </Pressable>
       ) : (
         <View className="px-4 py-2">{heading}</View>

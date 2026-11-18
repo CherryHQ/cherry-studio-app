@@ -1115,6 +1115,8 @@
   "marketplace.category.other": "Más",
   "marketplace.category.programming": "Programación",
   "marketplace.category.writing": "Escritura",
+  "marketplace.discover": "Explorar",
+  "marketplace.myAgents": "Mis agentes",
   "marketplace.templates.cached": "Se muestran las plantillas guardadas. No se pudo actualizar el catálogo.",
   "marketplace.templates.copied": "Instrucciones copiadas",
   "marketplace.templates.copy": "Copiar instrucciones",

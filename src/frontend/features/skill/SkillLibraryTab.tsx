@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ManagedMark, useManagedLabel, withResourcePolicy } from '@/frontend/components/Policy';
 import { useApiClient } from '@/frontend/data';
 import { useSkillsApi } from '@/frontend/hooks/skill';
@@ -25,6 +26,7 @@ export function useSkillLibrarySearch() {
 
   return () =>
     void openSearch<SkillListItem>({
+      emptyIcon: <EmptyIllustration scene="search" size="section" />,
       emptyText: t('skills.searchEmpty'),
       getAccessibilityLabel: (skill) => skill.name,
       keyExtractor: (skill) => skill.id,
@@ -79,6 +81,7 @@ export function SkillLibraryTab({ onDiscover }: { onDiscover: () => void }) {
       ) : skills.length === 0 ? (
         <View className="flex-1 justify-center">
           <ContentState.Empty
+            icon={<EmptyIllustration scene="collection" />}
             title={t('skills.installedEmpty')}
             primaryAction={{ children: t('skills.discover.title'), onPress: onDiscover }}
           />

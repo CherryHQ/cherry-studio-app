@@ -8,7 +8,6 @@ import type { SearchFieldProps } from './search-field.types';
 const groupClassNames = {
   default: 'min-h-10 rounded-full border border-border bg-field',
   filled: 'min-h-12 rounded-full bg-card shadow-sm',
-  inset: 'min-h-12 rounded-xl bg-secondary shadow-none',
   subtle: 'min-h-10 rounded-xl border border-border bg-card shadow-none dark:bg-background',
 } satisfies Record<NonNullable<SearchFieldProps['variant']>, string>;
 

@@ -1115,6 +1115,8 @@
   "marketplace.category.other": "Autres",
   "marketplace.category.programming": "Programmation",
   "marketplace.category.writing": "Rédaction",
+  "marketplace.discover": "Découvrir",
+  "marketplace.myAgents": "Mes agents",
   "marketplace.templates.cached": "Les modèles enregistrés sont affichés. Impossible d’actualiser le catalogue.",
   "marketplace.templates.copied": "Instructions copiées",
   "marketplace.templates.copy": "Copier les instructions",

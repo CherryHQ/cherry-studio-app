@@ -1,14 +1,18 @@
-import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { Tabs } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
-import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
+import {
+  MarketplaceAgentLibraryPreview,
+  MarketplaceSkillLibraryPreview,
+} from './components/MarketplaceLibraryPreview';
 import { MarketplaceSkills } from './skills/MarketplaceSkills';
 import { AgentTemplateCatalog } from './templates/AgentTemplateCatalog';
 
@@ -16,73 +20,73 @@ type MarketTab = 'skills' | 'agents';
 
 export function MarketplaceScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const params = useLocalSearchParams<{
-    agentId?: string | string[];
-    sessionId?: string | string[];
-  }>();
+  const headerHeight = useHeaderHeight();
+  const { bottom } = useSafeAreaInsets();
   const [tab, setTab] = useState<MarketTab>('skills');
   // Each catalog keeps its own query, so switching back finds the previous search intact.
   const [queries, setQueries] = useState<Record<MarketTab, string>>({ skills: '', agents: '' });
 
-  const openSkillLibrary = () =>
-    router.push({
-      pathname: '/skills/library',
-      params: {
-        agentId: getSingleRouteParam(params.agentId),
-        sessionId: getSingleRouteParam(params.sessionId),
-      },
-    });
+  const query = queries[tab];
+  const isSkills = tab === 'skills';
+  const placeholder = t(
+    isSkills ? 'skills.marketplace.searchPlaceholder' : 'marketplace.templates.search',
+  );
+  const browseHeader = query.trim() ? null : (
+    <View className="gap-4">
+      {isSkills ? <MarketplaceSkillLibraryPreview /> : <MarketplaceAgentLibraryPreview />}
+      <Text accessibilityRole="header" className="px-4 text-base font-medium text-muted-foreground">
+        {t('marketplace.discover')}
+      </Text>
+    </View>
+  );
+
+  function changeQuery(value: string) {
+    setQueries((current) => ({ ...current, [tab]: value }));
+  }
 
   return (
     <>
-      <RouteHeader
-        title={t('marketplace.title')}
-        rightActions={
-          tab === 'skills'
-            ? [
+      <RouteHeader title={t('marketplace.title')} />
+      <KeyboardAvoidingView
+        behavior="padding"
+        keyboardVerticalOffset={headerHeight - bottom}
+        style={styles.page}
+      >
+        <View className="flex-1 bg-background">
+          <View className="px-4 pt-2 pb-2">
+            <Tabs
+              accessibilityLabel={t('marketplace.title')}
+              items={[
+                { value: 'skills', label: t('skills.title'), testID: 'marketplace-tab-skills' },
                 {
-                  accessibilityLabel: t('skills.library'),
-                  icon: LibraryBigIcon,
-                  key: 'marketplace-library',
-                  nativeIcon: require('@/assets/header-toolbar/library-big.png'),
-                  onPress: openSkillLibrary,
-                  testID: 'marketplace-library',
-                  type: 'icon',
+                  value: 'agents',
+                  label: t('navigation.agents'),
+                  testID: 'marketplace-tab-agents',
                 },
-              ]
-            : undefined
-        }
-      />
-      <InlineSearch
-        onChangeText={(value) => setQueries((current) => ({ ...current, [tab]: value }))}
-        placeholder={t(
-          tab === 'skills'
-            ? 'skills.marketplace.searchPlaceholder'
-            : 'marketplace.templates.search',
-        )}
-        value={queries[tab]}
-      />
-      <View className="flex-1 bg-background">
-        <View className="px-4 pt-2 pb-2">
-          <Tabs
-            accessibilityLabel={t('marketplace.title')}
-            items={[
-              { value: 'skills', label: t('skills.title'), testID: 'marketplace-tab-skills' },
-              { value: 'agents', label: t('navigation.agents'), testID: 'marketplace-tab-agents' },
-            ]}
-            layout="hug"
-            onValueChange={setTab}
-            value={tab}
-            variant="pill"
-          />
+              ]}
+              layout="hug"
+              onValueChange={setTab}
+              value={tab}
+              variant="pill"
+            />
+          </View>
+          {isSkills ? (
+            <MarketplaceSkills browseHeader={browseHeader} query={query} />
+          ) : (
+            <AgentTemplateCatalog browseHeader={browseHeader} query={query} />
+          )}
+          <View className="px-4 pt-3" style={{ paddingBottom: bottom + 12 }}>
+            <InlineSearch
+              layout="embedded"
+              onChangeText={changeQuery}
+              placeholder={placeholder}
+              value={query}
+            />
+          </View>
         </View>
-        {tab === 'skills' ? (
-          <MarketplaceSkills query={queries.skills} />
-        ) : (
-          <AgentTemplateCatalog query={queries.agents} />
-        )}
-      </View>
+      </KeyboardAvoidingView>
     </>
   );
 }
+
+const styles = StyleSheet.create({ page: { flex: 1 } });

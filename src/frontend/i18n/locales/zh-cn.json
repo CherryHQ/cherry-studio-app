@@ -1091,6 +1091,8 @@
   "marketplace.category.other": "更多",
   "marketplace.category.programming": "编程",
   "marketplace.category.writing": "写作",
+  "marketplace.discover": "探索市场",
+  "marketplace.myAgents": "我的智能体",
   "marketplace.templates.cached": "当前显示缓存模板，目录更新失败。",
   "marketplace.templates.copied": "指令已复制",
   "marketplace.templates.copy": "复制指令",

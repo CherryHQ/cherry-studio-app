@@ -1091,6 +1091,8 @@
   "marketplace.category.other": "その他",
   "marketplace.category.programming": "プログラミング",
   "marketplace.category.writing": "執筆",
+  "marketplace.discover": "見つける",
+  "marketplace.myAgents": "マイエージェント",
   "marketplace.templates.cached": "保存済みのテンプレートを表示しています。カタログを更新できませんでした。",
   "marketplace.templates.copied": "指示をコピーしました",
   "marketplace.templates.copy": "指示をコピー",
