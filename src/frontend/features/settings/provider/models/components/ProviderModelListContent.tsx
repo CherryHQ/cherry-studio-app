@@ -17,6 +17,7 @@ import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import type { useProviderModelManagement } from '../hooks/useProviderModelManagement';
+import type { useProviderModelOrder } from '../hooks/useProviderModelOrder';
 import { getProviderModelEndpointLabelKey } from '../utils/providerModelAdd';
 import {
   getProviderModelEndpointState,
@@ -26,9 +27,14 @@ import {
   buildProviderModelListItems,
   type ProviderModelListItem,
 } from '../utils/providerModelListItems';
+import { ProviderModelReorderList } from './ProviderModelReorderList';
 import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderModelRow';
 
 export type ProviderModelListContentProps = {
+  reorder?: {
+    order: ReturnType<typeof useProviderModelOrder>;
+    onDragChange: (active: boolean) => void;
+  };
   groupByPurpose: boolean;
   supportedModelIds?: ReadonlySet<string>;
   management?: ReturnType<typeof useProviderModelManagement>;
@@ -52,6 +58,7 @@ type ProviderModelListExtraData = {
 };
 
 export function ProviderModelListContent({
+  reorder,
   groupByPurpose,
   management,
   supportedModelIds,
@@ -172,6 +179,10 @@ export function ProviderModelListContent({
       ),
     [lastIndex, locked, renderListItem],
   );
+
+  if (reorder) {
+    return <ProviderModelReorderList models={models} provider={provider} {...reorder} />;
+  }
 
   return (
     <ScrollInteractionBoundary>

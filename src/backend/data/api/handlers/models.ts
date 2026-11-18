@@ -1,11 +1,12 @@
 import type { ModelService } from '@/backend/data/services/ModelService';
-import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, toDataApiError } from '@/shared/data/api/errors';
 import {
   BulkUpdateModelsSchema,
   CreateModelsSchema,
   DeleteModelsQuerySchema,
   ListModelsQuerySchema,
   type ModelSchemas,
+  ReorderModelsRequestSchema,
   ResolveProviderModelsQuerySchema,
   UpdateModelSchema,
 } from '@/shared/data/api/schemas/models';
@@ -30,6 +31,16 @@ export function createModelHandlers(
   systemModelSupport: SystemModelSupportFilter,
 ): HandlersFor<ModelSchemas> {
   return {
+    '/models/order:batch': {
+      PATCH: async ({ body }) => {
+        try {
+          const { moves } = ReorderModelsRequestSchema.parse(body);
+          await service.reorderBatch(moves);
+        } catch (error) {
+          throw toDataApiError(error, 'model.reorderBatch');
+        }
+      },
+    },
     '/models': {
       DELETE: async ({ query }) => {
         const parsed = DeleteModelsQuerySchema.parse(query);

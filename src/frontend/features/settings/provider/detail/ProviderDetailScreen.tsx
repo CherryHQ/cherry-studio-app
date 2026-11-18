@@ -24,6 +24,7 @@ import { useProviderDeletion } from '../hooks/useProviderDeletion';
 import { useProviderSetup } from '../hooks/useProviderSetup';
 import { ProviderModelPurposeTabs } from '../models/components/ProviderModelPurposeTabs';
 import { useProviderModelManagement } from '../models/hooks/useProviderModelManagement';
+import { useProviderModelOrder } from '../models/hooks/useProviderModelOrder';
 import {
   filterProviderModelsByPurpose,
   getEffectiveProviderModelPurpose,
@@ -107,6 +108,23 @@ function ProviderDetailSettings({
     [allProviderModelsQuery.data],
   );
   const managedModels = allProviderModels;
+  const order = useProviderModelOrder({ models: managedModels, providerId });
+  const [isModelDragging, setIsModelDragging] = useState(false);
+  const orderedModels = useMemo(() => {
+    const byId = new Map<string, Model>(managedModels.map((model) => [model.id, model]));
+    return order.draftIds.flatMap((id) => byId.get(id) ?? []);
+  }, [managedModels, order.draftIds]);
+  const hasOrderChanges = (['chat', 'painting'] as const).some((purpose) => {
+    const original = filterProviderModelsByPurpose(managedModels, purpose);
+    return filterProviderModelsByPurpose(orderedModels, purpose).some(
+      (model, index) => original[index]?.id !== model.id,
+    );
+  });
+  const cancelOrder = order.cancel;
+  useEffect(() => navigation.addListener('blur', cancelOrder), [cancelOrder, navigation]);
+  useEffect(() => {
+    if (activeTab !== 'models') cancelOrder();
+  }, [activeTab, cancelOrder]);
   const supportedModelIds = useMemo(
     () => (modelsQuery.data ? new Set(models.map((model) => model.id)) : undefined),
     [models, modelsQuery.data],
@@ -135,7 +153,7 @@ function ProviderDetailSettings({
   const isConfigurationBusy = configuration.value?.isBusy ?? false;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: false,
-    isSaving: configuration.isSaving || management.isDeleting,
+    isSaving: configuration.isSaving || management.isDeleting || order.isSaving,
   });
   const { isDeleting, requestDelete } = useProviderDeletion({ onBeforeDismiss: allowNavigation });
   const handleDelete = useCallback(() => {
@@ -164,27 +182,71 @@ function ProviderDetailSettings({
     });
   }, [configuredProviderName, providerId, router]);
   const modelActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('settings.provider.models.syncTitle'),
-        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
-        icon: RefreshCwIcon,
-        key: 'sync-provider-models',
-        nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
-        onPress: startModelSync,
-        type: 'icon',
-      },
-      {
-        accessibilityLabel: t('settings.provider.models.addTitle'),
-        disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
-        icon: PlusIcon,
-        key: 'add-provider-model',
-        nativeIcon: require('@/assets/header-toolbar/plus.png'),
-        onPress: openModelAddSettings,
-        type: 'icon',
-      },
-    ],
+    () =>
+      order.isReordering
+        ? [
+            {
+              key: 'cancel-model-order',
+              type: 'label',
+              label: t('settings.provider.models.reorder.cancel'),
+              disabled: order.isSaving,
+              onPress: order.cancel,
+            },
+            {
+              key: 'save-model-order',
+              type: 'label',
+              label: t('settings.provider.models.reorder.done'),
+              disabled: order.isSaving || !hasOrderChanges || isModelDragging,
+              onPress: () => {
+                void order.commit();
+              },
+            },
+          ]
+        : [
+            ...(provider &&
+            order.canReorder &&
+            !isPreparing &&
+            !isConfigurationBusy &&
+            !management.isSelecting &&
+            !management.isDeleting
+              ? [
+                  {
+                    key: 'reorder-models',
+                    type: 'label' as const,
+                    label: t('settings.provider.models.reorder.action'),
+                    onPress: () => {
+                      setModelSearchText('');
+                      setModelPurpose('all');
+                      order.start();
+                    },
+                  },
+                ]
+              : []),
+            {
+              accessibilityLabel: t('settings.provider.models.syncTitle'),
+              disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
+              icon: RefreshCwIcon,
+              key: 'sync-provider-models',
+              nativeIcon: require('@/assets/header-toolbar/refresh-cw.png'),
+              onPress: startModelSync,
+              type: 'icon',
+            },
+            {
+              accessibilityLabel: t('settings.provider.models.addTitle'),
+              disabled: !provider || isPreparing || isConfigurationBusy || management.isDeleting,
+              icon: PlusIcon,
+              key: 'add-provider-model',
+              nativeIcon: require('@/assets/header-toolbar/plus.png'),
+              onPress: openModelAddSettings,
+              type: 'icon',
+            },
+          ],
     [
+      order,
+      hasOrderChanges,
+      isModelDragging,
+      management.isSelecting,
+      setModelSearchText,
       isConfigurationBusy,
       isPreparing,
       management.isDeleting,
@@ -196,10 +258,16 @@ function ProviderDetailSettings({
   );
   const handleTabChange = useCallback(
     (tab: ProviderDetailTab) => {
-      if (isConfigurationBusy || management.isSelecting || management.isDeleting) {
+      if (
+        isConfigurationBusy ||
+        management.isSelecting ||
+        management.isDeleting ||
+        order.isSaving
+      ) {
         return;
       }
 
+      order.cancel();
       setModelSearchText('');
       setModelPurpose('all');
       router.setParams({ tab });
@@ -208,6 +276,7 @@ function ProviderDetailSettings({
       isConfigurationBusy,
       management.isDeleting,
       management.isSelecting,
+      order,
       router,
       setModelSearchText,
     ],
@@ -260,7 +329,7 @@ function ProviderDetailSettings({
           {/* Search mounts with the header, not with the models: letting a finished load add the
               native search bar leaves it detached from the navigation bar. Multi-select is a
               deliberate mode change, so it still unmounts the field. */}
-          {management.isSelecting ? null : (
+          {management.isSelecting || order.isReordering ? null : (
             <InlineSearch
               onChangeText={setModelSearchText}
               placeholder={t('modelPicker.searchPlaceholder')}
@@ -271,13 +340,17 @@ function ProviderDetailSettings({
             {!management.isSelecting && managedModels.length > 0 ? (
               <View className="px-4 py-2">
                 <Text className="text-muted-foreground text-sm">
-                  {t('settings.provider.models.management.listTitle', {
-                    count: managedModels.length,
-                  })}
+                  {order.isReordering
+                    ? t('settings.provider.models.reorder.helper')
+                    : t('settings.provider.models.management.listTitle', {
+                        count: managedModels.length,
+                      })}
                 </Text>
               </View>
             ) : null}
-            {management.isSelecting || managedModels.length === 0 ? null : showsModelPurposeTabs ? (
+            {management.isSelecting ||
+            order.isReordering ||
+            managedModels.length === 0 ? null : showsModelPurposeTabs ? (
               <View className="px-4 pb-3">
                 <ProviderModelPurposeTabs
                   onChange={setModelPurpose}
@@ -297,13 +370,16 @@ function ProviderDetailSettings({
               </View>
             ) : (
               <ProviderModelList
+                reorder={
+                  order.isReordering ? { order, onDragChange: setIsModelDragging } : undefined
+                }
                 management={management}
                 supportedModelIds={supportedModelIds}
                 groupByPurpose={effectiveModelPurpose === 'all'}
                 isEndpointSelectionDisabled={management.isDeleting}
                 isFiltered={isModelListFiltered}
                 isLoading={allProviderModelsQuery.isPending}
-                models={listedModels}
+                models={order.isReordering ? orderedModels : listedModels}
                 onAddModelManually={openModelAddSettings}
                 onPullModels={startModelSync}
                 provider={provider}

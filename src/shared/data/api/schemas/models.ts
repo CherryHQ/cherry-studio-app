@@ -68,6 +68,33 @@ export const UpdateModelSchema = CreateModelSchema.omit({
   });
 export type UpdateModelDto = z.infer<typeof UpdateModelSchema>;
 
+export const ModelOrderMoveSchema = z.strictObject({
+  anchor: z.union([
+    z.strictObject({ before: UniqueModelIdSchema }),
+    z.strictObject({ after: UniqueModelIdSchema }),
+    z.strictObject({ position: z.enum(['first', 'last']) }),
+  ]),
+  id: UniqueModelIdSchema,
+});
+export type ModelOrderMove = z.infer<typeof ModelOrderMoveSchema>;
+
+export const ReorderModelsRequestSchema = z
+  .strictObject({ moves: z.array(ModelOrderMoveSchema).min(1) })
+  .superRefine(({ moves }, ctx) => {
+    const ids = new Set<UniqueModelId>();
+    moves.forEach(({ id }, index) => {
+      if (ids.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Duplicate move target',
+          path: ['moves', index, 'id'],
+        });
+      }
+      ids.add(id);
+    });
+  });
+export type ReorderModelsRequest = z.infer<typeof ReorderModelsRequestSchema>;
+
 export const BulkUpdateModelItemSchema = z.object({
   patch: UpdateModelSchema,
   uniqueModelId: UniqueModelIdSchema,
@@ -107,6 +134,12 @@ export type AddModelInput = Omit<CreateModelDto, 'presetModelId'> & {
 };
 
 export type ModelSchemas = {
+  '/models/order:batch': {
+    PATCH: {
+      body: ReorderModelsRequest;
+      response: undefined;
+    };
+  };
   '/models': {
     DELETE: {
       query: DeleteModelsQuery;

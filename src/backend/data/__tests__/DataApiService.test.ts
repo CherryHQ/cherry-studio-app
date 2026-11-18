@@ -93,6 +93,28 @@ describe('DataApiService', () => {
     ).resolves.toEqual({ modelId: 'Kwai-Kolors/Kolors', providerId: 'silicon' });
   });
 
+  it('dispatches model batches without capturing detail identities ending in /order', async () => {
+    const batch = jest.fn(async () => undefined);
+    const detail = jest.fn(async ({ params, body }) => ({ id: params.uniqueModelId, ...body }));
+    const service = createService({
+      '/models/:uniqueModelId*': { PATCH: detail },
+      '/models/order:batch': { PATCH: batch },
+    });
+    const body = { moves: [{ id: 'p::a' as const, anchor: { position: 'first' as const } }] };
+    await expect(service.patch('/models/order:batch', { body })).resolves.toBeUndefined();
+    expect(batch).toHaveBeenCalledWith({ body, params: {} });
+    expect(detail).not.toHaveBeenCalled();
+
+    await expect(
+      service.patch('/models/p::org/model/order', { body: { name: 'Renamed' } }),
+    ).resolves.toEqual({ id: 'p::org/model/order', name: 'Renamed' });
+    expect(detail).toHaveBeenCalledWith({
+      body: { name: 'Renamed' },
+      params: { uniqueModelId: 'p::org/model/order' },
+    });
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
   it('distinguishes an unsupported method from an unknown route', async () => {
     const service = createService({
       '/agents': { GET: jest.fn(async () => ({ items: [] })) },
