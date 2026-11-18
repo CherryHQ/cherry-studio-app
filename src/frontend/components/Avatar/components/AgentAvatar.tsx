@@ -2,7 +2,7 @@ import { Avatar } from '@cherrystudio/ui/components';
 
 import { CHERRY_AGENT_AVATAR, DEEPSEEK_AGENT_AVATAR } from '@/shared/data/types/agent';
 
-const DEEPSEEK_AVATAR_IMAGE = require('@/assets/avatars/deepseek.png');
+const DEEPSEEK_AVATAR_IMAGE = require('@/assets/avatars/deepseek.webp');
 const AGENT_AVATAR_SIZE = 40;
 const EMOJI_FONT_SCALE = 0.58;
 const INITIAL_FONT_SCALE = 0.42;
@@ -37,7 +37,6 @@ export function AgentAvatar({
   const builtInImage = avatar === DEEPSEEK_AGENT_AVATAR ? DEEPSEEK_AVATAR_IMAGE : undefined;
   const source = uri ? { uri } : builtInImage;
   const avatarEmoji = emoji?.trim() || (avatar === CHERRY_AGENT_AVATAR ? avatar : undefined);
-  const initial = getInitial(name);
 
   return (
     <Avatar accessibilityLabel={accessibilityLabel ?? name} size={size} testID={testID}>
@@ -46,7 +45,7 @@ export function AgentAvatar({
           accessibilityIgnoresInvertColors
           cachePolicy="memory-disk"
           contentFit="cover"
-          recyclingKey={uri || avatar || undefined}
+          recyclingKey={uri || avatar}
           source={source}
         />
       ) : (
@@ -57,7 +56,7 @@ export function AgentAvatar({
             },
           }}
         >
-          {avatarEmoji ?? initial}
+          {avatarEmoji ?? getInitial(name)}
         </Avatar.Fallback>
       )}
     </Avatar>

@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AgentAvatar } from '../components/AgentAvatar';
 
-jest.mock('@/assets/avatars/deepseek.png', () => 73);
+jest.mock('@/assets/avatars/deepseek.webp', () => 73);
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
