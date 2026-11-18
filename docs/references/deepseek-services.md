@@ -14,7 +14,9 @@ API version. A gateway must implement these APIs; configuring its chat endpoint 
 that it serves application tools.
 
 **Plugins → Built-in tools** owns separate **Document parsing** and **OCR** pages. Document parsing
-stores `file.document_parser.mode`; OCR stores `file.ocr.engine`. **Settings → Voice** owns the
+stores `file.document_parser.mode`; OCR stores `file.ocr.engine`. A new enterprise profile has its
+own model providers, so it does not inherit the OCR engine, and an inherited DeepSeek parser
+becomes the default. **Settings → Voice** owns the
 three engine selections and `feature.voice.deepseek_voice`. Enhanced content checks live in the
 ordinary DeepSeek model Provider page as `chat.deepseek.safety_check`.
 

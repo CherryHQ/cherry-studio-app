@@ -201,7 +201,6 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
   'file.document_parser.mode',
-  'file.ocr.engine',
   'file.export.watermark_enabled',
   'ui.font_size_step',
   'ui.library.view_mode',
