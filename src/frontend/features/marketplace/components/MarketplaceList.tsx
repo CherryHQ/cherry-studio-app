@@ -11,7 +11,6 @@ const ROW_ESTIMATED_HEIGHT = 72;
 
 /** Every entry of one collection or search, flat and virtualized, in the same columns as sections. */
 export function MarketplaceList({
-  bottomInset,
   empty,
   entries,
   footer,
@@ -19,7 +18,6 @@ export function MarketplaceList({
   onEndReached,
   testID,
 }: {
-  bottomInset?: number;
   empty: ReactElement;
   entries: readonly MarketplaceEntry[];
   footer?: ReactElement | null;
@@ -34,7 +32,7 @@ export function MarketplaceList({
     <LegendList
       key={columns}
       alwaysBounceVertical={false}
-      contentContainerStyle={{ paddingBottom: (bottomInset ?? bottom) + 24, paddingTop: 4 }}
+      contentContainerStyle={{ paddingBottom: bottom + 24, paddingTop: 4 }}
       contentInsetAdjustmentBehavior="never"
       data={entries}
       estimatedItemSize={ROW_ESTIMATED_HEIGHT}

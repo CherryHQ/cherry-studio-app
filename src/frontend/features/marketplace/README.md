@@ -8,15 +8,14 @@ their existing routes.
 
 The page is one continuous surface, without cards or separators. Top to bottom:
 
-1. Pill tabs (`Tabs variant="pill"`) choose Skills or Agents.
-2. My Skills or My Agents shows up to four entries from the corresponding local library query.
+1. The shared `InlineSearch` appears below the title, using the Agent list's layout. Each tab
+   keeps its own query. Typing shows market results and clearing restores the library preview.
+2. Pill tabs (`Tabs variant="pill"`) choose Skills or Agents.
+3. My Skills or My Agents shows up to four entries from the corresponding local library query.
    Each entry opens its existing detail or editor. The section title opens the management page.
    My Skills carries the source conversation identity into that page.
-3. The discovery section previews each market collection with up to three rows per column. If it has
+4. The discovery section previews each market collection with up to three rows per column. If it has
    more entries, its title opens `/skills/browse` with the full list.
-4. The shared `InlineSearch` uses its embedded layout at the bottom, above the safe area and
-   keyboard. Each tab keeps its own query. Typing shows market results and clearing the query
-   brings back the library preview.
 
 Phones use one column; windows wider than the form column use two (`useMarketplaceColumns`).
 `MarketplaceRow` shows a 48-point rounded mark, a one-line name and a one-line purpose. Skills use

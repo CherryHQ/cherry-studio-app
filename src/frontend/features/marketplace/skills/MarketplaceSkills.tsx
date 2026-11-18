@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 
@@ -29,6 +30,7 @@ export function MarketplaceSkills({
   query: string;
 }) {
   const router = useRouter();
+  const { bottom } = useSafeAreaInsets();
   const search = useSettledQuery(query);
   const isSettling = query.trim() !== search;
   const isLink = isSkillLink(search);
@@ -40,7 +42,6 @@ export function MarketplaceSkills({
   if (isLink)
     return (
       <MarketplaceList
-        bottomInset={0}
         empty={<SkillDiscoveryState discovery={discoveries.cherryin} isSettling={isSettling} />}
         entries={isSettling ? [] : discoveries.cherryin.entries}
         testID="marketplace-skills"
@@ -50,7 +51,8 @@ export function MarketplaceSkills({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-4 pt-2 pb-6"
+      contentContainerClassName="gap-4 pt-2"
+      contentContainerStyle={{ paddingBottom: bottom + 24 }}
       contentInsetAdjustmentBehavior="never"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
