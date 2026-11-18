@@ -3,13 +3,18 @@ import {
   MAX_PDF_ATTACHMENT_BYTES,
 } from '@/shared/utils/fileAttachmentPolicy';
 
+import { readDeepseekOcr } from '../deepseekOcr';
 import { DocumentTextError, readDocumentUriText } from '../documentText';
 import { readFileUriBytes } from '../fileStorage';
-import { readPdfText } from '../fileTextExtraction';
+import { getFileOcrEngine, readPdfText } from '../fileTextExtraction';
 
 const mockFile = { size: 64, exists: true };
 jest.mock('expo-file-system', () => ({ File: jest.fn(() => mockFile) }));
-jest.mock('../fileTextExtraction', () => ({ readPdfText: jest.fn() }));
+jest.mock('../fileTextExtraction', () => ({
+  getFileOcrEngine: jest.fn(() => 'local'),
+  readPdfText: jest.fn(),
+}));
+jest.mock('../deepseekOcr', () => ({ readDeepseekOcr: jest.fn() }));
 jest.mock('../fileStorage', () => ({ readFileUriBytes: jest.fn() }));
 const URI = 'file:///managed/document.pdf';
 const extracted = {
@@ -24,9 +29,31 @@ const extracted = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(getFileOcrEngine).mockReturnValue('local');
   mockFile.size = 64;
   mockFile.exists = true;
   jest.mocked(readPdfText).mockResolvedValue(extracted);
+});
+
+test('uses cloud OCR for PDF only without changing the built-in Office parser', async () => {
+  jest.mocked(getFileOcrEngine).mockReturnValue('deepseek');
+  jest.mocked(readDeepseekOcr).mockResolvedValueOnce(extracted);
+  await expect(
+    readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
+  ).resolves.toMatchObject({ text: 'PDF body', parser: 'deepseek-ocr' });
+  await expect(
+    readDocumentUriText(URI, 'application/msword', new AbortController().signal),
+  ).rejects.toMatchObject({ failure: 'invalid' });
+  expect(readDeepseekOcr).toHaveBeenCalledTimes(1);
+  expect(readPdfText).not.toHaveBeenCalled();
+});
+
+test('explicit document parsing uses DeepSeek for Word even when image OCR stays local', async () => {
+  jest.mocked(readDeepseekOcr).mockResolvedValueOnce({ ...extracted, text: 'Cloud Word text' });
+  await expect(
+    readDocumentUriText(URI, 'application/msword', new AbortController().signal, 'deepseek'),
+  ).resolves.toMatchObject({ text: 'Cloud Word text', parser: 'deepseek-ocr' });
+  expect(readPdfText).not.toHaveBeenCalled();
 });
 
 test('retains the extraction ceiling separately from unreadable image pages', async () => {

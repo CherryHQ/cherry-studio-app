@@ -1,1 +1,6 @@
-export { InfoPopover, type InfoPopoverProps } from './info-popover';
+export {
+  AnchoredInfoPopover,
+  InfoPopover,
+  type InfoPopoverAnchor,
+  type InfoPopoverProps,
+} from './info-popover';

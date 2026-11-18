@@ -1,6 +1,15 @@
-import { areAllSelected, toggleSelection } from '../selection';
+import { areAllSelected, orderedSelection, toggleSelection } from '../selection';
 
 describe('selection', () => {
+  test('sharing follows source order and retains missing IDs for explicit failure', () => {
+    const selected = new Set(['third', 'missing', 'first']);
+    expect(orderedSelection(selected, ['first', 'second', 'third'])).toEqual([
+      'first',
+      'third',
+      'missing',
+    ]);
+    expect([...selected]).toEqual(['third', 'missing', 'first']);
+  });
   test('toggles an id without mutating the current selection', () => {
     const current = new Set(['id-1']);
 

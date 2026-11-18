@@ -7,6 +7,7 @@ const ChatRouteParamsSchema = z.strictObject({
   composerHandoff: z.string().trim().min(1).optional(),
   selectionHandoff: z.string().trim().min(1).optional(),
   workspaceDraftId: z.uuid().optional(),
+  sshDraftId: z.uuid().optional(),
   sessionId: z.string().trim().min(1).optional(),
   messageId: z.string().trim().min(1).optional(),
   messageRequestId: z.string().trim().min(1).optional(),
@@ -23,10 +24,12 @@ export type ChatTarget =
       selectionHandoff?: string;
       /** Identifies the unsent conversation's optional workspace selection. */
       workspaceDraftId?: string;
+      sshDraftId?: string;
     }
   | {
       kind: 'session';
       sessionId: string;
+      composerHandoff?: string;
       selectionHandoff?: string;
       messageId?: string;
       /** Distinguishes repeated selections of the same search result. */
@@ -38,6 +41,7 @@ export type ChatRouteParamsInput = {
   composerHandoff?: string | string[];
   selectionHandoff?: string | string[];
   workspaceDraftId?: string | string[];
+  sshDraftId?: string | string[];
   sessionId?: string | string[];
   messageId?: string | string[];
   messageRequestId?: string | string[];
@@ -52,9 +56,10 @@ export function chatRouteParams(target: ChatTarget) {
   return target.kind === 'session'
     ? {
         agentId: undefined,
-        composerHandoff: undefined,
+        composerHandoff: target.composerHandoff,
         selectionHandoff: target.selectionHandoff,
         workspaceDraftId: undefined,
+        sshDraftId: undefined,
         sessionId: target.sessionId,
         messageId: target.messageId,
         messageRequestId: target.messageRequestId,
@@ -64,6 +69,7 @@ export function chatRouteParams(target: ChatTarget) {
         composerHandoff: target.composerHandoff,
         selectionHandoff: target.selectionHandoff,
         workspaceDraftId: target.workspaceDraftId,
+        sshDraftId: target.sshDraftId,
         sessionId: undefined,
         messageId: undefined,
         messageRequestId: undefined,
@@ -77,11 +83,16 @@ export function chatHref(target: ChatTarget) {
   };
 }
 
-/** Serializes complete chat identity for a return-to route parameter. */
+/** Preserves the chat and its draft workspace when returning from another screen. */
 export function chatReturnToHref(target: ChatTarget) {
-  const [key, value] =
-    target.kind === 'session' ? ['sessionId', target.sessionId] : ['agentId', target.agentId];
-  return `/?${key}=${encodeURIComponent(value)}`;
+  if (target.kind === 'session') return `/?sessionId=${encodeURIComponent(target.sessionId)}`;
+
+  const params = [`agentId=${encodeURIComponent(target.agentId)}`];
+  if (target.workspaceDraftId) {
+    params.push(`workspaceDraftId=${encodeURIComponent(target.workspaceDraftId)}`);
+  }
+  if (target.sshDraftId) params.push(`sshDraftId=${encodeURIComponent(target.sshDraftId)}`);
+  return `/?${params.join('&')}`;
 }
 
 export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
@@ -90,6 +101,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     composerHandoff: getSingleRouteParam(input.composerHandoff),
     selectionHandoff: getSingleRouteParam(input.selectionHandoff),
     workspaceDraftId: getSingleRouteParam(input.workspaceDraftId),
+    sshDraftId: getSingleRouteParam(input.sshDraftId),
     sessionId: getSingleRouteParam(input.sessionId),
     messageId: getSingleRouteParam(input.messageId),
     messageRequestId: getSingleRouteParam(input.messageRequestId),
@@ -104,6 +116,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     composerHandoff,
     selectionHandoff,
     workspaceDraftId,
+    sshDraftId,
     sessionId,
     messageId,
     messageRequestId,
@@ -114,6 +127,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
       target: {
         kind: 'session',
         sessionId,
+        ...(composerHandoff ? { composerHandoff } : {}),
         ...(selectionHandoff ? { selectionHandoff } : {}),
         ...(messageId ? { messageId, messageRequestId } : {}),
       },
@@ -128,6 +142,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
         ...(composerHandoff ? { composerHandoff } : {}),
         ...(selectionHandoff ? { selectionHandoff } : {}),
         ...(workspaceDraftId ? { workspaceDraftId } : {}),
+        ...(sshDraftId ? { sshDraftId } : {}),
       },
     };
   }

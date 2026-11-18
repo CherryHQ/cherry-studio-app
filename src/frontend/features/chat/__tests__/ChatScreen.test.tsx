@@ -4,6 +4,20 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import { ChatScreen } from '../ChatScreen';
 
+const mockShareApi = { get: jest.fn() };
+jest.mock('@/frontend/data', () => ({
+  useApiClient: () => mockShareApi,
+  useBackendModule: () => ({ getTarget: () => null }),
+}));
+jest.mock('../share/ChatShareSelectionProvider', () => ({
+  ChatShareSelectionProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('../share/ChatShareControls', () => ({
+  ChatShareComposerGuard: ({ children }: { children: React.ReactNode }) => children,
+  ChatShareSelectionControls: () => null,
+}));
+jest.mock('../runtime/agentMessageProjection', () => ({ resolveMessageModel: () => undefined }));
+
 let chatControlsInput: { agentId?: string; composerKey: number; sessionId?: string } | undefined;
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
@@ -85,6 +99,7 @@ jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
 }));
 
 jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
   useIsPreview: () => false,
   useLocalSearchParams: () => mockRouteParams,
   useRouter: () => ({ push: jest.fn() }),
@@ -119,6 +134,7 @@ const mockChatControls = {
 jest.mock('../runtime', () => ({
   latestConversationImageResult: jest.requireActual('../runtime/agentImageResult')
     .latestConversationImageResult,
+  selectContextUsageSource: jest.requireActual('../runtime/contextUsage').selectContextUsageSource,
   useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
     chatControlsInput = input;
     return mockChatControls;

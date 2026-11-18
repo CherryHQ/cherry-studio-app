@@ -206,14 +206,13 @@ export function useSavedModelSettings(
       value: baseSettings.endpointType,
     },
     group: { value: initial.group },
-    limits:
-      capabilities.drawing || capabilities.speech || capabilities.transcription
-        ? undefined
-        : {
-            contextWindow: limitSetting('contextWindow'),
-            maxInputTokens: limitSetting('maxInputTokens'),
-            maxOutputTokens: limitSetting('maxOutputTokens'),
-          },
+    limits: capabilities.drawing
+      ? undefined
+      : {
+          contextWindow: limitSetting('contextWindow'),
+          maxInputTokens: limitSetting('maxInputTokens'),
+          maxOutputTokens: limitSetting('maxOutputTokens'),
+        },
     modelId: model.modelId,
     name: { required: true, value: initial.name },
     notes: { value: initial.notes },

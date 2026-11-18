@@ -4,15 +4,52 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Public Interface
 
-- `ModelPickerDrawer` is the only model-selection view. Agent editing, painting, provider
+- `ModelPickerDrawer` is the standard model-selection sheet. Agent editing, painting, provider
   connectivity checks, and model settings all open this bottom sheet. Its search field filters the
   grouped model catalog in place without leaving the sheet. Callers may supply `onAddProvider` so
   the unfiltered empty state can hand off to provider setup without coupling the picker to routing.
-- `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
+  Focusing search expands the sheet from `large` to `full`. Clearing search, dismissing the keyboard,
+  and changing filters retain that height; a downward drag can return to `large` without discarding
+  the current conditions. A filtered empty state offers one action to clear search and filters.
+- `ModelPickerList` renders the grouped selectable model rows inside that sheet and the onboarding
+  page. Onboarding supplies its own discovered or entitled candidates, including models not yet
+  saved or enabled; the list owns row visuals, avatars, capability badges, and selection marks.
+  Its `disabled` input prevents selection while a caller is saving. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
-  jump to their group headers without changing provider/order-key order.
-  Single and multiple selected-model marks follow the theme palette; model artwork, unselected rows,
-  and other list selection controls retain their existing colors.
+  jump to their group headers without changing provider/order-key order. The contact-style index
+  floats in a narrow frosted-glass capsule centered in the model-list viewport, capped at 80% of
+  that viewport's current height. It grows with the sheet until all providers fit. Provider rows
+  retain 48-point targets and 20-point icons; overflow scrolls vertically without a visible scrollbar.
+  A press shows the private `ModelPickerProviderPreview` to the left: a separate glass identity
+  surface 152 points wide and at least 144 points tall, with a rounded 48-point provider avatar
+  and a two-line name. It reuses provider identity and uploaded-avatar resolution. The preview
+  remains next to the index and may temporarily cover list content or selection marks; it fades
+  out on release and respects reduced motion. A completed tap jumps to its group. Native
+  scrolling cancels the preview and navigation candidate, and a touch that stops momentum does
+  not navigate. The immediate native press excludes the sheet pan while recognizing simultaneously
+  with the navigation scroller; dragging the index scrolls its contents instead of the sheet.
+  The preview never intercepts touches. Scrolling the model list reveals its current provider in
+  the index without interrupting a navigation drag or momentum scroll.
+  Model names stay on one line with middle truncation, retaining their identifying prefix and
+  suffix. Brand marks align with the name's first line. Chat capability icons occupy a compact
+  second line without chip backgrounds; provider management retains its default chip style.
+  The list supplies one `BlurTargetView` for the index and preview, rendered before both effects.
+  Android uses `dimezisBlurViewSdk31Plus`, with a translucent fallback on older systems. Material
+  overlays, borders, and foregrounds use the shared light/dark theme tokens.
+  Rows span the sheet width, including their touch targets and neutral selected backgrounds,
+  without cards or outlines. Dark selection retains a neutral fill against the raised sheet;
+  the name weight and selection mark remain the primary cues. The provider index floats above the
+  rows. While the index is visible, the list reserves its 48-point touch area plus an 8-point gap
+  inside each row's content; short lists keep their existing insets. A fixed trailing slot holds
+  the compact selection mark in single and multiple selection clear of the permanent index.
+  The selected mark follows the theme palette in both modes and shares the same shape and size.
+  Tapping the floating index navigates providers rather than selecting the row beneath.
+  The diagnostic panel also embeds this public list and `useModelPickerData` so model selection
+  stays inside its existing full-height sheet.
+  Embedded consumers use `contentInset="none"` when their container already owns the gutter;
+  the shared picker keeps its existing inset by default.
+  `density="compact"` pairs 24-point model artwork with compact model text and group labels for
+  embedded flows; the standard picker retains its default row size.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
   embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value
@@ -28,6 +65,15 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Organization
 
-- `components/` contains the model selection sheet, metadata, and filtering UI.
+- `components/` contains the model selection sheet, metadata, and filtering UI. Inside a
+  `PolicyScope` the sheet offers only the policy's allowed models (`useModelChoice`).
 - `hooks/` owns model picker data and preference-backed model selection state.
 - `utils/` contains pure model setting and model type helpers and tests.
+
+## Community Cloud availability
+
+The picker observes `Backend.cloud` through `useCloud`. Plan rows require effective paid model
+entitlements and receive unavailability reasons; exhausted or unauthorized rows cannot be selected.
+The `cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
+chat and translation rights). Selection is only a presentation check: the Cloud request boundary
+rechecks entitlement, expiry and quota before every send.

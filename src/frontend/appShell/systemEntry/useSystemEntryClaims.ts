@@ -26,7 +26,7 @@ export function useSystemEntryClaims({
   const onDeliver = useEffectEvent(deliver);
   const onClaimFailure = useEffectEvent(onFailure);
   const activeClaim = useRef<(() => Promise<void>) | undefined>(undefined);
-  const heldAction = useRef<SystemAction | undefined>(undefined);
+  const heldActions = useRef<SystemAction[]>([]);
   const isClaiming = useRef(false);
   const isClaimRequested = useRef(false);
 
@@ -43,7 +43,11 @@ export function useSystemEntryClaims({
       isClaimRequested.current = false;
       try {
         const action = await module.claimNext();
-        if (action && !(activeClaim.current && onDeliver(action))) heldAction.current = action;
+        if (action) {
+          if (heldActions.current.length || !activeClaim.current || !onDeliver(action)) {
+            heldActions.current.push(action);
+          }
+        }
       } catch {
         if (activeClaim.current) onClaimFailure();
       } finally {
@@ -53,9 +57,9 @@ export function useSystemEntryClaims({
     };
 
     activeClaim.current = claim;
-    const held = heldAction.current;
-    heldAction.current = undefined;
-    if (held && !onDeliver(held)) heldAction.current = held;
+    while (heldActions.current.length > 0 && onDeliver(heldActions.current[0])) {
+      heldActions.current.shift();
+    }
     const stopPending = module.subscribePending(() => void claim());
     const foreground = AppState.addEventListener('change', (state) => {
       if (state === 'active') void claim();

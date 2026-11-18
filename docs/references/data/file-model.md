@@ -155,7 +155,8 @@ never created.
 the imported entry. Painting still admits images only.
 
 `readAttachmentContent` is the common controlled reader for attachments and file tools. Its
-document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
+document parser setting is supplied by the caller, with AnyDoc as the default. With a local parser
+and on-device OCR selected, PDF uses
 the native text extractor with on-device OCR for pages without usable text and image pages whose text is sparse. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
 accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
 CSV stays on the text path. Format admission follows the published mobile entry point's
@@ -274,22 +275,33 @@ Oversized IR is deferred to `read_file` rather than cut into invalid JSON. The H
 preparation and `read_file`. A later turn reparses historical input references with its own snapshot;
 existing messages, attachment reports, and tool results are not rewritten.
 
-Settings exposes **Document parser** as a local preference with AnyDoc selected by default and
-Built-in available for comparison. Its picker describes both formats and the next-turn/PDF rules;
+**Plugins → Built-in tools → Document parsing** owns the parser preference, with AnyDoc selected
+by default, Built-in available for text extraction, and DeepSeek available for native document
+input on its exact `deepseek-flash` model. With DeepSeek selected, other models receive cloud-extracted
+PDF/Word/PowerPoint text; formats outside that OCR API retain AnyDoc. The selected parser is carried
+through the managed reader boundary, including `read_file`, as an operation snapshot.
+The separate **OCR** tool page selects on-device or DeepSeek recognition for images and PDFs;
+that selection does not override Office parser choices. Its picker describes the formats;
 a failed preference save reports through the existing toast gateway. Under a sent message's attachments,
 the transcript lists what the model did not receive from the reports: unrecognized PDF pages and
 source or request truncation, naming the file when there are several. Reports still persist the actual parser, complete versus
 deferred IR delivery, and image omission reasons; older messages without those facts remain
 unspecified rather than inferred from today's preference.
 
-Image attachments reach vision providers as inlined base64 data URLs and text-only models as OCR text; documents send text or raw
-JSON and also work with text-only models, with embedded pixels explicitly marked unsent. The provider upload cache is deferred
-until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
-not to `file_entry`.
+Image attachments reach vision providers as inlined base64 data URLs and text-only models as OCR
+text; local documents send text or raw JSON, with embedded pixels explicitly marked unsent.
+The DeepSeek document parser selection instead prepares a `provider-document` report for
+supported attachments to the DeepSeek model Provider's `deepseek-flash`. The Pi wire adapter delegates the
+managed reference to the file upload owner using the credential serving that attempt, then emits
+a native document reference. The local original remains canonical; the remote mapping is a
+bounded disposable disk cache with hash, credential scope and expiry, not a `file_entry` column or
+an AI SDK conversation path. See [DeepSeek Services](../deepseek-services.md) for revision checks,
+temporary snapshots, expiry and recovery. Other providers keep their existing document path.
 
 ## Lifecycle
 
-**Create** — write bytes to `Data/Files`, then insert the row. A failed insert unlinks the bytes it
+**Create** — write pending bytes to `Data/Files`, complete applicable AI metadata, then insert the
+row with the final size. A failed insert unlinks the bytes it
 just wrote. A crash between the two leaves an orphan blob, reclaimable by the future cache-cleanup
 sweep.
 
@@ -299,8 +311,8 @@ after insertion; rejected creation rolls back the row and discards its unregiste
 creation passes its final transaction check, cancellation may leave the committed entry in place.
 Storage does not discard bytes for a successful commit.
 
-**Rewrite** — `rewriteInternalTextEntry` overwrites a draft's bytes at the same path, then records
-the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
+**Rewrite** — `rewriteInternalTextEntry` prepares text and metadata in a temporary file before
+replacing a draft at the same path, then records the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
@@ -410,5 +422,5 @@ inspection and read tools can also consume it by id. See
 Saving or sharing a managed artifact to the system copies its bytes to a user-selected destination.
 The managed entry remains canonical, and Cherry never persists the exported path as file authority.
 
-**Provider upload cache.** A separate table keyed by content hash, added when the AI SDK's Files
-Upload API stabilizes.
+**General provider upload cache.** Remains deferred. DeepSeek has a capability-specific disposable
+mapping described above; it does not establish a shared upload table or replace local originals.

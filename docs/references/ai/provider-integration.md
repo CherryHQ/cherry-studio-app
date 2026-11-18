@@ -64,6 +64,22 @@ temperature using model metadata and thinking-mode constraints. OpenAI-compatibl
 use `max_tokens` and omit OpenAI-only storage/strict-tool options; stream-usage parameters follow
 the endpoint's dialect declaration rather than URL detection.
 
+The maintained Pi AI patch captures Google Chat Completions tool-call signatures in Pi's existing
+`ToolCall.thoughtSignature` field and replays them for the same provider, model and API. At Pi's final
+payload boundary, Gemini 3/4 receives a compatibility marker only when no signature remains, such as
+imported history or a model switch. Native Google replay retains its own signature handling.
+Classic Qwen 3 models on LMStudio and GPUStack receive a prompt switch when using the shared generic
+Chat reasoning profile. Native thinking parameters come only from dedicated registry wire profiles;
+generic hosts retain their effort contract without an inferred `enable_thinking` parameter.
+Provider-default selections remain authoritative.
+Parameterless object tools receive an empty `properties` map in the model-facing copy without
+changing local validation or root-reference schemas.
+
+Poe model discovery consumes each bot's declared endpoints and preserves that result during catalog
+enrichment. With no declaration, it keeps a registered route or falls back to Chat Completions.
+Compatible model lists skip malformed entries individually and report the count through diagnostics;
+Gemini model discovery accepts null pagination markers.
+
 Model-backed application tools use this capability path:
 
 ```text
@@ -239,11 +255,18 @@ configuration and API-version settings influence the generated provider settings
 
 ## Remote Registry Boundary
 
-Mobile downloads Desktop-published `models.json` and `provider-models.json` from schema v3 on first
-use and when upgrading an older saved schema. Later refreshes follow explicit model-list access.
-The remote manifest must match v3 and the Desktop 2.1.4 semantic baseline supported by Mobile's
+Mobile starts from a complete compatible saved snapshot. Without one, model workflows wait for
+the first download of `models.json` and `provider-models.json` and offer retry after failure.
+The model files are not bundled; downloaded metadata passes Mobile capability filtering before use.
+Desktop-published schema v4 updates run in the background when no current saved snapshot exists;
+later refreshes follow explicit model-list access. GitCode's file API uses the registry branch in
+the `ref` query; GitHub is the other source. Compatible saved snapshots remain usable offline.
+The remote manifest must match v4 and the Desktop 2.1.11 semantic baseline supported by Mobile's
 consumed fields. This compatibility number is independent of the Mobile application version.
-Older saved schemas remain readable offline; startup attempts to replace them with v3.
+Older saved schemas remain readable offline; startup attempts to replace them with v4. The producer
+version is provenance, not a ceiling on the minimum reader version.
+Mobile admits GIF generation with API frame defaults; catalog projection omits GIF editing and
+custom frame controls without extending the pinned SDK.
 
 The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
 replaced remotely. Provider base URLs, adapter families, headers, and credential behavior remain
@@ -258,7 +281,7 @@ The reader drops unknown list vocabulary and incompatible entries individually. 
 `ultra` in a downloaded catalog remain unsupported optional capabilities. Always-on adaptive
 reasoning is projected through the existing wire interpreter. `adaptive-between-tools` models and
 overrides are omitted because the pinned Anthropic SDK cannot execute `between_tools`; they must not
-silently use another dialect. The v3 migration includes regression sources; local tests, typecheck,
+silently use another dialect. The v4 image-control migration includes regression sources; local tests, typecheck,
 and device acceptance remain pending until explicitly requested.
 
 Native web tools are an application feature with trusted bundled `serverTools` declarations and

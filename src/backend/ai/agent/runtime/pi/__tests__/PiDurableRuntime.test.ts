@@ -1,9 +1,12 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import {
   createRegistry,
+  CompactionEntry,
+  ResetEntry,
   defineDocFamily,
+  defineTask,
   Harness,
   InboxDoc,
   LiveDoc,
@@ -19,6 +22,7 @@ import {
 import { hasRunnablePiTasks, PiDurableRuntime } from '../PiDurableRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { ToolInstructions } from '../piToolInstructions';
+import { createWorkingPiEntries } from '../piWorkingHistory';
 
 function options() {
   return {
@@ -58,7 +62,7 @@ test('execution protection follows runnable work, including due sleeps and cance
     true,
   );
   const pending: TaskGraphNode = { ...task, state: { status: 'pending', phase: 'generate' } };
-  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'restart_limit' } } })).toBe(
+  expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'migration_failed' } } })).toBe(
     false,
   );
   expect(hasRunnablePiTasks({ tasks: { '1': { ...pending, blocked: 'missing_task' } } })).toBe(
@@ -69,6 +73,389 @@ test('execution protection follows runnable work, including due sleeps and cance
 });
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('withdrawal uses the current predecessor after a different queued input is steered', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const configuration = options();
+    const hold = defineTask({
+      name: 'test.idle-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' as const }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    configuration.registry.install({ name: 'test.idle-steer', tasks: [hold] });
+    const runtimeOptions = {
+      ...configuration,
+      settings: { afterFailedRun: 'keep' as const },
+    };
+    let runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['waiting', 'active-answer'],
+        ['guided', 'waiting-answer'],
+        ['last', 'guided-answer'],
+      ] as const) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id, content: id, whenBusy: 'followUp' },
+          {
+            requestId: id,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      // A caller captured waiting -> active before promotion. Withdrawal must not use it.
+      const stale = await runtime.submissionMetadata(
+        (await runtime.inputRecord(seed.sessionId, 'waiting'))!,
+      );
+      expect(stale).toMatchObject({ metadata: { parentMessageId: 'active-answer' } });
+      await runtime.steerInput(seed.sessionId, 'guided');
+      const fail = jest.spyOn(storage, 'commit').mockRejectedValueOnce(new Error('disk full'));
+      await expect(runtime.withdrawInput(seed.sessionId, 'waiting')).rejects.toThrow('disk full');
+      fail.mockRestore();
+      // Pi fences a storage-failed harness; recovery reopens its last committed state.
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+      expect((await runtime.inputRecord(seed.sessionId, 'waiting'))?.status).toBe('queued');
+      expect(await runtime.inputParents(seed.sessionId, ['last-user'])).toEqual([
+        {
+          userMessageId: 'last-user',
+          assistantMessageId: 'last-answer',
+          parentMessageId: 'waiting-answer',
+        },
+      ]);
+      expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('aborted');
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'last'))!),
+      ).toMatchObject({
+        metadata: { parentMessageId: 'guided-answer' },
+      });
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, runtimeOptions);
+      expect(await runtime.inputParents(seed.sessionId, ['guided-user', 'last-user'])).toEqual([
+        {
+          userMessageId: 'guided-user',
+          assistantMessageId: 'guided-answer',
+          parentMessageId: 'active-answer',
+        },
+        {
+          userMessageId: 'last-user',
+          assistantMessageId: 'last-answer',
+          parentMessageId: 'guided-answer',
+        },
+      ]);
+      expect(await runtime.withdrawInput(seed.sessionId, 'waiting')).toBe('settled');
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('promotion after the run ends starts the steer without consuming an older follow-up', async () => {
+    const configuration = options();
+    const hold = defineTask({
+      name: 'test.idle-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' as const }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    configuration.registry.install({ name: 'test.idle-steer', tasks: [hold] });
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), {
+      ...configuration,
+      settings: { afterFailedRun: 'keep' },
+    });
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['waiting', 'active-answer'],
+        ['guided', 'waiting-answer'],
+      ] as const) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id, content: id, whenBusy: 'followUp' },
+          {
+            requestId: id,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      // Model an ended run whose inbox has not resumed yet.
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        for (const id of live.run!.inputs)
+          tx.settleSubmission(id, { status: 'unanswered', reason: 'interrupted' });
+        delete live.run;
+      }, BACKGROUND_CONTEXT);
+      expect(await runtime.steerInput(seed.sessionId, 'guided')).toMatchObject({
+        status: 'accepted',
+      });
+      const guided = await runtime.inputRecord(seed.sessionId, 'guided:steer');
+      expect(guided).toMatchObject({ entry: expect.any(Number) });
+      expect(await runtime.inputRecord(seed.sessionId, 'waiting')).toMatchObject({
+        status: 'queued',
+      });
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'waiting'))!),
+      ).toMatchObject({
+        metadata: { parentMessageId: 'guided-answer' },
+      });
+      const watch = await runtime.watch(seed.sessionId);
+      expect(watch.value.docs['pi.inbox']).toEqual({
+        items: [expect.objectContaining({ mode: 'followUp', content: 'waiting' })],
+      });
+      await watch.stop();
+      expect(await runtime.steerInput(seed.sessionId, 'guided')).toMatchObject({
+        status: 'accepted',
+      });
+      expect(await runtime.inputRecord(seed.sessionId, 'guided:steer')).toMatchObject({
+        id: guided!.id,
+        entry: guided!.entry,
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('reports recovered content without writing display estimates into execution history', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const conversation = await runtime.ensureConversation({
+        ...seed,
+        entries: createWorkingPiEntries(
+          {
+            instructions: '',
+            input: [],
+            contextCheckpoint: null,
+            history: [
+              {
+                turnId: 'earlier',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+                  {
+                    role: 'assistant',
+                    parts: [{ type: 'text', text: 'Searching. Cherries are red.' }],
+                    contextTokens: 100,
+                  },
+                ],
+              },
+            ],
+          },
+          { api: 'cherry', id: 'model', provider: 'provider', input: ['text'] },
+        ),
+      });
+      const before = await conversation.context(BACKGROUND_CONTEXT);
+      expect(await runtime.contextUsageEstimate(seed.sessionId, before.entries.at(-1)!.id)).toEqual(
+        { tokens: 11, estimated: true },
+      );
+      const after = await conversation.context(BACKGROUND_CONTEXT);
+      expect(after.messages).toEqual(before.messages);
+      expect(after.messages.at(-1)).toMatchObject({
+        usage: { input: 100, output: 0, totalTokens: 100 },
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('steering atomically replaces one queued input, preserves display IDs and deduplicates clicks', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const hold = defineTask<Record<string, never>, { phase: 'wait' }, null>({
+      name: 'test.hold-steer',
+      version: 1,
+      initial: () => ({ phase: 'wait' }),
+      phases: {
+        wait: (_task, taskRuntime, context) =>
+          taskRuntime.sleepUntil(Date.now() + 60_000, { phase: 'wait' }, context),
+      },
+      abort: (_task, taskRuntime, context) =>
+        taskRuntime.commit(() => ({ status: 'terminal', outcome: { status: 'aborted' } }), context),
+    });
+    const configuration = options();
+    configuration.registry.install({ name: 'test.steer', tasks: [hold] });
+    let runtime = await PiDurableRuntime.open(storage, configuration);
+    try {
+      const conversation = await runtime.ensureConversation(seed);
+      await conversation.commit(async (tx) => {
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const taskId = await tx.createTask(
+          hold,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        live.run = { taskId, inputs: [], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      for (const [id, parent] of [
+        ['first', 'active-answer'],
+        ['second', 'first-answer'],
+      ]) {
+        await runtime.submit(
+          seed.sessionId,
+          { type: 'input', requestId: id!, content: id!, whenBusy: 'followUp' },
+          {
+            requestId: id!,
+            userMessageId: `${id}-user`,
+            assistantMessageId: `${id}-answer`,
+            metadata: { parentMessageId: parent! },
+          },
+          { userMessageId: `${id}-user`, assistantMessageId: `${id}-answer` },
+        );
+      }
+      const original = await runtime.inputRecord(seed.sessionId, 'second');
+      expect(original?.status).toBe('queued');
+      await expect(
+        Promise.all([
+          runtime.steerInput(seed.sessionId, 'second'),
+          runtime.steerInput(seed.sessionId, 'second'),
+        ]),
+      ).resolves.toEqual([
+        expect.objectContaining({ status: 'accepted' }),
+        expect.objectContaining({ status: 'accepted' }),
+      ]);
+      const replacement = await runtime.inputRecord(seed.sessionId, 'second:steer');
+      expect(replacement?.status).toBe('queued');
+      expect(await runtime.inputRecord(seed.sessionId, 'second')).toMatchObject({
+        status: 'unanswered',
+        reason: 'aborted',
+      });
+      expect(await runtime.submissionForMessage(seed.sessionId, 'second-answer')).toMatchObject({
+        record: { id: replacement!.id },
+      });
+      expect(await runtime.submissionMetadata(replacement!)).toMatchObject({
+        metadata: { steer: true, parentMessageId: 'active-answer' },
+      });
+      expect(
+        await runtime.submissionMetadata((await runtime.inputRecord(seed.sessionId, 'first'))!),
+      ).toMatchObject({ metadata: { parentMessageId: 'second-answer' } });
+      const watch = await runtime.watch(seed.sessionId);
+      expect(watch.value.docs['pi.inbox']).toEqual({
+        items: [
+          expect.objectContaining({ id: replacement!.id, mode: 'steer', content: 'second' }),
+          expect.objectContaining({ mode: 'followUp', content: 'first' }),
+        ],
+      });
+      await watch.stop();
+      const fail = jest.spyOn(storage, 'commit').mockRejectedValueOnce(new Error('disk full'));
+      await expect(runtime.steerInput(seed.sessionId, 'first')).rejects.toThrow('disk full');
+      fail.mockRestore();
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, configuration);
+      expect((await runtime.inputRecord(seed.sessionId, 'first'))?.status).toBe('queued');
+      expect(await runtime.inputRecord(seed.sessionId, 'first:steer')).toBeUndefined();
+      expect(await runtime.steerInput(seed.sessionId, 'first')).toMatchObject({
+        status: 'accepted',
+      });
+      expect(
+        await runtime.submissionMetadata(
+          (await runtime.inputRecord(seed.sessionId, 'second:steer'))!,
+        ),
+      ).toMatchObject({ metadata: { parentMessageId: 'active-answer' } });
+      expect(
+        await runtime.submissionMetadata(
+          (await runtime.inputRecord(seed.sessionId, 'first:steer'))!,
+        ),
+      ).toMatchObject({ metadata: { parentMessageId: 'second-answer' } });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('counts measured input, cached input and output, then follows compaction and reset context', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const conversation = await runtime.ensureConversation({ ...seed, resourceFileEntryIds: [] });
+      const response = {
+        role: 'assistant',
+        api: 'openai-completions',
+        provider: 'provider',
+        model: 'model',
+        content: [{ type: 'text', text: 'Answer.' }],
+        stopReason: 'stop',
+        timestamp: 2,
+        usage: {
+          input: 100,
+          cacheRead: 200,
+          cacheWrite: 50,
+          output: 25,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      } satisfies AssistantMessage;
+      const answer = await conversation.commit(
+        (tx) => tx.appendEntry(conversation.id, { kind: 'pi.assistant', model: [response] }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, answer.id)).tokens).toBe(375);
+      const tail = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: UserEntry.kind,
+            model: [{ role: 'user', content: 'Next...', timestamp: 3 }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, tail.id)).tokens).toBe(377);
+      const compacted = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: CompactionEntry.kind,
+            head: answer.id,
+            data: { reason: 'manual' },
+            model: [{ role: 'user', content: 'Summary', timestamp: 4 }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      // The summary precedes retained messages, invalidating their older usage measurement.
+      expect((await runtime.contextUsageEstimate(seed.sessionId, compacted.id)).tokens).toBe(6);
+      // Reads remain tied to their captured watch frame even after a later compaction.
+      expect((await runtime.contextUsageEstimate(seed.sessionId, answer.id)).tokens).toBe(375);
+      const reset = await conversation.commit(
+        (tx) => tx.appendEntry(conversation.id, { kind: ResetEntry.kind, head: 'self' }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await runtime.contextUsageEstimate(seed.sessionId, reset.id)).tokens).toBe(0);
+    } finally {
+      await runtime.close();
+    }
+  });
   test('forks replace current source grants with the supplied history prefix grants', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {
@@ -104,67 +491,101 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
-  test('reopens an existing run and advances waiting input after a missing-model failure', async () => {
-    class ReopenableStorage extends MemoryStorage {
-      override async close() {}
-    }
-    const storage = new ReopenableStorage();
-    const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    const conversation = await first.createConversation(
-      { ownership: { kind: 'ownerless' } },
-      BACKGROUND_CONTEXT,
-    );
-    await conversation.commit(async (tx) => {
-      const inbox = await tx.doc(InboxDoc, conversation.id);
-      const live = await tx.doc(LiveDoc, conversation.id);
-      const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
-      const active = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        status: 'placed',
-        requestId: 'active',
-        entry: entry.id,
-      });
-      const taskId = await tx.createTask(
-        GenerationTask,
-        {},
-        {
-          ownership: { kind: 'conversation' },
+  test.each(['1.4.0', '1.5.0'])(
+    'reopens a %s run and advances waiting input after a missing-model failure',
+    async (version) => {
+      class ReopenableStorage extends MemoryStorage {
+        override async close() {}
+      }
+      const legacyGeneration = defineTask({ ...GenerationTask.definition, version: 1 });
+      const storage = new ReopenableStorage();
+      const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+      const conversation = await first.createConversation(
+        { ownership: { kind: 'ownerless' } },
+        BACKGROUND_CONTEXT,
+      );
+      const savedRun = await conversation.commit(async (tx) => {
+        const inbox = await tx.doc(InboxDoc, conversation.id);
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
+        const active = await tx.createSubmission({
           conversationId: conversation.id,
-        },
-      );
-      live.run = { taskId, inputs: [active.id] };
-      const queued = await tx.createSubmission({
-        conversationId: conversation.id,
-        type: 'input',
-        status: 'queued',
-        requestId: 'waiting',
-      });
-      inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
-    }, BACKGROUND_CONTEXT);
-    await first.close(BACKGROUND_CONTEXT);
-    const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
-    try {
-      const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
-      expect(inspected.submissions.map((record) => [record.requestId, record.status])).toEqual([
-        ['active', 'placed'],
-        ['waiting', 'queued'],
-      ]);
-      expect(inspected.tasks).toHaveLength(1);
-      reopened.resume();
-      await reopened.waitForIdle(BACKGROUND_CONTEXT);
-      const records = await Promise.all(
-        inspected.submissions.map(async ({ id }) =>
-          (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
-        ),
-      );
-      expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
-      expect(records.every((record) => record.entry !== undefined)).toBe(true);
-      expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
-    } finally {
-      await reopened.close(BACKGROUND_CONTEXT);
-    }
-  });
+          type: 'input',
+          status: 'placed',
+          requestId: 'active',
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          version === '1.4.0' ? legacyGeneration : GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        const run = { taskId, inputs: [active.id] };
+        live.run = { ...run, turns: 0 };
+        const queued = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'queued',
+          requestId: 'waiting',
+        });
+        inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
+        return run;
+      }, BACKGROUND_CONTEXT);
+      await first.close(BACKGROUND_CONTEXT);
+      if (version === '1.4.0') {
+        // The current Harness initializes pi.live at v3. Replace its checkpoint only after close
+        // with the published v1.4.0 shape, so no current reader migrates it before reopen.
+        // https://github.com/earendil-works/pi/blob/v1.4.0/packages/durable/src/harness/live.ts
+        const live = await storage.findDocument(
+          { kind: 'pi.live', scope: { kind: 'conversation', conversationId: conversation.id } },
+          'current',
+          BACKGROUND_CONTEXT,
+        );
+        await storage.commit(
+          [
+            [
+              {
+                type: 'document.change',
+                id: live!.id,
+                content: { kind: 'base', version: 1, value: { run: savedRun } },
+              },
+            ],
+          ],
+          () => {},
+          BACKGROUND_CONTEXT,
+        );
+        expect((await storage.document(live!.id, 'current', BACKGROUND_CONTEXT))?.version).toBe(1);
+        expect((await storage.task(savedRun.taskId, BACKGROUND_CONTEXT))?.version).toBe(1);
+      }
+      const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+      try {
+        const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
+        expect(inspected.submissions.map((record) => [record.requestId, record.status])).toEqual([
+          ['active', 'placed'],
+          ['waiting', 'queued'],
+        ]);
+        expect(inspected.tasks).toHaveLength(1);
+        expect(
+          (await reopened.snapshot(LiveDoc, conversation.id, BACKGROUND_CONTEXT))?.run?.turns,
+        ).toBe(0);
+        reopened.resume();
+        await reopened.waitForIdle(BACKGROUND_CONTEXT);
+        const records = await Promise.all(
+          inspected.submissions.map(async ({ id }) =>
+            (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
+          ),
+        );
+        expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
+        expect(records.every((record) => record.entry !== undefined)).toBe(true);
+        expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
+      } finally {
+        await reopened.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test('a failed blocking compaction settles its input and advances queued input', async () => {
     const configuration = options();
@@ -387,6 +808,20 @@ describe('PiDurableRuntime identity and handoff', () => {
       const record = await input.wait(BACKGROUND_CONTEXT);
       const history = await runtime.history(seed.sessionId, 256);
       expect(history.submissions).toContainEqual({ record, metadata });
+      const compaction = await conversation.commit(
+        (tx) =>
+          tx.appendEntry(conversation.id, {
+            kind: CompactionEntry.kind,
+            head: 'self',
+            data: { reason: 'manual' },
+            model: [{ role: 'user', content: 'Summary', timestamp: Date.now() }],
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect(await runtime.latestInput(seed.sessionId, compaction.id)).toEqual({
+        record,
+        metadata,
+      });
       await runtime.history(seed.sessionId, 1);
       expect(
         scan.mock.calls.filter(([query]) => query.conversationId === conversation.id),

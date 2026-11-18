@@ -22,6 +22,7 @@ import {
   type AgentMessageView,
   AgentProtocolError,
   type AgentQueuedInput,
+  type AgentEditUserMessageInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -41,6 +42,7 @@ import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
+  sessionModelId?: UniqueModelId;
   workspaceFolderId?: string;
   isNewSession: boolean;
   isCurrent: () => boolean;
@@ -122,7 +124,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
   useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
-    async ({ agentId, isCurrent, isNewSession, ...submission }: AgentChatSendInput) => {
+    async ({
+      agentId,
+      isCurrent,
+      isNewSession,
+      sessionModelId,
+      ...submission
+    }: AgentChatSendInput) => {
       if (isNewSession) {
         if (!agentId) {
           throw new Error('Select an Agent before sending a message.');
@@ -130,6 +138,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         const session = await client.startSession({
           ...submission,
           agentId,
+          ...(sessionModelId ? { sessionModelId } : {}),
         });
         if (isCurrent()) {
           draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);
@@ -264,12 +273,14 @@ export function useAgentChatDraftHandoff(
 
 export function useAgentChatControls(input: {
   agentId?: string;
+  sshDraftId?: string;
   workspaceFolderId?: string | null;
   sessionId?: string;
   composerKey: number;
 }) {
   const { client, sendMessage } = useAgentChatContext();
-  const { agentId, composerKey, sessionId, workspaceFolderId } = input;
+  const { agentId, composerKey, sessionId, workspaceFolderId, sshDraftId } = input;
+  const ssh = useBackendModule('ssh');
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
@@ -335,6 +346,7 @@ export function useAgentChatControls(input: {
   const send = useCallback(
     async ({
       additionalModelIds,
+      sessionModelId,
       ...message
     }: Omit<
       AgentSubmitMessageInput,
@@ -342,6 +354,8 @@ export function useAgentChatControls(input: {
     > & {
       /** Further models answering the same question in parallel. */
       additionalModelIds?: readonly UniqueModelId[];
+      /** The draft's persisted choice, separate from the first reply model. */
+      sessionModelId?: UniqueModelId;
     }) => {
       const isCurrent = () => mountedComposerKeyRef.current === composerKey;
       const request = {
@@ -373,13 +387,17 @@ export function useAgentChatControls(input: {
         ...(state && selectRunningAnswerId(state) ? {} : { send: pending }),
       });
       try {
+        if (!sessionId && sshDraftId) await ssh.attachDraftTarget(sshDraftId, request.sessionId);
         await sendMessage({
           ...request,
           agentId,
           isCurrent,
           isNewSession: pending.isNewSession,
+          ...(!sessionId && sessionModelId ? { sessionModelId } : {}),
           ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
         });
+        if (!sessionId && sshDraftId)
+          void ssh.selectTarget(`draft:${sshDraftId}`, null).catch(() => {});
         if (isCurrent()) {
           setSubmission((current) =>
             current?.composerKey === composerKey && current.userMessageId === request.userMessageId
@@ -388,6 +406,8 @@ export function useAgentChatControls(input: {
           );
         }
       } catch (error) {
+        if (!sessionId && sshDraftId)
+          void ssh.selectTarget(request.sessionId, null).catch(() => {});
         if (isCurrent())
           setSubmission((current) =>
             current?.composerKey === composerKey && current.userMessageId === request.userMessageId
@@ -400,7 +420,29 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId],
+    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId, sshDraftId, ssh],
+  );
+  const editMessage = useCallback(
+    async ({
+      additionalModelIds,
+      ...edit
+    }: Omit<AgentEditUserMessageInput, 'additionalReplies'> & {
+      /** Further models answering the edited question in parallel. */
+      additionalModelIds?: readonly UniqueModelId[];
+    }) => {
+      await client.editUserMessage({
+        ...edit,
+        ...(additionalModelIds?.length
+          ? {
+              additionalReplies: additionalModelIds.map((modelId) => ({
+                modelId,
+                assistantMessageId: uuidv7(),
+              })),
+            }
+          : {}),
+      });
+    },
+    [client],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {
@@ -428,7 +470,8 @@ export function useAgentChatControls(input: {
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
-    isBusy: isComposerBusy || isSubmitting,
+    editMessage,
+    isBusy: isAdmitting || isComposerBusy || isSubmitting,
     sendMessage: send,
   };
 }

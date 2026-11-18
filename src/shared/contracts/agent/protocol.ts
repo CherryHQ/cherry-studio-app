@@ -6,9 +6,11 @@
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
   AgentDeleteTurnInput,
+  AgentEditUserMessageInput,
   AgentEditMessageInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
+  AgentReadReasoningInput,
   AgentSelectMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
@@ -17,6 +19,7 @@ import type { AgentRespondQuestionInput } from './userQuestion';
 import type {
   AgentErrorView,
   AgentMessageView,
+  AgentReasoningDetail,
   AgentSessionStatus,
   AgentSessionView,
 } from './views';
@@ -33,12 +36,17 @@ export class AgentProtocolError extends Error {
 }
 
 export interface AgentProtocol {
+  /** Read one full reasoning phase on demand, from the active runtime or saved transcript. */
+  readReasoning(input: AgentReadReasoningInput): Promise<AgentReasoningDetail>;
   /** Edits a successful answer while idle, including its future model context. */
   editMessage(input: AgentEditMessageInput): Promise<AgentMessageView>;
   /** Stable, immutable snapshot; null until this generation runs a turn in the Session. */
   getSessionStatus(sessionId: string): AgentSessionStatus | null;
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
+  /** Sessions with a status in this generation; used for collapsed catalog groups. */
+  getSessionStatusIds(): readonly string[];
+  subscribeSessionStatuses(listener: () => void): () => void;
 
   /** Bytes held by disposable execution copies; transcripts and attachments are excluded. */
   getWorkingStorageSize(): Promise<number>;
@@ -66,6 +74,7 @@ export interface AgentProtocol {
    * Removes one settled turn from the transcript and clears any context
    * checkpoint that may have summarized it. The turn's side effects are not
    * undone: this erases the record, not what the record describes.
+   * Naming an answer with siblings removes only that answer's subtree.
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 
@@ -75,6 +84,17 @@ export interface AgentProtocol {
    * stays in the tree.
    */
   retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
+
+  /**
+   * Editing a settled question sends a new sibling question under the same
+   * parent through the shared submission path: the edited text is the payload,
+   * and the composer's current model, reasoning, and other send settings define
+   * the new answer or answers. The original question and its answers stay in
+   * the tree as an unselected branch, and the history continues from the edited
+   * message. Editing rejects a busy Session rather than entering the
+   * normal-send queue.
+   */
+  editUserMessage(input: AgentEditUserMessageInput): Promise<void>;
 
   /**
    * Selects the branch containing `messageId`. Unless it is already on the
@@ -94,6 +114,12 @@ export interface AgentProtocol {
     sessionId: string;
     turnId: string;
   }): Promise<'withdrawn' | 'already-started' | 'not-found'>;
+
+  /** Promote a waiting input without interrupting tools or duplicating its message identities. */
+  steerQueuedInput(input: {
+    sessionId: string;
+    turnId: string;
+  }): Promise<'accepted' | 'already-started' | 'not-found'>;
 
   /**
    * Abandons a submission, retry, or Draft start that has not reserved its turn

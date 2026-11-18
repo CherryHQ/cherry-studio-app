@@ -16,6 +16,7 @@ describe('useChatInputReasoningEffortSelection', () => {
   const render = async (
     availableEfforts: readonly ChatInputReasoningEffort[] | undefined,
     agentId = 'agent-a',
+    sessionId?: string,
   ) => {
     await act(async () => {
       const harness = (
@@ -25,6 +26,7 @@ describe('useChatInputReasoningEffortSelection', () => {
           onSnapshot={(value) => {
             snapshot = value;
           }}
+          sessionId={sessionId}
         />
       );
       if (renderer) renderer.update(harness);
@@ -75,26 +77,42 @@ describe('useChatInputReasoningEffortSelection', () => {
     });
   });
 
-  test('remembers the nearest inherited stop instead of restoring the older preference', async () => {
+  test('remembers the nearest stop only in the conversation that needed it', async () => {
     await render(DEFAULT_EFFORTS);
     await act(async () => snapshot.selectReasoningEffort('high'));
-    await render(['default', 'low', 'medium']);
+    await render(['default', 'low', 'medium'], 'agent-a', 'session-a');
     expect(snapshot.reasoningEffort).toBe('medium');
-    await render(DEFAULT_EFFORTS);
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-a');
     expect(snapshot.reasoningEffort).toBe('medium');
-    expect(cacheService.getPersist('chat.reasoning_efforts')).toEqual({ 'agent-a': 'medium' });
+    expect(cacheService.getPersist('chat.reasoning_efforts')).toEqual({
+      'agent-a': 'high',
+      'session:session-a': 'medium',
+    });
   });
 
-  test('preserves the cache during model loading and resets only for a resolved non-reasoning model', async () => {
+  test("an unsent draft without reasoning leaves other conversations' inherited effort intact", async () => {
     cacheService.setPersist('chat.reasoning_efforts', { 'agent-a': 'high' });
-    await render(undefined);
+    await render(undefined, 'agent-a', 'session-b');
     expect(cacheService.getPersist('chat.reasoning_efforts')).toEqual({ 'agent-a': 'high' });
-    await render(DEFAULT_EFFORTS);
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-b');
     expect(snapshot.reasoningEffort).toBe('high');
     await render([]);
     expect(snapshot.reasoningEffort).toBe('default');
-    await render(DEFAULT_EFFORTS);
+    expect(cacheService.getPersist('chat.reasoning_efforts')).toEqual({ 'agent-a': 'high' });
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-b');
+    expect(snapshot.reasoningEffort).toBe('high');
+  });
+
+  test('isolates non-reasoning clamping per Session so another conversation keeps its effort', async () => {
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-a');
+    await act(async () => snapshot.selectReasoningEffort('high'));
+    expect(snapshot.reasoningEffort).toBe('high');
+
+    await render([], 'agent-a', 'session-b');
     expect(snapshot.reasoningEffort).toBe('default');
+
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-a');
+    expect(snapshot.reasoningEffort).toBe('high');
   });
 });
 
@@ -102,12 +120,14 @@ function Harness({
   agentId,
   availableEfforts,
   onSnapshot,
+  sessionId,
 }: {
   agentId: string;
   availableEfforts: readonly ChatInputReasoningEffort[] | undefined;
   onSnapshot: (snapshot: Snapshot) => void;
+  sessionId?: string;
 }) {
-  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentId);
+  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentId, sessionId);
   useEffect(() => onSnapshot(snapshot), [onSnapshot, snapshot]);
   return null;
 }

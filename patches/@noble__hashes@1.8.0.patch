@@ -1,0 +1,11 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -59,6 +59,7 @@
+       "import": "./esm/crypto.js",
+       "default": "./crypto.js"
+     },
++    "./crypto.js": "./crypto.js",
+     "./_assert": {
+       "import": "./esm/_assert.js",
+       "require": "./_assert.js"

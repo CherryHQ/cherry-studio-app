@@ -1,10 +1,11 @@
-import type { AgentProtocol } from '@/shared/contracts/agent';
+import type { AgentProtocol, AgentSessionStatus } from '@/shared/contracts/agent';
 
 import type {
   ConversationListStatus,
   ConversationPreview,
   ConversationRef,
   OperationOutcome,
+  Readable,
 } from '../contracts';
 import { ConversationReadError } from '../conversationState';
 import { localConversationFailure } from './localConversationFailure';
@@ -14,10 +15,26 @@ export type ConversationReadMarks = {
   subscribe(sessionId: string, listener: () => void): () => void;
 };
 
+export function toConversationListStatus(
+  turn: AgentSessionStatus | null,
+  readMark: string | null | undefined,
+): ConversationListStatus | undefined {
+  if (turn?.status === 'running' || turn?.status === 'cancelling') return 'running';
+  if (
+    turn?.status === 'awaiting-approval' ||
+    turn?.status === 'awaiting-input' ||
+    turn?.status === 'failed'
+  )
+    return turn.status;
+  if (turn?.status === 'completed' && turn.turnId !== readMark) return 'unread';
+  return undefined;
+}
+
 export function createLocalConversationPreview(input: {
   agent: AgentProtocol;
   address: ConversationRef;
   readMarks?: ConversationReadMarks;
+  status?: Readable<ConversationListStatus | undefined>;
   assertSource(): void;
   onChanged(sessionId: string): void;
 }): ConversationPreview {
@@ -41,20 +58,9 @@ export function createLocalConversationPreview(input: {
     }
   };
   return {
-    status: {
-      getSnapshot: (): ConversationListStatus | undefined => {
-        const turn = agent.getSessionStatus(sessionId);
-        if (turn?.status === 'running' || turn?.status === 'cancelling') return 'running';
-        if (
-          turn?.status === 'awaiting-approval' ||
-          turn?.status === 'awaiting-input' ||
-          turn?.status === 'failed'
-        )
-          return turn.status;
-        if (turn?.status === 'completed' && turn.turnId !== readMarks?.get(sessionId))
-          return 'unread';
-        return undefined;
-      },
+    status: input.status ?? {
+      getSnapshot: () =>
+        toConversationListStatus(agent.getSessionStatus(sessionId), readMarks?.get(sessionId)),
       subscribe: (listener) => {
         const unstatus = agent.subscribeSessionStatus(sessionId, listener);
         const unread = readMarks?.subscribe(sessionId, listener);

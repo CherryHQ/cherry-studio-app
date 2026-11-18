@@ -23,6 +23,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appShell/account';
 import { AppUpdateObserver, AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
@@ -35,8 +36,10 @@ import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/obser
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
 import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
+import { SshAuthenticationDialog } from '@/frontend/appShell/ssh';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
+import { UuRemoteCallbackBridge } from '@/frontend/appShell/uuRemote';
 import { MermaidRendererHost } from '@/frontend/components/MermaidDiagram';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -71,31 +74,38 @@ function RootLayout() {
                           {/* Inside the reporter so a failed first render still lays out and ends startup. */}
                           <AppErrorBoundary>
                             <NavigationThemeProvider>
-                              <AppAlertProvider>
-                                <BottomSheetProvider>
-                                  <RouteHeaderProvider rootAction="back">
-                                    <AppUpdateProvider>
-                                      <AppUpdateObserver />
-                                      <BackgroundActivityBridge />
-                                      <LanguagePreferenceObserver />
-                                      <SystemEntryBridge />
-                                      {/* Before the navigator, so opaque screens cover the renderer page. */}
-                                      <MermaidRendererHost />
-                                      <FeedbackCaptureProvider>
-                                        <FeedbackHintProvider>
-                                          <ConversationProvider>
-                                            <RootStack />
-                                          </ConversationProvider>
-                                        </FeedbackHintProvider>
-                                      </FeedbackCaptureProvider>
-                                      <PrivacyConsentGate />
-                                      <RestoreOutcomeNotice />
-                                      <BackupDialog />
-                                      <McpInteractionDialog />
-                                    </AppUpdateProvider>
-                                  </RouteHeaderProvider>
-                                </BottomSheetProvider>
-                              </AppAlertProvider>
+                              <OrganizationLockAppearance>
+                                <AppAlertProvider>
+                                  <BottomSheetProvider>
+                                    <RouteHeaderProvider rootAction="back">
+                                      <AppUpdateProvider>
+                                        <AppUpdateObserver />
+                                        <BackgroundActivityBridge />
+                                        <LanguagePreferenceObserver />
+                                        <UuRemoteCallbackBridge />
+                                        {/* Before the navigator, so opaque screens cover the renderer page. */}
+                                        <MermaidRendererHost />
+                                        <FeedbackCaptureProvider>
+                                          <FeedbackHintProvider>
+                                            <AccountSessionGate>
+                                              <ConversationProvider>
+                                                <SystemEntryBridge>
+                                                  <RootStack />
+                                                </SystemEntryBridge>
+                                              </ConversationProvider>
+                                            </AccountSessionGate>
+                                          </FeedbackHintProvider>
+                                        </FeedbackCaptureProvider>
+                                        <PrivacyConsentGate />
+                                        <RestoreOutcomeNotice />
+                                        <BackupDialog />
+                                        <McpInteractionDialog />
+                                        <SshAuthenticationDialog />
+                                      </AppUpdateProvider>
+                                    </RouteHeaderProvider>
+                                  </BottomSheetProvider>
+                                </AppAlertProvider>
+                              </OrganizationLockAppearance>
                             </NavigationThemeProvider>
                           </AppErrorBoundary>
                         </StartupRouteReadyReporter>
@@ -154,6 +164,18 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="login"
+        getId={() => 'login'}
+        options={({ route }) => ({
+          headerShown: false,
+          animation:
+            (route.params as { purpose?: string } | undefined)?.purpose === 'expired'
+              ? 'none'
+              : undefined,
+        })}
+      />
+      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen
         name="search"
@@ -173,15 +195,18 @@ function RootStack() {
         name="files/[fileEntryId]"
         options={{ headerTransparent: false }}
       />
-      <Stack.Screen name="chat-share" options={{ headerShown: false }} />
+      <Stack.Screen name="share-destination" options={{ headerTransparent: false }} />
       <Stack.Screen name="mermaid-diagram" options={{ headerTransparent: false }} />
       <Stack.Screen name="edit-reply" options={{ headerTransparent: false }} />
+      <Stack.Screen name="uu-remote/callback" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen
-        name="document-export"
+        name="share"
         options={{
-          contentStyle: { backgroundColor },
+          contentStyle: { backgroundColor: 'transparent' },
           headerShown: false,
-          presentation: 'fullScreenModal',
+          presentation: 'transparentModal',
+          animation: 'none',
+          gestureEnabled: false,
         }}
       />
     </Stack>

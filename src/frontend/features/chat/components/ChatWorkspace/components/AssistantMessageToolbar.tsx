@@ -4,14 +4,23 @@ import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
-import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
-import { memo, useMemo } from 'react';
+import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import Volume2Icon from '@cherrystudio/app-icons/icons/volume-2';
+import {
+  ActionMenu,
+  Button,
+  OptionPickerBottomSheet,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
-import { resolveAppLanguage } from '@/shared/utils/languages';
+import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
 
+import { useMessageSpeech } from '../../../voice/useMessageSpeech';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -30,19 +39,21 @@ type AssistantMessageToolbarProps = {
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
+  const [isTranslationLanguagePickerOpen, setIsTranslationLanguagePickerOpen] = useState(false);
   const {
+    answerableMessageIds,
     copiedMessageId,
     isAssistantToolbarEnabled,
     isDeleteDisabled,
     isRetryDisabled,
     retryableMessageIds,
-    editableMessageIds,
-    isEditDisabled,
+    editableAnswerIds,
+    isEditAnswerDisabled,
   } = useAssistantMessageActionsState();
   const {
     answerWithModel,
-    editAssistantMessage,
+    editAnswer,
     copyAssistantMessage,
     deleteMessageTurn,
     forkFromAssistantMessage,
@@ -52,29 +63,34 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   const translation = useMessageTranslation(message);
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
-    () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
+    () =>
+      isSettled
+        ? copyAssistantMessageText(message.data.parts ?? [], message.data.citationSources)
+        : '',
     [isSettled, message],
   );
+  const speechText = useMemo(
+    () => (isSettled ? messageTranslationText(message.data.parts ?? []) : undefined),
+    [isSettled, message],
+  );
+  const speech = useMessageSpeech(message.id, speechText);
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
   const turnId = message.turnId;
-  // Answering with another model is offered wherever the answer can be regenerated.
-  const isRegenerable = retryableMessageIds.has(message.id);
-
   if (!isSettled) {
     return null;
   }
 
   const hasTranslation = translation ? translation.state.status !== 'idle' : false;
   const menuItems: MenuItem[] = [
-    ...(editAssistantMessage && editableMessageIds.has(message.id)
+    ...(editAnswer && editableAnswerIds.has(message.id)
       ? [
           {
             id: 'edit',
-            label: t('chat.messageActions.edit'),
-            disabled: isEditDisabled,
-            onPress: () => editAssistantMessage({ messageId: message.id }),
+            label: t('chat.messageActions.editAnswerAction'),
+            disabled: isEditAnswerDisabled,
+            onPress: () => editAnswer({ messageId: message.id }),
           },
         ]
       : []),
@@ -89,14 +105,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
                   : 'chat.translation.show'
                 : 'chat.translation.translate',
             ),
-            // The translation panel offers other target languages once it is open.
-            onPress: () =>
-              hasTranslation
-                ? translation.store.toggle(translation.source)
-                : void translation.store.start(
-                    translation.source,
-                    resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language),
-                  ),
+            onPress: () => {
+              if (hasTranslation) {
+                translation.store.toggle(translation.source);
+              } else {
+                Keyboard.dismiss();
+                setIsTranslationLanguagePickerOpen(true);
+              }
+            },
           },
         ]
       : []),
@@ -112,7 +128,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
             disabled: isDeleteDisabled,
             id: 'delete',
             label: t('common.delete'),
-            onPress: () => deleteMessageTurn({ turnId }),
+            onPress: () => deleteMessageTurn({ turnId, messageId: message.id }),
           },
         ]
       : []),
@@ -136,7 +152,23 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      {retryAssistantMessage && isRegenerable ? (
+      {speechText ? (
+        <Button
+          accessibilityLabel={t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start')}
+          icon={
+            speech.isSpeaking ? (
+              <SquareIcon className="text-foreground" size={15} />
+            ) : (
+              <Volume2Icon className="text-muted-foreground" size={15} />
+            )
+          }
+          onPress={speech.toggle}
+          size="xs"
+          testID="assistant-message-read-aloud"
+          variant="ghost"
+        />
+      ) : null}
+      {retryAssistantMessage && retryableMessageIds.has(message.id) ? (
         <Button
           accessibilityLabel={t(
             message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
@@ -149,7 +181,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      {answerWithModel && isRegenerable ? (
+      {answerWithModel && answerableMessageIds.has(message.id) ? (
         <Button
           accessibilityLabel={t('chat.messageActions.answerWith')}
           disabled={isRetryDisabled}
@@ -179,6 +211,20 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       </ActionMenu>
+      {translation && isTranslationLanguagePickerOpen ? (
+        <OptionPickerBottomSheet<AppLanguage | ''>
+          onClose={() => setIsTranslationLanguagePickerOpen(false)}
+          onValueChange={(language) => {
+            if (language) void translation.store.start(translation.source, language);
+          }}
+          open
+          options={APP_LANGUAGES}
+          selectedValue=""
+          size="large"
+          testID="message-translation-language-picker"
+          title={t('chat.translation.translate')}
+        />
+      ) : null}
     </View>
   );
 });

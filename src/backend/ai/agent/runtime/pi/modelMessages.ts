@@ -10,6 +10,7 @@ import type {
   UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
 import type {
   RuntimeDocumentAttachmentPart,
@@ -18,6 +19,7 @@ import type {
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
+import type { PiProviderDocument } from './piProviderDocument';
 import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
@@ -48,10 +50,28 @@ export type PiHistoryTurn = {
   messages: PiMessage[];
 };
 
+type PiHistoryModel = Pick<PiModel<PiApi>, 'api' | 'id' | 'provider' | 'input'>;
+export type PiConversationInput = Pick<
+  RuntimeExecutionRequest,
+  'instructions' | 'history' | 'input' | 'resume'
+>;
+
+/** Display only: rebuilt replies may merge responses already covered by their input measurement. */
+export function estimatePiContextUsage(messages: readonly PiMessage[]) {
+  return estimateContextTokens(
+    messages.map((message) =>
+      // The local cherry API identifies normalized replay; native responses keep their real API.
+      message.role === 'assistant' && message.api === 'cherry'
+        ? { ...message, usage: EMPTY_PI_USAGE }
+        : message,
+    ),
+  );
+}
+
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
-  request: RuntimeExecutionRequest,
-  model: PiModel<PiApi>,
+  request: PiConversationInput,
+  model: PiHistoryModel,
 ): PiConversation {
   const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
@@ -141,12 +161,12 @@ function collectUserContent(
     }
     return [];
   });
-  return content.some((part) => part.type === 'image')
+  return content.some((part) => part.type === 'image' || 'cherryProviderDocument' in part)
     ? content
     : content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
 }
 
-function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
+function toPiTextAttachment(part: RuntimeTextAttachmentPart): PiProviderDocument {
   const envelope = {
     version: 1,
     kind: 'managed-text-attachment',
@@ -158,7 +178,9 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
     ...(part.attachmentReport?.mode === 'image-text'
       ? {
           interpretation:
-            'OCR text from the first image frame only. The model has not received image pixels; visual details and layout may be missing.',
+            part.attachmentReport.parser === 'deepseek-ocr'
+              ? 'OCR text only. The model has not received image pixels; visual details and layout may be missing.'
+              : 'OCR text from the first image frame only. The model has not received image pixels; visual details and layout may be missing.',
         }
       : {}),
     truncation: part.truncated ? '[truncated]' : '[complete]',
@@ -167,6 +189,15 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
   return {
     type: 'text',
     text: `${PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX}${JSON.stringify(envelope)}`,
+    ...(part.attachmentReport?.mode === 'provider-document'
+      ? {
+          cherryProviderDocument: {
+            fileEntryId: part.fileEntryId,
+            mediaType: part.mediaType,
+            ...(part.revision !== undefined ? { revision: part.revision } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -218,7 +249,7 @@ function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
   return { type: 'image', data: part.uri.slice(prefix.length), mimeType: part.mediaType };
 }
 
-function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
+function collectProviderNames(request: PiConversationInput): Map<string, string> {
   const result = new Map<string, string>();
   for (const part of request.resume ?? []) {
     if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
@@ -243,7 +274,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
-  model: PiModel<PiApi>,
+  model: PiHistoryModel,
   contextTokens?: number,
 ): void {
   let content: AssistantMessage['content'] = [];
@@ -308,8 +339,7 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
-  // The measured size of the request that ended this answer anchors Pi's
-  // estimate; everything replayed after it is estimated by content.
+  // Keep execution's saved input measurement unchanged. Display estimates are computed separately.
   if (lastAssistant && contextTokens !== undefined) {
     lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
   }

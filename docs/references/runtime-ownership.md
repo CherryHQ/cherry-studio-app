@@ -3,8 +3,11 @@
 The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
-Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
-before resuming. User stop aborts the selected Session. Route disposal only releases observation.
+Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
+reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
+stops its owning work instead of suspending it for restart, as specified in
+[Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
+selected Session. Route disposal only releases observation.
 
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
 cleanup.
@@ -43,9 +46,11 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
-- Every admitted unfinished conversation holds execution demand in foreground and background,
-  including questions, approvals, persistence, and final delivery. Stored history does not.
-  Platform protection remains subject to OS limits and process death.
+- Local execution owns one stable Session lease from user submission through persistence and
+  final delivery. Awaiting input retains the decision and the same lease. iOS and Android retain
+  shared protection while work remains unfinished, including questions and approvals; the last
+  release stops protection immediately without an inactivity countdown. Stored history does not
+  acquire a lease. Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
   `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
@@ -122,8 +127,10 @@ or TanStack Query.
 
 User cancellation affects only the selected Session. Pi executes one input at a time within that
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
-Ordinary disposal and OS execution expiry suspend the Harness without a user-abort mark. The next
-Host reopens committed tasks and reconstructs current capabilities. An unsafe tool interrupted after
+Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
+the same only when no continued-processing or audio protection remains. The next Host reopens
+committed tasks and reconstructs current capabilities. Continued-processing revocation
+stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
@@ -234,6 +241,7 @@ mutex or a distributed transaction.
 | Agent admission, tools and transcript projection | Host admission and per-execution signals; ordinary shutdown suspends; user stop aborts | Host tracks admissions, pending writes and settlements; workspace/file commits retain live guards | Busy during admitted work; `quiesce()` reconciles reservations, drains usage/naming and captures context; dependencies remain alive during close |
 | Painting admission and job execution | Module transaction then `JobRuntime`; user/scope/OS interruption aborts the execution | Admission scope covers commit/rollback; job actual-settlement promise covers terminal persistence; output writes never recreate a deleted receipt | Pending transaction verification, pump and actual executions count as busy; shutdown drains within its existing ceiling, then ledger recovery handles unfinished rows |
 | Skill installation/update publication | Caller may cancel download/staging; composition owns persistent publication admission | Publication and the row write are inside the counted write transaction; staging is disposable cache data | Busy during admitted publication; `disposeSkills()` rejects later writes and joins accepted transactions before host uninstall; later network completions fail admission and discard staging |
+| DeepSeek history import | Settings supplies a signed export link and caller cancellation; `DeepseekImportRuntime` owns download, staging and publication | Lenient link/ZIP/schema reading skips unreadable parts before atomic Agent/conversation publication; failure discards imported images and staging | Pending work including cleanup blocks backup; `disposeDeepseekImport()` aborts and joins it before host uninstall |
 | Trash marking/restore/purge/sweep | `TrashRuntime` immediately admits trash metadata transactions and serializes restore/purge/sweeps; stopping blocks new work | `trashWrites` retains marking transactions; `pending` and `tail` cover restore/purge plus best-effort byte cleanup; purge rechecks deletion timestamp | Busy while any accepted work is pending; sweeps skip a freeze; stop drains both marking writes and the tail before SQLite closes |
 | MCP OAuth completion | Service deduplicates by attempt ID; service lifetime and OAuth attempt signals cancel network work | Completion stays tracked through inspection, connection transaction and grant cleanup; lifetime checks run inside the connection transaction | Reject start while frozen; tracked completions count as busy; stop aborts OAuth/inspection, then joins completion and cleanup before persistence teardown |
 | MCP temporary inspection | Caller starts a bounded unsaved-server probe; service lifetime aborts it | No application row write; temporary-operation promise includes closing the client | May run during backup; stop cancels and joins it. A probe used by OAuth remains inside that completion's busy interval |
@@ -258,9 +266,26 @@ user-owned verification policy.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
+- `RegionService` owns the IPinfo Lite egress-country lookup, ten-minute success cache
+  and explicit unknown-country result; detection is independent of data-collection consent, and
+  the host aborts and joins it. `ProviderCatalogRuntime` owns
+  post-ready provider seeding. Discovery and initial recommendations share `getProviderCatalogEdition`: all distributions
+  use detected CN/overseas countries to select domestic/global entries, falling back to the device
+  region when detection is unavailable. Only a missing device region retains the
+  domestic default. Domestic-store builds also permit a detected overseas VPN exit.
+  Provider list queries join that initialization; existing seeded installations do not wait for country detection. Backup admission
+  includes pending seeding.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
-  approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
-- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
+  approved-cache activation, shared first downloads and request cancellation; the host stops it.
+  Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
+- `IosBackgroundExecutionSource` prefers task-scoped native continued processing for explicit
+  foreground user work, retains a finite UIKit window, and uses consented audio only as fallback.
+  `DurableAgentHost` owns stable Session leases; reply presentation never transfers them. Questions
+  and approvals retain protection on the same lease. The final release stops finite/audio protection
+  immediately. Official requests follow the owning work through final settlement.
+  New local painting enqueues carry process-local intent and real handler progress. Native continued-task
+  revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
+  uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.

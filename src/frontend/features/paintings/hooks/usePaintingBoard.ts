@@ -18,7 +18,7 @@ import {
   type PaintingBoardNodeRef,
 } from '../utils/paintingBoardGraph';
 
-export type PaintingBoardImage = { fileEntryId: string; uri: string };
+export type PaintingBoardImage = { fileEntryId: string; mediaType: string; uri: string };
 
 export type PaintingBoardNodeStatus =
   | { kind: 'ready' }
@@ -68,19 +68,23 @@ export function usePaintingBoard(boardId: string | undefined): PaintingBoardData
 
   const nodes = useMemo(() => {
     const byPaintingId = new Map(paintings.map((painting, index) => [painting.id, index]));
-    const uris = new Map<string, string>();
+    const images = new Map<string, PaintingBoardImage>();
     for (const resolved of files) {
       for (const file of [...(resolved?.inputs ?? []), ...(resolved?.outputs ?? [])]) {
-        uris.set(file.entry.id, file.uri);
+        images.set(file.entry.id, {
+          fileEntryId: file.entry.id,
+          mediaType: file.entry.mediaType,
+          uri: file.uri,
+        });
       }
     }
     const result = new Map<string, PaintingBoardNode>();
     for (const ref of graph.nodes) {
       if (ref.kind === 'import') {
-        const uri = uris.get(ref.fileEntryId);
+        const image = images.get(ref.fileEntryId);
         result.set(ref.id, {
           ...ref,
-          images: uri ? [{ fileEntryId: ref.fileEntryId, uri }] : [],
+          images: image ? [image] : [],
           status: { kind: 'ready' },
         });
         continue;
@@ -116,10 +120,10 @@ function outputImages(
   painting: Painting,
   resolved: ResolvedPaintingFiles | undefined,
 ): PaintingBoardImage[] {
-  const uris = new Map(resolved?.outputs.map((file) => [file.entry.id, file.uri]));
+  const files = new Map(resolved?.outputs.map((file) => [file.entry.id, file]));
   return painting.files.output.flatMap((fileEntryId) => {
-    const uri = uris.get(fileEntryId);
-    return uri ? [{ fileEntryId, uri }] : [];
+    const file = files.get(fileEntryId);
+    return file ? [{ fileEntryId, mediaType: file.entry.mediaType, uri: file.uri }] : [];
   });
 }
 

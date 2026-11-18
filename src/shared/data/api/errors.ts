@@ -135,7 +135,7 @@ export function toDataApiError(error: unknown, context?: string): DataApiError {
  */
 function isZodError(
   error: unknown,
-): error is { issues: Array<{ path: (string | number)[]; message: string }> } {
+): error is { issues: { path: (string | number)[]; message: string }[] } {
   return (
     error instanceof Error &&
     error.name === 'ZodError' &&

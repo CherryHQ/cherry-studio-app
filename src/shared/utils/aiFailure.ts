@@ -9,9 +9,63 @@ export type AiFailureFacts = {
   statusCode?: number;
 };
 
+// Known provider values only: compatible gateways can return arbitrary finish-reason text.
+const KNOWN_FINISH_REASONS = new Set([
+  'stop',
+  'length',
+  'tool_calls',
+  'function_call',
+  'content_filter',
+  // Pi retains Responses statuses, including the two known incomplete-reason combinations.
+  'completed',
+  'failed',
+  'cancelled',
+  'in_progress',
+  'queued',
+  'incomplete',
+  'incomplete.max_output_tokens',
+  'incomplete.content_filter',
+  'end_turn',
+  'max_tokens',
+  'stop_sequence',
+  'tool_use',
+  'pause_turn',
+  'refusal',
+  'model_context_window_exceeded',
+  'FINISH_REASON_UNSPECIFIED',
+  'STOP',
+  'MAX_TOKENS',
+  'SAFETY',
+  'RECITATION',
+  'LANGUAGE',
+  'OTHER',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'MALFORMED_FUNCTION_CALL',
+  'UNEXPECTED_TOOL_CALL',
+  'TOO_MANY_TOOL_CALLS',
+  'IMAGE_SAFETY',
+  'IMAGE_PROHIBITED_CONTENT',
+  'IMAGE_RECITATION',
+  'IMAGE_OTHER',
+  'NO_IMAGE',
+]);
+
+export function readKnownAiFinishReason(value: unknown): string | undefined {
+  return typeof value === 'string' && KNOWN_FINISH_REASONS.has(value) ? value : undefined;
+}
+
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
+  cloud_signed_out: 'auth',
+  cloud_unavailable: 'provider_unavailable',
+  cloud_not_entitled: 'permission',
+  cloud_quota_exhausted: 'quota',
+  quota_exhausted: 'quota',
   authentication_error: 'auth',
   content_filter: 'content_filter',
+  content_policy_violation: 'content_filter',
+  contentfilter: 'content_filter',
   context_length_exceeded: 'context_length',
   duplicate_tool_call_id: 'tool_failed',
   econnrefused: 'network',
@@ -23,6 +77,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   insufficient_credit: 'quota',
   insufficient_quota: 'quota',
   insufficient_user_quota: 'quota',
+  input_too_long: 'context_length',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
   image_too_large: 'payload_too_large',
@@ -45,6 +100,24 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   unsupported_tools: 'invalid_input',
 };
 
+// These provider/transport codes fill an unknown cause without replacing the existing
+// status and message policy (for example, TLS or timeout evidence in a no_response error).
+const FALLBACK_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
+  api_error: 'provider_unavailable',
+  billing_not_active: 'quota',
+  freeusagelimiterror: 'quota',
+  gousagelimiterror: 'quota',
+  no_response: 'network',
+  overloaded_error: 'provider_unavailable',
+  permission_error: 'permission',
+  server_error: 'provider_unavailable',
+  stream_disconnected: 'network',
+  stream_idle_timeout: 'timeout',
+  subscription_sharing_usage_limit_exceeded: 'quota',
+  usage_limit_reached: 'quota',
+  usage_not_included: 'quota',
+};
+
 function includesAny(text: string, values: readonly string[]): boolean {
   return values.some((value) => text.includes(value));
 }
@@ -64,7 +137,18 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   const finishReason = facts.finishReason?.trim().toLowerCase();
   if (
     finishReason &&
-    ['content-filter', 'content_filter', 'safety', 'recitation'].includes(finishReason)
+    [
+      'content-filter',
+      'content_filter',
+      'safety',
+      'recitation',
+      'blocklist',
+      'prohibited_content',
+      'spii',
+      'image_safety',
+      'image_prohibited_content',
+      'image_recitation',
+    ].includes(finishReason)
   ) {
     return 'content_filter';
   }
@@ -73,6 +157,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase();
+  const cloudCode = /\bcloud_(?:signed_out|unavailable|not_entitled|quota_exhausted)\b/.exec(
+    text,
+  )?.[0];
+  if (cloudCode && CODE_REASONS[cloudCode]) return CODE_REASONS[cloudCode];
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,
   )?.[1];
@@ -189,19 +277,6 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     includesAny(text, [
-      'content_filter',
-      'content_policy',
-      'prohibited_content',
-      'responsible_ai',
-      'output_blocked',
-      'blocked by safety',
-      'recitation',
-    ])
-  ) {
-    return 'content_filter';
-  }
-  if (
-    includesAny(text, [
       'mcp server',
       'mcp connection',
       'mcp error',
@@ -268,5 +343,5 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   ) {
     return 'parse';
   }
-  return 'unknown';
+  return (code && FALLBACK_CODE_REASONS[code]) || 'unknown';
 }

@@ -1,5 +1,6 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
+import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import { userModelTable, type UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { REASONING_EFFORT } from '@/shared/data/types/model';
@@ -34,6 +35,26 @@ beforeEach(installProviderRegistryTestSnapshot);
 describe('ModelService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  test('prevents deleting the configured session naming model', async () => {
+    const writes = jest.fn();
+    const service = await createService(
+      { withWriteTx: writes } as unknown as DbService,
+      {
+        get: jest.fn(async (key: string) =>
+          key === 'agent.session_naming.model_id' ? 'openai::naming' : null,
+        ),
+      } as unknown as PreferenceService,
+    );
+
+    await expect(service.deleteByKey('openai', 'naming')).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(
+      service.bulkDelete([{ providerId: 'openai', modelId: 'naming' }]),
+    ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+    expect(writes).not.toHaveBeenCalled();
   });
 
   test('rejects model writes before download instead of committing rows and then failing to read them', async () => {
@@ -211,9 +232,9 @@ describe('ModelService', () => {
     });
 
     expect(dbService.withWriteTx).toHaveBeenCalledTimes(1);
-    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.calls).toEqual([[agentSessionTable], [agentTable]]);
     expect(tx.delete).toHaveBeenCalledWith(userModelTable);
-    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(tx.update.mock.invocationCallOrder[1]).toBeLessThan(
       tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(deletedWhereClauses).toHaveLength(1);
@@ -279,7 +300,7 @@ describe('ModelService', () => {
     });
 
     expect(result.removedIds).toEqual(['openai::replace', 'openai::stale']);
-    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.calls).toEqual([[agentSessionTable], [agentTable]]);
     expect(tx.delete.mock.invocationCallOrder[0]).toBeLessThan(
       jest.mocked(insertManyWithOrderKey).mock.invocationCallOrder.at(-1) ??
         Number.POSITIVE_INFINITY,
@@ -321,7 +342,12 @@ describe('ModelService', () => {
     });
 
     expect(selectWhere).toHaveBeenCalledTimes(3);
-    expect(tx.update).toHaveBeenCalledTimes(3);
+    expect(tx.update.mock.calls).toEqual(
+      Array.from({ length: 3 }, () => [[agentSessionTable], [agentTable]]).flat(),
+    );
+    for (const [index, deleteOrder] of tx.delete.mock.invocationCallOrder.entries()) {
+      expect(tx.update.mock.invocationCallOrder[index * 2 + 1]).toBeLessThan(deleteOrder);
+    }
     expect(returning).toHaveBeenCalledTimes(3);
     const insertCalls = jest.mocked(insertManyWithOrderKey).mock.calls;
     expect(insertCalls.length).toBeGreaterThan(3);
@@ -432,7 +458,10 @@ describe('ModelService', () => {
     } as unknown as DbService);
 
     await expect(service.delete('openai::custom')).resolves.toBe(true);
-    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.calls).toEqual([[agentSessionTable], [agentTable]]);
+    expect(tx.update.mock.invocationCallOrder[1]).toBeLessThan(
+      tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
   });
 
   test('refuses to delete the chat default and never opens a transaction for it', async () => {
@@ -471,7 +500,7 @@ async function createService(
 }
 
 function createUpdateMock() {
-  return jest.fn(() => ({
+  return jest.fn((_table: typeof agentSessionTable | typeof agentTable) => ({
     set: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
   }));
 }

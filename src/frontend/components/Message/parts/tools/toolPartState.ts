@@ -12,6 +12,8 @@ export type ToolMessagePart = Extract<
   mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
   mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
   progress?: AgentToolProgress;
+  /** Preserve the local runtime's queued/executing distinction across the UI SDK's shared state. */
+  executionState?: 'pending' | 'running';
   /** Original failure code retained by the chat's presentation projection. */
   errorCode?: string;
 };

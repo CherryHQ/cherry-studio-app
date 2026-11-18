@@ -1,9 +1,8 @@
-import type { ListToolsResult } from '@modelcontextprotocol/client';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
+import type { CallToolResult, ListToolsResult, Tool } from '@modelcontextprotocol/client';
 import { CallToolResultSchema } from '@modelcontextprotocol/core';
 import * as z from 'zod';
 
-import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type { McpAppReference } from '@/shared/contracts/mcpApp';
 import type { McpElicitationResponse } from '@/shared/contracts/mcpInteraction';
 import type { RemoteMcpServer } from '@/shared/data/types/mcpServer';

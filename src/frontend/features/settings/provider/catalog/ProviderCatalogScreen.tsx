@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
@@ -14,20 +14,23 @@ import {
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderAvatar } from '@/frontend/components/Avatar';
-import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
-import { queryKeys, useBackendModule, useQuery as useDataQuery } from '@/frontend/data';
+import {
+  InlineSearch,
+  type InlineSearchLayout,
+  useInlineSearch,
+} from '@/frontend/components/InlineSearch';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ProviderCatalogEntry } from '@/shared/contracts';
-import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSeparator, SettingsServiceRow } from '../../components/SettingsServiceRow';
 import { ProviderAccountBadge } from '../components/ProviderAccountBadge';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 56;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;
+const EMPTY_CATALOG_ENTRIES: ProviderCatalogEntry[] = [];
 
 type ProviderCatalogEntryItem =
   | { id: typeof CUSTOM_PROVIDER_ITEM_ID; type: 'custom' }
-  | (Provider & { type: 'saved' })
   | (ProviderCatalogEntry & { type: 'preset' });
 
 /** Position within its section, so each row can draw its slice of the section's card. */
@@ -84,13 +87,12 @@ function ProviderCatalogRow({
   const supportsSignIn = accounts.getCapabilities(entry).signIn;
   const onPress = onChoose ?? (entry.isInstalled ? onImport : undefined);
   const statusLabel = entry.isEnabled ? t('settings.provider.status.enabled') : undefined;
-  const subtitle = onChoose ? entry.description : undefined;
 
   return (
     <SettingsServiceRow
       accessibilityLabel={
         supportsSignIn
-          ? [entry.name, statusLabel, subtitle, t('settings.provider.account.signInSupported')]
+          ? [entry.name, statusLabel, t('settings.provider.account.signInSupported')]
               .filter(Boolean)
               .join(', ')
           : undefined
@@ -109,7 +111,6 @@ function ProviderCatalogRow({
       onPress={onPress ? () => onPress(entry) : undefined}
       statusLabel={statusLabel}
       statusTone="success"
-      subtitle={subtitle}
       testID={`provider-catalog-entry-${entry.id}`}
       trailingAction={
         onChoose ? (
@@ -155,9 +156,26 @@ function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-export default function ProviderCatalogScreen({
+export default function ProviderCatalogScreen() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <RouteHeader title={t('settings.provider.catalog.title')} />
+      <ProviderCatalogContent />
+    </>
+  );
+}
+
+/** The original catalog and selection flow, with the route chrome supplied by its caller. */
+export function ProviderCatalogContent({
+  header,
+  searchLayout = 'screen',
   setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
+}: {
+  header?: ReactNode;
+  searchLayout?: InlineSearchLayout;
+  setupIntent?: FirstUseSetupIntent;
+} = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<ProviderSetupRouteParamsInput>();
@@ -177,14 +195,12 @@ export default function ProviderCatalogScreen({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const providers = useBackendModule('providers');
-  const accounts = providers.accounts;
-  const savedProviders = useDataQuery('/providers', { enabled: intent === 'chat' });
   const catalogQuery = useQuery({
     queryFn: providers.listCatalog,
     queryKey: queryKeys.providers.catalog(),
     staleTime: 0,
   });
-  const entries = catalogQuery.data ?? [];
+  const entries = catalogQuery.data ?? EMPTY_CATALOG_ENTRIES;
   const {
     query,
     results: listedEntries,
@@ -261,22 +277,6 @@ export default function ProviderCatalogScreen({
     return [
       {
         data:
-          intent === 'chat'
-            ? (savedProviders.data ?? [])
-                .filter(
-                  (provider) =>
-                    !provider.presetProviderId &&
-                    (!query ||
-                      `${provider.name} ${provider.id}`
-                        .toLowerCase()
-                        .includes(query.toLowerCase())),
-                )
-                .map((provider) => ({ ...provider, type: 'saved' as const }))
-            : [],
-        title: t('onboarding.provider.saved'),
-      },
-      {
-        data:
           intent === 'chat' && !query && !showsAllProviders ? recommended.slice(0, 6) : recommended,
         title: t('settings.provider.catalog.section.recommended'),
       },
@@ -296,34 +296,13 @@ export default function ProviderCatalogScreen({
           isLast: index === section.data.length - 1,
         })),
       }));
-  }, [intent, listedEntries, query, savedProviders.data, showsAllProviders, t]);
+  }, [intent, listedEntries, query, showsAllProviders, t]);
   const renderProviderRow = useCallback(
     ({ item }: { item: ProviderCatalogItem }) => {
-      const supportsSavedSignIn = item.type === 'saved' && accounts.getCapabilities(item).signIn;
       return (
         <CatalogCardSlice item={item}>
           {item.type === 'custom' ? (
             <CustomProviderCatalogRow onCreate={openCustomProvider} />
-          ) : item.type === 'saved' ? (
-            <SettingsServiceRow
-              accessibilityLabel={
-                supportsSavedSignIn
-                  ? [
-                      item.name,
-                      t('onboarding.provider.continue'),
-                      t('settings.provider.account.signInSupported'),
-                    ].join(', ')
-                  : undefined
-              }
-              avatar={<ProviderAvatar providerId={item.id} providerName={item.name} />}
-              disabled={importPending}
-              id={item.id}
-              name={item.name}
-              nameAccessory={supportsSavedSignIn ? <ProviderAccountBadge /> : undefined}
-              onPress={() => openProviderSetup(item)}
-              subtitle={t('onboarding.provider.continue')}
-              testID={`provider-catalog-entry-${item.id}`}
-            />
           ) : (
             <ProviderCatalogRow
               entry={item}
@@ -336,48 +315,31 @@ export default function ProviderCatalogScreen({
         </CatalogCardSlice>
       );
     },
-    [
-      accounts,
-      handleImportProvider,
-      importPending,
-      intent,
-      openCustomProvider,
-      openProviderSetup,
-      pendingProviderId,
-      t,
-    ],
+    [handleImportProvider, importPending, intent, openCustomProvider, pendingProviderId],
   );
   const retry = useCallback(() => {
     void catalogQuery.refetch();
-    if (intent === 'chat') void savedProviders.refetch();
-  }, [catalogQuery, intent, savedProviders]);
+  }, [catalogQuery]);
 
   return (
     <>
-      <RouteHeader
-        onBack={intent === 'chat' ? () => router.replace('/onboarding') : undefined}
-        title={t(
-          intent === 'chat' ? 'onboarding.provider.title' : 'settings.provider.catalog.title',
-        )}
-      />
-      <InlineSearch onChangeText={setQuery} value={query} />
-      {intent === 'chat' ? (
-        <View className="gap-2 px-4 pt-4 pb-2">
-          <Text className="text-xs text-muted-foreground">
-            {t('onboarding.step', { current: 1 })}
-          </Text>
-          <Text className="text-base text-foreground">{t('onboarding.provider.description')}</Text>
+      {searchLayout === 'embedded' ? (
+        <View className="px-4 pb-2">
+          <InlineSearch layout="embedded" onChangeText={setQuery} value={query} />
         </View>
-      ) : null}
+      ) : (
+        <InlineSearch onChangeText={setQuery} value={query} />
+      )}
+      {header}
       <View
         className="min-h-0 flex-1 gap-3 px-4 pb-5"
         testID={intent === 'chat' ? 'onboarding-provider' : 'provider-catalog'}
       >
-        {catalogQuery.isPending || (intent === 'chat' && savedProviders.isPending) ? (
+        {catalogQuery.isPending ? (
           <View className="px-1 py-8">
             <ContentState.Loading title={t('settings.provider.catalog.loading')} />
           </View>
-        ) : catalogQuery.isError || (intent === 'chat' && savedProviders.isError) ? (
+        ) : catalogQuery.isError ? (
           <View className="px-1 py-8">
             <ContentState.Error
               primaryAction={{ children: t('common.retry'), onPress: retry }}
@@ -405,7 +367,7 @@ export default function ProviderCatalogScreen({
                       <Button
                         onPress={() => setShowsAllProviders(true)}
                         testID="onboarding-provider-show-all"
-                        variant="ghost"
+                        variant="outline"
                       >
                         {t('onboarding.provider.showAll')}
                       </Button>

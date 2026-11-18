@@ -36,6 +36,7 @@ jest.mock('@/frontend/data', () => ({
   useQuery: (path: unknown, options: unknown) => mockRecipientQuery(path, options),
 }));
 let sheet: {
+  isOpen: boolean;
   canRespond: boolean;
   onRespond(input: ToolApprovalRespondInput): Promise<void>;
   approvals: { approvalId: string; input: unknown }[];
@@ -143,6 +144,34 @@ it('responds only to the bound loaded decision and treats an accepted pending re
   await act(async () => sheet.onRespond({ approvalId: 'decision', approved: true }));
   expect(test.respond).toHaveBeenCalledWith({ kind: 'approve' });
   expect(mockToast).not.toHaveBeenCalled();
+});
+
+it('releases the approval overlay while offline and restores the same decision after recovery', async () => {
+  const test = fixture();
+  const connected = test.snapshot;
+  await render(test);
+  expect(sheet.isOpen).toBe(true);
+  test.update({
+    ...connected,
+    freshness: { state: 'cached', reason: 'offline' },
+    interactions: connected.interactions.map((item) => ({
+      ...item,
+      respond: { availability: { state: 'disabled', reason: 'offline' }, execute: test.respond },
+    })),
+  });
+  await render(test);
+  expect(sheet.isOpen).toBe(false);
+  expect(sheet.canRespond).toBe(false);
+  await act(async () => sheet.onRespond({ approvalId: 'decision', approved: true }));
+  expect(test.respond).not.toHaveBeenCalled();
+  test.update(connected);
+  await render(test);
+  expect(sheet.isOpen).toBe(true);
+  expect(sheet.canRespond).toBe(true);
+  expect(sheet.approvals[0]).toMatchObject({
+    approvalId: 'decision',
+    input: { path: '/approved' },
+  });
 });
 
 it('retirement removes sensitive resource values and cancels outstanding reads', async () => {

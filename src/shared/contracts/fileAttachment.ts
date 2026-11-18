@@ -42,13 +42,23 @@ export class FileAttachmentError extends Error {
 
 /** Persist facts about what was sent, never extracted file bodies. */
 export const FileAttachmentReportSchema = z.strictObject({
-  mode: z.enum(['image', 'image-text', 'text', 'document-text', 'document-ir']),
+  mode: z.enum([
+    'image',
+    'image-text',
+    'text',
+    'document-text',
+    'document-ir',
+    'provider-document',
+    'audio',
+  ]),
   sourceTruncated: z.boolean(),
   /** One-based PDF pages whose visual content did not yield recognized text. */
   unrecognizedPages: z.array(z.number().int().positive()).optional(),
   requestTruncated: z.boolean(),
   includedCharacters: z.number().int().nonnegative().optional(),
-  parser: z.enum(['anydoc', 'builtin', 'native-pdf', 'native-image-ocr']).optional(),
+  parser: z
+    .enum(['anydoc', 'builtin', 'native-pdf', 'native-image-ocr', 'deepseek-ocr'])
+    .optional(),
   parserVersion: z.string().optional(),
   delivery: z.enum(['complete', 'deferred']).optional(),
   images: z
@@ -63,8 +73,10 @@ export const FileAttachmentReportSchema = z.strictObject({
 });
 export type FileAttachmentReport = z.infer<typeof FileAttachmentReportSchema>;
 
-export type DocumentParserMode = 'anydoc' | 'builtin';
+export type DocumentParserMode = 'anydoc' | 'builtin' | 'deepseek';
 export const DEFAULT_DOCUMENT_PARSER_MODE: DocumentParserMode = 'anydoc';
+
+export type OcrEngine = 'local' | 'deepseek';
 
 /** Opaque JSON, not a schema for a particular community IR version. */
 export type DocumentJsonValue =

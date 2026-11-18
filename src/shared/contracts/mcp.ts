@@ -73,6 +73,21 @@ export class McpAuthorizationError extends Error {
   }
 }
 
+export class McpLegacyFallbackError extends Error {
+  readonly code = 'mcp_legacy_fallback_failed';
+
+  constructor(
+    readonly negotiationError: unknown,
+    legacyError: unknown,
+  ) {
+    super('MCP protocol negotiation and the legacy connection attempt both failed.', {
+      cause: legacyError,
+    });
+    this.name = 'McpLegacyFallbackError';
+    this.stack = undefined;
+  }
+}
+
 /** The endpoint answered with a redirect to another origin, which credentials never follow. */
 export class McpRedirectError extends Error {
   /** Redirect target without credentials, query, or fragment. */

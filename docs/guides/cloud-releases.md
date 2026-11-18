@@ -5,23 +5,26 @@ Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger
 [PR CI](../../.github/workflows/pr-ci.yml) on the tagged commit, then starts the
 [Android release](../../.github/workflows/android-release.yml) and
 [iOS TestFlight](../../.github/workflows/ios-release.yml) workflows in parallel. Stable tags such as
-`v0.1.0` also start the [Google Play AAB](../../.github/workflows/google-play-release.yml) workflow;
-prerelease tags do not. Branch pushes do not publish.
+`v0.1.0` also start the [Google Play AAB](../../.github/workflows/google-play-release.yml) workflow
+and call the Android release workflow with `domestic: true` for the domestic APK. Prerelease tags
+do not build these store artifacts. Branch pushes do not publish.
 The tag's base version must match `expo.version` in `app.json`; update and commit the version before
 tagging. Public APK and iOS builds use the existing EAS `production` profile.
 Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
-and automatic native build-number increments, but generates an AAB instead of an APK. Both Android
-profiles retain the current ARM64-only device support.
+and automatic native build-number increments, but generates an AAB instead of an APK. The public APK and Google Play
+profiles retain the current ARM64-only device support. The domestic profile inherits production
+signing and APK output, disables self-installation, and uses `production-domestic-stores`.
 
 ## Release Channels
 
-A release reaches five channels from three builds:
+A stable release prepares nine distribution destinations from four builds:
 
 | Channel | Artifact | Build | Publication |
 | --- | --- | --- | --- |
 | GitHub | APK | Built in the cloud on every version tag | Published automatically with `SHA256SUMS` ([Android GitHub Downloads](#android-github-downloads)) |
 | GitCode | The same APK | None; reuses the GitHub APK | Mirror sync and browser upload by a maintainer ([GitCode Maintainer Upload](#gitcode-maintainer-upload)) |
 | Google Play | AAB | Built in the cloud on stable tags only | Manual upload and review in Play Console ([Google Play](#google-play)) |
+| HONOR / Xiaomi / OPPO / vivo | One shared domestic APK | Built in the cloud on stable tags only | Separate manual uploads, reviews, and live-version records in each console |
 | TestFlight | IPA | Built in the cloud on every version tag | Uploaded automatically; internal distribution and external beta review in App Store Connect ([iOS](#ios)) |
 | App Store | The same IPA | None; reuses the TestFlight build | Manual submission and release in App Store Connect |
 
@@ -41,6 +44,23 @@ Releases are built by the workflows above. Before pushing the tag, have these re
 - A maintainer with GitCode write access to sync and upload the release.
 
 Submit each store once its materials are complete; another store's pending review does not block it.
+
+## Release Procedure
+
+1. Summarize the changes on the intended `main` commit since the previous release. Update
+   `expo.version` in `app.json`, merge the version PR, then push the matching version tag to start
+   **Actions → Release**. The tag workflow owns CI and native builds.
+2. Use the exact builds from that run for distribution: the public APK for GitHub and
+   [GitCode](#gitcode-maintainer-upload), the [AAB for Google Play](#google-play), and the already
+   uploaded [iOS build for TestFlight and App Store](#ios). Stable tags also produce one
+   [domestic APK for four separate store submissions](#manual-domestic-store-upload).
+3. Complete each channel's publication or review submission in its own console. TestFlight
+   internal distribution, external beta review, and App Store review are separate steps. Record
+   pending reviews without blocking other channels or treating an upload as an available release.
+4. Archive the exact packages, checksums, release notes, build identities, and
+   [release status](#release-status) under one version directory outside the repository. Keep the
+   domestic APK in its own subdirectory. Use [Failure Recovery](#failure-recovery) for interrupted
+   jobs or uploads; a publication retry reuses its successful build.
 
 ## Required Configuration
 
@@ -63,11 +83,12 @@ production bundle identifier in `app.json`. Set up its submission API key with
 `eas credentials --platform ios` before the first unattended submission. See [local build configuration](./local-builds.md)
 for app identities and production environment requirements.
 
-All three workflows and `scripts/publishUpdate.ts` (used by the OTA Update workflow) pin EAS CLI to
+All three build workflows and `scripts/publishUpdate.ts` (used by the OTA Update workflow) pin EAS CLI to
 `24.4.2`; update them together when upgrading it.
 
 Native releases now embed the EAS Update client. Channels are platform-specific:
-`production-apk` for public APKs, `production-google-play` for Play, and `production-ios` for iOS.
+`production-apk` for public APKs, `production-google-play` for Play,
+`production-domestic-stores` for domestic stores, and `production-ios` for iOS.
 These workflows build native packages only. JavaScript-only fixes between tags are published by the
 manual [OTA Update](../../.github/workflows/ota-update.yml) workflow; see
 [Application Updates](./app-updates.md#publishing).
@@ -81,6 +102,7 @@ suffix. Dates are not part of the filename. The application version in `app.json
 | --- | --- |
 | GitHub APK download | `cherry-studio-0.1.0-android.apk` |
 | GitHub prerelease APK download | `cherry-studio-0.1.0-beta.6-android.apk` |
+| Domestic store upload, archived separately from the public APK | `cherry-studio-0.1.0-android.apk` |
 | Google Play upload archive | `cherry-studio-0.1.0-android.aab` |
 | Locally archived iOS package | `cherry-studio-0.1.0-ios.ipa` |
 
@@ -88,8 +110,8 @@ The workflows name the downloaded APK and AAB archives; EAS may use its own inte
 names. iOS submission uses the EAS build ID and does not download or rename the IPA. For local
 builds, pass the desired filename with `--output` as described in [Local EAS Builds](./local-builds.md).
 When retaining multiple builds of one version, keep them in separate `build-<native-build-number>/`
-directories. APK and AAB are separate builds and can have different automatically assigned native
-build numbers even when they share a release tag.
+directories. Public APK, domestic APK, and Google Play AAB are separate builds and can have
+different automatically assigned native build numbers even when they share a release tag.
 
 ## Android GitHub Downloads
 
@@ -220,6 +242,49 @@ APK; the AAB is only saved with the workflow run.
 Reuse the saved AAB when retrying an upload. Once Play has accepted its version code, finish the
 existing release in the Console rather than uploading that version code again.
 
+## Domestic Android Stores
+
+Stable tags call the existing [Android release workflow](../../.github/workflows/android-release.yml)
+with `domestic: true`. Its domestic branch builds one `production-domestic-stores` APK after CI
+and saves it as the `domestic-stores-release` Actions artifact for 30 days. The default public APK
+call and GitHub publishing path remain independent; the domestic call never publishes to GitHub.
+The artifact includes the standard
+`cherry-studio-<version>-android.apk` filename, `SHA256SUMS`, and `release-manifest.json` with the EAS
+build ID, source commit, version/build, package identity, channel, and signing certificate digest.
+This is a separate artifact from the public APK; keep separate directories when downloading both.
+
+The workflow does not upload, submit for review or poll the stores. The first package containing
+the domestic channel and vendor integrations requires a native release; OTA cannot add them to
+existing installations. Prerelease tags do not produce the domestic store artifact.
+
+### Manual Domestic Store Upload
+
+1. Open **Actions → Release** for the intended stable tag. Once its domestic build job succeeds,
+   download and extract `domestic-stores-release` into a separate directory from `android-release`:
+   both artifacts contain an APK with the same filename.
+2. From the extracted directory, verify `SHA256SUMS` with `shasum -a 256 -c SHA256SUMS` on macOS or
+   `sha256sum --check SHA256SUMS` on Linux. Confirm `release-manifest.json` records the intended source
+   commit, app version, package ID, `production-domestic-stores` channel, native version code, and
+   signing certificate. Match the package and signing identity to each store's application record,
+   and keep the EAS build ID with the release record.
+3. Archive the APK, `SHA256SUMS`, and `release-manifest.json` together, for example under
+   `<archive-root>/<release-version>/domestic-stores/build-<versionCode>/`. Use the native build
+   number from this manifest, which can differ from the public APK's. Archive before the Actions
+   artifact expires after 30 days.
+4. Open the existing Cherry Studio application in each of HONOR, Xiaomi, OPPO, and vivo. Upload the
+   same domestic APK separately to all four; use neither the public APK nor the Play AAB. Complete
+   each console's required materials, localized release notes, screenshots, and reviewer access,
+   then submit there. Reuse existing listing materials where applicable.
+5. Update each store's row in the version's `release-status.md` with the submitted version/build,
+   console status, observation time, and link. Track review and actual availability independently;
+   when available, record the live version/build. An upload retry uses this same archived APK.
+
+Client queries use the vendor integrations or GitCode as described in
+[Domestic Android Store Updates](./domestic-store-updates.md). OPPO checks the GitCode stable
+release, so it can announce a newer project version while that version is still under OPPO review.
+GitCode publication and build completion do not establish any store's live version; record what
+each console actually reports.
+
 ## iOS
 
 The build job waits for a production IPA, then passes its exact build ID to a separate submission
@@ -243,20 +308,29 @@ not configure groups or submit the app for an App Store public release.
 - Before retrying a manual Google Play upload, check Play Console. If Play already accepted the
   version code, complete the existing release. Otherwise, upload the original saved AAB again;
   no new build is needed merely to retry an upload.
+- For a domestic store upload retry, check that store's submission first. Resume an accepted
+  submission or upload the same archived domestic APK if it was not accepted. Preserve the other
+  stores' submissions and record each result separately.
 - **Re-run all jobs** creates new EAS builds and increments native build numbers. Use it only when a
   new build is intended. A build job timeout does not cancel the remote EAS build; check EAS first.
 - Saved Actions artifacts expire after 30 days. Recover the GitHub APK from its published release
-  or EAS; recover the Google Play AAB from the exact EAS build recorded in the workflow summary.
+  or EAS; recover the Google Play AAB or domestic APK from its exact recorded EAS build. Use the
+  domestic `release-manifest.json` to identify its build rather than substituting the public APK.
 
 ## Release Status
 
 Keep one `release-status.md` per version outside the repository, with a row for each channel:
-GitHub, GitCode, TestFlight internal, TestFlight external, App Store, and Google Play. Each row
+GitHub, GitCode, TestFlight internal, TestFlight external, App Store, Google Play, HONOR, Xiaomi,
+OPPO, and vivo. Each row
 records the version/build, the status in the platform's own wording, when it was observed, and a
 link. Update a row whenever its channel changes state. Uploaded, submitted, approved, and available
 are different states; record `unknown` rather than inferring one, and do not infer the external
 TestFlight result from App Store approval. Open an issue for anything left unfinished after the
 release, such as fixes that have not reached `main`.
+
+For domestic store rows, link the archived `release-manifest.json` and keep the submitted
+version/build distinct from the observed live version/build. All four submissions share one
+artifact identity, but their review and availability states are independent.
 
 ## References
 

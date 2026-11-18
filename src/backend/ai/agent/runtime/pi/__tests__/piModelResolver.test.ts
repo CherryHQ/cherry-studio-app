@@ -991,6 +991,76 @@ describe('Pi model resolver', () => {
   });
 
   test.each([
+    ['openai-compatible', 'o1', 'max_completion_tokens'],
+    ['openai-compatible', 'o3-mini', 'max_completion_tokens'],
+    ['openai-compatible', 'o4-mini', 'max_completion_tokens'],
+    ['openai-compatible', 'gpt-5.2', 'max_completion_tokens'],
+    ['openai-compatible', 'gpt-6.1-sol', 'max_completion_tokens'],
+    ['openai-compatible', 'openai/gpt-6.1-sol', 'max_completion_tokens'],
+    ['openai-compatible', 'openai:gpt-6.1-sol', 'max_completion_tokens'],
+    ['openai-compatible', 'external/OpenAI:GPT-5.2', 'max_completion_tokens'],
+    ['openai-compatible', 'openai/gpt-5.2:free', 'max_completion_tokens'],
+    ['openai-compatible', 'gpt-5-chat-latest', 'max_tokens'],
+    ['openai-compatible', 'openai:gpt-5-chat-latest', 'max_tokens'],
+    ['openai-compatible', 'gpt-4o', 'max_tokens'],
+    ['openai-compatible', 'gpt-oss:120b', 'max_tokens'],
+    ['openai-compatible', 'deepseek-r1', 'max_tokens'],
+    ['openai', 'gpt-4o', 'max_completion_tokens'],
+  ] as const)(
+    'serializes %s output limits for %s as %s',
+    async (adapterFamily, modelId, expectedField) => {
+      const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+      mockGetProviderById.mockResolvedValue(
+        makeProvider(endpoint, 'https://chat.test/v1', adapterFamily),
+      );
+      mockGetModelById.mockResolvedValue(
+        makeModel(endpoint, { apiModelId: modelId, contextWindow: 128_000 }),
+      );
+
+      for (const maxOutputTokens of [undefined, 1024]) {
+        const resolution = await resolve(resolver, { maxOutputTokens });
+        const binding = mockBindPiStream.mock.calls.at(-1)![1];
+        const model = { ...resolution.model, api: 'openai-completions' as const };
+        let body = '';
+        const result = await streamOpenaiCompletions(
+          model,
+          normalizeContext({
+            messages: [{ role: 'user', content: 'Hello', timestamp: 1 }],
+          }),
+          {
+            apiKey: 'fixture',
+            maxTokens: binding.maxTokens,
+            maxRetries: 0,
+            fetch: async (_url, init) => {
+              body = String(init?.body);
+              const event = {
+                id: 'fixture',
+                object: 'chat.completion.chunk',
+                created: 1,
+                model: modelId,
+                choices: [{ index: 0, delta: { content: 'OK' }, finish_reason: 'stop' }],
+              };
+              return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, {
+                headers: { 'content-type': 'text/event-stream' },
+              });
+            },
+          },
+        ).result();
+
+        const request = JSON.parse(body);
+        expect(result.stopReason).toBe('stop');
+        expect(request).toMatchObject({
+          model: modelId,
+          [expectedField]: maxOutputTokens ?? 4096,
+        });
+        expect(request).not.toHaveProperty(
+          expectedField === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens',
+        );
+      }
+    },
+  );
+
+  test.each([
     [1_048_576, 1_048_576, undefined, 65_536],
     [1_048_576, 1_048_576, 131_072, 131_072],
     [64_000, 1_048_576, undefined, 64_000],

@@ -1,9 +1,13 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { Database, DbService } from '@/backend/data/db/DbService';
+import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
+import { AccountError } from '@/shared/contracts/account';
+import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
+import { configureEnterpriseSessionAdmission } from '../managedResources';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { batchUpsertProviders, ProviderService } from '../ProviderService';
 
@@ -233,9 +237,9 @@ describe('ProviderService', () => {
 
     await service.delete('custom-provider');
 
-    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.calls).toEqual([[agentSessionTable], [agentTable]]);
     expect(tx.delete).toHaveBeenCalledTimes(1);
-    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(tx.update.mock.invocationCallOrder[1]).toBeLessThan(
       tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
   });
@@ -260,6 +264,28 @@ describe('ProviderService', () => {
     await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
     await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-c');
     await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
+  });
+
+  test('withholds enterprise keys while the organization session is refused', async () => {
+    const service = await createRotationService([apiKey('gateway', 'gateway-key')]);
+    configureEnterpriseSessionAdmission(async () => {
+      throw new AccountError('rejected');
+    });
+    try {
+      // Local data never asks the account.
+      await expect(service.getRotatedApiKey('custom-provider')).resolves.toBe('gateway-key');
+      setActiveProfile({
+        id: 'profile-1',
+        identity: { authentication: 'password', deployment: 'server-1', subject: 'user-1' },
+        address: 'https://private.example.com',
+      });
+      await expect(service.resolveApiKey('custom-provider')).rejects.toMatchObject({
+        code: 'rejected',
+      });
+    } finally {
+      setActiveProfile(LOCAL_PROFILE);
+      configureEnterpriseSessionAdmission(async () => {});
+    }
   });
 
   test('returns the selected key with a non-secret identity receipt', async () => {
@@ -396,6 +422,7 @@ describe('ProviderService', () => {
  */
 async function createReadService(db: object): Promise<ProviderService> {
   await installTestHost({
+    ProviderCatalogRuntime: { ensureReady: async () => {} },
     CacheService: createCacheService(),
     DbService: { getDb: () => db } as unknown as DbService,
   });
@@ -468,7 +495,7 @@ function createDeleteTransaction(input: { providerId: string }) {
         where: jest.fn(() => ({})),
       })),
     })),
-    update: jest.fn(() => ({
+    update: jest.fn((_table: typeof agentSessionTable | typeof agentTable) => ({
       set: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
     })),
   };

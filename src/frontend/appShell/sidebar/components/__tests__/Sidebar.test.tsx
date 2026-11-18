@@ -32,7 +32,6 @@ jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => '#fff'
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   useConversationTarget: () => ({}),
-  useStartNewChat: () => jest.fn(),
   useChatSource: () => ({
     localChat: mockLocalChat,
     source: mockSource,
@@ -53,6 +52,9 @@ jest.mock('../../hooks/useSessionSearch', () => ({
   sessionSearchResultHref: jest.fn(),
   useSessionSearch: () => jest.fn(),
   useSessionSearchRequest: () => ({}),
+}));
+jest.mock('../../hooks/useCloseDrawerForExternalNavigation', () => ({
+  useCloseDrawerForExternalNavigation: () => jest.fn(),
 }));
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,

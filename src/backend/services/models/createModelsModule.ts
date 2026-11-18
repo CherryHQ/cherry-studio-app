@@ -14,7 +14,7 @@ import {
   ProviderAccountError,
 } from '@/shared/contracts';
 import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -235,15 +235,22 @@ function buildPullPreview(
   remoteModels: readonly Model[],
   existingModels: readonly Model[] = localModels,
 ) {
+  const getApiModelKey = (model: Model) =>
+    createUniqueModelId(model.providerId, model.apiModelId ?? model.modelId);
   const localIds = new Set(existingModels.map((model) => model.id));
   const remoteIds = new Set(remoteModels.map((model) => model.id));
+  const localApiModelKeys = new Set(existingModels.map(getApiModelKey));
+  const remoteApiModelKeys = new Set(remoteModels.map(getApiModelKey));
 
   return {
-    added: remoteModels.filter((model) => !localIds.has(model.id)),
+    added: remoteModels.filter(
+      (model) => !localIds.has(model.id) && !localApiModelKeys.has(getApiModelKey(model)),
+    ),
     missing: localModels.filter(
       (model) =>
         model.providerId === providerId &&
         !remoteIds.has(model.id) &&
+        !remoteApiModelKeys.has(getApiModelKey(model)) &&
         model.presetModelId != null &&
         model.presetModelId !== '',
     ),

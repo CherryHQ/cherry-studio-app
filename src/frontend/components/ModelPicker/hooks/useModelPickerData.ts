@@ -1,6 +1,12 @@
 import { useCallback, useMemo } from 'react';
 
 import { useModels, useProviders } from '@/frontend/hooks/chat';
+import { useCloud } from '@/frontend/hooks/useCloud';
+import {
+  CLOUD_PROVIDER_ID,
+  cloudModelUnavailable,
+  type CloudModelUse,
+} from '@/shared/contracts/cloud';
 
 import {
   buildModelPickerGroups,
@@ -13,21 +19,35 @@ type UseModelPickerDataOptions = {
   modelType: ModelTypeFilter;
   providerId?: string;
   searchText?: string;
+  cloudUse?: CloudModelUse;
 };
 
 export function useModelPickerData({
   modelType,
   providerId,
   searchText = '',
+  cloudUse = 'agent',
 }: UseModelPickerDataOptions) {
-  const { isLoading: isModelsLoading, models } = useModels({
+  const { state: cloud } = useCloud();
+  const {
+    isLoading: isModelsLoading,
+    models,
+    modelsQuery,
+    refetch: refetchModels,
+  } = useModels({
     enabled: true,
     isSystemSupported: true,
     providerId,
   });
-  const { isLoading: isProvidersLoading, providers: enabledProviders } = useProviders({
-    enabled: true,
-  });
+  const {
+    isLoading: isProvidersLoading,
+    providers: enabledProviders,
+    providersQuery,
+    refetch: refetchProviders,
+  } = useProviders({ enabled: true });
+  const error = modelsQuery.error ?? providersQuery.error;
+  const hasLoadedCatalog =
+    !error && modelsQuery.data !== undefined && providersQuery.data !== undefined;
   const providers = useMemo(
     () =>
       providerId
@@ -36,8 +56,22 @@ export function useModelPickerData({
     [enabledProviders, providerId],
   );
   const groups = useMemo(
-    () => buildModelPickerGroups({ modelType, models, providers, searchText }),
-    [modelType, models, providers, searchText],
+    () =>
+      buildModelPickerGroups({ modelType, models, providers, searchText })
+        .map((group) => {
+          if (group.provider.id !== CLOUD_PROVIDER_ID) return group;
+          return {
+            ...group,
+            items: group.items
+              .filter((item) => cloud.models.some((model) => model.id === item.model.modelId))
+              .map((item) => ({
+                ...item,
+                cloudUnavailable: cloudModelUnavailable(cloud, item.model.modelId, cloudUse),
+              })),
+          };
+        })
+        .filter((group) => group.items.length > 0),
+    [modelType, models, providers, searchText, cloud, cloudUse],
   );
   const modelItems = useMemo<ModelPickerModelItem[]>(
     () => groups.flatMap((group) => group.items),
@@ -46,6 +80,10 @@ export function useModelPickerData({
   const getModelItem = useCallback(
     (modelId: string | null) => getModelPickerModelItem(modelId, { modelType, models, providers }),
     [modelType, models, providers],
+  );
+  const refresh = useCallback(
+    () => Promise.all([refetchModels(), refetchProviders()]),
+    [refetchModels, refetchProviders],
   );
 
   // Memoized so consumers can key their own memos/effects on the returned object.
@@ -56,13 +94,27 @@ export function useModelPickerData({
   // defeated this memo.
   return useMemo(
     () => ({
+      error,
       groups,
+      hasLoadedCatalog,
       isLoading: isModelsLoading || isProvidersLoading,
       modelItems,
       models,
       providers,
       getModelItem,
+      refresh,
     }),
-    [getModelItem, groups, isModelsLoading, isProvidersLoading, modelItems, models, providers],
+    [
+      error,
+      getModelItem,
+      groups,
+      hasLoadedCatalog,
+      isModelsLoading,
+      isProvidersLoading,
+      modelItems,
+      models,
+      providers,
+      refresh,
+    ],
   );
 }

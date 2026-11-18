@@ -18,12 +18,7 @@ export type ProviderModelListItem =
       type: 'model';
     };
 
-const groupedPurposes: readonly ProviderModelListSectionPurpose[] = [
-  'chat',
-  'painting',
-  'speech',
-  'transcription',
-];
+const groupedPurposes: readonly ProviderModelListSectionPurpose[] = ['chat', 'painting'];
 
 export function buildProviderModelListItems(
   models: readonly Model[],

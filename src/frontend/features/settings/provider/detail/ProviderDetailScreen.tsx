@@ -9,8 +9,10 @@ import { Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { withCapability } from '@/frontend/components/Policy';
 import { SelectionToolbar } from '@/frontend/components/Selection';
 import { useBackendModule, useQuery } from '@/frontend/data';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -29,6 +31,9 @@ import {
   hasMultipleProviderModelPurposes,
   type ProviderModelPurpose,
 } from '../models/utils/providerModelPurpose';
+import { CloudProviderDetail } from './components/CloudProviderDetail';
+import { DeepseekSafetySetting } from './components/DeepseekSafetySetting';
+import { ManagedProviderDetail } from './components/ManagedProviderDetail';
 import { ProviderDetailTabs } from './components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './components/ProviderDetailTabs/types';
 import { ProviderModelList } from './components/ProviderModelList';
@@ -43,11 +48,17 @@ export default function ProviderDetailSettingsScreen() {
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
+  if (providerId === CLOUD_PROVIDER_ID) return <CloudProviderDetail />;
 
-  return (
-    <ProviderDetailSettings key={providerId} providerId={providerId} providerName={providerName} />
-  );
+  return <ProviderDetail key={providerId} providerId={providerId} providerName={providerName} />;
 }
+
+/** Organization providers open read-only. */
+const ProviderDetail = withCapability(
+  'providerSettings',
+  ProviderDetailSettings,
+  ManagedProviderDetail,
+);
 
 function ProviderDetailSettings({
   providerId,
@@ -232,15 +243,18 @@ function ProviderDetailSettings({
       {activeTab === 'configuration' ? (
         <ProviderConfiguration
           footer={
-            <Section>
-              <Section.Item
-                destructive
-                disabled={isDeleting || configuration.value?.isBusy}
-                label={t('settings.provider.deleteProvider')}
-                onPress={handleDelete}
-                showChevron={false}
-              />
-            </Section>
+            <>
+              {provider?.id === 'deepseek' ? <DeepseekSafetySetting /> : null}
+              <Section>
+                <Section.Item
+                  destructive
+                  disabled={isDeleting || configuration.value?.isBusy}
+                  label={t('settings.provider.deleteProvider')}
+                  onPress={handleDelete}
+                  showChevron={false}
+                />
+              </Section>
+            </>
           }
           testID="provider-configuration"
           value={configuration.value}
@@ -270,7 +284,6 @@ function ProviderDetailSettings({
             {management.isSelecting || managedModels.length === 0 ? null : showsModelPurposeTabs ? (
               <View className="px-4 pb-3">
                 <ProviderModelPurposeTabs
-                  counts={modelPurposeCounts}
                   onChange={setModelPurpose}
                   value={effectiveModelPurpose}
                 />

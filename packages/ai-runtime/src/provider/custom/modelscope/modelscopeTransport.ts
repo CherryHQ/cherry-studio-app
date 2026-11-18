@@ -1,4 +1,4 @@
-import { DEFAULT_TIMEOUT } from '../../../constants';
+import { DEFAULT_IMAGE_REQUEST_TIMEOUT_MS, DEFAULT_TIMEOUT } from '../../../constants';
 import type { ImageGenerationSubmitInput, ImageGenerationTransport } from '../imageGenerationModel';
 import {
   createAbortError,
@@ -114,7 +114,7 @@ class ModelscopeTransport implements ImageGenerationTransport {
       'POST',
       body,
       {
-        timeout: 120000,
+        timeout: input.requestTimeoutMs ?? DEFAULT_IMAGE_REQUEST_TIMEOUT_MS,
         signal: input.signal,
         extraHeaders: { 'X-ModelScope-Async-Mode': 'true' },
       },
@@ -249,7 +249,9 @@ class ModelscopeTransport implements ImageGenerationTransport {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         if (externallyAborted) throw createAbortError('ModelScope API request aborted');
-        throw new Error(`ModelScope API request timeout after ${timeout / 1000}s`);
+        throw new Error(`ModelScope API request timeout after ${timeout / 1000}s`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {

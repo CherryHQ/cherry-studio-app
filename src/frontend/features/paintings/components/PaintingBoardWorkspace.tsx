@@ -1,5 +1,6 @@
 import {
   Composer,
+  ContentState,
   getComposerKeyboardStickyOffset,
   ImageGenerationLoader,
   useAlert,
@@ -10,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Stack, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   useAnimatedStyle,
@@ -26,6 +27,7 @@ import {
   useFeedbackSource,
   type FeedbackContextInput,
 } from '@/frontend/appShell/feedback';
+import { useShareFiles } from '@/frontend/appShell/sharing';
 import {
   ComposerDock,
   ComposerSessionProvider,
@@ -33,6 +35,7 @@ import {
   useComposerPresentationActions,
   useComposerSendError,
 } from '@/frontend/components/Composer';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useModelPickerData } from '@/frontend/components/ModelPicker';
 import {
   PaintingInputProvider,
@@ -42,6 +45,7 @@ import {
 import { useMutation } from '@/frontend/data';
 import { paintingJobParamValues } from '@/frontend/data/paintings/usePaintingJobs';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
+import { useSharePaintingBoards } from '@/frontend/hooks/painting';
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import { diagnosticIdentifier } from '@/shared/utils/diagnosticIdentifier';
@@ -65,6 +69,7 @@ import { PaintingFocusCanvas } from './PaintingFocusCanvas';
 import { PaintingFocusChrome } from './PaintingFocusChrome';
 import { PaintingGenerationFailure } from './PaintingGenerationFailure';
 import { PaintingGenerationInfoSheet } from './PaintingGenerationInfoSheet';
+import { PaintingImageSelection } from './PaintingImageSelection';
 import { PaintingLineageStrip } from './PaintingLineageStrip';
 import { PaintingOverviewChrome } from './PaintingOverviewChrome';
 
@@ -126,6 +131,14 @@ function PaintingBoardContent({
   const generation = usePaintingBoardGeneration(initialBoardId);
   const { boardId } = generation;
   const board = usePaintingBoard(boardId);
+  const boardSharing = useSharePaintingBoards();
+  const imageSharing = useShareFiles();
+  const [isSelectingImages, setIsSelectingImages] = useState(false);
+  const imageIds = board.paintings.flatMap((painting) => painting.files.output);
+  const openImageSelection = useCallback(() => {
+    Keyboard.dismiss();
+    setIsSelectingImages(true);
+  }, []);
   const deletePaintings = useDeletePaintings();
   const reportError = useComposerSendError({ sendFailedLabel: t('painting.input.generateFailed') });
   const { setDraft } = useComposerActions();
@@ -405,6 +418,7 @@ function PaintingBoardContent({
           canAnnotate={!previewNode && referenceImage !== null && !annotation.isSubmitting}
           imageCount={focusedNode?.images.length ?? 1}
           key={shownImage.uri}
+          mediaType={shownImage.mediaType}
           onAddAnnotation={annotation.addAnnotation}
           onRemoveAnnotation={annotation.removeAnnotation}
           onSelectAnnotation={annotation.selectAnnotation}
@@ -453,7 +467,9 @@ function PaintingBoardContent({
             key={focusedNode.id}
             message={focusedNode.status.job?.error?.message}
             onRetry={canRetry ? retryFocused : undefined}
-            onReport={() => void openFeedback(paintingFeedbackContext(focusedNode))}
+            onReport={(destination) =>
+              void openFeedback(paintingFeedbackContext(focusedNode), { destination })
+            }
             prompt={focusedPainting?.brief ?? focusedPainting?.prompt}
             status={focusedNode.status.reason}
             width={loaderWidth}
@@ -471,20 +487,19 @@ function PaintingBoardContent({
     );
   } else {
     canvas = (
-      <Pressable className="flex-1 items-center justify-center gap-2 px-8" onPress={dismissInput}>
-        <Text className="font-semibold text-2xl text-foreground">
-          {t('painting.workspace.emptyTitle')}
-        </Text>
-        <Text className="text-center text-muted-foreground text-sm">
-          {t('painting.workspace.emptyDescription')}
-        </Text>
+      <Pressable className="flex-1 justify-center px-8" onPress={dismissInput}>
+        <ContentState.Empty
+          icon={<EmptyIllustration scene="creation" />}
+          prominence="prominent"
+          title={t('painting.workspace.emptyTitle')}
+        />
       </Pressable>
     );
   }
 
   return (
     <View className="flex-1">
-      {showBoardChrome ? (
+      {showBoardChrome && !isSelectingImages ? (
         mode === 'overview' ? (
           <PaintingOverviewChrome
             nodeCount={board.graph.nodes.length}
@@ -492,10 +507,19 @@ function PaintingBoardContent({
             onDelete={confirmDeleteBoard}
             onRename={renameBoard}
             title={boardTitle}
+            onSelectImages={imageIds.length > 1 ? openImageSelection : undefined}
+            isSharing={boardSharing.isSharing}
+            onShare={
+              boardId && board.paintings.some((painting) => painting.files.output.length > 0)
+                ? () => void boardSharing.share([boardId])
+                : undefined
+            }
           />
         ) : (
           <PaintingFocusChrome
             boardTitle={boardTitle}
+            groupFileEntryIds={focusedNode?.painting?.files.output}
+            onSelectImages={imageIds.length > 1 ? openImageSelection : undefined}
             image={focusedNode?.status.kind === 'ready' ? focusedImage : undefined}
             onBack={onClose}
             onDelete={focusedPainting ? confirmDeleteNode : undefined}
@@ -505,16 +529,29 @@ function PaintingBoardContent({
         )
       ) : null}
       {/* iOS toolbar composition forces the native header visible while mounted. */}
-      <Stack.Screen options={{ headerShown: showBoardChrome }} />
+      <Stack.Screen options={{ headerShown: isSelectingImages || showBoardChrome }} />
+      {isSelectingImages ? (
+        <PaintingImageSelection
+          fileIds={imageIds}
+          initialId={mode === 'focus' ? focusedImage?.fileEntryId : undefined}
+          onClose={() => setIsSelectingImages(false)}
+          onShare={(ids) => {
+            setIsSelectingImages(false);
+            void imageSharing.share(ids);
+          }}
+        />
+      ) : null}
       <View
-        accessibilityElementsHidden={isEditorPresented}
+        accessibilityElementsHidden={isEditorPresented || isSelectingImages}
         className="absolute inset-0"
-        importantForAccessibility={isEditorPresented ? 'no-hide-descendants' : 'auto'}
-        pointerEvents={isEditorPresented ? 'none' : 'auto'}
+        importantForAccessibility={
+          isEditorPresented || isSelectingImages ? 'no-hide-descendants' : 'auto'
+        }
+        pointerEvents={isEditorPresented || isSelectingImages ? 'none' : 'auto'}
       >
         {canvas}
       </View>
-      {showBoardChrome && mode === 'focus' ? (
+      {showBoardChrome && !isSelectingImages && mode === 'focus' ? (
         <Animated.View
           className="absolute right-0 left-0 gap-2 px-4"
           pointerEvents="box-none"
@@ -556,31 +593,39 @@ function PaintingBoardContent({
           )}
         </Animated.View>
       ) : null}
-      <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
-        <PaintingWorkspaceInput
-          onCancel={handleCancel}
-          onGenerate={handleGenerate}
-          onRatioChange={prepareRatioChange}
-          painting={focusedPainting}
-          placeholder={
-            mode === 'overview'
-              ? referenceImage
-                ? t('painting.focus.editPlaceholder')
-                : t('painting.board.newRootPlaceholder')
-              : annotation.selectedId !== null
-                ? t('painting.editor.annotationPlaceholder', { number: annotation.selectedId })
-                : referenceImage
+      <View
+        accessibilityElementsHidden={isSelectingImages}
+        importantForAccessibility={isSelectingImages ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={isSelectingImages ? 'none' : 'box-none'}
+        className="absolute inset-0"
+        style={{ opacity: isSelectingImages ? 0 : 1 }}
+      >
+        <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
+          <PaintingWorkspaceInput
+            onCancel={handleCancel}
+            onGenerate={handleGenerate}
+            onRatioChange={prepareRatioChange}
+            painting={focusedPainting}
+            placeholder={
+              mode === 'overview'
+                ? referenceImage
                   ? t('painting.focus.editPlaceholder')
-                  : undefined
-          }
-          preparePrompt={(text, images) =>
-            annotationKey && images.some((image) => image.fileEntryId === annotationKey)
-              ? annotation.preparePrompt(text)
-              : text
-          }
-          status={mode === 'focus' && isGenerating && !isAwaitingNode ? 'generating' : 'idle'}
-        />
-      </ComposerDock>
+                  : t('painting.board.newRootPlaceholder')
+                : annotation.selectedId !== null
+                  ? t('painting.editor.annotationPlaceholder', { number: annotation.selectedId })
+                  : referenceImage
+                    ? t('painting.focus.editPlaceholder')
+                    : undefined
+            }
+            preparePrompt={(text, images) =>
+              annotationKey && images.some((image) => image.fileEntryId === annotationKey)
+                ? annotation.preparePrompt(text)
+                : text
+            }
+            status={mode === 'focus' && isGenerating && !isAwaitingNode ? 'generating' : 'idle'}
+          />
+        </ComposerDock>
+      </View>
       {isInfoOpen && focusedPainting ? (
         <PaintingGenerationInfoSheet
           modelName={modelName}

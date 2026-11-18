@@ -41,17 +41,6 @@ export function isAudioGenerationModel(model: Model): boolean {
   return model.capabilities.includes(MODEL_CAPABILITY.AUDIO_GENERATION);
 }
 
-/** Text-only synthesis, excluding realtime and multimodal audio conversation models. */
-export function isTextToSpeechModel(model: Model): boolean {
-  return (
-    isAudioGenerationModel(model) &&
-    (!model.inputModalities?.length ||
-      model.inputModalities.every((modality) => modality === MODALITY.TEXT)) &&
-    (!model.outputModalities?.length ||
-      model.outputModalities.every((modality) => modality === MODALITY.AUDIO))
-  );
-}
-
 export function isVideoGenerationModel(model: Model): boolean {
   return model.capabilities.includes(MODEL_CAPABILITY.VIDEO_GENERATION);
 }

@@ -1,4 +1,5 @@
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type {
   AgentMessageView,
   AgentUserQuestions,
@@ -110,15 +111,22 @@ export type ResourceRead =
   | { kind: 'deferred'; key: string; read(signal: AbortSignal): Promise<ResourceValue> };
 export type ConversationInteractionResponse =
   | InteractionResponse
+  | { kind: 'approve'; sshDiagnosticsGrant: true }
   | { kind: 'user-answer'; answer: AgentUserAnswers };
 export type ConversationInteraction = {
   execution?: string;
   id: string;
   kind: 'decision' | 'question';
   title: string;
+  /** Known local tool identity for translated titles and operation-specific approval content. */
+  toolName?: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   /** Local health tools disclose the receiving model service before approval. */
   healthDataSharing?: { providerId: string | null };
+  /** Identified from the local tool reference, never from model-authored arguments. */
+  sshCommand?: boolean;
+  /** Only a locally bound, still-current SSH target can offer this narrower future grant. */
+  canGrantSshDiagnostics?: boolean;
   input: ResourceRead;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
@@ -127,7 +135,10 @@ export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' 
   parts: (
     | AgentMessageView['parts'][number]
     | { type: 'tool-summary'; id: string; displayName: string }
+    | { type: 'prepared-file'; id: string; filename: string; mediaType: string; base64?: string }
   )[];
+  citationSources?: readonly CitationSource[];
+  revision?: string;
   createdAt?: string;
   attachments?: readonly { name: string; mediaType?: string }[];
   /** Display name of the model that produced an assistant message. */
@@ -162,10 +173,15 @@ export type ConversationMessage = {
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
     /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
-    edit?: { availability: Availability };
-    retry?: ConversationAction<void, ConversationRef | void>;
+    editAnswer?: { availability: Availability };
+    retry?: ConversationAction<void, ConversationRef | void> & {
+      /** The model the source will reuse from the saved reply, when present. */
+      modelId?: UniqueModelId | null;
+    };
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
+    /** Sends the edited text as a sibling question of this message; the original stays. */
+    editQuestion?: ConversationAction<{ text: string }, void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */
@@ -173,6 +189,8 @@ export type ConversationMessage = {
   };
 };
 export type ConversationSnapshot = {
+  /** A submission or answer retry is being prepared before its execution is reserved. */
+  isSubmitting?: boolean;
   agentId?: string;
   workspaceId?: string;
   workspaceKind?: 'registered' | 'system';
@@ -187,6 +205,8 @@ export type ConversationSnapshot = {
 /** One paginated transcript window as the workspace consumes it; each source owns its hook. */
 export type ConversationHistoryView = {
   dataKey: string;
+  /** Immutable history revision for source reads, independent of the visible window identity. */
+  revision?: string;
   messages: readonly ConversationMessage[];
   error?: Error;
   isLoadingInitial: boolean;
@@ -200,7 +220,14 @@ export type ConversationHistoryView = {
   loadNewer(): Promise<void>;
   retry(): Promise<void>;
   returnToLatest?: () => void;
+  /** Confirm earlier tool facts without moving the visible history window. */
+  readCitations?: ConversationCitationReader;
 };
+export type ConversationCitationReader = (
+  messageId: string,
+  ids: readonly string[],
+  signal: AbortSignal,
+) => Promise<readonly CitationSource[]>;
 export type TranscriptSnapshot = {
   title?: string;
   assistantName?: string;
@@ -217,6 +244,8 @@ export type AgentSummary = {
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
+  /** Delivered by the enterprise server; only local Agents can be managed. */
+  isManaged?: boolean;
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }
@@ -226,6 +255,9 @@ export type ConversationSummary = {
   agentId?: string;
   title: string;
   updatedAt?: string;
+  createdAt?: string;
+  forkedFromSessionId?: string | null;
+  hasChildren?: boolean;
 };
 export type ConversationListStatus =
   | 'running'
@@ -244,13 +276,25 @@ export interface ConversationCatalog {
   readonly cacheScope?: QueryScope;
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
-  previewSession?(ref: ConversationRef): ConversationPreview;
+  /** Local-only full-history data export, independent of mounted chat windows. */
+  readTranscript?(ref: ConversationRef, signal: AbortSignal): Promise<TranscriptSnapshot>;
+  previewSession?(
+    ref: ConversationRef,
+    options?: { includeDescendants?: boolean },
+  ): ConversationPreview;
+  previewAgent?(ref: AgentRef): Readable<ConversationListStatus | undefined>;
+  listSessionChildren?(
+    parent: ConversationRef,
+    cursor: CatalogCursor | undefined,
+    signal: AbortSignal,
+  ): Promise<CatalogPage<ConversationSummary>>;
+  readSessionPath?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary[]>;
   listAgents(
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<AgentSummary>>;
   listSessions(
-    filter: { agent?: AgentRef },
+    filter: { agent?: AgentRef; includeBranches?: boolean },
     cursor: CatalogCursor | undefined,
     signal: AbortSignal,
   ): Promise<CatalogPage<ConversationSummary>>;

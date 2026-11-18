@@ -1,6 +1,8 @@
 import { fetch } from 'expo/fetch';
 
+import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { DocumentExportIssue, ExportDocument } from '@/shared/contracts/documentExport';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { safeExportUrl } from './normalizeDocument';
 
@@ -15,31 +17,50 @@ export async function resolveDocumentAssets(
 ): Promise<{ images: Map<string, string>; issues: DocumentExportIssue[] }> {
   const images = new Map<string, string>();
   const issues: DocumentExportIssue[] = [];
-  for (const [key, source] of sources) {
-    signal.throwIfAborted();
-    try {
-      let asset = cache.get(key);
-      if (!asset) {
-        const bytes =
-          source.kind === 'managed-file'
-            ? await readManagedImage(source.fileEntryId, signal)
-            : await fetchImage(source.url, signal);
-        signal.throwIfAborted();
-        const { width, height, mediaType } = inspectImage(bytes);
-        if (width < 1 || height < 1) throw new Error('Invalid image dimensions');
-        // Admit valid source images at their original size; device allocation decides capacity.
-        asset = {
-          dataUrl: `data:${mediaType};base64,${encodeBase64(bytes)}`,
-        };
-        cache.set(key, asset);
-      }
-      images.set(key, asset.dataUrl);
-    } catch {
+  const slots = createConcurrencySlots(2);
+  const pending = new Map<string, Promise<PreparedAsset>>();
+  const entries = [...sources];
+  const resolved = await Promise.allSettled(
+    entries.map(async ([, source]) => {
       signal.throwIfAborted();
-      // Failed resources stay retryable; no private file paths or URLs in diagnostic copy.
-      issues.push({ code: 'image-unavailable', label: 'Image' });
-    }
-  }
+      const key =
+        source.kind === 'managed-file'
+          ? `managed:${source.fileEntryId}`
+          : source.kind === 'prepared-image'
+            ? `prepared:${sha256HexOfText(source.base64)}`
+            : `remote:${source.url}`;
+      const cached = cache.get(key);
+      if (cached) return cached;
+      const existing = pending.get(key);
+      if (existing) return existing;
+      const operation = (async () => {
+        const release = await slots.acquire(signal);
+        try {
+          const bytes =
+            source.kind === 'managed-file'
+              ? await readManagedImage(source.fileEntryId, signal)
+              : source.kind === 'prepared-image'
+                ? Uint8Array.from(atob(source.base64), (character) => character.charCodeAt(0))
+                : await fetchImage(source.url, signal);
+          signal.throwIfAborted();
+          const { width, height, mediaType } = inspectImage(bytes);
+          if (width < 1 || height < 1) throw new Error('Invalid image dimensions');
+          const asset = { dataUrl: `data:${mediaType};base64,${encodeBase64(bytes)}` };
+          cache.set(key, asset);
+          return asset;
+        } finally {
+          release();
+        }
+      })();
+      pending.set(key, operation);
+      return operation;
+    }),
+  );
+  signal.throwIfAborted();
+  resolved.forEach((result, index) => {
+    if (result.status === 'fulfilled') images.set(entries[index][0], result.value.dataUrl);
+    else issues.push({ code: 'image-unavailable', label: 'Image' });
+  });
   return { images, issues };
 }
 

@@ -1,3 +1,4 @@
+import type { ComposerInputProps } from '@cherrystudio/ui/components';
 import { createContext, use } from 'react';
 
 import type { QuoteFields } from '@/shared/contracts/agent';
@@ -12,7 +13,8 @@ export type ChatQuoteActions = {
     sourceMessageId: string;
     requestId: string;
   }) => Promise<QuoteNavigationOutcome>;
-  capture: () => QuoteAttempt;
+  previewQuote: NonNullable<ComposerInputProps['onLinkPress']>;
+  capture: (draft: string) => QuoteAttempt;
 };
 export type QuoteState = { fields: QuoteFields; isBusy: boolean };
 export const Actions = createContext<ChatQuoteActions | undefined>(undefined);

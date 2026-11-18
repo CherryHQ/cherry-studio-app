@@ -1,6 +1,27 @@
 import { CreateAgentSchema, ListAgentsQuerySchema, UpdateAgentSchema } from '../agents';
 
 describe('agent api schemas', () => {
+  test.each([CreateAgentSchema, UpdateAgentSchema])(
+    'rejects retired per-Agent capability switches',
+    (schema) => {
+      expect(schema.safeParse({ name: 'Agent' }).success).toBe(true);
+      for (const capability of [
+        'health',
+        'reminders',
+        'agents',
+        'fileLibrary',
+        'calendar',
+        'location',
+        'image',
+        'web',
+      ]) {
+        expect(
+          schema.safeParse({ name: 'Agent', disabledCapabilities: [capability] }).success,
+        ).toBe(false);
+      }
+    },
+  );
+
   test.each([CreateAgentSchema, UpdateAgentSchema])('accepts only fixed Agent modes', (schema) => {
     for (const mode of ['standard', 'minimal']) {
       expect(schema.safeParse({ name: 'Agent', mode }).success).toBe(true);
@@ -59,13 +80,18 @@ describe('agent api schemas', () => {
     },
   );
 
-  test('accepts the built-in Cherry avatar only at creation', () => {
-    expect(CreateAgentSchema.parse({ avatar: '🍒', name: 'Cherry Agent' })).toMatchObject({
-      avatar: '🍒',
-    });
-    expect(UpdateAgentSchema.safeParse({ avatar: '🍒' }).success).toBe(false);
-    expect(
-      CreateAgentSchema.safeParse({ avatar: 'file:///avatar.webp', name: 'Cherry Agent' }).success,
-    ).toBe(false);
-  });
+  test.each(['🍒', 'builtin:deepseek', '👨‍💼', '🧑🏽‍💻', '🏗️', '🧳'])(
+    'accepts avatar %s only at creation',
+    (avatar) => {
+      expect(CreateAgentSchema.parse({ avatar, name: 'Agent' })).toMatchObject({ avatar });
+      expect(UpdateAgentSchema.safeParse({ avatar }).success).toBe(false);
+    },
+  );
+
+  test.each(['file:///avatar.webp', 'avatar.webp', '123', 'builtin:unknown'])(
+    'rejects unsupported avatar %s at creation',
+    (avatar) => {
+      expect(CreateAgentSchema.safeParse({ avatar, name: 'Agent' }).success).toBe(false);
+    },
+  );
 });

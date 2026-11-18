@@ -1,13 +1,18 @@
 import { createCodeBlockMarkdown } from '@cherrystudio/ui/markdown';
 
+import { resolveMessageCitations, type CitationSource } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-export function copyAssistantMessageText(parts: readonly CherryMessagePart[]): string {
+export function copyAssistantMessageText(
+  parts: readonly CherryMessagePart[],
+  sources?: readonly CitationSource[],
+): string {
+  const citations = resolveMessageCitations(parts, sources);
   return parts
-    .map((part) => {
+    .map((part, index) => {
       switch (part.type) {
         case 'text':
-          return part.text;
+          return citations.textByPartIndex.get(index)?.plainText ?? part.text;
         case 'data-code':
           return createCodeBlockMarkdown(part.data.content, part.data.language);
         case 'data-compact':

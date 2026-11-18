@@ -13,6 +13,23 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('../../../hooks/useMessageCitationSources', () => ({
+  useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
+}));
+
+jest.mock('react-native-reanimated', () => ({
+  useDerivedValue: (read: () => unknown) => ({ get: read }),
+}));
+
+jest.mock('../../../share/chatShareSelection', () => ({
+  useChatShareSelectionActions: () => ({ beginSelection: jest.fn() }),
+  useIsChatShareSelecting: () => false,
+  useChatShareFooterHeight: () => ({ height: 0 }),
+}));
+jest.mock('../../../share/ChatShareControls', () => ({
+  ChatShareSelectionRow: ({ children }: { children: ReactNode }) => children,
+}));
+
 const mockPendingSendDisplayed = jest.fn();
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
@@ -47,6 +64,10 @@ jest.mock('../hooks/useConversationFeedback', () => ({
   useConversationFeedback: () => undefined,
 }));
 
+jest.mock('../../../voice/useMessageSpeech', () => ({
+  useEndReadingWithConversation: jest.fn(),
+  useMessageSpeech: () => ({ isSpeaking: false, toggle: jest.fn() }),
+}));
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
   useMessageTranslation: () => undefined,
@@ -102,6 +123,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
+      Empty: (props: object) => createElement('ContentState.Empty', props),
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,

@@ -29,6 +29,7 @@ import {
   type DiagnosticFeedbackFeature,
   type DiagnosticFeedbackProblem,
 } from '@/shared/contracts/diagnostics';
+import type { DiagnosticFeedbackSummary } from '@/shared/contracts/diagnosticSession';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 /** Icons match the sidebar and settings entries for the same feature. */
@@ -78,6 +79,7 @@ export type FeedbackFormValue = {
 };
 
 export function FeedbackFormFields({
+  diagnosis,
   attempted,
   captureFailed,
   context,
@@ -88,6 +90,7 @@ export function FeedbackFormFields({
   screenshot,
   value,
 }: {
+  diagnosis?: DiagnosticFeedbackSummary;
   attempted: boolean;
   captureFailed: boolean;
   context?: DiagnosticFeedbackContext;
@@ -167,12 +170,12 @@ export function FeedbackFormFields({
           </Text>
         ) : null}
       </View>
-      {context || screenshot || captureFailed ? (
+      {context || diagnosis || screenshot || captureFailed ? (
         <Section title={t('settings.about.feedback.attachments')}>
-          {context ? (
+          {context || diagnosis ? (
             <Section.SwitchItem
-              description={contextSummary}
-              label={t('settings.about.feedback.context.title')}
+              description={diagnosis ? t('diagnosis.attachmentDescription') : contextSummary}
+              label={t(diagnosis ? 'diagnosis.attach' : 'settings.about.feedback.context.title')}
               onValueChange={(includeContext) => onChange({ ...value, includeContext })}
               testID="feedback-include-context"
               value={value.includeContext}

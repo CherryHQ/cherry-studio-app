@@ -1,3 +1,4 @@
+import { MessageQuoteSchema, type MessageQuote } from '@/shared/contracts/agent';
 import { PluginTextReferenceSchema, type PluginTextReference } from '@/shared/data/types/plugin';
 import {
   SelectionTextReferenceSchema,
@@ -8,14 +9,38 @@ import {
   SkillTextReferenceSchema,
   type SkillTextReference,
 } from '@/shared/data/types/skill';
+import { SshTextReferenceSchema, type SshTextReference } from '@/shared/data/types/ssh';
 
-type TextReference = PluginTextReference | SkillTextReference | SelectionTextReference;
+type TextReference =
+  | PluginTextReference
+  | SkillTextReference
+  | SelectionTextReference
+  | SshTextReference
+  | {
+      type: 'quote';
+      quote: MessageQuote;
+      label: string;
+      offset: number;
+    };
 type TextSegment = { text: string; reference?: TextReference };
 const WORD_CHARACTER_PATTERN = /[\p{L}\p{N}_-]/u;
 
 /** Decorate recorded occurrences without interpreting the user's prose as Markdown. */
-export function splitTextReferences(text: string, values: readonly unknown[] = []): TextSegment[] {
+export function splitTextReferences(
+  text: string,
+  values: readonly unknown[] = [],
+  quotes: readonly unknown[] = [],
+): TextSegment[] {
   const references: TextReference[] = [];
+  for (const value of quotes) {
+    const quote = MessageQuoteSchema.safeParse(value);
+    if (quote.success && quote.data.reference)
+      references.push({
+        type: 'quote',
+        quote: quote.data,
+        ...quote.data.reference,
+      });
+  }
   for (const value of values) {
     const parsed = PluginTextReferenceSchema.safeParse(value);
     if (parsed.success) references.push(parsed.data);
@@ -25,6 +50,10 @@ export function splitTextReferences(text: string, values: readonly unknown[] = [
       else {
         const selection = SelectionTextReferenceSchema.safeParse(value);
         if (selection.success) references.push(selection.data);
+        else {
+          const ssh = SshTextReferenceSchema.safeParse(value);
+          if (ssh.success) references.push(ssh.data);
+        }
       }
     }
   }

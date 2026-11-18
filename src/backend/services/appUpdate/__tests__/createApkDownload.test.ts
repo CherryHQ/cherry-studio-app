@@ -3,8 +3,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { hashLocalFile } from '@/backend/services/file/fileHash';
 import type { ApkUpdateRelease } from '@/shared/contracts/appUpdate';
 
+import { readApkChecksum } from '../apkRelease';
 import { createApkDownload } from '../createApkDownload';
-import { readApkChecksum } from '../gitcodeRelease';
 
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
@@ -15,7 +15,7 @@ jest.mock('expo-file-system/legacy', () => ({
   createDownloadResumable: jest.fn(),
 }));
 jest.mock('@/backend/services/file/fileHash', () => ({ hashLocalFile: jest.fn() }));
-jest.mock('../gitcodeRelease', () => ({ readApkChecksum: jest.fn() }));
+jest.mock('../apkRelease', () => ({ readApkChecksum: jest.fn() }));
 const hash = 'a'.repeat(64);
 const release: ApkUpdateRelease = {
   channel: 'apk',
@@ -56,11 +56,11 @@ test('deduplicates concurrent requests and publishes ready only after verificati
   await first;
   expect(FileSystem.createDownloadResumable).toHaveBeenCalledTimes(1);
   expect(hashLocalFile).toHaveBeenCalledWith(
-    'file:///cache/app-updates/pending.apk',
+    'file:///cache/app-updates/update.apk.part',
     expect.any(AbortSignal),
   );
   expect(FileSystem.moveAsync).toHaveBeenCalledWith({
-    from: 'file:///cache/app-updates/pending.apk',
+    from: 'file:///cache/app-updates/update.apk.part',
     to: 'file:///cache/app-updates/update.apk',
   });
   expect(states).toEqual(['downloading', 'verifying', 'ready']);
@@ -121,9 +121,8 @@ test('cancellation during metadata loading joins cleanup without claiming failur
   await pending;
   expect(updates.getDownload()).toEqual({ status: 'idle' });
   expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
-  expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/app-updates/pending.apk', {
-    idempotent: true,
-  });
+  // Cancellation before asset metadata resolves never starts or mutates the shared file transfer.
+  expect(FileSystem.moveAsync).not.toHaveBeenCalled();
 });
 
 test('disposal rejects new transfers', async () => {

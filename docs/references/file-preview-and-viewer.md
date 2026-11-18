@@ -75,16 +75,25 @@ under system bars. Images and text use theme surfaces. iOS's pop
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
-Every resolved file has an Open with action in the overflow menu. Images put Share and Save to
-Photos in a bottom toolbar; other files retain Share in the overflow menu. Saving to Photos uses
-the add-only permission flow shared with the painting viewer.
+Every resolved file has Share and Open with actions in the header's flat overflow menu, with no
+separators between actions. Images also offer Save to Photos and, when eligible, Edit in that
+same menu. Share opens the unified `/share` panel through `appShell/sharing`. Saving to Photos
+uses the add-only permission flow shared with the painting viewer.
+
+Image, document and text viewers receive the existing `sourceChat` from the route or chat pane.
+When `useAddFileToChat.returnsToSourceChat` is true, a shared `FileViewerFooter` shows a text-only
+Add to current chat button, disabled while `isResolving` is true. It returns to the source chat
+and adds the whole file once through the existing attachment handoff, preserving draft text and
+existing attachments without sending. Missing, unavailable or unsupported source chats offer no
+button. The footer owns the bottom safe area while shown; otherwise the preview content owns it.
 
 ### Image
 
-`ArtifactImageViewer` provides pinch, pan, and double-tap zoom. Its optional error callback lets the
-page render a retry state without losing sharing or system opening. Optional children compose
-caller-owned controls below the image. The painting viewer retains
-its own route and painting-specific actions.
+`ArtifactImageViewer` provides pinch, pan, and double-tap zoom, with an inline retry state for
+image-load failures. `FileImageViewer` owns the header menu and shared attachment footer; it no
+longer renders `ImagePreviewToolbar`. Edit retains the condition
+`editing.canEdit && (isDocument || stillImageUri === file.uri)` and resets zoom before opening the
+existing editor. The painting viewer retains its own route and painting-specific actions.
 
 Composer images opt into Edit through `FileEntryPreview.onImageReplace`. The file library's grid
 and list opt in through a request owned by their list container, so recycling a tile cannot cancel
@@ -211,7 +220,8 @@ long press. Text query entries are discarded one minute after their last observe
 
 ### HTML
 
-The overflow menu also offers PNG and image-based PPTX conversion for complete HTML sources.
+For complete HTML sources, the unified sharing panel offers Original, Image and PPT formats.
+The viewer's Share action opens that panel; conversion is not a separate overflow-menu action.
 See [HTML Conversion](./html-conversion.md) for pagination, limits, implementation selection and
 pending native acceptance.
 

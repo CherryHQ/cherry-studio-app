@@ -1,6 +1,11 @@
 import { resolveReasoningInvocation } from '@cherrystudio/ai-runtime/utils';
-import { REASONING_WIRE_TARGETS, type ReasoningWireProfile } from '@cherrystudio/provider-registry';
 import {
+  REASONING_FORMAT_PROFILES,
+  REASONING_WIRE_TARGETS,
+  type ReasoningWireProfile,
+} from '@cherrystudio/provider-registry';
+import {
+  getLowerBaseModelName,
   isClaude47SeriesModel,
   isGemini3Model,
   isMaxTemperatureOneModel,
@@ -13,6 +18,7 @@ import type { SupportedPiApi } from './piApiAdapters';
 
 export type PiRequestParameters = {
   model: Model;
+  providerId?: string;
   profile: ReasoningWireProfile;
   selection: RuntimeOptions['reasoningEffort'];
   summary?: string;
@@ -61,6 +67,41 @@ export function applyPiRequestParameters(
     );
   }
 
+  const modelId = getLowerBaseModelName(
+    parameters.model.apiModelId ??
+      parameters.model.modelId ??
+      parameters.model.id?.split('::').at(-1) ??
+      '',
+  );
+  const providerId = parameters.providerId ?? parameters.model.providerId;
+  if (
+    api === 'openai-completions' &&
+    ['lmstudio', 'gpustack'].includes(providerId) &&
+    /^qwen3(?:-\d|:|$)/.test(modelId) &&
+    reasoning.kind !== 'omit' &&
+    parameters.profile === REASONING_FORMAT_PROFILES['openai-chat'].wire &&
+    Array.isArray(result.messages)
+  ) {
+    const suffix = reasoning.kind === 'off' ? ' /no_think' : ' /think';
+    const append = (text: string) => (/\/(?:no_)?think\s*$/.test(text) ? text : text + suffix);
+    result.messages = result.messages.map((message) => {
+      if (!isRecord(message) || message.role !== 'user') return message;
+      if (typeof message.content === 'string') {
+        return { ...message, content: append(message.content) };
+      }
+      if (!Array.isArray(message.content)) return message;
+      const content = [...message.content];
+      for (let index = content.length - 1; index >= 0; index--) {
+        const part = content[index];
+        if (isRecord(part) && part.type === 'text' && typeof part.text === 'string') {
+          content[index] = { ...part, text: append(part.text) };
+          break;
+        }
+      }
+      return { ...message, content };
+    });
+  }
+
   const resolvedTemperature = resolveTemperature(parameters.model, temperature);
   const temperaturePath =
     api === 'google-generative-ai' || api === 'google-vertex'
@@ -76,6 +117,54 @@ export function applyPiRequestParameters(
     setPath(result, temperaturePath, resolvedTemperature);
   }
   return result;
+}
+
+/** Gemini's OpenAI-compatible route validates signatures even for replayed or imported calls. */
+export function applyPiRequestCompatibility(
+  payload: unknown,
+  api: SupportedPiApi,
+  modelId: string,
+): unknown {
+  if (
+    api !== 'openai-completions' ||
+    !/^gemini-(?:[34](?:[.-]|$)|(?:flash|pro)-latest$)/.test(
+      getLowerBaseModelName(modelId ?? ''),
+    ) ||
+    !isRecord(payload) ||
+    !Array.isArray(payload.messages)
+  ) {
+    return payload;
+  }
+  return {
+    ...payload,
+    messages: payload.messages.map((message) => {
+      if (
+        !isRecord(message) ||
+        message.role !== 'assistant' ||
+        !Array.isArray(message.tool_calls)
+      ) {
+        return message;
+      }
+      return {
+        ...message,
+        tool_calls: message.tool_calls.map((call) => {
+          if (!isRecord(call) || call.type !== 'function') return call;
+          const extra = isRecord(call.extra_content) ? call.extra_content : {};
+          const google = isRecord(extra.google) ? extra.google : {};
+          return {
+            ...call,
+            extra_content: {
+              ...extra,
+              google: {
+                ...google,
+                thought_signature: google.thought_signature ?? 'skip_thought_signature_validator',
+              },
+            },
+          };
+        }),
+      };
+    }),
+  };
 }
 
 function toPiReasoningPath(api: SupportedPiApi, target: string): string | undefined {

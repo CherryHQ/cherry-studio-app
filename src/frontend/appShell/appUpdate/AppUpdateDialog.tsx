@@ -23,6 +23,7 @@ export type AppUpdateDialogActions = {
 const STORE_KEYS = {
   'app-store': 'appUpdate.openAppStore',
   'google-play': 'appUpdate.openGooglePlay',
+  'domestic-stores': 'appUpdate.openStore',
 } as const;
 
 /**
@@ -94,7 +95,10 @@ function AppUpdateDialogContent({
         {t('appUpdate.currentVersion', { version: current.currentVersion })}
       </Text>
       <ReleaseNotes
-        channel={current.channel}
+        markdown={
+          current.channel === 'apk' ||
+          (current.channel === 'domestic-stores' && current.notesSource === 'gitcode')
+        }
         fontSizeStep={normalizeFontSizeStep(fontSizeStep)}
         loading={notes.isPending}
         notes={notes.data ?? null}
@@ -105,17 +109,16 @@ function AppUpdateDialogContent({
 }
 
 function ReleaseNotes({
-  channel,
+  markdown,
   fontSizeStep,
   loading,
   notes,
 }: {
-  channel: AppUpdateRelease['channel'];
+  markdown: boolean;
   fontSizeStep: TypographySizeStep;
   loading: boolean;
   notes: string | null;
 }) {
-  const { t } = useTranslation();
   if (loading) {
     return (
       <View className="h-16 items-center justify-center">
@@ -123,16 +126,12 @@ function ReleaseNotes({
       </View>
     );
   }
-  if (!notes) {
-    return channel === 'google-play' ? (
-      <Text className="text-base text-foreground">{t('appUpdate.storeAvailable')}</Text>
-    ) : null;
-  }
+  if (!notes) return null;
   // Notes scroll inside a bounded region so the actions below stay in view.
   return (
     <ScrollView className="max-h-80" nestedScrollEnabled showsVerticalScrollIndicator={false}>
       {/* GitCode and GitHub publish Markdown; store listings publish plain text with line breaks. */}
-      {channel === 'apk' ? (
+      {markdown ? (
         <MarkdownText
           fontSizeStep={fontSizeStep}
           markdown={notes}

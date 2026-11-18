@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import {
   type SelectionSource,
   useListBottomInset,
@@ -177,7 +178,12 @@ export function FileLibraryList({
           <FileLibrarySkeleton count={fileLibraryLayout.skeletonRows} />
         ) : (
           <View className="min-h-48 flex-1 justify-center px-6 pb-24">
-            <ContentState.Empty testID="file-library-empty" title={t('library.empty')} />
+            <ContentState.Empty
+              icon={<EmptyIllustration scene="collection" />}
+              prominence="prominent"
+              testID="file-library-empty"
+              title={t('library.empty')}
+            />
           </View>
         )}
       </View>
@@ -227,7 +233,10 @@ export function FileLibraryList({
         style={styles.list}
         testID="file-library-list"
       />
-      <FileLibrarySelectionControls refresh={refresh} />
+      <FileLibrarySelectionControls
+        refresh={refresh}
+        fileOrder={entries.map((file) => file.entry.id)}
+      />
     </>
   );
 }

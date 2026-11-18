@@ -36,16 +36,20 @@ beforeEach(() => {
   mockRequest.mockReset();
 });
 
-it('requests upstream-supported mobile Skills for the default catalog', async () => {
-  mockRequest.mockResolvedValueOnce(page([listing]));
-  expect((await createCherryinSkillClient().list({})).items).toHaveLength(1);
+it('requests the full catalog without filtering mobile support', async () => {
+  mockRequest.mockResolvedValueOnce(
+    page([listing, { ...listing, id: 'desktop-notes', mobileSupport: 'unsupported' }]),
+  );
+  const { items } = await createCherryinSkillClient().list({});
+  expect(items.map((item) => item.mobileSupport)).toEqual(['supported', 'unsupported']);
   expect(mockRequest.mock.calls[0]![0]).toMatchObject({
     credentials: 'omit',
-    query: { mobileSupport: 'supported', limit: 20 },
+    query: { limit: 20 },
   });
+  expect(mockRequest.mock.calls[0]![0].query).not.toHaveProperty('mobileSupport');
 });
 
-it('preserves mobile filtering with search, popularity order and pagination', async () => {
+it('preserves search, popularity order and pagination without mobile filtering', async () => {
   mockRequest.mockResolvedValueOnce(page([listing], 0, true));
   mockRequest.mockResolvedValueOnce(page([listing], 20));
   const client = createCherryinSkillClient();
@@ -54,14 +58,11 @@ it('preserves mobile filtering with search, popularity order and pagination', as
   expect(first.nextOffset).toBe(20);
   const result = await client.list({ ...query, offset: first.nextOffset! });
   expect(result.nextOffset).toBeNull();
-  expect(mockRequest.mock.calls[1]![0]).toMatchObject({
-    query: {
-      q: 'notes',
-      sort: 'popular',
-      mobileSupport: 'supported',
-      offset: 20,
-      limit: 20,
-    },
+  expect(mockRequest.mock.calls[1]![0].query).toEqual({
+    q: 'notes',
+    sort: 'popular',
+    offset: 20,
+    limit: 20,
   });
 });
 

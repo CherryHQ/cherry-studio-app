@@ -55,7 +55,7 @@ export function AiFailureMessage({
   title?: string;
   message?: string;
   detailTestID?: string;
-  onReport?: () => void;
+  onReport?: (destination?: 'feedback' | 'diagnosis') => void;
 }) {
   const { t } = useTranslation();
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -68,9 +68,11 @@ export function AiFailureMessage({
     t(
       reasonCode === 'auth'
         ? 'chat.errorPart.message.auth'
-        : retryable === true
-          ? 'chat.errorPart.retryable'
-          : 'chat.errorPart.message',
+        : reasonCode === 'context_length'
+          ? 'chat.errorPart.message.contextLength'
+          : retryable === true
+            ? 'chat.errorPart.retryable'
+            : 'chat.errorPart.message',
     );
 
   return (
@@ -95,7 +97,7 @@ export function AiFailureMessage({
 
 /**
  * Diagnostic detail the user explicitly asked for: the persisted `message`
- * and failure snapshot are shown verbatim here, never inline in the card.
+ * and failure snapshot are shown directly in readable sections.
  */
 export function AiFailureDetailSheet({
   data,
@@ -107,7 +109,7 @@ export function AiFailureDetailSheet({
   data: AiFailureData;
   onClose: () => void;
   /** Opening feedback dismisses this sheet through the shared overlay navigation. */
-  onReport?: () => void;
+  onReport?: (destination?: 'feedback' | 'diagnosis') => void;
 }) {
   const { t } = useTranslation();
   const detail = readAiFailureDetail(data);
@@ -117,8 +119,15 @@ export function AiFailureDetailSheet({
     <MessagePart.Detail
       headerAction={
         onReport ? (
-          <Button onPress={onReport} size="sm" testID={`${testID}-report`} variant="ghost">
+          <Button onPress={() => onReport()} size="sm" testID={`${testID}-report`} variant="ghost">
             <Button.Label>{t('settings.about.feedback.reportProblem')}</Button.Label>
+          </Button>
+        ) : undefined
+      }
+      footer={
+        onReport ? (
+          <Button onPress={() => onReport('diagnosis')} testID={`${testID}-diagnose`}>
+            <Button.Label>{t('diagnosis.checkProblem')}</Button.Label>
           </Button>
         ) : undefined
       }

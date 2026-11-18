@@ -1,6 +1,7 @@
 import { loggerService } from '@logger';
 import { Platform } from 'react-native';
 
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -18,8 +19,9 @@ import {
   type RemoteRegistryFileName,
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { isDeviceRegionMainlandChina } from '@/backend/services/device';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { repositorySourceOrder } from '@/backend/services/region';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
@@ -34,7 +36,7 @@ const logger = loggerService.withContext('ProviderRegistryUpdaterService');
 const REMOTE_BRANCH = 'x-files/provider-registry';
 const REMOTE_SUBPATH = `v${REGISTRY_SCHEMA_VERSION}`;
 const REGISTRY_SOURCES = {
-  gitcode: `https://raw.gitcode.com/CherryHQ/cherry-studio/raw/${encodeURIComponent(REMOTE_BRANCH)}/${REMOTE_SUBPATH}`,
+  gitcode: 'https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw',
   github: `https://raw.githubusercontent.com/CherryHQ/cherry-studio/refs/heads/${REMOTE_BRANCH}/${REMOTE_SUBPATH}`,
 } as const;
 
@@ -69,7 +71,7 @@ type StagedSnapshot = {
  * The payload is unsigned, so `providers.json` deliberately remains bundled:
  * remote data can improve model descriptions and capabilities, but can never
  * redirect credentials or change a provider's API destination. Startup restores
- * the persistent snapshot and downloads one only when none is saved. Later
+ * a complete compatible persistent snapshot and downloads one when none is saved. Later
  * refreshes happen when the user opens a provider's model list.
  */
 @Injectable('ProviderRegistryUpdaterService')
@@ -80,6 +82,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private activeSlot: ProviderRegistrySnapshot['slot'] | undefined;
   private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
   private readonly requestControllers = new Set<AbortController>();
+  private readonly controller = new AbortController();
   private stopped = false;
   private cacheInFlight: Promise<void> | undefined;
 
@@ -121,15 +124,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private restoreSnapshot(): Promise<void> {
-    this.cacheInFlight ??=
-      Platform.OS === 'web'
-        ? Promise.resolve()
-        : this.activateCachedSnapshot().catch((error: unknown) => {
-            logger.warn(
-              'Could not restore the model registry; a download is required',
-              toError(error),
-            );
-          });
+    this.cacheInFlight ??= this.activateCachedSnapshot().catch((error: unknown) => {
+      logger.warn('Could not restore the model registry; a download is required', toError(error));
+    });
     return this.cacheInFlight;
   }
 
@@ -156,6 +153,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private stopRequests(): void {
     if (this.stopped) return;
     this.stopped = true;
+    this.controller.abort();
     for (const controller of this.requestControllers) {
       controller.abort();
     }
@@ -166,7 +164,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private async activateCachedSnapshot(): Promise<void> {
-    const snapshots = await readProviderRegistrySnapshots();
+    const snapshots = Platform.OS === 'web' ? [] : await readProviderRegistrySnapshots();
     snapshots.sort(
       (left, right) =>
         right.manifest.schemaVersion - left.manifest.schemaVersion ||
@@ -197,7 +195,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     let reachedSource = false;
     let lastError: Error | undefined;
 
-    for (const source of this.getSourceOrder()) {
+    for (const source of await this.getSourceOrder()) {
       if (this.stopped) {
         return undefined;
       }
@@ -236,7 +234,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
     const sources = [
       preferredSource,
-      ...this.getSourceOrder().filter((source) => source !== preferredSource),
+      ...(await this.getSourceOrder()).filter((source) => source !== preferredSource),
     ];
     let lastError: Error | undefined;
 
@@ -392,7 +390,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
         }),
         maxResponseBytes: maxBytes,
         method: 'GET',
-        path: `/${name}`,
+        path:
+          source === 'gitcode' ? `/${encodeURIComponent(`${REMOTE_SUBPATH}/${name}`)}` : `/${name}`,
+        query: source === 'gitcode' ? { ref: REMOTE_BRANCH } : undefined,
         responseType: 'text',
         signal: controller.signal,
       });
@@ -407,8 +407,12 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  private getSourceOrder(): RegistryNetworkSource[] {
-    return isDeviceRegionMainlandChina() ? ['gitcode', 'github'] : ['github', 'gitcode'];
+  private async getSourceOrder(): Promise<readonly RegistryNetworkSource[]> {
+    const country = await raceAbort(
+      application.get('RegionService').getCountry(),
+      this.controller.signal,
+    );
+    return repositorySourceOrder(country);
   }
 }
 

@@ -1,5 +1,8 @@
-import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, JsonValue, Model } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
+
+import { normalizeAiError } from '@/backend/ai/normalizeAiError';
+import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
@@ -7,6 +10,7 @@ import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
 import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 import { piDurableSetupError } from '../piDurableStream';
+import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -110,6 +114,58 @@ test('stored tool blueprints keep deferred discovery across restarts', () => {
 });
 
 describe('Pi turn projection', () => {
+  test.each([
+    { raw: undefined, code: 'stream_disconnected', category: 'network' },
+    { raw: undefined, code: 'no_response', category: 'network' },
+    { raw: 'SAFETY', category: 'content_filter' },
+    { raw: 'MALFORMED_FUNCTION_CALL', category: 'unknown' },
+    { raw: 'UNEXPECTED_TOOL_CALL', category: 'unknown' },
+    { raw: 'TOO_MANY_TOOL_CALLS', category: 'unknown' },
+    { raw: 'OTHER', category: 'unknown' },
+    { raw: undefined, category: 'unknown' },
+    { raw: 'private_finish_reason', category: 'unknown' },
+  ])('projects provider reason $raw and code $code as $category', ({ raw, code, category }) => {
+    const terminal: AssistantMessage = {
+      ...call('', 2000),
+      api: 'google-generative-ai',
+      content: [],
+      stopReason: 'error',
+      rawStopReason: raw,
+      errorMessage: 'Provider stopped.',
+      diagnostics: code
+        ? [
+            {
+              type: 'provider_response_failure',
+              timestamp: 1,
+              error: { code, message: 'Request failed.' },
+            },
+          ]
+        : undefined,
+    };
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'unanswered',
+        reason: 'model_error',
+        entry: 1,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+
+    expect(toAgentErrorView(turn.error!)).toMatchObject({
+      retryable: true,
+      failure: {
+        reasonCode: category,
+        context: { finishReason: raw ?? 'error' },
+      },
+    });
+  });
+
   test.each(['provider_response_failure', 'pi_messages_response_failure'])(
     'preserves the terminal %s facts in the displayed failure',
     (type) => {
@@ -165,6 +221,7 @@ describe('Pi turn projection', () => {
       });
 
       expect(turn.status).toBe('failed');
+      expect(piModelTerminalErrorAttributes(terminal)['error.category']).toBe('quota');
       expect(toAgentErrorView(turn.error!)).toEqual({
         code: 'EXECUTION_FAILED',
         message: terminal.errorMessage,
@@ -385,12 +442,13 @@ describe('Pi turn projection', () => {
     entry: 1,
   } as unknown as SubmissionRecord;
 
-  function projectMessage(message: AssistantMessage, streaming: boolean) {
+  function projectMessage(message: AssistantMessage, streaming: boolean, fullReasoning = false) {
     return projectPiTurn({
       lane: { sessionId: 'session', slot: 0 },
       record: placed,
       metadata,
       active: true,
+      fullReasoning,
       entries: streaming
         ? []
         : ([
@@ -399,6 +457,30 @@ describe('Pi turn projection', () => {
       ...(streaming ? { partial: message } : {}),
     });
   }
+
+  test.each([true, false])(
+    'full detail reads retain all reasoning while streaming=%s',
+    (streaming) => {
+      const text = 'Earlier thoughts must remain readable.\n'.repeat(200);
+      const message: AssistantMessage = {
+        ...call('', 2000),
+        content: [
+          { type: 'thinking', thinking: text },
+          { type: 'thinking', thinking: 'Continuation.' },
+        ],
+      };
+      expect(projectMessage(message, streaming).parts[0]).toMatchObject({
+        type: 'reasoning',
+        text: '',
+        hasText: true,
+      });
+      expect(projectMessage(message, streaming, true).parts[0]).toMatchObject({
+        type: 'reasoning',
+        text: `${text}\n\nContinuation.`,
+        state: streaming ? 'streaming' : 'done',
+      });
+    },
+  );
 
   test.each([true, false])(
     'joins consecutive reasoning summaries without truncating content while streaming=%s',
@@ -413,7 +495,7 @@ describe('Pi turn projection', () => {
           { type: 'text', text: 'The complete answer.' },
         ],
       };
-      const turn = projectMessage(message, streaming);
+      const turn = projectMessage(message, streaming, true);
 
       expect(turn.parts).toEqual([
         expect.objectContaining({
@@ -468,7 +550,7 @@ describe('Pi turn projection', () => {
         { type: 'thinking', thinking: 'More reasoning.' },
       ],
     };
-    const turn = projectMessage(message, true);
+    const turn = projectMessage(message, true, true);
 
     expect(turn.parts).toEqual([
       expect.objectContaining({ type: 'reasoning', text: 'Before the tool.', state: 'done' }),
@@ -549,6 +631,7 @@ describe('Pi turn projection', () => {
         record: placed,
         metadata,
         active: true,
+        fullReasoning: true,
         entries: [
           { id: 2, conversationId: 1, kind: 'pi.assistant', model: [earlier] },
           ...(streaming
@@ -581,10 +664,10 @@ describe('Pi turn projection', () => {
       ],
     };
     expect(projectMessage(message, true).parts).toEqual([
-      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'streaming' }),
+      expect.objectContaining({ type: 'reasoning', text: '', hasText: true, state: 'streaming' }),
     ]);
     expect(projectMessage(message, false).parts).toEqual([
-      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'done' }),
+      expect.objectContaining({ type: 'reasoning', text: '', hasText: true, state: 'done' }),
     ]);
   });
 
@@ -836,4 +919,359 @@ describe('Pi turn projection', () => {
       tools: [{ toolCallId: 'call', toolName: 'write_file', startedAt: 3_700, completedAt: 4_000 }],
     });
   });
+});
+
+describe('terminal provider reason parity', () => {
+  const metadataBody = { content_filter_results: { hate: { filtered: false } } };
+  const metadataText = JSON.stringify(metadataBody);
+  type Scenario = {
+    label: string;
+    reason: AiFailureReason;
+    code?: string;
+    message?: string;
+    body?: JsonValue;
+    rawStopReason?: string;
+    status?: JsonValue;
+    statusCode?: JsonValue;
+    expectedStatusCode?: number;
+    forgedReason?: boolean;
+  };
+  const scenarios: Scenario[] = [
+    { label: 'metadata in message', message: metadataText, reason: 'unknown' },
+    { label: 'metadata in string body', body: metadataText, reason: 'unknown' },
+    { label: 'metadata in object body', body: metadataBody, reason: 'unknown' },
+    { label: 'neutral control', reason: 'unknown' },
+    {
+      label: 'metadata with 503',
+      body: metadataBody,
+      status: 503,
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'metadata with ECONNREFUSED',
+      body: metadataBody,
+      code: 'ECONNREFUSED',
+      reason: 'network',
+    },
+    { label: 'explicit safety code', code: 'content_filter', reason: 'content_filter' },
+    {
+      label: 'metadata with no_response',
+      body: metadataBody,
+      code: 'no_response',
+      reason: 'network',
+    },
+    {
+      label: 'metadata with stream_disconnected',
+      body: metadataBody,
+      code: 'stream_disconnected',
+      reason: 'network',
+    },
+    {
+      label: 'metadata with server_error',
+      body: metadataBody,
+      code: 'server_error',
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'only network prose',
+      body: metadataBody,
+      message: 'Network request failed',
+      reason: 'network',
+    },
+    {
+      label: 'only stream prose',
+      body: metadataBody,
+      message: 'Stream ended unexpectedly',
+      reason: 'stream_interrupted',
+    },
+    { label: 'timeout prose', message: 'Request timed out', reason: 'timeout' },
+    {
+      label: 'TLS evidence refines a generic transport code',
+      code: 'no_response',
+      message: 'Self-signed certificate',
+      reason: 'proxy_tls',
+    },
+    {
+      label: 'quota evidence refines forbidden status',
+      code: 'forbidden',
+      status: 403,
+      expectedStatusCode: 403,
+      body: { error: { message: 'Quota exhausted', content_filter_results: {} } },
+      reason: 'quota',
+    },
+    {
+      label: 'OpenAI authentic safety',
+      rawStopReason: 'content_filter',
+      message: 'Provider finish_reason: content_filter',
+      reason: 'content_filter',
+    },
+    {
+      label: 'Google authentic safety',
+      rawStopReason: 'SAFETY',
+      message: 'Provider stopped with: SAFETY',
+      reason: 'content_filter',
+    },
+    {
+      label: 'Google authentic recitation',
+      rawStopReason: 'RECITATION',
+      message: 'Provider stopped with: RECITATION',
+      reason: 'content_filter',
+    },
+    ...[
+      'PROHIBITED_CONTENT',
+      'IMAGE_PROHIBITED_CONTENT',
+      'IMAGE_RECITATION',
+      'IMAGE_SAFETY',
+      'BLOCKLIST',
+      'SPII',
+    ].map(
+      (rawStopReason): Scenario => ({
+        label: `Google safety finish ${rawStopReason}`,
+        rawStopReason,
+        reason: 'content_filter',
+      }),
+    ),
+    ...[' CoNtEnT-FiLtEr ', ' CONTENT_FILTER ', ' safety ', ' recitation '].map(
+      (rawStopReason): Scenario => ({
+        label: `exact normalized raw ${rawStopReason}`,
+        rawStopReason,
+        reason: 'content_filter',
+      }),
+    ),
+    ...['content_filter_results', 'OTHER', 'private safety description'].map(
+      (rawStopReason): Scenario => ({
+        label: `non-safety raw ${rawStopReason}`,
+        rawStopReason,
+        reason: 'unknown',
+      }),
+    ),
+    { label: 'near-match code', code: 'content_filter_results', reason: 'unknown' },
+    {
+      label: 'auth code beats safety and status',
+      code: 'authentication_error',
+      rawStopReason: 'SAFETY',
+      status: 503,
+      expectedStatusCode: 503,
+      reason: 'auth',
+    },
+    {
+      label: 'exact safety finish beats generic transport code and TLS prose',
+      code: 'no_response',
+      rawStopReason: 'SAFETY',
+      message: 'Self-signed certificate',
+      reason: 'content_filter',
+    },
+    {
+      label: 'quota prose refines forbidden status',
+      code: 'forbidden',
+      status: 403,
+      expectedStatusCode: 403,
+      message: 'Quota exhausted',
+      reason: 'quota',
+    },
+    { label: 'bare forbidden', code: 'forbidden', reason: 'unknown' },
+    {
+      label: 'forbidden yields to safety',
+      code: 'forbidden',
+      rawStopReason: 'SAFETY',
+      reason: 'content_filter',
+    },
+    { label: 'forged upstream reason', forgedReason: true, reason: 'unknown' },
+    {
+      label: 'missing provider code',
+      code: undefined,
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'placeholder provider code',
+      code: 'runtime_error',
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    {
+      label: 'string statusCode',
+      statusCode: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+    { label: 'status lower boundary', status: 100, expectedStatusCode: 100, reason: 'unknown' },
+    {
+      label: 'status upper boundary',
+      status: 599,
+      expectedStatusCode: 599,
+      reason: 'provider_unavailable',
+    },
+    ...[99, 600, 503.5, 'not numeric', '', '   ', Number.NaN, Number.POSITIVE_INFINITY].map(
+      (status): Scenario => ({
+        label: `invalid status ${String(status)}`,
+        status,
+        reason: 'unknown',
+      }),
+    ),
+    {
+      label: 'invalid statusCode does not fall back to status',
+      statusCode: '',
+      status: 503,
+      reason: 'unknown',
+    },
+    {
+      label: 'null statusCode falls back to status',
+      statusCode: null,
+      status: '503',
+      expectedStatusCode: 503,
+      reason: 'provider_unavailable',
+    },
+  ];
+
+  describe.each(['provider_response_failure', 'pi_messages_response_failure'])('%s', (type) => {
+    test.each(scenarios)('$label → $reason at both layers', (scenario) => {
+      const code = 'code' in scenario ? scenario.code : 'provider_error';
+      const terminal: AssistantMessage = {
+        ...call('', 2000),
+        content: [],
+        stopReason: 'error',
+        errorMessage: scenario.message ?? 'The provider request failed.',
+        rawStopReason: scenario.rawStopReason,
+        diagnostics: [
+          {
+            type,
+            timestamp: 1,
+            error: {
+              name: 'ProviderError',
+              code,
+              message: 'The diagnostic request failed.',
+              ...(scenario.forgedReason ? { reasonCode: 'content_filter' } : {}),
+            },
+            details: {
+              ...(scenario.statusCode !== undefined ? { statusCode: scenario.statusCode } : {}),
+              ...(scenario.status !== undefined ? { status: scenario.status } : {}),
+              ...(scenario.body !== undefined ? { body: scenario.body } : {}),
+            },
+          },
+        ],
+        ...(scenario.forgedReason ? { reasonCode: 'content_filter' } : {}),
+      };
+      const turn = projectPiTurn({
+        lane: { sessionId: 'session', slot: 0 },
+        metadata,
+        record: {
+          id: 1,
+          type: 'input',
+          status: 'unanswered',
+          reason: 'model_error',
+          entry: 1,
+        } as unknown as SubmissionRecord,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+        ] as unknown as EntryRecord[],
+      });
+      const view = JSON.parse(JSON.stringify(toAgentErrorView(turn.error!)));
+      const attributes = piModelTerminalErrorAttributes(terminal);
+      // Check both values together so a passing equality cannot hide a shared wrong decision.
+      expect([view.failure.reasonCode, attributes['error.category']]).toEqual([
+        scenario.reason,
+        scenario.reason,
+      ]);
+      expect(turn.status).toBe('failed');
+      expect(view).toMatchObject({
+        code: 'EXECUTION_FAILED',
+        message: terminal.errorMessage,
+        retryable: true,
+        failure: {
+          version: 1,
+          source: {
+            layer: 'provider',
+            code: code === undefined || code === 'runtime_error' ? 'provider_error' : code,
+            name: 'ProviderError',
+          },
+          context: {
+            providerId: 'provider',
+            modelId: 'model',
+            finishReason: scenario.rawStopReason?.trim() ?? 'error',
+          },
+        },
+      });
+      if (scenario.body !== undefined)
+        expect(view.failure.context.responseBody).toBe(
+          typeof scenario.body === 'string' ? scenario.body : JSON.stringify(scenario.body),
+        );
+      expect(view.failure.context.statusCode).toBe(scenario.expectedStatusCode);
+      expect(attributes['http.status_code']).toBe(scenario.expectedStatusCode);
+      expect(attributes['error.retry_scope']).toBe('automatic');
+      expect(JSON.stringify(attributes)).not.toContain('private');
+    });
+  });
+
+  test('a recovered earlier failure does not mark a successful terminal answer', () => {
+    const terminal: AssistantMessage = {
+      ...call('', 2000),
+      content: [{ type: 'text', text: 'Recovered' }],
+      stopReason: 'stop',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { code: 'content_filter', message: 'Earlier filtered attempt' },
+        },
+      ],
+    };
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      record: {
+        id: 1,
+        type: 'input',
+        status: 'done',
+        entry: 1,
+        answer: 2,
+      } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [terminal] },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.error).toBeNull();
+    expect(piModelTerminalErrorAttributes(terminal)).toEqual({});
+  });
+
+  test('normalization discards an upstream forged reason before host projection', () => {
+    const normalized = normalizeAiError({
+      code: 'provider_error',
+      message: 'Request failed',
+      reasonCode: 'content_filter',
+    });
+    expect(normalized).not.toHaveProperty('reasonCode');
+    expect(toAgentErrorView(normalized).failure?.reasonCode).toBe('unknown');
+  });
+});
+
+test('live reasoning carries no text while live and settled tool inputs remain complete', () => {
+  const text = '思考'.repeat(20_000);
+  const code = 'const data = [];'.repeat(10_000);
+  const message: AssistantMessage = {
+    ...call('', 2_000),
+    content: [
+      { type: 'thinking', thinking: text },
+      { type: 'toolCall', id: 'script', name: 'codemode', arguments: { code } },
+    ],
+  };
+  const options = {
+    lane: { sessionId: 'session', slot: 0 },
+    metadata,
+    record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+    entries: [
+      { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+    ] as unknown as EntryRecord[],
+  };
+  const live = projectPiTurn({ ...options, active: true });
+  expect(live.parts[0]).toMatchObject({ type: 'reasoning', text: '', hasText: true });
+  expect(live.parts[1]).toHaveProperty('input.code', code);
+  const settled = projectPiTurn({ ...options, active: false });
+  expect(settled.parts[0]).toMatchObject({ text });
+  expect(settled.parts[1]).toHaveProperty('input.code', code);
+  expect(message.content[0]).toHaveProperty('thinking', text);
+  expect(message.content[1]).toHaveProperty('arguments.code', code);
 });

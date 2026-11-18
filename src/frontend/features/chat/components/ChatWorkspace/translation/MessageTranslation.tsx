@@ -1,3 +1,4 @@
+import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
@@ -18,6 +19,8 @@ import { Text, View } from 'react-native';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 import { useMessageTranslation } from './MessageTranslationProvider';
@@ -40,9 +43,24 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
   });
   if (!translation?.state.visible) return null;
   const { state } = translation;
+  const sourceParts = message.data.parts ?? [];
+  const originalNumbers = resolveMessageCitations(
+    sourceParts,
+    message.data.citationSources,
+  ).sourceNumberById;
+  const parts: CherryMessagePart[] = [
+    ...sourceParts.filter((part) => part.type !== 'text'),
+    { type: 'text', text: state.content },
+  ];
+  const resolved = resolveMessageCitations(
+    parts,
+    message.data.citationSources,
+    'display',
+    originalNumbers,
+  ).textByPartIndex.get(parts.length - 1);
   const copy = async () => {
     try {
-      await Clipboard.setStringAsync(state.content);
+      await Clipboard.setStringAsync(resolved?.plainText ?? state.content);
       toast.show({ label: t('chat.messageActions.copied'), variant: 'success' });
     } catch {
       toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
@@ -58,7 +76,10 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
             </Text>
           ) : null}
           {state.content ? (
-            <MarkdownText isStreaming={state.status === 'running'} markdown={state.content} />
+            <MarkdownText
+              isStreaming={state.status === 'running'}
+              markdown={resolved?.markdown ?? state.content}
+            />
           ) : null}
           {state.status === 'error' || state.status === 'cancelled' ? (
             <Text className="text-muted-foreground text-sm" accessibilityLiveRegion="polite">
@@ -112,6 +133,14 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
                 variant="ghost"
               />
             </ActionMenu>
+            <Button
+              accessibilityLabel={t('chat.translation.hide')}
+              icon={<ChevronUpIcon className="text-muted-foreground" size={15} />}
+              onPress={() => translation.store.toggle(translation.source)}
+              size="xs"
+              testID="message-translation-collapse"
+              variant="ghost"
+            />
           </View>
         </MessagePart.Translation>
       </ContextMenuExclusion>

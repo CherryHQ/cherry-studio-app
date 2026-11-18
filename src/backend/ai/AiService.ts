@@ -47,6 +47,7 @@ export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Image requests accept transport options only; text generation controls have no image meaning. */
 export interface AiImageRequest extends Pick<AiBaseRequest, 'apiKeyOverride' | 'requestOptions'> {
+  requestTimeoutMs?: number;
   usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
@@ -200,6 +201,9 @@ export class AiService extends BaseService {
         getAuthConfig: async (providerId) =>
           (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
         getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
+        getModelEndpointTypes: (modelId) =>
+          registryModels.find((model) => (model.apiModelId ?? model.modelId) === modelId)
+            ?.endpointTypes,
         getVertexAccessToken: (input, signal) =>
           this.services.vertexAuth.getAccessToken({ ...input, providerId: provider.id }, signal),
       },
@@ -246,6 +250,7 @@ export class AiService extends BaseService {
       paramValues: request.paramValues,
       provider,
       vendorBag: transportVendorBag,
+      requestTimeoutMs: request.requestTimeoutMs,
     });
     const inputImages = request.inputImages ?? [];
     const hasInputImages = inputImages.length > 0;

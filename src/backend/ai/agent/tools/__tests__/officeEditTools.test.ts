@@ -1,6 +1,7 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { OFFICE_MEDIA_TYPES } from '@/backend/services/office';
 import { FileEntrySchema } from '@/shared/data/types/file';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { createOfficeEditTools } from '../officeEditTools';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
@@ -95,6 +96,40 @@ test('publishes an image-only derivative and keeps the resolved media inside the
   expect(files.createFileEntry).toHaveBeenCalledTimes(1);
 });
 
+test('the published digest includes final metadata and can guard a subsequent edit', async () => {
+  const { execute, files, allowedIds } = setup();
+  const sourceUri = `file:///managed/${SOURCE}`;
+  const publishedUri = `file:///managed/${OUTPUT}`;
+  const temporaryUri = 'file:///cache/1.docx';
+  const contents = new Map([
+    [sourceUri, 'original Office bytes'],
+    [temporaryUri, 'edited Office bytes'],
+  ]);
+  files.hash.mockImplementation(async (uri) => sha256HexOfText(contents.get(uri)!));
+  files.createFileEntry.mockImplementation(async () => {
+    contents.set(publishedUri, 'edited Office bytes with completed AIGC metadata');
+    return entry;
+  });
+  const result = await execute({ source_sha256: sha256HexOfText(contents.get(sourceUri)!) });
+  const publishedDigest = sha256HexOfText(contents.get(publishedUri)!);
+  expect(result.value).toMatchObject({ status: 'created', sha256: publishedDigest });
+  expect(publishedDigest).not.toBe(sha256HexOfText(contents.get(temporaryUri)!));
+
+  const facts = await files.resolveAvailable();
+  facts.set(OUTPUT, {
+    fileEntryId: entry.id,
+    name: entry.filename,
+    mediaType: entry.mediaType,
+    size: entry.size,
+  });
+  files.resolveAvailable.mockResolvedValue(facts);
+  files.sizes.set(publishedUri, entry.size);
+  allowedIds.add(OUTPUT);
+  expect(
+    (await execute({ file_entry_id: OUTPUT, source_sha256: publishedDigest })).value,
+  ).toMatchObject({ status: 'created' });
+});
+
 test('stale sources and unavailable replacement images never publish a derivative', async () => {
   const { execute, files, sandbox, allowedIds } = setup();
   allowedIds.add(IMAGE);
@@ -163,6 +198,7 @@ test.each([null, WORKSPACE_ID])(
         name: 'copy.docx',
         mediaType: OFFICE_MEDIA_TYPES.docx,
         provenance: 'generated',
+        aiOperation: 'edit',
         folderId,
         workspaceFolderId: folderId,
       },
@@ -242,4 +278,68 @@ test('cancellation after native completion prevents publication', async () => {
   await expect(execute({}, abort.signal)).rejects.toThrow('cancelled');
   expect(files.createFileEntry).not.toHaveBeenCalled();
   expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
+});
+
+test('comparison is independently authorized before reading either package', async () => {
+  const { tools, files, sandbox } = setup();
+  const tool = tools.find((tool) => tool.providerName === 'inspect_office_file')!;
+  await expect(
+    tool.execute({
+      input: { file_entry_id: SOURCE, kind: 'check', against_file_entry_id: IMAGE },
+      signal: new AbortController().signal,
+      turnId: 'turn',
+      toolCallId: 'check',
+    }),
+  ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+  expect(files.resolveAvailable).not.toHaveBeenCalled();
+  expect(sandbox.run).not.toHaveBeenCalled();
+});
+
+test('check passes the untouched comparison snapshot to the package checker and preserves finding totals', async () => {
+  const { tools, sandbox } = setup();
+  sandbox.run.mockImplementationOnce(async ({ onSettled }) => {
+    onSettled?.();
+    return {
+      status: 'ok',
+      result: JSON.stringify({
+        kind: 'check',
+        errors: 3,
+        warnings: 0,
+        existing: 1,
+        compared: true,
+        total: 3,
+        offset: 2,
+        findings: [],
+      }),
+      logs: '',
+      logsTruncated: false,
+      durationMs: 1,
+    };
+  });
+  const result = await tools
+    .find((tool) => tool.providerName === 'inspect_office_file')!
+    .execute({
+      input: {
+        file_entry_id: SOURCE,
+        kind: 'check',
+        against_file_entry_id: SOURCE,
+        offset: 2,
+        limit: 1,
+      },
+      signal: new AbortController().signal,
+      turnId: 'turn',
+      toolCallId: 'check',
+    });
+  expect(result.value).toMatchObject({
+    status: 'read',
+    kind: 'check',
+    compared: true,
+    errors: 3,
+    total: 3,
+    against_file_entry_id: SOURCE,
+  });
+  expect(sandbox.run.mock.calls[0][0].files?.inputs).toEqual([
+    `file:///managed/${SOURCE}`,
+    `file:///managed/${SOURCE}`,
+  ]);
 });

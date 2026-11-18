@@ -15,12 +15,18 @@ export function PaintingOverviewChrome({
   onBack,
   onDelete,
   onRename,
+  onShare,
+  isSharing,
+  onSelectImages,
   title,
 }: {
   nodeCount: number;
   onBack: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onShare?: () => void;
+  isSharing?: boolean;
+  onSelectImages?: () => void;
   title: string;
 }) {
   const { t } = useTranslation();
@@ -32,6 +38,22 @@ export function PaintingOverviewChrome({
         accessibilityLabel: t('painting.board.more'),
         icon: EllipsisIcon,
         items: [
+          {
+            id: 'share',
+            label: t('common.share'),
+            disabled: isSharing || !onShare,
+            onPress: () => onShare?.(),
+          },
+          ...(onSelectImages
+            ? [
+                {
+                  id: 'select-images',
+                  label: t('sharing.selectImages'),
+                  disabled: isSharing,
+                  onPress: onSelectImages,
+                },
+              ]
+            : []),
           { id: 'rename', label: t('painting.board.rename'), onPress: onRename },
           {
             destructive: true,
@@ -45,7 +67,7 @@ export function PaintingOverviewChrome({
         type: 'menu',
       },
     ],
-    [onDelete, onRename, t],
+    [isSharing, onDelete, onRename, onShare, onSelectImages, t],
   );
 
   return (

@@ -266,6 +266,11 @@ export class DesktopSession {
       if (error instanceof JSONRPCErrorException) {
         const failure = remoteFailureSchema.safeParse(error.data);
         if (failure.success) throw new RemoteFailureError(failure.data);
+        if (error.code === -32601 && method === 'agent.tasks.list')
+          throw new RemoteFailureError({
+            reason: 'UPGRADE_REQUIRED',
+            message: 'Desktop does not support the task catalog',
+          });
         // Without a verdict the outcome stays unknown; callers must not record it as rejected.
         if (error.code === LOCAL_ERROR_CODE && error.data === undefined)
           throw new RemoteTransportError(

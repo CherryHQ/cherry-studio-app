@@ -7,6 +7,8 @@ import type {
 } from '@earendil-works/pi-ai';
 import type { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import type { CloudModelUse } from '@/shared/contracts/cloud';
+
 import type { TraceSpan } from '../../../observability';
 import type {
   RuntimeModel,
@@ -31,6 +33,7 @@ export type PiModelResolution = {
   streamFn: PiStreamFn;
   supportsTools: boolean;
   nativeWebTools?: PiNativeWebTools;
+  deepseekSafetyCheck?: boolean;
   usageContext: RuntimeUsageContext;
 };
 
@@ -44,5 +47,6 @@ export interface PiRuntimeDependencies {
     sessionId: string,
     apiKeyOverride?: string,
     signal?: AbortSignal,
+    cloudUse?: CloudModelUse,
   ): PiModelResolution | Promise<PiModelResolution>;
 }

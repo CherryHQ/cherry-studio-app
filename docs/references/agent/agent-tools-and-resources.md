@@ -3,19 +3,20 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+generation, plain HTTP requests, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
 `create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
-Host resolves that catalog against model tool support, platform, OS permission, app
-configuration, and the Agent's capability-group deny-list, then combines it with
-globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
+Host resolves that catalog against model tool support, platform, OS permission and app
+configuration, then combines it with globally connected plugins and the Agent's persisted executable
+remote MCP bindings. Built-in tools, including Health and Reminders, follow the user's conversation
+task without per-Agent editor switches. System permission, service configuration, approval and
+managed-resource gates still apply. The file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
-Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
+Office generation, structural reads, integrity checks and bounded editing use the native QuickJS compute sandbox.
+Desktop Office fidelity remains a separate acceptance concern. See [Office Tools Design](./office-tools-design.md)
 and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
 tool still diverges from carry an **As-built** note.
 
@@ -73,11 +74,10 @@ historical UI remains understandable after configuration changes.
 Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its provider alias,
 which is unambiguous because the catalog is Cherry-owned and collision-free.
 `src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
-own platform, permission, application-configuration, base approval, capability-group membership,
-and auto-approval eligibility. The Agent editor enables or disables capability groups
-(`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
-only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota. Personal-health
+own platform, permission, application-configuration, base approval and auto-approval eligibility.
+The Agent editor cannot change the base policies; its approval preference only changes whether
+effective `ask` calls show an interactive prompt. `generate_image` is never
+auto-approval eligible: tool availability is not consent to spend provider quota. Personal-health
 reads are also ineligible: each call requires explicit consent to share health data with AI.
 Public HealthKit type discovery contains no personal data and can run automatically.
 
@@ -91,8 +91,8 @@ content. See [Web Search](../web-search.md) for the request and partial-result p
 that can still be requested keeps a device tool available as `ask`; execution prompts after
 in-app approval, including after a denial when the OS allows another request. Permanently denied,
 unavailable, or unreadable permission states remove dependent tools for the turn.
-The inference snapshot records the tools that entered the immutable turn. Enabling an Agent
-capability changes its preference; it does not itself request OS permission.
+The inference snapshot records the tools that entered the immutable turn. Discovering a tool
+does not itself request OS permission.
 
 The logical binding model is:
 
@@ -116,6 +116,14 @@ next turn.
 
 Connected plugins are system-wide: permitted tools and their bundled guides are available to every
 Agent, independent of legacy plugin bindings or composer mentions. A mention adds message intent.
+
+Custom remote MCP bindings retain their per-Agent isolation. The editor shows only enabled bindings;
+Add MCP opens a separate picker of enabled, supported servers. Server connection management remains
+on the plugin page. Disabled bindings and per-tool rules are not implicitly enabled by discovery.
+
+All retired built-in capability deny-list entries, including Health and Reminders, are ignored
+when reading old Agents. Historical Agent tool results omit these switches on read without
+rewriting their stored payloads.
 
 For remote MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
@@ -142,14 +150,13 @@ tool.
 Before admitting a turn, the Host resolves tools in this order:
 
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
-2. Read the Agent's capability-group deny-list from its definition.
-3. Project only system capabilities implemented and available on the current mobile platform.
-4. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
+2. Project only system capabilities implemented and available on the current mobile platform.
+3. Resolve executable descriptors for globally connected plugins and the current Agent's enabled
    remote MCP bindings, then select plugin guide sections whose tool prerequisites are available.
-5. Apply system permission state, model tool-calling support, and application policy.
-6. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
+4. Apply system permission state, model tool-calling support, and application policy.
+5. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
    automatic mode; `deny` remains denied).
-7. Freeze stable refs, provider-safe aliases, callbacks, and effective approval modes into `RuntimeTool[]` for
+6. Freeze stable refs, provider-safe aliases, callbacks, and effective approval modes into `RuntimeTool[]` for
    the turn.
 
 Configuration changes affect the next turn. Permission and resource checks that can change outside
@@ -189,8 +196,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill creation/installation/adaptation,
-library management, Office operations, Health and Agent management) register as upstream `deferred`
+MCP capabilities and built-in tools marked `deferred` (managed-file read/write/edit, file-library and
+workspace tools, Skill creation/installation/adaptation, Office operations, Health, Reminders,
+Calendar, Location, image generation and Agent management) register as upstream `deferred`
 tools. The system prompt's Tools On Demand section names each deferred built-in tool of the turn,
 because the model searches only for names it knows exist. Upstream `tool_search`
 ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
@@ -220,8 +228,10 @@ The initial prompt retains plugin capability overviews, critical constraints, an
 rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
 connection's tools are refused before approval until its guide is present. Loading ends its tool
 round; dependent actions are planned only after the next request supplies the complete instructions.
-Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
-their full routing descriptions retain the existing catalog budget.
+Loaded guides remain for later turns of the Session. Questions and Skill readers remain directly
+exposed so clarification and workflow loading do not require a discovery round. Their concise
+descriptions preserve invocation and pagination rules; full Skill routing metadata retains the
+existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -250,19 +260,38 @@ name search, and subfolder creation use `list_workspace`, `find_workspace_files`
 `create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
 live destination ancestry. Without a workspace, new outputs use the library root.
 
+Audio attachments are managed references, with no audio bytes in model input. When the native
+file decoder and selected offline transcription engine are ready, `transcribe_audio` accepts a conversation
+file reference or workspace-relative path. It creates a plain-text artifact in the captured workspace
+(or library root) and the Host grants it before the next `read_file` call. Like `write_file`, it is
+auto-approved. It uses the shared voice runtime and never uploads audio. SenseVoice needs no
+recognition permission; the optional system engine uses platform speech permissions, including
+Android’s required `RECORD_AUDIO` permission for file input.
+Limits are 100 MiB and two hours; unsupported/corrupt audio, unavailable models and cancellation do
+not produce partial documents. See [Voice Input And Speech](../voice.md#audio-file-transcription).
+
 The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. They follow the shared approval rule: reads
 (`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
-`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+`auto`, while folder creation, move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
 Agent's approval mode decides whether a mutation waits for the user. A successful library read
 permits editing that source into a workspace copy during this turn and leaves the source unchanged.
 It does not grant `read_file` future outside-library access.
 
-The six management tools are deferred; `library_search_files` names them for `tool_search`.
+Library search/read and the seven management tools are deferred, alongside managed-file and workspace
+tools. The initial Tools On Demand section names them for `tool_search`; a loaded
+`library_search_files` also names the management tools.
+Both file readers carry their own complete parser, pagination and image-delivery instructions,
+composed from the same definition; `library_read_file` does not require loading `read_file` first.
 `library_list_folders` searches active folder names or lists direct children, returning stable ids
 and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
 and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
 rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_create_folder` creates one folder without requiring a Session workspace. It accepts a
+safe name and an exact parent id, or `null` (also the default) for the library root. The existing
+transaction validates the live parent, rejects duplicate names, observes cancellation and
+notifies folder subscribers. The result returns the saved id, parent id and name. It does not
+associate the folder with the conversation; workspace association remains a separate user action.
 `library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
 changes only its display name. The existing library service owns cycle prevention, active
 destinations, collision rules, transactions, and cache invalidation. Move results report any
@@ -577,7 +606,7 @@ must describe the supported health categories and selected AI service.
 - Successful output is imported into managed file storage before the tool reports an artifact.
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
   `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
-  confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
+  confirms each call; the tool is absent unless a drawing
   model is configured. A disabled, hidden or non-drawing model counts as unconfigured, so it omits
   the tool rather than failing approved calls. Its description, input schema and request admission
   use one model capability snapshot and the same `createPaintingGenerationStrategy` as painting jobs
@@ -615,7 +644,11 @@ Results contain managed file metadata and a created artifact, never package byte
 Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
 membership in the selected workspace. Outputs are separate logical files in that workspace, or at
 the library root when none is selected; storage validates workspace placement at commit.
-`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. Its `kind: "structure"`
+inventories Word blocks/comments/revisions, Excel formula caches/errors, or PowerPoint geometry
+and estimated layout findings. `kind: "check"` validates bounded package XML, content types,
+relationships and selected IDs; optional `against_file_entry_id` compares against a separately
+authorized original. Counts precede paging, and existing findings remain distinct from new ones. `read_office_content`
 returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
 source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
 hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
@@ -674,11 +707,10 @@ compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact
 spec tools cannot express, including template filling, formulas, free layouts and package-level edits
 of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
 job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
-and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
-not parse are refused before publication. Script errors and console output return as
-`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
-pending. Executed tests cover package contents and supported patch preservation in a Node VM;
-they do not establish native QuickJS compatibility or Office visual fidelity.
+and saves no file, so package inspection does not leave scratch files. Outputs pass the same package integrity checks before publication. Scripts may supply
+`against_file_entry_id` to reject only newly introduced errors; the baseline is an independent
+snapshot that script mutations cannot replace. Script errors and console output return as
+`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope.
 
 ### Managed File Write And Edit
 
@@ -764,7 +796,9 @@ successive `text` windows until `nextOffset` is null recovers the complete origi
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Document assets remain `reference-only`; an explicit read of an authorized managed image is a
 separate operation.
-Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
+For text, PDF, AnyDoc, and OCR reads, mixed line/offset parameters are rejected before content is
+read, after schema validation, reference authorization, and source resolution succeed.
+The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
 
 The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
@@ -831,11 +865,14 @@ A client without the native module, or whose native module predates the interact
 no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
 `read_file` can explicitly read PNG, JPEG, WebP and GIF within its conversation or workspace access scope.
-It reuses native image normalization and the existing attachment byte limit. Vision-capable model
-calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
-details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
-When rebuilding from transcript alone, read the image again if its pixels are needed. Arbitrary
-paths and directory enumeration remain unavailable.
+It reuses native image normalization and the existing attachment byte limit. After schema validation,
+reference authorization, source resolution, and the attachment byte-limit check succeed, direct-pixel
+image reads reject any supplied paging parameter, including mixed line/offset groups, before reading or
+normalizing pixels, and instruct the caller to retry without start_line, limit, offset, or max_characters.
+Text-only models retain OCR text paging. Vision-capable model calls receive bounded pixels; scripts
+receive metadata. Visible Cherry transcript parts and tool details omit pixels, but a valid context
+checkpoint within the 256 KiB limit can retain them. When rebuilding from transcript alone, read the image
+again if its pixels are needed. Arbitrary paths and directory enumeration remain unavailable.
 
 ### Skill Boundary
 
@@ -902,6 +939,20 @@ desktop event labels or persistence shapes.
   side effects entering the transcript or non-terminal tool calls entering later model history.
 
 
+## Plain HTTP Requests
+
+`http_request` is a deferred built-in tool for ordinary API calls from the device. It takes a full
+HTTP(S) `url`, optional `method` (GET by default), string-valued `headers`, and a string `body`.
+GET and HEAD reject bodies; POST, PUT, PATCH, DELETE and OPTIONS can send one. It uses the shared
+HTTP service without native cookies, a 30-second deadline, and no automatic retries. The base
+approval is `ask` and follows the Agent's existing approval preference.
+
+Results contain the numeric `status`, response `headers`, raw text `body`, and `truncated` flag.
+All HTTP statuses are returned, including non-followed redirects and 4xx/5xx responses. At most
+64 KiB of response bytes are retained, dropping an incomplete trailing UTF-8 character. Network
+failures and timeouts do not prove that a write was not applied; the model must inspect resulting
+state before considering another write. No configuration page or credential management is added.
+
 ## User Questions
 
 `ask_user_question` is a core system tool, available when the model supports tool calls and the
@@ -937,20 +988,40 @@ approvals: leaving a route does not cancel the turn, but cancellation, host disp
 restart invalidate the question. Persisted unanswered questions are not resumable controls.
 
 A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
-with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+with a question-specific label and retains its keep-alive lease until the turn settles. This does not promise indefinite
 background execution or recovery after the operating system terminates the app.
 
 
+## MCP Connection Management
+
+`mcp_list_servers`, `mcp_get_server`, `mcp_create_server`, and `mcp_update_server` are deferred
+application tools. Reads are automatic; writes follow the Agent's existing approval preference.
+They use the same saved connections and mutation owner as the MCP settings page, so endpoint or
+header changes retire the previous authenticated connection and release a replaced OAuth grant.
+Successful writes invalidate the connection Data API queries even without a visible chat subscriber.
+
+Creation supports remote Streamable HTTP configuration only: name, HTTP(S) endpoint, optional
+static headers, enablement and disabled tool names. An omitted enablement keeps the existing
+disabled-by-default creation behavior. Mobile does not install or run stdio executables.
+Updates require a fresh `updatedAt`; the write transaction rejects concurrent changes. Unspecified
+fields stay unchanged; supplying `headers` replaces the whole map. These tools cannot create
+OAuth grants, configure bundled plugin authorizations, or bind a connection to an Agent.
+
+Receipts expose endpoint origin, header names, enablement and version metadata, never full URLs,
+header values or OAuth references. Saving does not verify connectivity, authentication or execution.
+Unknown write outcomes direct the model to inspect saved state before another write.
+Validation, unsupported configuration and persistence failures use the Runtime's call-failure
+envelope, including sanitized error diagnostics. Pi and Code Mode therefore retain the failed
+outcome instead of treating an error-valued reply as a successful invocation.
+
 ## Agent Management
 
-The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
-All four are deferred and loaded through `tool_search`.
-The editor lists it as Agent management alongside the other capability groups; it needs no OS
-permission. New Agents start with it disabled,
-whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
-fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
-preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
-or change MCP bindings.
+Agent management contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+All four are deferred and loaded through `tool_search` for user-directed conversation tasks.
+There is no per-Agent switch and no OS permission requirement. Reads use automatic approval;
+writes start at `ask` and follow the current Agent's approval
+preference, without a second confirmation flow. These definition tools do not delete Agents.
+Avatar and MCP binding changes use the dedicated application workflows described below.
 
 Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
 `AgentService` resolve the global default Agent model; omitted capability settings use the same
@@ -964,8 +1035,10 @@ registered `provider::model` string; omitting it preserves the model on update. 
 clear a model; the user does that in the editor. Agent targets are strings validated locally as an
 exact Agent ID or `current`.
 
-`agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+`agent_list` lists saved Agents with optional name filtering and pagination. Call with `{}` to browse
+without a name filter; a request to list Agents does not require asking the user for a search keyword.
+It returns at most 50 compact records per call and omits instructions.
+`agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -976,6 +1049,11 @@ preserved; this does not change the Skill library's global enablement. Definitio
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
 apply to future turns only.
 
+For avatar changes and version-only reads, `agent_get` accepts `view: summary`: it returns only
+`id`, `name`, and `updatedAt`, without instructions or Skill bindings. The definition view remains
+the required source before editing instructions. Both views and all three configuration tools
+refuse organization-delivered Agents before reading bindings, resolving images or changing state.
+
 A call saved before this contract, such as one still awaiting approval, fails validation without
 writing; the model reads the current definition and retries with the new form.
 
@@ -984,3 +1062,27 @@ chat subscriber. Successful writes render a compact saved-Agent card with a Star
 configured. List/read results remain in the process disclosure. Results omit managed
 avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
 inspect current saved records before deciding whether another write is needed.
+
+`agent_set_avatar` accepts an exact Agent id (or `current`), a fresh `updatedAt` from
+`agent_get` with `view: summary`, and a managed
+image reference. The source must be attached, generated, inside the captured workspace, or read
+through `library_read_file` this turn. No device paths or remote URLs enter its schema. The normal
+avatar workflow normalizes a separate image, conditionally updates the Agent row, compensates the
+new image on a stale-write failure, and removes the previous avatar only after persistence. The
+original library image is unchanged; successful receipts include only the Agent's id, name and
+new updatedAt, without instructions, avatar references or device-local paths.
+
+`agent_list_mcp_servers` reads saved remote servers and current bindings, including disabled servers
+and dangling bindings, with bounded pagination and no endpoint or credential values. It returns
+the server-wide binding's own `updatedAt`, or `null` when absent, and the number of per-tool
+overrides. Bundled plugins remain globally available and do not need per-Agent bindings.
+`agent_set_mcp_binding` enables, disables or removes one server-wide remote binding. It requires
+that binding version (or explicit `null` for creation), rechecks it in the write transaction, and
+preserves every unrelated binding and per-tool override. New bindings start at `ask`; existing
+denials are preserved. A disabled server stays disabled. Binding changes invalidate the Agent's
+binding query and enter subsequent tool catalogs; they do not expand the active turn's snapshot.
+These three tools are deferred, with automatic reads and the existing Agent approval preference
+for writes. They do not configure connections or perform external authorization.
+Validation, resource and persistence failures use the Runtime's call-failure envelope so Pi,
+Code Mode and transcript projection all preserve the failed outcome. Failure messages remain
+sanitized and uncertain writes require reading current state before another write.

@@ -11,6 +11,7 @@ import {
   localConversationFailure,
 } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { SshModule } from '@/shared/contracts/ssh';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { editableReplyParts } from '@/shared/utils/assistantReply';
@@ -63,18 +64,28 @@ export function createLocalConversationProjector(input: {
     | 'respondApproval'
     | 'respondQuestion'
     | 'retryMessage'
+    | 'editUserMessage'
     | 'forkSession'
     | 'deleteTurn'
     | 'selectMessage'
   >;
   sessionId: string;
+  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>;
   onSessionChanged?: (sessionId: string) => void;
 }) {
   const { client, sessionId } = input;
   const cache = createAgentMessageListProjectionCache();
-  const messages = new WeakMap<AgentMessageView, { busy: boolean; message: ConversationMessage }>();
+  const messages = new WeakMap<
+    AgentMessageView,
+    { busy: boolean; retrying: boolean; message: ConversationMessage }
+  >();
   let history:
-    | { source: readonly AgentMessageView[]; busy: boolean; messages: ConversationMessage[] }
+    | {
+        source: readonly AgentMessageView[];
+        busy: boolean;
+        pendingRetryMessageId?: string;
+        messages: ConversationMessage[];
+      }
     | undefined;
   const isBusy = (state: AgentSessionChatState) =>
     isAgentSessionBusy(state) || state.status === 'error';
@@ -112,20 +123,25 @@ export function createLocalConversationProjector(input: {
   return {
     message(message: AgentMessageView, state: AgentSessionChatState): ConversationMessage {
       const busy = isBusy(state);
-      const cached = messages.get(message);
-      if (cached && cached.busy === busy) return cached.message;
       const isSettled = message.status !== 'pending' && message.status !== 'streaming';
-      const canModify = isSettled && message.role !== 'system';
+      const retrying =
+        isSettled && message.status !== 'success' && state.pendingRetryMessageId === message.id;
+      const cached = messages.get(message);
+      if (cached && cached.busy === busy && cached.retrying === retrying) return cached.message;
+      const canModify = isSettled && !retrying && message.role !== 'system';
       const projected: ConversationMessage = {
-        ...projectLocalTranscriptMessage(message, cache),
+        ...projectLocalTranscriptMessage(
+          retrying ? { ...message, status: 'pending', parts: [], stats: null } : message,
+          cache,
+        ),
         actions: {
           ...(message.role === 'assistant' &&
           message.status === 'success' &&
           editableReplyParts(message.parts).length > 0
-            ? { edit: { availability: availability(state, true) } }
+            ? { editAnswer: { availability: availability(state, true) } }
             : {}),
           // Answers switch in place; switching only changes what is shown, so it never waits.
-          ...(message.siblings && message.role === 'assistant'
+          ...(message.siblings
             ? {
                 select: action<{ messageId: string }, void>(state, false, async ({ messageId }) => {
                   await client.selectMessage(sessionId, messageId);
@@ -135,19 +151,29 @@ export function createLocalConversationProjector(input: {
           ...(canModify && message.turnId
             ? {
                 remove: action<void, void>(state, true, () =>
-                  client.deleteTurn(sessionId, message.turnId!),
+                  client.deleteTurn(sessionId, message.turnId!, message.id),
+                ),
+              }
+            : {}),
+          ...(canModify && message.role === 'user'
+            ? {
+                editQuestion: action<{ text: string }, void>(state, true, ({ text }) =>
+                  client.editUserMessage({ sessionId, messageId: message.id, text }),
                 ),
               }
             : {}),
           ...(canModify && message.role === 'assistant'
             ? {
-                retry: action<void, ConversationRef | void>(state, true, async () => {
-                  const next = await client.retryMessage({ sessionId, messageId: message.id });
-                  if (next) {
-                    input.onSessionChanged?.(next.id);
-                    return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
-                  }
-                }),
+                retry: {
+                  ...action<void, ConversationRef | void>(state, true, async () => {
+                    const next = await client.retryMessage({ sessionId, messageId: message.id });
+                    if (next) {
+                      input.onSessionChanged?.(next.id);
+                      return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
+                    }
+                  }),
+                  modelId: message.modelId,
+                },
                 answerWith: action<{ modelId: UniqueModelId }, void>(
                   state,
                   true,
@@ -168,7 +194,7 @@ export function createLocalConversationProjector(input: {
             : {}),
         },
       };
-      messages.set(message, { busy, message: projected });
+      messages.set(message, { busy, retrying, message: projected });
       return projected;
     },
     /** Rows keep their array while only live state streams, so history consumers stay put. */
@@ -177,14 +203,41 @@ export function createLocalConversationProjector(input: {
       state: AgentSessionChatState,
     ): readonly ConversationMessage[] {
       const busy = isBusy(state);
-      if (history?.source !== source || history.busy !== busy)
-        history = { source, busy, messages: source.map((message) => this.message(message, state)) };
+      if (
+        history?.source !== source ||
+        history.busy !== busy ||
+        history.pendingRetryMessageId !== state.pendingRetryMessageId
+      )
+        history = {
+          source,
+          busy,
+          pendingRetryMessageId: state.pendingRetryMessageId,
+          messages: source.map((message) => this.message(message, state)),
+        };
       return history.messages;
     },
-    snapshot(state: AgentSessionChatState, title: string | undefined): ConversationSnapshot {
+    snapshot(
+      state: AgentSessionChatState,
+      title: string | undefined,
+      currentSshTarget = input.ssh?.getTarget(sessionId),
+    ): ConversationSnapshot {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const sshCommand =
+          approval.toolRef.source === 'builtin' && approval.toolRef.capabilityId === 'ssh_execute';
+        const sshTarget = sshCommand ? currentSshTarget : null;
+        const boundInput =
+          approval.input && typeof approval.input === 'object' && !Array.isArray(approval.input)
+            ? approval.input
+            : null;
+        const canGrantSshDiagnostics = Boolean(
+          sshTarget &&
+          !sshTarget.grant &&
+          boundInput?.connection_id === sshTarget.profile.id &&
+          boundInput?.connection_revision === sshTarget.profile.revision &&
+          boundInput?.selection_id === sshTarget.selectionId,
+        );
         const isHealth = isHealthToolRef(approval.toolRef);
         const inference = isHealth
           ? state.liveMessages.find(
@@ -196,7 +249,11 @@ export function createLocalConversationProjector(input: {
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
+          toolName:
+            approval.toolRef.source === 'builtin' ? approval.toolRef.capabilityId : undefined,
           state: 'pending',
+          sshCommand,
+          canGrantSshDiagnostics,
           ...(isHealth
             ? {
                 healthDataSharing: {
@@ -222,6 +279,25 @@ export function createLocalConversationProjector(input: {
               JSON.stringify(current.input) !== inputKey
             )
               throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+            if (
+              decision.kind === 'approve' &&
+              'sshDiagnosticsGrant' in decision &&
+              decision.sshDiagnosticsGrant
+            ) {
+              if (!canGrantSshDiagnostics || !sshTarget || !input.ssh)
+                throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+              const grantedTarget = await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              try {
+                await client.respondApproval(sessionId, approval.id, decision.kind);
+              } catch (error) {
+                // A concurrent selection or grant replacement must not be revoked here.
+                await input.ssh
+                  .setCommandGrant(sessionId, grantedTarget, false)
+                  .catch(() => undefined);
+                throw error;
+              }
+              return;
+            }
             await client.respondApproval(sessionId, approval.id, decision.kind);
           }),
         };
@@ -246,6 +322,7 @@ export function createLocalConversationProjector(input: {
         });
       }
       return {
+        isSubmitting: state.isSubmitting,
         agentId: state.snapshot?.agent.id,
         title: state.snapshot?.session.name ?? title ?? '',
         freshness:

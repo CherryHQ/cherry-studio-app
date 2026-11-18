@@ -90,7 +90,16 @@ export const workbookSpecSchema = z.strictObject({
           1000,
           50,
         ),
-        column_widths: z.array(z.number().min(4).max(80)).max(50).optional(),
+        column_widths: z
+          .array(
+            z
+              .number()
+              .transform((width) => Math.min(80, Math.max(4, width)))
+              .pipe(z.number().min(4).max(80))
+              .describe('Column width in characters; finite numbers are clamped to 4–80.'),
+          )
+          .max(50)
+          .optional(),
         column_formats: z
           .array(z.enum(['general', 'integer', 'decimal', 'percent']))
           .max(50)

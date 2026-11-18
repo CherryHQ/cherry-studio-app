@@ -11,6 +11,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
 ## Public Interface
 
 - `ChatScreen` is exported from `index.ts`.
+- `RemoteChatScreen` and `ReadOnlyTaskSessionScreen` are the desktop chat and scheduled-result
+  transcript route entries.
 
 ## Organization
 
@@ -43,6 +45,12 @@ message list keeps its geometry and selection does not subscribe into the chat r
   session; its text and attachments stay intact.
   The composer also reuses this sheet for MCP prompt parameters, with per-field requirements and a
   cancel action. Conversation questions keep their existing skip policy and non-dismissible behavior.
+  A form containing only one single-choice question with reviewed text changes instead presents
+  the decisions directly as fixed footer buttons. The body contains only the explanation and
+  before/after text, without radio options, a free-text field or an extra submit step. Pressing a
+  footer action submits that decision immediately; both actions lock while it is being saved and
+  become available on failure. Multi-question requests retain ordinary choices, free text and skip
+  policies, and submit all answers together even when questions include reviewed text changes.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound
@@ -92,6 +100,11 @@ are submitted as file parts and stay separate from the text draft; text controls
 
 ## Local and remote presentation
 
+`remote/ReadOnlyTaskSessionScreen` verifies membership in the selected scheduled task before
+opening the transcript. `ReadOnlyRemoteChat` shares message/history rendering and read actions,
+but has no composer, Agent picker or conversation-creation action. Its Session exposes no send,
+cancel, approval, upload or undelivered-message capability. The task list belongs to `remoteTask/`.
+
 `remote/RemoteChatScreen` keeps the `/remote` route, page frame, header and composer layout. It
 retains a desktop ConversationSource, opens a route Session through the remote-only hooks in
 `@/frontend/appShell/conversation/remote`, reconciles live rows with the desktop's history revision
@@ -120,6 +133,10 @@ ConversationApprovals shows decisions only: it reads the interaction input (inli
 deferred for desktop), uses the bound response action and cancels only the execution associated
 with the displayed approval. Pending questions never open the approval sheet; desktop question
 forms use the same `ConversationQuestionSheet` as local questions.
+Approval overlays, like question sheets, only open while their source is current, so a disconnected
+or refreshing source leaves recovery controls reachable. Known local tools use translated titles;
+Skill creation and installation show readable operation-specific content, with raw arguments behind
+an explicit details action.
 
 The matching desktop protocol supports question answers and system-workspace creation. Question
 forms consume a bound resource; responses carry complete answers rather than a boolean approval.
@@ -137,3 +154,8 @@ the remote execution controls, so workspace references are acquired for the new 
 from an existing session or an admitted start opens a distinct draft; admission is checked at click
 time and navigation invalidates the old handoff immediately. Pending/uncertain operations remain
 recoverable and cannot redirect the new draft when their replies arrive.
+
+The runtime public boundary exports `selectContextUsageSource` and `ContextUsageSource` for
+selecting the current working-context usage for the newest answer on the selected branch.
+`useLocalConversation` exposes the Session observation's `contextUsages`, including updates after
+background compaction. Persisted message token statistics do not supply composer occupancy.

@@ -1,3 +1,6 @@
+import ArrowUpIcon from '@cherrystudio/app-icons/icons/arrow-up';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Alert, Button, Surface, useToast } from '@cherrystudio/ui/components';
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -11,6 +14,7 @@ import { fileEntryUrl } from '@/shared/data/types/file';
 
 import { useChatQuoteActions, useChatQuoteState } from '../../../quotes/ChatQuoteContext';
 import { messageQuoteLine } from '../../../quotes/MessageQuotePreview';
+import { restoreQuoteMentions } from '../../../quotes/quoteMentions';
 import { useAgentChatClient, useAgentQueuedInputs } from '../../../runtime';
 import { QueuedInputPreview } from './QueuedInputSheets';
 
@@ -25,7 +29,8 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   const quote = useChatQuoteState().fields;
   const [preview, setPreview] = useState<AgentQueuedInput>();
   const [conflict, setConflict] = useState(false);
-  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState(true);
+  const [pending, setPending] = useState<Record<string, 'steer' | 'withdraw' | false>>({});
   const locks = useRef(new Set<string>());
   const withdrawn = useRef(new Set<string>());
   const latest = useRef({ composer, quote, sessionId, mounted: true });
@@ -48,7 +53,7 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
     const key = JSON.stringify([targetSession, input.turnId]);
     if (locks.current.has(key) || (!restore && withdrawn.current.has(key))) return;
     locks.current.add(key);
-    setPending((previous) => ({ ...previous, [input.turnId]: true }));
+    setPending((previous) => ({ ...previous, [input.turnId]: 'withdraw' }));
     const before = latest.current;
     let completed = false;
     try {
@@ -94,7 +99,9 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
         );
         setDraft(
           input.userMessage.parts
-            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+            .flatMap((part) =>
+              part.type === 'text' ? [restoreQuoteMentions(part.text, part.quotes)] : [],
+            )
             .join('\n'),
         );
         setAttachments(attachments);
@@ -120,10 +127,36 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
   function takeBack() {
     if (!preview || composer.isSubmitting || pending[preview.turnId]) return;
     if (locks.current.has(JSON.stringify([sessionId, preview.turnId]))) return;
-    if (composer.draft.length > 0 || composer.attachments.length > 0 || quote.quotes?.length) {
+    if (composer.draft.length > 0 || composer.attachments.length > 0) {
       setConflict(true);
     } else {
       void withdraw(preview, true);
+    }
+  }
+
+  async function steer(input: AgentQueuedInput) {
+    if (!sessionId) return;
+    const key = JSON.stringify([sessionId, input.turnId]);
+    if (locks.current.has(key)) return;
+    locks.current.add(key);
+    setPending((previous) => ({ ...previous, [input.turnId]: 'steer' }));
+    let accepted = false;
+    try {
+      const result = await client.steerQueuedInput(sessionId, input.turnId);
+      accepted = result === 'accepted';
+      if (!accepted)
+        toast.show({
+          label: t(
+            result === 'already-started' ? 'chat.queue.alreadyStarted' : 'chat.queue.notFound',
+          ),
+          variant: 'danger',
+        });
+      if (latest.current.sessionId === sessionId) setPreview(undefined);
+    } catch {
+      toast.show({ label: t('chat.queue.steerFailed'), variant: 'danger' });
+    } finally {
+      if (!accepted) locks.current.delete(key);
+      setPending((previous) => ({ ...previous, [input.turnId]: false }));
     }
   }
 
@@ -131,25 +164,39 @@ export function ChatInputQueue({ sessionId }: { sessionId?: string }) {
     <>
       {sessionId && inputs.length > 0 ? (
         <Surface testID="chat-input-queue">
-          <View className="py-1 pl-4 pr-2">
-            {/* Native scrolling cancels row taps; only detail text is selectable. */}
-            <ScrollView
-              className="max-h-40"
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-            >
-              {inputs.map((input, index) => (
-                <QueuedInputRow
-                  key={input.turnId}
-                  input={input}
-                  position={index + 1}
-                  pending={!!pending[input.turnId]}
-                  onPreview={() => setPreview(input)}
-                  onRemove={() => void withdraw(input, false)}
-                />
-              ))}
-            </ScrollView>
-          </View>
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={() => setExpanded(!expanded)}
+            accessibilityState={{ expanded }}
+            icon={expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            testID="chat-input-queue-toggle"
+          >
+            {`${t('chat.queue.title')} (${inputs.length})`}
+          </Button>
+          {expanded ? (
+            <View className="py-1 pl-4 pr-2">
+              {/* Native scrolling cancels row taps; only detail text is selectable. */}
+              <ScrollView
+                className="max-h-40"
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
+                {inputs.map((input, index) => (
+                  <QueuedInputRow
+                    key={input.turnId}
+                    input={input}
+                    position={index + 1}
+                    pending={!!pending[input.turnId]}
+                    steering={pending[input.turnId] === 'steer'}
+                    onPreview={() => setPreview(input)}
+                    onRemove={() => void withdraw(input, false)}
+                    onSteer={() => void steer(input)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </Surface>
       ) : null}
       {preview ? (
@@ -189,14 +236,18 @@ function QueuedInputRow({
   input,
   position,
   pending,
+  steering,
   onPreview,
   onRemove,
+  onSteer,
 }: {
   input: AgentQueuedInput;
   position: number;
   pending: boolean;
+  steering: boolean;
   onPreview: () => void;
   onRemove: () => void;
+  onSteer: () => void;
 }) {
   const { t } = useTranslation();
   const text = input.userMessage.parts
@@ -208,7 +259,16 @@ function QueuedInputRow({
     .flatMap((part) => (part.type === 'file' ? [part.filename ?? t('chat.queue.message')] : []))
     .join(' · ');
   const quote = input.userMessage.parts.flatMap((part) => {
-    const line = part.type === 'text' ? messageQuoteLine(part, t) : undefined;
+    const line =
+      part.type === 'text'
+        ? messageQuoteLine(
+            {
+              ...part,
+              quotes: part.quotes?.filter((quote) => !quote.reference),
+            },
+            t,
+          )
+        : undefined;
     return line ? [line] : [];
   })[0];
   // One quiet line under the request: what it carries besides its own words.
@@ -236,10 +296,22 @@ function QueuedInputRow({
         ) : null}
       </Pressable>
       <Button
+        accessibilityLabel={t('chat.queue.steer')}
+        disabled={pending}
+        loading={steering}
+        icon={<ArrowUpIcon className="text-muted-foreground" />}
+        onPress={onSteer}
+        size="xs"
+        variant="ghost"
+        testID={`chat-input-queue-steer-${input.turnId}`}
+      >
+        {t('chat.queue.steer')}
+      </Button>
+      <Button
         accessibilityLabel={t('chat.queue.remove', { position })}
         disabled={pending}
         icon={<XIcon className="text-muted-foreground" />}
-        loading={pending}
+        loading={pending && !steering}
         onPress={onRemove}
         shape="pill"
         size="xs"

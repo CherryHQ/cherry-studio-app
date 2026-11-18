@@ -2,6 +2,7 @@ import type * as AiSdkProviderUtils from '@ai-sdk/provider-utils';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/universal/data/types/model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ModelListContext } from '../listModels';
 import { DEFAULT_VERTEX_MODEL_PUBLISHERS } from '../listModels/vertex';
 import { AIHubMixModelsResponseSchema } from '../listModelsSchemas';
 import { makeProvider } from './fixtures';
@@ -37,6 +38,7 @@ function listModels(
   provider: Parameters<typeof listPortableModels>[0],
   signal?: AbortSignal,
   options?: { throwOnError?: boolean },
+  contextOverrides: Partial<ModelListContext> = {},
 ) {
   return listPortableModels(
     provider,
@@ -46,6 +48,7 @@ function listModels(
       getCopilotToken: async (headers) => (await getCopilotTokenMock(null, headers)).token,
       getRotatedApiKey: getRotatedApiKeyMock,
       getVertexAccessToken: getVertexAccessTokenMock,
+      ...contextOverrides,
     },
     signal,
     options,
@@ -104,6 +107,75 @@ describe('listModels — default grouping', () => {
       expect(models.map((model) => model.group)).not.toContain(providerId);
     },
   );
+});
+
+describe('listModels — Poe endpoint discovery', () => {
+  it.each(['poe', 'poe-copy'])('uses each bot declaration on %s', async (id) => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: {
+        data: [
+          { id: 'community', supported_endpoints: ['/v1/chat/completions'] },
+          { id: 'claude', supported_endpoints: ['/v1/messages', '/v1/chat/completions'] },
+          { id: 'responses', supported_endpoints: ['/v1/responses', '/v1/chat/completions'] },
+        ],
+      },
+    });
+    const provider = makeProvider({
+      id,
+      presetProviderId: 'poe',
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      endpointConfigs: { [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://poe.test/v1' } },
+    });
+    const models = await listModels(provider, undefined, undefined, {
+      getModelEndpointTypes: () => [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    expect(models.map((model) => model.endpointTypes)).toEqual([
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ]);
+  });
+
+  it('keeps known registry routes and defaults an unknown bot to chat completions without declarations', async () => {
+    aiSdkGetFromApiMock.mockResolvedValue({
+      value: { data: [{ id: 'known' }, { id: 'unknown' }] },
+    });
+    const models = await listModels(makeProvider({ id: 'poe' }), undefined, undefined, {
+      getModelEndpointTypes: (id) =>
+        id === 'known' ? [ENDPOINT_TYPE.OPENAI_RESPONSES] : undefined,
+    });
+    expect(models.map((model) => model.endpointTypes)).toEqual([
+      [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ]);
+  });
+});
+
+describe('listModels — malformed entry diagnostics', () => {
+  it('returns the valid models and reports skipped entries through the existing observer', async () => {
+    aiSdkGetFromApiMock.mockImplementationOnce(async ({ successfulResponseHandler }) =>
+      successfulResponseHandler({
+        response: new Response(
+          JSON.stringify({ data: [{ id: 'valid-model' }, { name: 'missing-id' }] }),
+          {
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+        url: 'https://provider.test/v1/models',
+        requestBodyValues: undefined,
+      }),
+    );
+    const diagnostics = vi.fn();
+    const models = await listModels(makeProvider({ id: 'custom' }), undefined, undefined, {
+      diagnostics,
+    });
+    expect(models.map((model) => model.apiModelId)).toEqual(['valid-model']);
+    expect(diagnostics.mock.calls[0][0]).toMatchObject({
+      code: 'model-list-entries-skipped',
+      providerId: 'custom',
+      error: expect.objectContaining({ message: 'Skipped 1 malformed model-list entries' }),
+    });
+  });
 });
 
 describe('listModels — Ollama capabilities', () => {
@@ -254,7 +326,7 @@ describe('listModels — geminiFetcher API key transport', () => {
   });
 });
 
-describe('listModels — openAIFetcher (official OpenAI provider, voice model discovery)', () => {
+describe('listModels — openAIFetcher (official OpenAI provider, audio/video filtering)', () => {
   function makeOpenAIProvider() {
     return makeProvider({
       id: 'openai',
@@ -265,7 +337,7 @@ describe('listModels — openAIFetcher (official OpenAI provider, voice model di
     });
   }
 
-  it('includes supported TTS/STT models while keeping realtime, audio chat and video out', async () => {
+  it('drops audio/video models (tts/whisper/transcribe/audio/realtime/sora), keeping chat, image, embedding, and moderation', async () => {
     aiSdkGetFromApiMock.mockResolvedValue({
       value: {
         data: [
@@ -279,9 +351,6 @@ describe('listModels — openAIFetcher (official OpenAI provider, voice model di
           { id: 'gpt-4o-mini-tts' },
           { id: 'whisper-1' },
           { id: 'gpt-4o-transcribe' },
-          { id: 'gpt-4o-mini-tts-2025-12-15' },
-          { id: 'gpt-4o-mini-transcribe-2025-12-15' },
-          { id: 'gpt-4o-transcribe-diarize' },
           { id: 'gpt-4o-realtime-preview' },
           { id: 'gpt-4o-audio-preview' },
           { id: 'sora-2' },
@@ -298,26 +367,10 @@ describe('listModels — openAIFetcher (official OpenAI provider, voice model di
       'dall-e-3',
       'text-embedding-3-large',
       'omni-moderation-latest',
-      'tts-1',
-      'gpt-4o-mini-tts',
-      'whisper-1',
-      'gpt-4o-transcribe',
-      'gpt-4o-mini-tts-2025-12-15',
-      'gpt-4o-mini-transcribe-2025-12-15',
     ]);
-    expect(models.find((model) => model.apiModelId === 'gpt-4o-mini-tts')).toMatchObject({
-      capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
-      inputModalities: ['text'],
-      outputModalities: ['audio'],
-    });
-    expect(models.find((model) => model.apiModelId === 'whisper-1')).toMatchObject({
-      capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
-      inputModalities: ['audio'],
-      outputModalities: ['text'],
-    });
   });
 
-  it('also discovers voice models for copied OpenAI providers', async () => {
+  it('applies the audio/video filter to copied OpenAI providers that keep presetProviderId but get a uuid id (REGRESSION)', async () => {
     const copiedOpenAIProvider = makeProvider({
       id: '550e8400-e29b-41d4-a716-446655440000',
       presetProviderId: 'openai',
@@ -334,29 +387,7 @@ describe('listModels — openAIFetcher (official OpenAI provider, voice model di
 
     const models = await listModels(copiedOpenAIProvider);
 
-    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o', 'tts-1', 'whisper-1']);
-  });
-
-  it('keeps known audio types on compatible gateways without classifying names by loose keywords', async () => {
-    aiSdkGetFromApiMock.mockResolvedValue({
-      value: {
-        data: [{ id: 'openai/gpt-4o-mini-tts' }, { id: 'whisper-1' }, { id: 'speech-chat' }],
-      },
-    });
-    const models = await listModels(
-      makeProvider({
-        id: 'custom-gateway',
-        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-        endpointConfigs: {
-          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://gateway.invalid/v1' },
-        },
-      }),
-    );
-    expect(models.map((model) => model.capabilities)).toEqual([
-      [MODEL_CAPABILITY.AUDIO_GENERATION],
-      [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
-      [],
-    ]);
+    expect(models.map((m) => m.apiModelId)).toEqual(['gpt-4o']);
   });
 });
 

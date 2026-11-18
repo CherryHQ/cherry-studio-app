@@ -158,8 +158,9 @@ Unused boot-receiver permission is blocked. Before Play distribution, complete i
 
 Assessment date: 2026-10-01. The priority is a small application adapter over maintained open-source
 execution and Expo capabilities, with no application-owned Java/Kotlin service lifecycle.
-Expo Notifications is pinned to `58.1.6`, within the `~58.1.6` range recommended by Expo 58.0.19's
-`bundledNativeModules.json` and matching the version-specific native patch.
+Expo Notifications is pinned to `58.1.7`, within the `~58.1.7` range recommended by Expo 58.0.22's
+`bundledNativeModules.json`. The maintained background-service patch belongs to
+`react-native-background-actions`; notification integration retains the same ownership.
 
 | Option | Decision |
 | --- | --- |

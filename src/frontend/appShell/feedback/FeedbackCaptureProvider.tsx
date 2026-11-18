@@ -13,9 +13,11 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
+import { DiagnosisSheet } from '@/frontend/appShell/diagnosis';
 import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
 import { usePreference } from '@/frontend/data/hooks';
 import type { DiagnosticFeedbackContext } from '@/shared/contracts/diagnostics';
+import type { DiagnosticFeedbackSummary } from '@/shared/contracts/diagnosticSession';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { canCaptureFeedbackRoute } from './feedbackCapturePolicy';
@@ -24,6 +26,12 @@ import { removeFeedbackScreenshot, type FeedbackScreenshot } from './feedbackScr
 import { useShakeFeedback } from './useShakeFeedback';
 
 const logger = loggerService.withContext('FeedbackCapture');
+const FEEDBACK_ROUTE = '/settings/about/feedback/new';
+const isFeedbackWorkflow = (path: string) => path === FEEDBACK_ROUTE;
+type FeedbackOptions = {
+  destination?: 'feedback' | 'diagnosis';
+  diagnosis?: DiagnosticFeedbackSummary;
+};
 type FeedbackHandoff = {
   context: DiagnosticFeedbackContext;
   controller?: AbortController;
@@ -34,10 +42,11 @@ const FeedbackCaptureContext = createContext<{
   screenshot?: FeedbackScreenshot;
   captureFailed: boolean;
   context?: DiagnosticFeedbackContext;
+  diagnosis?: DiagnosticFeedbackSummary;
 } | null>(null);
 
 const FeedbackActionsContext = createContext<{
-  openFeedback: (context: FeedbackContextInput) => Promise<void>;
+  openFeedback: (context: FeedbackContextInput, options?: FeedbackOptions) => Promise<void>;
   registerSource: (route: string, read: () => FeedbackContextInput) => () => void;
 } | null>(null);
 
@@ -52,11 +61,13 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   const [screenshot, setScreenshot] = useState<FeedbackScreenshot>();
   const [captureFailed, setCaptureFailed] = useState(false);
   const [context, setContext] = useState<DiagnosticFeedbackContext>();
+  const [diagnosis, setDiagnosis] = useState<DiagnosticFeedbackSummary>();
+  const [diagnosisOpen, setDiagnosisOpen] = useState(false);
   const source = useRef<{ route: string; read: () => FeedbackContextInput }>(undefined);
   const handoff = useRef<FeedbackHandoff>(undefined);
-  const latest = useRef({ pathname, router, prepareForNavigation, canNavigate });
+  const latest = useRef({ pathname, router, prepareForNavigation, canNavigate, diagnosisOpen });
   useLayoutEffect(() => {
-    latest.current = { pathname, router, prepareForNavigation, canNavigate };
+    latest.current = { pathname, router, prepareForNavigation, canNavigate, diagnosisOpen };
   });
   const owned = useRef<FeedbackScreenshot>(undefined);
   const clearScreenshot = useCallback(() => {
@@ -65,7 +76,10 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
     setScreenshot(undefined);
     setCaptureFailed(false);
   }, []);
-  const clearContext = useCallback(() => setContext(undefined), []);
+  const clearContext = useCallback(() => {
+    setContext(undefined);
+    setDiagnosis(undefined);
+  }, []);
   const registerSource = useCallback((route: string, read: () => FeedbackContextInput) => {
     const registered = { route, read };
     source.current = registered;
@@ -75,11 +89,12 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   }, []);
 
   const openFeedback = useCallback(
-    async (input: FeedbackContextInput) => {
+    async (input: FeedbackContextInput, options?: FeedbackOptions) => {
       const current = latest.current;
+      const openDiagnosis = options?.destination === 'diagnosis';
       if (
         handoff.current ||
-        current.pathname === '/settings/about/feedback/new' ||
+        (openDiagnosis ? current.diagnosisOpen : current.pathname === FEEDBACK_ROUTE) ||
         AppState.currentState !== 'active' ||
         !current.canNavigate()
       )
@@ -103,8 +118,13 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
           return;
         clearScreenshot();
         setContext(captured);
-        current.router.push('/settings/about/feedback/new');
-        pending.navigated = true;
+        setDiagnosis(options?.diagnosis);
+        if (openDiagnosis) setDiagnosisOpen(true);
+        else {
+          setDiagnosisOpen(false);
+          current.router.push(FEEDBACK_ROUTE);
+          pending.navigated = true;
+        }
       } catch (error) {
         logger.warn('Failed to open feedback', { error });
       } finally {
@@ -115,14 +135,11 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    const route = pathname;
     return () => {
       handoff.current?.controller?.abort();
       handoff.current = undefined;
-      if (
-        route === '/settings/about/feedback/new' ||
-        latest.current.pathname !== '/settings/about/feedback/new'
-      ) {
+      if (!isFeedbackWorkflow(latest.current.pathname)) {
+        setDiagnosisOpen(false);
         clearScreenshot();
         clearContext();
       }
@@ -149,6 +166,7 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
       isShakeEnabled &&
       !consentPending &&
       pathname !== '/settings/about/feedback/new' &&
+      !diagnosisOpen &&
       !pathname.startsWith('/onboarding'),
     route: pathname,
     prepareForNavigation,
@@ -180,13 +198,27 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   });
 
   const value = useMemo(
-    () => ({ screenshot, captureFailed, context }),
-    [screenshot, captureFailed, context],
+    () => ({ screenshot, captureFailed, context, diagnosis }),
+    [screenshot, captureFailed, context, diagnosis],
   );
   const actions = useMemo(() => ({ openFeedback, registerSource }), [openFeedback, registerSource]);
   return (
     <FeedbackActionsContext value={actions}>
-      <FeedbackCaptureContext value={value}>{children}</FeedbackCaptureContext>
+      <FeedbackCaptureContext value={value}>
+        {children}
+        {diagnosisOpen && context ? (
+          <DiagnosisSheet
+            context={context}
+            onClose={() => {
+              setDiagnosisOpen(false);
+              if (!handoff.current) clearContext();
+            }}
+            onFeedback={(summary) => {
+              void openFeedback(context, { diagnosis: summary });
+            }}
+          />
+        ) : null}
+      </FeedbackCaptureContext>
     </FeedbackActionsContext>
   );
 }

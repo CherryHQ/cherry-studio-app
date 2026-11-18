@@ -6,8 +6,12 @@ it to the app: bytes, PDF resources, theme, locale, diagnostics, structural sele
 system-open request.
 The app side lives in [`src/frontend/features/files`](../../src/frontend/features/files/README.md).
 
-> Status: uses the published npm package `@cherrystudio/file-preview@0.2.3`.
-> Native acceptance is still pending.
+> Status: uses the published npm package `@cherrystudio/file-preview@0.4.0`.
+> Dependency resolution used `--lockfile-only --ignore-scripts`; installation, regenerating `dist/`
+> and native acceptance remain pending.
+
+The `0.4.0` upgrade adds Czech and Polish translations; rendering, workers and public types are
+unchanged from `0.2.7`. Mobile's supported languages and locale selection remain app-owned.
 
 ## Build
 

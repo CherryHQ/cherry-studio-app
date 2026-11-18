@@ -65,6 +65,14 @@ afterEach(() => {
   appStateListeners.clear();
 });
 
+it('releases native pending and foreground subscriptions on unmount', () => {
+  render({ deliver: jest.fn(() => true) });
+  act(() => renderer!.unmount());
+  renderer = undefined;
+  expect(pendingListeners.size).toBe(0);
+  expect(appStateListeners.size).toBe(0);
+});
+
 it('delivers a claim through the latest render after its effect was replaced', async () => {
   const first = jest.fn(() => true);
   const latest = jest.fn(() => true);
@@ -115,6 +123,19 @@ it('keeps a share that delivery declines for the next ready pass', async () => {
   const accept = jest.fn(() => true);
   render({ deliver: accept, isReady: true });
   expect(accept).toHaveBeenCalledWith(share('declined'));
+});
+
+it('retains multiple declined shares in their original order', async () => {
+  const decline = jest.fn(() => false);
+  render({ deliver: decline });
+  await settle(0, share('first'));
+  act(() => pendingListeners.forEach((listener) => listener()));
+  await settle(1, share('second'));
+
+  render({ deliver: decline, isReady: false });
+  const accept = jest.fn((_action: SystemAction) => true);
+  render({ deliver: accept, isReady: true });
+  expect(accept.mock.calls.map(([action]) => action.text)).toEqual(['first', 'second']);
 });
 
 it('reports a failed import and claims again only when asked', async () => {

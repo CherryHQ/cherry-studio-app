@@ -1,0 +1,12 @@
+diff --git a/android/src/main/java/expo/modules/kotlin/services/FilePermissionService.kt b/android/src/main/java/expo/modules/kotlin/services/FilePermissionService.kt
+--- a/android/src/main/java/expo/modules/kotlin/services/FilePermissionService.kt
++++ b/android/src/main/java/expo/modules/kotlin/services/FilePermissionService.kt
+@@ -41,6 +41,7 @@ open class FilePermissionService : Service {
+   private fun getInternalPaths(context: Context): List<String> =
+     listOf(
+       context.filesDir.canonicalPath,
+-      context.cacheDir.canonicalPath
++      context.cacheDir.canonicalPath,
++      context.noBackupFilesDir.canonicalPath
+     )
+ }

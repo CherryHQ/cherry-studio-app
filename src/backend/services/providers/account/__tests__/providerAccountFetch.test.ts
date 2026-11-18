@@ -1,3 +1,5 @@
+import { HttpError } from '@/backend/services/http';
+
 import { createProviderAccountFetch } from '../providerAccountFetch';
 
 const mockRequest = jest.fn();
@@ -35,4 +37,84 @@ it('rejects methods other than GET and POST as an internal error', async () => {
     fetchAccount('https://auth.x.ai/oauth2/token', { method: 'PUT', body: '{}' }),
   ).rejects.toMatchObject({ code: 'INVALID_ACCOUNT_METHOD', kind: 'internal' });
   expect(mockRequest).not.toHaveBeenCalled();
+});
+
+it.each([
+  [400, 'invalid_grant'],
+  [401, undefined],
+  [401, 'invalid_client'],
+  [400, 'unauthorized_client'],
+] as const)(
+  'preserves a terminal OAuth rejection as structured metadata: %s %s',
+  async (status, code) => {
+    mockRequest.mockResolvedValueOnce({
+      status,
+      headers: {},
+      data: JSON.stringify({ error: code, error_description: 'secret-server-response' }),
+    });
+    const error = await fetchAccount('https://auth.x.ai/oauth2/token', { method: 'POST' }).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(HttpError);
+    expect(error).toMatchObject({ kind: 'http', status, code });
+    expect(String(error)).not.toContain('secret-server-response');
+  },
+);
+
+it.each([
+  [400, 'authorization_pending'],
+  [400, 'slow_down'],
+  [403, 'authorization_pending'],
+  [400, 'access_denied'],
+  [400, 'expired_token'],
+  [429, 'invalid_grant'],
+  [503, 'invalid_grant'],
+] as const)('leaves polling and retry responses intact: %s %s', async (status, error) => {
+  const body = { error, interval: 5 };
+  mockRequest.mockResolvedValueOnce({ status, headers: {}, data: JSON.stringify(body) });
+  const response = await fetchAccount('https://auth.x.ai/oauth2/token', { method: 'POST' });
+  expect(response.status).toBe(status);
+  expect(await response.json()).toEqual(body);
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+});
+
+it('leaves an ordinary non-JSON rejection available for SDK handling', async () => {
+  mockRequest.mockResolvedValueOnce({ status: 403, headers: {}, data: 'Forbidden' });
+  const response = await fetchAccount('https://auth.x.ai/oauth2/token', { method: 'POST' });
+  expect(response.status).toBe(403);
+  expect(await response.text()).toBe('Forbidden');
+});
+
+it.each([
+  ['https://auth.openai.com/oauth/token', 'POST'],
+  ['https://auth.x.ai/oauth2/token', 'POST'],
+  ['https://auth.kimi.com/api/oauth/token', 'POST'],
+  ['https://api.company.ghe.com/copilot_internal/v2/token', 'GET'],
+])('preserves a credential-exchange 401 from %s', async (url, method) => {
+  mockRequest.mockResolvedValueOnce({ status: 401, headers: {}, data: 'Unauthorized' });
+  await expect(fetchAccount(new Request(url, { method }))).rejects.toMatchObject({
+    kind: 'http',
+    status: 401,
+  });
+});
+
+it.each(['Unauthorized', JSON.stringify({ error: 'invalid_grant' })])(
+  'leaves a secondary endpoint rejection available for SDK handling: %s',
+  async (body) => {
+    mockRequest.mockResolvedValueOnce({ status: 401, headers: {}, data: body });
+    const response = await fetchAccount('https://api.individual.githubcopilot.com/models');
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe(body);
+  },
+);
+
+it('preserves client configuration errors outside credential exchanges', async () => {
+  mockRequest.mockResolvedValueOnce({
+    status: 400,
+    headers: {},
+    data: JSON.stringify({ error: 'invalid_client' }),
+  });
+  await expect(
+    fetchAccount('https://auth.openai.com/api/accounts/deviceauth/usercode', { method: 'POST' }),
+  ).rejects.toMatchObject({ kind: 'http', status: 400, code: 'invalid_client' });
 });

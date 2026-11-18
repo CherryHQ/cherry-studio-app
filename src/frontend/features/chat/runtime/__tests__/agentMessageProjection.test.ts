@@ -1,4 +1,4 @@
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import { AgentMessageViewSchema, type AgentMessageView } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
@@ -28,6 +28,20 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('projects sibling questions as question versions, not answer branches', () => {
+    const item = toAgentMessageListItem(
+      message('q2', {
+        role: 'user',
+        status: 'success',
+        siblings: [
+          { id: 'q1', modelId: null, status: 'success', siblingsGroupId: 0 },
+          { id: 'q2', modelId: null, status: 'success', siblingsGroupId: 0 },
+        ],
+      }),
+    );
+    expect(item?.questionBranch).toEqual({ siblings: ['q1', 'q2'] });
+    expect(item?.branch).toBeUndefined();
+  });
   test('a stale history page cannot replace newer message-owned translations', () => {
     const older = {
       sourceHash: 'a'.repeat(64),
@@ -122,7 +136,7 @@ describe('agentMessageProjection', () => {
   });
 
   test.each(['streaming', 'success'] as const)(
-    'joins restored reasoning summaries without changing source history, status=%s',
+    'projects restored reasoning phases as status without changing source history, status=%s',
     (status) => {
       const first = '**我准备穷举验证数字排列**\n\n**我构造双重穷举校验**\n\n**我枚举全部排列**';
       const second = '**Refining search bounds**\n\n**Preparing validation output**';
@@ -167,11 +181,17 @@ describe('agentMessageProjection', () => {
       expect(item?.data.parts).toEqual([
         {
           type: 'reasoning',
-          text: `${first}\n\n${second}`,
+          text: '',
           state: 'done',
+          providerMetadata: { cherry: { hasText: true } },
         },
         expect.objectContaining({ type: 'dynamic-tool', toolCallId: 'js-call' }),
-        { type: 'reasoning', text: '**Checking A>399 solutions**', state: 'done' },
+        {
+          type: 'reasoning',
+          text: '',
+          state: 'done',
+          providerMetadata: { cherry: { hasText: true } },
+        },
         { type: 'text', text: '168 solutions.', state: 'done' },
       ]);
       expect(parts).toEqual(original);
@@ -199,10 +219,20 @@ describe('agentMessageProjection', () => {
 
     expect(growing?.data.partKeys).toEqual(['summary']);
     expect(growing?.data.parts).toEqual([
-      { type: 'reasoning', text: 'Received summary.', state: 'streaming' },
+      {
+        type: 'reasoning',
+        text: '',
+        state: 'streaming',
+        providerMetadata: { cherry: { hasText: true } },
+      },
     ]);
     expect(settled?.data.parts).toEqual([
-      { type: 'reasoning', text: 'Received summary.', state: 'done' },
+      {
+        type: 'reasoning',
+        text: '',
+        state: 'done',
+        providerMetadata: { cherry: { hasText: true } },
+      },
     ]);
   });
 
@@ -247,6 +277,7 @@ describe('agentMessageProjection', () => {
         type: 'reasoning',
         text: '',
         state: 'streaming',
+        providerMetadata: { cherry: { hasText: false } },
       });
       expect(settled?.data.partKeys).toEqual(precedingParts.map((part) => part.id));
       expect(settled?.data.parts).toEqual(growing?.data.parts?.slice(0, -1));
@@ -362,11 +393,18 @@ describe('agentMessageProjection', () => {
     expect(restored?.status).toBe('pending');
   });
 
-  test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
-    const pluginReferences = [
-      { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
-    ];
-    const input = { type: 'text' as const, text: '飞书 查找文档', pluginReferences };
+  test.each([
+    {
+      type: 'text' as const,
+      text: '飞书 查找文档',
+      pluginReferences: [{ type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 }],
+    },
+    {
+      type: 'text' as const,
+      text: 'SSH · guoxu 这台机器有什么',
+      sshReferences: [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 0 }],
+    },
+  ])('keeps the inline display snapshot in pending and persisted user messages: $text', (input) => {
     const [pending] = createPendingChatMessages({
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
@@ -385,7 +423,7 @@ describe('agentMessageProjection', () => {
         type: 'text',
         text: input.text,
         state: 'done',
-        providerMetadata: { cherry: { references: pluginReferences } },
+        providerMetadata: { cherry: { references: input.pluginReferences ?? input.sshReferences } },
       },
     ]);
   });
@@ -683,7 +721,12 @@ describe('agentMessageProjection', () => {
       data: {
         partKeys: ['reasoning-1', 'tool-1'],
         parts: [
-          { state: 'streaming', text: 'Thinking', type: 'reasoning' },
+          {
+            state: 'streaming',
+            text: '',
+            type: 'reasoning',
+            providerMetadata: { cherry: { hasText: true } },
+          },
           {
             approval: { id: 'approval-1' },
             state: 'approval-requested',
@@ -894,6 +937,48 @@ describe('agentMessageProjection', () => {
     expect(mergeAgentMessageViews([assistant], [user])).toEqual([user, assistant]);
   });
 
+  test('parent order survives steering an older reservation and retry timestamps', () => {
+    const user = message('user', { role: 'user', parentId: null });
+    const first = message('first', { parentId: user.id, createdAt: '2026-08-25T00:00:05.000Z' });
+    const steer = message('steer', {
+      role: 'user',
+      parentId: first.id,
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const reply = message('reply', { parentId: steer.id });
+    const followup = message('followup', { role: 'user', parentId: reply.id });
+    const expected = [user, first, steer, reply, followup];
+    expect(mergeAgentMessageViews([], [followup, reply, steer, first, user])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, steer, followup], [reply, first])).toEqual(expected);
+    expect(mergeAgentMessageViews([user, followup, steer, first, reply], [])).toEqual(expected);
+  });
+
+  test('successive steer questions keep acceptance order before either answer exists', () => {
+    const original = message('original', { parentId: null, createdAt: '2026-08-25T00:00:00.000Z' });
+    const laterQueued = message('later-queued', {
+      role: 'user',
+      parentId: original.id,
+      createdAt: '2026-08-25T00:00:02.000Z',
+    });
+    const earlierQueued = message('earlier-queued', {
+      role: 'user',
+      parentId: 'guided-answer',
+      createdAt: '2026-08-25T00:00:01.000Z',
+    });
+    const answer = message('guided-answer', { parentId: laterQueued.id });
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued])).toEqual([
+      original,
+      laterQueued,
+      earlierQueued,
+    ]);
+    expect(mergeAgentMessageViews([original], [laterQueued, earlierQueued, answer])).toEqual([
+      original,
+      laterQueued,
+      answer,
+      earlierQueued,
+    ]);
+  });
+
   test('keeps the saved position of a retried answer when its live creation time differs', () => {
     const user = message('user', { role: 'user', status: 'success' });
     const assistant = message('assistant', {
@@ -973,3 +1058,39 @@ test('settled and pending quote-only metadata survives the conditional display p
   const part = toAgentMessageListItem(source)?.data.parts?.[0];
   expect(part?.type === 'text' && readCherryMeta(part)).toMatchObject(fields);
 });
+
+test.each(['content_filter', 'unknown', undefined] as const)(
+  'restores stored reason %s and classifies historical metadata without a snapshot',
+  (reasonCode) => {
+    const row = message('stored-failure', {
+      status: 'error',
+      parts: [
+        {
+          id: 'failure',
+          type: 'data-error',
+          data: {
+            code: 'EXECUTION_FAILED',
+            message: 'content_filter_results: filtered false',
+            retryable: true,
+            ...(reasonCode
+              ? {
+                  failure: {
+                    version: 1,
+                    reasonCode,
+                    source: { layer: 'provider', code: 'provider_error' },
+                  },
+                }
+              : {}),
+          },
+        },
+      ],
+    });
+    const restored = AgentMessageViewSchema.parse(JSON.parse(JSON.stringify(row)));
+    expect(toAgentMessageListItem(restored)?.data.parts).toEqual([
+      expect.objectContaining({
+        type: 'data-error',
+        data: expect.objectContaining({ reasonCode: reasonCode ?? 'unknown', retryable: true }),
+      }),
+    ]);
+  },
+);

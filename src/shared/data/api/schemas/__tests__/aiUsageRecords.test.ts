@@ -1,5 +1,6 @@
 import {
   AI_USAGE_RECORD_MAX_RANGE_DAYS,
+  AiUsageRecordAnalyticsQuerySchema,
   AiUsageRecordListQuerySchema,
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
@@ -8,6 +9,36 @@ import {
 describe('AI usage record query schemas', () => {
   const from = Date.UTC(2026, 0, 1);
   const to = Date.UTC(2026, 0, 31);
+
+  test('permits full-history analytics while retaining currency and range guards', () => {
+    expect(
+      AiUsageRecordAnalyticsQuerySchema.safeParse({ from: 0, to, groupBy: 'model' }).success,
+    ).toBe(true);
+    expect(
+      AiUsageRecordAnalyticsQuerySchema.safeParse({ from: to, to: from, groupBy: 'model' }).success,
+    ).toBe(false);
+    expect(
+      AiUsageRecordAnalyticsQuerySchema.safeParse({ from: 0, to, groupBy: 'model', metric: 'cost' })
+        .success,
+    ).toBe(false);
+    expect(
+      AiUsageRecordAnalyticsQuerySchema.parse({
+        from: 0,
+        to,
+        groupBy: 'apiKey',
+        apiKeyId: null,
+        search: '  key  ',
+      }),
+    ).toMatchObject({ apiKeyId: null, search: 'key' });
+    expect(
+      AiUsageRecordAnalyticsQuerySchema.safeParse({
+        from: 0,
+        to,
+        groupBy: 'model',
+        search: 'a'.repeat(201),
+      }).success,
+    ).toBe(false);
+  });
 
   test('applies list and aggregate defaults', () => {
     expect(AiUsageRecordListQuerySchema.parse({})).toMatchObject({

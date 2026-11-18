@@ -1,26 +1,50 @@
-import type { ToolExecutionResult } from '@earendil-works/pi-durable';
+import type { Context } from '@earendil-works/chord';
+import type { CodemodeStoreWrites } from '@earendil-works/pi-codemode';
+import type { ToolExecutionApi, ToolExecutionResult } from '@earendil-works/pi-durable';
+import { CodemodeStoreDoc } from '@earendil-works/pi-durable/codemode';
 
-import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+// Pi 1.5's native entry does not export its store limits. Match its 256 Ki-character
+// JSON value limit and reserve 256 Ki characters in the 1 Mi-character store for scripts/receipts.
+const MAX_OUTPUT_JSON_CHARACTERS = 256 * 1024;
+export const PI_CODEMODE_STORE_CHARACTERS = 4 * MAX_OUTPUT_JSON_CHARACTERS;
+const MAX_OUTPUT_STORE_CHARACTERS = PI_CODEMODE_STORE_CHARACTERS - MAX_OUTPUT_JSON_CHARACTERS;
 
-// A UTF-16 code unit needs at most three UTF-8 bytes, so this many always fit.
-const MAX_CHARACTERS = Math.floor(MAX_TEXT_ATTACHMENT_BYTES / 3);
-
-/**
- * read_file refuses a source over its full-source limit, so a saved text output keeps only the
- * start it can read back. The model already holds the output's start and end in the tool result.
- */
-export function fitPiCodemodeOutput(data: string | Uint8Array): string | Uint8Array {
-  if (
-    typeof data !== 'string' ||
-    data.length <= MAX_CHARACTERS ||
-    new TextEncoder().encode(data).byteLength <= MAX_TEXT_ATTACHMENT_BYTES
-  )
-    return data;
-  // Room for the note; the count it states is what the file keeps.
-  let end = MAX_CHARACTERS - 120;
-  const last = data.charCodeAt(end - 1);
-  if (last >= 0xd800 && last <= 0xdbff) end--;
-  return `${data.slice(0, end)}\n[Saved output cut: the first ${end} of ${data.length} characters are kept.]`;
+/** Console overflow is private working data, not a file-library artifact. */
+export async function retainPiCodemodeOutput(
+  name: string,
+  text: string,
+  api: ToolExecutionApi,
+  context: Context,
+  storeWrites?: CodemodeStoreWrites,
+): Promise<{ path: string } | { error: string }> {
+  // Avoid serializing text already known to exceed the limit.
+  const outputCharacters =
+    text.length > MAX_OUTPUT_JSON_CHARACTERS ? text.length : JSON.stringify(text).length;
+  if (outputCharacters > MAX_OUTPUT_JSON_CHARACTERS)
+    return { error: 'Text output exceeds the working cache limit. Print a smaller result.' };
+  const key = `codemode-output:${api.taskId}:${name}`;
+  return api.commit(async (tx) => {
+    const store = await tx.doc(CodemodeStoreDoc, api.conversationId);
+    if (store.values[key] === undefined) {
+      // The native runner commits these writes after formatting output. Check both snapshots;
+      // future deletions must not make the independent overflow commit exceed its budget either.
+      const values: Record<string, unknown> = Object.assign(Object.create(null), store.values);
+      for (const name of storeWrites?.delete ?? []) delete values[name];
+      Object.assign(values, storeWrites?.set);
+      const exceedsBudget = [store.values, values].some(
+        (candidate) =>
+          Object.entries(candidate).reduce(
+            (total, [name, value]) => total + name.length + JSON.stringify(value).length,
+            key.length + outputCharacters,
+          ) > MAX_OUTPUT_STORE_CHARACTERS,
+      );
+      if (exceedsBudget)
+        return { error: 'Working cache has no room for this output. Print a smaller result.' };
+      // CodemodeSandboxBase serializes JsonValues before load() sees them; retain the raw text.
+      store.values[key] = text;
+    }
+    return { path: `store:${key}` };
+  }, context);
 }
 
 const SCRIPT_ERROR = 'Script error:\n';

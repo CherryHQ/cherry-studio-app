@@ -32,17 +32,18 @@ import {
   readMessageTranslations,
   type MessageTranslations,
 } from '@/shared/data/types/messageTranslation';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import { messagePathIdsSql } from './utils/agentMessageTree';
+import { messageTreeOrder, messagePathIdsSql } from './utils/agentMessageTree';
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
   toAgentSessionView,
   toReadableAgentMessageViews,
 } from './utils/agentSessionRows';
-import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
+import { asNumericKey, decodeListCursor, encodeCursor } from './utils/keysetCursor';
 
 /** Durable transcript reads and message-owned reading aids. */
 export class AgentSessionMessageService {
@@ -171,25 +172,10 @@ export class AgentSessionMessageService {
   /** One SELECT holds SQLite's read snapshot for both selection and session metadata. */
   async readSelection(sessionId: string, ids: string[]): Promise<AgentTranscriptSelection> {
     const input = AgentTranscriptSelectionSchema.parse({ ids });
-    // Capture this generation before awaiting; never resolve a replacement host.
-    const db = this.db;
-    const rows = await db
-      .select({
-        session: agentSessionTable,
-        message: agentSessionMessageTable,
-        assistantName: agentTable.name,
-      })
-      .from(agentSessionTable)
-      .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
-      .leftJoin(
-        agentSessionMessageTable,
-        and(
-          eq(agentSessionMessageTable.sessionId, agentSessionTable.id),
-          inArray(agentSessionMessageTable.id, input.ids),
-        ),
-      )
-      .where(eq(agentSessionTable.id, sessionId))
-      .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id));
+    const rows = await this.readTranscriptRows(
+      sessionId,
+      inArray(agentSessionMessageTable.id, input.ids),
+    );
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     const messages = rows.flatMap(({ message }) => (message ? [message] : []));
     if (messages.length !== new Set(input.ids).size)
@@ -205,6 +191,41 @@ export class AgentSessionMessageService {
     };
   }
 
+  /** The selected path and its metadata come from one read, without the sharing selection limit. */
+  async readTranscript(sessionId: string): Promise<AgentTranscriptSelection> {
+    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId));
+    if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+    return {
+      assistantName: rows[0].assistantName ?? undefined,
+      session: toAgentSessionView(rows[0].session),
+      messages: toReadableAgentMessageViews(
+        rows.flatMap(({ message }) => (message && message.role !== 'system' ? [message] : [])),
+      ),
+    };
+  }
+
+  private readTranscriptRows(sessionId: string, selection: SQL) {
+    // Capture this generation before awaiting; never resolve a replacement host.
+    const db = this.db;
+    const order = messageTreeOrder(db, sessionId);
+    return db
+      .with(order)
+      .select({
+        session: agentSessionTable,
+        message: agentMessageViewColumns,
+        assistantName: agentTable.name,
+      })
+      .from(agentSessionTable)
+      .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
+      .leftJoin(
+        agentSessionMessageTable,
+        and(eq(agentSessionMessageTable.sessionId, agentSessionTable.id), selection),
+      )
+      .where(eq(agentSessionTable.id, sessionId))
+      .leftJoin(order, eq(order.id, agentSessionMessageTable.id))
+      .orderBy(asc(order.depth), asc(agentSessionMessageTable.id));
+  }
+
   private async readAround(
     sessionId: string,
     messageId: string,
@@ -212,10 +233,14 @@ export class AgentSessionMessageService {
     settledOnly = false,
     aroundMode?: 'exact',
   ) {
+    const db = this.db;
+    const order = messageTreeOrder(db, sessionId);
     const readTarget = (candidates: SQL) =>
-      this.db
+      db
+        .with(order)
         .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
+        .innerJoin(order, eq(order.id, agentSessionMessageTable.id))
         .where(
           and(
             eq(agentSessionMessageTable.sessionId, sessionId),
@@ -224,7 +249,7 @@ export class AgentSessionMessageService {
             this.settledTurnFilter(settledOnly),
           ),
         )
-        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .orderBy(desc(order.depth), desc(agentSessionMessageTable.id))
         .limit(1);
     let [target] = await readTarget(eq(agentSessionMessageTable.id, messageId));
     // Selecting another answer above it takes the message out of the transcript; read around its
@@ -267,23 +292,31 @@ export class AgentSessionMessageService {
     cursor: { key: number; id: string } | null,
     settledOnly = false,
   ): Promise<AgentMessageViewRow[]> {
-    const ordering = keysetOrdering(
-      agentSessionMessageTable.createdAt,
-      agentSessionMessageTable.id,
-      { major: direction, tie: direction },
-    );
-    return this.db
+    // Cursor IDs anchor tree position; reservation timestamps do not encode execution order.
+    const db = this.db;
+    const order = messageTreeOrder(db, sessionId);
+    const cursorDepth = cursor
+      ? sql`(SELECT message_order_depth FROM message_order WHERE message_order_id = ${cursor.id})`
+      : undefined;
+    const sort = direction === 'asc' ? asc : desc;
+    return db
+      .with(order)
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
+      .innerJoin(order, eq(order.id, agentSessionMessageTable.id))
       .where(
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           this.onSelectedPath(sessionId),
-          cursor ? ordering.where(cursor) : undefined,
+          cursor
+            ? direction === 'asc'
+              ? sql`${order.depth} > ${cursorDepth}`
+              : sql`${order.depth} < ${cursorDepth}`
+            : undefined,
           this.settledTurnFilter(settledOnly),
         ),
       )
-      .orderBy(...ordering.orderBy)
+      .orderBy(sort(order.depth), sort(agentSessionMessageTable.id))
       .limit(limit);
   }
 
@@ -345,7 +378,9 @@ export class AgentSessionMessageService {
     }
     return items.map((item) => {
       const siblings = item.parentId === undefined ? undefined : children.get(item.parentId);
-      return siblings && siblings.length > 1 ? { ...item, siblings } : item;
+      return projectAgentMessageDisplay(
+        siblings && siblings.length > 1 ? { ...item, siblings } : item,
+      );
     });
   }
 

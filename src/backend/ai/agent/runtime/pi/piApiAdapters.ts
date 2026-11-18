@@ -5,7 +5,11 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { piModelPayloadAttributes } from './piModelDiagnostics';
 import type { PiStreamFn } from './piModelTypes';
-import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
+import {
+  applyPiRequestCompatibility,
+  applyPiRequestParameters,
+  type PiRequestParameters,
+} from './piRequestParameters';
 import type { VertexAnthropicOptions } from './piVertexAnthropic';
 
 export type SupportedPiApi =
@@ -53,7 +57,7 @@ const PI_API_ADAPTERS = {
     loadStreamSimple: async () =>
       (await import('@earendil-works/pi-ai/api/google-generative-ai'))
         .streamSimple as unknown as PiStreamFn,
-    supportsCustomFetch: false,
+    supportsCustomFetch: true,
   },
   [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
     api: 'openai-completions',
@@ -233,7 +237,7 @@ export async function bindPiStream(
       onPayload: async (payload, requestModel) => {
         const previous = await options?.onPayload?.(payload, requestModel);
         const resolvedPayload = previous === undefined ? payload : previous;
-        const requestPayload = binding.requestParameters
+        const parameterizedPayload = binding.requestParameters
           ? applyPiRequestParameters(
               resolvedPayload,
               adapter.api,
@@ -242,6 +246,11 @@ export async function bindPiStream(
               temperature,
             )
           : resolvedPayload;
+        const requestPayload = applyPiRequestCompatibility(
+          parameterizedPayload,
+          adapter.api,
+          requestModel.id,
+        );
         trace?.setAttributes(piModelPayloadAttributes(requestPayload, adapter.api));
         return requestPayload;
       },

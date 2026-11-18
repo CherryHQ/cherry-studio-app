@@ -2,7 +2,13 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { createModelHandlers } from '@/backend/data/api/handlers/models';
-import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { agentTable } from '@/backend/data/db/schemas/agent';
+import { userModelTable } from '@/backend/data/db/schemas/userModel';
+import {
+  installProviderRegistryTestSnapshot,
+  providerRegistryTestSnapshot,
+} from '@/backend/data/services/providerRegistryTestSnapshot';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
@@ -147,4 +153,131 @@ describe('ModelService copied provider metadata', () => {
       }),
     ).resolves.toEqual(model.imageGeneration);
   });
+});
+
+describe('ModelService legacy MiMo identities', () => {
+  const legacyModels = [
+    ['mimo-v2-5', 'mimo-v2.5'],
+    ['mimo-v2-5-pro', 'mimo-v2.5-pro'],
+    ['mimo-v2-5-pro-ultraspeed', 'mimo-v2.5-pro-ultraspeed'],
+    ['mimo-v2-6-flash', 'mimo-v2.6-flash'],
+    ['mimo-v2-6-pro', 'mimo-v2.6-pro'],
+    ['mimo-v2-6-pro-ultraspeed', 'mimo-v2.6-pro-ultraspeed'],
+  ] as const;
+  let sqlite: DatabaseSync;
+  let db: ReturnType<typeof createTestDb>;
+  let models: ModelService;
+
+  beforeEach(async () => {
+    installProviderRegistryTestSnapshot();
+    sqlite = new DatabaseSync(':memory:');
+    db = createTestDb(sqlite);
+    await installTestHost({
+      DbService: db.dbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+    });
+    models = new ModelService();
+  });
+
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+    installProviderRegistryTestSnapshot();
+  });
+
+  it.each([
+    ['mimo', false],
+    ['copied-mimo', false],
+    ['mimo', true],
+    ['copied-mimo', true],
+  ] as const)(
+    'corrects request IDs without rewriting %s records or Agent references (old catalog: %s)',
+    async (providerId, oldCatalog) => {
+      if (oldCatalog) {
+        providerRegistryService.installRemoteSnapshot({
+          ...providerRegistryTestSnapshot,
+          providerModels: {
+            ...providerRegistryTestSnapshot.providerModels,
+            overrides: providerRegistryTestSnapshot.providerModels.overrides.map((override) =>
+              override.providerId === 'mimo' ? { ...override, apiModelId: undefined } : override,
+            ),
+          },
+        });
+      }
+      await new ProviderService().create({ name: 'MiMo', providerId, presetProviderId: 'mimo' });
+      await models.createDtos(
+        [...legacyModels.map(([id]) => id), 'mimo-v2.6-pro'].map((modelId) => ({
+          modelId,
+          providerId,
+          name: `My ${modelId}`,
+          maxOutputTokens: 8192,
+        })),
+      );
+      const selectedId = createUniqueModelId(providerId, 'mimo-v2-6-pro');
+      await db.database
+        .insert(agentTable)
+        .values({ name: 'MiMo Agent', model: selectedId, orderKey: 'a0' });
+      const savedRows = sqlite.prepare('SELECT * FROM user_model ORDER BY id').all();
+      const listed = await models.list({ providerId });
+
+      for (const [modelId, apiModelId] of legacyModels) {
+        const expected = {
+          id: createUniqueModelId(providerId, modelId),
+          providerId,
+          modelId,
+          apiModelId,
+          presetModelId: modelId,
+          name: `My ${modelId}`,
+          maxOutputTokens: 8192,
+        };
+        const saved = await models.getByKey(providerId, modelId);
+        expect(saved).toMatchObject(expected);
+        await expect(models.getById(expected.id)).resolves.toMatchObject(expected);
+        expect(listed).toContainEqual(expect.objectContaining(expected));
+      }
+      await expect(models.getByKey(providerId, 'mimo-v2.6-pro')).resolves.toMatchObject({
+        id: createUniqueModelId(providerId, 'mimo-v2.6-pro'),
+        modelId: 'mimo-v2.6-pro',
+        apiModelId: 'mimo-v2.6-pro',
+      });
+      expect(sqlite.prepare('SELECT * FROM user_model ORDER BY id').all()).toEqual(savedRows);
+      expect(sqlite.prepare('SELECT model FROM agent').get()).toEqual({ model: selectedId });
+    },
+  );
+
+  it.each([
+    ['custom-mimo', undefined, 'mimo-v2-6-pro'],
+    ['mimo', 'mimo', null],
+    ['mimo', 'mimo', 'mimo-v2-6-flash'],
+  ] as const)(
+    'preserves explicit aliases for %s with preset %s and model preset %s',
+    async (providerId, presetProviderId, presetModelId) => {
+      await new ProviderService().create({
+        name: 'Custom alias',
+        providerId,
+        presetProviderId,
+        defaultChatEndpoint: 'openai-chat-completions',
+        endpointConfigs: {
+          'openai-chat-completions': { baseUrl: 'https://example.test/v1' },
+        },
+      });
+      const modelId = 'mimo-v2-6-pro';
+      await db.database.insert(userModelTable).values({
+        id: createUniqueModelId(providerId, modelId),
+        providerId,
+        modelId,
+        presetModelId,
+        name: 'User alias',
+        capabilities: [],
+        supportsStreaming: true,
+        orderKey: 'a0',
+      });
+
+      await expect(models.getByKey(providerId, modelId)).resolves.toMatchObject({
+        modelId,
+        apiModelId: modelId,
+        name: 'User alias',
+      });
+    },
+  );
 });

@@ -23,6 +23,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('chat.web_search.default_fetch_urls_provider')).toBe('jina');
     expect(getDefaultValue('chat.web_search.default_search_keywords_provider')).toBe('exa-mcp');
     expect(getDefaultValue('chat.web_search.max_results')).toBe(5);
+    expect(getDefaultValue('chat.input.enter_to_send')).toBe(false);
     expect(getDefaultValue('chat.web_search.compression.method')).toBe('cutoff');
     expect(getDefaultValue('chat.web_search.compression.cutoff_limit')).toBe(2000);
     expect(getDefaultValue('feature.paintings.default_model_id')).toBeNull();
@@ -30,6 +31,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
     expect(getDefaultValue('ui.sidebar.recent_view_mode')).toBe('sessions');
+    expect(getDefaultValue('ui.sidebar.session_tree_enabled')).toBe(true);
   });
 });
 
@@ -38,4 +40,35 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(getDefaultValue('app.feedback.shake_hint_decision')).toBe('unseen');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
+});
+
+test('background audio needs a new device-local decision rather than prior guidance or backup consent', () => {
+  expect(getDefaultValue('app.background_audio.consent')).toBeNull();
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.background_audio.consent');
+});
+
+test('screen awake is a known, device-local opt-in with a valid key shape', () => {
+  const key = 'app.keep_screen_on.enabled';
+  expect(isPreferenceKey(key)).toBe(true);
+  expect(getPreferenceKeys()).toContain(key);
+  expect(getDefaultValue(key)).toBe(false);
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain(key);
+  expect(key).toMatch(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/);
+});
+
+test('dictation is opt-in and voice engine choices stay on the device', () => {
+  expect(getDefaultValue('feature.voice.dictation_engine')).toBeNull();
+  expect(getDefaultValue('feature.voice.speech_engine')).toBeNull();
+  expect(getDefaultValue('feature.voice.system_voice')).toBe('');
+  expect(getDefaultValue('feature.voice.transcription_engine')).toBe('sensevoice');
+  expect(getDefaultValue('feature.voice.transcription_language')).toBeNull();
+  // Engine support and system voices are facts of this device, not of a restored backup.
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toEqual(
+    expect.arrayContaining([
+      'feature.voice.dictation_engine',
+      'feature.voice.speech_engine',
+      'feature.voice.transcription_engine',
+      'feature.voice.system_voice',
+    ]),
+  );
 });

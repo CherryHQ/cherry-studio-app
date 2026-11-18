@@ -625,7 +625,11 @@ describe('fileStorage', () => {
       id: entry.id,
     });
 
-    expect(testState.writes).toEqual([{ content: 'longer content', options: undefined, uri }]);
+    expect(testState.writes).toEqual([
+      { content: 'longer content', options: undefined, uri: expect.stringMatching(/\.draft$/) },
+    ]);
+    expect(testState.files.get(uri)).toBe(14);
+    expect([...testState.files.keys()].filter((path) => path.endsWith('.draft'))).toEqual([]);
     expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
     expect(rewritten.size).toBe(14);
     expect(onFileChange).toHaveBeenCalledTimes(1);

@@ -26,8 +26,15 @@ export type TabsProps<TValue extends string> = {
   accessibilityLabel?: string;
   items: readonly TabsItem<TValue>[];
   layout?: TabsLayout;
+  /** The choice belongs to someone else: every option stays visible, none can be picked. */
+  locked?: boolean;
   onValueChange: (value: TValue) => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;
   value: TValue;
+  /**
+   * Omit for the existing platform control; explicit styles share one product rendering. `pill`
+   * is a page-level choice: plain labels, with a soft filled pill behind the selected one.
+   */
+  variant?: 'segmented' | 'underline' | 'chips' | 'floating' | 'pill';
 };

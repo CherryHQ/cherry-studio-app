@@ -32,6 +32,8 @@ const input: PairDesktopConnectionDto = {
   capabilities: ['agent'],
 };
 const connection: DesktopConnection = {
+  alias: null,
+  defaultName: 'Desktop',
   id: 'desktop',
   name: 'Desktop',
   status: 'paired',
@@ -124,10 +126,9 @@ describe('desktop pairing workflow', () => {
     );
 
     expect(latest.repairConnectionId).toBeUndefined();
-    expect(pairingCancelDestination(undefined, latest.repairConnectionId)).toBe(
+    expect(pairingCancelDestination(latest.repairConnectionId)).toBe(
       '/settings/device-connections',
     );
-    expect(pairingCancelDestination('chat', latest.repairConnectionId)).toBe('/onboarding');
     expect(latest.connection).toBeUndefined();
   });
 

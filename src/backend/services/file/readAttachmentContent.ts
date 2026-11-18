@@ -35,7 +35,7 @@ export type ReadAttachmentContent =
       text: string;
       sourceTruncated: boolean;
       unrecognizedPages?: number[];
-      parser?: 'builtin' | 'native-pdf' | 'native-image-ocr';
+      parser?: 'builtin' | 'native-pdf' | 'native-image-ocr' | 'deepseek-ocr';
     }
   | { kind: 'document'; parsed: ParsedAnydocDocument };
 
@@ -74,7 +74,7 @@ export async function readAttachmentContent(
         kind: 'text',
         text: result.text,
         sourceTruncated: result.truncated,
-        parser: 'native-image-ocr',
+        parser: result.parser ?? 'native-image-ocr',
       };
     }
     if (isDocument) {

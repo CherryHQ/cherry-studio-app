@@ -172,3 +172,23 @@ describe('run_office_script', () => {
     expect(sandbox.run).not.toHaveBeenCalled();
   });
 });
+
+test('script comparison adds and authorizes the original even when omitted from inputs', async () => {
+  const { files, sandbox, allowed, execute } = setup();
+  await expect(
+    execute({ filename: 'Deck.pptx', code: 'return "";', against_file_entry_id: DOC_ID }),
+  ).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+  expect(files.resolveAvailable).not.toHaveBeenCalled();
+  allowed.add(DOC_ID);
+  expect(
+    (
+      await execute({
+        filename: 'Deck.pptx',
+        code: 'return inputs[Object.keys(inputs)[0]].bytes;',
+        against_file_entry_id: DOC_ID,
+      })
+    ).value,
+  ).toMatchObject({ status: 'created' });
+  expect(sandbox.run.mock.calls[0][0].files?.inputs).toEqual([`file:///managed/${DOC_ID}`]);
+  expect(sandbox.run.mock.calls[0][0].code).toContain('const original = readInput(0).slice()');
+});

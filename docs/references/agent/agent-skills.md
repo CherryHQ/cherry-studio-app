@@ -25,9 +25,11 @@ local persistent UI cache by package content hash and language, and appear immed
 same document is reopened, including after an app restart. A changed package or another language
 uses its own translation; truncated, failed and cancelled requests are not saved. The existing
 update action is labeled **Update skill** because it applies the upstream content directly.
-Installed Skills are available by default, with no library enablement switch. Agent settings enable
-Skills individually for each Agent; the chat composer selects eligible bindings for a message.
-An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
+Installed Skills are available by default, with no library enablement switch. Agent settings retain
+individual bindings as the isolation boundary and show only enabled bindings. Add Skill opens a
+separate picker of installed, available packages; removing an entry unbinds it without uninstalling
+the package. Installation and updates stay in the Skill library, reachable from that picker.
+An enabled binding makes a Skill available for the model to choose when relevant. A composer reference
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
 
@@ -63,13 +65,11 @@ plugin connection ownership and per-turn tool filtering.
 
 Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
 search in popularity order; the app offers no sort choice. Catalog and detail reads never download
-packages or require credentials. All CherryIN list requests send `mobileSupport=supported`;
-upstream owns this classification through the `mobileSupport` field (`supported` or `unsupported`).
-Search and pagination use the same server-filtered list. Pasted CherryIN
-links and market detail pages also hide entries whose `mobileSupport` is not `supported`. This is a
-discovery UI policy: backend detail resolution, installation and updates remain available regardless
-of that field, and installed Skills remain manageable in the library. The app does not maintain a
-mobile compatibility classifier or allowlist.
+packages or require credentials. CherryIN list requests do not filter by the upstream
+`mobileSupport` classification (`supported` or `unsupported`), so both kinds of entries are available
+through browsing, search, pagination, pasted links and market detail pages. This classification
+does not gate discovery, detail resolution, installation or updates, and installed Skills remain
+manageable in the library. The app does not maintain a mobile compatibility classifier or allowlist.
 
 CherryIN downloads are ZIP packages, bounded to 32 MiB compressed and expanded, with unsafe paths,
 symlinks, collisions and invalid checksums rejected before installation. Resolution discovers up to
@@ -119,7 +119,7 @@ loading. Scripts, references, templates and other accepted resources are preserv
 
 Limitations compare two fixed things: what the package asks of its host, and what this build of the
 app provides. Neither side depends on the user's configuration. A missing permission, web-search
-provider, drawing model, plugin connection or Agent capability is the user's to configure, and the
+provider, drawing model or plugin connection is the user's to configure, and the
 owning tool reports it when a step runs.
 
 - **The package's side** is two stored facts. Its script files come from the accepted manifest:
@@ -252,16 +252,18 @@ without changing the original bytes outside the edited passages.
 The existing `UserQuestionSheet` displays the actual before/after text, reasons, and a notice that
 the one local Skill changes for all Agents using it. The tool itself requests this choice through
 the Host question port, including in automatic tool approval mode. It does not rely on the model
-remembering to ask. Only the explicit adaptation option with no unresolved custom input permits
-saving. Refusal, skipping, free-text-only answers and cancellation leave files unchanged. The tool
-rechecks current Agent access and package integrity after the answer; an internal content-hash
-comparison in the write transaction rejects concurrent changes instead of overwriting them.
+remembering to ask. The fixed footer offers save-and-continue and keep-unchanged actions directly;
+there are no radio options, free-text field or extra submit step. Only pressing the explicit save
+action permits saving. Refusal, skipping, free-text-only answers and cancellation leave files
+unchanged. The tool rechecks current Agent access and package integrity after the answer; an internal
+content-hash comparison in the write transaction rejects concurrent changes instead of overwriting them.
 
 Saving publishes a fully validated package and switches the one current installation atomically,
 preserving bindings. It does not create user-managed versions or per-Agent variants. The accepted
 scope and the same per-Skill Runtime instruction section are replaced before continuing the original
-task. A saved receipt with the actual changes stays inline outside the completed process disclosure,
-even if the model supplies no explanatory prose. A post-save refresh failure reports that saving
+task. A saved receipt shows the Skill name, outcome and change reasons inline outside the completed
+process disclosure, even if the model supplies no explanatory prose. The exact before/after text
+remains available in its detail reader. A post-save refresh failure reports inline that saving
 succeeded and requests a new message instead of claiming current-turn execution support.
 
 Tool availability and bounded text changes do not prove semantic equivalence. The model must
@@ -316,6 +318,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
+| `list_installed_skills` | App-wide installed metadata, including globally disabled and unbound Skills; `mode: count` returns only the total; lists default to 20 compact entries with opt-in descriptions and a 12,000-character serialized-value cap; optional name/description search and exact cursor continuation; does not load instructions or expand the turn scope |
 | `list_local_skills` | Unfiltered scoped automatic-invocation metadata, 20 results per page; the model judges task fit from names and complete descriptions; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
@@ -325,10 +328,11 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are application built-ins. Skill metadata, instruction and package file readers are directly
-exposed; discovery, installation, adaptation and creation tools are deferred and found with
+exposed; app-wide inventory, discovery, installation, adaptation and creation tools are deferred and found with
 `tool_search` by exact name. When the Agent has no Skill packages, the Skills section keeps only
 the inventory, discovery and in-turn installation rules. A search for a generic Skill tool does not describe installed package
-availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
+availability: use `list_local_skills` for the current Agent's usable inventory, or
+`list_installed_skills` for the complete installed library. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
 
@@ -346,7 +350,16 @@ not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
 subset, even when either is zero, and distinguishes them from the app's installed library and explicit
-selections. Current inventory questions use `list_local_skills`
+selections. App-wide inventory questions use `list_installed_skills`: `mode: count` queries the
+library total directly, with the same optional search and no package or binding materialization.
+Only a complete-list request follows every page. Lists return IDs, names, global enablement,
+Agent binding state and invocation flags; descriptions are included only with
+`include_descriptions: true`. The 12,000-character budget includes JSON escaping, metadata and
+the continuation cursor. A page may contain fewer than `limit` entries; its cursor resumes after
+the last returned entry, and only a null cursor completes the list. Descriptions remain complete.
+Both modes read the same library service as the Skill page, without package paths or instruction
+bodies. These are configuration facts, not proof of execution support or package readability.
+Current Agent inventory questions use `list_local_skills`
 with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
 automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
 null with the same options. This also refreshes inventory after a conversation installation without

@@ -59,6 +59,7 @@ export function ComposerEditor({
   compactAccessory,
   expandLabel,
   field,
+  restingTrailingActionCount = 1,
   testID,
 }: PropsWithChildren<{
   active: boolean;
@@ -71,6 +72,8 @@ export function ComposerEditor({
   compactAccessory?: ReactNode;
   expandLabel: string;
   field: ReactNode;
+  /** Action-sized slots kept visible at the end of the resting toolbar. */
+  restingTrailingActionCount?: number;
   testID?: string;
 }>) {
   const expansion = useComposerExpansion();
@@ -136,7 +139,7 @@ export function ComposerEditor({
     right: interpolate(
       activeProgress.get(),
       [0, 1],
-      [restingActionSlotWidth, 0],
+      [restingActionSlotWidth * restingTrailingActionCount, 0],
       Extrapolation.CLAMP,
     ),
   }));

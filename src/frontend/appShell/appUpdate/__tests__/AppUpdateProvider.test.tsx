@@ -239,3 +239,36 @@ test('a failed manual check releases its guard so a later attempt can succeed', 
   await act(async () => actions.check());
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
 });
+
+test('another trigger preserves the open prompt until it closes', async () => {
+  act(() => actions.open(oldRelease));
+  act(() => actions.open(latestRelease));
+  expect(mockDialog.release).toBe(oldRelease);
+  expect(mockSetPersist).toHaveBeenCalledTimes(1);
+  act(() => mockDialog.actions.close());
+  recordAvailable(oldRelease);
+  await act(async () => actions.check());
+  expect(mockDialog.release).toMatchObject({ id: oldRelease.id });
+  expect(mockSetPersist).toHaveBeenCalledTimes(2);
+});
+
+test('domestic updates use the existing dialog and only open the store after confirmation', async () => {
+  const release = {
+    channel: 'domestic-stores',
+    store: 'oppo',
+    id: 'domestic-stores:oppo:apk:2.1.0',
+    currentVersion: '1.0.0',
+    latestVersion: '2.1.0',
+    notesSource: 'gitcode',
+    notes: null,
+  } as const;
+  mockUpdate.check.mockResolvedValue({ status: 'available', ...release });
+  await act(async () => actions.check());
+  expect(mockDialog.release).toMatchObject(release);
+  expect(mockUpdate.openStore).not.toHaveBeenCalled();
+  expect(mockUpdate.download).not.toHaveBeenCalled();
+  act(() => mockDialog.actions.start(release));
+  expect(mockDialog.release).toBeNull();
+  expect(mockUpdate.openStore).toHaveBeenCalledWith(release);
+  expect(mockUpdate.download).not.toHaveBeenCalled();
+});

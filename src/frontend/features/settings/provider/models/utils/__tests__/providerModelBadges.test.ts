@@ -28,31 +28,6 @@ describe('provider model badges', () => {
   it('keeps CherryAI models free without relying on their names', () => {
     expect(getProviderModelBadges(createModel({ providerId: 'CherryAI' }))).toEqual(['free']);
   });
-
-  it('marks dedicated speech and transcription, but not multimodal audio chat', () => {
-    expect(
-      getProviderModelBadges(createModel({ capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION] })),
-    ).toEqual(['speech']);
-    expect(
-      getProviderModelBadges(createModel({ capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT] })),
-    ).toEqual(['transcription']);
-    expect(
-      getProviderModelBadges({
-        ...createModel({ capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION] }),
-        inputModalities: ['audio'],
-        outputModalities: ['text'],
-      }),
-    ).toEqual(['transcription']);
-    expect(
-      getProviderModelBadges({
-        ...createModel({
-          capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION, MODEL_CAPABILITY.AUDIO_RECOGNITION],
-        }),
-        inputModalities: ['text', 'audio'],
-        outputModalities: ['text', 'audio'],
-      }),
-    ).toEqual([]);
-  });
 });
 
 function createModel({

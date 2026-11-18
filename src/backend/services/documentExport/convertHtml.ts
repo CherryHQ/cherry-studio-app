@@ -8,7 +8,10 @@ import {
   HTML_CONVERSION_MAX_PIXELS,
   type HtmlConversionContext,
   type HtmlConversionInput,
+  type HtmlConversionArtifact,
+  type ExportImagePage,
 } from '@/shared/contracts/documentExport';
+import type { ResolvedFile } from '@/shared/contracts/file';
 import { readableFilename } from '@/shared/data/types/file';
 
 import type { DocumentExportDependencies } from './createDocumentExportSession';
@@ -35,6 +38,15 @@ export async function convertHtml(
   let outputBytes = 0;
   let output: ReturnType<File['open']> | undefined;
   let presentation: ReturnType<typeof createImagePresentation> | undefined;
+  const previews: ExportImagePage[] = [];
+  let published = false;
+  const release = () => {
+    try {
+      if (directory.exists) directory.delete();
+    } catch {
+      /* OS cache cleanup is best effort. */
+    }
+  };
   try {
     directory.create({ intermediates: true });
     if (input.format === 'pptx') {
@@ -92,6 +104,16 @@ export async function convertHtml(
         } else {
           await image.copy(file);
         }
+        const preview =
+          input.format === 'image'
+            ? file
+            : new File(directory, `page-${String(index + 1).padStart(3, '0')}.png`);
+        if (input.format !== 'image') await image.copy(preview);
+        previews.push({
+          file: { uri: preview.uri, filename: preview.name, mediaType: 'image/png' },
+          width: page.width,
+          height: page.height,
+        });
         pages++;
       },
     });
@@ -102,17 +124,55 @@ export async function convertHtml(
     output?.close();
     output = undefined;
     signal.throwIfAborted();
-    return await dependencies.saveFile(
-      {
-        filename,
-        uri: file.uri,
-        mediaType:
-          input.format === 'image'
-            ? 'image/png'
-            : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    const preparedFile = {
+      filename,
+      uri: file.uri,
+      mediaType:
+        input.format === 'image'
+          ? 'image/png'
+          : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+    let saved: ResolvedFile | undefined;
+    let saving: Promise<ResolvedFile> | undefined;
+    let disposed = false;
+    let savingController: AbortController | undefined;
+    const artifact: HtmlConversionArtifact = {
+      file: preparedFile,
+      pages: Object.freeze(previews),
+      save: async (saveSignal) => {
+        saveSignal?.throwIfAborted();
+        if (disposed) throw new DocumentExportError('disposed');
+        if (saved) return saved;
+        if (saving) return saving;
+        const controller = new AbortController();
+        savingController = controller;
+        const abort = () => controller.abort();
+        saveSignal?.addEventListener('abort', abort, { once: true });
+        saving = Promise.resolve()
+          .then(() => {
+            controller.signal.throwIfAborted();
+            return dependencies.saveFile(preparedFile, controller.signal);
+          })
+          .then((file) => {
+            saved = file;
+            return file;
+          })
+          .finally(() => {
+            saveSignal?.removeEventListener('abort', abort);
+            saving = undefined;
+            savingController = undefined;
+          });
+        return saving;
       },
-      signal,
-    );
+      dispose: async () => {
+        disposed = true;
+        savingController?.abort();
+        await saving?.catch(() => {});
+        release();
+      },
+    };
+    published = true;
+    return artifact;
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof DocumentExportError) throw error;
@@ -120,10 +180,6 @@ export async function convertHtml(
   } finally {
     presentation?.cancel();
     output?.close();
-    try {
-      if (directory.exists) directory.delete();
-    } catch {
-      /* OS-owned temporary cache cleanup is best effort. */
-    }
+    if (!published) release();
   }
 }

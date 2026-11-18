@@ -30,6 +30,8 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'serply',
   'searchapi',
   'desearch',
+  'stepfun',
+  'serpkite',
 ] as const;
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
@@ -73,6 +75,8 @@ export type WebSearchProviderOverrides = Partial<
  * Generated at runtime by merging preset with user overrides
  */
 export interface WebSearchProvider {
+  /** Explicit mobile service binding; execution selects its key through ProviderService. */
+  credentialsProviderId?: string;
   /** Unique provider identifier */
   id: WebSearchProviderId;
   /** Display name (from preset) */

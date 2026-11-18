@@ -59,3 +59,12 @@ describe('copyAssistantMessageText', () => {
     expect(copyAssistantMessageText([{ text: '   ', type: 'text' }])).toBe('');
   });
 });
+
+test('copies confirmed source numbering and leaves code and unknown IDs literal', () => {
+  expect(
+    copyAssistantMessageText(
+      [{ type: 'text', text: 'Answer [cite:earlier] `[cite:earlier]` [cite:missing]' }],
+      [{ id: 'earlier', title: 'Source', url: 'https://example.com' }],
+    ),
+  ).toBe('Answer [1] `[cite:earlier]` [cite:missing]');
+});

@@ -24,10 +24,10 @@ overlay in compact windows. Navigation state reports a permanent drawer as close
 receipts use it instead of the raw drawer status.
 
 In a wide window the sidebar stays beside every page in the content region, so its actions read the
-content stack when they run. Agents, Paintings, Plugins, Skills, and the avatar's Settings push above
+content stack when they run. Agents, Paintings, Plugins, Marketplace, and the avatar's Settings push above
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
 shows selected through `resolveSidebarDestination`. Conversation rows, New chat, device switching,
-and Files first pop the content region back to the chat. Plugins and Skills act for the chat beside
+and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills
 the content region. Files opens the [file pane](../pane/README.md) in place of the sidebar and stays
@@ -35,8 +35,10 @@ selected while the pane is open beside the chat. In compact windows the `/librar
 current local chat, so its previews can add files to that chat.
 
 The floating dock insets from the sidebar's leading safe area only: the column sits at the window's
-leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. Rows
-scrolled under the dock blur toward the bottom edge, as they do under the title row.
+leading edge, so a trailing safe area such as an iPhone Duo's status bar never reaches it. A
+theme-colored translucent layer covers the full width behind the profile row through the bottom
+safe area, with a soft fade above the row. It keeps scrolling rows subdued on Android and layers
+over the existing progressive blur on iOS.
 `useSidebarHeaderTop` places the title row below the top safe area, except where the chat header
 fills that inset (an upright iPhone Duo inner display) or keeps its own margin below a zero inset
 (the same display on its side); there the row centers on the header's controls.
@@ -66,19 +68,61 @@ Multi-select deletion removes sessions serially so active work settles before it
 Deleted rows hide immediately, and each removal's catalog change notification refreshes the lists;
 selection never refreshes them itself. Failed deletions remain selected for retry.
 
-The recent-list menu switches between a flat conversation list and conversations grouped by Agent.
+The recent-list menu switches between the conversation list and conversations grouped by Agent.
+General settings owns `ui.sidebar.session_tree_enabled`, enabled by default. With it enabled,
+local conversation rows with forks form collapsible groups under their main conversation in both
+views. With it disabled, both views list main and branch conversations separately by each
+conversation's latest activity, using the complete catalog rather than flattening loaded child
+pages. Changing this preference resets list pagination and releases child queries; query caches and
+local pagination cursors keep the two modes separate. The destination picker retains tree grouping.
+The root row opens its conversation; its separate disclosure target expands only its direct
+children. Each expanded node owns an independently paginated metadata query, ordered by creation
+time and id so new replies do not move sibling nodes. Collapsing it releases the child queries.
+Root groups are paginated by the family's latest activity. A lightweight root-first path read
+restores the selected conversation's ancestors when the drawer opens, including ancestors outside
+the loaded pages. It never loads transcripts. Relationship rails use the ordinary row's measured
+height and retain 12-point indentation for every generation. `SidebarBranchScrollView` owns the
+vertical viewport and measures mounted rows against its native content view after layout changes;
+the catalog's actual depth supplies their horizontal coordinates. As a row crosses the visible top
+edge below the floating header, the common offset interpolates toward the next row's depth. Text,
+nodes and rails move together, returning to the ordinary gutter across headers and gaps. This is
+scroll-driven UI-thread layout with no horizontal gesture, scrollbar, path toolbar or extra easing;
+it does not change selection, hierarchy, expansion or pagination. The row canvas grows by the
+current offset so text truncation and status stay inside its fixed trailing edge. Native measurements
+publish as a complete batch; stale batches are discarded when rows change or unmount.
+A row stops moving left once its own indentation is consumed, so shallower siblings below a deep
+top row retain the beginning of their titles. Text and rails share this row-local boundary.
+The navigation and native menu targets stay outside that moving canvas at the viewport's width;
+their content callback places only row content and rails inside it. Native menu previews therefore
+use the visible row bounds, including at deep offsets.
+Selection uses the existing whole-row surface, with no additional selected label or branch count.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles
 its conversations without navigating; multiple groups can stay open. Only expanded groups query
 Sessions by their Agent id, show ten initially, and own independent "Load more" actions.
 Conversation rows share selection and navigation; status, rename and deletion are supplied by the
 source preview contract. Local previews retain these capabilities without opening transcripts.
+Status consumes space only while present: progress uses a spinner, failure an alert icon, and
+unread completion a dot; pending approval or input keeps a short translated label. Full labels
+remain in each row's accessibility value. Default and read-completed rows have no status slot.
+The disclosure stays at the same trailing edge at every depth, with no empty disclosure slot on
+leaves. A collapsed family or Agent group shows its highest-priority status; expanded nodes show
+their own status and leave descendant hints with the visible child rows. Status hints never
+fetch child pages or transcripts.
 Remote previews currently omit them because the desktop catalog does not supply them. Agent header labels
-toggle their groups. The existing dock's "New chat" action opens a draft, where the user can
+toggle their groups. The chat header's new-chat action opens a draft, where the user can
 select an Agent.
-Within Agent groups, Agent names, conversation titles, and pagination actions share one text
-column. Grouped conversation and pagination rows keep the avatar column empty; the ordinary
-conversation list has no avatar column and retains its original left gutter. Selection surfaces
-keep the same outer gutters across groups.
+Within Agent groups, ordinary conversation titles and pagination actions share the Agent's text
+column. Branch rails start in that column, with titles following their node. Grouped rows keep the
+avatar column empty; the ordinary conversation list has no avatar column and retains its original
+left gutter. Selection surfaces keep the same outer gutters across groups. The navigation/menu
+target and disclosure are siblings: a tap on the disclosure only expands or collapses, long press
+on the conversation opens its existing native menu, and scrolling cancels those actions through
+the shared gesture owners. In selection mode, the main target toggles the checkbox while disclosure
+remains available for selecting descendants; all targets disable during deletion.
+The bottom dock retains its existing iOS progressive blur. Its explicit stacking order keeps
+scrolling rows and disclosure targets behind the controls. The container retains `box-none` touch
+handling: controls own their taps, while gaps keep the existing pass-through behavior. The body's
+existing bottom padding keeps the final conversation reachable above the dock.
 
 The drawer title names whose chats it shows: "Cherry Studio" for this phone, or the selected
 desktop's name. The name always reads in full and never ends in an ellipsis: a long one shrinks
@@ -95,14 +139,21 @@ pagination, selection and menu presentation consume catalog summaries and bound 
 `SidebarDesktopSource` owns only connection framing.
 The original local sidebar is the visual and interaction baseline for both sources. Agent headers
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
-group. New chat stays in the existing bottom dock, with no per-Agent new-chat icon. Row gutters,
+group. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
+settings row. Community accounts with a confirmed, currently effective paid subscription also show
+the existing dashed plan badge beside the nickname; free, expired, signed-out, unavailable and
+enterprise accounts keep it hidden. Plan names come from plan metadata; remaining percentages use
+the account quota snapshot, matched to the plan by allocation ID. Exhausted quotas still show 0%.
+The badge cycles the plan name for four seconds and each quota for three seconds through CherryUI
+`TextAnimation.Rotating`. Rotation stops while the drawer is hidden, the app is backgrounded, or
+selection is active; Reduce Motion shows the plan and first remaining percentage statically. Row gutters,
 text columns, selection/pressed surfaces, empty/loading/error spacing and pagination feedback
 follow the local presentation. Avatar rendering is shared; desktop emoji is preserved, while a source without avatar metadata uses
 the common fallback.
 A connected PC is represented by a green status dot beside the list view heading, with the device
 name retained in its accessibility label. Connection problems keep their message and recovery
 action. Source switching stays inside the drawer chat stack. On a desktop, the drawer shows only
-what exists there: the search button and the Agents, Paintings, Plugins, Skills and Library rows are hidden
+what exists there: the search button and the Agents, Paintings, Plugins, Marketplace and Library rows are hidden
 because they manage this phone.
 
 Conversation source acquisition and loaded content share the same header frame, including a reserved status
@@ -118,3 +169,15 @@ Device selection still reads the pairing directory; action availability comes fr
 source. Local Data API metadata changes invalidate the catalog; lightweight Host status and read marks
 update individual rows. Search availability is supplied by the sidebar navigation owner. Concurrent readers share catalog requests. The last reader cancels unfinished reads and releases
 connection demand; completed metadata remains briefly in memory for reopening the sidebar.
+
+`ConversationDestinationList`, exported from the module root, reuses those same Agent groups,
+conversation queries, pagination and row frames for a caller-owned destination choice. It requires
+`ConversationSourceBoundary`; it does not require drawer actions or sidebar selection state. In
+this explicit consumer, pressing the Agent name/avatar chooses a new conversation under that Agent,
+and a separate disclosure target expands its conversations. Pressing a conversation reports its
+summary to the caller without closing a drawer or mounting rename/delete/multiselect controls.
+The ordinary sidebar retains its full-row expansion and management behavior. The name and
+arrow are sibling press targets; scroll cancellation remains with Gesture Handler and the shared
+scroll interaction boundary. The picker changes neither row typography nor the avatar/text columns.
+Its caller owns scrolling; without `SidebarBranchScrollView`, the shared row frames keep their
+ordinary static indentation and do not acquire the drawer's automatic horizontal following.

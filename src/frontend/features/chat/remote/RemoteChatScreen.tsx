@@ -4,7 +4,15 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useLocalSearchParams } from 'expo-router';
-import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
+import {
+  type RefObject,
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View, type ViewInstance } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -23,15 +31,15 @@ import {
   useConversationSnapshot,
   useRemoteConversationSource,
 } from '@/frontend/appShell/conversation/remote';
-import { MainHeaderView, MainHeaderAgentPickerSheet } from '@/frontend/appShell/header';
+import { MainHeaderView } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
-  conversationShareHref,
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import { useSidebarPresence } from '@/frontend/appShell/sidebar';
+import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -43,7 +51,10 @@ import { useBackendModule } from '@/frontend/data';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
+import { ChatShareComposerGuard, ChatShareSelectionControls } from '../share/ChatShareControls';
+import { ChatShareSelectionProvider } from '../share/ChatShareSelectionProvider';
 import { ConversationPresenter } from './ConversationPresenter';
+import { remoteChatShareTarget } from './remoteChatShareTarget';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
 import { readRemoteDraft } from './useRemoteDraftPersistence';
@@ -99,6 +110,7 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInst
   const { startRemoteChat } = useChatSource();
   return <MainHeaderView blurTarget={blurTarget} onNewChat={() => startRemoteChat()} />;
 }
+
 const HeaderContext = createContext<{
   agent?: AgentSummary;
   selectAgent(agentId: string): void;
@@ -107,9 +119,11 @@ const HeaderContext = createContext<{
 function RemoteHeader({
   blurTarget,
   hidden,
+  selection,
 }: {
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
+  selection?: { selectedCount: number; onExit(): void };
 }) {
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
@@ -120,13 +134,15 @@ function RemoteHeader({
         agent={header.agent}
         blurTarget={blurTarget}
         hidden={hidden}
+        selection={selection}
         onNewChat={() => header.startNewChat(header.agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
           setPickerOpen(true);
         }}
       />
-      <MainHeaderAgentPickerSheet
+      <AgentPickerSheet
+        testID="main-header-agent-picker"
         catalog={catalog}
         currentAgentId={header.agent?.id}
         open={pickerOpen}
@@ -182,10 +198,8 @@ function RemoteChatSession() {
     history.hasNewerMessages,
   );
   const session = opened.session;
-  const shareMessage = useCallback(
-    (messageId: string) => {
-      if (session) router.push(conversationShareHref(session.ref, messageId, session.scope));
-    },
+  const shareTarget = useMemo(
+    () => (session ? remoteChatShareTarget(session) : undefined),
     [session],
   );
   const agents = useConversationAgents();
@@ -201,90 +215,97 @@ function RemoteChatSession() {
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
   return (
+    // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
-        <ComposerSessionProvider
-          key={`${source.scope}:${identity}`}
-          initialDraft={() => readRemoteDraft(draftKey)}
-        >
-          {/* Native background taps yield to scrolling and excluded message content. */}
-          <ComposerDismissArea testID="chat-background">
-            {opened.error ? (
-              <ContentState.Error
-                title={t('remoteAgent.loadFailed')}
-                primaryAction={{ children: t('common.retry'), onPress: opened.retry }}
-              />
-            ) : (
-              <ChatWorkspace
-                executionSource="desktop"
-                feedbackHintBottomOffset={composerHeight}
-                renderUsage={renderRemoteUsage}
-                messages={messages}
-                onShare={opened.session ? shareMessage : undefined}
-                snapshot={snapshot}
-                messageWindow={history}
-                sessionId={target.sessionId}
-                assistantEmoji={agent?.emoji}
-                assistantName={agent?.name}
-                isAssistantToolbarEnabled
-                contentBottomInset={composerContentGap}
-                keyboardOffset={getComposerKeyboardStickyOffset(bottom)}
-                onPendingSendDisplayed={ignorePending}
-              />
-            )}
-          </ComposerDismissArea>
-          <ComposerDock
-            backgroundClassName="bg-chat-background"
-            layoutMode="expandable-overlay"
-            onHeightChange={setComposerHeight}
+        <ChatShareSelectionProvider target={shareTarget} messages={messages}>
+          <ComposerSessionProvider
+            key={`${source.scope}:${identity}`}
+            initialDraft={() => readRemoteDraft(draftKey)}
           >
-            <View>
-              <ConversationStatus
-                availability={availability}
-                onRepair={() => router.push('/settings/device-connections')}
-                onReconnect={
-                  connectionId ? () => desktopConnections.reconnect(connectionId) : undefined
-                }
-                onOpenDeviceSettings={
-                  connectionId
-                    ? () =>
-                        router.push({
-                          pathname: '/settings/device-connections/[connectionId]',
-                          params: { connectionId },
-                        })
-                    : undefined
-                }
-              />
-              {!target.sessionId && agents.isError ? (
+            {/* Native background taps yield to scrolling and excluded message content. */}
+            <ComposerDismissArea testID="chat-background">
+              {opened.error ? (
                 <ContentState.Error
                   title={t('remoteAgent.loadFailed')}
-                  primaryAction={{
-                    children: t('common.retry'),
-                    onPress: () => void agents.refetch(),
-                  }}
+                  primaryAction={{ children: t('common.retry'), onPress: opened.retry }}
                 />
-              ) : null}
-              {!target.sessionId && agents.isSuccess && !agents.items.length ? (
-                <ContentState.Empty title={t('remoteAgent.noAgents')} />
-              ) : null}
-              {/* Agent-scoped workspace controls reset; the user's composer above stays mounted. */}
-              <RemoteComposer
-                key={agent?.ref}
-                agent={agent}
-                session={opened.session}
-                snapshot={snapshot}
-                draftId={target.sessionId ? undefined : draftId}
-                draftKey={draftKey}
-                onSessionCreated={onSessionCreated}
-              />
-              <ChatDockFooter>
-                <Text className="text-center text-xs text-muted-foreground">
-                  {t('chat.input.disclaimer')}
-                </Text>
-              </ChatDockFooter>
-            </View>
-          </ComposerDock>
-        </ComposerSessionProvider>
+              ) : (
+                <ChatWorkspace
+                  executionSource="desktop"
+                  isTranslationEnabled={Boolean(opened.session?.readingAidScope)}
+                  readingAidScope={opened.session?.readingAidScope}
+                  feedbackHintBottomOffset={composerHeight}
+                  renderUsage={renderRemoteUsage}
+                  messages={messages}
+                  snapshot={snapshot}
+                  messageWindow={history}
+                  sessionId={target.sessionId}
+                  assistantEmoji={agent?.emoji}
+                  assistantName={agent?.name}
+                  isAssistantToolbarEnabled
+                  contentBottomInset={composerContentGap}
+                  keyboardOffset={getComposerKeyboardStickyOffset(bottom)}
+                  onPendingSendDisplayed={ignorePending}
+                />
+              )}
+            </ComposerDismissArea>
+            <ChatShareComposerGuard>
+              <ComposerDock
+                backgroundClassName="bg-chat-background"
+                layoutMode="expandable-overlay"
+                onHeightChange={setComposerHeight}
+              >
+                <View>
+                  <ConversationStatus
+                    availability={availability}
+                    onRepair={() => router.push('/settings/device-connections')}
+                    onReconnect={
+                      connectionId ? () => desktopConnections.reconnect(connectionId) : undefined
+                    }
+                    onOpenDeviceSettings={
+                      connectionId
+                        ? () =>
+                            router.push({
+                              pathname: '/settings/device-connections/[connectionId]',
+                              params: { connectionId },
+                            })
+                        : undefined
+                    }
+                  />
+                  {!target.sessionId && agents.isError ? (
+                    <ContentState.Error
+                      title={t('remoteAgent.loadFailed')}
+                      primaryAction={{
+                        children: t('common.retry'),
+                        onPress: () => void agents.refetch(),
+                      }}
+                    />
+                  ) : null}
+                  {!target.sessionId && agents.isSuccess && !agents.items.length ? (
+                    <ContentState.Empty title={t('remoteAgent.noAgents')} />
+                  ) : null}
+                  {/* Agent-scoped workspace controls reset; the user's composer above stays mounted. */}
+                  <RemoteComposer
+                    key={agent?.ref}
+                    agent={agent}
+                    session={opened.session}
+                    snapshot={snapshot}
+                    draftId={target.sessionId ? undefined : draftId}
+                    draftKey={draftKey}
+                    onSessionCreated={onSessionCreated}
+                  />
+                  <ChatDockFooter>
+                    <Text className="text-center text-xs text-muted-foreground">
+                      {t('chat.input.disclaimer')}
+                    </Text>
+                  </ChatDockFooter>
+                </View>
+              </ComposerDock>
+            </ChatShareComposerGuard>
+            <ChatShareSelectionControls />
+          </ComposerSessionProvider>
+        </ChatShareSelectionProvider>
       </ChatScreenFrame>
     </HeaderContext>
   );

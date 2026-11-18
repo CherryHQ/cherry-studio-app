@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -17,10 +17,16 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/components/MessageDetail', () => {
   const { Text: MockText } = jest.requireActual('react-native');
   return {
+    MessageDetailText: ({ value }: { value: string }) => <MockText>{value}</MockText>,
     MessageDetailValue: ({ value }: { value: unknown }) => (
       <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
     ),
   };
+});
+
+jest.mock('@/frontend/components/MarkdownText', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+  return { MarkdownText: ({ markdown }: { markdown: string }) => <MockText>{markdown}</MockText> };
 });
 
 jest.mock('@cherrystudio/ui/components', () => {
@@ -30,6 +36,18 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockView {...props}>{children}</MockView>;
   }
   MockButton.Label = MockText;
+
+  function MockSection({ children, footer }: { children?: ReactNode; footer?: string }) {
+    return (
+      <MockView>
+        <MockText>{footer}</MockText>
+        {children}
+      </MockView>
+    );
+  }
+  MockSection.SwitchItem = function MockSwitchItem(props: object) {
+    return <MockView {...props} />;
+  };
 
   function MockBottomSheet({
     children,
@@ -56,6 +74,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
+    Section: MockSection,
     MessagePart: {
       ValueSection: ({ value }: { value: unknown }) => (
         <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
@@ -130,6 +149,30 @@ describe('ToolApprovalSheet', () => {
     await act(async () => button.props.onPress());
   }
 
+  test.each([true, false])(
+    'shows the pending grant accurately and attaches it only when approved=%s',
+    async (approved) => {
+      const { onRespond } = render({
+        approvals: [
+          makeApproval({
+            sshCommand: true,
+            canGrantSshDiagnostics: true,
+            input: { command: 'pwd', target: 'user@host', cwd: '.', stdin: '' },
+          }),
+        ],
+      });
+      expect(renderer.root.findByType(Section).props.footer).toBe('ssh.grant.ask');
+      act(() => renderer.root.findByType(Section.SwitchItem).props.onValueChange(true));
+      expect(renderer.root.findByType(Section).props.footer).toBe('ssh.grant.onApproval');
+      await press(approved ? approveLabel : denyLabel);
+      expect(onRespond).toHaveBeenCalledWith({
+        approvalId: 'approval-1',
+        approved,
+        ...(approved ? { sshDiagnosticsGrant: true } : {}),
+      });
+    },
+  );
+
   function renderedTexts(): string[] {
     return renderer.root
       .findAllByType(Text)
@@ -167,6 +210,44 @@ describe('ToolApprovalSheet', () => {
     render();
 
     expect(renderer.root.findByType(ScrollView).props.showsVerticalScrollIndicator).toBe(false);
+  });
+
+  test('presents skill creation as readable content with raw arguments behind an explicit action', async () => {
+    const input = {
+      name: 'meeting-notes',
+      description: 'Organize meeting notes',
+      instructions: '## Steps\n\nSummarize the decisions.',
+    };
+    const { onRespond } = render({
+      approvals: [makeApproval({ toolName: 'create_skill', displayName: 'Create Skill', input })],
+    });
+    expect(renderedTexts()).toEqual(
+      expect.arrayContaining([
+        'skills.create.name',
+        'meeting-notes',
+        input.description,
+        input.instructions,
+        'skills.approval.createDescription',
+      ]),
+    );
+    expect(renderedTexts()).not.toContain('Create Skill');
+    expect(renderedTexts()).not.toContain(JSON.stringify(input));
+    await press('skills.approval.showDetails');
+    expect(renderedTexts()).toContain(JSON.stringify(input));
+    await press('skills.create.name');
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: true });
+  });
+
+  test('explains skill installation and lets cancellation deny that exact call', async () => {
+    const input = { url: 'https://skills.cherryin.ai/example' };
+    const { onRespond } = render({
+      approvals: [makeApproval({ toolName: 'install_skill', displayName: 'Install Skill', input })],
+    });
+    expect(renderedTexts()).toContain('skills.approval.installDescription');
+    expect(renderedTexts()).toContain(input.url);
+    expect(renderedTexts()).not.toContain(JSON.stringify(input));
+    await press('common.cancel');
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: false });
   });
 
   test('denies the call the sheet is showing', async () => {

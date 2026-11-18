@@ -9,6 +9,7 @@ import {
   fileEntryTable,
   fileFolderTable,
   libraryFileTable,
+  monotonicUpdateTimestamp,
   type FileFolderRow,
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
@@ -158,6 +159,7 @@ export class FileLibraryService {
     parentId: string | null,
     requestedName: string,
     workspaceFolderId?: string,
+    signal?: AbortSignal,
   ): Promise<FileFolder> {
     const folder = await this.mutate(async (tx) => {
       await requireWorkspaceDestination(tx, parentId, workspaceFolderId);
@@ -168,7 +170,7 @@ export class FileLibraryService {
         .returning();
       if (!row) throw new Error('Insert did not return a FileFolder');
       return folderView(row);
-    });
+    }, signal);
     publishDataApiChanges(['/files/folders']);
     return folder;
   }
@@ -278,7 +280,10 @@ export class FileLibraryService {
       await requireActiveFolder(tx, folderId);
       const rows = await tx
         .update(agentSessionTable)
-        .set({ workspaceFolderId: folderId })
+        .set({
+          workspaceFolderId: folderId,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.id, sessionId))
         .returning({ id: agentSessionTable.id });
       if (!rows.length) throw DataApiErrorFactory.notFound('AgentSession', sessionId);

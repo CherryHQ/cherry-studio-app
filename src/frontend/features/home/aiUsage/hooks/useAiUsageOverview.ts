@@ -29,9 +29,11 @@ export function useAiUsageOverview() {
   });
   const hasFocusedOnceRef = useRef(false);
   const endDateKeyRef = useRef(toLocalDateKey(endDate));
+  const { refetch: refetchTimeline } = timelineQuery;
+  const { refetch: refetchTopProviders } = topProvidersQuery;
   const refetch = useCallback(
-    () => Promise.all([timelineQuery.refetch(), topProvidersQuery.refetch()]),
-    [timelineQuery.refetch, topProvidersQuery.refetch],
+    () => Promise.all([refetchTimeline(), refetchTopProviders()]),
+    [refetchTimeline, refetchTopProviders],
   );
   const refetchRef = useRef(refetch);
 

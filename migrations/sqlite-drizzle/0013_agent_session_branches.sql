@@ -1,0 +1,1 @@
+CREATE INDEX `agent_session_forked_from_created_id_idx` ON `agent_session` (`forked_from_session_id`,`created_at`,`id`);

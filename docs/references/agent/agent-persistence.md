@@ -45,30 +45,32 @@ the selected branch into a new Session ([Agent Protocol](./agent-protocol.md#bra
 Out of scope: broader Pi provider coverage. Mobile Skill persistence and
 loading are documented in [Agent Skills](./agent-skills.md).
 The Host projects Agent-specific MCP bindings into each Runtime snapshot.
-System capability enablement persists on the Agent row as a capability-group deny-list
-(`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
-capability resolves per turn and needs no Session persistence.
+Built-in tool availability resolves per turn and needs no per-Agent switches or Session persistence.
+The retired `disabled_capabilities` JSON column remains for storage compatibility; current Data API
+reads project it as an empty array, and create/update inputs no longer accept it.
 
 The Agent's `mode` is either `standard` (the creation and migration default) or
 `minimal`. Minimal mode supports text chat, direct images and provider-native web tools: the Host
 skips application tools, Skills, MCP discovery and plugin guides, rejects new document attachments
 and image generation,
-and uses a compact application prompt. Capability, approval and MCP binding preferences stay
+and uses a compact application prompt. Approval, Skill and MCP binding preferences stay
 stored when modes change, so switching back to standard restores them. Mode changes apply to
 subsequent turns; existing transcript content remains part of the conversation history.
 Provider-native web search and page reading follow the shared web policy in either mode. They
-remain available when the web capability is enabled and the selected provider endpoint supports
-them. Minimal mode never falls back to application-owned external web services. Mode selection
-does not grant web access or change the stored web capability preference.
+remain available when the shared web policy and selected provider endpoint support them. Minimal
+mode never falls back to application-owned external web services. Mode selection does not bypass
+the shared web policy.
 
 ## Current limitations
 
 The Agent Data API, `Backend.agent`, and frontend surfaces share these current constraints:
 
-- Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
-  or clearing its model can therefore make its existing Sessions unavailable through the public
-  Host API even though their rows remain durable. The Data API's static Session and transcript
-  reads remain available without resolving an executable Agent definition.
+- Session observation confirms the Agent has not been soft-deleted, while turn preparation
+  resolves a model from the turn override, Session model override, or Agent default. Soft-deleting an
+  Agent therefore makes its existing Sessions unavailable through the public Host API even though
+  their rows remain durable, and clearing `agent.model` blocks only turns without a Session or
+  per-turn model. The Data API's static Session and transcript reads remain available without
+  resolving an executable Agent definition.
 - Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
   `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
 - Agent deletion is soft so historical Sessions retain their definition and avatar reference.
@@ -129,9 +131,9 @@ Completed decisions appear in terminal ToolPart state and normalized output. Mis
 is reconciled as interrupted, closing unfinished parts rather than replaying a dead callback.
 No `agent_approval` table is needed.
 
-**Avatar stores the built-in Cherry emoji or a stable file reference.** The initial Cherry Agent
-and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. Existing records are
-preserved. Uploaded avatars follow the user-avatar pattern
+**Avatar stores an emoji, a bundled avatar key or a stable file reference.** The initial Cherry
+Agent and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. DeepSeek imports
+use `builtin:deepseek` for the bundled whale image. Uploaded avatars follow the user-avatar pattern
 ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
 WebP under `{documentDirectory}/agent-avatars/`, referenced as
 `agent-avatar-file:{agentId}.{uuid}.webp`, never as an absolute `file://` path. `file_entry` is for
@@ -140,14 +142,15 @@ attached to a soft-deleted Agent for historical Sessions.
 
 Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
 `PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
-column-write failure compensating the new file. Creation accepts only the built-in `🍒` value;
-updates reject direct avatar writes, and managed file references always use the image workflow.
+column-write failure compensating the new file. Creation accepts validated emoji or
+`builtin:deepseek`. Updates reject direct avatar writes, and managed file references always use
+the image workflow.
 The uuid rotates on every replace so the uri, which doubles as the image cache key,
 changes with it.
 
-Emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
-device-local `Agent.avatarUri`, rebuilt per read because the
-absolute path does not survive container relocation. That projection happens at the Data API
+Emoji and bundled avatars render from `Agent.avatar` without a managed image URI. File references
+project into a device-local `Agent.avatarUri`, rebuilt per read because the absolute path does not
+survive container relocation. That projection happens at the Data API
 boundary, not in `AgentService`: resolving it is file-system work under `backend/services`, which
 `backend/data` must not depend on. `createAgentAvatars` owns both directions and is injected through
 `dataApiDependencies`, the same channel `mcpServerMutations` uses.
@@ -178,8 +181,8 @@ unavailability without deleting or retargeting the row. Runtime projection is de
 The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `ask` policy to
 `auto`; it does not rewrite bindings or make an unavailable tool executable.
 
-The physical table and typed Data API accept only MCP bindings. Built-in capability enablement
-lives on the Agent row's group-level deny-list, never in this per-tool relation.
+The physical table and typed Data API accept only MCP bindings. Built-in tool availability is
+resolved from system and service gates rather than stored in this per-tool relation.
 
 Skill installations and Agent bindings live in Cherry; the Host resolves their instructions and
 resource scope. Pi reads neither tool nor Skill persistence directly.
@@ -193,9 +196,13 @@ rows and persisted rows have identical identities. The store inserts those suppl
 existing reservation transaction; it still creates a new Session together with its first message
 pair. Record timestamps and turn IDs remain store-generated. Primary-key collisions reject the
 transaction without overwriting records or leaving a partial Session.
-Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
-transaction. The composer can therefore use it as a strict row version when reconciling optimistic
-model selection with Agent definition edits and inactive query caches.
+Agent and Session updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the
+serialized write transaction. The composer can therefore use it as a strict row version when
+reconciling optimistic model selection with concurrent edits, model removals, and inactive query
+caches.
+Each reply reservation checks its prepared model against the owning Agent's current organization
+pool in the same write transaction. A pool update committed during preparation can therefore reject
+the reservation before it records a new reply.
 
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568
@@ -212,7 +219,7 @@ external runtime (execution targets, delivery, resume tokens) are deliberately a
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
-| `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
+| `avatar` | text | NULL | Emoji, bundled avatar key or stable file reference. NULL uses the name fallback. |
 | `model` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `auto` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
@@ -244,6 +251,7 @@ listing/cascade and MCP server delete-time disabling.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v7 | |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
+| `model` | text | FK → `user_model.id` ON DELETE SET NULL | Session model override. Unset Sessions inherit the Agent's model. Forks copy the override. |
 | `name` | text | NOT NULL DEFAULT `''` | |
 | `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `workspaceFolderId` | text | FK → `file_folder.id` ON DELETE SET NULL | Optional shared library workspace; retained while trashed |
@@ -261,7 +269,7 @@ recency; no `orderKey`).
 
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
-| `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
+| `id` | text | PK, UUID v7 | Stable identity; transcript follows parent order, including queued inputs promoted to Steer |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
 | `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |
@@ -269,7 +277,7 @@ recency; no `orderKey`).
 | `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No virtual root: the first question has no parent |
 | `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and the latest positive measured request input in `contextTokens`, which need not be the final request or a post-compaction size |
 | `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
@@ -324,6 +332,17 @@ ledger totals remain intact. Preparation must finish before this operation; a re
 does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
 recorded prefix. Retry never creates a Session or inserts another user message.
 
+Editing a user question uses the normal `reserveSubmission` transaction with an explicit
+`parentMessageId` equal to the edited question's parent (`null` for a root question). The Host
+checks that the edited row is a user message and rejects busy Sessions before preparing the new
+submission. Shared reservation inserts the new sibling question and its pending answer or answers,
+then selects the new branch. The original question and descendants are untouched. The normal
+lane planner preserves native continuation or forks at the chosen parent, with its rebuild fallback;
+editing does not create another Session or advance `runtimeRevision`.
+
+This differs from `editMessage`, which edits assistant reply prose in place and has its own
+conflict check. Neither operation uses a dedicated edit-reservation method.
+
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:
 
@@ -345,11 +364,32 @@ projection:
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
   native admission is interrupted with its saved parts retained.
+  At startup only, a reservation whose stored parts or native terminal projection fails schema
+  validation is logged as `ai.reconcile / invalid_reservation` and left unchanged while other
+  reservations recover. Ordinary Session commands and backup reconciliation remain strict;
+  cancellation, database and other non-validation failures still abort startup.
+  Native results are resolved before promoted input parents are repaired as a batch. If a native
+  read or that repair fails validation, startup skips settlement for the affected Session rather
+  than exposing a partially repaired chain; other Sessions still recover. Output validation after
+  the parent repair continues to isolate individual reservations.
+  Startup observation is a separate validation boundary: when an unfinished copy cannot be
+  observed, the Host isolates its entire Session for that runtime generation. It releases any
+  sibling observations, leaves that Session's Cherry reservations and parent links unchanged,
+  and rejects new submissions and model/tool execution through the existing execution-owner
+  ports. Healthy Sessions still recover and accept work. Pi scheduling remains global and may
+  record internal failure outcomes; isolation is not a per-conversation scheduler pause or a
+  compatibility migration. Backups and runtime-cache clearing remain strict. A fresh runtime
+  generation retries the original data; ordinary refresh does not repeat the same failed attach.
+  The affected Session reports `SESSION_RECOVERY_FAILED` with translated new-conversation and
+  diagnostic guidance. Non-validation observation errors and startup cancellation remain fatal.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
   Reservation places the question below the selected leaf and selects its first answer; a
   multi-model question reserves every answer in one new sibling group. Regeneration, including
-  answering with another model, reserves a sibling answer to the same question. Selecting a message
+  answering with another model, reserves a sibling answer to the same question. Editing a settled
+  question reserves a sibling question under its parent plus its requested answers, and selects
+  the first answer;
+  the edited row and its answers stay in the tree. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
   wherever the branch passes a parent with several children. A search result is selected once when
@@ -369,9 +409,10 @@ projection:
   straight branch with sibling groups reset; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
-  "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
-  ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
-  preserves order while stamping "now" on every row would be visibly wrong in the UI.
+  "never set timestamps by hand" rule: copies retain the original history times rather than
+  appearing newly created. Transcript order follows the source parent chain, including steered
+  inputs whose execution order differs from reservation time; the copied rows reconnect that chain
+  with their reissued IDs.
   `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
   the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
   multi-row statements with ids generated in transcript order.
@@ -386,9 +427,12 @@ projection:
   checkpoint that may have absorbed the deleted content cannot be replayed without putting that
   content back in front of the model. The cost is a full replay, and usually a fresh compaction,
   on the next turn. The Session's own `forkBoundaryMessageId` is cleared when it names a deleted
-  row, and `lastActivityAt` rewinds to the newest surviving message, since a deleted turn is no
-  longer activity to sort by. The FTS delete trigger keeps the index consistent with no extra
-  work; `ai_usage_record` rows are a separate ledger and deliberately survive.
+  row, and `lastActivityAt` is recomputed as the maximum surviving message activity: an assistant's
+  `stats.runtimeTiming.completedAt` when present, otherwise the message's `createdAt`. Parallel
+  answers may finish out of creation order, so deleting an older turn retains their latest
+  completion; deleting the latest activity allows recency to rewind. The FTS delete trigger keeps
+  the index consistent with no extra work; `ai_usage_record` rows are a separate ledger and
+  deliberately survive.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

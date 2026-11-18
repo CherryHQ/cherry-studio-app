@@ -88,9 +88,12 @@ export function normalizeAiError(
           ? record.message
           : '';
   const message = sanitizeErrorText(rawMessage, secrets, MAX_EXECUTION_ERROR_MESSAGE_CHARS);
+  // AI SDK APICallError retains the parsed provider error under data.error.
+  const providerError = errorRecord(errorRecord(record?.data)?.error);
+  const codeValue = typeof record?.code === 'string' ? record.code : providerError?.code;
   const code =
-    typeof record?.code === 'string'
-      ? sanitizeErrorText(record.code, secrets, 128) || 'runtime_error'
+    typeof codeValue === 'string'
+      ? sanitizeErrorText(codeValue, secrets, 128) || 'runtime_error'
       : 'runtime_error';
   const nameValue =
     error instanceof Error

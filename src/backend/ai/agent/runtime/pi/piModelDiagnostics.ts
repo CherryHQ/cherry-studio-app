@@ -7,41 +7,20 @@ import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
 
 import { traceErrorAttributes, type TraceAttributes } from '../../../observability';
+import { readPiTerminalError } from './piModelError';
 import type { PiModelResolution } from './piModelTypes';
 
 export type PiModelFailureStage = 'configuration' | 'model_resolution' | 'stream';
 
-// Provider codes outside the product table. Adding them to `CODE_REASONS` would override the
-// reason the UI currently derives from message text for the same failures.
-const DIAGNOSTIC_CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
-  api_error: 'provider_unavailable',
-  billing_not_active: 'quota',
-  freeusagelimiterror: 'quota',
-  gousagelimiterror: 'quota',
-  // No response covers every failure before headers, including native timeouts and TLS errors.
-  no_response: 'network',
-  overloaded_error: 'provider_unavailable',
-  permission_error: 'permission',
-  server_error: 'provider_unavailable',
-  stream_disconnected: 'network',
-  stream_idle_timeout: 'timeout',
-  subscription_sharing_usage_limit_exceeded: 'quota',
-  usage_limit_reached: 'quota',
-  usage_not_included: 'quota',
-};
-
-/** Classify only structured facts. Unknown failures must not acquire a cause from their message. */
+/** Pre-stream failures expose only safe structured facts to diagnostics. */
 function errorCategory(facts: TraceAttributes): AiFailureReason {
   const code = facts['error.code'] === undefined ? undefined : String(facts['error.code']);
   const status = facts['http.status_code'];
-  return (
-    (code && DIAGNOSTIC_CODE_REASONS[code.toLowerCase()]) ||
-    classifyAiFailureReason({
-      code,
-      message: '',
-      statusCode: typeof status === 'number' ? status : undefined,
-    })
-  );
+  return classifyAiFailureReason({
+    code,
+    message: '',
+    statusCode: typeof status === 'number' ? status : undefined,
+  });
 }
 
 export function piModelErrorAttributes(
@@ -53,23 +32,19 @@ export function piModelErrorAttributes(
 }
 
 export function piModelTerminalErrorAttributes(message: AssistantMessage): TraceAttributes {
-  if (message.stopReason !== 'error') return {};
-  const diagnostic = message.diagnostics?.findLast(
-    (entry) =>
-      entry.type === 'pi_messages_response_failure' || entry.type === 'provider_response_failure',
-  );
+  const error = readPiTerminalError(message);
+  if (!error) return {};
   return {
-    ...piModelErrorAttributes(
-      {
-        name: diagnostic?.error?.name,
-        code: diagnostic?.error?.code,
-        statusCode: diagnostic?.details?.statusCode ?? diagnostic?.details?.status,
-        // Use Pi's existing classifier, including its quota and cancellation rules.
-        retryable: isRetryableAssistantError(message),
-        origin: 'provider',
-      },
-      'stream',
-    ),
+    ...traceErrorAttributes({
+      name: error.name,
+      code: error.code,
+      statusCode: error.context?.statusCode,
+      // Use Pi's existing classifier, including its quota and cancellation rules.
+      retryable: isRetryableAssistantError(message),
+      origin: 'provider',
+    }),
+    'error.stage': 'stream',
+    'error.category': classifyAiFailureReason({ ...error, ...error.context }),
     'error.retry_scope': 'automatic',
   };
 }

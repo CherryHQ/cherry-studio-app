@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 
-import type { TSchema } from '@earendil-works/pi-ai';
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
 import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
@@ -94,7 +93,7 @@ function setup() {
     const value = result.value as Record<string, RuntimeJsonValue>;
     // Use the same JSON Schema validator consumed by Pi, against actual tool results.
     validateToolArguments(
-      { name, description: '', parameters: tool.outputSchema as TSchema },
+      { name, description: '', parameters: tool.outputSchema as Record<string, unknown> },
       { type: 'toolCall', id: 'result', name, arguments: value },
     );
     return value;
@@ -311,7 +310,11 @@ test('declares the file search result as a paged files object without a status',
     nextCursor: null,
   });
   validateToolArguments(
-    { name: tool.providerName, description: '', parameters: tool.outputSchema as TSchema },
+    {
+      name: tool.providerName,
+      description: '',
+      parameters: tool.outputSchema as Record<string, unknown>,
+    },
     {
       type: 'toolCall',
       id: 'result',

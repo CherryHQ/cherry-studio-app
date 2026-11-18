@@ -1,0 +1,141 @@
+diff --git a/dist/codemode/codemode.d.ts b/dist/codemode/codemode.d.ts
+index 429bfd1e491008edca6b9ff146ab25a50baa1d9e..d6e7dc38b541ce4819b74f6e657c0f01c07e5022 100644
+--- a/dist/codemode/codemode.d.ts
++++ b/dist/codemode/codemode.d.ts
+@@ -35,7 +35,7 @@
+  * call with an error result.
+  */
+ import { type Context, type JsonValue } from "@earendil-works/chord";
+-import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
++import type { CodemodeSandboxBase, CodemodeStoreWrites } from "@earendil-works/pi-codemode/portable";
+ import { type Static } from "@earendil-works/pi-schema";
+ import type { Extension, ToolExecutionApi, ToolRegistration } from "../harness/types.ts";
+ import type { JsonObject } from "../types.ts";
+@@ -152,6 +152,10 @@ declare const codemodeSchema: import("@earendil-works/pi-schema").Schema<{
+ }>;
+ export type CodemodeToolInput = Static<typeof codemodeSchema>;
+ export type CodemodeToolOptions = {
++    /** Host-managed output storage, for environments without device filesystem paths. */
++    readonly writeOutput?: (name: string, data: string | Uint8Array, api: ToolExecutionApi, context: Context, storeWrites?: CodemodeStoreWrites) => Promise<{ path: string } | { error: string }>;
++    /** Final conversation store budget, including concurrent host writes, in key and JSON characters. */
++    readonly maxStoreCharacters?: number;
+     /** Runs the scripts: `CodemodeSandbox` on Node, `RemoteCodemodeSandbox` on Cloudflare. */
+     readonly sandbox: CodemodeSandboxBase;
+     /** Groups of tools by name prefix, such as MCP servers, for the `codemode` section and tool search. */
+diff --git a/dist/codemode/codemode.js b/dist/codemode/codemode.js
+index 9ef1da0d2b59fd84ee03aae503c308cf73f6d641..5b92f83a1560ea43ca7c273c0128bec2fb9e3705 100644
+--- a/dist/codemode/codemode.js
++++ b/dist/codemode/codemode.js
+@@ -385,13 +385,14 @@ class CodemodeCall {
+     /** The script's own outcome, stored with its store writes in one transaction. */
+     async complete(result) {
+         const details = this.details();
++        const writes = result.ok ? result.storeWrites : undefined;
+         const formatted = await formatResult(result, {
+             generatedImages: this.generatedImages,
+             wallMs: this.api.now() - this.start.startedAt,
+             maxOutputTokens: this.start.maxOutputTokens,
+             calls: details.calls,
+             limits: OUTPUT_LIMITS,
+-            write: this.outputFiles(),
++            write: this.outputFiles(writes),
+         });
+         const tool = {
+             output: formatted.content,
+@@ -401,24 +402,41 @@ class CodemodeCall {
+                 ...(formatted.fullOutputPath === undefined ? {} : { fullOutputPath: formatted.fullOutputPath }),
+             },
+         };
+-        const writes = result.ok ? result.storeWrites : undefined;
+         return this.api.commit(async (tx) => {
+             const run = await tx.doc(CodemodeRunDoc, this.api.taskId);
+             if (run.result !== undefined)
+                 return run.result;
+-            run.result = copyJson(tool, { omitUndefinedProperties: true });
++            let settled = tool;
+             if (writes !== undefined && (Object.keys(writes.set).length > 0 || writes.delete.length > 0)) {
+                 const store = await tx.doc(CodemodeStoreDoc, this.api.conversationId);
++                const values = Object.assign(Object.create(null), store.values);
+                 for (const key of writes.delete)
+-                    delete store.values[key];
++                    delete values[key];
+                 for (const [key, value] of Object.entries(writes.set))
+-                    store.values[key] = value;
++                    values[key] = value;
++                const characters = Object.entries(values).reduce((total, [key, value]) => total + key.length + JSON.stringify(value).length, 0);
++                if (this.options.maxStoreCharacters !== undefined && characters > this.options.maxStoreCharacters) {
++                    settled = {
++                        ...tool,
++                        isError: true,
++                        output: [...tool.output, { type: "text", text: "Script error:\nWorking cache is full after concurrent writes. This script's cache writes were not saved. Completed tool calls were not undone; inspect their receipts before retrying." }],
++                    };
++                }
++                else {
++                    for (const key of writes.delete)
++                        delete store.values[key];
++                    for (const [key, value] of Object.entries(writes.set))
++                        store.values[key] = value;
++                }
+             }
+-            return tool;
++            run.result = copyJson(settled, { omitUndefinedProperties: true });
++            return settled;
+         }, this.context);
+     }
+     /** Writes the result's files under fixed names into the run's output directory, so a rerun overwrites them. */
+-    outputFiles() {
++    outputFiles(storeWrites) {
++        if (this.options.writeOutput)
++            return (name, data) => this.options.writeOutput(name, data, this.api, this.context, storeWrites);
+         const env = this.api.env;
+         let directory;
+         return async (name, data) => {
+diff --git a/dist/search.js b/dist/search.js
+index 7b05ef0be2e825d0428d6a3867afb098a46c8317..3d53359e9d9b8df1bfa44c7a8e9f831c7c6811b0 100644
+--- a/dist/search.js
++++ b/dist/search.js
+@@ -79,7 +79,10 @@ function indexDocument(document) {
+         namespaceTerms: new Set(tokenize(document.namespaceText ?? "")),
+     };
+ }
+-const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
++// Native runtimes without Segmenter still support the existing Unicode/Han search contract.
++const wordSegmenter = typeof Intl.Segmenter === "function"
++    ? new Intl.Segmenter(undefined, { granularity: "word" })
++    : undefined;
+ const STOP_WORDS = new Set([
+     "a",
+     "an",
+@@ -113,10 +116,15 @@ export function tokenize(text) {
+         .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ");
+     // The segmenter costs about 15 times a split. Plain ASCII splits into the same words at spaces, so only other
+     // text, such as Chinese written without spaces, goes through it.
+-    const words = /^[a-z0-9 ]*$/.test(normalized)
++    const words = /^[a-z0-9 ]*$/.test(normalized) || wordSegmenter === undefined
+         ? normalized.split(" ")
+         : Array.from(wordSegmenter.segment(normalized), (segment) => (segment.isWordLike ? segment.segment : ""));
+-    return words
++    // Retain whole Han names and adjacent pairs independently of dictionary segmentation.
++    const hanTerms = (normalized.match(/\p{Script=Han}+/gu) ?? []).flatMap((term) => {
++        const chars = [...term];
++        return chars.length > 2 ? [term, ...chars.slice(1).map((next, index) => chars[index] + next)] : [term];
++    });
++    return [...words, ...hanTerms.filter((term) => !words.includes(term))]
+         .filter((word) => word.length > 0 && !STOP_WORDS.has(word))
+         .map((word) => (/^[a-z0-9]+$/.test(word) ? stem(word) : word));
+ }
+diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
+index 1c5c127ea6b007eb4033486fcbde0d5e6b20cc16..762d61c9d02dbe38509e922ff821c3f36bba726c 100644
+--- a/dist/tool-search/tool-search.js
++++ b/dist/tool-search/tool-search.js
+@@ -59,7 +59,9 @@ export function createToolSearchTool() {
+                 throw new Error("limit must be a positive integer");
+             const candidates = (await api.agent(context)).deferred;
+             const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
+-            const loaded = rankDocuments(query, documents, max);
++            // Explicit deferred names are admitted before ranked matches, even when their count exceeds limit.
++            const named = [...new Set(query.split(/[\s,]+/))].filter((term) => candidates.some((tool) => tool.name === term));
++            const loaded = [...named, ...rankDocuments(query, documents, max).filter((name) => !named.includes(name))].slice(0, Math.max(max, named.length));
+             const text = loaded.length === 0
+                 ? "No matching tools found."
+                 : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded

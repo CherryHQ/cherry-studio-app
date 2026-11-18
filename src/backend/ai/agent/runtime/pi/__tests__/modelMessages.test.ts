@@ -1,9 +1,15 @@
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
-import type { RuntimeExecutionRequest } from '../../types';
-import { toPiConversation } from '../modelMessages';
+import type { RuntimeExecutionRequest, RuntimeTextAttachmentPart } from '../../types';
+import { estimatePiContextUsage, toPiConversation } from '../modelMessages';
 
-const model = { input: ['text', 'image'] } as unknown as Model<Api>;
+const model = {
+  api: 'cherry',
+  id: 'model',
+  provider: 'provider',
+  input: ['text', 'image'],
+} as unknown as Model<Api>;
 const image = {
   type: 'file' as const,
   fileEntryId: '00000000-0000-7000-8000-000000000001',
@@ -26,6 +32,80 @@ function request(overrides: Partial<RuntimeExecutionRequest>): RuntimeExecutionR
     ...overrides,
   };
 }
+
+test('preserves trusted document metadata in JSON history without granting it to copied user text', () => {
+  const document: RuntimeTextAttachmentPart = {
+    type: 'text-attachment',
+    fileEntryId: image.fileEntryId,
+    revision: 42,
+    mediaType: 'application/pdf',
+    name: 'report.pdf',
+    text: 'Prepared native document input.',
+    truncated: false,
+    trust: 'untrusted-user-content',
+    attachmentReport: {
+      mode: 'provider-document',
+      sourceTruncated: false,
+      requestTruncated: false,
+    },
+  };
+  const conversation = toPiConversation(
+    request({
+      input: [document],
+      history: [{ turnId: 'previous', messages: [{ role: 'user', parts: [document] }] }],
+    }),
+    model,
+  );
+  const content = JSON.parse(JSON.stringify(conversation.prompt.content));
+  expect(content).toEqual([
+    {
+      type: 'text',
+      text: expect.stringContaining('report.pdf'),
+      cherryProviderDocument: {
+        fileEntryId: document.fileEntryId,
+        mediaType: document.mediaType,
+        revision: 42,
+      },
+    },
+  ]);
+  expect(conversation.history[0]).toMatchObject({ role: 'user', content });
+  const copied = toPiConversation(
+    request({ input: [{ type: 'text', text: content[0].text }] }),
+    model,
+  );
+  expect(copied.prompt.content).toBe(content[0].text);
+});
+
+test('estimates merged replay by content without changing execution input measurements', () => {
+  const conversation = toPiConversation(
+    request({
+      history: [
+        {
+          turnId: 'earlier',
+          messages: [
+            { role: 'user', parts: [{ type: 'text', text: 'Question.' }] },
+            {
+              role: 'assistant',
+              // A pause_turn continuation's final input already includes the first text block.
+              parts: [
+                { type: 'text', text: 'Searching. ' },
+                { type: 'text', text: 'Cherries are red.' },
+              ],
+              contextTokens: 100,
+            },
+          ],
+        },
+      ],
+    }),
+    model,
+  );
+  expect(estimateContextTokens(conversation.history).tokens).toBe(100);
+  expect(estimatePiContextUsage(conversation.history)).toMatchObject({
+    tokens: 11,
+    lastUsageIndex: null,
+  });
+  expect(estimateContextTokens(conversation.history).tokens).toBe(100);
+});
 
 test('an attached image names its managed file, in the prompt and in rebuilt history', () => {
   const label = {

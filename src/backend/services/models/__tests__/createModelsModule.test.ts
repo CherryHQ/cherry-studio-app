@@ -1,5 +1,3 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import type { ModelsModule } from '@/shared/contracts';
 import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
@@ -16,15 +14,16 @@ const provider = {
 } as Provider;
 
 function model(modelId: string, overrides: Partial<Model> = {}): Model {
+  const providerId = overrides.providerId ?? 'openai';
   return {
     capabilities: [],
-    id: createUniqueModelId('openai', modelId),
+    id: createUniqueModelId(providerId, modelId),
     isDeprecated: false,
     isEnabled: true,
     isHidden: false,
     modelId,
     name: modelId,
-    providerId: 'openai',
+    providerId,
     supportsStreaming: true,
     ...overrides,
   };
@@ -111,6 +110,58 @@ describe('createModelsModule', () => {
     });
   });
 
+  it.each([
+    ['an older catalog', 'mimo-v2-6-pro', false],
+    ['a corrected catalog', 'mimo-v2.6-pro', false],
+    ['both saved identities', 'mimo-v2.6-pro', true],
+  ] as const)('keeps a saved MiMo model matched with %s', async (_case, remoteId, hasNewCopy) => {
+    const saved = model('mimo-v2-6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const corrected = model('mimo-v2.6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const remote = model(remoteId, {
+      apiModelId: remoteId,
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.get).mockResolvedValue({ ...provider, id: 'mimo' });
+    jest
+      .mocked(dependencies.models.list)
+      .mockResolvedValue(hasNewCopy ? [saved, corrected] : [saved]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([remote]);
+
+    await expect(backend.pull('mimo')).resolves.toEqual({ status: 'up-to-date' });
+    expect(dependencies.models.reconcile).not.toHaveBeenCalled();
+  });
+
+  it('keeps real additions and removals alongside a matched legacy MiMo model', async () => {
+    const saved = model('mimo-v2-6-pro', {
+      apiModelId: 'mimo-v2.6-pro',
+      presetModelId: 'mimo-v2-6-pro',
+      providerId: 'mimo',
+    });
+    const missing = model('retired', { presetModelId: 'retired', providerId: 'mimo' });
+    const corrected = model('mimo-v2.6-pro', { providerId: 'mimo' });
+    const added = model('new-model', { providerId: 'mimo' });
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.get).mockResolvedValue({ ...provider, id: 'mimo' });
+    jest.mocked(dependencies.models.list).mockResolvedValue([saved, missing]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([corrected, added]);
+
+    await expect(backend.pull('mimo')).resolves.toEqual({
+      status: 'changes',
+      preview: { added: [added], missing: [missing] },
+    });
+    expect(dependencies.models.reconcile).not.toHaveBeenCalled();
+  });
+
   it('keeps unsupported local and remote models out of the pull preview', async () => {
     const supported = model('supported');
     const unsupportedLocal = model('unsupported-local', { presetModelId: 'unsupported-local' });
@@ -124,56 +175,6 @@ describe('createModelsModule', () => {
     await expect(backend.pull('openai')).resolves.toEqual({
       status: 'up-to-date',
     });
-  });
-
-  it('keeps voice models through discovery and persistence without exposing them to chat checks', async () => {
-    const speech = model('tts-1', { capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION] });
-    const transcription = model('transcribe', {
-      capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
-      inputModalities: ['audio'],
-      outputModalities: ['text'],
-    });
-    const voiceProvider: Provider = {
-      ...provider,
-      endpointConfigs: {
-        'openai-chat-completions': {
-          adapterFamily: 'openai-compatible',
-          baseUrl: 'https://example.test/v1',
-        },
-      },
-    };
-    const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.providers.get).mockResolvedValue(voiceProvider);
-    jest.mocked(dependencies.ai.listModels).mockResolvedValue([speech, transcription]);
-    jest.mocked(dependencies.models.get).mockResolvedValue(speech);
-    await expect(backend.pull(provider.id)).resolves.toMatchObject({
-      status: 'changes',
-      preview: { added: [speech, transcription], missing: [] },
-    });
-    await backend.reconcile(provider.id, { toAdd: [speech, transcription] });
-    expect(dependencies.models.reconcile).toHaveBeenCalledWith(
-      provider.id,
-      {
-        toAdd: [
-          expect.objectContaining({
-            modelId: 'tts-1',
-            capabilities: [MODEL_CAPABILITY.AUDIO_GENERATION],
-          }),
-          expect.objectContaining({
-            modelId: 'transcribe',
-            inputModalities: ['audio'],
-            outputModalities: ['text'],
-          }),
-        ],
-        toRemove: [],
-      },
-      voiceProvider,
-    );
-    await expect(backend.checkChat({ modelId: speech.id })).resolves.toEqual({
-      status: 'failed',
-      reason: 'model',
-    });
-    expect(dependencies.checkChatModel).not.toHaveBeenCalled();
   });
 
   it('returns an up-to-date result without an implicit enable result', async () => {

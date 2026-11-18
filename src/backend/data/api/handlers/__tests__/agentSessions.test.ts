@@ -6,6 +6,7 @@ import { type AgentSessionMutations, createAgentSessionHandlers } from '../agent
 function createService() {
   return {
     getById: jest.fn(async () => ({ id: 'session-1' })),
+    getPath: jest.fn(async () => [{ id: 'root' }, { id: 'session-1' }]),
     listByCursor: jest.fn(async () => ({ items: [] })),
   };
 }
@@ -18,6 +19,19 @@ function createMutations() {
 }
 
 describe('agent session handlers', () => {
+  test('reads a selected path through one cancellable metadata operation', async () => {
+    const service = createService();
+    const handlers = createAgentSessionHandlers(
+      service as unknown as AgentSessionService,
+      createMutations() as unknown as AgentSessionMutations,
+    );
+    const signal = new AbortController().signal;
+    await expect(
+      handlers['/agent-sessions/:id/path'].GET({ params: { id: 'session-1' }, signal }),
+    ).resolves.toEqual([{ id: 'root' }, { id: 'session-1' }]);
+    expect(service.getPath).toHaveBeenCalledWith('session-1', signal);
+    expect(service.getById).not.toHaveBeenCalled();
+  });
   test('parses list pagination before delegation', async () => {
     const service = createService();
     const mutations = createMutations();
@@ -33,6 +47,21 @@ describe('agent session handlers', () => {
     });
 
     expect(service.listByCursor).toHaveBeenCalledWith({ agentId: 'agent-1', limit: 25 }, signal);
+  });
+
+  test('rejects mixing the root catalog with a direct-child query', async () => {
+    const service = createService();
+    const handlers = createAgentSessionHandlers(
+      service as unknown as AgentSessionService,
+      createMutations() as unknown as AgentSessionMutations,
+    );
+
+    await expect(
+      handlers['/agent-sessions'].GET({
+        query: { groupBy: 'root', parentSessionId: 'session-1' },
+      }),
+    ).rejects.toThrow();
+    expect(service.listByCursor).not.toHaveBeenCalled();
   });
 
   test('routes rename and delete through the Host mutation boundary', async () => {

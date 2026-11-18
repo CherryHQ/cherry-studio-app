@@ -71,10 +71,10 @@ export function LogoDrawAnimation({
   onFinish,
   ref,
 }: LogoDrawAnimationProps) {
-  const internalProgress = useSharedValue(0);
+  const internalProgress = useSharedValue(autoPlay ? 0 : 1);
   const controlled = progress !== undefined;
   const master = progress ?? internalProgress;
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinished] = useState(!controlled && !autoPlay);
 
   const handleSettle = useCallback(() => {
     // Controlled progress can scrub back below 1, so the unmasked fast path

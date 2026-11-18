@@ -1,5 +1,5 @@
 import {
-  type DirectEndpoint,
+  configuredEndpointsSchema,
   pairingQrSchema,
   remoteCapabilitiesSchema,
 } from '@cherrystudio/remote-protocol';
@@ -42,6 +42,22 @@ export const PairDesktopConnectionSchema = DesktopPairingQrSchema.and(
   }),
 );
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
+
+export const UpdateDesktopConnectionSchema = z
+  .object({
+    alias: z
+      .string()
+      .trim()
+      .max(128)
+      .transform((name) => name || null)
+      .nullable()
+      .optional(),
+    configuredEndpoints: configuredEndpointsSchema.optional(),
+  })
+  .refine((value) => value.alias !== undefined || value.configuredEndpoints !== undefined, {
+    message: 'At least one connection field is required',
+  });
+export type UpdateDesktopConnectionDto = z.infer<typeof UpdateDesktopConnectionSchema>;
 
 /** Shown while the desktop user approves the claim; the code must match the desktop's. */
 export type DesktopPairingClaim = { expiresAt: string; verificationCode: string };
@@ -345,7 +361,7 @@ export type DesktopConnectionSchemas = {
     GET: { params: { id: string }; response: DesktopConnection };
     PATCH: {
       params: { id: string };
-      body: { configuredEndpoints: DirectEndpoint[] };
+      body: UpdateDesktopConnectionDto;
       response: DesktopConnection;
     };
   };

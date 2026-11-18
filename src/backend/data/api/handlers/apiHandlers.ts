@@ -15,6 +15,7 @@ import type { McpServerService } from '../../services/McpServerService';
 import type { PaintingService } from '../../services/PaintingService';
 import type { PluginAuthorizationService } from '../../services/PluginAuthorizationService';
 import type { ProviderService } from '../../services/ProviderService';
+import type { SshProfileService } from '../../services/SshProfileService';
 import type { TrashService } from '../../services/TrashService';
 import { type AgentAvatars, createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
@@ -36,9 +37,11 @@ import {
   type SkillAvailabilityReader,
   type SkillInstructionReader,
 } from './skills';
+import { createSshProfileHandlers } from './sshProfiles';
 import { createTrashHandlers, type TrashMutations } from './trash';
 
 export type DataApiDependencies = {
+  sshProfiles: Pick<SshProfileService, 'list'>;
   trash: TrashService;
   trashMutations: TrashMutations;
   agentAvatars: AgentAvatars;
@@ -54,6 +57,7 @@ export type DataApiDependencies = {
   contentSearch: ContentSearchService;
   desktopConnections: DesktopConnectionService;
   desktopConnectionEndpointsChanged: (id: string) => Promise<void>;
+  desktopConnectionNameChanged: (id: string) => Promise<void>;
   entitySearch: EntitySearchService;
   files: FileEntryService;
   jobs: JobService;
@@ -70,6 +74,7 @@ export type DataApiDependencies = {
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
+    ...createSshProfileHandlers(dependencies.sshProfiles),
     ...createTrashHandlers(dependencies.trash, dependencies.trashMutations),
     ...createAgentHandlers(dependencies.agents, dependencies.agentAvatars),
     ...createAgentToolBindingHandlers(dependencies.agentToolBindings),
@@ -79,6 +84,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createDesktopConnectionHandlers(
       dependencies.desktopConnections,
       dependencies.desktopConnectionEndpointsChanged,
+      dependencies.desktopConnectionNameChanged,
     ),
     ...createFileHandlers(dependencies.files, dependencies.trashMutations),
     ...createJobHandlers(dependencies.jobs),

@@ -47,6 +47,7 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
+| [Enterprise Edition](./references/enterprise.md) | Cloud/private accounts, data profiles, organization-owned resources, synchronization, and backup rules |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
 | [Office Tools Design](./references/agent/office-tools-design.md) | DOCX/XLSX/PPTX generation, bounded editing, preview selections and QuickJS/Pi Durable integration; acceptance pending |
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |
@@ -61,13 +62,16 @@ They are the source of truth for how the repository works today.
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [File Preview And Viewer](./references/file-preview-and-viewer.md) | File kinds, open policy, in-app viewing and export; native acceptance pending |
-| [Document Export](./references/document-export.md) | Application-level Markdown, HTML, and long-image export, file-library retention, limits, and pending device acceptance |
+| [Document Export](./references/document-export.md) | Unified sharing, Markdown/HTML and paged images, temporary artifacts, explicit saving, and pending device acceptance |
+| [AI Content Metadata](./references/ai-content-labeling-design.md) | Implicit labels at generation/edit time, source inheritance, format coverage, upstream identity coverage, and pending native acceptance |
 | [HTML Conversion](./references/html-conversion.md) | HTML to PNG and image-based PPTX, native capture, streaming output, implementation selection and pending acceptance |
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
 | [Remote Access](./references/remote-access/README.md) | Plan for pairing, configuration sync, and Agent access over the desktop's encrypted channel |
+| [Voice Input And Speech](./references/voice.md) | Dictation and read-aloud engines, AI voice models, and audio attachment transcription |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
+| [DeepSeek Services](./references/deepseek-services.md) | Shared model credentials, built-in file tool settings, cloud voice and native web tools; acceptance pending |
 
 ## Documentation Governance
 

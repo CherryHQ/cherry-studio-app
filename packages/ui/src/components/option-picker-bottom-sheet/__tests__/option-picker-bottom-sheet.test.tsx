@@ -31,6 +31,9 @@ jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
   return View;
 });
 
+// Locked rows explain themselves through the info popover, whose motion needs native Reanimated.
+jest.mock('../../info-popover', () => ({ InfoPopover: () => null }));
+
 jest.mock('../../bottom-sheet', () => {
   const React = require('react');
   const { View } = require('react-native');

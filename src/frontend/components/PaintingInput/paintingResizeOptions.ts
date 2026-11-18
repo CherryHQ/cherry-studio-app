@@ -10,8 +10,11 @@ import { optionRatioLabel, pixelSizeLabel } from './imageGenerationLabels';
  * Changing the ratio offers only declared dimensions and carries their exact
  * request value; pixel sizes read as their nominal ratio and also report their dimensions.
  */
-export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefined) {
-  const fields = getImageParamFields(mode);
+export function paintingResizeOptions(
+  mode: ResolvedImageGenerationMode | undefined,
+  values: ImageParamDraft = {},
+) {
+  const fields = getImageParamFields(mode, values);
   for (const key of ['aspectRatio', 'size', 'imageResolution'] as const) {
     const field = fields.find((item) => item.key === key && item.spec.type === 'enum');
     if (!field || field.spec.type !== 'enum') continue;

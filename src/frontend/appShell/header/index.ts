@@ -19,5 +19,3 @@ export {
   MainHeaderView,
   mainHeaderScreenOptions,
 } from './MainHeader/MainHeaderView/MainHeaderView';
-
-export { MainHeaderAgentPickerSheet } from './MainHeader/MainHeaderAgentPickerSheet';

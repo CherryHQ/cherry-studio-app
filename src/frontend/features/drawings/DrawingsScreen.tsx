@@ -13,6 +13,7 @@ import {
   PaintingWorkspaceInput,
 } from '@/frontend/components/PaintingInput';
 import { paintingGenerationInput } from '@/frontend/components/PaintingInput/paintingGenerationInput';
+import { SelectionProvider, useSelectionState } from '@/frontend/components/Selection';
 import { useStartPaintingGeneration } from '@/frontend/data/paintings/usePaintings';
 
 import { PaintingBoardList } from './components/PaintingBoardList';
@@ -23,13 +24,15 @@ import { PaintingBoardList } from './components/PaintingBoardList';
  */
 export function DrawingsScreen() {
   return (
-    <ComposerSessionProvider>
-      <Composer.Expansion>
-        <PaintingInputProvider>
-          <DrawingsScreenBody />
-        </PaintingInputProvider>
-      </Composer.Expansion>
-    </ComposerSessionProvider>
+    <SelectionProvider>
+      <ComposerSessionProvider>
+        <Composer.Expansion>
+          <PaintingInputProvider>
+            <DrawingsScreenBody />
+          </PaintingInputProvider>
+        </Composer.Expansion>
+      </ComposerSessionProvider>
+    </SelectionProvider>
   );
 }
 
@@ -39,6 +42,7 @@ function DrawingsScreenBody() {
   const { left, right } = useSafeAreaInsets();
   const startGeneration = useStartPaintingGeneration();
   const [dockHeight, setDockHeight] = useState(0);
+  const { isEditing } = useSelectionState();
   const handleGenerate = useCallback(
     async (input: PaintingInputSubmission) => {
       const started = await startGeneration(paintingGenerationInput(input));
@@ -54,15 +58,23 @@ function DrawingsScreenBody() {
           side safe area, such as the status bar down an iPhone Duo's trailing edge. */}
       <View className="flex-1" style={{ marginLeft: left, marginRight: right }}>
         <PaintingBoardList bottomInset={dockHeight} />
-        <ComposerDock layoutMode="expandable" onHeightChange={setDockHeight}>
-          <PaintingWorkspaceInput
-            onCancel={noop}
-            onGenerate={handleGenerate}
-            onRatioChange={noop}
-            placeholder={t('painting.home.placeholder')}
-            status="idle"
-          />
-        </ComposerDock>
+        <View
+          accessibilityElementsHidden={isEditing}
+          importantForAccessibility={isEditing ? 'no-hide-descendants' : 'auto'}
+          pointerEvents={isEditing ? 'none' : 'box-none'}
+          className="absolute inset-0"
+          style={{ opacity: isEditing ? 0 : 1 }}
+        >
+          <ComposerDock layoutMode="expandable" onHeightChange={setDockHeight}>
+            <PaintingWorkspaceInput
+              onCancel={noop}
+              onGenerate={handleGenerate}
+              onRatioChange={noop}
+              placeholder={t('painting.home.placeholder')}
+              status="idle"
+            />
+          </ComposerDock>
+        </View>
       </View>
     </>
   );

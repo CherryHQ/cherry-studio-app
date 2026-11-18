@@ -33,6 +33,9 @@ export function createAgentSessionHandlers(
       GET: async ({ query, signal }) =>
         service.listByCursor(ListAgentSessionsQuerySchema.parse(query ?? {}), signal),
     },
+    '/agent-sessions/:id/path': {
+      GET: async ({ params, signal }) => service.getPath(params.id, signal),
+    },
     '/agent-sessions/:id': {
       DELETE: async ({ params }) => {
         await runSessionMutation(params.id, () =>
@@ -41,9 +44,10 @@ export function createAgentSessionHandlers(
       },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => {
-        const { name } = UpdateAgentSessionSchema.parse(body);
+        const patch = UpdateAgentSessionSchema.parse(body);
+        if ('model' in patch) return service.setModel(params.id, patch.model);
         await runSessionMutation(params.id, () =>
-          mutations.renameSession({ sessionId: params.id, name }),
+          mutations.renameSession({ sessionId: params.id, name: patch.name }),
         );
         return service.getById(params.id);
       },

@@ -138,7 +138,10 @@ async function generateThumbnail(sourceUri: string, destination: File): Promise<
     thumbnailDirectory.create({ intermediates: true });
   }
 
-  const sourceContext = ImageManipulator.manipulate(sourceUri);
+  const sourceContext = ImageManipulator.manipulate(sourceUri, {
+    maxHeight: thumbnailMaxDimension,
+    maxWidth: thumbnailMaxDimension,
+  });
   let sourceImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;
   let outputContext: ReturnType<typeof ImageManipulator.manipulate> | undefined;
   let outputImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;

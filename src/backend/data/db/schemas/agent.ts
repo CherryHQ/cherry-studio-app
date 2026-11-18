@@ -1,4 +1,4 @@
-import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import {
   DEFAULT_AGENT_MODE,
@@ -37,7 +37,7 @@ export const agentTable = sqliteTable(
       .$type<AgentMode>()
       .notNull()
       .default(DEFAULT_AGENT_MODE),
-    // Built-in Cherry emoji or file reference (agent-avatar-file:{agentId}.{uuid}.webp);
+    // Emoji, bundled avatar key, or file reference (agent-avatar-file:{agentId}.{uuid}.webp).
     // NULL renders the default avatar. Never an absolute file:// path.
     avatar: text(),
     // Default model: FK to user_model(id) — UniqueModelId "providerId::modelId"
@@ -48,14 +48,22 @@ export const agentTable = sqliteTable(
       .$type<AgentToolApprovalMode>()
       .notNull()
       .default(DEFAULT_AGENT_TOOL_APPROVAL_MODE),
-    // Capability-group deny-list (aligned with desktop's disabled_tools JSON
-    // pattern): a group id absent from the list is enabled. Stores group ids,
-    // never tool names; reads sanitize unknown ids instead of failing.
+    // Retired capability switches. Keep stored values for schema compatibility;
+    // current readers ignore them and tool discovery uses per-turn system gates.
     disabledCapabilities: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
+    // Enterprise remote id when the enterprise server owns this definition; NULL for user data.
+    managedRemoteId: text(),
+    // Enterprise default model and model pool, as the desktop names them; NULL for user data.
+    defaultModelId: text(),
+    allowedModelIds: text({ mode: 'json' }).$type<string[]>(),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,
   },
-  (t) => [index('agent_created_at_idx').on(t.createdAt), orderKeyIndex('agent')(t)],
+  (t) => [
+    index('agent_created_at_idx').on(t.createdAt),
+    orderKeyIndex('agent')(t),
+    uniqueIndex('agent_managed_remote_id_idx').on(t.managedRemoteId),
+  ],
 );
 
 export type AgentRow = typeof agentTable.$inferSelect;

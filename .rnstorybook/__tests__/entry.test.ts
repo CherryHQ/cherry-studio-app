@@ -28,7 +28,7 @@ describe('Storybook entry wiring', () => {
     };
 
     expect(manifest.main).toBe('index.ts');
-    for (const script of ['storybook', 'storybook:clear']) {
+    for (const script of ['dev:storybook', 'dev:storybook:clear']) {
       expect(manifest.scripts[script]).toContain(`${flag}=true`);
     }
   });

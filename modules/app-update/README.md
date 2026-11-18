@@ -2,19 +2,35 @@
 
 Android-only Expo module used by `backend/services/appUpdate`:
 
-- `checkPlayUpdate` asks Google's official `com.google.android.play:app-update:2.1.0` library for
-  availability and the target version code; it does not start Play's in-app installation flow.
+- `getDomesticStore` resolves one store from the installation/update source, then device identity.
+  It returns null outside the compiled domestic distribution. The application reads it once; a
+  native resolution failure disables domestic update checks without failing startup.
+- `checkDomesticStoreUpdate(requestId, store)` queries HONOR/Xiaomi SDKs or vivo's local provider
+  without opening vendor UI. `cancelDomesticStoreUpdate` releases the pending request.
+- `openDomesticStore(store)` opens that store's full-release listing after checking availability.
+- `checkPlayUpdate` reads availability and version code from Google's official update library.
 - `isApkInstallationEnabled` reads the immutable Android manifest flag and embedded Expo channel.
-- `canInstallPackages` reads Android 8+'s install-source authorization. On Android 7, the system
-  installer owns the global unknown-source check.
-- `installApk` accepts no path or URL. It validates only the app-owned `cache/app-updates/update.apk`
-  and opens Android's installer. It checks the package name, exact signer set and increasing native
-  version code. It never performs a silent installation or claims the system installation succeeded.
+- `canInstallPackages` reads the system's install-source authorization.
+- `installApk` accepts no path or URL. It validates the app-owned `cache/app-updates/update.apk`,
+  including package, signer set and increasing build number, then opens Android's installer.
 
-`scripts/withAppUpdates.js` owns build-time permission policy; the library manifest itself does not
-request package-install permission. Its distinct private FileProvider exposes only the update cache.
-JavaScript owns transfer, checksum verification and user-facing decisions; the existing permission
-owner serializes the unknown-source settings screen.
+`scripts/withAppUpdates.js` owns build-time installation permission policy. The private
+FileProvider exposes only the update cache. JavaScript owns download/checksum handling; the
+existing permission owner serializes the install-source settings screen.
 
-New or changed native code requires a new installation package. Development clients can load the
-JavaScript without this module, but cannot install APK updates or query Google Play until rebuilt.
+New or changed native APIs require a new installation package. See
+[SDK provenance](android/libs/README.md) and the
+[domestic update guide](../../docs/guides/domestic-store-updates.md) for query lifecycle and SDK
+constraints. No vendor credentials live in this module. Store/installer navigation does not
+establish installation success.
+
+Only the Android `production-domestic-stores` profile sets `DOMESTIC_STORES_ENABLED=true` in
+`eas.json`. App config maps it to `cherry.appUpdate.domesticStoresEnabled` during native generation.
+The explicit profile env is shared by build submission, native generation and OTA fingerprinting;
+`EAS_BUILD_PROFILE` is a worker-only variable and must not select this flag.
+That flag selects the vendor implementation, its manifest overlay and both AARs;
+other builds compile the disabled factory without vendor dependencies, permissions or store queries.
+The same flag selects the module's consumer ProGuard rules for HONOR's three guarded optional
+HiAnalytics references; ordinary APK and Play builds do not load those suppressions.
+Regenerate native projects when switching profiles. Native compilation and R8/device acceptance
+remain separate required release checks.

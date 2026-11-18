@@ -25,7 +25,7 @@ const TokenResponseSchema = z.object({
     .regex(/^bearer$/i)
     .optional(),
 });
-const OAuthErrorSchema = z.object({
+export const ProviderOauthErrorSchema = z.object({
   error: z.enum(['invalid_grant', 'invalid_client', 'unauthorized_client']),
 });
 
@@ -85,13 +85,13 @@ export function createProviderOauthClient(config: {
         maxResponseBytes: 65_536,
         signal,
         errorDecoder: ({ data }) => {
-          const parsed = OAuthErrorSchema.safeParse(data);
+          const parsed = ProviderOauthErrorSchema.safeParse(data);
           return parsed.success
             ? { code: parsed.data.error, message: 'Provider authorization rejected.' }
             : undefined;
         },
       });
-      const failure = OAuthErrorSchema.safeParse(response.data);
+      const failure = ProviderOauthErrorSchema.safeParse(response.data);
       if (failure.success)
         throw new ProviderAccountError(
           failure.data.error === 'invalid_grant' ? 'authorization' : 'configuration',

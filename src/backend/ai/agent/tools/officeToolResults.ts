@@ -24,8 +24,137 @@ const read = {
   source_sha256: z.string(),
 };
 const page = { total: z.number(), offset: z.number() };
+const structure = { ...read, ...page, kind: z.literal('structure') };
+function findingPage<T extends z.ZodType>(item: T) {
+  return z.strictObject({ ...page, items: z.array(item) });
+}
 const inspect = z.union([
   error,
+  z.strictObject({
+    ...structure,
+    format: z.literal('docx'),
+    items: z.array(
+      z.strictObject({
+        id: z.string(),
+        kind: z.enum([
+          'paragraph',
+          'table',
+          'content_control',
+          'header',
+          'footer',
+          'footnote',
+          'endnote',
+          'comment',
+          'change',
+          'field',
+        ]),
+        part: z.string(),
+        text: z.string(),
+        style: z.string().optional(),
+        anchor: officeAnchorSchemas.docx
+          .omit({ charRange: true })
+          .extend({ paraId: z.string().optional() })
+          .optional(),
+        rows: z.number().optional(),
+        columns: z.number().optional(),
+        merged_cells: z.number().optional(),
+        author: z.string().optional(),
+        change_type: z.string().optional(),
+      }),
+    ),
+  }),
+  z.strictObject({
+    ...structure,
+    format: z.literal('xlsx'),
+    formula_values: z.literal('saved-cache-only'),
+    items: z.array(
+      z.strictObject({
+        sheet: z.string(),
+        state: z.string(),
+        range: z.string(),
+        cells: z.number(),
+        formulas: z.number(),
+        cached_formulas: z.number(),
+        error_cells: z.number(),
+        uncached_formulas: z.number(),
+        merges: z.number(),
+        tables: z.number(),
+        charts: z.number(),
+      }),
+    ),
+    findings: findingPage(
+      z.strictObject({
+        sheet: z.string(),
+        cell: z.string(),
+        kind: z.enum(['error', 'uncached_formula']),
+        formula: z.string().optional(),
+        value: z.string().optional(),
+      }),
+    ),
+  }),
+  z.strictObject({
+    ...structure,
+    format: z.literal('pptx'),
+    width: z.number(),
+    height: z.number(),
+    units: z.literal('inches'),
+    layout: z.string(),
+    fonts: z.literal('explicit-run-fonts'),
+    items: z.array(
+      z.strictObject({
+        slide: z.number(),
+        shape_total: z.number(),
+        shape_offset: z.number(),
+        shapes: z.array(
+          z.strictObject({
+            nodeId: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            text: z.string(),
+            fonts: z.array(z.string()),
+            font_sizes: z.array(z.number()),
+            box: z
+              .strictObject({
+                x: z.number(),
+                y: z.number(),
+                width: z.number(),
+                height: z.number(),
+                source: z.enum(['shape', 'layout', 'master']),
+              })
+              .optional(),
+          }),
+        ),
+      }),
+    ),
+    findings: findingPage(
+      z.strictObject({
+        slide: z.number(),
+        kind: z.enum(['unresolved_geometry', 'outside_slide', 'overlapping_text_boxes']),
+        nodeIds: z.array(z.string()),
+      }),
+    ),
+  }),
+  z.strictObject({
+    ...read,
+    ...page,
+    kind: z.literal('check'),
+    format: z.enum(['docx', 'xlsx', 'pptx']),
+    against_file_entry_id: z.string().optional(),
+    compared: z.boolean(),
+    existing: z.number(),
+    errors: z.number(),
+    warnings: z.number(),
+    findings: z.array(
+      z.strictObject({
+        key: z.string(),
+        rule: z.string(),
+        part: z.string(),
+        location: z.string(),
+        severity: z.enum(['error', 'warning']),
+        message: z.string(),
+      }),
+    ),
+  }),
   z.strictObject({
     ...read,
     ...page,
@@ -111,7 +240,7 @@ const content = z.union([
           value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
           type: z.string().optional(),
           formula: z.string().optional(),
-          cached: z.literal(true).optional(),
+          cached: z.boolean().optional(),
         }),
       ),
     ),

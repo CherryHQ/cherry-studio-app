@@ -1,0 +1,11 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -178,6 +178,7 @@
+       "import": "./dist/src/hashes/sha2.js",
+       "module-sync": "./dist/src/hashes/sha2.js"
+     },
++    "./dist/src/hashes/sha2-browser.js": "./dist/src/hashes/sha2-browser.js",
+     "./interface": {
+       "types": "./dist/src/interface.d.ts",
+       "import": "./dist/src/interface.js",

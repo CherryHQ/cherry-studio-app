@@ -46,7 +46,9 @@ It uses plain secondary text with a middle dot between tokens and elapsed time, 
 surface, border, or extra icon. Token counts use a locale-independent compact number with its unit,
 such as `27k Tokens`. The entire summary remains tappable.
 
-The detail sheet retains localized exact counts. It opens at medium height and expands through
+The detail sheet composes shared `AiUsageDetail` from `@/frontend/components/AiUsageDetail`, also used
+by individual calls on the usage page. Its shared presentation retains localized exact counts; the
+message owner still supplies its own aggregate and query feedback. It opens at medium height and expands through
 large to full height. The model and provider remain at the top, followed by total tokens, request
 counts, and the input/cache and output/reasoning measurements in two columns. A neutral segmented
 bar shows the relative input/output counts only when both are known and their sum is positive.

@@ -11,7 +11,9 @@ import { parallel } from '@cherrystudio/web-search/providers/parallel';
 import { querit } from '@cherrystudio/web-search/providers/querit';
 import { searchapi } from '@cherrystudio/web-search/providers/searchapi';
 import { searxng } from '@cherrystudio/web-search/providers/searxng';
+import { serpkite } from '@cherrystudio/web-search/providers/serpkite';
 import { serply } from '@cherrystudio/web-search/providers/serply';
+import { stepfun } from '@cherrystudio/web-search/providers/stepfun';
 import { tavily } from '@cherrystudio/web-search/providers/tavily';
 import { yuanbao } from '@cherrystudio/web-search/providers/yuanbao';
 import { zhipu } from '@cherrystudio/web-search/providers/zhipu';
@@ -35,4 +37,6 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   serply,
   searchapi,
   desearch,
+  stepfun,
+  serpkite,
 } satisfies Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderModule>;

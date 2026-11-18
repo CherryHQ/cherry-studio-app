@@ -12,13 +12,16 @@ import type {
 import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
+import { useChatEditing } from '../../context/ChatEditingProvider';
+import { useMessageCitationSources } from '../../hooks/useMessageCitationSources';
 import { type PendingChatSend } from '../../runtime';
-import type { ChatShareTranslations } from '../../share/chatShareHandoff';
+import { useChatShareSelectionActions } from '../../share/chatShareSelection';
+import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatComposerClearance } from './components/ChatComposerClearance';
-import { ChatDraftState } from './components/ChatDraftState';
+import { type ChatDraftModelSetup, ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
 import { ExpandedAnswerProvider } from './components/ExpandedAnswer';
@@ -46,6 +49,7 @@ type ChatWorkspaceProps = {
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
+  draftModelSetup?: ChatDraftModelSetup;
   /** Copied message inside this Session that closes the inherited prefix. */
   forkBoundaryMessageId?: string;
   /** Direct source Session named by the fork-origin divider. */
@@ -56,9 +60,10 @@ type ChatWorkspaceProps = {
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
-  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   sessionId?: string;
-  /** Translation is available only for locally owned Agent messages. */
+  /** Remote reading aids use this stable source-owned namespace instead of local persistence. */
+  readingAidScope?: string;
+  /** Translation is enabled only when its source can identify a stable message origin. */
   isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
@@ -69,8 +74,7 @@ export function ChatWorkspace({
   onQuoteWindowReady,
   onQuoteTakeover,
   snapshot: live,
-  messages: mergedMessages,
-  onShare,
+  messages: sourceMessages,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -79,6 +83,7 @@ export function ChatWorkspace({
   assistantEmoji,
   assistantName,
   contentBottomInset,
+  draftModelSetup,
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
@@ -87,8 +92,10 @@ export function ChatWorkspace({
   isAssistantToolbarEnabled,
   sessionId,
   isTranslationEnabled = false,
+  readingAidScope,
   renderUsage,
 }: ChatWorkspaceProps) {
+  const { beginSelection } = useChatShareSelectionActions();
   const {
     dataKey,
     error,
@@ -103,12 +110,19 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
+  const mergedMessages = useMessageCitationSources(
+    sourceMessages,
+    dataKey || `${executionSource}:${sessionId ?? 'draft'}`,
+    messageWindow.readCitations,
+    messageWindow.revision,
+  );
   useConversationFeedbackHint(
     messageWindow.dataKey || sessionId || 'draft',
     live,
     feedbackHintBottomOffset,
   );
   const listKey = sessionId ?? pendingSend?.sessionId;
+  useEndReadingWithConversation(sessionId);
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
   useEffect(() => {
@@ -121,6 +135,7 @@ export function ChatWorkspace({
       onPendingSendDisplayed(pendingSend.messages[0].id);
     }
   }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
+  const { editing } = useChatEditing();
   const projectedMessages = useMemo(() => {
     const projected = mergedMessages
       .filter((message) => message.display.role !== 'system')
@@ -241,6 +256,7 @@ export function ChatWorkspace({
         assistantEmoji={assistantEmoji}
         assistantName={assistantName}
         contentBottomInset={contentBottomInset}
+        modelSetup={draftModelSetup}
       />
     );
   }
@@ -278,18 +294,21 @@ export function ChatWorkspace({
     <View className="flex-1" onTouchStart={onQuoteTakeover}>
       <MessageTranslationProvider
         isEnabled={isTranslationEnabled}
+        readingAidScope={readingAidScope}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-          onShare={onShare}
+          onShare={beginSelection}
           sessionId={sessionId}
           snapshot={live}
           messages={mergedMessages}
         >
           <ChatMessageRowProvider
+            breakAfterMessageId={forkBoundary?.id}
+            editingMessageId={editing?.messageId}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
           >

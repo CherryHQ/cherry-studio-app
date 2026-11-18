@@ -13,6 +13,7 @@
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import type { DiagnosticFeedbackRecord } from '@/shared/contracts/diagnostics';
+import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 
 // ============================================================================
 // Template Key Type Utilities
@@ -73,6 +74,8 @@ export const DefaultUseCache: UseCacheSchema = {
  * observable as `undefined`; entries are not initialized from defaults.
  */
 export type BackendCacheSchema = {
+  // Successfully detected egress country; expires after ten minutes.
+  'region.egress_country': string;
   // Round-robin cursor for enabled provider API keys.
   'settings.provider.${providerId}.last_used_key_id': string;
 };
@@ -87,11 +90,17 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  /** Origin of the last sign-in attempt, retained for cold and duplicate callback delivery. */
+  'account.sign_in.return_to': string | null;
   'app_update.last_reminder': { releaseId: string; remindedAt: number } | null;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
+  /** Bounded phone-owned remote reading aids, keyed by source/message/revision/content hash. */
+  'remote_agent.translations': Record<string, MessageTranslations>;
+  // Last local chat Agent; cold starts open its greeting rather than a Session.
+  'chat.last_agent_id': string | null;
   // Last composer effort per Agent; clearing the cache restores model defaults.
   'chat.reasoning_efforts': Record<string, ReasoningEffortOption>;
   // Persist-layer self-test key: exercises the typed persist API and round-trip
@@ -100,10 +109,13 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'account.sign_in.return_to': null,
   'app_update.last_reminder': null,
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
+  'remote_agent.translations': {},
+  'chat.last_agent_id': null,
   'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,
 };

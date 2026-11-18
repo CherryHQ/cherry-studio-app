@@ -1,5 +1,6 @@
 import {
   assertBackupPath,
+  BACKUP_FORMAT_VERSION,
   BACKUP_LIMITS,
   type BackupManifest,
   validateManifest,
@@ -24,6 +25,13 @@ test('accepts the portable mobile snapshot contract without platform-specific ab
   expect(validateManifest(manifest())).toEqual(manifest());
 });
 
+test('admits both legacy portable backups and the explicit inline-quote format', () => {
+  expect(
+    validateManifest({ ...manifest(), formatVersion: BACKUP_FORMAT_VERSION }).formatVersion,
+  ).toBe(3);
+  expect(validateManifest(manifest()).formatVersion).toBe(1);
+});
+
 test.each([
   '../database/cherry.db',
   '/database/cherry.db',
@@ -33,6 +41,8 @@ test.each([
   'avatars/user/',
   'files/x\u0000y',
   'preferences.json',
+  'ssh/credentials.json',
+  'ssh/other.json',
   `skills/brief/${sha256}/../SKILL.md`,
   `skills/brief/${sha256}/./SKILL.md`,
   `skills/brief/${sha256}/references//format.md`,
@@ -49,11 +59,19 @@ test('accepts nested files in pinned Skill revisions', () => {
   );
 });
 
+test('accepts the optional portable SSH profile snapshot', () => {
+  const base = manifest();
+  const entry = { path: 'ssh/profiles.json', size: 80, sha256 };
+  expect(validateManifest({ ...base, entries: [...base.entries, entry] }).entries).toContainEqual(
+    entry,
+  );
+});
+
 test('rejects another product or a future format instead of attempting replacement', () => {
   expect(() => validateManifest({ ...manifest(), product: 'cherry-desktop' })).toThrow(
     'incompatible',
   );
-  expect(() => validateManifest({ ...manifest(), formatVersion: 3 })).toThrow('incompatible');
+  expect(() => validateManifest({ ...manifest(), formatVersion: 4 })).toThrow('incompatible');
 });
 
 test('rejects experimental paired backups and never accepts a Pi cache as user backup data', () => {

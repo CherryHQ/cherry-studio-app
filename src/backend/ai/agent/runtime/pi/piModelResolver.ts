@@ -12,7 +12,7 @@ import {
   normalizeModelId,
   supportsServerToolFunctionMixing,
 } from '@cherrystudio/provider-registry';
-import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
+import { getLowerBaseModelName, isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -24,8 +24,14 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import {
+  DeepseekDocumentUnavailableError,
+  uploadDeepseekDocument,
+} from '@/backend/services/file/deepseekFiles';
+import { createDeepseekConnection } from '@/backend/services/providers/deepseekConnection';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
@@ -39,6 +45,7 @@ import type { RuntimeModel, RuntimeModelPreflight, RuntimeOptions, RuntimeUsageC
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
+import { withPiDeepseekFiles } from './piDeepseekFiles';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './piModelTypes';
 import {
@@ -93,6 +100,7 @@ export function createPiModelResolver(
       sessionId,
       apiKeyOverride,
       signal,
+      cloudUse = 'agent',
     ): Promise<PiModelResolution> {
       const {
         adapter: configuredAdapter,
@@ -192,6 +200,21 @@ export function createPiModelResolver(
         provider.presetProviderId === 'openrouter' ||
         isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
+      const deepseekFiles =
+        provider.authType === 'api-key' &&
+        provider.id === 'deepseek' &&
+        modelId === 'deepseek-flash' &&
+        application.get('PreferenceService').readCached('file.document_parser.mode') === 'deepseek';
+      if (deepseekFiles && adapter.api === 'anthropic-messages') {
+        const existing = Object.keys(headers).find(
+          (name) => name.toLowerCase() === 'anthropic-beta',
+        );
+        const betas = existing ? headers[existing] : '';
+        if (existing) delete headers[existing];
+        headers['anthropic-beta'] = [
+          ...new Set([...betas.split(',').filter(Boolean), 'files-api-2025-04-14']),
+        ].join(',');
+      }
       if (vertex) {
         for (const name of Object.keys(headers)) {
           if (adapter.authHeaderNames.includes(name.toLowerCase())) delete headers[name];
@@ -254,7 +277,7 @@ export function createPiModelResolver(
                           }
                         : {}),
                       maxTokensField:
-                        connection.adapterFamily === 'openai'
+                        connection.adapterFamily === 'openai' || isOpenAIReasoningModelId(modelId)
                           ? 'max_completion_tokens'
                           : 'max_tokens',
                       supportsStore: connection.adapterFamily === 'openai',
@@ -312,7 +335,9 @@ export function createPiModelResolver(
           : {}),
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
-        fetch: expoFetch as unknown as FetchFunction,
+        fetch: (provider.id === CLOUD_PROVIDER_ID
+          ? application.get('CloudRuntime').createModelFetch(modelId, cloudUse)
+          : expoFetch) as unknown as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: oauth ? Math.min(outputReservation, piModel.maxTokens) : outputReservation,
@@ -320,6 +345,7 @@ export function createPiModelResolver(
           ? undefined
           : {
               model: invocationModel,
+              providerId: provider.presetProviderId ?? provider.id,
               profile: reasoningProfile.wire,
               selection: runtimeOptions.reasoningEffort,
               summary:
@@ -331,7 +357,40 @@ export function createPiModelResolver(
           adapter.api === 'openai-codex-responses' ? undefined : runtimeOptions.temperature,
         azureApiVersion,
       };
-      const primaryStream = await bindPiStream(adapter, streamBinding);
+      const bindDocuments = (stream: Awaited<ReturnType<typeof bindPiStream>>, apiKey: string) => {
+        if (!deepseekFiles) return stream;
+        const auth = Object.entries(headers).find(
+          ([name]) => name.toLowerCase() === 'authorization',
+        );
+        const nativeKey =
+          adapter.api === 'anthropic-messages'
+            ? (Object.entries(headers).find(([name]) => name.toLowerCase() === 'x-api-key')?.[1] ??
+              apiKey)
+            : undefined;
+        const bearerKey = auth ? /^Bearer\s+(.+)$/i.exec(auth[1])?.[1] : undefined;
+        // Two different authentication headers do not prove which remote account owns files.
+        const servingKey = auth
+          ? bearerKey && (!nativeKey || nativeKey === bearerKey)
+            ? bearerKey
+            : ''
+          : (nativeKey ?? apiKey);
+        const serving = createDeepseekConnection(provider.id, connection.baseUrl, servingKey);
+        return withPiDeepseekFiles(stream, async (document, signal) => {
+          try {
+            return await uploadDeepseekDocument(serving, document, signal);
+          } catch (error) {
+            signal.throwIfAborted();
+            if (document.isCurrent || !(error instanceof DeepseekDocumentUnavailableError)) {
+              throw error;
+            }
+            return null;
+          }
+        });
+      };
+      const primaryStream = bindDocuments(
+        await bindPiStream(adapter, streamBinding),
+        selectedApiKey.value,
+      );
       const hasAuthHeader = Object.keys(headers).some((name) =>
         adapter.authHeaderNames.includes(name.toLowerCase()),
       );
@@ -388,7 +447,7 @@ export function createPiModelResolver(
                   apiKey: selected.value,
                 });
                 usageContext.credentialReceipt = selected.apiKeySelection;
-                return stream;
+                return bindDocuments(stream, selected.value);
               }),
             ]);
 
@@ -422,6 +481,11 @@ export function createPiModelResolver(
                 provider,
                 runtimeOptions,
               }),
+        deepseekSafetyCheck:
+          provider.id === 'deepseek' &&
+          provider.authType === 'api-key' &&
+          modelId === 'deepseek-flash' &&
+          application.get('PreferenceService').readCached('chat.deepseek.safety_check'),
         usageContext,
       };
     },
@@ -456,6 +520,21 @@ function resolveNativeWebTools({
   runtimeOptions: RuntimeOptions;
 }): PiNativeWebTools {
   if (!connection.endpointType) return NO_NATIVE_WEB_TOOLS;
+  if (
+    provider.authType === 'api-key' &&
+    provider.id === 'deepseek' &&
+    connection.wireModelId === 'deepseek-flash'
+  ) {
+    const dialect =
+      api === 'anthropic-messages'
+        ? 'deepseek-messages'
+        : api === 'openai-responses'
+          ? 'deepseek-responses'
+          : api === 'openai-completions'
+            ? 'deepseek-chat'
+            : undefined;
+    if (dialect) return { dialect, search: true, fetch: true, functionToolMixing: true };
+  }
   const serverTools = providerRegistryService.resolveServerTools(
     provider,
     connection.wireModelId,
@@ -606,6 +685,11 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
       /authorization|api[-_]key|token|secret/i.test(name) ? [value] : [],
     ),
   ];
+}
+
+/** Desktop Agent token-field rules, allowing gateway namespace prefixes. */
+function isOpenAIReasoningModelId(modelId: string): boolean {
+  return /^(?:[^:]+:)*(?:o1|o3|o4-mini|gpt-6|gpt-5(?!-chat))/.test(getLowerBaseModelName(modelId));
 }
 
 function isProviderHost(baseUrl: string, hostname: string): boolean {

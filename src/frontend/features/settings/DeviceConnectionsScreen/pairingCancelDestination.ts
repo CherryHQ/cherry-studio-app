@@ -1,13 +1,7 @@
 import type { Href } from 'expo-router';
 
-import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
-
-/** Leaving scan or pairing returns to setup, the connection being re-paired, or the list. */
-export function pairingCancelDestination(
-  setupIntent: FirstUseSetupIntent | undefined,
-  connectionId: string | undefined,
-): Href {
-  if (setupIntent === 'chat') return '/onboarding';
+/** A cold pairing entry without back history falls back to its connection or the list. */
+export function pairingCancelDestination(connectionId: string | undefined): Href {
   if (connectionId) {
     return { pathname: '/settings/device-connections/[connectionId]', params: { connectionId } };
   }

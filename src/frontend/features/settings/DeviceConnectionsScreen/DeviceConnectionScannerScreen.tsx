@@ -6,19 +6,16 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 
 import { useDesktopPairingInput } from './DesktopPairingProvider';
-import { pairingCancelDestination } from './pairingCancelDestination';
 import { usePairingInvitationInput } from './usePairingInvitationInput';
+import { usePairingNavigation } from './usePairingNavigation';
 import { useScannerPermissions } from './useScannerPermissions';
 
-export function DeviceConnectionScannerScreen({
-  setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
+export function DeviceConnectionScannerScreen() {
   const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
   const connectionId = getSingleRouteParam(params.connectionId);
   const { t } = useTranslation();
@@ -36,11 +33,7 @@ export function DeviceConnectionScannerScreen({
         capabilities: ['configuration', 'agent'],
         ...(connectionId ? { connectionId } : {}),
       });
-      router.replace(
-        setupIntent === 'chat'
-          ? '/onboarding/device-connections/pair'
-          : '/settings/device-connections/pair',
-      );
+      router.replace('/settings/device-connections/pair');
     },
     onInvalidPaste: () =>
       toast.show({
@@ -51,7 +44,7 @@ export function DeviceConnectionScannerScreen({
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanInvalid && camera?.state === 'granted';
 
-  const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
+  const { cancel } = usePairingNavigation({ connectionId });
 
   const openSystemSettings = () => {
     void permissions.openSystemSettings().catch(() => {

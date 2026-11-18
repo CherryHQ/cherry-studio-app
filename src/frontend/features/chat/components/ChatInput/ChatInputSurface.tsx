@@ -1,5 +1,9 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import { Composer } from '@cherrystudio/ui/components';
+import {
+  Composer,
+  type ComposerInputProps,
+  useComposerExpansion,
+} from '@cherrystudio/ui/components';
 import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
@@ -10,8 +14,18 @@ import {
   ComposerSurface,
   useComposerPresentationState,
   useComposerState,
+  useComposerSubmit,
 } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
+import { usePreference } from '@/frontend/data/hooks';
+
+import { ChatInputPrimaryAction } from '../../voice/ChatInputPrimaryAction';
+import { DictationCancelAction } from '../../voice/DictationCancelAction';
+import { DictationStatus } from '../../voice/DictationStatus';
+import { useDictation } from '../../voice/useDictation';
+import { useDictationAvailability } from '../../voice/useDictationAvailability';
+import { ContextUsageRing } from './components/ContextUsageRing';
+import type { ContextUsage } from './utils/contextUsage';
 
 /** A drafted follow-up can be admitted while Pi continues its current answer. */
 export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
@@ -28,44 +42,117 @@ export function ChatInputAccessories({ children }: PropsWithChildren) {
   return <ComposerEditorAccessories testID="chat-composer">{children}</ComposerEditorAccessories>;
 }
 
-export function ChatInputSurface({
-  leadingAction,
-  secondaryAction,
-  trailingAction,
-  streaming,
-  onStop,
-  fieldStyle,
-  placeholder,
-  attachmentMode = 'images',
-}: {
+type ChatInputSurfaceProps = {
+  contextUsage?: ContextUsage;
+  contextUsageSessionId?: string;
+  contextUsageMessageId?: string;
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
   trailingAction?: ReactNode;
   streaming: boolean;
   onStop?: () => void;
   fieldStyle?: StyleProp<TextStyle>;
+  onLinkPress?: ComposerInputProps['onLinkPress'];
   placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
+  /** Voice input takes the send slot while there is nothing to send. */
+  dictation?: boolean;
+};
+
+export function ChatInputSurface({ dictation = false, ...props }: ChatInputSurfaceProps) {
+  return dictation ? <DictationChatInputSurface {...props} /> : <ChatInputLayout {...props} />;
+}
+
+/**
+ * Dictation spans three slots: cancel replaces the leading action, its status stands in for the
+ * placeholder until text arrives, and the primary slot finishes it.
+ */
+function DictationChatInputSurface(props: Omit<ChatInputSurfaceProps, 'dictation'>) {
+  const dictation = useDictation();
+  const canDictate = useDictationAvailability();
+  const { draft } = useComposerState();
+  const { state } = dictation;
+  const status = (state === 'listening' || state === 'finishing') && !draft ? state : null;
+  return (
+    <ChatInputLayout
+      {...props}
+      leadingAction={
+        state === 'idle' ? (
+          props.leadingAction
+        ) : (
+          <DictationCancelAction onCancel={dictation.cancel} />
+        )
+      }
+      placeholder={status ? '' : props.placeholder}
+      status={status ? <DictationStatus state={status} /> : undefined}
+      renderPrimary={(send) => (
+        <ChatInputPrimaryAction
+          canDictate={canDictate}
+          dictation={dictation}
+          send={send}
+          streaming={props.streaming}
+        />
+      )}
+    />
+  );
+}
+
+function ChatInputLayout({
+  contextUsage,
+  contextUsageSessionId,
+  contextUsageMessageId,
+  leadingAction,
+  secondaryAction,
+  trailingAction,
+  streaming,
+  onStop,
+  fieldStyle,
+  onLinkPress,
+  placeholder,
+  attachmentMode = 'images',
+  status,
+  renderPrimary,
+}: Omit<ChatInputSurfaceProps, 'dictation'> & {
+  /** Replaces the secondary action and, unlike it, also shows in the resting row. */
+  status?: ReactNode;
+  renderPrimary?: (send: ReactNode) => ReactNode;
 }) {
   const { t } = useTranslation();
+  const [submitOnReturn] = usePreference('chat.input.enter_to_send');
+  const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
+  const isExpanded = useComposerExpansion()?.state.isExpanded ?? false;
+  const active = isEditing || isExpanded || draft.length > 0 || attachments.length > 0;
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
+  const send = (
+    <Composer.Send
+      testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
+    />
+  );
+  const ring = contextUsage ? (
+    <ContextUsageRing
+      key={JSON.stringify([contextUsageSessionId, contextUsageMessageId])}
+      usage={contextUsage}
+      testID={isEditing ? 'chat-context-usage-editing' : 'chat-context-usage-compact'}
+    />
+  ) : null;
   return (
     <ComposerEditor
-      active={isEditing || draft.length > 0 || attachments.length > 0}
+      restingTrailingActionCount={contextUsage ? 2 : 1}
+      active={active}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
+      onLinkPress={onLinkPress}
+      onReturnSubmit={submit}
       placeholder={placeholder}
+      submitOnReturn={submitOnReturn}
       testID="chat-composer"
     >
       {leadingAction ?? <View className="w-8" />}
-      <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>
-      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-        {trailingAction ? (
-          <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
-        ) : null}
-        {streaming && hasFollowUp && onStop ? (
+      {status ?? <Composer.EditorSecondary>{secondaryAction}</Composer.EditorSecondary>}
+      {streaming && hasFollowUp && onStop ? (
+        <Composer.EditorSecondary>
           <Composer.Action
             accessibilityLabel={t('chat.input.action.stopGenerating')}
             className="bg-transparent"
@@ -74,10 +161,14 @@ export function ChatInputSurface({
           >
             <PauseIcon className="size-6 text-foreground" />
           </Composer.Action>
+        </Composer.EditorSecondary>
+      ) : null}
+      <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+        {trailingAction ? (
+          <Composer.EditorSecondary>{trailingAction}</Composer.EditorSecondary>
         ) : null}
-        <Composer.Send
-          testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
-        />
+        {ring}
+        {renderPrimary ? renderPrimary(send) : send}
       </View>
     </ComposerEditor>
   );

@@ -34,7 +34,7 @@ module.exports = {
     // architecture rules and the native patch guards that protect every PR.
     ...(process.env.PRCI
       ? [
-          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInputMeasurement)\\.test\\.ts$)',
+          '/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache|androidWindowCompatibility|nitroIosCompatibility|expoFilePermissions|expoModulesCoreSwiftCompatibility|enrichedMarkdownMathWidth|enrichedMarkdownInputMeasurement|skiaCompilerMemory)\\.test\\.ts$)',
         ]
       : []),
   ],
@@ -69,6 +69,8 @@ module.exports = {
     '^@earendil-works/pi-codemode/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-codemode/dist/$1.js',
     '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
+    '^@earendil-works/pi-schema$': piDependencyFile('pi-schema', 'index.js'),
+    '^@earendil-works/pi-schema/formats$': piDependencyFile('pi-schema', 'formats/index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/models$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/models.js',
     '^@earendil-works/pi-ai/native-oauth$':
@@ -104,9 +106,10 @@ module.exports = {
     // they need transforming for any suite that reaches them. `standard-navigation`
     // arrives transitively through Expo Router's public exports.
     // `typebox` is Pi's ESM-only tool argument validator, exercised by real-loop tests.
+    // `@cherryinternal/accounts-portal` ships ESM only; bootstrap suites reach it.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@modelcontextprotocol/ext-apps|@cherrystudio/file-preview|@cherrystudio/provider-registry|@cherrystudio/remote-protocol|@cherrystudio/remote-transport|@cherrystudio/web-search)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@modelcontextprotocol/ext-apps|@cherrystudio/file-preview|@cherrystudio/provider-registry|@cherrystudio/remote-protocol|@cherrystudio/remote-transport|@cherrystudio/web-search|@cherryinternal/accounts-portal)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

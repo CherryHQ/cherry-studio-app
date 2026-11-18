@@ -1,5 +1,6 @@
+import { ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
-import { BackHandler, Dimensions, StyleSheet, Text } from 'react-native';
+import { BackHandler, Dimensions, Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
@@ -7,6 +8,7 @@ import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/ov
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
+const mockAnimatedStyleFactories: (() => object)[] = [];
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -35,10 +37,28 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
+  const { useState } = jest.requireActual('react');
   return {
     __esModule: true,
     default: { View },
-    useAnimatedStyle: (factory: () => object) => factory(),
+    createAnimatedComponent: (component: unknown) => component,
+    useAnimatedStyle: (factory: () => object) => {
+      mockAnimatedStyleFactories.push(factory);
+      return factory();
+    },
+    useEvent: (handler: (event: unknown) => void) => handler,
+    useSharedValue: (initial: number) => {
+      const [shared] = useState(() => {
+        let value = initial;
+        return {
+          get: () => value,
+          set: (next: number) => {
+            value = next;
+          },
+        };
+      });
+      return shared;
+    },
   };
 });
 
@@ -52,22 +72,33 @@ jest.mock('uniwind', () => ({
 
 describe('BottomSheet', () => {
   let backHandlerSpy: jest.SpyInstance;
+  let animationFrameSpy: jest.SpyInstance;
+  let frames: FrameRequestCallback[];
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    frames = [];
+    animationFrameSpy = jest
+      .spyOn(global, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
+    mockAnimatedStyleFactories.length = 0;
+    const handlers: (() => boolean | null | undefined)[] = [];
     backHandlerSpy = jest
       .spyOn(BackHandler, 'addEventListener')
       .mockImplementation((_event, handler) => {
-        mockHardwareBackPress = () => handler({ type: 'hardwareBackPress', timeStamp: Date.now() });
-        return { remove: jest.fn() };
+        const listener = () => handler({ type: 'hardwareBackPress', timeStamp: Date.now() });
+        handlers.push(listener);
+        mockHardwareBackPress = () => handlers.toReversed().some((callback) => callback());
+        return { remove: () => handlers.splice(handlers.indexOf(listener), 1) };
       });
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    animationFrameSpy.mockRestore();
     backHandlerSpy.mockRestore();
   });
 
@@ -129,19 +160,39 @@ describe('BottomSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  test('uses the provider host so native menu controls retain their presenting page controller', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open size="large" title="Share">
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    // A window-level native overlay detaches controls from their view controller on iOS.
+    expect(mockBottomSheetProps.nativeOverlay).toBe(false);
+  });
+
   test('does not report a controlled close as a user dismissal', () => {
     const onClose = jest.fn();
+    const onClosed = jest.fn();
 
     act(() => {
       renderer = create(
-        <BottomSheet onClose={onClose} open size="medium" title="Models">
+        <BottomSheet onClosed={onClosed} onClose={onClose} open size="medium" title="Models">
           <Text>Content</Text>
         </BottomSheet>,
       );
     });
     act(() => {
       renderer?.update(
-        <BottomSheet onClose={onClose} open={false} size="medium" title="Models">
+        <BottomSheet
+          onClosed={onClosed}
+          onClose={onClose}
+          open={false}
+          size="medium"
+          title="Models"
+        >
           <Text>Content</Text>
         </BottomSheet>,
       );
@@ -150,6 +201,7 @@ describe('BottomSheet', () => {
 
     expect(mockBottomSheetProps.index).toBe(0);
     expect(onClose).not.toHaveBeenCalled();
+    expect(onClosed).toHaveBeenCalledTimes(1);
   });
 
   test('keeps the closed detent of a non-dismissible sheet programmatic-only', () => {
@@ -344,6 +396,55 @@ describe('BottomSheet', () => {
     expect(mockBottomSheetProps.index).toBe(1);
   });
 
+  test('retains draggable heights while controlled size changes and reports only user resizing', () => {
+    const onClose = jest.fn();
+    const onSizeChange = jest.fn();
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    const sheet = (size: 'large' | 'full') => (
+      <BottomSheet
+        avoidKeyboard
+        onClose={onClose}
+        onSizeChange={onSizeChange}
+        open
+        size={size}
+        sizes={['large', 'full']}
+        title="Models"
+      >
+        <Text>Models</Text>
+      </BottomSheet>
+    );
+
+    try {
+      act(() => {
+        renderer = create(sheet('large'));
+      });
+      const detents = mockBottomSheetProps.detents as number[];
+      expect(detents).toHaveLength(3);
+      expect(mockBottomSheetProps.index).toBe(1);
+
+      act(() => renderer?.update(sheet('full')));
+      expect(mockBottomSheetProps.index).toBe(2);
+      expect(mockBottomSheetProps.detents).toEqual(detents);
+      expect(mockBottomSheetProps.animateContentHeight).toBe(true);
+
+      // A stale programmatic settlement must not undo a newer requested height.
+      act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(1));
+      expect(onSizeChange).not.toHaveBeenCalled();
+      expect(mockBottomSheetProps.index).toBe(2);
+
+      act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(1));
+      expect(onSizeChange).toHaveBeenCalledWith('large');
+      expect(dismiss).toHaveBeenCalledTimes(1);
+
+      act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(0));
+      act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
+      expect(onSizeChange).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      dismiss.mockRestore();
+    }
+  });
+
   test('shows the drag handle only when a drag can close or resize the sheet', () => {
     const sheet = (props: { dismissible?: boolean; sizes?: ['compact', 'large'] }) =>
       props.sizes ? (
@@ -399,6 +500,120 @@ describe('BottomSheet', () => {
 
     act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(2));
     expect(mockBottomSheetProps.index).toBe(2);
+  });
+
+  test('keeps the footer inside the visible layout while dragging between heights', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text>Create</Text>}
+          onClose={jest.fn()}
+          open
+          sizes={['large', 'full']}
+          testID="resizable-sheet"
+          title="Files"
+        >
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const [, minimum, maximum] = mockBottomSheetProps.detents as number[];
+    const layout = mockAnimatedStyleFactories.at(-1)!;
+    expect(layout()).toEqual({ height: minimum });
+    const card = renderer?.root
+      .findAllByProps({ testID: 'resizable-sheet' })
+      .find((node) => typeof node.type === 'string');
+    const cardStyle = StyleSheet.flatten(card?.props.style);
+    expect(cardStyle.flex).toBe(1);
+    expect(cardStyle.height).toBeUndefined();
+
+    const onPositionChange = mockBottomSheetProps.onPositionChange as (event: {
+      position: number;
+      index: number;
+    }) => void;
+    const middle = (minimum + maximum) / 2;
+    onPositionChange({ position: middle, index: 1.5 });
+    expect(layout()).toEqual({ height: middle });
+    onPositionChange({ position: maximum, index: 2 });
+    expect(layout()).toEqual({ height: maximum });
+    onPositionChange({ position: minimum / 2, index: 0.5 });
+    expect(layout()).toEqual({ height: minimum });
+  });
+
+  test('sizes an overlay to its content and safe-area space', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open presentation="overlay" size="content" title="Tools">
+          <Text>Tools body</Text>
+        </BottomSheet>,
+      );
+    });
+    act(() => renderer!.root.findByType(ScrollView).props.onContentSizeChange(320, 200));
+    expect(mockBottomSheetProps.detents).toEqual([0, 200 + 32 + 34]);
+    expect(renderer!.root.findAllByType(Text).some((node) => node.props.children === 'Tools')).toBe(
+      false,
+    );
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Tools' }).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  test('covers a parent and routes Back only to its nested overlay', () => {
+    const closeParent = jest.fn();
+    const closeChild = jest.fn();
+    const childClosed = jest.fn();
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={closeParent} open presentation="overlay" size="large" title="Parent">
+          <BottomSheet
+            onClosed={childClosed}
+            onClose={closeChild}
+            open
+            size="compact"
+            title="Child"
+          >
+            <Text>Child body</Text>
+          </BottomSheet>
+        </BottomSheet>,
+      );
+    });
+    let sheets = renderer!.root.findAllByType(ModalBottomSheet);
+    expect(sheets[1].props.detents).toEqual(sheets[0].props.detents);
+    act(() => {
+      expect(mockHardwareBackPress?.()).toBe(true);
+    });
+    sheets = renderer!.root.findAllByType(ModalBottomSheet);
+    expect(sheets[0].props.index).toBe(1);
+    expect(sheets[1].props.index).toBe(0);
+    act(() => sheets[1].props.onSettle(0));
+    expect(closeParent).not.toHaveBeenCalled();
+    expect(closeChild).toHaveBeenCalledTimes(1);
+    expect(childClosed).not.toHaveBeenCalled();
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    expect(childClosed).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the footer inside the initial visible height of an expandable sheet', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text>Share</Text>}
+          onClose={jest.fn()}
+          open
+          sizes={['large', 'full']}
+          testID="share-sheet"
+          title="Share"
+        >
+          <Text>Preview</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const layout = mockAnimatedStyleFactories.at(-1)!;
+    const detents = mockBottomSheetProps.detents as number[];
+    expect(layout()).toEqual({ height: detents[1] });
+    expect(detents[1]).toBeLessThan(detents[2]);
   });
 
   test('uses a caller-provided fixed height on a bounded sheet with only top corners rounded', () => {

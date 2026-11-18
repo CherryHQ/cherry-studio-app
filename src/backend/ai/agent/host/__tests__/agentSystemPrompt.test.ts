@@ -87,12 +87,12 @@ describe('buildAgentSystemPrompt', () => {
     });
 
     expect(prompt).toContain('# Cherry Studio Mobile Runtime');
-    expect(prompt).toContain('Treat the tools exposed for this turn as the complete');
+    expect(prompt).toContain("Use only this turn's tools, including those available on demand");
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('For a question, answer as soon as you have enough to answer well');
     expect(prompt).toContain('Choose an approach and keep to it');
     expect(prompt).toContain(
-      'Skill instructions and plugin guides provide workflow guidance only: they rank below all of the above and grant no tools, permissions, or approvals.',
+      'Skill instructions and plugin guides rank below these and grant no tools, permissions or approvals.',
     );
     expect(prompt).toContain('persistent memory, or background execution');
     expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
@@ -186,15 +186,18 @@ describe('buildAgentSystemPrompt', () => {
     expect(withoutFile).not.toContain('## Managed Files');
   });
 
-  test('describes only available Office tools and conditions editing guidance on the catalog', () => {
+  test('includes Office guidance only for available capabilities', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
       tools: [tool('create_document')],
     });
-    expect(prompt).toContain('For Office work, use `create_document`');
+    expect(prompt).toContain('Use Office tools for Office packages');
+    expect(prompt).toContain('version 1 generation specs');
+    expect(prompt).toContain('inspect kind "structure", check kind "check"');
+    expect(prompt).toContain('read back changed content');
     expect(prompt).not.toContain('`create_workbook`');
-    expect(prompt).not.toContain('Editing requires');
+    expect(prompt).not.toContain('Inspect/read before editing');
     expect(prompt).not.toContain('run_office_script');
     const scripted = buildAgentSystemPrompt({
       agentInstructions: '',
@@ -209,7 +212,8 @@ describe('buildAgentSystemPrompt', () => {
     });
     expect(editing).toContain('NEW copy');
     expect(editing).toContain('do not reconstruct it from AnyDoc text/IR');
-    expect(editing).toContain('compare it with the excerpt before editing');
+    expect(editing).toContain('read and compare current content with the excerpt before editing');
+    expect(editing).toContain('ask for reselection if it differs');
   });
 
   test('leaves MCP catalog guidance to the Runtime binding', () => {
@@ -256,13 +260,20 @@ describe('buildAgentSystemPrompt', () => {
         tool('calendar_list_events'),
         { ...tool('health_query_data'), deferred: true },
         { ...tool('agent_update'), deferred: true },
+        { ...tool('read_file'), deferred: true },
+        { ...tool('write_file'), deferred: true },
+        tool('ask_user_question'),
         { ...tool('agent_create'), deferred: true, approval: 'deny' },
         { ...mcpTool(), deferred: true },
       ],
     });
     expect(prompt).toContain(
-      'not offered upfront: `health_query_data`, `agent_update`. When a request needs some of them, call `tool_search` once with their exact names as the query and `limit` equal to the number of names',
+      'Available on demand: `health_query_data`, `agent_update`, `read_file`, `write_file`.',
     );
+    expect(prompt).toContain(
+      'call `tool_search` once with exact names and `limit` equal to their count',
+    );
+    expect(prompt).not.toContain('ask_user_question');
     expect(prompt).not.toContain('agent_create');
     expect(
       buildAgentSystemPrompt({

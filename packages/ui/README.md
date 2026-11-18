@@ -5,6 +5,26 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`FileBrowserRow` shares the library's file/folder presentation: a 40-point preview, single-line
+filename with middle truncation, optional secondary metadata, and a caller-composed trailing slot.
+It keeps the preview outside touch and accessibility handling so opening, selection and context-menu
+actions belong to the row. Callers own file data, translated descriptions, menus and loading.
+
+`Breadcrumbs` presents a caller-owned path with shared separators, ancestor press targets and
+current-location emphasis. It scrolls to the end as the path changes. Each item has a key, a label
+and an optional `onPress`; omit the action for the current location. `disabled` blocks ancestor
+navigation during operations. Local-library folders and SSH paths keep their own identities.
+
+`CardStack` is a controlled, upright preview carousel for a small ordered collection. It shows
+flat previous/current/next cards and page dots, with native horizontal fling recognition and
+accessible page adjustment actions. Fixed slots retain the foreground browser across page changes;
+vertical movement yields to the sheet, and cancelled flings never change the index. Callers own
+items, index, translated labels, content, selection, conversion, file access and delivery. Background
+slots must disable irrelevant interactions. The default `fill` layout lets a single item occupy
+its whole frame without pagination space; `compact` keeps the bounded media geometry for one item.
+Collections use 290-point cards when available, without rotation or overlapping stack layers.
+
+
 `ReorderList` is a controlled ordering list for small collections. It renders the shared Section
 rows with labeled up/down buttons, disables moves at the first and last positions, and returns
 a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
@@ -125,6 +145,11 @@ optional `badge` slot sits beside the document icon or over an image; callers ow
 localized content. Library cards show the complete filename so its type remains visible; compact
 attachment tiles may omit the extension from the title while retaining the complete accessible
 label and type metadata.
+
+Audio cards use a neutral waveform icon. Compact audio attachments show their extension below
+the filename; opening and transcription state remain caller-owned.
+The `icon` variant accepts `iconSize` for the glyph, independently of the tile's `size`;
+omitting it keeps the existing 24-point glyph.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
@@ -258,11 +283,18 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
-`defaultExpanded` preserves reading when a live tool group enters the completed process, and
+`defaultExpanded` supplies the initial disclosure state without overriding later manual toggles, and
 `statusText`/`statusTone` keep exceptions visible while the process is folded.
 `MessagePart.ToolGroup` defaults closed regardless of running state. Its optional controlled
 `expanded`/`onExpandedChange` pair lets a message retain group state across outer disclosure
 unmounts; new calls and completion never override the reader's choice.
+
+`MessagePart.Reasoning` opens the existing detail sheet at its default large height;
+it never expands content inline. `detailTitle` supplies a stable reader title. Content mounts only
+while open. The chat adapter owns one message-level reader above process folding, so committing a
+streamed part or completing a reply cannot close a reader already open.
+For inline reasoning, the chat adapter instead composes `MessagePart.ToolGroup` with
+`MessagePart.TextBody variant="preview"`; tapping the preview opens that message-owned reader.
 
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
@@ -275,6 +307,7 @@ The native Storybook exposes these states under the dedicated top-level `Message
 page for visual debugging.
 `MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
 caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
+`MessagePart.Detail` also accepts the shared sheet's fixed `footer` slot for a caller-owned action.
 
 `MessagePart.Section` composes a quiet heading, an optional action, and content. Its `tone="danger"`
 marks the heading with an error indicator while keeping the content readable. `SectionBody` is the
@@ -291,6 +324,9 @@ are not recycled between blocks. Native scroll and selection recognizers own can
 nested scrolling inside the detail sheet. There is no row tap or custom long-press handler. The
 section's explicit copy action always uses the original value, including text outside the viewport
 and original line endings. Gesture cancellation still requires acceptance on both platforms.
+`variant="preview"` always uses the fixed-height viewport and disables partial selection for a
+caller-owned tappable preview; wrap it in `BackgroundPressArea` so native scroll cancellation still
+owns the tap decision. Other readers keep block selection and natural short-text height by default.
 
 `splitTextBlocks` from `@cherrystudio/ui/utils` owns bounded reader chunks for `TextBody` and the file
 reader. It normalizes line endings for display and continues very long lines without splitting
@@ -397,9 +433,12 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
 behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
 its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
-`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+`inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
-compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
+to 14/20 labels, 20-point icons and a minimum 48-point touch target in both dimensions, growing for
+larger text. Other platforms retain `lg` sizing. This adaptation stays inside Button; feature code
+does not branch by platform. The `icon` prop renders an icon before
 the label and automatically switches to the matching icon-only padding when no label is provided.
 Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
 composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
@@ -409,6 +448,47 @@ composed content. Callers do not need an Expo UI `Host`. The visually compact `x
 `Section` receives the grouped title inset from the root; a standalone header receives placement
 from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
 `"default"`, or `"comfortable"` for intrinsic vertical spacing.
+`Section` styles only its own row kinds. A component that always renders exactly one of them, such
+as a wrapper choosing between a selectable and a read-only row, sets the static `sectionItem = true`
+(typed by `SectionItemComponent`) and passes `onPressedChange` through, so its separators follow
+press state like any row.
+
+Locked content belongs to someone else: it shows its value at full contrast, without the means to
+change it, and explains why when pressed. `LockedAppearanceProvider` supplies the owner's mark
+(`icon`, sized by `className`) and the `reason` shown in an `InfoPopover`; without a reason locks
+stay silent. `Switch`, `Tabs`, `Input`, `SelectionIndicator` and the `Section` rows take `locked`:
+they drop their edit affordances, and on their own carry the mark in its place. The switch draws a
+neutral track on both platforms, with the mark on its thumb when alone, because the iOS system
+switch cannot carry one. `LockedGroup` encloses a block in one outlined card headed by the mark and
+reason, locks the editable components inside and flattens the sections inside into
+its card, where their footers drop out. The header names the owner once, so nothing inside repeats
+the mark. A `Section.Item` locks only when it edits
+something; a row that only navigates or copies passes `locked={false}`. A virtualized list draws a
+group one item at a time with `LockedGroupSlice`; `LockedMark` and `LockedTrigger` serve custom
+controls.
+
+Use `inset="none"` when the containing surface already supplies the horizontal gutter; the default
+keeps the row's standard inset.
+
+`Tabs` retains its platform control by default. Explicit `variant="segmented"`, `"underline"`,
+and `"chips"` styles use the same token-backed geometry and accessible selection semantics on all
+platforms. They support the existing `fill`/`hug` layouts; labels grow with system text size.
+`variant="floating"` provides a 42-point capsule at default text size, with iOS-owned glass where
+available and the same token-backed capsule fallback elsewhere. Items can combine icons and labels.
+
+`DateRangePicker` is a controlled calendar for selecting a start and end day on one surface.
+It adapts `react-native-ui-datepicker` with Cherry typography, theme tokens, range highlighting,
+month/year navigation, and the caller's resolved `locale`, including both Chinese scripts.
+Its `value` and `onValueChange` use `DateRangeValue` (`startDate`/`endDate`, both optional `Date`s);
+the end stays absent while a new range is being selected. `minimumDate` and `maximumDate` constrain
+selection. The caller owns surrounding insets, presets, incomplete-selection copy, confirmation,
+and conversion to application-specific day boundaries. Tapping a completed range starts a new one;
+tapping its pending start again selects that single day.
+Public `Date` values represent local calendar days. The adapter exchanges date-only values with
+the vendor in UTC and reconstructs local dates on selection, avoiding the vendor's timezone
+conversion shifting a pressed day. The vendor's UTC-based today decoration is not used; the
+calendar uses Monday-first weeks, matching the app's usage calendar.
+It adds no native module or platform-specific component API.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
@@ -625,6 +705,14 @@ contract belongs to `Input`; native search and the composer's rich text field re
 It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
 taps, system back, and viewport changes dismiss it without changing the underlying layout.
 
+`AnchoredInfoPopover` accepts a caller-owned `InfoPopoverAnchor` in window coordinates instead of
+wrapping a trigger. Native editor links and inline transcript text use it when they measure their
+own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
+Its keyboard-preserving overlay shares the existing menu surface and bounded text reader. Optional
+children compose a visual readout while `text` supplies its accessible description; `width` requests
+a compact panel within the usual safe-area bounds, and `placement="above"` prefers the space above
+the anchor. The composed presentation remains stable through dismissal.
+
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
@@ -694,8 +782,7 @@ React Native touches too, and must still be allowed to open its menu.
 
 Cherry-rendered menus use an opaque `popover` surface with a soft external shadow, keeping the
 panel distinct from the composer and page. Dark mode layers a neutral `secondary` fill over that
-opaque base for separation from other dark surfaces. The private `MenuSurface` also supplies
-`Composer.Popover`; content clipping stays inside the shadow boundary. Leading icons sit in
+opaque base for separation from other dark surfaces. Content clipping stays inside the shadow boundary. Leading icons sit in
 40-point neutral circles within 56-point minimum rows; labels retain `popover-foreground` contrast,
 pressed rows use `secondary-active`, and trailing checkmarks and switches keep their state cues.
 
@@ -809,6 +896,18 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
+`Composer.Input` accepts `submitOnReturn` and `onReturnSubmit`. When both are set, the soft
+keyboard shows Send and a native submit event supplies the current Markdown without inserting a
+newline or blurring the field. The caller connects that snapshot to its normal guarded submission
+path. IME composition, paste and `inputRef.current.insertText('\n')` stay on the native editing
+path; they never infer submission from text changes. With the preference off, Return keeps its
+ordinary newline and list-editing behavior. Hardware keyboard Return remains an editing action.
+While Return submits, the native text menu offers an action labelled by `insertNewlineLabel`.
+It inserts at the caret or after selected text without replacing that text or submitting.
+The native menu retains the system editing actions and works without a nonempty selection.
+The native contract is maintained in the enriched-input dependency patch and needs an updated
+development client on both platforms.
+
 `Composer.Dock` applies horizontal and safe-area insets and follows the keyboard. It floats above
 screen content by default. Use `layoutMode="flow"` when the parent should reserve its space through
 normal flex layout; this avoids measuring the dock back into React state. Pair the floating mode
@@ -846,6 +945,9 @@ row and moving the caller-composed toolbar below the full-width field during edi
 state is caller-owned; an optional action-sized `compactAccessory` previews an attachment without
 activating editing. The `field` stays mounted, and `Composer.Input` automatically adapts its
 native layout and action inset to the editor frame, including through app-specific field wrappers.
+`Composer.Editor` accepts `restingTrailingActionCount` (default 1) to reserve the field space for
+visible action-sized slots at the end of the resting toolbar. The toolbar children stay mounted
+while editing changes. The existing leading `compactAccessory` remains independent.
 `Composer.EditorSecondary` reveals secondary toolbar tools, and
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
 The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it
@@ -918,24 +1020,6 @@ switch action and render a private decorative indicator. `width` is a floor boun
 Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel, including when its
 content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
-`Composer.Popover` wraps the input surface and presents caller-owned `content` above it. It follows
-the anchor while the keyboard or composer height changes. `maxWidth` and `maxHeight` constrain a
-compact list while its content determines the natural height. It shares the menu's material, radius,
-interruptible lifecycle, and reduced-motion behavior. Outside taps include both side gutters and
-the bottom safe area; touching the composer closes the picker while preserving that touch's action.
-The entire picker content must scroll. When even a compact composer leaves too little room, the
-panel uses the viewport above the keyboard, temporarily overlapping the composer instead of
-collapsing to zero. Callers may fold attachments and constrain the editor while open, keeping both
-mounted so draft state and the caret survive.
-
-Mount `Portal.AccessibilityBoundary` around app content below the provider that owns the portal
-host. The popover hides background accessibility through its exit, focuses `initialFocusRef` after
-layout, then restores `returnFocusRef` and calls `onClosed` after dismissal. Omit `returnFocusRef`
-when continuing into another surface. `onClose` distinguishes outside, composer, and Back/Escape
-actions so touching the composer can cancel a pending focus restoration. Selection,
-connection state, translations, and post-dismissal actions remain in the feature. Resolve route
-and business contexts before passing content, because the portal host does not inherit them.
-No editor mention trigger is installed by this component.
 
 ## Motion
 

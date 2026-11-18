@@ -4,6 +4,7 @@ import {
   type FileAttachmentTarget,
 } from '@/shared/contracts/fileAttachment';
 
+import { isAudioMediaType, MAX_AUDIO_FILE_BYTES } from './audioFileTypes';
 import { documentFileTypeFromMediaType } from './documentFileTypes';
 import { isAiSupportedImageMediaType } from './imageFileTypes';
 import { isSupportedTextAttachment } from './textFileTypes';
@@ -14,7 +15,7 @@ export const MAX_TEXT_ATTACHMENT_TOTAL_CHARACTERS = 400_000;
 export const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_PAGES = 100;
-export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_IMAGE_ATTACHMENT_BYTES = 30 * 1024 * 1024;
 // Attached images have no request-level count or byte ceiling: the Runtime prices them into the
 // context window and compaction folds old ones. Only document-embedded images, which the user did
 // not pick one by one, draw from this bounded budget alongside the attached images.
@@ -25,6 +26,7 @@ export const MIN_TEXT_CONTEXT_TOKEN_RESERVE = 1_024;
 export function fileAttachmentMode(file: Pick<FileAttachmentFact, 'mediaType' | 'name'>) {
   if (isAiSupportedImageMediaType(file.mediaType)) return 'image';
   if (documentFileTypeFromMediaType(file.mediaType)) return 'document';
+  if (isAudioMediaType(file.mediaType)) return 'audio';
   if (isSupportedTextAttachment(file)) return 'text';
   return undefined;
 }
@@ -60,9 +62,11 @@ export function validateFileAttachments(
     const limit =
       mode === 'image'
         ? MAX_IMAGE_ATTACHMENT_BYTES
-        : mode === 'document'
-          ? documentAttachmentByteLimit(file.mediaType)
-          : MAX_TEXT_ATTACHMENT_BYTES;
+        : mode === 'audio'
+          ? MAX_AUDIO_FILE_BYTES
+          : mode === 'document'
+            ? documentAttachmentByteLimit(file.mediaType)
+            : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });
   }
   // Painting models declare how many references they accept; chat images are unbounded.

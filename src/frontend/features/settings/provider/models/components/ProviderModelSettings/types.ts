@@ -41,7 +41,7 @@ export type ProviderModelSettingsValue = {
     value: ProviderModelAddEndpoint;
   };
   group: ProviderModelTextSetting;
-  /** Drawing and voice models have no token limits to set here. */
+  /** Drawing models have no token limits to set. */
   limits?: Record<ProviderModelLimitField, ProviderModelTextSetting & { error?: string }>;
   /** A saved model's ID, shown read-only and copied on tap. Adding a model types it instead. */
   modelId?: string;

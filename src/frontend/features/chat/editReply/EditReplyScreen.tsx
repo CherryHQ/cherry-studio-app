@@ -183,6 +183,8 @@ function ReplyEditor({ message, target }: { message: AgentMessageView; target: E
                   isStreaming={false}
                   key={item.key}
                   messageId={message.id}
+                  sessionId={target.sessionId}
+                  partId={item.key}
                   messageParts={parts}
                   part={item.part}
                 />

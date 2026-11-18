@@ -71,6 +71,9 @@ start and the header fades with the motion's progress on the UI thread; nothing 
 out mid-motion, and the region is released before the closed layer is removed. A new action takes
 over from the current progress. With reduced motion the layer fades in and out in place. The
 transcript keeps its size and header inset throughout, so nothing under the layer moves.
+While the workspace is elevated, the transcript is clipped above the measured composer footprint
+without resizing its viewport. The shrinking answer and fading scrim reveal the mounted composer
+during closing rather than leaving its area blank until the layer is released.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions
@@ -93,6 +96,9 @@ and it confirms destructively before removing the pressed answer together with t
 produced it: a transcript replays tool calls paired with their results, so half a turn is not
 replayable. The button is disabled while the Session is busy, like retry, because a running turn's
 rows must not disappear underneath it.
+For a question with multiple answers, the existing delete action targets the pressed answer and
+its descendants instead. Its shared question, sibling answers and independent fork Sessions remain.
+Single-answer deletion keeps the existing turn-removal behavior and confirmation presentation.
 Holding these regions belongs to the child interaction and does not open the message menu.
 
 `ChatWorkspace` observes the native screen-reader setting once for all rows. When enabled, settled
@@ -107,8 +113,9 @@ newer setting-change event.
 
 The assistant toolbar offers translation for complete, successful text answers. It extracts only
 answer text and code parts; reasoning, tool output, errors, and existing translations are excluded.
-Before a translation exists, pressing translate opens a button-anchored language menu. Choosing a
-language starts translation through `Backend.translation` with the configured translation model
+Before a translation exists, pressing translate in the toolbar's more menu opens the shared
+language selection bottom sheet with no language preselected. Choosing a language starts
+translation through `Backend.translation` with the configured translation model
 (or the default model when unset).
 Dismissal makes no request. Each answer owns its chosen language, independently of the app language
 and other answers. Only the local Agent screen enables message translation. Remote conversations
@@ -116,12 +123,12 @@ provide no translation action or translation state provider.
 
 `translation/MessageTranslationStore` owns requests for the open Session, independently of virtualized
 row lifetimes. Button and result subscribe by message ID, so streamed translation does not rerender
-the transcript or original Markdown. The original toolbar's translation button is the only disclosure
-control: it keeps the same language icon and position, highlights while expanded, and toggles the
-result below it. Folding removes the complete result block. The block has a plain separator without
-a duplicate title or language heading. Its footer aligns icon-only copy, language selection, cancel,
-and retry actions with the original message toolbar. Choosing a language restores its cached result
-or starts translation when none is saved. Copy includes only the active translation text. Sharing
+the transcript or original Markdown. The toolbar's more menu toggles an existing translation,
+and the translation footer provides a quick-collapse icon. Folding removes the complete result
+block while preserving its cached content and any in-flight request. The block has a plain separator
+without a duplicate title or language heading. Its footer aligns icon-only copy, language selection,
+cancel, retry, and collapse actions with the original message toolbar. Choosing a language restores
+its cached result or starts translation when none is saved. Copy includes only the active translation text. Sharing
 uses the original message's share action and selection page. Opening sharing captures the current
 text and language of each expanded translation; folded translations are omitted even when cached.
 Image, HTML, and Markdown include the captured translation beneath its selected original message,

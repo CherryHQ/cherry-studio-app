@@ -7,7 +7,11 @@ import {
 import type { Model } from '@/shared/data/types/model';
 
 import type { SupportedPiApi } from '../piApiAdapters';
-import { applyPiRequestParameters, type PiRequestParameters } from '../piRequestParameters';
+import {
+  applyPiRequestCompatibility,
+  applyPiRequestParameters,
+  type PiRequestParameters,
+} from '../piRequestParameters';
 
 const model: Model = {
   id: 'provider::model',
@@ -41,7 +45,213 @@ function apply(
   );
 }
 
+describe('Gemini compatible tool-call replay', () => {
+  test.each(['gemini-3-pro', 'google/gemini-4-argon', 'gemini-flash-latest'])(
+    'adds a missing signature for %s without overwriting signed calls or other metadata',
+    (modelId) => {
+      const calls = [
+        {
+          id: 'missing',
+          type: 'function',
+          function: { name: 'lookup', arguments: '{}' },
+          extra_content: { other: 'keep', google: { metadata: 'keep' } },
+        },
+        {
+          id: 'signed',
+          type: 'function',
+          function: { name: 'lookup', arguments: '{}' },
+          extra_content: { google: { thought_signature: 'original-signature' } },
+        },
+        { id: 'custom', type: 'custom', custom: { name: 'lookup', input: 'source' } },
+      ];
+      const payload = {
+        messages: [
+          { role: 'assistant', tool_calls: calls },
+          { role: 'tool', tool_call_id: 'missing', content: 'result' },
+        ],
+      };
+      expect(applyPiRequestCompatibility(payload, 'openai-completions', modelId)).toEqual({
+        messages: [
+          {
+            role: 'assistant',
+            tool_calls: [
+              {
+                ...calls[0],
+                extra_content: {
+                  other: 'keep',
+                  google: {
+                    metadata: 'keep',
+                    thought_signature: 'skip_thought_signature_validator',
+                  },
+                },
+              },
+              calls[1],
+              calls[2],
+            ],
+          },
+          payload.messages[1],
+        ],
+      });
+      expect(calls[0].extra_content?.google).toEqual({ metadata: 'keep' });
+    },
+  );
+
+  test.each([
+    ['google-generative-ai', 'gemini-3-pro'],
+    ['openai-responses', 'gemini-4-argon'],
+    ['openai-completions', 'gemini-2.5-pro'],
+    ['openai-completions', 'gpt-6.1-terra'],
+  ] as const)('does not change %s requests for %s', (api, modelId) => {
+    const payload = {
+      messages: [{ role: 'assistant', tool_calls: [{ type: 'function', id: 'call' }] }],
+    };
+    expect(applyPiRequestCompatibility(payload, api, modelId)).toBe(payload);
+  });
+});
+
 describe('Pi registry request parameters', () => {
+  const qwen = { ...model, apiModelId: 'Qwen/Qwen3-32B' };
+
+  test.each(['fireworks', 'custom', 'nvidia'])(
+    'keeps the generic Qwen effort contract without guessing a native switch on %s',
+    (providerId) => {
+      const messages = [{ role: 'user', content: 'Question' }];
+      for (const selection of ['off', 'high'] as const) {
+        expect(
+          apply(
+            'openai-completions',
+            REASONING_FORMAT_PROFILES['openai-chat'].wire,
+            selection,
+            { messages },
+            { model: qwen, providerId },
+          ),
+        ).toEqual({
+          messages,
+          reasoning_effort: selection === 'off' ? 'none' : selection,
+          temperature: 0.5,
+        });
+      }
+    },
+  );
+
+  test.each(['default', undefined] as const)('keeps Qwen provider defaults for %s', (selection) => {
+    const messages = [{ role: 'user', content: 'Question' }];
+    expect(
+      apply(
+        'openai-completions',
+        REASONING_FORMAT_PROFILES['openai-chat'].wire,
+        selection,
+        { messages },
+        {
+          model: qwen,
+          providerId: 'gpustack',
+        },
+      ),
+    ).toEqual({ messages, temperature: 0.5 });
+  });
+
+  test.each(['enable_thinking', 'chat_template_kwargs.enable_thinking'] as const)(
+    'keeps an explicit Qwen %s wire declaration authoritative',
+    (target) => {
+      const profile: ReasoningWireProfile = {
+        off: {
+          operations: [
+            {
+              target,
+              value: { source: 'literal', value: false },
+            },
+          ],
+        },
+      };
+      expect(apply('openai-completions', profile, 'off', {}, { model: qwen })).toEqual({
+        ...(target === 'enable_thinking'
+          ? { enable_thinking: false }
+          : { chat_template_kwargs: { enable_thinking: false } }),
+        temperature: 0.5,
+      });
+    },
+  );
+
+  test('does not add a fallback to an explicit effort-only Qwen contract', () => {
+    expect(
+      apply(
+        'openai-completions',
+        {
+          off: {
+            operations: [
+              { target: 'reasoningEffort', value: { source: 'literal', value: 'none' } },
+            ],
+          },
+        },
+        'off',
+        {},
+        { model: qwen },
+      ),
+    ).toEqual({ reasoning_effort: 'none', temperature: 0.5 });
+  });
+
+  test.each(['lmstudio', 'gpustack'])(
+    'uses a soft switch for classic Qwen on a preset-backed %s copy without changing history',
+    (providerId) => {
+      const messages = [
+        { role: 'user', content: 'Question' },
+        { role: 'assistant', content: 'Answer' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Follow-up' },
+            { type: 'image_url', image_url: { url: 'image' } },
+          ],
+        },
+        { role: 'user', content: 'Already selected /think' },
+      ];
+      const result = apply(
+        'openai-completions',
+        REASONING_FORMAT_PROFILES['openai-chat'].wire,
+        'off',
+        { messages },
+        {
+          model: { ...qwen, providerId: 'copied-provider' },
+          providerId,
+        },
+      );
+      expect(result.messages).toEqual([
+        { role: 'user', content: 'Question /no_think' },
+        messages[1],
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Follow-up /no_think' },
+            { type: 'image_url', image_url: { url: 'image' } },
+          ],
+        },
+        messages[3],
+      ]);
+      expect(messages[0].content).toBe('Question');
+      expect((messages[2].content as { text?: string }[])[0].text).toBe('Follow-up');
+      expect(result).not.toHaveProperty('enable_thinking');
+    },
+  );
+
+  test.each(['Qwen3.5-35B-A3B', 'Qwen3.8-Flash-Next', 'Qwen3-Coder-30B', 'Qwen2.5-32B'])(
+    'does not add a classic soft switch to %s',
+    (apiModelId) => {
+      const messages = [{ role: 'user', content: 'Question' }];
+      expect(
+        apply(
+          'openai-completions',
+          REASONING_FORMAT_PROFILES['openai-chat'].wire,
+          'off',
+          { messages },
+          {
+            model: { ...qwen, apiModelId },
+            providerId: 'lmstudio',
+          },
+        ).messages,
+      ).toEqual(messages);
+    },
+  );
+
   test.each(['default', undefined] as const)(
     'leaves provider reasoning defaults intact for %s',
     (selection) => {

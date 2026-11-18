@@ -14,8 +14,8 @@ import { FakeRuntime, type RuntimeModel, type RuntimeTool } from '../../runtime'
 import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
+  StoredSkillActivation,
 } from '../../sessionStore/AgentSessionStore';
-import type { StoredSkillActivation } from '../../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
@@ -56,7 +56,6 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -72,6 +71,28 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 }));
 
 describe('turn preparation', () => {
+  test('falls back after a conversation pick is withdrawn and ignores its model-specific effort', async () => {
+    const harness = createHarness();
+    const oldModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    const defaultModelId = createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId);
+    // A sync committed after the Session read but before the Agent read.
+    harness.getSession.mockResolvedValue({ ...SESSION, model: oldModelId });
+    harness.getAgent.mockResolvedValue({ ...AGENT, allowedModelIds: [defaultModelId] });
+    const signal = new AbortController().signal;
+    const input = {
+      ...textInput(),
+      reasoningEffort: 'high',
+      reasoningEffortModelId: oldModelId,
+    } as const;
+
+    const plan = await prepareTurn(harness.dependencies, input, signal);
+    expect(plan.inferenceSnapshot.model.uniqueModelId).toBe(defaultModelId);
+    expect(plan.inferenceSnapshot.reasoningEffort).toBe(AGENT.options.reasoningEffort);
+    await expect(
+      prepareTurn(harness.dependencies, { ...input, modelId: oldModelId }, signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
+
   test.each(['existing', 'initial', 'durable'] as const)(
     'standard %s chat remains available without function calling or tool discovery',
     async (kind) => {
@@ -148,7 +169,7 @@ describe('turn preparation', () => {
         throw new Error('Skills unavailable');
       });
       harness.dependencies.skills = { resolve: resolveSkills };
-      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
       harness.getSystemTools.mockRejectedValue(new Error('Tools unavailable'));
       harness.resolveRuntimeTools.mockRejectedValue(new Error('Plugin connection unavailable'));
       harness.preflightModel.mockResolvedValue({
@@ -510,9 +531,9 @@ describe('turn preparation', () => {
 
     expect(harness.getSystemTools).toHaveBeenCalledWith({
       workspaceFolderId: null,
+      sessionId: SESSION_ID,
       agentId: AGENT.id,
       askUser: harness.askUser,
-      disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       acceptsImages: true,
       resources: plan.resources,
@@ -667,9 +688,12 @@ describe('turn preparation', () => {
       const pluginReferences = [
         { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
       ];
+      const sshReferences = [{ type: 'ssh' as const, label: 'SSH · guoxu', offset: 8 }];
       const selected = await prepare({
         ...textInput(),
-        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+        parts: [
+          { type: 'text', text: '飞书 查找文档 SSH · guoxu', pluginReferences, sshReferences },
+        ],
       });
       const unselected = await prepare(textInput());
       expect(selected.tools).toEqual([harness.configuredTool]);
@@ -678,7 +702,14 @@ describe('turn preparation', () => {
       expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
       expect(selected.agent).toEqual(AGENT);
       expect(selected.userParts).toEqual([
-        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+        {
+          id: 'input-0',
+          type: 'text',
+          text: '飞书 查找文档 SSH · guoxu',
+          pluginReferences,
+          sshReferences,
+          state: 'done',
+        },
       ]);
     },
   );
@@ -710,7 +741,7 @@ describe('turn preparation', () => {
     expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
   });
 
-  test('freezes the web policy only for an Agent that may use the web', async () => {
+  test('freezes the web policy independently of Agent mode', async () => {
     const harness = createHarness();
     const policy = {
       modelToolsPreferred: true,
@@ -722,10 +753,10 @@ describe('turn preparation', () => {
       (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
 
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
     expect(await prepare()).toEqual(policy);
-    harness.getAgent.mockResolvedValue({ ...AGENT, disabledCapabilities: ['web'] });
-    expect(await prepare()).toBeUndefined();
+    harness.getAgent.mockResolvedValue({ ...AGENT });
+    expect(await prepare()).toEqual(policy);
   });
 
   test('stops at session admission when the session does not exist', async () => {
@@ -987,6 +1018,44 @@ describe('Skill turn preparation', () => {
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
     expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
   });
+
+  test('prepareInitialTurn uses parsed.modelId fallback when sessionModelId is omitted and rejects disallowed pool models', async () => {
+    const harness = createHarness();
+    const fallbackModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    harness.getAgent.mockImplementationOnce(async (_agentId, fallback) => ({
+      ...AGENT,
+      model: fallback === fallbackModelId ? OVERRIDE_MODEL : BASE_MODEL,
+      allowedModelIds: [fallbackModelId],
+    }));
+
+    const plan = await prepareInitialTurn(
+      harness.dependencies,
+      {
+        ...textInput(),
+        agentId: AGENT_ID,
+        modelId: fallbackModelId,
+      },
+      new AbortController().signal,
+    );
+    expect(harness.getAgent).toHaveBeenCalledWith(AGENT_ID, fallbackModelId);
+    expect(plan.agent.model).toEqual(OVERRIDE_MODEL);
+
+    harness.getAgent.mockResolvedValueOnce({
+      ...AGENT,
+      allowedModelIds: [createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId)],
+    });
+    await expect(
+      prepareInitialTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          agentId: AGENT_ID,
+          modelId: fallbackModelId,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
 });
 
 function createHarness() {
@@ -994,7 +1063,10 @@ function createHarness() {
   const getSession = jest.fn(
     async (_sessionId: string): Promise<AgentSessionView | null> => SESSION,
   );
-  const getAgent = jest.fn(async (_agentId: string): Promise<AgentDefinition | null> => AGENT);
+  const getAgent = jest.fn(
+    async (_agentId: string, _fallbackModelId?: string | null): Promise<AgentDefinition | null> =>
+      AGENT,
+  );
   const getLatestContextCheckpoint = jest.fn(
     async (_sessionId: string): Promise<StoredRuntimeContextCheckpoint | null> => null,
   );

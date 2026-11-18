@@ -1,6 +1,5 @@
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { Agent } from '@/shared/data/types/agent';
-import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
 import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
 
 import type { RuntimeJsonValue } from '../../runtime';
@@ -89,7 +88,7 @@ describe('Agent management tools', () => {
     }
   });
 
-  test('creation leaves default-model resolution to storage and uses the manual form capability defaults', async () => {
+  test('creation leaves default-model resolution to storage without capability switches', async () => {
     const { data, invoke } = setup();
     const result = await invoke('agent_create', {
       name: ' Writer ',
@@ -98,10 +97,10 @@ describe('Agent management tools', () => {
     expect(data.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Writer',
-        disabledCapabilities: [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
       }),
     );
     expect(data.create.mock.calls[0][0].model).toBeUndefined();
+    expect(data.create.mock.calls[0][0]).not.toHaveProperty('disabledCapabilities');
     expect(result.value).toEqual({ status: 'created', agent: AgentToolRecordSchema.parse(agent) });
     expect(result.value).not.toHaveProperty('agent.avatar');
     expect(result.value).not.toHaveProperty('agent.avatarUri');
@@ -161,6 +160,29 @@ describe('Agent management tools', () => {
       expect(data.update).not.toHaveBeenCalled();
     },
   );
+
+  test('neither reads nor changes an organization-delivered Agent, and marks it in the list', async () => {
+    const { data, invoke } = setup();
+    const managed = { ...agent, isManaged: true };
+    data.getById.mockResolvedValue(managed);
+    data.list.mockResolvedValue({ items: [managed], page: 1, total: 1 });
+    for (const view of ['definition', 'summary']) {
+      const read = await invoke('agent_get', { agent_id: 'current', view });
+      expect(read).toMatchObject({ failure: { scope: 'call', error: { code: 'agent_managed' } } });
+      expect(JSON.stringify(read.value)).not.toContain(agent.instructions);
+    }
+    expect(
+      await invoke('agent_update', {
+        agent_id: agent.id,
+        expected_updated_at: agent.updatedAt,
+        changes: { mode: 'standard' },
+      }),
+    ).toMatchObject({ value: { code: 'agent_managed' } });
+    expect(data.update).not.toHaveBeenCalled();
+    expect(data.listSkillBindings).not.toHaveBeenCalled();
+    const listed = await invoke('agent_list', {});
+    expect(listed.value).toMatchObject({ items: [{ id: agent.id, isManaged: true }] });
+  });
 
   test('rejects an invented Agent id before reading', async () => {
     const { data, invoke } = setup();
@@ -283,5 +305,16 @@ describe('Agent management tools', () => {
       total: 1,
     });
     expect(data.list).toHaveBeenCalledWith({ search: 'Writer', page: 2, limit: 20 });
+  });
+
+  test('reads only the version summary for avatar workflows without loading instructions or bindings', async () => {
+    const { data, invoke } = setup();
+    data.getById.mockResolvedValueOnce({ ...agent, instructions: 'x'.repeat(64_000) });
+    const result = await invoke('agent_get', { agent_id: 'current', view: 'summary' });
+    expect(result.value).toEqual({
+      agent: { id: agent.id, name: agent.name, updatedAt: agent.updatedAt },
+    });
+    expect(JSON.stringify(result).length).toBeLessThan(400);
+    expect(data.listSkillBindings).not.toHaveBeenCalled();
   });
 });

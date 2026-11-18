@@ -4,7 +4,6 @@ import { AppState } from 'react-native';
 import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
-import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import {
   AppStatePolicy,
   BaseService,
@@ -15,6 +14,7 @@ import {
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
+import { denyUnless } from '@/backend/data/services/managedResources';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import {
   createBuiltInMcpClient,
@@ -24,6 +24,7 @@ import {
   type PluginToolCatalog,
 } from '@/backend/services/builtInMcp';
 import { McpOAuthRuntime } from '@/backend/services/mcp';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import type {
   McpConnectionConfig,
   McpModule,
@@ -33,6 +34,7 @@ import type {
 } from '@/shared/contracts';
 import {
   McpAuthorizationError,
+  McpLegacyFallbackError,
   type McpOAuthStartInput,
   type McpContentPreview,
   type McpPromptEntry,
@@ -47,6 +49,7 @@ import { McpResultSourceSchema, type McpResourceReference } from '@/shared/contr
 import type { McpElicitationResponse } from '@/shared/contracts/mcpInteraction';
 import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { managedResourcePolicy } from '@/shared/data/managedPolicy';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
 import { enablesMcpServer } from '@/shared/utils/agentMcpBinding';
@@ -128,6 +131,7 @@ type ServerToolCatalog = {
 };
 
 type ServerRuntimeState = {
+  shouldUseLegacyProtocol: boolean;
   /** Tool calls in flight on the pooled client; a server question pauses all of them. */
   calls: Set<McpInvocationProgress>;
   /** Server questions awaiting the user, withdrawn once no call remains to receive the answer. */
@@ -224,7 +228,10 @@ function createMcpClient(
   pluginAuthorizations: PluginAuthorizationManager,
   foreground: boolean,
   authorization: McpOAuthRuntime,
-  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onCatalogChanged'>,
+  pooled?: Pick<
+    Parameters<typeof createRemoteMcpClient>[0],
+    'elicit' | 'onCatalogChanged' | 'shouldUseLegacyProtocol' | 'onLegacyPreferenceChanged'
+  >,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
@@ -301,6 +308,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const previous = input.serverId ? await mcpServerService.getById(input.serverId) : undefined;
     this.lifetime.signal.throwIfAborted();
     if (previous?.origin === 'builtin') throw new McpAuthorizationError('configuration');
+    denyUnless(managedResourcePolicy(previous).canEdit('oauth'), 'mcp.beginOAuth');
     return this.oauth.begin(input, previous);
   }
 
@@ -459,6 +467,15 @@ export class McpRuntimeService extends BaseService implements McpModule {
     );
 
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
+  }
+
+  /** Diagnostic reads never create clients or trigger discovery. */
+  getCachedConnectionStates(
+    servers: readonly McpServer[],
+  ): Record<string, McpServerRuntimeSummary['state']> {
+    return Object.fromEntries(
+      servers.map((server) => [server.id, this.getRuntimeSummary(server).state]),
+    );
   }
 
   readonly subscribePromptCatalogs = (listener: () => void): (() => void) => {
@@ -899,6 +916,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     const state: ServerRuntimeState = {
+      shouldUseLegacyProtocol: false,
       calls: new Set(),
       questions: new Set(),
       abort: new AbortController(),
@@ -948,7 +966,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.runtimeError =
       error instanceof McpTimeoutError
         ? 'MCP request timed out.'
-        : error instanceof McpRuntimeToolError
+        : error instanceof McpRuntimeToolError || error instanceof McpLegacyFallbackError
           ? error.message
           : 'MCP connection failed.';
   }
@@ -985,6 +1003,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
         {
           elicit: (params, requestSignal) =>
             this.askForServer(server, state, params, requestSignal),
+          shouldUseLegacyProtocol: state.shouldUseLegacyProtocol,
+          onLegacyPreferenceChanged: (shouldUseLegacyProtocol) => {
+            if (this.isCurrentState(state, generation) && !setupSignal.aborted)
+              state.shouldUseLegacyProtocol = shouldUseLegacyProtocol;
+          },
           onCatalogChanged: () => {
             if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
           },

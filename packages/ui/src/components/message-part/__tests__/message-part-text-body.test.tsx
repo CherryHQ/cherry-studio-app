@@ -17,18 +17,20 @@ jest.mock('@legendapp/list/react-native', () => {
   return {
     LegendList: ({
       data,
+      extraData,
       keyExtractor,
       renderItem,
       ...props
     }: {
       data: string[];
+      extraData?: unknown;
       keyExtractor: (item: string, index: number) => string;
       renderItem: (item: LegendListRenderItemProps<string>) => ReactNode;
     }) => (
       <MockView {...props} testID="text-viewport">
         {data.map((item, index) => (
           <MockView key={keyExtractor(item, index)}>
-            {renderItem({ data, extraData: undefined, index, item, type: undefined })}
+            {renderItem({ data, extraData, index, item, type: undefined })}
           </MockView>
         ))}
       </MockView>
@@ -81,6 +83,33 @@ it('bounds an unbroken result and replaces it with the current short value', () 
   act(() => renderer.update(<MessagePartTextBody value="Updated result" />));
   expect(renderedText()).toEqual(['Updated result']);
   expect(renderer.root.findAllByProps({ testID: 'text-viewport' })).toHaveLength(0);
+});
+
+it('keeps even a short preview in a non-selectable viewport and restores ordinary reading', () => {
+  const value = 'Thinking line';
+  act(() => {
+    renderer = create(<MessagePartTextBody value={value} variant="preview" />);
+  });
+  expect(renderer.root.findAllByProps({ testID: 'text-viewport' }).length).toBeGreaterThan(0);
+  expect(renderer.root.findAllByType(Text).every((text) => text.props.selectable === false)).toBe(
+    true,
+  );
+  act(() => renderer.update(<MessagePartTextBody value={value} />));
+  expect(renderer.root.findAllByProps({ testID: 'text-viewport' })).toHaveLength(0);
+  expect(renderer.root.findAllByType(Text).every((text) => text.props.selectable === true)).toBe(
+    true,
+  );
+});
+
+it('disables selection on every block of a long preview', () => {
+  act(() => {
+    renderer = create(
+      <MessagePartTextBody value={'Thinking line\n'.repeat(100)} variant="preview" />,
+    );
+  });
+  const text = renderer.root.findAllByType(Text);
+  expect(text.length).toBeGreaterThan(1);
+  expect(text.every((block) => block.props.selectable === false)).toBe(true);
 });
 
 function renderedText(): string[] {

@@ -1,5 +1,5 @@
 import { Image } from '@cherrystudio/ui/components';
-import { useImage } from 'expo-image';
+import { useImage, type ImageRef } from 'expo-image';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
@@ -21,6 +21,20 @@ const SWIPE_DISTANCE = 60;
 
 type CanvasSize = { height: number; width: number };
 
+type PaintingFocusCanvasProps = {
+  accessibilityLabel: string;
+  annotations: readonly PaintingAnnotation[];
+  canAnnotate: boolean;
+  imageCount: number;
+  mediaType: string;
+  onAddAnnotation: (x: number, y: number) => void;
+  onRemoveAnnotation: (id: number) => void;
+  onSelectAnnotation: (id: number) => void;
+  onSwipe: (direction: 1 | -1) => void;
+  selectedAnnotationId: number | null;
+  uri: string;
+};
+
 /**
  * The focused image, full-bleed. Each gesture has one owner:
  * tap only selects a marker, long press drops an annotation at the pressed
@@ -28,46 +42,65 @@ type CanvasSize = { height: number; width: number };
  * horizontal swipe at rest moves between the images of one generation. Annotation coordinates are normalized to the image itself,
  * excluding letterboxing, so they survive keyboard and zoom changes.
  */
-export function PaintingFocusCanvas({
+export function PaintingFocusCanvas(props: PaintingFocusCanvasProps) {
+  const mediaType = props.mediaType.split(';')[0].trim().toLowerCase();
+  if (mediaType === 'image/gif') {
+    return <PaintingFocusCanvasContent {...props} imageSource={props.uri} />;
+  }
+  return <StillPaintingFocusCanvas {...props} />;
+}
+
+function StillPaintingFocusCanvas(props: PaintingFocusCanvasProps) {
+  const [isLoadingFailed, setIsLoadingFailed] = useState(false);
+  // Decode once at screen resolution; keyboard layout changes reuse these pixels.
+  const screen = Dimensions.get('screen');
+  const decodeSize = Math.ceil(Math.max(screen.width, screen.height) * screen.scale);
+  const imageSource = useImage(
+    props.uri,
+    {
+      maxHeight: decodeSize,
+      maxWidth: decodeSize,
+      onError: () => setIsLoadingFailed(true),
+    },
+    [decodeSize],
+  );
+  return (
+    <PaintingFocusCanvasContent
+      {...props}
+      imageSource={imageSource}
+      isLoadingFailed={isLoadingFailed}
+    />
+  );
+}
+
+function PaintingFocusCanvasContent({
   accessibilityLabel,
   annotations,
   canAnnotate,
   imageCount,
+  imageSource,
+  isLoadingFailed = false,
   onAddAnnotation,
   onRemoveAnnotation,
   onSelectAnnotation,
   onSwipe,
   selectedAnnotationId,
   uri,
-}: {
-  accessibilityLabel: string;
-  annotations: readonly PaintingAnnotation[];
-  canAnnotate: boolean;
-  imageCount: number;
-  onAddAnnotation: (x: number, y: number) => void;
-  onRemoveAnnotation: (id: number) => void;
-  onSelectAnnotation: (id: number) => void;
-  onSwipe: (direction: 1 | -1) => void;
-  selectedAnnotationId: number | null;
-  uri: string;
+}: PaintingFocusCanvasProps & {
+  imageSource: ImageRef | string | null;
+  isLoadingFailed?: boolean;
 }) {
   const { t } = useTranslation();
   const [size, setSize] = useState<CanvasSize>({ height: 0, width: 0 });
   const [isZoomed, setIsZoomed] = useState(false);
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  // Decode once at screen resolution. Keyboard-driven layout changes only resize the same bitmap.
-  const screen = Dimensions.get('screen');
-  const decodeSize = Math.ceil(Math.max(screen.width, screen.height) * screen.scale);
-  const imageSource = useImage(
-    uri,
-    {
-      maxHeight: decodeSize,
-      maxWidth: decodeSize,
-      onError: () => setFailedUri(uri),
-    },
-    [decodeSize],
-  );
-  const sourceRatio = imageSource ? imageSource.width / imageSource.height : null;
+  // GIFs report their dimensions from the view; still images already have a bounded ImageRef.
+  const [loadedImage, setLoadedImage] = useState<{ ratio: number; uri: string } | null>(null);
+  const loadedRatio = loadedImage?.uri === uri ? loadedImage.ratio : null;
+  const sourceRatio =
+    imageSource && typeof imageSource !== 'string'
+      ? imageSource.width / imageSource.height
+      : loadedRatio;
   const image = sourceRatio
     ? fitPaintingImage(size.width, size.height, sourceRatio)
     : { height: size.height, left: 0, top: 0, width: size.width };
@@ -234,7 +267,7 @@ export function PaintingFocusCanvas({
             accessible
             style={[{ height, width }, animatedStyle]}
           >
-            {failedUri === uri ? (
+            {isLoadingFailed || failedUri === uri ? (
               <View className="flex-1 items-center justify-center px-8">
                 <Text className="text-center text-muted-foreground text-sm">
                   {t('painting.focus.imageUnavailable')}
@@ -242,10 +275,13 @@ export function PaintingFocusCanvas({
               </View>
             ) : (
               <Image
-                allowDownscaling={false}
+                allowDownscaling={typeof imageSource === 'string'}
                 cachePolicy="memory-disk"
                 contentFit="contain"
                 onError={() => setFailedUri(uri)}
+                onLoad={({ source }) =>
+                  setLoadedImage({ ratio: source.width / source.height, uri })
+                }
                 source={imageSource}
                 style={StyleSheet.absoluteFill}
                 transition={0}

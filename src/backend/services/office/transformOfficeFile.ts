@@ -23,7 +23,16 @@ export function createOfficeTransformCode(
 ${officeRuntimeCode}
 const request = ${JSON.stringify(request)};
 const images = ${JSON.stringify(images)};
-try { return (() => { ${officeTransformCode} })(); }
+try {
+  ${
+    request.operation === 'inspect' && request.kind === 'check'
+      ? `const check = checkOfficePackage(readInput(0), request.format, request.against ? readInput(1) : undefined);
+  const { findings, ...summary } = check;
+  return { kind: 'check', ...summary, total: findings.length, offset: request.offset,
+    findings: findings.slice(request.offset, request.offset + request.limit) };`
+      : `return (() => { ${officeTransformCode} })();`
+  }
+}
 catch (error) { return { error: String(error.message || error).slice(0, 500) }; }
 `;
 }
@@ -31,16 +40,21 @@ catch (error) { return { error: String(error.message || error).slice(0, 500) }; 
 /** Reads `source`; an edit writes the new package to `output` and returns its size. */
 export async function transformOfficeFile(input: {
   source: { uri: string; size: number };
+  against?: { uri: string; size: number };
   request: OfficeTransformRequest;
   images?: Readonly<Record<string, OfficeImage>>;
   output?: string;
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
+  onStage?: (
+    stage: 'prepare_script' | 'sandbox_queue' | 'sandbox_execution' | 'decode_result',
+  ) => void;
 }): Promise<{ size: number } | { content: Record<string, z.core.util.JSONType> }> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
+    input.onStage?.('prepare_script');
     const entries = Object.entries(input.images ?? {});
     const code = createOfficeTransformCode(
       input.request,
@@ -48,15 +62,21 @@ export async function transformOfficeFile(input: {
         entries.map(([id, image], index) => [id, { index: index + 1, mediaType: image.mediaType }]),
       ),
     );
+    input.onStage?.('sandbox_queue');
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
       files: {
-        inputs: [input.source.uri, ...entries.map(([, image]) => image.uri)],
+        inputs: [
+          input.source.uri,
+          ...(input.against ? [input.against.uri] : []),
+          ...entries.map(([, image]) => image.uri),
+        ],
         output: input.output,
       },
       signal: input.signal,
       onSettled: input.onSettled,
+      onStarted: () => input.onStage?.('sandbox_execution'),
       limits: {
         ...officeLimits(0, 128 * 1024),
         // Only app code runs here, and a parsed XML part takes about 180 times its text (a 2 MiB
@@ -65,6 +85,7 @@ export async function transformOfficeFile(input: {
       },
     });
     input.signal.throwIfAborted();
+    input.onStage?.('decode_result');
     if (outcome.status === 'error')
       throw new OfficeGenerationError(
         outcome.kind === 'memory'

@@ -1,5 +1,6 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
+import { mergeAgentMessageViews } from '../agentMessageProjection';
 import {
   type LiveSiblingViews,
   readQuestionAnswers,
@@ -60,6 +61,41 @@ describe('message tree view', () => {
     expect(withLiveSiblings(persisted, [question, first], new Map())).toBe(persisted);
   });
 
+  test.each(['pending', 'streaming'] as const)(
+    "switches back from a completed steer branch to the original question's %s retry",
+    (status) => {
+      const [question, first] = persisted;
+      const guided = message('guided-question', first.id, 'user');
+      const guidedAnswer = message('guided-answer', guided.id);
+      const retry = message('retry', question.id, 'assistant', status);
+      const live = [question, first, retry];
+      // While retry runs, settled history omits its whole turn but retains the steer below it.
+      const history = [guided, guidedAnswer];
+      const read = readQuestionAnswers([...persisted, ...history]);
+      const selected = (leaf: string) =>
+        withLiveSiblings(
+          selectedBranchMessages(
+            mergeAgentMessageViews(history, selectedLiveMessages(live, history, leaf)),
+            leaf,
+          ),
+          live,
+          read,
+        );
+
+      const original = selected(guidedAnswer.id);
+      expect(original.map((row) => row.id)).toEqual([
+        question.id,
+        first.id,
+        guided.id,
+        guidedAnswer.id,
+      ]);
+      expect(original[1].siblings?.map((row) => row.id)).toEqual([first.id, retry.id]);
+      expect(original[1].siblings?.[1].status).toBe(status);
+      expect(selected(retry.id).map((row) => row.id)).toEqual([question.id, retry.id]);
+      expect(selected(guidedAnswer.id)).toEqual(original);
+    },
+  );
+
   test('restored answers retain their persisted groups without a previously read history page', () => {
     const question = message('q2', 'a1', 'user');
     const first = { ...message('a2', 'q2'), siblingsGroupId: 3 };
@@ -109,21 +145,25 @@ describe('message tree view', () => {
     expect(changed).not.toBe(before);
   });
 
-  test('keeps the answers last read for a question while another answer to it runs', () => {
-    const added = message('a1b', 'q1', 'assistant', 'streaming');
-    const sibling = { id: 'a1', modelId: null, status: 'success' as const, siblingsGroupId: 0 };
-    // Read while the question was settled; the next reading omits its answering turn.
-    const read = readQuestionAnswers(
-      [persisted[0]!],
-      readQuestionAnswers([{ ...persisted[1]!, siblings: [sibling] }]),
-    );
-    const shown = [persisted[0]!, added];
-    const [, answer] = withLiveSiblings(shown, [added], read);
-    expect(answer?.siblings).toEqual([
-      { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 0 },
-      { id: 'a1b', modelId: null, status: 'streaming', siblingsGroupId: 0 },
-    ]);
-    // A first answer with nothing read before it has no alternatives.
-    expect(withLiveSiblings(shown, [added], new Map())).toBe(shown);
-  });
+  test.each(['pending', 'streaming'] as const)(
+    'selects an added %s answer with cards before history refreshes',
+    (status) => {
+      const added = message('a1b', 'q1', 'assistant', status);
+      // A lone persisted answer has no siblings field until another answer is saved.
+      const read = readQuestionAnswers(persisted);
+      const selected = selectedBranchMessages([...persisted, added], added.id);
+      const shown = withLiveSiblings(selected, [added], read);
+      expect(shown.map((row) => row.id)).toEqual(['q1', 'a1b']);
+      expect(shown[1]?.siblings).toEqual([
+        { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 0 },
+        { id: 'a1b', modelId: null, status, siblingsGroupId: 0 },
+      ]);
+      // Settled history then omits the answering turn; the cards must stay present.
+      expect(
+        withLiveSiblings(selected, [added], readQuestionAnswers([persisted[0]!], read)),
+      ).toEqual(shown);
+      // A first answer with nothing read before it has no alternatives.
+      expect(withLiveSiblings(selected, [added], new Map())).toBe(selected);
+    },
+  );
 });

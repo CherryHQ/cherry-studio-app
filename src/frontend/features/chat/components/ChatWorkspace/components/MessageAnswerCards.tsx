@@ -394,22 +394,28 @@ export function AnswerDots({
   index,
   names,
   onSelect,
+  pageLabel,
 }: {
   count: number;
   index: number;
-  names: readonly string[];
+  names?: readonly string[];
   onSelect: (index: number) => void;
+  /** Accessible description of one dot; defaults to the answer page label. */
+  pageLabel?: (index: number) => string;
 }) {
   const { t } = useTranslation();
   return (
     <View className="flex-row items-center justify-center gap-1.5">
       {Array.from({ length: count }, (_, dot) => (
         <Pressable
-          accessibilityLabel={t('chat.branch.page', {
-            index: dot + 1,
-            model: names[dot],
-            total: count,
-          })}
+          accessibilityLabel={
+            pageLabel?.(dot) ??
+            t('chat.branch.page', {
+              index: dot + 1,
+              model: names?.[dot] ?? '',
+              total: count,
+            })
+          }
           accessibilityRole="button"
           accessibilityState={{ selected: dot === index }}
           hitSlop={{ bottom: 10, left: 4, right: 4, top: 10 }}

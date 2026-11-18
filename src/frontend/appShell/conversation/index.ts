@@ -5,6 +5,7 @@ export type {
   CatalogCursor,
   ConversationAction,
   ConversationCatalog,
+  ConversationCitationReader,
   ConversationExecution,
   ConversationFailure,
   ConversationFreshness,
@@ -31,6 +32,7 @@ export type {
   WorkspaceSummary,
 } from './contracts';
 export { ConversationReadError } from './conversationState';
+export { readToolCitations } from './readToolCitations';
 export { localConversationFailure } from './local/localConversationFailure';
 export { ConversationProvider, useConversationSources } from './ConversationProvider';
 export {
@@ -41,7 +43,10 @@ export {
 export {
   useConversationAgents,
   useConversationSessions,
+  useConversationSessionChildren,
+  useConversationSessionPath,
   useConversationPreview,
+  useConversationAgentStatus,
   useConversationSummary,
   useConversationWorkspaces,
 } from './useConversationCatalog';

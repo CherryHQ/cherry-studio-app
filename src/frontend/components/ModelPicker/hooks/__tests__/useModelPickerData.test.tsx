@@ -10,19 +10,35 @@ import { useModelPickerData } from '../useModelPickerData';
 // `mock`-prefixed names are the only out-of-scope variables jest.mock factories
 // may reference (they're hoisted above the imports).
 const mockEmptyList = Object.freeze([]);
+const mockCloudState = { phase: 'signed_out', account: null, models: mockEmptyList };
+jest.mock('@/frontend/hooks/useCloud', () => ({ useCloud: () => ({ state: mockCloudState }) }));
 const mockModelQueries: unknown[] = [];
+const mockLoadedQuery = { data: mockEmptyList };
+const mockRefetch = jest.fn();
+let mockProviderQueryError: Error | null = null;
 
 jest.mock('@/frontend/hooks/chat', () => ({
   useModels: (query: unknown) => {
     mockModelQueries.push(query);
-    return { isLoading: false, models: mockEmptyList };
+    return {
+      isLoading: false,
+      models: mockEmptyList,
+      modelsQuery: mockLoadedQuery,
+      refetch: mockRefetch,
+    };
   },
-  useProviders: () => ({ isLoading: false, providers: mockEmptyList }),
+  useProviders: () => ({
+    isLoading: false,
+    providers: mockEmptyList,
+    providersQuery: { data: mockEmptyList, error: mockProviderQueryError ?? undefined },
+    refetch: mockRefetch,
+  }),
 }));
 
 describe('useModelPickerData', () => {
   beforeEach(() => {
     mockModelQueries.length = 0;
+    mockProviderQueryError = null;
   });
 
   test('returns the same reference across re-renders', () => {
@@ -55,6 +71,15 @@ describe('useModelPickerData', () => {
       isSystemSupported: true,
       providerId: 'provider-1',
     });
+  });
+
+  test('does not confirm an empty catalog when a model source failed to load', () => {
+    mockProviderQueryError = new Error('Could not load the providers');
+    const [result] = renderHookTwice(() => useModelPickerData({ modelType: 'text' }));
+
+    expect(result?.modelItems).toHaveLength(0);
+    expect(result?.hasLoadedCatalog).toBe(false);
+    expect(result?.error).toBe(mockProviderQueryError);
   });
 });
 

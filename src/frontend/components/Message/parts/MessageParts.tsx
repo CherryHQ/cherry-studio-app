@@ -14,6 +14,7 @@ import { MessagePartRenderer } from './MessagePartRenderer';
 import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
 import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
+import { ReasoningDetailProvider } from './ReasoningPart';
 import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
@@ -39,9 +40,17 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   );
   // Parts keep their identity across renders (see the projection cache), so the
   // resolved text and source-number map stay stable for their consumers too.
-  const citations = useMemo(() => resolveMessageCitations(parts), [parts]);
+  const citations = useMemo(
+    () => resolveMessageCitations(parts, message.data.citationSources),
+    [parts, message.data.citationSources],
+  );
 
   const { boundaries, body, files, process } = partitionMessageParts(parts);
+  const processItems = process.map(({ index, part }) => ({
+    index,
+    key: getMessagePartKey(message, part, index),
+    part,
+  }));
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
   const hasContent = boundaries.length > 0 || body.length > 0 || process.length > 0;
@@ -52,13 +61,16 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
     message.status === 'paused' &&
     body.length === 0 &&
     files.length === 0;
-  const showSources = isSettled && parts.some((part) => part.type === 'source-url');
+  const showSources =
+    isSettled &&
+    (parts.some((part) => part.type === 'source-url') ||
+      message.data.citationSources?.some((source) => source.url));
   const initialImageAspectRatio = message.imageGeneration
     ? imageParamsAspectRatio(message.imageGeneration.paramValues)
     : undefined;
 
   return (
-    <>
+    <ReasoningDetailProvider items={processItems} key={message.id} message={message}>
       {hasContent || (isSettled && parts.length > 0) ? (
         <View className="gap-4">
           {boundaries.map(({ index, part }) => (
@@ -73,11 +85,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
               <ProcessGroupPart
                 key={message.id}
                 citationText={citations.textByPartIndex}
-                items={process.map(({ index, part }) => ({
-                  index,
-                  key: getMessagePartKey(message, part, index),
-                  part,
-                }))}
+                items={processItems}
                 message={message}
                 messageParts={parts}
                 renderMode={renderMode}
@@ -90,6 +98,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
                 initialImageAspectRatio={initialImageAspectRatio}
                 key={getMessagePartKey(message, item.part, item.index)}
                 parts={[item.part]}
+                partKeys={[getMessagePartKey(message, item.part, item.index)]}
               />
             ) : (
               <MessagePartRenderer
@@ -104,7 +113,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
             ),
           )}
           {showSources ? (
-            <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
+            <SourceGroup
+              citationNumberBySourceId={citations.sourceNumberById}
+              parts={parts}
+              additionalSources={message.data.citationSources}
+            />
           ) : null}
           {isSettled
             ? parts.flatMap((part, index) =>
@@ -120,7 +133,12 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
             : null}
           {/* Downloadable files collect in the footer once the answer settles.
           Images stay in the body as soon as their file part arrives. */}
-          {isSettled && files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
+          {isSettled && files.length > 0 ? (
+            <GeneratedFileStrip
+              parts={files}
+              partKeys={files.map((part) => getMessagePartKey(message, part, parts.indexOf(part)))}
+            />
+          ) : null}
         </View>
       ) : null}
       {isWaitingForResponse ? (
@@ -135,7 +153,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
           <Text className="text-muted-foreground text-sm">{t('chat.message.stopped')}</Text>
         </MessagePart.Status>
       ) : null}
-    </>
+    </ReasoningDetailProvider>
   );
 }
 

@@ -18,6 +18,12 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+export const AgentReadReasoningInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  partId: z.string().min(1),
+});
+export type AgentReadReasoningInput = z.infer<typeof AgentReadReasoningInputSchema>;
 /**
  * Further models answering the same question in parallel. Each answer is an
  * ordinary assistant message in the same multi-model sibling group.
@@ -40,11 +46,13 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   parts: AgentInputPartsSchema,
-  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  /** The model selected for this submission, independent of pending preference writes. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  /** The model whose controls supplied the effort, if it was selected by the composer. */
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -60,15 +68,18 @@ export const AgentStartSessionInputSchema = z.strictObject({
   agentId: z.string().min(1),
   /** Optional workspace chosen before sending the first message. */
   workspaceFolderId: z.uuid().optional(),
+  /** A single-model choice made in the draft, saved with the new Session. */
+  sessionModelId: UniqueModelIdSchema.optional(),
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   parts: AgentInputPartsSchema,
-  /** Snapshots the draft composer's selected model while its Agent mutation settles. */
+  /** First reply's model, which can differ from the Session's own choice. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -94,12 +105,14 @@ export const AgentForkSessionInputSchema = z.strictObject({
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
 /**
  * Deletion is turn-scoped. A transcript replays `tool-call` and `tool-result`
- * as a pair, so removing one message of a turn would leave history no provider
- * accepts; the UI therefore resolves the pressed message to its turn.
+ * as a pair. A selected alternative is removed with its complete descendant
+ * messages; a question with one answer retains the existing turn deletion.
  */
 export const AgentDeleteTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** With alternative answers, remove only this answer and its descendants. */
+  messageId: z.string().min(1).optional(),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
 /** Moves the Session's selected leaf into the branch that contains `messageId`. */
@@ -115,6 +128,33 @@ export const AgentRetryMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
+export const AgentEditUserMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  /** The settled user row the edited question branches from; it stays in the tree. */
+  messageId: z.string().min(1),
+  /**
+   * The replacement question text. The Host derives the new input from the
+   * stored parts, not from client parts: inline references are remapped onto
+   * the edited text and carried file parts stay attached.
+   */
+  text: z.string().min(1),
+  /** Optional override for this edit while a conversation model selection is being saved. */
+  modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
+  /** Per-turn only; this value is never persisted back to the Agent. */
+  reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
+  imageGeneration: AgentImageGenerationSchema.optional(),
+  /**
+   * Skills the user selected explicitly in the composer. Each must be bound,
+   * enabled, and user-invocable for this Agent; the Host loads their
+   * instructions for this turn only and never persists the selection.
+   */
+  skillIds: z.array(SkillIdSchema).max(8).optional(),
+  /** App-owned composer action; no installation occurs until the user sends the request. */
+  skillAction: SkillActionSchema.optional(),
+});
+export type AgentEditUserMessageInput = z.infer<typeof AgentEditUserMessageInputSchema>;
 const AgentReplyPartEditSchema = z.strictObject({
   /** A text part of the answer; reasoning, files and tool receipts are not editable. */
   id: z.string().min(1),

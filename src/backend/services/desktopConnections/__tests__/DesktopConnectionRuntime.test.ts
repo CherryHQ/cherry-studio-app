@@ -46,6 +46,7 @@ const grants: RemoteAuthorization['grants'] = [{ domain: 'configuration', grantI
 const row = {
   id,
   name: 'Desktop',
+  alias: null,
   deviceId: 'device-1',
   desktopIdentity: '12D3KooWDesktop',
   learnedEndpoints: [] as { host: string; port: number; security: 'ws' | 'wss' }[],
@@ -59,6 +60,8 @@ const row = {
   updatedAt: 1,
 };
 const connection = {
+  alias: null,
+  defaultName: 'Desktop',
   configuredEndpoints: [],
   id,
   name: 'Desktop',

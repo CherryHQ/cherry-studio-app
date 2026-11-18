@@ -31,6 +31,13 @@ export function useRemoteChatNavigation(
     };
   }, [identity, isFocused]);
 
+  // The sidebar reads the shared route target. Publish the actual composer identity so an
+  // external-app callback can restore unsent input even after this process is reclaimed.
+  useLayoutEffect(() => {
+    const routeDraftId = target.sessionId ? undefined : draftId;
+    if (isFocused && target.draftId !== routeDraftId) router.setParams({ draftId: routeDraftId });
+  }, [draftId, isFocused, router, target.draftId, target.sessionId]);
+
   return {
     draftId,
     identity,

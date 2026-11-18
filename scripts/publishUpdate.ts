@@ -24,6 +24,7 @@ const TARGETS: Record<string, { profile: string; platform?: 'android' | 'ios'; r
   preview: { profile: 'preview' },
   apk: { profile: 'production', platform: 'android', release: true },
   'google-play': { profile: 'production-google-play', platform: 'android', release: true },
+  'domestic-stores': { profile: 'production-domestic-stores', platform: 'android', release: true },
   ios: { profile: 'production', platform: 'ios', release: true },
 };
 const FIXED_OPTIONS = new Set(['--channel', '--branch', '--environment', '--input-dir', '--json']);

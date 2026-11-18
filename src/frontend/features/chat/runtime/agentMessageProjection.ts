@@ -4,7 +4,7 @@ import {
   webSearchOutputSchema,
 } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { MessageListItem } from '@/frontend/components/Message';
+import type { MessageListItem, ToolMessagePart } from '@/frontend/components/Message';
 import {
   type AgentErrorView,
   type AgentMessagePart,
@@ -16,6 +16,7 @@ import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
 import { classifyAgentFailureReason } from '@/shared/utils/agentFailure';
+import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
 
 type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
 
@@ -81,6 +82,9 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
   const result = AgentToolResultSchema.safeParse(part.output);
   const base = {
+    ...(part.toolRef.source === 'builtin'
+      ? { toolMetadata: { cherry: { tool: { type: 'builtin' as const } } } }
+      : {}),
     ...(part.toolRef.source === 'mcp'
       ? {
           toolMetadata: {
@@ -97,6 +101,11 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
     ...(part.progress ? { progress: part.progress } : {}),
+    ...(part.state === 'running'
+      ? { executionState: 'running' as const }
+      : part.state === 'input-available'
+        ? { executionState: 'pending' as const }
+        : {}),
     title: part.title,
     toolCallId: part.toolCallId,
     toolName: part.toolName,
@@ -128,15 +137,17 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
         ...base,
         state: 'output-denied',
       } as CherryMessagePart;
-    case 'error':
+    case 'error': {
       // The tool's own error text is diagnostic detail; renderers translate
       // the status and fall back to app copy when no detail exists.
-      return {
+      const failedPart = {
         ...base,
         errorCode: part.error?.failure?.source.code ?? part.error?.code,
         errorText: part.error?.message ?? '',
         state: 'output-error',
-      } as CherryMessagePart;
+      } satisfies ToolMessagePart;
+      return failedPart;
+    }
     case 'interrupted':
       return withCherryMeta(
         { ...base, errorText: '', state: 'output-error' } as Extract<
@@ -171,6 +182,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
         part.selectionReferences?.length ||
+        part.sshReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction ||
         part.quotes
@@ -182,6 +194,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
                 ...(part.selectionReferences ?? []),
+                ...(part.sshReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',
@@ -192,7 +205,14 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
           )
         : { type: 'text', text: part.text, state: part.state };
     case 'reasoning':
-      return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
+      return {
+        type: part.type,
+        text: part.text,
+        state: part.state,
+        ...(part.hasText !== undefined
+          ? { providerMetadata: { cherry: { hasText: part.hasText } } }
+          : {}),
+      } as CherryMessagePart;
     case 'file':
       return withCherryMeta(
         {
@@ -269,7 +289,7 @@ function projectAgentPart(
   return projection;
 }
 
-function toDisplayParts(
+export function toAgentMessageDisplayParts(
   parts: readonly AgentMessagePart[],
   cache?: AgentMessageListProjectionCache,
 ): Pick<NonNullable<MessageListItem['data']>, 'partKeys' | 'parts' | 'attachmentReports'> {
@@ -283,22 +303,6 @@ function toDisplayParts(
   const sourcePartKeys: string[] = [];
 
   for (const sourcePart of parts) {
-    // Restored history can still contain separate provider summaries and opaque empty items.
-    if (sourcePart.type === 'reasoning') {
-      const previous = displayParts.at(-1);
-      if (previous?.type === 'reasoning') {
-        // The previous display part may be cached; keep source and cached objects unchanged.
-        displayParts[displayParts.length - 1] = {
-          ...previous,
-          text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
-          state: sourcePart.state,
-        };
-      } else if (sourcePart.text.trim() || sourcePart.state === 'streaming') {
-        displayParts.push(projectAgentPart(sourcePart, cache).part);
-        partKeys.push(sourcePart.id);
-      }
-      continue;
-    }
     if (sourcePart.type === 'file' && sourcePart.attachmentReport) {
       attachmentReports[sourcePart.id] = sourcePart.attachmentReport;
     }
@@ -356,16 +360,17 @@ export function toAgentMessageListItem(
 
   const model = resolveMessageModel(message);
   const item = {
+    agentSessionId: message.sessionId,
     createdAt: message.createdAt,
     data: {
-      ...toDisplayParts(
+      ...toAgentMessageDisplayParts(
         message.status === 'cancelled'
-          ? message.parts.filter(
+          ? projectAgentMessageDisplay(message).parts.filter(
               (part) =>
                 part.type !== 'data-error' ||
                 (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
             )
-          : message.parts,
+          : projectAgentMessageDisplay(message).parts,
         cache,
       ),
       ...(message.translations ? { translations: message.translations } : {}),
@@ -383,11 +388,15 @@ export function toAgentMessageListItem(
             key: `answers:${message.parentId}`,
             siblings: message.siblings.map((sibling) => ({
               id: sibling.id,
-              status: toDisplayStatus(sibling.status),
+              status: toDisplayStatus(sibling.id === message.id ? message.status : sibling.status),
               modelId: sibling.modelId,
             })),
           },
         }
+      : {}),
+    // Editing a sent question adds a sibling question; the row offers those versions.
+    ...(message.siblings && message.role === 'user'
+      ? { questionBranch: { siblings: message.siblings.map((sibling) => sibling.id) } }
       : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
@@ -418,7 +427,7 @@ export function createPendingChatMessages(
   return [
     {
       createdAt,
-      data: toDisplayParts(parts),
+      data: toAgentMessageDisplayParts(parts),
       id: input.userMessageId,
       role: 'user',
       status: 'pending',
@@ -440,20 +449,20 @@ export function mergeAgentMessageViews(
   live: readonly AgentMessageView[],
 ): readonly AgentMessageView[] {
   if (live.length === 0) {
-    return persisted;
+    return orderMessageParents(persisted);
   }
   if (persisted.length === 0) {
-    return live;
+    return orderMessageParents(live);
   }
 
   const liveById = new Map(live.map((message) => [message.id, message]));
   const persistedIds = new Set(persisted.map((message) => message.id));
   const compareMessages = (left: AgentMessageView, right: AgentMessageView) =>
     Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
-    // Match the store's binary (createdAt, id) order, not locale collation.
+    // Use reservation order only to place detached live rows around a bounded history window.
     (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  // filter() already returns a fresh array, so sorting it in place is safe.
-  const newLive = live.filter((message) => !persistedIds.has(message.id)).sort(compareMessages);
+  // Arrival order also orders accepted steer questions whose intervening assistant has no output yet.
+  const newLive = live.filter((message) => !persistedIds.has(message.id));
   const merged: AgentMessageView[] = [];
   let liveIndex = 0;
 
@@ -474,7 +483,22 @@ export function mergeAgentMessageViews(
     );
   }
   merged.push(...newLive.slice(liveIndex));
-  return merged;
+  return orderMessageParents(merged);
+}
+
+function orderMessageParents(messages: readonly AgentMessageView[]): readonly AgentMessageView[] {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const visited = new Set<string>();
+  const ordered: AgentMessageView[] = [];
+  function visit(message: AgentMessageView) {
+    if (visited.has(message.id)) return;
+    visited.add(message.id);
+    const parent = message.parentId ? byId.get(message.parentId) : undefined;
+    if (parent) visit(parent);
+    ordered.push(message);
+  }
+  for (const message of messages) visit(message);
+  return ordered.every((message, index) => message === messages[index]) ? messages : ordered;
 }
 
 export function toAgentMessageListItems(

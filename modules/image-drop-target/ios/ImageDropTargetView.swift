@@ -26,6 +26,11 @@ public final class ImageDropTargetView: ExpoView {
   private static let supportedImageMIMETypes: Set<String> = [
     "image/gif", "image/jpeg", "image/png", "image/webp",
   ]
+  // Shared across views and drop sessions so only one bitmap is transcoded at a time.
+  private static let transcodingQueue = DispatchQueue(
+    label: "expo.modules.ImageDropTarget.transcoding", qos: .userInitiated
+  )
+  private static let maxTranscodedDimension = 2048
 
   /// When false the view ignores every drop session (the composer may be
   /// absent in preview or error states); the container stays mounted so the
@@ -61,6 +66,11 @@ public final class ImageDropTargetView: ExpoView {
     from provider: NSItemProvider,
     completion: @escaping ([String: Any]?) -> Void
   ) {
+    // Initialize the staging directory on the drop callback's main thread.
+    guard let directory = dropDirectory else {
+      completion(nil)
+      return
+    }
     provider.loadInPlaceFileRepresentation(
       forTypeIdentifier: UTType.image.identifier
     ) { [weak self] url, _, error in
@@ -71,19 +81,34 @@ public final class ImageDropTargetView: ExpoView {
         completion(nil)
         return
       }
-      completion(self.stageDroppedImage(from: url, provider: provider))
+      guard let stagedURL = self.stageDroppedImage(from: url, in: directory, provider: provider) else {
+        completion(nil)
+        return
+      }
+      // The provider URL expires when this callback returns; only the local copy can be queued.
+      Self.transcodingQueue.async {
+        autoreleasepool {
+          guard let finalURL = self.transcodeToSupportedFormat(stagedURL, in: directory) else {
+            try? self.fileManager.removeItem(at: stagedURL)
+            completion(nil)
+            return
+          }
+          completion(self.payload(for: finalURL))
+        }
+      }
     }
   }
 
-  /// Copies the provider-backed source into staging and returns its payload.
+  /// Copies the provider-backed source into staging and returns the local URL.
   /// Apple requires in-place provider URLs to be accessed through
   /// `NSFileCoordinator` regardless of `isInPlace`; the `.forUploading` option
   /// coordinates a readable snapshot (including Files/iCloud providers), and
   /// the copy happens synchronously inside the coordinated block.
   private func stageDroppedImage(
     from source: URL,
+    in directory: URL,
     provider: NSItemProvider
-  ) -> [String: Any]? {
+  ) -> URL? {
     let didStartAccessing = source.startAccessingSecurityScopedResource()
     defer {
       if didStartAccessing {
@@ -91,9 +116,6 @@ public final class ImageDropTargetView: ExpoView {
       }
     }
 
-    guard let directory = dropDirectory else {
-      return nil
-    }
     let coordinator = NSFileCoordinator(filePresenter: nil)
     var coordinationError: NSError?
     var stagedURL: URL?
@@ -110,16 +132,7 @@ public final class ImageDropTargetView: ExpoView {
       )
       return nil
     }
-    guard let stagedURL else {
-      return nil
-    }
-    // A still format the send pipeline rejects becomes JPEG now, while the
-    // bytes are local — never at send time.
-    guard let finalURL = transcodeToSupportedFormat(stagedURL, in: directory) else {
-      try? fileManager.removeItem(at: stagedURL)
-      return nil
-    }
-    return payload(for: finalURL)
+    return stagedURL
   }
 
   /// Copies the coordinated snapshot into staging. Items of the same batch
@@ -156,8 +169,18 @@ public final class ImageDropTargetView: ExpoView {
        Self.supportedImageMIMETypes.contains(mediaType) {
       return url
     }
-    guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+    let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+    guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, sourceOptions),
           CGImageSourceGetCount(imageSource) > 0 else {
+      return nil
+    }
+    let decodeOptions = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceThumbnailMaxPixelSize: Self.maxTranscodedDimension,
+      kCGImageSourceShouldCacheImmediately: true,
+    ] as CFDictionary
+    guard let image = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, decodeOptions) else {
       return nil
     }
     let baseName = url.deletingPathExtension().lastPathComponent
@@ -175,8 +198,9 @@ public final class ImageDropTargetView: ExpoView {
       return nil
     }
     let options = [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary
-    CGImageDestinationAddImageFromSource(destinationSink, imageSource, 0, options)
+    CGImageDestinationAddImage(destinationSink, image, options)
     guard CGImageDestinationFinalize(destinationSink) else {
+      try? fileManager.removeItem(at: destination)
       return nil
     }
     if url != destination {
@@ -311,7 +335,7 @@ extension ImageDropTargetView: UIDropInteractionDelegate {
 
     // Every load must start before performDrop returns: once the session ends,
     // a load requested later never calls back. The provider delivers results
-    // on its own callback queue, so no extra dispatching is needed here.
+    // on its own callback queue; only transcoding the staged copies is serialized.
     for (index, item) in imageItems.enumerated() {
       group.enter()
       loadImagePayload(from: item.itemProvider) { payload in

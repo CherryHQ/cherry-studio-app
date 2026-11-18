@@ -9,10 +9,12 @@ import { fileDisplayStem, fileVisualPreset } from '../utils/file-presentation';
 export function FileCardPreview({
   badge,
   file,
+  iconSize = 24,
   variant,
 }: {
   badge?: ReactNode;
   file: Pick<FilePreviewFile, 'displayName' | 'extensionLabel' | 'kind'>;
+  iconSize?: number;
   variant: Exclude<FilePreviewVariant, 'thumbnail'>;
 }) {
   const { icon: Icon, iconClassName } = fileVisualPreset(file);
@@ -20,7 +22,7 @@ export function FileCardPreview({
   if (variant === 'icon') {
     return (
       <View className="flex-1 items-center justify-center bg-secondary">
-        <Icon className={cn('size-6 shrink-0', iconClassName)} />
+        <Icon className={cn('shrink-0', iconClassName)} size={iconSize} />
         {badge ? (
           <View className="absolute right-1 bottom-1 max-w-3/4" pointerEvents="none">
             {badge}
@@ -54,7 +56,20 @@ export function FileCardPreview({
       )}
     >
       {variant === 'card' ? filename : icon}
-      {variant === 'card' ? icon : filename}
+      {variant === 'card' ? (
+        icon
+      ) : file.kind === 'audio' ? (
+        <View className="w-full min-h-0 shrink gap-1">
+          {filename}
+          {file.extensionLabel ? (
+            <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+              {file.extensionLabel}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        filename
+      )}
     </View>
   );
 }

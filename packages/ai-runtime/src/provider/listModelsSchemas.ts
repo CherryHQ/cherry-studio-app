@@ -9,18 +9,49 @@ import * as z from 'zod';
 
 // === OpenAI-compatible (also used by OpenRouter, PPIO, etc.) ===
 
-export const OpenAIModelsResponseSchema = z.object({
-  data: z.array(
-    z.looseObject({
-      id: z.string(),
-      name: z.string().optional(),
-      object: z.string().optional().default('model'),
-      created: z.number().optional(),
-      owned_by: z.string().optional(),
-    }),
-  ),
-  object: z.string().optional(),
+const OpenAIModelSchema = z.looseObject({
+  id: z.string(),
+  name: z.string().optional(),
+  object: z.string().optional().default('model'),
+  created: z.number().optional(),
+  owned_by: z.string().optional(),
 });
+
+export const OpenAIModelsResponseSchema = z
+  .object({
+    data: z.array(
+      z.unknown().transform((model) => {
+        const parsed = OpenAIModelSchema.safeParse(model);
+        return parsed.success ? parsed.data : undefined;
+      }),
+    ),
+    object: z.string().optional(),
+  })
+  .transform((response) => {
+    const data = response.data.filter((model) => model !== undefined);
+    return { ...response, data, skippedModelCount: response.data.length - data.length };
+  });
+
+// === Poe (each bot declares the chat endpoints it serves) ===
+
+const PoeModelSchema = OpenAIModelSchema.extend({
+  supported_endpoints: z.array(z.string()).optional(),
+});
+
+export const PoeModelsResponseSchema = z
+  .object({
+    data: z.array(
+      z.unknown().transform((model) => {
+        const parsed = PoeModelSchema.safeParse(model);
+        return parsed.success ? parsed.data : undefined;
+      }),
+    ),
+    object: z.string().optional(),
+  })
+  .transform((response) => {
+    const data = response.data.filter((model) => model !== undefined);
+    return { ...response, data, skippedModelCount: response.data.length - data.length };
+  });
 
 // === GitHub Copilot (/models) ===
 export const CopilotModelsResponseSchema = z.object({
@@ -90,7 +121,10 @@ export const GeminiModelsResponseSchema = z.object({
       supportedGenerationMethods: z.array(z.string()).optional(),
     }),
   ),
-  nextPageToken: z.string().optional(),
+  nextPageToken: z
+    .string()
+    .nullish()
+    .transform((token) => token ?? undefined),
 });
 
 // === Vertex AI Model Garden ===

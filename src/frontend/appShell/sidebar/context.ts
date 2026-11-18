@@ -3,16 +3,18 @@ import { createContext, use } from 'react';
 export type SidebarActions = {
   /** Closes an overlay and brings the chat back in front of any page beside the sidebar. */
   closeDrawer: () => void;
+  /** Closes an overlay without changing the page and waits for its closing transition. */
+  prepareExternalNavigation: (signal: AbortSignal) => Promise<boolean>;
   /** Brings the chat back in front of any page beside the sidebar, leaving an overlay open. */
   returnToChat: () => void;
   navigateAgents: () => void;
   openLibrary: () => void;
   openPlugins: () => void;
   openSkills: () => void;
+  openScheduledTasks: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   openSearch?: () => void;
-  startNewChat: () => void;
 };
 
 export const SidebarActionsContext = createContext<SidebarActions | null>(null);

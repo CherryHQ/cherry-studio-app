@@ -32,7 +32,7 @@ describe('shared chat route contract', () => {
     });
   });
 
-  test('carries a composer handoff on a draft and drops it on a Session', () => {
+  test('carries a composer handoff on a draft and a Session', () => {
     const target = { agentId: 'agent-1', kind: 'draft' as const, composerHandoff: 'share-1' };
     expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
     expect(chatRouteParams({ kind: 'session', sessionId: 'session-1' })).toHaveProperty(
@@ -41,8 +41,12 @@ describe('shared chat route contract', () => {
     );
     expect(parseChatRoute({ composerHandoff: 'share-1', sessionId: 'session-1' })).toEqual({
       status: 'ready',
-      target: { kind: 'session', sessionId: 'session-1' },
+      target: { kind: 'session', sessionId: 'session-1', composerHandoff: 'share-1' },
     });
+    expect(
+      chatRouteParams({ kind: 'session', sessionId: 'session-1', composerHandoff: 'share-1' })
+        .composerHandoff,
+    ).toBe('share-1');
   });
 
   test('serializes complete chat identity for return navigation', () => {
@@ -50,6 +54,11 @@ describe('shared chat route contract', () => {
       '/?sessionId=session%20%2F%201',
     );
     expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
+    const workspaceDraftId = '00000000-0000-7000-8000-000000000001';
+    const sshDraftId = '00000000-0000-7000-8000-000000000002';
+    expect(
+      chatReturnToHref({ agentId: 'agent-1', kind: 'draft', workspaceDraftId, sshDraftId }),
+    ).toBe(`/?agentId=agent-1&workspaceDraftId=${workspaceDraftId}&sshDraftId=${sshDraftId}`);
   });
 
   test('carries an unsent workspace selection only with its draft', () => {
@@ -64,6 +73,18 @@ describe('shared chat route contract', () => {
       status: 'ready',
       target: { kind: 'session', sessionId: 'session-1' },
     });
+  });
+
+  test('carries an SSH selection only with its draft and rejects malformed identities', () => {
+    const sshDraftId = '00000000-0000-7000-8000-000000000001';
+    const target = { kind: 'draft' as const, agentId: 'agent-1', sshDraftId };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'session', sessionId: 'session-1' }).sshDraftId).toBeUndefined();
+    expect(parseChatRoute({ sessionId: 'session-1', sshDraftId })).toEqual({
+      status: 'ready',
+      target: { kind: 'session', sessionId: 'session-1' },
+    });
+    expect(parseChatRoute({ agentId: 'agent-1', sshDraftId: 'invalid' }).status).toBe('invalid');
   });
 
   test('preserves a message destination and repeated-navigation identity', () => {

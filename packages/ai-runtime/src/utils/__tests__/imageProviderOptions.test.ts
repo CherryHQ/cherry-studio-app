@@ -38,6 +38,21 @@ function build(
 }
 
 describe('image provider option routing', () => {
+  it('routes timeout metadata only to custom transports', () => {
+    for (const id of ['dashscope', 'modelscope', 'ppio', 'tokenhub', 'openai', 'newapi']) {
+      const options = buildImageProviderOptions({
+        aiSdkProviderId: id,
+        modelId: 'test-image',
+        paramValues: {},
+        provider: provider(id),
+        vendorBag: {},
+        requestTimeoutMs: 45000,
+      });
+      if (['dashscope', 'modelscope', 'ppio', 'tokenhub'].includes(id))
+        expect(options[id]).toEqual({ requestTimeoutMs: 45000 });
+      else expect(JSON.stringify(options)).not.toContain('requestTimeoutMs');
+    }
+  });
   it('delivers CherryIN chat-variant image options to the key its image wrapper reads', () => {
     expect(
       build(
@@ -170,6 +185,44 @@ describe('image provider option routing', () => {
       },
     });
   });
+
+  it('maps output format for custom compatible providers without losing sampling options', () => {
+    expect(
+      build(
+        'openai-compatible',
+        { outputFormat: 'gif', complexity: 'medium', cfg: 7.5, seed: 4 },
+        provider('custom-provider'),
+      ),
+    ).toEqual({
+      'custom-provider': {
+        output_format: 'gif',
+        complexity: 'medium',
+        cfg: 7.5,
+        seed: 4,
+      },
+    });
+  });
+
+  it.each(['aihubmix', 'openai-compatible'])(
+    'passes AiHubMix format fields through via %s',
+    (aiSdkProviderId) => {
+      expect(
+        build(
+          aiSdkProviderId,
+          { outputFormat: 'gif', complexity: 'medium', seed: 9, cfg: 7.5 },
+          provider('imported-aihubmix', 'aihubmix'),
+        ),
+      ).toEqual({
+        [aiSdkProviderId === 'openai-compatible' ? 'imported-aihubmix' : 'aihubmix']: {
+          output_format: 'gif',
+          complexity: 'medium',
+          seed: 9,
+          cfg: 7.5,
+        },
+        openai: { outputFormat: 'gif', complexity: 'medium', seed: 9 },
+      });
+    },
+  );
 
   it('uses the shared MiniMax and Doubao wire registrations', () => {
     expect(

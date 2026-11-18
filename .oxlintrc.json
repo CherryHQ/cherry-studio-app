@@ -45,6 +45,25 @@
   },
   "overrides": [
     {
+      "files": [
+        "src/frontend/appShell/conversation/__tests__/ConversationSourceBoundary.test.tsx",
+        "src/frontend/appShell/sidebar/components/SidebarRecents.tsx",
+        "src/frontend/appShell/sidebar/components/SidebarDesktopSource.tsx",
+        "src/frontend/features/chat/remote/RemoteChatScreen.tsx"
+      ],
+      "rules": {
+        "react/no-unstable-nested-components": ["warn", { "propNamePattern": "{render*,fallback}" }]
+      }
+    },
+    {
+      "files": [
+        "src/frontend/features/onboarding/components/LogoDraw/components/LogoDrawAnimation.tsx"
+      ],
+      "rules": {
+        "react/style-prop-object": ["warn", { "allow": ["Path"] }]
+      }
+    },
+    {
       "files": ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
       "rules": {
         "eslint/no-unsafe-optional-chaining": "off"

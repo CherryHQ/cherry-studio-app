@@ -23,9 +23,4 @@ export {
   type RemoteChatRouteParams,
 } from './remoteChatRoute';
 
-export {
-  conversationHref,
-  useConversationTarget,
-  conversationShareHref,
-  conversationRefFromRoute,
-} from './conversationRoute';
+export { conversationHref, useConversationTarget } from './conversationRoute';

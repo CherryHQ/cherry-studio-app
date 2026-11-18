@@ -1,6 +1,10 @@
-import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { ProtocolError, SdkError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 
-import { McpAuthorizationError, McpRedirectError } from '@/shared/contracts/mcp';
+import {
+  McpAuthorizationError,
+  McpLegacyFallbackError,
+  McpRedirectError,
+} from '@/shared/contracts/mcp';
 
 import { classifyMcpCallRejection, createRemoteMcpClient } from '../mcpProtocolClient';
 
@@ -10,6 +14,7 @@ const mockClose = jest.fn(async () => {});
 const mockConnect = jest.fn(async () => {});
 const mockExpoFetch = jest.fn();
 let mockOptions: Record<string, unknown>;
+const mockAttempts: { options: Record<string, unknown>; close: jest.Mock }[] = [];
 let mockTransport: {
   fetch: typeof fetch;
   authProvider?: unknown;
@@ -28,9 +33,10 @@ jest.mock('@modelcontextprotocol/client', () => ({
   Client: class {
     constructor(_info: unknown, options: Record<string, unknown>) {
       mockOptions = options;
+      mockAttempts.push({ options, close: this.close });
     }
     connect = mockConnect;
-    close = mockClose;
+    close = jest.fn(async () => mockClose());
     getServerVersion = () => ({ name: 'Server', version: '1' });
     getServerCapabilities = () => ({ tools: {}, resources: {}, prompts: {} });
     getProtocolEra = () => 'modern';
@@ -74,12 +80,157 @@ function streamingResponse(body: ReadableStream<Uint8Array>, contentType: string
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAttempts.length = 0;
   mockListResult = { tools: [mockTool], ttlMs: 1000 };
   mockCall.mockResolvedValue({ content: [{ type: 'text', text: 'done' }] });
   authorization.token.mockResolvedValue(undefined);
 });
 
 describe('native MCP protocol boundary', () => {
+  it('closes the failed attempt before opening a fresh legacy client', async () => {
+    const callback = jest.fn();
+    mockConnect.mockImplementationOnce(async () => {
+      throw new SdkError(SdkErrorCode.EraNegotiationFailed, 'failed');
+    });
+    mockConnect.mockImplementationOnce(async () => {
+      expect(mockAttempts[0]!.close).toHaveBeenCalledTimes(1);
+    });
+    const client = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: false,
+      authorization,
+      onLegacyPreferenceChanged: callback,
+    });
+    expect(mockAttempts.map(({ options }) => options.versionNegotiation)).toEqual([
+      { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } },
+      { mode: 'legacy' },
+    ]);
+    expect(mockAttempts[1]!.close).not.toHaveBeenCalled();
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith(true);
+    await client.close();
+    expect(mockAttempts[0]!.close).toHaveBeenCalledTimes(1);
+    expect(mockAttempts[1]!.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])(
+    'does not retry an aborted negotiation with legacy preference %s',
+    async (shouldUseLegacyProtocol) => {
+      const controller = new AbortController();
+      const callback = jest.fn();
+      mockConnect.mockImplementationOnce(async () => {
+        controller.abort();
+        throw new SdkError(SdkErrorCode.EraNegotiationFailed, 'failed');
+      });
+      await expect(
+        createRemoteMcpClient({
+          config: { endpointUrl },
+          signal: controller.signal,
+          foreground: false,
+          authorization,
+          shouldUseLegacyProtocol,
+          onLegacyPreferenceChanged: callback,
+        }),
+      ).rejects.toBeDefined();
+      expect(mockAttempts).toHaveLength(1);
+      expect(callback).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps a working legacy preference without probing', async () => {
+    const callback = jest.fn();
+    const client = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: false,
+      authorization,
+      shouldUseLegacyProtocol: true,
+      onLegacyPreferenceChanged: callback,
+    });
+    expect(mockAttempts).toHaveLength(1);
+    expect(mockAttempts[0]!.options.versionNegotiation).toEqual({ mode: 'legacy' });
+    expect(callback).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it('forgets a failed legacy preference before a fresh automatic negotiation', async () => {
+    mockConnect.mockRejectedValueOnce(new Error('legacy is no longer supported'));
+    const callback = jest.fn();
+    mockConnect.mockImplementationOnce(async () => {
+      expect(mockAttempts[0]!.close).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(false);
+    });
+    const client = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: false,
+      authorization,
+      shouldUseLegacyProtocol: true,
+      onLegacyPreferenceChanged: callback,
+    });
+    expect(mockAttempts.map(({ options }) => options.versionNegotiation)).toEqual([
+      { mode: 'legacy' },
+      { mode: 'auto', probe: { maxRetries: 0, timeoutMs: 15_000 } },
+    ]);
+    expect(callback).toHaveBeenCalledTimes(1);
+    await client.close();
+    expect(mockAttempts[0]!.close).toHaveBeenCalledTimes(1);
+    expect(mockAttempts[1]!.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains both failures without repeating a failed preferred handshake', async () => {
+    const legacyError = new Error('legacy is no longer supported');
+    const negotiationError = new SdkError(SdkErrorCode.EraNegotiationFailed, 'probe failed');
+    mockConnect.mockRejectedValueOnce(legacyError).mockRejectedValueOnce(negotiationError);
+    const callback = jest.fn();
+    const error = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: false,
+      authorization,
+      shouldUseLegacyProtocol: true,
+      onLegacyPreferenceChanged: callback,
+    }).catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(McpLegacyFallbackError);
+    expect(error).toMatchObject({ negotiationError, cause: legacyError });
+    expect(mockAttempts).toHaveLength(2);
+    expect(callback.mock.calls).toEqual([[false]]);
+    expect(mockAttempts[0]!.close).toHaveBeenCalledTimes(1);
+    expect(mockAttempts[1]!.close).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new McpAuthorizationError('reauthorize'),
+    new McpRedirectError('https://elsewhere.example/mcp'),
+    Object.assign(new Error('cancelled'), { name: 'AbortError' }),
+    new SdkError(SdkErrorCode.RequestTimeout, 'timeout'),
+    new SdkHttpError(SdkErrorCode.ClientHttpAuthentication, 'unauthorized', { status: 401 }),
+    new SdkHttpError(SdkErrorCode.ClientHttpForbidden, 'forbidden', { status: 403 }),
+  ])('does not probe after a preferred legacy connection fails with %s', async (failure) => {
+    mockConnect.mockRejectedValueOnce(failure);
+    const callback = jest.fn();
+    await expect(
+      createRemoteMcpClient({
+        config: { endpointUrl },
+        signal: new AbortController().signal,
+        foreground: false,
+        authorization,
+        shouldUseLegacyProtocol: true,
+        onLegacyPreferenceChanged: callback,
+      }),
+    ).rejects.toBe(failure);
+    expect(mockAttempts).toHaveLength(1);
+    expect(mockAttempts[0]!.options.versionNegotiation).toEqual({ mode: 'legacy' });
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('does not retry an SDK timeout', async () => {
+    mockConnect.mockRejectedValueOnce(new SdkError(SdkErrorCode.RequestTimeout, 'timeout'));
+    await expect(open()).rejects.toMatchObject({ code: SdkErrorCode.RequestTimeout });
+    expect(mockAttempts).toHaveLength(1);
+  });
+
   it('routes tool and prompt list changes to one catalog refresh only while active', async () => {
     const onCatalogChanged = jest.fn();
     const client = await createRemoteMcpClient({

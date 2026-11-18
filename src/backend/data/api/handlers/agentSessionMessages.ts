@@ -8,9 +8,20 @@ import {
 import type { HandlersFor } from '@/shared/data/api/types';
 
 export function createAgentSessionMessageHandlers(
-  service: Pick<AgentSessionMessageService, 'listByCursor' | 'readSelection' | 'saveTranslation'>,
+  service: Pick<
+    AgentSessionMessageService,
+    'listByCursor' | 'readSelection' | 'readTranscript' | 'saveTranslation'
+  >,
 ): HandlersFor<AgentSessionMessageSchemas> {
   return {
+    '/agent-sessions/:sessionId/messages/transcript': {
+      GET: async ({ params, signal }) => {
+        signal?.throwIfAborted();
+        const result = await service.readTranscript(params.sessionId);
+        signal?.throwIfAborted();
+        return result;
+      },
+    },
     '/agent-sessions/:sessionId/messages/:messageId/translations': {
       PATCH: async ({ params, body }) =>
         service.saveTranslation(

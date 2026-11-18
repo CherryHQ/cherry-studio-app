@@ -1,8 +1,32 @@
-const { AndroidConfig, withAndroidManifest } = require('expo/config-plugins');
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withGradleProperties,
+  withProjectBuildGradle,
+} = require('expo/config-plugins');
 
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';
+const DOMESTIC_STORES_PROPERTY = 'cherry.appUpdate.domesticStoresEnabled';
+const VENDOR_REPOSITORY =
+  '\n// Cherry app-update vendor SDKs\nallprojects {\n  repositories {\n    flatDir { dirs "$rootDir/../modules/app-update/android/libs" }\n  }\n}\n';
 
-module.exports = (config, { apkUpdatesEnabled }) => {
+module.exports = (config, { apkUpdatesEnabled, domesticStoresEnabled = false }) => {
+  config = withGradleProperties(config, (mod) => {
+    mod.modResults = mod.modResults.filter(
+      (property) => property.type !== 'property' || property.key !== DOMESTIC_STORES_PROPERTY,
+    );
+    mod.modResults.push({
+      type: 'property',
+      key: DOMESTIC_STORES_PROPERTY,
+      value: String(domesticStoresEnabled),
+    });
+    return mod;
+  });
+  config = withProjectBuildGradle(config, (mod) => {
+    mod.modResults.contents = mod.modResults.contents.replace(VENDOR_REPOSITORY, '');
+    if (domesticStoresEnabled) mod.modResults.contents += VENDOR_REPOSITORY;
+    return mod;
+  });
   // Explicitly remove this permission from every store/preview manifest, including library merges.
   config.android ??= {};
   config.android.permissions = (config.android.permissions ?? []).filter(

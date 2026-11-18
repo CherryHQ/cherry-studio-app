@@ -3,6 +3,11 @@
 Mobile captures diagnostic metadata in ordinary app operation, including development builds. Capture has no developer-mode gate. Tracing itself has no upload destination; the user can export
 or submit selected metadata through the diagnostic bundle screen.
 
+Each trace snapshots the initiating data profile, admitted account and native/JavaScript version
+context in `environment`. Child spans and terminal revisions preserve that snapshot across account
+changes. Historical records without it remain unattributed; export never applies the submitting
+account to past requests. See [Diagnostics](../../services/diagnostics/README.md) for field semantics.
+
 ## Ownership and coverage
 
 `TraceStorageService` is a PostReady lifecycle service. `AgentHostDependencies` and
@@ -49,20 +54,29 @@ Current producers are:
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
 `error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
-structured code and status alone. Messages are not used to guess a category. Provider codes the
-product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
-`piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
-keeps the status. Final `ai.turn_state` failures also retain `error.product_reason` from the existing
-product failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper,
-and available source name/origin/status. The product reason may have been inferred from the
-caller-visible message; it is distinct from the request's structured-only `error.category`.
-Only the closed reason is copied, never the message or response body.
+normalized provider facts. Safety requires an explicit source code or exact safety finish reason;
+other categories retain their existing status and message rules. Provider/transport code fallbacks
+(for example `usage_limit_reached` or `overloaded_error`) belong to that shared classifier, after
+more specific status/message evidence.
+`piModelError.ts` adapts terminal provider facts, including the raw provider finish reason, for both
+turn projection and generation diagnostics. The Host packages those facts with `createAiFailure`;
+diagnostics apply the same shared classification without supplying a product override to the Host.
+Pre-stream failures expose only structured facts, so their category may differ from a later product
+snapshot with more evidence. A 4xx status without a product reason is `unknown`; `http.status_code`
+keeps the status. Final `ai.turn_state` failures retain `error.product_reason` from the product
+failure snapshot, `error.source.code` behind the protocol's `EXECUTION_FAILED` wrapper, and available
+source name/origin/status. Only the closed reason is copied, never the message or response body.
+`gen_ai.response.finish_reason` retains Pi's normalized outcome;
+`gen_ai.response.raw_finish_reason` on `pi.generate_content` retains a known provider enum such as
+`SAFETY` or `MALFORMED_FUNCTION_CALL`. The producer and archive exporter use the same closed
+allowlist. These diagnostic fields do not override the shared error classifier or Pi's automatic
+retry decision.
 Application operation failures unwrap `AgentProtocolError.view` before projecting safe error
 facts, so admission rejections retain their protocol code and retryability alongside the wrapper type.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
-`stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
-and TLS errors because the rejection carries no cause. Adapters without a custom fetch (Google)
-do not receive these codes. Terminal model failures record Pi's retry classification of the
+`stream_disconnected`; both fall back to network failures. More specific message evidence can
+identify a timeout, TLS failure, or interrupted stream. Gemini and host-authenticated Vertex use
+the same injected transport as the other supported adapters. Terminal model failures record Pi's retry classification of the
 error as `error.retryable`, qualified by `error.retry_scope: automatic`; whether a retry happened
 also depends on the retry budget and context
 overflow handling. Cancellation remains a cancelled outcome. Correlate existing retry attempt logs
@@ -107,6 +121,10 @@ Pi's existing event observer records fixed failure metadata for failed tasks, au
 attempts and interrupted tool executions. Recovery inspection records blocked tasks and their
 closed reason codes; the Harness report callback records extension failures that do not fail the
 calling operation. Failed asynchronous usage delivery is logged while its receipt remains pending.
+If a receipt's historical owner fails schema validation, delivery records
+`pi.usage_delivery / invalid_receipt`, keeps that receipt pending and continues with later receipts.
+A later pass retries the retained receipt; successful deliveries are still acknowledged once.
+Database and other non-validation failures continue to reject the delivery pass.
 Task ids/kinds and available Session/turn/request/message ids are included, never event messages
 or event payloads. Task failures use current turn identities only for generation and tool tasks;
 compaction and extension task failures retain Session/task identity without borrowing the active
@@ -134,7 +152,9 @@ policy, not arbitrary-content redaction.
 
 ## Stored format and limits
 
-Files live under `{Paths.document}/Runtime/trace/v1`. Each rolling `.jsonl` file contains
+Files live under the active data profile's `Runtime/trace/v1` directory: directly below
+`{Paths.document}` for local data, or `{Paths.document}/profiles/<id>` for enterprise data.
+Each rolling `.jsonl` file contains
 span snapshots conforming to `src/shared/data/types/trace.ts`. Started spans are written before
 completion so a later diagnostic package can identify unfinished work after a crash.
 
@@ -148,8 +168,11 @@ byte-for-byte Desktop schema.
 - At most 32 active traces and 256 spans per trace; root completion closes unfinished children.
 - At most 256 KiB buffered, 64 KiB per write batch, and 16 KiB per record. Oversized attributes are
   removed before the record is dropped. Capture never waits for filesystem I/O.
-- History retains at most 7 days, 20 MiB, and 512 files, whichever limit is reached first.
-  Cleanup runs off the first-paint path, after writes, and before diagnostic snapshots.
+- History across **all** data profiles shares a 7-day / 20 MiB / 512-file retention budget.
+  Cleanup runs off the first-paint path, after writes, and before diagnostic snapshots. It discovers
+  UUID profile directories from disk, so inactive or unregistered profiles are cleaned too. Only
+  known trace files and interrupted trace temporary files in the exact trace directories are touched;
+  the newest files across profiles take priority. Directory scans and metadata reads are asynchronous.
 - Flushes append to the current UTC day's file, rotating before 1 MiB. Starting/ending a request
   still triggers a flush, but no longer consumes a new file for every small batch. The existing
   512-file guard protects against legacy/exceptional file counts rather than limiting ordinary
@@ -177,10 +200,11 @@ try {
 ```
 
 This flushes queued records, serializes against retention, and copies retained batches into a
-private `{Paths.cache}/Diagnostics/trace-<id>` directory, using the same parent-directory casing as
+private `{Paths.cache}/Diagnostics/run-<runtime-id>/trace-<id>` directory, using the same parent-directory casing as
 upload archives. `files` includes `manifest.json` with the
 format version, capture policy, retention limits, file sizes, and collection-loss counters for the
 current service generation. Subsequent tracing and pruning cannot alter these copies.
-`metadata` also exposes retention and loss counters without parsing a file. The caller owns
+`metadata` also exposes retention and loss counters without parsing a file; `retention.scope` is
+`installation`, while the snapshot itself still contains only the active profile's traces. The caller owns
 archive/upload policy and must release the snapshot after consumption. Snapshot creation
 reports its own I/O failures to that caller; ordinary trace producers never receive those failures.

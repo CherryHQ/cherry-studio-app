@@ -96,6 +96,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
     id: part.id,
     type: part.type,
     text: part.text,
+    ...(part.type === 'reasoning' && part.hasText !== undefined ? { hasText: part.hasText } : {}),
     state: part.state,
   });
 }

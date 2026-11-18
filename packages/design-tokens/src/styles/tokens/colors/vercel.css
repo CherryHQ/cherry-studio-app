@@ -30,6 +30,11 @@
  */
 
 :root {
+  /* Mobile categorical chart extension; separate hues identify data series. */
+  --indigo-700: oklch(0.52 0.17 275);
+  --violet-700: oklch(0.58 0.15 305);
+  --cyan-700: oklch(0.53 0.1 215);
+
   /* Page and surface bases */
   --background-100: oklch(1 0 0);
   --background-200: oklch(0.984 0 0);
@@ -87,6 +92,10 @@
 
 /* Dark Mode */
 .dark {
+  --indigo-700: oklch(0.76 0.12 275);
+  --violet-700: oklch(0.79 0.12 305);
+  --cyan-700: oklch(0.77 0.1 215);
+
   /* Page and surface bases */
   --background-100: oklch(0 0 0);
   --background-200: oklch(0.027 0 0);

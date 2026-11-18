@@ -131,6 +131,7 @@ Private disposers stay with bootstrap, and callers release their own observation
 | `remoteAgent` | `RemoteAgentRuntime`: remote reads, observations and command recovery | Host-owned scopes; callers dispose retained sources. Desktop remains the execution and history authority |
 | `desktopConnections` | `DesktopConnectionRuntime`: pairing, credentials and configuration import | Host-owned requests and credential operations; connection leases belong to `DesktopConnectionManager` |
 | `skills` | `createSkillsModule`: discovery, validation and installation | Caller-cancelled preparation; bootstrap's private `disposeSkills` rejects and drains admitted publication writes |
+| `agentTemplates` | `createAgentTemplatesModule`: region-routed template discovery, per-field defaults and recoverable disk snapshots | Lazy language reads and shared refreshes; callers may stop waiting, while bootstrap's private `disposeAgentTemplates` aborts and joins owned work |
 | `translation` | `createTranslationModule`: language/model selection and one text-generation invocation | Per-call cancellation; no conversation or tool-loop lifetime |
 | `models` | `createModelsModule`: model pull, preview, reconcile and health checks | Per-call deadlines and cancellation; model records remain Data API resources |
 | `providers` | `createProvidersModule`: provider policy, presets, avatars, registry updates and account workflows | Calls delegate persistent state and long-lived work to their existing data, registry and account owners |
@@ -144,7 +145,8 @@ Private disposers stay with bootstrap, and callers release their own observation
 | `permissions` | `DevicePermissions`: system permission queries, serialized prompts and settings recovery | Module-level native prompt queue; an open system prompt retains its slot until native completion |
 | `backgroundExecution` | `KeepAliveCoordinator`: background protection status, settings and observation | Host-owned platform sources; backend consumers acquire/release execution leases |
 | `backup` | `BackupRuntime`: capture, validation, staging and restore with storage admission | Host-owned operation and staged restore; explicit cancellation and host stop settle accepted work |
-| `diagnostics` | `DiagnosticBundleService`: metadata inspection, archive creation, saving and upload | Host-owned in-flight operation; host stop cancels and joins it. Process log recording has a separate lifetime |
+| `deepseekImport` | `DeepseekImportRuntime`: DeepSeek-host link admission, bounded download and lenient atomic conversation import | Composition owns the operation; caller cancellation and composition disposal join cleanup before database teardown |
+| `diagnostics` | `createDiagnosticsModule` and `DiagnosticBundleService`: transient checks/AI diagnosis and metadata upload | Diagnostic sheets dispose sessions; bootstrap drains them before host stop. Bundle and process-log lifetimes remain separate |
 | `appUpdate` | `createAppUpdateModule`: channel routing, release discovery, APK transfer and installation | App-owned download; bootstrap's private `disposeAppUpdate` cancels/drains it. Closing a dialog does not cancel the download |
 | `profile` | `createProfileModule`: avatar storage and preference coordination | Per-call replacement; preferences and avatar bytes retain their own storage owners |
 

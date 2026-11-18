@@ -14,6 +14,7 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { BackupRuntime } from '@/backend/services/backup';
+import { CloudRuntime } from '@/backend/services/cloud';
 import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
@@ -21,14 +22,19 @@ import {
 } from '@/backend/services/desktopConnections';
 import { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
+import { EnterpriseSyncService } from '@/backend/services/enterprise';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { IosBackgroundExecutionSource } from '@/backend/services/keepAlive/IosBackgroundExecutionSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
+import { ProviderCatalogRuntime } from '@/backend/services/providers/ProviderCatalogRuntime';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { VertexAuthClient } from '@/backend/services/providers/vertex';
+import { RegionService } from '@/backend/services/region';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
+import { SshRuntime } from '@/backend/services/ssh';
 import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -63,19 +69,25 @@ export const services = {
   RemoteAgentRuntime,
   DocumentExportRuntime,
   PreferenceService,
+  ScreenAwakeRuntime,
   AnalyticsService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,
   IosBackgroundExecutionSource,
   KeepAliveCoordinator,
+  SshRuntime,
   RemoteConnectionNotificationRuntime,
   BackgroundActivityManager,
   BackgroundReplyRuntime,
   WebSearchService,
+  RegionService,
+  ProviderCatalogRuntime,
   ProviderRegistryUpdaterService,
   TraceStorageService,
   DiagnosticBundleService,
   McpRuntimeService,
+  EnterpriseSyncService,
+  CloudRuntime,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

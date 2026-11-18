@@ -12,13 +12,10 @@ import {
 
 const options: ChatExportOptions = {
   title: 'Conversation',
-  includeProcess: false,
   labels: {
     user: 'You',
     assistant: 'Assistant',
-    process: (seconds) => `Took ${seconds}s`,
     sources: (count) => `${count} sources`,
-    reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',
     translation: (language) => `Translation (${language})`,
@@ -68,32 +65,24 @@ const question = message('a', 'user', [
   { id: 'question', type: 'text', text: 'Question?', state: 'done' },
 ]);
 
-test.each([false, true])(
-  'expanded translations follow selected messages independently of process visibility (%s)',
-  (includeProcess) => {
-    const document = toChatExportDocument([question, answer], {
-      ...options,
-      includeProcess,
-      translations: {
-        b: {
-          sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
-          language: 'zh-CN',
-          content: '当前语言译文',
-        },
-        unselected: { sourceHash: 'a'.repeat(64), language: 'fr-FR', content: 'Unselected' },
+test('expanded translations follow only selected messages, without exporting reasoning', () => {
+  const document = toChatExportDocument([question, answer], {
+    ...options,
+    translations: {
+      b: {
+        sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+        language: 'zh-CN',
+        content: '当前语言译文',
       },
-    });
-    expect(document.sections).toHaveLength(2);
-    expect(document.sections[1].blocks).toEqual(
-      expect.arrayContaining([
-        { kind: 'markdown', source: 'Final answer' },
-        { kind: 'markdown', source: '---\n\n### Translation (zh-CN)\n\n当前语言译文' },
-      ]),
-    );
-    expect(JSON.stringify(document.sections[0])).not.toContain('当前语言译文');
-    expect(JSON.stringify(document)).not.toContain('Unselected');
-  },
-);
+      unselected: { sourceHash: 'a'.repeat(64), language: 'fr-FR', content: 'Unselected' },
+    },
+  });
+  expect(document.sections).toHaveLength(2);
+  expect(JSON.stringify(document.sections[1])).toContain('当前语言译文');
+  expect(JSON.stringify(document.sections[0])).not.toContain('当前语言译文');
+  expect(JSON.stringify(document)).not.toContain('Unselected');
+  expect(JSON.stringify(document)).not.toContain('Private reasoning');
+});
 
 test('saved translations stay out of sharing when folded, and stale translations never accompany changed text', () => {
   const saved: AgentMessageView = {
@@ -172,21 +161,11 @@ test('answers carry the Cherry avatar and their own model; questions stay plain 
   expect(document.sections[2]).not.toHaveProperty('model');
 });
 
-test('process includes the visible reasoning and intermediate text without timestamps', () => {
-  const document = toChatExportDocument([answer], {
-    ...options,
-    includeProcess: true,
-  });
-  expect(JSON.stringify(document)).toContain('Private reasoning');
-  expect(JSON.stringify(document)).toContain('Let me check.');
-  expect(document.sections[0].blocks[0]).toMatchObject({
-    kind: 'details',
-    presentation: 'process',
-    summary: 'Took 1s',
-    blocks: expect.arrayContaining([
-      expect.objectContaining({ kind: 'details', presentation: 'reasoning', summary: 'Reasoning' }),
-    ]),
-  });
+test('process, reasoning and intermediate prose never enter the share document', () => {
+  const document = toChatExportDocument([answer], options);
+  expect(JSON.stringify(document)).not.toContain('Private reasoning');
+  expect(JSON.stringify(document)).not.toContain('Let me check.');
+  expect(document.sections[0].blocks.some((block) => block.kind === 'details')).toBe(false);
   expect(document.sections[0].metadata).toEqual([]);
 });
 
@@ -404,3 +383,129 @@ async function loadChatExportMessages(
   );
   return snapshot.messages;
 }
+
+test('remote snapshots share confirmed citations and ordered image bytes without managed file IDs', () => {
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'remote-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [
+          {
+            type: 'prepared-file',
+            id: 'picture',
+            filename: 'Remote.png',
+            mediaType: 'image/png',
+            base64: 'aW1hZ2U=',
+          },
+          { type: 'text', id: 'final', state: 'done', text: 'Answer [cite:earlier]' },
+        ],
+        citationSources: [{ id: 'earlier', title: 'Earlier source', url: 'https://example.com' }],
+      },
+    ],
+    options,
+  );
+  expect(document.assets?.['remote-answer:picture']).toEqual({
+    kind: 'prepared-image',
+    base64: 'aW1hZ2U=',
+  });
+  expect(document.sections[0].blocks.slice(0, 2)).toEqual([
+    { kind: 'image', assetId: 'remote-answer:picture', alt: 'Remote.png' },
+    { kind: 'markdown', source: 'Answer [1](<https://example.com/>)' },
+  ]);
+  expect(JSON.stringify(document)).not.toContain('fileEntryId');
+});
+
+test('retains an unavailable-image placeholder when a prepared image has no bytes', () => {
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'remote-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [
+          {
+            type: 'prepared-file',
+            id: 'picture',
+            filename: 'MetadataOnly.png',
+            mediaType: 'image/png',
+          },
+          { type: 'text', id: 'final', state: 'done', text: 'Answer text' },
+        ],
+      },
+    ],
+    options,
+  );
+  expect(document.assets).toEqual({});
+  expect(document.sections[0].blocks).toEqual([
+    { kind: 'image', assetId: 'remote-answer:picture', alt: 'MetadataOnly.png' },
+    { kind: 'markdown', source: 'Answer text' },
+  ]);
+});
+
+test('keeps exported translation citations aligned with original answer and sources numbering', () => {
+  const originalText = 'First [cite:src-a], then [cite:src-b].';
+  const translationText = '先出现 [cite:src-b]，再出现 [cite:src-a]。';
+  const document = toChatExportDocument(
+    [
+      {
+        id: 'translated-answer',
+        role: 'assistant',
+        status: 'success',
+        stats: null,
+        parts: [{ type: 'text', id: 'final', state: 'done', text: originalText }],
+        citationSources: [
+          { id: 'src-a', title: 'Source A', url: 'https://a.example' },
+          { id: 'src-b', title: 'Source B', url: 'https://b.example' },
+        ],
+      },
+    ],
+    {
+      ...options,
+      translations: {
+        'translated-answer': {
+          language: 'zh-CN',
+          content: translationText,
+          sourceHash: sha256HexOfText(originalText),
+        },
+      },
+    },
+  );
+  expect(document.sections[0].blocks).toEqual([
+    {
+      kind: 'markdown',
+      source: 'First [1](<https://a.example/>), then [2](<https://b.example/>).',
+    },
+    {
+      kind: 'links',
+      summary: '2 sources',
+      items: [
+        { label: '1. Source A', url: 'https://a.example' },
+        { label: '2. Source B', url: 'https://b.example' },
+      ],
+    },
+    {
+      kind: 'markdown',
+      source:
+        '---\n\n### Translation (zh-CN)\n\n先出现 [2](<https://b.example/>)，再出现 [1](<https://a.example/>)。',
+    },
+  ]);
+});
+
+test('sharing a remote message omits translations from an older revision even when prose matches', () => {
+  const document = toChatExportDocument([{ ...answer, revision: '2' }], {
+    ...options,
+    translations: {
+      b: {
+        revision: '1',
+        sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+        language: 'zh-CN',
+        content: '旧版本译文',
+      },
+    },
+  });
+  expect(JSON.stringify(document)).not.toContain('旧版本译文');
+});

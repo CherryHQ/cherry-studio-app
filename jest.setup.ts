@@ -76,6 +76,31 @@ jest.mock('expo-media-library', () => {
   };
 });
 
+// Voice native libraries resolve their modules at import time. Voice engine suites replace them
+// with explicit fakes; unrelated suites only import them through backend composition.
+jest.mock('expo-audio', () => ({
+  setAudioModeAsync: jest.fn(),
+}));
+jest.mock('expo-speech', () => ({
+  getAvailableVoicesAsync: jest.fn(async () => []),
+  maxSpeechInputLength: 4000,
+  speak: jest.fn(),
+  stop: jest.fn(async () => undefined),
+}));
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    abort: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    getPermissionsAsync: jest.fn(),
+    getDefaultRecognitionService: jest.fn(() => ({ packageName: '' })),
+    getSpeechRecognitionServices: jest.fn(() => []),
+    isRecognitionAvailable: jest.fn(() => false),
+    requestPermissionsAsync: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
+  },
+}));
+
 // The library resolves its native module at import time. Its own jest entry is
 // the sanctioned stand-in and keeps the hooks/event emitters callable, which the
 // chat list needs the moment it imports KeyboardEvents.

@@ -2,21 +2,24 @@ import { type MenuItem, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShareFiles } from '@/frontend/appShell/sharing';
 import { useSelectionActions, useSelectionState } from '@/frontend/components/Selection';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { FileFolder, LibraryFile } from '@/shared/data/types/fileLibrary';
+import { isAudioMediaType } from '@/shared/utils/audioFileTypes';
 
 export type LibrarySelection =
   | { kind: 'folder'; folder: FileFolder }
   | { kind: 'file'; file: LibraryFile };
 
-/** Row menus run quick actions directly; only moving needs a surface to pick the destination. */
-export function useFileLibraryItemActions() {
+/** Row menus own file actions; transcription runs in the library’s cancellable progress panel. */
+export function useFileLibraryItemActions(onTranscribe: (file: LibraryFile) => void) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
   const files = useBackendModule('file');
+  const sharing = useShareFiles({ allowConversion: false });
   const { enterEditing, selectIds } = useSelectionActions();
   const { isDeletionPending } = useSelectionState();
   const editFolder = useMutation('PATCH', '/files/folders/:id');
@@ -118,6 +121,16 @@ export function useFileLibraryItemActions() {
       ...(selection.kind === 'file'
         ? [
             {
+              id: 'share',
+              label: t('common.share'),
+              disabled: sharing.isSharing || isPending || isDeletionPending,
+              onPress: () => void sharing.share([selection.file.entry.id]),
+            },
+          ]
+        : []),
+      ...(selection.kind === 'file'
+        ? [
+            {
               disabled: isPending || isDeletionPending,
               id: 'select',
               label: t('library.selection.start'),
@@ -125,6 +138,16 @@ export function useFileLibraryItemActions() {
                 enterEditing();
                 selectIds([selection.file.entry.id]);
               },
+            },
+          ]
+        : []),
+      ...(selection.kind === 'file' && isAudioMediaType(selection.file.entry.mediaType)
+        ? [
+            {
+              id: 'transcribe',
+              label: t('library.transcription.title'),
+              disabled: isPending || isDeletionPending,
+              onPress: () => onTranscribe(selection.file),
             },
           ]
         : []),
@@ -148,7 +171,17 @@ export function useFileLibraryItemActions() {
         onPress: () => trash(selection),
       },
     ],
-    [enterEditing, isDeletionPending, isPending, rename, selectIds, t, trash],
+    [
+      enterEditing,
+      isDeletionPending,
+      isPending,
+      onTranscribe,
+      rename,
+      selectIds,
+      sharing,
+      t,
+      trash,
+    ],
   );
 
   return { closeMove, getMenuItems, isPending, move, moving };

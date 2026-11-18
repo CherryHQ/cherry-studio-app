@@ -18,6 +18,7 @@ const mockPush = jest.fn();
 const mockUsePreventRemove = jest.fn();
 const mockQueryClient = {};
 let mockDefaultModelId: UniqueModelId | null = null;
+let mockNamingModelId: UniqueModelId | null = null;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { confirm: mockConfirm } }),
@@ -34,10 +35,16 @@ jest.mock('@/frontend/components/Selection', () =>
 );
 jest.mock('@/frontend/data', () => ({ useMutation: () => ({ trigger: mockDelete }) }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  MODEL_SETTING_KINDS: ['default', 'fast', 'translate', 'painting'],
-  MODEL_SETTING_KIND_TITLE_KEYS: { default: 'Default' },
+  MODEL_SETTING_KINDS: ['default', 'fast', 'translate', 'painting', 'naming'],
+  MODEL_SETTING_KIND_TITLE_KEYS: { default: 'Default', naming: 'Naming' },
   useModelSettingSelections: () => ({
-    selections: { default: mockDefaultModelId, fast: null, translate: null, painting: null },
+    selections: {
+      default: mockDefaultModelId,
+      fast: null,
+      translate: null,
+      painting: null,
+      naming: mockNamingModelId,
+    },
   }),
 }));
 jest.mock('../../utils/refreshProviderModelQueries', () => ({
@@ -54,6 +61,7 @@ describe('model management deletion', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDefaultModelId = null;
+    mockNamingModelId = null;
     mockDelete.mockResolvedValue(undefined);
     act(() => {
       renderer = create(<Probe />);
@@ -88,16 +96,20 @@ describe('model management deletion', () => {
     expect(management.selectedIds.size).toBe(0);
   });
 
-  it('routes default-model conflicts to settings without attempting deletion', () => {
-    mockDefaultModelId = model.id;
-    act(() => management.beginSelection(model));
-    act(() => management.requestDelete());
-    expect(mockConfirm.mock.calls[0][0].title).toBe(
-      'settings.provider.models.management.protectedTitle',
-    );
-    act(() => mockConfirm.mock.calls[0][0].onConfirm());
-    expect(mockPush).toHaveBeenCalledWith('/settings/model');
-    expect(mockDelete).not.toHaveBeenCalled();
-    expect(management.selectedIds.has(model.id)).toBe(true);
-  });
+  it.each(['default', 'naming'])(
+    'routes %s model conflicts to settings without attempting deletion',
+    (kind) => {
+      if (kind === 'naming') mockNamingModelId = model.id;
+      else mockDefaultModelId = model.id;
+      act(() => management.beginSelection(model));
+      act(() => management.requestDelete());
+      expect(mockConfirm.mock.calls[0][0].title).toBe(
+        'settings.provider.models.management.protectedTitle',
+      );
+      act(() => mockConfirm.mock.calls[0][0].onConfirm());
+      expect(mockPush).toHaveBeenCalledWith('/settings/model');
+      expect(mockDelete).not.toHaveBeenCalled();
+      expect(management.selectedIds.has(model.id)).toBe(true);
+    },
+  );
 });

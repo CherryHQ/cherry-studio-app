@@ -42,6 +42,8 @@ export type PrepareFileAttachmentsInput = AttachmentContentReader & {
   signal: AbortSignal;
   target: FileAttachmentTarget;
   documentParserMode?: DocumentParserMode;
+  /** A provider binding may defer an admitted document to its native upload path. */
+  deferDocument?: (file: FileAttachmentFact) => boolean;
 };
 
 /**
@@ -89,8 +91,19 @@ export async function prepareFileAttachments(
   for (const [id, count] of counts) {
     const file = input.availableFiles.get(id)!;
     const mode = fileAttachmentMode(file)!;
-    if (mode === 'image' && input.target.acceptsImages) {
+    if (mode === 'audio' || (mode === 'image' && input.target.acceptsImages)) {
       result.set(id, { file, report: { mode, sourceTruncated: false, requestTruncated: false } });
+      continue;
+    }
+    if (mode === 'document' && input.deferDocument?.(file)) {
+      result.set(id, {
+        file,
+        content: {
+          kind: 'text',
+          text: 'Document input is prepared for the selected provider. If native document content is unavailable, use read_file with this managed file reference.',
+        },
+        report: { mode: 'provider-document', sourceTruncated: false, requestTruncated: false },
+      });
       continue;
     }
     const budget = Math.max(

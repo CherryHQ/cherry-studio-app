@@ -60,11 +60,15 @@ export function useUserQuestionForm({
   const answer = answers.get(question.id) ?? emptyAnswer;
   const locked = disabled || busy;
   const isLast = index === questions.length - 1;
-  const answered = isAnswered(answer);
-  const canSkip = !(question.required ?? !allowSkip);
-  const isComplete = questions.every(
-    ({ id, required }) => !(required ?? !allowSkip) || isAnswered(answers.get(id)),
-  );
+  // Direct decisions settle the whole request; multi-question forms keep ordinary drafts.
+  const isReview =
+    questions.length === 1 &&
+    question.selection === 'single' &&
+    Boolean(question.textChanges?.length) &&
+    question.options.length > 0;
+  const answered = isAnswered(answer, isReview);
+  const canSkip = !isReview && !(question.required ?? !allowSkip);
+  const isComplete = isFormComplete(questions, answers, allowSkip, isReview);
   const action: 'submit' | 'next' | 'skip' = isLast
     ? 'submit'
     : answered || !canSkip
@@ -103,14 +107,22 @@ export function useUserQuestionForm({
     navigate(index + 1);
   }
 
-  async function submit() {
-    if (disabled || submitting.current || !active.current || !isComplete) return;
+  async function submit(drafts = answers) {
+    if (
+      disabled ||
+      submitting.current ||
+      !active.current ||
+      !isFormComplete(questions, drafts, allowSkip, isReview)
+    )
+      return;
     submitting.current = true;
+    setAnswers(drafts);
     setBusy(true);
     setFailed(false);
-    const response = questions.map(({ id, input }) => {
-      const answer = answers.get(id);
-      return answer && isAnswered(answer)
+    const response = questions.map((question) => {
+      const { id, input } = question;
+      const answer = drafts.get(id);
+      return answer && isAnswered(answer, isReview)
         ? {
             ...answer,
             text: input?.preserveWhitespace ? answer.text : answer.text.trim(),
@@ -135,6 +147,17 @@ export function useUserQuestionForm({
     }
   }
 
+  async function respondOption(id: string) {
+    if (!isReview || !question.options.some((option) => option.id === id)) return;
+    await submit(
+      new Map(answers).set(question.id, {
+        selectedOptionIds: [id],
+        text: '',
+        skipped: false,
+      }),
+    );
+  }
+
   function advance() {
     if (!canAct) return;
     if (action === 'submit') void submit();
@@ -151,18 +174,36 @@ export function useUserQuestionForm({
     canAct,
     failed,
     index,
+    isReview,
     isComplete,
     locked,
     navigate,
     question,
     questions,
+    respondOption,
     select,
     skip,
-    submit,
+    submit: () => submit(),
     setText: (text: string) => change((current) => ({ ...current, text, skipped: false })),
   };
 }
 
-function isAnswered(answer: AnswerDraft | undefined) {
-  return Boolean(answer && (answer.selectedOptionIds.length > 0 || answer.text.trim()));
+function isAnswered(answer: AnswerDraft | undefined, isReview: boolean) {
+  if (!answer) return false;
+  // Saving reviewed changes requires a choice, rather than a skip or an unresolved suggestion.
+  if (isReview) return answer.selectedOptionIds.length === 1 && !answer.text.trim();
+  return answer.selectedOptionIds.length > 0 || Boolean(answer.text.trim());
+}
+
+function isFormComplete(
+  questions: readonly QuestionFormQuestion[],
+  answers: ReadonlyMap<string, AnswerDraft>,
+  allowSkip: boolean,
+  isReview: boolean,
+) {
+  return questions.every(
+    (question) =>
+      (!isReview && !(question.required ?? !allowSkip)) ||
+      isAnswered(answers.get(question.id), isReview),
+  );
 }

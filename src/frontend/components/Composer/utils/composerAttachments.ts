@@ -5,6 +5,7 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
+import { resolveAudioImportMediaType } from '@/shared/utils/audioFileTypes';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
 
@@ -226,7 +227,10 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAt
 export function createDocumentAttachmentDraft(
   asset: FileUploadSelection,
 ): ComposerAttachmentSource {
-  const mediaType = resolveDocumentImportMediaType(asset.name, asset.mediaType);
+  const mediaType = resolveAudioImportMediaType(
+    asset.name,
+    resolveDocumentImportMediaType(asset.name, asset.mediaType),
+  );
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
   const extension = asset.name.trim().split('.').pop()?.toLowerCase();
   const resolvedMediaType =

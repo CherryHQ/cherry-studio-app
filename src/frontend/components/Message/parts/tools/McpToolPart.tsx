@@ -82,7 +82,7 @@ export function McpToolPart({ part }: McpToolPartProps) {
   );
 }
 
-function McpOutputSection({
+export function McpOutputSection({
   normalized,
   source,
 }: {

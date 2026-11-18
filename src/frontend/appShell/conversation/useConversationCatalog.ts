@@ -10,12 +10,15 @@ import type {
 } from './contracts';
 import { useConversationSource, useConversationSourceState } from './ConversationSourceBoundary';
 
-function useCatalog<T>(
+export function useCatalog<T>(
   key: readonly string[],
   read: (cursor: CatalogCursor | undefined, signal: AbortSignal) => Promise<CatalogPage<T>>,
   enabled = true,
+  options: { refetchInterval?: number | false } = {},
 ) {
-  const kind = key[0] === 'selected-session' ? 'sessions' : key[0];
+  const kind = ['selected-session', 'session-children', 'session-path'].includes(key[0]!)
+    ? 'sessions'
+    : key[0];
   const source = useConversationSource();
   const { availability } = useConversationSourceState();
   const queryClient = useQueryClient();
@@ -30,6 +33,10 @@ function useCatalog<T>(
     availability.state === 'disabled' &&
     ['retired', 'needs-repair', 'not-authorized'].includes(availability.reason);
   const active = enabled && availability.state === 'enabled';
+  // Desktop-created conversations have no catalog notification; other catalogs own their policy.
+  const refetchInterval =
+    options.refetchInterval ??
+    (source.ref.kind === 'desktop' && key[0] === 'sessions' ? 15_000 : false);
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: undefined as CatalogCursor | undefined,
@@ -38,7 +45,8 @@ function useCatalog<T>(
     enabled: active,
     retry: false,
     gcTime: shared ? 5 * 60_000 : 0,
-    staleTime: shared ? 30_000 : 0,
+    staleTime: refetchInterval ? 0 : shared ? 30_000 : 0,
+    refetchInterval,
     refetchOnMount: 'always',
   });
   useEffect(() => {
@@ -84,14 +92,41 @@ function useCatalog<T>(
   };
 }
 
-export function useConversationAgents() {
+export function useConversationAgents(enabled = true) {
   const { catalog } = useConversationSource();
-  return useCatalog(['agents'], catalog.listAgents);
+  return useCatalog(['agents'], catalog.listAgents, enabled);
 }
-export function useConversationSessions(agent?: AgentRef) {
+export function useConversationSessions(
+  agent?: AgentRef,
+  enabled = true,
+  { includeBranches = false }: { includeBranches?: boolean } = {},
+) {
   const { catalog } = useConversationSource();
-  return useCatalog(['sessions', agent ?? ''], (cursor, signal) =>
-    catalog.listSessions({ agent }, cursor, signal),
+  return useCatalog(
+    ['sessions', agent ?? '', includeBranches ? 'all' : 'roots'],
+    (cursor, signal) => catalog.listSessions({ agent, includeBranches }, cursor, signal),
+    enabled,
+  );
+}
+export function useConversationSessionChildren(parent: ConversationRef, enabled = true) {
+  const { catalog } = useConversationSource();
+  return useCatalog(
+    ['session-children', parent.sessionId],
+    (cursor, signal) => catalog.listSessionChildren!(parent, cursor, signal),
+    enabled && Boolean(catalog.listSessionChildren),
+  );
+}
+export function useConversationSessionPath(sessionId?: string) {
+  const source = useConversationSource();
+  return useCatalog(
+    ['session-path', sessionId ?? ''],
+    async (_cursor, signal) => ({
+      items: await source.catalog.readSessionPath!(
+        { source: source.ref, sessionId: sessionId! },
+        signal,
+      ),
+    }),
+    Boolean(sessionId && source.catalog.readSessionPath),
   );
 }
 export function useConversationWorkspaces(agent?: AgentRef) {
@@ -111,12 +146,27 @@ const emptyStatus = {
   subscribe: () => () => {},
 };
 
-export function useConversationPreview(ref: ConversationRef) {
+export function useConversationPreview(
+  ref: ConversationRef,
+  { includeDescendants = false }: { includeDescendants?: boolean } = {},
+) {
   const source = useConversationSource();
-  const preview = useMemo(() => source.catalog.previewSession?.(ref) ?? {}, [source, ref]);
+  const preview = useMemo(
+    () => source.catalog.previewSession?.(ref, { includeDescendants }) ?? {},
+    [source, ref, includeDescendants],
+  );
   const state = preview.status ?? emptyStatus;
   const status = useSyncExternalStore(state.subscribe, state.getSnapshot, state.getSnapshot);
   return { ...preview, status };
+}
+
+export function useConversationAgentStatus(ref: AgentRef, enabled: boolean) {
+  const source = useConversationSource();
+  const state = useMemo(
+    () => (enabled ? source.catalog.previewAgent?.(ref) : undefined) ?? emptyStatus,
+    [source, ref, enabled],
+  );
+  return useSyncExternalStore(state.subscribe, state.getSnapshot, state.getSnapshot);
 }
 
 /** Reads metadata for the selected conversation only, never each visible row's history. */

@@ -3,7 +3,10 @@
 This directory owns frontend infrastructure that applies across the application rather than one
 page.
 
+- `account/` owns the Accounts Portal sign-in page, its `/login` route and the gate that returns an
+  enterprise profile with a rejected session to sign-in.
 - `appUpdate/` owns the package-update dialog, cold-start offer and entry state across channels.
+- [`branding/`](./branding/README.md) selects profile-aware in-app artwork.
 - `fileExport/` owns watermark preparation, system file sharing and photo saving.
 - `documentExport/` owns the source-neutral document export navigation handoff.
 - `header/` owns the app-wide main and route header adapters.
@@ -11,9 +14,12 @@ page.
 - [`conversation/`](./conversation/README.md) owns the shared conversation read model and catalog
   sources used by the drawer, Agent picker and chat. Its `remote/` boundary owns desktop Session
   observation and history; local chat observation belongs to `features/chat/runtime`.
-- `sidebar/` owns the drawer's navigation surface.
+- `sidebar/` owns the drawer's navigation surface and the shared grouped destination list.
+- `systemEntry/` retains incoming shares while the destination page chooses an Agent or conversation.
 - `pane/` owns the file pane beside chat in wide windows.
 - `search/` owns the cross-page request session that opens the transient search page.
+- [`ssh/`](./ssh/README.md) presents authentication questions directly to the user, outside Agent
+  inputs and transcript state; the SSH runtime owns the queue and cancellation.
 - `backgroundActivity/` owns platform Live Activity factories registered during bootstrap.
 - `startup/` owns the frontend startup cover, readiness reporting, and handoff lifecycle.
 - `recovery/` owns the full-screen surfaces shown when the app fails to start or to render:

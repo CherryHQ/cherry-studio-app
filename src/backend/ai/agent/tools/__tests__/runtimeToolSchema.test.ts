@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { toRuntimeInputSchema } from '../runtimeToolSchema';
+import { toRuntimeInputSchema, toolValidationError } from '../runtimeToolSchema';
 
 describe('toRuntimeInputSchema', () => {
   test('drops what only repeats a type and keeps real constraints', () => {
@@ -27,4 +27,17 @@ describe('toRuntimeInputSchema', () => {
       additionalProperties: false,
     });
   });
+});
+
+test('returns only bounded error paths and constraints for large invalid payloads', () => {
+  const parsed = z
+    .array(z.strictObject({ width: z.number().max(80) }))
+    .safeParse(Array.from({ length: 50 }, () => ({ width: 110, data: 'PRIVATE'.repeat(10_000) })));
+  if (parsed.success) throw new Error('Expected invalid input');
+  const error = toolValidationError(parsed.error);
+  expect(error.length).toBeLessThanOrEqual(2000);
+  expect(error).toContain('0.width');
+  expect(error).toContain('80');
+  expect(error).toContain('more errors omitted');
+  expect(error).not.toContain('PRIVATE');
 });

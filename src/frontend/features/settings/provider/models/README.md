@@ -30,6 +30,8 @@ configuration repair or an independent manual-add task with the same setup inten
 An empty directory also offers manual creation. Removal results report protected skipped models.
 The manual form and synchronization task mount independently under `detail/modelAdd/components/`;
 the synchronization preview lives with that task, while the legacy pull page only redirects.
+Synchronization rows retain the shared free-model badge and its accessible label, matching Desktop's
+pull preview; other model traits remain limited to management rows.
 
 Manual creation and editing offer text/image classification (embedding and rerank models cannot
 be used in chat, so they are only shown, never offered), reasoning and tool capabilities, image/audio/video inputs, group, streaming support metadata, and pricing. Existing list
@@ -57,6 +59,8 @@ manual creation: name, type and endpoint; reasoning, tool use and streaming swit
 and video input switches; token limits (not for drawing models); pricing; group and notes (notes on
 saved models only). Switches change in place. Names, limits, notes and pricing open a sheet that
 edits a copy and applies it on Save; a rejected value keeps the sheet open with its error.
+Under a policy that locks models, such as an organization's provider, the rows show the same
+values without opening anything and switches stay at full contrast.
 
 Model details keep their introduction (avatar, name, provider and purpose, model ID) and put these
 rows under it. `useSavedModelSettings` writes each change immediately: it is the former edit draft

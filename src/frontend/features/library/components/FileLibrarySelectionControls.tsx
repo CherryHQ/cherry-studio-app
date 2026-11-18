@@ -2,9 +2,11 @@ import { useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShareFiles } from '@/frontend/appShell/sharing';
 import { FileFolderPicker } from '@/frontend/components/FileFolderPicker';
 import {
   SelectionControls,
+  orderedSelection,
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
@@ -13,14 +15,23 @@ import { ErrorCode } from '@/shared/data/api/errors';
 import { useMoveLibraryFiles } from '../hooks/useMoveLibraryFiles';
 import { fileLibrarySelectionScope } from '../utils/constants';
 
+const EMPTY_FILE_ORDER: readonly string[] = [];
+
 /** Keep the selected entries frozen while the picker and its batch are active. */
-export function FileLibrarySelectionControls({ refresh }: { refresh: () => Promise<unknown> }) {
+export function FileLibrarySelectionControls({
+  refresh,
+  fileOrder = EMPTY_FILE_ORDER,
+}: {
+  refresh: () => Promise<unknown>;
+  fileOrder?: readonly string[];
+}) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const { selectedIds } = useSelectionState();
   const { exitEditing, selectIds } = useSelectionActions();
   const [movingIds, setMovingIds] = useState<readonly string[] | null>(null);
   const { move, progress } = useMoveLibraryFiles();
+  const sharing = useShareFiles({ allowConversion: false });
   const formatter = new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language);
 
   async function moveSelected(folderId: string | null) {
@@ -52,9 +63,14 @@ export function FileLibrarySelectionControls({ refresh }: { refresh: () => Promi
     <>
       <SelectionControls
         actions={[
+          {
+            id: 'share',
+            label: t('common.share'),
+            onPress: () => void sharing.share(orderedSelection(selectedIds, fileOrder)),
+          },
           { id: 'move', label: t('library.move'), onPress: () => setMovingIds([...selectedIds]) },
         ]}
-        isPending={progress !== null}
+        isPending={progress !== null || sharing.isSharing}
         scope={fileLibrarySelectionScope}
       />
       {movingIds ? (

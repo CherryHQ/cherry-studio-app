@@ -14,6 +14,7 @@ describe('JobHandlerRegistry', () => {
         },
         translate: (key: string) => key,
       } as never,
+      { acquire: jest.fn() } as never,
     );
 
     expect(registry.entries).toHaveLength(1);

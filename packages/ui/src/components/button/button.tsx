@@ -7,6 +7,7 @@ import {
   useContext,
 } from 'react';
 import {
+  Platform,
   Pressable,
   Text,
   type PressableProps,
@@ -29,7 +30,7 @@ export type ButtonVariant =
   | 'text'
   | 'tonal';
 export type ButtonShape = 'pill' | 'rounded';
-export type ButtonSize = 'default' | 'field' | 'inline' | 'lg' | 'sm' | 'xs';
+export type ButtonSize = 'default' | 'field' | 'footer' | 'inline' | 'lg' | 'sm' | 'xs';
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style'> & {
   children?: ReactNode;
@@ -68,6 +69,13 @@ const sizeStyles: Record<
     iconOnly: 'p-2.5',
     label: 'text-base',
     root: 'min-h-10 gap-2 px-4 py-2',
+    spinner: 'sm',
+  },
+  footer: {
+    icon: 'size-5',
+    iconOnly: 'p-3',
+    label: 'text-sm',
+    root: 'min-h-12 min-w-12 gap-2 px-4 py-3',
     spinner: 'sm',
   },
   inline: {
@@ -174,13 +182,18 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
   },
   ref,
 ) {
+  const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
   const isIconOnly = icon !== undefined && children == null;
   const labelStyle = useResolveClassNames(variantStyles[variant].label);
   const spinnerColor = typeof labelStyle.color === 'string' ? labelStyle.color : undefined;
   const iconElement = icon
     ? cloneElement(icon, {
-        className: cn(sizeStyles[size].icon, variantStyles[variant].label, icon.props.className),
+        className: cn(
+          sizeStyles[resolvedSize].icon,
+          variantStyles[variant].label,
+          icon.props.className,
+        ),
       })
     : null;
   const mergedAccessibilityState = {
@@ -192,7 +205,7 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
 
   return (
     <ButtonVariantContext.Provider value={variant}>
-      <ButtonSizeContext.Provider value={size}>
+      <ButtonSizeContext.Provider value={resolvedSize}>
         <Pressable
           {...props}
           accessibilityRole={accessibilityRole}
@@ -201,8 +214,8 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
             rootBaseStyles,
             variantStyles[variant].root,
             shapeStyles[shape],
-            sizeStyles[size].root,
-            isIconOnly ? sizeStyles[size].iconOnly : undefined,
+            sizeStyles[resolvedSize].root,
+            isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
           )}
           disabled={isDisabled}
           hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
@@ -213,7 +226,7 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
               accessibilityElementsHidden
               color={spinnerColor}
               importantForAccessibility="no"
-              size={sizeStyles[size].spinner}
+              size={sizeStyles[resolvedSize].spinner}
             />
           ) : null}
           {!loading ? iconElement : null}

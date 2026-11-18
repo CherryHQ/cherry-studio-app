@@ -9,7 +9,7 @@ import type {
   RuntimeToolRef,
   RuntimeToolResult,
 } from '@/backend/ai/agent';
-import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
 import type { PluginErrorReason } from '@/shared/contracts/plugins';
 

@@ -6,23 +6,19 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import {
-  useDesktopConnectionActions,
-  useDesktopConnections,
-} from '@/frontend/hooks/useDesktopConnections';
+  useDesktopProviderSync,
+  type DesktopProviderSyncPreview,
+} from '@/frontend/hooks/useDesktopProviderSync';
+import { readInternalHref } from '@/frontend/utils/internalHref';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type {
-  DesktopImportPreview,
-  DesktopImportUnavailableReason,
-} from '@/shared/data/api/schemas/desktopConnections';
-import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
+import type { DesktopImportUnavailableReason } from '@/shared/data/api/schemas/desktopConnections';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { describeCapabilities } from '../../describeCapabilities';
@@ -36,137 +32,68 @@ const UNAVAILABLE_KEYS = {
   'unsupported-endpoint': 'settings.provider.desktopSync.unavailable.unsupported-endpoint',
 } as const satisfies Record<DesktopImportUnavailableReason, string>;
 
-type LoadedPreview = {
-  connection: DesktopConnection;
-  preview: DesktopImportPreview;
-};
+type LoadedPreview = DesktopProviderSyncPreview;
 
-export default function DesktopProviderSyncScreen({
-  setupIntent,
-}: { setupIntent?: FirstUseSetupIntent } = {}) {
-  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+export default function DesktopProviderSyncScreen() {
+  const params = useLocalSearchParams<{
+    connectionId?: string | string[];
+    returnTo?: string | string[];
+  }>();
   const connectionId = getSingleRouteParam(params.connectionId);
+  const returnTo = readInternalHref(params.returnTo) ?? '/settings/provider';
 
   return (
     <DesktopProviderSync
       connectionId={connectionId}
-      key={`${setupIntent ?? 'settings'}:${connectionId ?? 'choose-device'}`}
-      setupIntent={setupIntent}
+      returnTo={returnTo}
+      key={connectionId ?? 'choose-device'}
     />
   );
 }
 
 function DesktopProviderSync({
   connectionId,
-  setupIntent,
+  returnTo,
 }: {
   connectionId?: string;
-  setupIntent?: FirstUseSetupIntent;
+  returnTo: string;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
+  const navigation = useNavigation();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const { connections, error, isLoading, refetch } = useDesktopConnections();
-  const { importSelected, isImporting, isPreviewing, preview } = useDesktopConnectionActions();
-  const availableConnections = useMemo(
-    () =>
-      connections.filter(
-        (connection) =>
-          connection.status === 'paired' &&
-          connection.capabilities.includes('configuration') &&
-          (!connectionId || connection.id === connectionId),
-      ),
-    [connectionId, connections],
-  );
+  const sync = useDesktopProviderSync(connectionId);
+  const {
+    availableConnections,
+    error,
+    isLoading,
+    refetch,
+    loadedPreview,
+    previewError,
+    selectedProviderIds,
+    isImporting,
+    isPreviewing,
+    loadPreview,
+    retryPreview,
+    toggleProvider,
+  } = sync;
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>();
-  const [loadedPreview, setLoadedPreview] = useState<LoadedPreview>();
-  const [previewError, setPreviewError] = useState<unknown>();
-  const [selectedProviderIds, setSelectedProviderIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const automaticPreviewConnectionId = useRef<string | undefined>(undefined);
-  const previewConnectionId = useRef<string | undefined>(undefined);
 
-  const loadPreview = useCallback(
-    async (connection: DesktopConnection) => {
-      previewConnectionId.current = connection.id;
-      setPreviewError(undefined);
-      try {
-        const nextPreview = await preview(connection.id);
-        if (!nextPreview) return;
-        setLoadedPreview({ connection, preview: nextPreview });
-        setSelectedProviderIds(
-          new Set(
-            nextPreview.providers
-              .filter((provider) => !provider.unavailableReason)
-              .map((provider) => provider.id),
-          ),
-        );
-      } catch (loadError) {
-        setPreviewError(loadError);
-      }
-    },
-    [preview],
-  );
-
-  useEffect(() => {
-    if (isLoading || availableConnections.length !== 1 || loadedPreview || previewError) {
-      return;
-    }
-
-    const [connection] = availableConnections;
-    if (!connection || automaticPreviewConnectionId.current === connection.id) {
-      return;
-    }
-    automaticPreviewConnectionId.current = connection.id;
-    void loadPreview(connection);
-    return () => {
-      automaticPreviewConnectionId.current = undefined;
-    };
-  }, [availableConnections, isLoading, loadPreview, loadedPreview, previewError]);
-
-  const openDeviceConnections = useCallback(() => {
-    router.replace(
-      setupIntent === 'chat' ? '/onboarding/device-connections' : '/settings/device-connections',
-    );
-  }, [router, setupIntent]);
-  const continueWithSelectedConnection = useCallback(() => {
+  const close = () => router.dismissTo(returnTo as Href);
+  const openDeviceConnections = () => router.push('/settings/device-connections');
+  const continueWithSelectedConnection = () => {
     const connection = availableConnections.find((item) => item.id === selectedConnectionId);
-    if (connection) {
-      void loadPreview(connection);
-    }
-  }, [availableConnections, loadPreview, selectedConnectionId]);
-  const retryPreview = useCallback(() => {
-    const connection = availableConnections.find((item) => item.id === previewConnectionId.current);
-    if (connection) {
-      void loadPreview(connection);
-    }
-  }, [availableConnections, loadPreview]);
-  const toggleProvider = useCallback((providerId: string) => {
-    setSelectedProviderIds((current) => {
-      const next = new Set(current);
-      if (next.has(providerId)) {
-        next.delete(providerId);
-      } else {
-        next.add(providerId);
-      }
-      return next;
-    });
-  }, []);
-  const applySync = useCallback(async () => {
+    if (connection) void loadPreview(connection);
+  };
+  const applySync = async () => {
     if (!loadedPreview || selectedProviderIds.size === 0) {
       return;
     }
 
     try {
-      const result = await importSelected(loadedPreview.connection.id, {
-        selections: [...selectedProviderIds].map((providerId) => ({
-          mode: 'provider-models',
-          providerId,
-        })),
-      });
-      if (!result) return;
+      const result = await sync.apply();
+      if (!result || !navigation.isFocused()) return;
       toast.show({
         label: t('settings.provider.desktopSync.success', {
           models: result.modelsAdded,
@@ -176,32 +103,20 @@ function DesktopProviderSync({
         }),
         variant: 'success',
       });
-      if (setupIntent === 'chat') {
-        router.replace({
-          params: { connectionId: loadedPreview.connection.id },
-          pathname: '/onboarding/model',
-        });
-      } else {
-        router.replace('/settings/provider');
-      }
+      close();
     } catch (syncError) {
       alert.show({ title: desktopConnectionErrorMessage(syncError, t) });
     }
-  }, [alert, importSelected, loadedPreview, router, selectedProviderIds, setupIntent, t, toast]);
+  };
 
   return (
     <SettingsScrollPage
       contentClassName="flex-grow gap-4"
       headerProps={{
-        onBack: () => router.replace(setupIntent === 'chat' ? '/onboarding' : '/settings/provider'),
+        onBack: close,
         title: t('settings.provider.desktopSync.title'),
       }}
     >
-      {setupIntent === 'chat' ? (
-        <Text className="px-3 text-xs text-muted-foreground">
-          {t('onboarding.step', { current: 2 })}
-        </Text>
-      ) : null}
       {isLoading ? (
         <ContentState.Loading title={t('settings.provider.desktopSync.loadingDevices')} />
       ) : error ? (
@@ -270,18 +185,6 @@ function DesktopProviderSync({
           </Button>
         </>
       )}
-      {setupIntent === 'chat' ? (
-        <View className="min-h-12 items-center justify-center">
-          <Button
-            disabled={isImporting}
-            onPress={() => router.replace('/onboarding')}
-            size="xs"
-            variant="ghost"
-          >
-            {t('onboarding.device.chooseAnotherWay')}
-          </Button>
-        </View>
-      ) : null}
     </SettingsScrollPage>
   );
 }

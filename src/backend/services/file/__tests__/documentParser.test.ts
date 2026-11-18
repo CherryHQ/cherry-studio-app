@@ -25,6 +25,31 @@ const signal = () => new AbortController().signal;
 beforeEach(() => jest.clearAllMocks());
 
 describe('shared document parser selection', () => {
+  test.each(['pdf', 'doc', 'docx', 'ppt', 'pptx'])(
+    'keeps the selected DeepSeek parser for %s through the controlled reader',
+    async (extension) => {
+      const port = {
+        ...reader(),
+        readDocumentText: jest.fn(async () => ({
+          text: 'Cloud document text',
+          truncated: false,
+          parser: 'deepseek-ocr' as const,
+        })),
+      };
+      const source = file(`file.${extension}`);
+      const abort = signal();
+      await expect(
+        readAttachmentContent(source, port, abort, undefined, 'deepseek'),
+      ).resolves.toMatchObject({
+        kind: 'text',
+        text: 'Cloud document text',
+        parser: 'deepseek-ocr',
+      });
+      expect(port.readDocumentText).toHaveBeenCalledWith(source, abort, 'deepseek');
+      expect(parseAnydocDocument).not.toHaveBeenCalled();
+    },
+  );
+
   test.each(['docx', 'pptx', 'xlsx', 'doc', 'ppt', 'xls', 'odt', 'ods', 'odp', 'rtf', 'epub'])(
     'passes %s to AnyDoc and retains the exact public output',
     async (extension) => {

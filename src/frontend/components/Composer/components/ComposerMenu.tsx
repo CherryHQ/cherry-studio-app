@@ -2,20 +2,15 @@ import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import { Composer } from '@cherrystudio/ui/components';
-import * as ImagePicker from 'expo-image-picker';
 import { type PropsWithChildren, type RefObject, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewInstance } from 'react-native';
 
-import { useCameraAccess } from '@/frontend/hooks/useCameraAccess';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
+import { useComposerPresentationActions } from '../context/ComposerProvider';
 import { useComposerDocumentPicker } from '../hooks/useComposerDocumentPicker';
-import {
-  createCameraAttachmentDraft,
-  createPhotoAttachmentDraft,
-} from '../utils/composerAttachments';
+import { useComposerMediaActions } from '../hooks/useComposerMediaActions';
 
 const logger = loggerService.withContext('ComposerMenu');
 
@@ -37,70 +32,24 @@ const logger = loggerService.withContext('ComposerMenu');
  * scrolling its contents when needed instead of dismissing the keyboard.
  */
 type ComposerMenuProps = PropsWithChildren<{
+  /** Hide camera/photos/files: the caller's current flow keeps no attachments. */
+  attachmentsDisabled?: boolean;
   media?: 'all' | 'images';
   onPickFiles?: () => void;
   triggerRef?: RefObject<ViewInstance | null>;
 }>;
 
 export function ComposerMenu({
+  attachmentsDisabled,
   children,
   media = 'all',
   onPickFiles,
   triggerRef,
 }: ComposerMenuProps) {
   const { t } = useTranslation();
-  const { addAttachments } = useComposerActions();
+  const { openCamera, openPhotoLibrary } = useComposerMediaActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const openDocumentPicker = useComposerDocumentPicker();
-  const requestCameraAccess = useCameraAccess();
-
-  const openCamera = useCallback(async () => {
-    await runInputReplacement(async () => {
-      if (!(await requestCameraAccess())) {
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-
-      if (result.canceled) {
-        return;
-      }
-
-      addAttachments(result.assets.map((asset) => createCameraAttachmentDraft({ uri: asset.uri })));
-    });
-  }, [addAttachments, requestCameraAccess, runInputReplacement]);
-  const openPhotoLibrary = useCallback(async () => {
-    await runInputReplacement(async () => {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsMultipleSelection: true,
-        mediaTypes: ['images'],
-        orderedSelection: true,
-        preferredAssetRepresentationMode:
-          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-        quality: 1,
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      addAttachments(
-        result.assets.map((asset) => {
-          const attachment = createPhotoAttachmentDraft({
-            fileName: asset.fileName ?? undefined,
-            id: asset.assetId ?? asset.uri,
-            uri: asset.uri,
-          });
-
-          return {
-            ...attachment,
-            mediaType: asset.mimeType ?? attachment.mediaType,
-            size: asset.fileSize ?? attachment.size,
-          };
-        }),
-      );
-    });
-  }, [addAttachments, runInputReplacement]);
   const openFiles = useCallback(async () => {
     if (onPickFiles) {
       await runInputReplacement(onPickFiles);
@@ -122,23 +71,27 @@ export function ComposerMenu({
       testID="composer-menu"
       triggerRef={triggerRef}
     >
-      <Composer.Menu.Item
-        icon={<CameraIcon className="size-5 text-foreground" />}
-        label={t('chat.media.camera')}
-        onPress={() => present('camera', openCamera)}
-      />
-      <Composer.Menu.Item
-        icon={<ImagesIcon className="size-5 text-foreground" />}
-        label={t('chat.media.photos')}
-        onPress={() => present('photo', openPhotoLibrary)}
-      />
-      {media === 'all' ? (
-        <Composer.Menu.Item
-          icon={<PaperclipIcon className="size-5 text-foreground" />}
-          label={t('chat.media.file')}
-          onPress={() => present('file', openFiles)}
-        />
-      ) : null}
+      {attachmentsDisabled ? null : (
+        <>
+          <Composer.Menu.Item
+            icon={<CameraIcon className="size-5 text-foreground" />}
+            label={t('chat.media.camera')}
+            onPress={() => present('camera', openCamera)}
+          />
+          <Composer.Menu.Item
+            icon={<ImagesIcon className="size-5 text-foreground" />}
+            label={t('chat.media.photos')}
+            onPress={() => present('photo', openPhotoLibrary)}
+          />
+          {media === 'all' ? (
+            <Composer.Menu.Item
+              icon={<PaperclipIcon className="size-5 text-foreground" />}
+              label={t('chat.media.file')}
+              onPress={() => present('file', openFiles)}
+            />
+          ) : null}
+        </>
+      )}
       {children ? (
         <>
           <View className="my-1 h-px bg-border-subtle" />

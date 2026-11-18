@@ -6,10 +6,11 @@ import {
 
 describe('model settings helpers', () => {
   test('maps picker targets to model preference keys', () => {
-    expect(MODEL_SETTING_KINDS).toEqual(['default', 'fast', 'translate', 'painting']);
+    expect(MODEL_SETTING_KINDS).toEqual(['default', 'fast', 'translate', 'painting', 'naming']);
     expect(MODEL_SETTING_PREFERENCE_KEYS).toEqual({
       default: 'agent.default_model_id',
       fast: 'feature.quick_assistant.model_id',
+      naming: 'agent.session_naming.model_id',
       painting: 'feature.paintings.default_model_id',
       translate: 'feature.translate.model_id',
     });

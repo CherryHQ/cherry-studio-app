@@ -10,6 +10,7 @@ import { loggerService } from '@logger';
 import { createMMKV } from 'react-native-mmkv';
 
 import { BaseService, Injectable } from '@/backend/core/lifecycle';
+import { profileScopedName } from '@/shared/data/activeProfile';
 import {
   type BackendCacheKey,
   type BackendPersistCacheKey,
@@ -30,7 +31,7 @@ interface BackendCacheStorage {
 }
 
 function createBackendCacheStorage(): BackendCacheStorage {
-  const mmkv = createMMKV({ id: 'cherry-backend-cache-persist' });
+  const mmkv = createMMKV({ id: profileScopedName('cherry-backend-cache-persist') });
   return {
     delete: (key) => {
       mmkv.remove(key);

@@ -6,10 +6,13 @@ working — the JS wrapper falls back to plain passthrough.
 
 A container view hosting a `UIDropInteraction` that admits only sessions with
 image items (`UTType.image`). On drop, each image item's in-place file
-representation is copied into `Caches/ImageDropTarget/` — original bytes,
-filename, and EXIF survive, so a dropped HEIC matches what the photo library
-picker path hands to the attachment pipeline. Dimensions are read from image
-metadata without decoding the bitmap. No photo-library permission is involved:
+representation is copied into `Caches/ImageDropTarget/` before the provider callback returns.
+Supported GIF/JPEG/PNG/WebP files keep their original bytes. Other still formats, including
+HEIC/HEIF/AVIF, are decoded with orientation correction at a maximum edge of 2048 pixels and
+encoded as JPEG. A shared serial queue and per-item autorelease pool bound concurrent transcode
+memory across views and drop sessions. Every provider load still starts during `performDrop`;
+only work on the local copies is queued. Dimensions are read from image metadata without decoding
+the full bitmap. No photo-library permission is involved:
 the system delivers the data as part of the user's explicit drag.
 
 Events:

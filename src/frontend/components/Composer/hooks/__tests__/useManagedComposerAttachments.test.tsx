@@ -172,6 +172,25 @@ describe('useManagedComposerAttachments', () => {
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
   });
 
+  it('appends managed attachments in order and deduplicates file entry IDs across additions', async () => {
+    const existing = readyAttachment('00000000-0000-7000-8000-000000000045', 'existing.pdf');
+    const first = readyAttachment('00000000-0000-7000-8000-000000000046', 'first.pdf');
+    const second = readyAttachment('00000000-0000-7000-8000-000000000047', 'second.pdf');
+    await renderHook([existing]);
+
+    await act(async () => {
+      snapshot?.addAttachments([
+        first,
+        { ...existing, id: 'reselected-existing' },
+        second,
+        { ...first, id: 'duplicate-first' },
+      ]);
+    });
+
+    expect(snapshot?.attachments).toEqual([existing, first, second]);
+    expect(mockCreateInternalEntry).not.toHaveBeenCalled();
+  });
+
   it('notifies draft subscribers after an image edit and rejects a stale source', async () => {
     const source = {
       ...readyAttachment('00000000-0000-7000-8000-000000000042', 'source.png'),
@@ -395,6 +414,64 @@ describe('useManagedComposerAttachments', () => {
       }),
     ]);
     expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('restarts the import of a tile restored as still importing via setAttachments', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(resolvedFile('00000000-0000-7000-8000-000000000041', 'slow.pdf'));
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('slow.pdf')]));
+    const stashed = [...(snapshot?.attachments ?? [])];
+    expect(stashed).toEqual([expect.objectContaining({ name: 'slow.pdf', status: 'importing' })]);
+
+    // The edit stash clears attachments and their import tokens, then restores them.
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.setAttachments(stashed));
+
+    // The orphaned original completion is ignored; the restarted import resolves the tile.
+    await act(async () => {
+      first.resolve(resolvedFile('00000000-0000-7000-8000-000000000040', 'slow.pdf'));
+      await first.promise;
+    });
+    await act(flushPromises);
+
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(2);
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000041',
+        status: 'ready',
+      }),
+    ]);
+  });
+
+  it('restarts the import of a tile re-added as still importing via addAttachments', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(resolvedFile('00000000-0000-7000-8000-000000000043', 'slow.pdf'));
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('slow.pdf')]));
+    const stashed = [...(snapshot?.attachments ?? [])];
+    expect(stashed).toEqual([expect.objectContaining({ name: 'slow.pdf', status: 'importing' })]);
+
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.addAttachments(stashed));
+
+    await act(async () => {
+      first.resolve(resolvedFile('00000000-0000-7000-8000-000000000042', 'slow.pdf'));
+      await first.promise;
+    });
+    await act(flushPromises);
+
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(2);
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000043',
+        status: 'ready',
+      }),
+    ]);
   });
 });
 

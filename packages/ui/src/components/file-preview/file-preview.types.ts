@@ -5,7 +5,7 @@ import type { ComponentType, ReactNode } from 'react';
  * `image` has a built-in renderer; the rest exist so a caller can name a file
  * precisely today and register a renderer for it later.
  */
-export type BuiltInFilePreviewKind = 'document' | 'image' | 'pdf' | 'text';
+export type BuiltInFilePreviewKind = 'audio' | 'document' | 'image' | 'pdf' | 'text';
 
 /**
  * An open set: product code registers renderers for kinds CherryUI has never
@@ -69,12 +69,14 @@ export type FilePreviewProps = {
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   onPress: () => void;
   size?: number;
+  /** Glyph size for the icon variant; defaults to 24 independently of the tile. */
+  iconSize?: number;
   variant?: FilePreviewVariant;
 };
 
 export type FileAttachmentPreviewProps = Omit<
   FilePreviewProps,
-  'badge' | 'file' | 'size' | 'variant'
+  'badge' | 'file' | 'size' | 'iconSize' | 'variant'
 > & {
   categoryLabel: string;
   disabled?: boolean;

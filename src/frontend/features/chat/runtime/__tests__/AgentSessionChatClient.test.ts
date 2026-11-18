@@ -7,6 +7,7 @@ import type {
   AgentTurnView,
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { AgentSessionChatClient, isAgentSessionBusy } from '../AgentSessionChatClient';
 
@@ -41,6 +42,44 @@ function snapshot(): AgentSessionSnapshot {
     streamingMessage: null,
   };
 }
+
+test('restores context usage and applies idle compaction updates without message events', async () => {
+  let listener!: (event: AgentEvent) => void;
+  const protocol = protocolWithObservation(
+    jest.fn(async (_sessionId: string, next: typeof listener) => {
+      listener = next;
+      return {
+        snapshot: {
+          ...snapshot(),
+          contextUsages: [{ messageId: 'answer', tokens: 90_000 }],
+        },
+        unsubscribe() {},
+      };
+    }),
+  );
+  const client = new AgentSessionChatClient(protocol);
+  const unsubscribe = client.subscribe('session-1', () => {});
+  try {
+    await client.observe('session-1');
+    expect(client.getState('session-1').contextUsages).toEqual([
+      { messageId: 'answer', tokens: 90_000 },
+    ]);
+    listener({
+      type: 'context.usage.updated',
+      usages: [{ messageId: 'answer', tokens: 12_000 }],
+    });
+    expect(client.getState('session-1').contextUsages).toEqual([
+      { messageId: 'answer', tokens: 12_000 },
+    ]);
+    expect(client.getState('session-1').activeTurn).toBeNull();
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    listener({ type: 'runtime.failed' });
+    expect(client.getState('session-1').contextUsages).toEqual([]);
+  } finally {
+    unsubscribe();
+    client.dispose();
+  }
+});
 
 test('observes a removable queue without inventing an active execution and reconciles placement races', async () => {
   const queued = {
@@ -123,6 +162,7 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelSubmission: jest.fn(),
+    steerQueuedInput: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<
       ReturnType<AgentProtocol['cancelQueuedInput']>,
@@ -131,9 +171,11 @@ function protocolWithObservation(
     clearWorkingStorage: jest.fn(),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
+    editUserMessage: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
     editMessage: jest.fn(),
+    readReasoning: jest.fn(),
     selectMessage: jest.fn(),
     getWorkingStorageSize: jest.fn(),
     getSessionStatus: jest.fn<
@@ -143,6 +185,11 @@ function protocolWithObservation(
     subscribeSessionStatus: jest.fn<
       ReturnType<AgentProtocol['subscribeSessionStatus']>,
       Parameters<AgentProtocol['subscribeSessionStatus']>
+    >(() => () => undefined),
+    getSessionStatusIds: jest.fn(() => []),
+    subscribeSessionStatuses: jest.fn<
+      ReturnType<AgentProtocol['subscribeSessionStatuses']>,
+      Parameters<AgentProtocol['subscribeSessionStatuses']>
     >(() => () => undefined),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
@@ -161,6 +208,36 @@ async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> 
 }
 
 describe('AgentSessionChatClient', () => {
+  test('hands the retry overlay to its reserved message before admission finishes', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const admission = deferred<void>();
+    protocol.retryMessage.mockImplementation(() => admission.promise);
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
+    await waitForCall(protocol.retryMessage);
+    const replacement: AgentMessageView = {
+      ...assistantMessage(),
+      turnId: 'retry-turn',
+      status: 'pending',
+      parts: [],
+    };
+    publish({ type: 'message.created', message: replacement });
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').liveMessages).toEqual([replacement]);
+    admission.resolve();
+    await retry;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    unsubscribe();
+  });
+
   test('keeps live text on runtime failure and clears the error after refreshing the observation', async () => {
     let publish!: (event: AgentEvent) => void;
     const protocol = protocolWithObservation(async (_id, listener) => {
@@ -378,6 +455,7 @@ describe('AgentSessionChatClient', () => {
     await client.observe('session-1');
     await client.refresh('session-1');
     expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').pendingRetryMessageId).toBe('assistant-1');
     await expect(
       client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
@@ -392,12 +470,13 @@ describe('AgentSessionChatClient', () => {
     rejectRetry(new Error('preflight failed'));
     await rejected;
     expect(client.getState('session-1').isSubmitting).toBe(false);
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
     expect(protocol.retryMessage).toHaveBeenCalledTimes(1);
     expect(protocol.submitMessage).not.toHaveBeenCalled();
     unsubscribe();
   });
 
-  test('keeps the original answer visible while a new branch is admitted, across a refresh', async () => {
+  test('keeps explicit model selection outside the retry overlay across a refresh', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -411,14 +490,59 @@ describe('AgentSessionChatClient', () => {
     );
     const client = new AgentSessionChatClient(protocol);
     const unsubscribe = client.subscribe('session-1', () => undefined);
-    const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
+    const retry = client.retryMessage({
+      sessionId: 'session-1',
+      messageId: 'assistant-1',
+      modelId: createUniqueModelId('provider', 'other'),
+    });
+
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    await client.refresh('session-1');
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    expect(client.getState('session-1').pendingRetryMessageId).toBeUndefined();
+
+    admitRetry();
+    await retry;
+    expect(client.getState('session-1').isSubmitting).toBe(false);
+    unsubscribe();
+  });
+
+  test('admits an edit while the original exchange stays visible', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    const changed: string[] = [];
+    let admitEdit!: () => void;
+    protocol.editUserMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          admitEdit = () => resolve();
+        }),
+    );
+    const client = new AgentSessionChatClient(protocol, {
+      onTranscriptChanged: (sessionId) => changed.push(sessionId),
+    });
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    const edit = client.editUserMessage({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
 
     expect(client.getState('session-1').isSubmitting).toBe(true);
     await client.refresh('session-1');
     expect(client.getState('session-1').isSubmitting).toBe(true);
 
-    admitRetry();
-    await retry;
+    changed.length = 0;
+    admitEdit();
+    await edit;
+    expect(protocol.editUserMessage).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      messageId: 'user-1',
+      text: 'Edited question',
+    });
+    expect(changed).toEqual(['session-1']);
     expect(client.getState('session-1').isSubmitting).toBe(false);
     unsubscribe();
   });
@@ -672,6 +796,40 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').liveMessages).toEqual([]);
     expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
     expect(onSessionChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('a branch deletion retains the question and other answers sharing its turn', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), id: 'another-answer' },
+    });
+    listener?.({
+      type: 'turn.updated',
+      turn: {
+        id: 'turn-1',
+        sessionId: 'session-1',
+        assistantMessageId: 'assistant-1',
+        status: 'completed',
+        error: null,
+        startedAt: '2026-09-22T00:00:00.000Z',
+        endedAt: '2026-09-22T00:00:01.000Z',
+      },
+    });
+    listener?.({ type: 'messages.deleted', messageIds: ['another-answer'] });
+    expect(client.getState('session-1').activeTurn?.assistantMessageId).toBe('assistant-1');
+    expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
   });
 
   test('cancels the active turn with the correlated session and turn ids', async () => {
@@ -1204,7 +1362,7 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
-  test('keeps a regenerated question live while its new answer runs', async () => {
+  test('keeps a regenerated question and its previous answer live while its new answer runs', async () => {
     let publish!: (event: AgentEvent) => void;
     const protocol = protocolWithObservation(async (_sessionId, listener) => {
       publish = listener;
@@ -1213,20 +1371,23 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
     await client.observe('session-1');
     const question = userMessage();
+    const previous = { ...assistantMessage(), parentId: question.id, status: 'success' as const };
     const answer = { ...assistantMessage(), id: 'assistant-2', parentId: question.id };
     publish({ type: 'message.created', message: question });
+    publish({ type: 'message.created', message: previous });
     publish({ type: 'message.created', message: answer });
 
     // A page read before the regeneration still holds the question with its earlier answer.
-    client.reconcilePersistedMessages('session-1', [question]);
+    client.reconcilePersistedMessages('session-1', [question, previous]);
     expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
       question.id,
+      previous.id,
       answer.id,
     ]);
 
     const settled = { ...answer, status: 'success' as const };
     publish({ type: 'message.finalized', message: settled });
-    client.reconcilePersistedMessages('session-1', [question, settled]);
+    client.reconcilePersistedMessages('session-1', [question, previous, settled]);
     expect(client.getState('session-1').liveMessages).toEqual([]);
     client.dispose();
   });

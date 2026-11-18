@@ -20,10 +20,13 @@ import {
   type SkillInspection,
   type SkillsErrorCode,
 } from '@/shared/contracts/skills';
-import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
+import {
+  cherryinSkillUrl,
+  marketplaceText,
+  parseCherryinSkillUrl,
+} from '@/shared/utils/cherryinSkills';
 
 import { SkillPage } from '../SkillPage';
-import { marketplaceText } from './skillDiscovery';
 
 const errorCode = (error: unknown): SkillsErrorCode =>
   isSkillsError(error) ? error.code : 'source-unreachable';
@@ -197,13 +200,6 @@ function CherryinSkill({ id }: { id: string }) {
             primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
           />
         )}
-      </SkillPage>
-    );
-
-  if (data.mobileSupport !== 'supported')
-    return (
-      <SkillPage headerProps={{ title: t('skills.candidate.title') }}>
-        <ContentState.Empty title={t('skills.notFound')} />
       </SkillPage>
     );
 

@@ -2,6 +2,7 @@ import { File } from 'expo-file-system';
 
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { FileOcrState } from '@/shared/contracts/file';
+import type { OcrEngine } from '@/shared/contracts/fileAttachment';
 import { MAX_PDF_ATTACHMENT_PAGES } from '@/shared/utils/fileAttachmentPolicy';
 import { DEFAULT_APP_LANGUAGE, type AppLanguage } from '@/shared/utils/languages';
 
@@ -27,6 +28,15 @@ const observers = new Map<string, Set<OcrObserver>>();
 // A running read_file call is observed by its call ID; a workspace path resolves its entry later.
 const links = new Map<string, string>();
 let appLanguage = (): AppLanguage => DEFAULT_APP_LANGUAGE;
+let ocrEngine = (): OcrEngine => 'local';
+
+export function configureFileOcrEngine(resolve: () => OcrEngine): void {
+  ocrEngine = resolve;
+}
+
+export function getFileOcrEngine(): OcrEngine {
+  return ocrEngine();
+}
 
 /** Composition supplies the shared language resolver; recognition languages follow it. */
 export function configureFileOcrLanguage(resolve: () => AppLanguage): void {

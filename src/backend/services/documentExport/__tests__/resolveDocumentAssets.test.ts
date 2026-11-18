@@ -60,6 +60,20 @@ test('zero image dimensions still produce a retryable placeholder', async () => 
   expect(cache.size).toBe(0);
 });
 
+test('the same managed image at different transcript positions is read once and cached by source', async () => {
+  const read = jest.fn(async () => png());
+  const cache = new Map();
+  const sources = new Map([
+    ['answer:first', { kind: 'managed-file' as const, fileEntryId: 'image' }],
+    ['answer:again', { kind: 'managed-file' as const, fileEntryId: 'image' }],
+  ]);
+  const result = await resolveDocumentAssets(sources, cache, read, new AbortController().signal);
+  expect(result.images.size).toBe(2);
+  expect(read).toHaveBeenCalledTimes(1);
+  await resolveDocumentAssets(sources, cache, read, new AbortController().signal);
+  expect(read).toHaveBeenCalledTimes(1);
+});
+
 test.each([null, String(5 * 1024 * 1024)])(
   'remote streams read beyond the former byte cap (content-length: %s)',
   async (contentLength) => {
@@ -117,4 +131,29 @@ test('cancelling a remote read releases its stream without caching a partial ima
   expect(read).toHaveBeenCalledTimes(1);
   expect(cancel).toHaveBeenCalledTimes(1);
   expect(cache.size).toBe(0);
+});
+
+test('prepared image bytes render without any file or network reader and reject active formats', async () => {
+  const read = jest.fn();
+  const networkCalls = jest.mocked(fetch).mock.calls.length;
+  const result = await resolveDocumentAssets(
+    new Map([
+      [
+        'remote-snapshot',
+        { kind: 'prepared-image' as const, base64: btoa(String.fromCharCode(...png())) },
+      ],
+      [
+        'unsafe',
+        { kind: 'prepared-image' as const, base64: btoa('<svg onload="alert(1)"></svg>') },
+      ],
+    ]),
+    new Map(),
+    read,
+    new AbortController().signal,
+  );
+  expect(result.images.get('remote-snapshot')).toMatch(/^data:image\/png;base64,/);
+  expect(result.images.has('unsafe')).toBe(false);
+  expect(result.issues).toHaveLength(1);
+  expect(read).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledTimes(networkCalls);
 });

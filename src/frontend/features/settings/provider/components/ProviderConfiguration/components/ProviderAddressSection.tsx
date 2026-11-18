@@ -4,6 +4,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import type {
+  ProviderAddress,
+  ProviderConfigurationValue,
+} from '@/frontend/types/providerConfiguration';
 import type { EndpointType } from '@/shared/data/types/model';
 import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
@@ -15,7 +19,6 @@ import {
 import { getProviderModelEndpointLabelKey } from '../../../models/utils/providerModelAdd';
 import { ProviderRequestUrl } from '../../ProviderRequestUrl';
 import { ProviderValueSheet } from '../../ProviderValueSheet';
-import type { ProviderAddress, ProviderConfigurationValue } from '../types';
 
 const CUSTOM_ENDPOINT_LABEL_KEYS = {
   'anthropic-messages': 'settings.provider.apiService.endpointAnthropic',

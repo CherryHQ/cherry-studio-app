@@ -4,6 +4,16 @@ import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { createProvidersModule, type ProvidersModuleDependencies } from '../createProvidersModule';
 
+let mockDeviceRegion: string | null = 'CN';
+
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageTag: 'zh-CN', regionCode: mockDeviceRegion }],
+}));
+
+beforeEach(() => {
+  mockDeviceRegion = 'CN';
+});
+
 function subject() {
   let provider = {
     id: 'custom',
@@ -14,6 +24,7 @@ function subject() {
     endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
   } as Provider;
   const dependencies: ProvidersModuleDependencies = {
+    getCountry: jest.fn(async () => 'US'),
     accounts: {
       getStatus: jest.fn(),
       begin: jest.fn(),
@@ -55,6 +66,110 @@ function subject() {
 }
 
 describe('explicit provider activation', () => {
+  it.each([
+    { country: 'CN', deviceRegion: 'US', expected: ['deepseek'] },
+    { country: 'US', deviceRegion: 'CN', expected: ['deepseek', 'openai'] },
+    { country: null, deviceRegion: 'CN', expected: ['deepseek'] },
+    { country: null, deviceRegion: 'US', expected: ['deepseek', 'openai'] },
+    { country: null, deviceRegion: null, expected: ['deepseek'] },
+  ])(
+    'selects discovery from IP $country and device region $deviceRegion',
+    async ({ country, deviceRegion, expected }) => {
+      const { dependencies } = subject();
+      dependencies.getCountry = async () => country;
+      mockDeviceRegion = deviceRegion;
+      dependencies.catalog.list = () =>
+        [
+          { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
+          { id: 'openai', name: 'OpenAI', availableInEditions: ['global'] },
+        ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+      jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+      const entries = await createProvidersModule(dependencies).listCatalog();
+      expect(entries.map((entry) => entry.id)).toEqual(expected);
+      expect(entries.every((entry) => entry.isRecommended)).toBe(true);
+    },
+  );
+
+  it('keeps overseas discovery and imports available when detection leaves the country unknown', async () => {
+    mockDeviceRegion = 'US';
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => null;
+    const loader = new MobileRegistryLoader();
+    dependencies.catalog = {
+      isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
+      list: () => loader.loadProviders(),
+    };
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const backend = createProvidersModule(dependencies);
+    const ids = (await backend.listCatalog()).map((entry) => entry.id);
+    expect(ids).toEqual(expect.arrayContaining(['openai', 'anthropic', 'gemini']));
+
+    for (const id of ['openai', 'anthropic', 'gemini']) {
+      const installed = { id, name: id, isEnabled: false } as Provider;
+      jest.mocked(dependencies.providers.create).mockResolvedValueOnce(installed);
+      await expect(backend.importPreset(id)).resolves.toBe(installed);
+    }
+  });
+
+  it('exposes and imports international presets after detection changes to an overseas VPN exit', async () => {
+    const { dependencies } = subject();
+    jest.mocked(dependencies.getCountry).mockResolvedValueOnce('CN').mockResolvedValue('US');
+    dependencies.catalog.list = () =>
+      [
+        { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
+        { id: 'openai', name: 'OpenAI', availableInEditions: ['global'] },
+      ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const installed = { id: 'openai', name: 'OpenAI', isEnabled: false } as Provider;
+    jest.mocked(dependencies.providers.create).mockResolvedValue(installed);
+    const backend = createProvidersModule(dependencies);
+
+    expect((await backend.listCatalog()).map((entry) => entry.id)).toEqual(['deepseek']);
+    expect((await backend.listCatalog()).map((entry) => entry.id)).toEqual(['deepseek', 'openai']);
+    await expect(backend.importPreset('openai')).resolves.toBe(installed);
+  });
+
+  it('admits Kimi Code in China while retaining regional hiding for global-only presets', async () => {
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => 'CN';
+    const loader = new MobileRegistryLoader();
+    dependencies.catalog = {
+      isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
+      list: () => loader.loadProviders(),
+    };
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const ids = (await createProvidersModule(dependencies).listCatalog()).map((entry) => entry.id);
+    expect(ids).toContain('kimi-coding');
+    expect(ids).not.toContain('openai');
+    expect(ids).not.toContain('github');
+  });
+
+  it('keeps an installed international provider usable after moving to China', async () => {
+    const { dependencies } = subject();
+    dependencies.getCountry = async () => 'CN';
+    const installed = { id: 'openai', name: 'Saved OpenAI', isEnabled: true } as Provider;
+    jest.mocked(dependencies.providers.find).mockResolvedValue(installed);
+    const backend = createProvidersModule(dependencies);
+    await expect(backend.importPreset('openai')).resolves.toBe(installed);
+    expect(dependencies.providers.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['CN', null])(
+    'rejects a new international preset for country %s without writing provider data',
+    async (country) => {
+      const { dependencies } = subject();
+      dependencies.getCountry = async () => country;
+      dependencies.catalog.list = () =>
+        [{ id: 'openai', name: 'OpenAI', availableInEditions: ['global'] }] as ReturnType<
+          ProvidersModuleDependencies['catalog']['list']
+        >;
+      await expect(createProvidersModule(dependencies).importPreset('openai')).rejects.toThrow(
+        'unavailable',
+      );
+      expect(dependencies.providers.create).not.toHaveBeenCalled();
+    },
+  );
+
   it('marks only enabled providers as enabled in the catalog', async () => {
     const { dependencies } = subject();
     dependencies.catalog.list = () =>

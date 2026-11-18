@@ -59,7 +59,7 @@ function Probe() {
   return null;
 }
 
-function register() {
+function createCatalog() {
   const remove = jest.fn(
     async (_sessionId: string): Promise<OperationOutcome<void>> => ({
       state: 'applied',
@@ -90,13 +90,46 @@ function register() {
     agentId: 'agent',
     title: sessionId,
   }));
+  return { source, sessions, remove };
+}
+
+function register() {
+  const { source, sessions, remove } = createCatalog();
+  let unregister!: () => void;
   act(() => {
-    selection.registerList('sessions', source, sessions);
+    unregister = selection.registerList('sessions', source, sessions);
     selection.enter();
     selection.toggleAll();
     selection.requestDelete();
   });
-  return { remove, confirm: mockConfirm.mock.calls.at(-1)![0].onConfirm as () => void };
+  return {
+    source,
+    sessions,
+    remove,
+    unregister,
+    confirm: mockConfirm.mock.calls.at(-1)![0].onConfirm as () => void,
+  };
+}
+
+function registerFamily() {
+  const { source, sessions, remove } = createCatalog();
+  const root = { ...sessions[0]!, hasChildren: true };
+  const child = { ...sessions[1]!, forkedFromSessionId: root.ref.sessionId };
+  let unregister!: () => void;
+  act(() => {
+    selection.registerList('sessions', source, [root]);
+    unregister = selection.registerList('children', source, [child]);
+    selection.enter();
+    selection.toggleAll();
+    selection.requestDelete();
+  });
+  return {
+    source,
+    child,
+    remove,
+    unregister,
+    confirm: mockConfirm.mock.calls.at(-1)![0].onConfirm as () => void,
+  };
 }
 
 function renderProvider() {
@@ -138,8 +171,92 @@ test('deletes serially, then unlocks with deleted rows hidden', async () => {
   });
 });
 
+test('drops selection entries when the catalog stops showing a session', async () => {
+  const { source, sessions, remove } = createCatalog();
+  let unregister!: () => void;
+  act(() => {
+    unregister = selection.registerList('sessions', source, sessions);
+    selection.enter();
+    selection.toggleAll();
+  });
+  act(() => {
+    selection.registerList('sessions', source, sessions.slice(0, 1));
+    unregister();
+  });
+
+  const first = JSON.stringify(['local', 'first']);
+  const second = JSON.stringify(['local', 'second']);
+  expect(selection.shownIds()).toEqual([first]);
+  expect(selection.selectedEntries().map((entry) => entry.ref.sessionId)).toEqual(['first']);
+  expect(selection.getSnapshot().selectedIds).toEqual(new Set([first]));
+
+  act(() => {
+    selection.toggle(second);
+    selection.enter(second);
+  });
+  expect(selection.getSnapshot().selectedIds).toEqual(new Set([first]));
+
+  await act(async () => {
+    selection.requestDelete();
+    mockConfirm.mock.calls.at(-1)![0].onConfirm();
+  });
+  expect(remove.mock.calls).toEqual([['first']]);
+});
+
+test('drops the selection when its list unregisters', () => {
+  const { source, sessions, remove } = createCatalog();
+  let unregister!: () => void;
+  act(() => {
+    unregister = selection.registerList('sessions', source, sessions);
+    selection.enter();
+    selection.toggleAll();
+  });
+  act(() => unregister());
+
+  expect(selection.shownIds()).toEqual([]);
+  expect(selection.selectedEntries()).toEqual([]);
+  expect(selection.getSnapshot().selectedIds.size).toBe(0);
+
+  act(() => {
+    selection.enter(JSON.stringify(['local', 'first']));
+    selection.requestDelete();
+  });
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
+});
+
+test.each(['update', 'unregister'] as const)(
+  'preserves selections still owned by another list after %s',
+  (change) => {
+    const { source, sessions } = createCatalog();
+    let unregister!: () => void;
+    let unregisterShared!: () => void;
+    act(() => {
+      unregister = selection.registerList('sessions', source, sessions);
+      unregisterShared = selection.registerList('shared', source, sessions.slice(1));
+      selection.enter();
+      selection.toggleAll();
+    });
+    act(() => {
+      if (change === 'update') selection.registerList('sessions', source, sessions.slice(0, 1));
+      else unregister();
+    });
+
+    const remaining = change === 'update' ? ['first', 'second'] : ['second'];
+    expect(selection.selectedEntries().map((entry) => entry.ref.sessionId)).toEqual(remaining);
+    expect(selection.getSnapshot().selectedIds).toEqual(
+      new Set(remaining.map((id) => JSON.stringify(['local', id]))),
+    );
+
+    act(() => unregisterShared());
+    expect(selection.selectedEntries().map((entry) => entry.ref.sessionId)).toEqual(
+      change === 'update' ? ['first'] : [],
+    );
+  },
+);
+
 test('keeps failed deletions selected for retry', async () => {
-  const { remove, confirm } = register();
+  const { source, sessions, remove, confirm } = register();
   remove.mockRejectedValueOnce(new Error('Could not stop the running turn'));
   await act(async () => confirm());
 
@@ -152,6 +269,104 @@ test('keeps failed deletions selected for retry', async () => {
     label: 'session.selection.deleteFailed',
     variant: 'danger',
   });
+
+  act(() => {
+    selection.registerList('sessions', source, sessions);
+  });
+  expect(selection.getSnapshot().selectedIds).toEqual(state.selectedIds);
+  expect(selection.shownIds()).toEqual([JSON.stringify(['local', 'first'])]);
+});
+
+test('does not restore vanished selections when a pending deletion fails', async () => {
+  const deletion = Promise.withResolvers<OperationOutcome<void>>();
+  const { remove, confirm, unregister } = register();
+  remove.mockImplementationOnce(() => deletion.promise);
+
+  act(confirm);
+  act(() => unregister());
+  await act(async () => {
+    deletion.reject(new Error('Could not stop the running turn'));
+  });
+
+  expect(selection.getSnapshot()).toMatchObject({ isDeleting: false, isSelecting: false });
+  expect(selection.getSnapshot().selectedIds.size).toBe(0);
+  expect(selection.selectedEntries()).toEqual([]);
+  expect(selection.shownIds()).toEqual([]);
+});
+
+test.each(['before', 'after'] as const)(
+  'cancelling %s a child deletion fails prevents its selection returning after promotion',
+  async (timing) => {
+    const deletion = Promise.withResolvers<OperationOutcome<void>>();
+    const { source, child, remove, unregister, confirm } = registerFamily();
+    remove.mockResolvedValueOnce({ state: 'applied', value: undefined });
+    remove.mockImplementationOnce(() => deletion.promise);
+    await act(async () => confirm());
+    act(unregister);
+
+    if (timing === 'before') act(selection.exit);
+    await act(async () => deletion.reject(new Error('Could not stop the running turn')));
+    if (timing === 'after') act(selection.exit);
+
+    act(() => {
+      selection.registerList('sessions', source, [{ ...child, forkedFromSessionId: null }]);
+    });
+    expect(selection.getSnapshot()).toMatchObject({ isDeleting: false, isSelecting: false });
+    expect(selection.getSnapshot().selectedIds.size).toBe(0);
+    expect(selection.selectedEntries()).toEqual([]);
+    expect(selection.shownIds()).toEqual([JSON.stringify([source.scope, child.ref.sessionId])]);
+  },
+);
+
+test('preserves a promoted retry selection that appears during another deletion', async () => {
+  const deletion = Promise.withResolvers<OperationOutcome<void>>();
+  const { source, child, remove, unregister, confirm } = registerFamily();
+  remove.mockResolvedValueOnce({ state: 'applied', value: undefined });
+  remove.mockImplementationOnce(() => deletion.promise);
+  await act(async () => confirm());
+  act(unregister);
+  await act(async () => deletion.reject(new Error('Could not stop the running turn')));
+
+  const other = { ...child, ref: { ...child.ref, sessionId: 'other' }, forkedFromSessionId: null };
+  const otherDeletion = Promise.withResolvers<OperationOutcome<void>>();
+  remove.mockImplementationOnce(() => otherDeletion.promise);
+  act(() => {
+    selection.registerList('sessions', source, [other]);
+    selection.toggle(JSON.stringify([source.scope, other.ref.sessionId]));
+    selection.requestDelete();
+    mockConfirm.mock.calls.at(-1)![0].onConfirm();
+  });
+  act(() => {
+    selection.registerList('sessions', source, [other, { ...child, forkedFromSessionId: null }]);
+  });
+  await act(async () => otherDeletion.resolve({ state: 'applied', value: undefined }));
+
+  expect(remove.mock.calls).toEqual([['first'], ['second'], ['other']]);
+  expect(selection.getSnapshot()).toMatchObject({ isDeleting: false, isSelecting: true });
+  expect(selection.getSnapshot().selectedIds).toEqual(
+    new Set([JSON.stringify([source.scope, child.ref.sessionId])]),
+  );
+  expect(selection.selectedEntries().map((entry) => entry.ref.sessionId)).toEqual(['second']);
+});
+
+test('ends selection when a promoted retry succeeds before its root catalog refreshes', async () => {
+  const { source, child, remove, confirm } = registerFamily();
+  remove.mockResolvedValueOnce({ state: 'applied', value: undefined });
+  remove.mockRejectedValueOnce(new Error('Could not stop the running turn'));
+  await act(async () => confirm());
+
+  await act(async () => {
+    selection.requestDelete();
+    mockConfirm.mock.calls.at(-1)![0].onConfirm();
+  });
+  act(() => {
+    selection.registerList('sessions', source, [{ ...child, forkedFromSessionId: null }]);
+  });
+
+  expect(remove.mock.calls).toEqual([['first'], ['second'], ['second']]);
+  expect(selection.getSnapshot()).toMatchObject({ isDeleting: false, isSelecting: false });
+  expect(selection.getSnapshot().selectedIds.size).toBe(0);
+  expect(selection.shownIds()).toEqual([]);
 });
 
 test('keeps a selection beside a permanent sidebar and ends it once the sidebar is hidden', () => {

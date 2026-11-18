@@ -8,10 +8,9 @@ export function StartupRouteReadyReporter({ children }: PropsWithChildren) {
   const segments = useSegments();
   const reportReadyAfterFrames = useStartupReadyAfterFrames();
   const hasLayoutRef = useRef(false);
-  // Every route reports readiness from its root layout, including the default
-  // chat route: its cold-start empty state has no async content, so the first
-  // laid-out frame already is the final UI.
-  const shouldReportRouteReady = segments.length > 0;
+  // Keep the UU callback placeholder covered until the validated target replaces it.
+  // Ordinary routes, including an empty chat, are ready after their root layout.
+  const shouldReportRouteReady = segments.length > 0 && segments[0] !== 'uu-remote';
 
   useEffect(() => {
     if (hasLayoutRef.current && shouldReportRouteReady) {

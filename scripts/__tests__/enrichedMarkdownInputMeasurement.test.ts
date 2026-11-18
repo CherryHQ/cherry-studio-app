@@ -49,3 +49,17 @@ describe('Enriched Markdown input measurement patch', () => {
     expect(measurement).not.toMatch(/dispatch_sync|dispatch_get_main_queue|UITextView/);
   });
 });
+
+// Delivery guard for the Google Play input ANR fix; timing and IME behavior need Android acceptance.
+describe('Android input line breaking patch', () => {
+  test('keeps live editing and height measurement on simple line breaking', () => {
+    const patch = readFileSync('patches/react-native-enriched-markdown@1.1.1.patch', 'utf8');
+    for (const file of ['EnrichedMarkdownTextInputView.kt', 'layout/InputMeasurementStore.kt']) {
+      const section = patch
+        .split(`+++ b/android/src/main/java/com/swmansion/enriched/markdown/input/${file}\n`)[1]
+        ?.split('diff --git ')[0];
+      expect(section).toMatch(/^-.*BREAK_STRATEGY_HIGH_QUALITY.*$/m);
+      expect(section).toMatch(/^\+.*BREAK_STRATEGY_SIMPLE.*$/m);
+    }
+  });
+});

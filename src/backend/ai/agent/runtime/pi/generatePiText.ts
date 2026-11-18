@@ -1,9 +1,9 @@
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
+import { raceAbort } from '@/backend/utils/raceAbort';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { raceAbort } from '../raceAbort';
 import type { RuntimeTextGenerator } from '../types';
 import { measuredStream } from './piDurableModels';
 import { protectPiDurableStream } from './piDurableStream';
@@ -38,7 +38,14 @@ export async function generatePiText(
   try {
     signal.throwIfAborted();
     const resolved = await raceAbort(
-      dependencies.resolveModel(request.model, request.options, requestId, undefined, signal),
+      dependencies.resolveModel(
+        request.model,
+        request.options,
+        requestId,
+        undefined,
+        signal,
+        'general',
+      ),
       signal,
     );
     secrets = resolved.redactionValues;

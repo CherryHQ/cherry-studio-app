@@ -28,7 +28,6 @@ export type {
 export { getCurrentLocation } from './location';
 export { getHealthSummary, healthMetricNames, listHealthWorkouts } from './health';
 export type { HealthMetricName } from './health';
-export { isDeviceRegionMainlandChina } from './region';
 export { MAX_QUERY_RANGE_DAYS, NATIVE_TOOL_TIMEOUT_MS } from './utils';
 
 export {

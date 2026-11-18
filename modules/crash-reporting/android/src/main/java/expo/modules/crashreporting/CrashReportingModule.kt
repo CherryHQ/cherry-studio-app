@@ -77,9 +77,14 @@ internal object CrashReportingState {
       applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 &&
       metadata?.getBoolean("CherryCrashReportingEnabled") == true
     if (configured) {
-      if (version != consentVersion || (!canCapture && active)) {
+      if (version != consentVersion) {
         consentVersion = version
         revoke()
+      } else if (!canCapture && active) {
+        // A configuration error is not a user opt-out; retain consent and previously captured reports.
+        active = false
+        initialization = "inactive"
+        Sentry.close()
       } else if (canCapture && granted && !active) {
         start()
       }

@@ -215,6 +215,7 @@ function allocateOrderKeys(
 
     throw new Error(
       `Cannot allocate order keys in "${getTableName(table)}" between ${String(before)} and ${String(after)}: ${reason}`,
+      { cause: error },
     );
   }
 }

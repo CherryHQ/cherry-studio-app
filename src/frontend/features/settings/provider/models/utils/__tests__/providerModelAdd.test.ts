@@ -3,12 +3,7 @@ import { ENDPOINT_TYPE, MODALITY } from '@cherrystudio/provider-registry';
 import { MODEL_CAPABILITY } from '@/shared/data/types/model';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import {
-  isImageGenerationModel,
-  isSpeechToTextModel,
-  isTextGenerationModel,
-  isTextToSpeechModel,
-} from '@/shared/utils/modelPurpose';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import {
   buildProviderModelAddInput,
@@ -284,63 +279,6 @@ describe('provider model add helpers', () => {
     expect(result.errors).toEqual({});
     expect(result.input).not.toHaveProperty('contextWindow');
     expect(result.input).not.toHaveProperty('maxOutputTokens');
-  });
-
-  test.each(['speech', 'transcription'] as const)(
-    'creates a custom %s model with the required modalities and no hidden token limits',
-    (type) => {
-      const form = changeProviderModelPrimaryType(
-        createInitialProviderModelAddFormState(),
-        type,
-        openaiProvider,
-      );
-      const result = build({ ...form, modelId: 'custom-voice', contextWindow: 'invalid' });
-      expect(result.errors).toEqual({});
-      expect(result.input).toMatchObject({
-        capabilities: [
-          type === 'speech' ? MODEL_CAPABILITY.AUDIO_GENERATION : MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
-        ],
-        inputModalities: [type === 'speech' ? MODALITY.TEXT : MODALITY.AUDIO],
-        outputModalities: [type === 'speech' ? MODALITY.AUDIO : MODALITY.TEXT],
-      });
-      expect(result.input).not.toHaveProperty('contextWindow');
-      const saved: Model = {
-        ...model('custom-voice'),
-        capabilities: result.input?.capabilities ?? [],
-        endpointTypes: result.input?.endpointTypes,
-        inputModalities: result.input?.inputModalities,
-        outputModalities: result.input?.outputModalities,
-      };
-      expect(type === 'speech' ? isTextToSpeechModel(saved) : isSpeechToTextModel(saved)).toBe(
-        true,
-      );
-      expect(isTextGenerationModel(saved)).toBe(false);
-    },
-  );
-
-  test('switches an audio-only recognition catalog model back to text without retaining STT classification', () => {
-    const baseline = catalogModel('transcribe', {
-      capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
-      inputModalities: [MODALITY.AUDIO],
-      outputModalities: [MODALITY.TEXT],
-    });
-    const form = changeProviderModelPrimaryType(
-      createInitialProviderModelAddFormState(),
-      'text',
-      openaiProvider,
-      baseline,
-    );
-    const result = build({ ...form, modelId: baseline.modelId }, baseline);
-    expect(result.errors).toEqual({});
-    const saved: Model = {
-      ...baseline,
-      capabilities: result.input?.capabilities ?? baseline.capabilities,
-      endpointTypes: result.input?.endpointTypes ?? baseline.endpointTypes,
-      inputModalities: result.input?.inputModalities ?? baseline.inputModalities,
-      outputModalities: result.input?.outputModalities ?? baseline.outputModalities,
-    };
-    expect(isSpeechToTextModel(saved)).toBe(false);
-    expect(isTextGenerationModel(saved)).toBe(true);
   });
 
   test('includes app fallbacks when only one token limit is entered', () => {

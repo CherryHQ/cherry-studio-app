@@ -20,9 +20,22 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
   `src/frontend/appShell/navigation`, so they hold it only while their route is focused. A route
   pushed over the layer keeps the layer mounted underneath, and Android calls the latest listener
   first, so an unfocused listener would take back from the visible route.
-- Device pairing, desktop provider import, and first-use setup replace their entry page and each
-  subsequent step. Completion replaces the current step with its destination; cancellation and
-  retry use explicit replacement targets. Completed steps do not belong in back history.
+- Opening a detail page or a temporary workflow preserves its source page with push navigation.
+  Settings sign-in, device pairing and desktop provider import follow this rule. The sidebar's
+  first-level destination switching retains its separate no-history contract below.
+- A workflow owns its continuation, cancellation and completion targets. Scan → pairing and retry
+  replace the transient step, retaining the page that opened the flow. Cancellation pops to that
+  retained page, with an explicit target for cold entries. Completion dismisses to an existing
+  destination, or replaces the transient step when the destination is absent. A missing repair
+  connection returns to the device list instead of its removed detail.
+- First-use admission and its committed setup steps keep replacement navigation: completed setup
+  must not reappear in ordinary back history. Back within its preparation stages follows the
+  persisted onboarding progress rather than replaying completed native routes.
+- Login carries an internal `returnTo`. Its browser and callback paths close the same login flow;
+  callbacks never choose a universal homepage. Account expiry opens the same real login route,
+  while an opaque account gate hides restricted content without unmounting the root navigator or
+  its drafts. Same-profile reauthentication returns to the original page. Changing profiles still
+  reloads JavaScript and never restores another profile's navigation intent.
 - The target priority and cancellation rules between system gestures, scrolling, app-defined pan,
   long press, tap, and text selection are in
   [Interaction And Gesture Arbitration](./interaction-and-gesture-arbitration.md) (`Status: design`).
@@ -72,9 +85,10 @@ Before enabling it, verify:
 - `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
-- The root Stack hosts the `(drawer)` group (header hidden) plus window-level `home`, `onboarding`,
-  `search`, `files/[fileEntryId]`, `chat-share`, and `document-export` flows, which cover the whole
-  window, sidebar included.
+- The root Stack hosts the `(drawer)` group (header hidden) plus window-level `login`,
+  `auth/callback`, `home`, `onboarding`, `search`, `files/[fileEntryId]`, and the transparent `share`
+  modal, which cover the whole
+  window, sidebar included. Sharing uses the common BottomSheet above its source screen.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`). Its only
   scene, `(main)`, is the content region: a Stack whose initial route is `(chat)`, with `agents`,
   `drawings`, `paintings`, `plugins`, `skills`, `library`, `settings`, and `trash` above it.
@@ -87,8 +101,9 @@ Before enabling it, verify:
   `(chat)` is the initial route. In a wide window the sidebar stays beside every page; see
   [Window Sizes](#window-sizes).
 - Settings is a normal content-region card with its own nested Stack, not a modal or form sheet. Its
-  management and detail pages use back navigation. Its one-time pairing and import workflows use
-  replacement navigation, including opening desktop chat from device details.
+  management and detail pages use back navigation. Pairing and import preserve their source pages;
+  only their transient steps replace each other. Opening desktop chat from device details switches
+  the chat destination rather than creating another detail level.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
   provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes

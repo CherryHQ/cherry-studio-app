@@ -1,8 +1,13 @@
 import { Tabs as HeroTabs } from 'heroui-native/tabs';
 
+import { TabsContent } from './tabs-content';
 import type { TabsProps } from './tabs.types';
 
-export function Tabs<TValue extends string>({
+export function Tabs<TValue extends string>(props: TabsProps<TValue>) {
+  return props.variant ? <TabsContent {...props} /> : <PlatformTabs {...props} />;
+}
+
+function PlatformTabs<TValue extends string>({
   accessibilityLabel,
   items,
   layout = 'fill',

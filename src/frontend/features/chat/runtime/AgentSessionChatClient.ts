@@ -1,8 +1,9 @@
 import type {
   AgentApprovalView,
+  AgentEditUserMessageInput,
+  AgentEvent,
   AgentPendingQuestion,
   AgentUserAnswers,
-  AgentEvent,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -23,6 +24,8 @@ export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
   isSubmitting?: boolean;
+  /** Unfinished answer displayed as pending until its replacement is reserved. */
+  pendingRetryMessageId?: string;
   activeTurn: AgentTurnView | null;
   queuedInputs: readonly AgentQueuedInput[];
   enteringUserMessageId?: string;
@@ -34,6 +37,7 @@ export type AgentSessionChatState = {
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
   contextStatus?: AgentSessionSnapshot['contextStatus'];
+  contextUsages?: AgentSessionSnapshot['contextUsages'];
   status: AgentSessionChatStatus;
 };
 
@@ -319,17 +323,17 @@ export class AgentSessionChatClient {
   }
 
   /**
-   * The removal reaches live state through the Session's own `turn.deleted`
+   * The removal reaches live state through the Session's own deletion
    * event, so a caller that is already observing needs no separate reconcile.
    */
-  async deleteTurn(sessionId: string, turnId: string): Promise<void> {
-    await this.protocol.deleteTurn({ sessionId, turnId });
+  async deleteTurn(sessionId: string, turnId: string, messageId?: string): Promise<void> {
+    await this.protocol.deleteTurn({ sessionId, turnId, ...(messageId ? { messageId } : {}) });
   }
 
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    const submission = this.beginSubmission(entry, true);
+    const submission = this.beginSubmission(entry, { allowQueue: true });
     try {
       await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
@@ -348,41 +352,66 @@ export class AgentSessionChatClient {
   }
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
-    const entry = this.getEntry(input.sessionId);
-    // The original answer stays visible while the engine prepares its new branch.
-    const submission = this.beginSubmission(entry);
+    // A retry without a model replaces the displayed answer; explicit model selection adds
+    // another answer and keeps its source visible. A returned Session also needs invalidation.
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.retryMessage(input), {
+      pendingRetryMessageId: input.modelId === undefined ? input.messageId : undefined,
+      applied: (session) => {
+        if (session) {
+          this.options.onSessionChanged?.(session.id);
+          this.options.onTranscriptChanged?.(session.id);
+        }
+      },
+    });
+  }
+
+  async editUserMessage(input: AgentEditUserMessageInput): Promise<void> {
+    // Editing adds a sibling question; it never hides or rewrites the original exchange.
+    return this.runTranscriptSubmission(input.sessionId, () =>
+      this.protocol.editUserMessage(input),
+    );
+  }
+
+  /** One idle-only admission/observation lifecycle, with operation semantics kept by callers. */
+  private async runTranscriptSubmission<Result>(
+    sessionId: string,
+    submit: () => Promise<Result>,
+    options: { pendingRetryMessageId?: string; applied?: (result: Result) => void } = {},
+  ): Promise<Result> {
+    const entry = this.getEntry(sessionId);
+    const submission = this.beginSubmission(entry, {
+      pendingRetryMessageId: options.pendingRetryMessageId,
+    });
     try {
-      await this.observe(input.sessionId);
+      await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
-      const session = await this.protocol.retryMessage(input);
-      this.options.onSessionChanged?.(input.sessionId);
-      this.options.onTranscriptChanged?.(input.sessionId);
-      if (session) {
-        this.options.onSessionChanged?.(session.id);
-        this.options.onTranscriptChanged?.(session.id);
-      }
-      return session;
+      const result = await submit();
+      this.options.onSessionChanged?.(sessionId);
+      this.options.onTranscriptChanged?.(sessionId);
+      options.applied?.(result);
+      return result;
     } finally {
-      // Admission never replaces the source answer, whether a branch was created or rejected.
+      // Preparation never mutates a source row; retire only its pending display overlay.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
+        pendingRetryMessageId: undefined,
       });
-      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+      if (entry.listeners.size === 0 && this.sessions.get(sessionId) === entry) {
         this.stopObservation(entry);
-        this.sessions.delete(input.sessionId);
+        this.sessions.delete(sessionId);
       }
     }
   }
 
   private beginSubmission(
     entry: SessionEntry,
-    allowQueue = false,
+    options: { allowQueue?: boolean; pendingRetryMessageId?: string } = {},
   ): NonNullable<SessionEntry['submission']> {
     if (
       entry.state.isSubmitting ||
-      (!allowQueue &&
+      (!options.allowQueue &&
         entry.state.activeTurn &&
         !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
     ) {
@@ -392,8 +421,12 @@ export class AgentSessionChatClient {
         retryable: false,
       });
     }
-    this.updateState(entry, { ...entry.state, isSubmitting: true });
     entry.submission = { isCancelled: false };
+    this.updateState(entry, {
+      ...entry.state,
+      isSubmitting: true,
+      pendingRetryMessageId: options.pendingRetryMessageId,
+    });
     return entry.submission;
   }
 
@@ -413,8 +446,8 @@ export class AgentSessionChatClient {
     }
 
     const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
-    // Observation supplies a question while an answer to it runs: settled history omits it then,
-    // even when a page read just before a regeneration still holds it.
+    // Keep the question and its answer versions while any answer runs: settled history omits
+    // their whole turn, even when a page read just before regeneration still holds those rows.
     const answeredLive = new Set(
       [...entry.liveMessages.values()].flatMap((message) =>
         message.role === 'assistant' && message.parentId && !isTerminalMessage(message)
@@ -428,6 +461,7 @@ export class AgentSessionChatClient {
       if (
         persistedMessage &&
         !answeredLive.has(messageId) &&
+        !(liveMessage.parentId && answeredLive.has(liveMessage.parentId)) &&
         persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
@@ -483,6 +517,10 @@ export class AgentSessionChatClient {
     const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
     await this.refresh(sessionId);
     return result;
+  }
+
+  async steerQueuedInput(sessionId: string, turnId: string) {
+    return this.protocol.steerQueuedInput({ sessionId, turnId });
   }
 
   async respondQuestion(
@@ -571,6 +609,12 @@ export class AgentSessionChatClient {
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
+      pendingRetryMessageId:
+        snapshot.streamingMessage &&
+        snapshot.streamingMessage.id === entry.state.pendingRetryMessageId &&
+        !isTerminalMessage(snapshot.streamingMessage)
+          ? undefined
+          : entry.state.pendingRetryMessageId,
       activeTurn: snapshot.activeTurn,
       queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage
@@ -581,6 +625,7 @@ export class AgentSessionChatClient {
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
       contextStatus: snapshot.contextStatus,
+      contextUsages: snapshot.contextUsages,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -595,10 +640,14 @@ export class AgentSessionChatClient {
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;
+      case 'context.usage.updated':
+        this.updateState(entry, { ...entry.state, contextUsages: event.usages });
+        return;
       case 'runtime.failed':
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,
+          contextUsages: [],
           pendingApprovals: [],
           pendingQuestion: null,
           status: 'error',
@@ -655,6 +704,10 @@ export class AgentSessionChatClient {
         entry.liveMessages.set(event.message.id, event.message);
         this.installToolInputPreviews(event.message);
         this.commitLiveMessages(entry, {
+          ...(event.message.id === entry.state.pendingRetryMessageId &&
+          !isTerminalMessage(event.message)
+            ? { pendingRetryMessageId: undefined }
+            : {}),
           ...(event.message.role === 'user' ? { enteringUserMessageId: event.message.id } : {}),
         });
         if (event.message.role === 'user') {
@@ -723,14 +776,20 @@ export class AgentSessionChatClient {
         )
           this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
-      case 'turn.deleted': {
+      case 'turn.deleted':
+      case 'messages.deleted': {
         for (const messageId of event.messageIds) {
           entry.liveMessages.delete(messageId);
           this.toolInputPreviews.clearMessage(messageId);
         }
         // The last turn this generation ran may be the one that just left the
         // transcript; keeping its view would report a turn nothing can show.
-        const isActiveTurnDeleted = entry.state.activeTurn?.id === event.turnId;
+        const isActiveTurnDeleted = Boolean(
+          entry.state.activeTurn &&
+          (event.type === 'turn.deleted'
+            ? entry.state.activeTurn.id === event.turnId
+            : event.messageIds.includes(entry.state.activeTurn.assistantMessageId)),
+        );
         this.commitLiveMessages(entry, {
           ...(isActiveTurnDeleted
             ? { activeTurn: null, pendingApprovals: [], pendingQuestion: null }

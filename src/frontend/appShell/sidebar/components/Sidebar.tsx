@@ -10,7 +10,6 @@ import {
   chatRouteParams,
   useChatSource,
   useConversationTarget,
-  useStartNewChat,
 } from '@/frontend/appShell/navigation/chat';
 import { useFilePane } from '@/frontend/appShell/pane/state';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
@@ -18,6 +17,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
+import { useCloseDrawerForExternalNavigation } from '../hooks/useCloseDrawerForExternalNavigation';
 import {
   sessionSearchResultHref,
   useSessionSearch,
@@ -49,18 +49,21 @@ function getContentStack(navigation: SidebarNavigation) {
 /** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
 export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) {
   const router = useRouter();
-  const { source, remoteTarget, viewMode, startRemoteChat, localChat } = useChatSource();
+  const { source, remoteTarget, viewMode, localChat } = useChatSource();
   // Destinations act for the chat beside the sidebar, or the one a page currently covers.
   const agentId = localChat?.kind === 'draft' ? localChat.agentId : undefined;
   const sessionId = localChat?.kind === 'session' ? localChat.sessionId : undefined;
   // Serialized so the actions below change only when the chat does.
   const sourceChat = localChat ? JSON.stringify(chatRouteParams(localChat)) : undefined;
-  const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
   const canDock = useCanDockSidebar();
   const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
+  const prepareExternalNavigation = useCloseDrawerForExternalNavigation(
+    navigation,
+    column.kind === 'permanent',
+  );
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -97,6 +100,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
+      prepareExternalNavigation,
       returnToChat,
       openSearch:
         source === 'local'
@@ -120,19 +124,21 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       openPaintings: () => openDestination('/drawings'),
       openPlugins: () => openDestination({ pathname: '/plugins', params: { agentId, sessionId } }),
       openSkills: () => openDestination({ pathname: '/skills', params: { agentId, sessionId } }),
-      openSettings: () => openDestination('/settings'),
-      startNewChat: () => {
-        navigation.closeDrawer();
-        returnToChat();
-        if (source === 'remote') startRemoteChat();
-        else void startNewChat();
+      openScheduledTasks: () => {
+        if (remoteTarget.connectionId)
+          openDestination({
+            pathname: '/scheduled-tasks/[connectionId]',
+            params: { connectionId: remoteTarget.connectionId },
+          });
       },
+      openSettings: () => openDestination('/settings'),
     }),
     [
       agentId,
       sessionId,
       sourceChat,
       navigation,
+      prepareExternalNavigation,
       canDock,
       openDestination,
       openSessionSearch,
@@ -142,8 +148,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       SearchPanel,
       setContent,
       source,
-      startRemoteChat,
-      startNewChat,
+      remoteTarget.connectionId,
     ],
   );
 

@@ -18,7 +18,7 @@ export function appUpdateQueryOptions(appUpdate: AppUpdateModule) {
   });
 }
 
-/** A published version's notes never change, so one lookup per release and language suffices. */
+/** Notes may be corrected after publication, so refresh them after six hours. */
 export function appUpdateReleaseNotesQueryOptions(
   appUpdate: AppUpdateModule,
   release: AppUpdateRelease,
@@ -27,7 +27,7 @@ export function appUpdateReleaseNotesQueryOptions(
   return queryOptions({
     queryKey: queryKeys.appUpdate.notes(release.id, language),
     queryFn: () => appUpdate.releaseNotes(release, language),
-    staleTime: Infinity,
+    staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,
   });
 }

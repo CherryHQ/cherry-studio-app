@@ -36,4 +36,32 @@ describe('Enriched Markdown atomic link patch', () => {
       '+      if (existing.range.location < NSMaxRange(newRange.range) && existingEnd > newRange.range.location)',
     );
   });
+
+  test('delivers link-label escaping in both native serializers', () => {
+    const android = filePatch(
+      'android/src/main/java/com/swmansion/enriched/markdown/input/formatting/MarkdownSerializer.kt',
+    );
+    expect(android).toContain('+    var isInsideLink = false');
+    expect(android).toContain(
+      String.raw`+          markdown.append(fragment.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]"))`,
+    );
+    expect(android).toContain(
+      '+      if (event.type == StyleType.LINK) isInsideLink = event.isOpening',
+    );
+
+    const ios = filePatch('ios/input/ENRMMarkdownSerializer.mm');
+    expect(ios).toContain('+  BOOL isInsideLink = NO;');
+    expect(ios).toContain(
+      String.raw`+        fragment = [fragment stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];`,
+    );
+    expect(ios).toContain(
+      String.raw`+        fragment = [fragment stringByReplacingOccurrencesOfString:@"[" withString:@"\\["];`,
+    );
+    expect(ios).toContain(
+      String.raw`+        fragment = [fragment stringByReplacingOccurrencesOfString:@"]" withString:@"\\]"];`,
+    );
+    expect(ios).toContain(
+      '+    if (event.type == ENRMInputStyleTypeLink) isInsideLink = event.isOpening;',
+    );
+  });
 });

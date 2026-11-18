@@ -14,6 +14,7 @@ import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 import type { CompactionPolicy } from '@earendil-works/pi-durable';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
@@ -165,11 +166,22 @@ export function createPiDurableModels(
             search: configured?.search === 'server' && native?.search ? 'server' : 'none',
             fetch: configured?.fetch === 'server' && native?.fetch ? 'server' : 'none',
           };
+          const safetyDialect = resolved.deepseekSafetyCheck
+            ? resolved.model.api === 'anthropic-messages'
+              ? 'deepseek-messages'
+              : resolved.model.api === 'openai-responses'
+                ? 'deepseek-responses'
+                : resolved.model.api === 'openai-completions'
+                  ? 'deepseek-chat'
+                  : undefined
+            : undefined;
+          const observationDialect = safetyDialect ?? native?.dialect;
           const web =
-            native?.dialect && (routes.search === 'server' || routes.fetch === 'server')
+            observationDialect &&
+            (routes.search === 'server' || routes.fetch === 'server' || safetyDialect)
               ? new PiWebResponse(
                   newCitePrefix(() => globalThis.crypto.randomUUID()),
-                  native.dialect,
+                  observationDialect,
                 )
               : undefined;
           const createStream = async (continuedContent?: JsonObject[]) => {
@@ -191,7 +203,9 @@ export function createPiDurableModels(
               onPayload: async (payload: unknown, wire: Model<Api>) => {
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
-                const sent = (await onPayload?.(payload, wire)) ?? payload;
+                let sent = (await onPayload?.(payload, wire)) ?? payload;
+                if (resolved.deepseekSafetyCheck)
+                  sent = { ...(sent as Record<string, unknown>), safety_check: { level: 'high' } };
                 // Replay follows routing: a deferred server tool returns only beside its definition.
                 const prepared = applyPiWebReplay(
                   applyPiWebTools(sent, native?.dialect, routes),
@@ -314,14 +328,17 @@ async function* webStream(
           break;
         }
         const complete = previous ? withPiContinuationUsage(message, event.message.usage) : message;
-        yield { ...event, message: web?.settle(complete) ?? complete };
+        const settled = web?.settle(complete) ?? complete;
+        if (web?.contentFiltered) yield { type: 'error', reason: 'error', error: settled };
+        else yield { ...event, message: settled };
         return;
       }
       if (event.type === 'error') {
         const combined = joinResponses(previous, event.error);
+        const checked = web?.contentFiltered ? web.settle(combined) : combined;
         yield {
           ...event,
-          error: previous ? withPiContinuationUsage(combined, event.error.usage) : combined,
+          error: previous ? withPiContinuationUsage(checked, event.error.usage) : checked,
         };
         return;
       }
@@ -389,6 +406,7 @@ async function* tracedStream(
           event.type === 'done' ? 'ok' : message.stopReason === 'aborted' ? 'cancelled' : 'error',
           {
             'gen_ai.response.finish_reason': message.stopReason,
+            'gen_ai.response.raw_finish_reason': readKnownAiFinishReason(message.rawStopReason),
             ...piModelTerminalErrorAttributes(message),
           },
         );

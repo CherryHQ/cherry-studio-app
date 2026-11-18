@@ -11,9 +11,11 @@ export const BACKUP_LIMITS = {
 
 const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const CountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+// v2 was an experimental paired-database format and must remain unsupported.
+export const BACKUP_FORMAT_VERSION = 3;
 export const BackupManifestSchema = z.strictObject({
   product: z.literal('cherry-mobile'),
-  formatVersion: z.literal(1),
+  formatVersion: z.union([z.literal(1), z.literal(BACKUP_FORMAT_VERSION)]),
   id: z.string().uuid(),
   createdAt: z.string().datetime(),
   appVersion: z.string().min(1).max(100),
@@ -39,6 +41,7 @@ export function assertBackupPath(path: string): void {
   const allowed =
     path === 'manifest.json' ||
     path === 'database/cherry.db' ||
+    path === 'ssh/profiles.json' ||
     /^skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/[0-9a-f]{64}\/(?:[^/\\\x00-\x1f]+\/)*[^/\\\x00-\x1f]+$/.test(
       path,
     ) ||
@@ -59,7 +62,9 @@ export function validateManifest(value: unknown): BackupManifest {
     typeof value === 'object' &&
     value !== null &&
     (('product' in value && value.product !== 'cherry-mobile') ||
-      ('formatVersion' in value && value.formatVersion !== 1))
+      ('formatVersion' in value &&
+        value.formatVersion !== 1 &&
+        value.formatVersion !== BACKUP_FORMAT_VERSION))
   ) {
     throw new BackupError('incompatible');
   }

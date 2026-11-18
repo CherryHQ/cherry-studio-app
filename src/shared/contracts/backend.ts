@@ -1,7 +1,11 @@
+import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
+import type { AgentTemplatesModule } from './agentTemplates';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
+import type { CloudModule } from './cloud';
+import type { DeepseekImportModule } from './deepseekImport';
 import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
@@ -15,18 +19,27 @@ import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { RemoteAgentModule } from './remoteAgent';
 import type { SkillsModule } from './skills';
+import type { SshModule } from './ssh';
 import type { SystemEntryModule } from './systemEntry';
 import type { TranslationModule } from './translation';
+import type { UuRemoteModule } from './uuRemote';
+import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly account: AccountModule;
+  readonly cloud: CloudModule;
+  readonly ssh: SshModule;
   readonly backgroundExecution: BackgroundExecutionModule;
   readonly appUpdate: AppUpdateModule;
   readonly backup: BackupModule;
+  readonly deepseekImport: DeepseekImportModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
+  readonly agentTemplates: AgentTemplatesModule;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
+  readonly uuRemote: UuRemoteModule;
   readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;
@@ -40,6 +53,7 @@ export interface Backend {
   readonly skills: SkillsModule;
   readonly translation: TranslationModule;
   readonly webSearch: WebSearchModule;
+  readonly voice: VoiceModule;
 }
 
 export type BackendModuleKey = keyof Backend;

@@ -6,8 +6,9 @@ This shared component family connects an artifact preview surface to its viewer 
 
 - `ArtifactImageViewer` renders a measured, pannable, pinch- and double-tap-zoomable image inside
   the transition target. Callers supply its accessible label and observe zoom state when navigation
-  gestures must be disabled. Calling surfaces place their own controls, such as CherryUI's
-  `ImagePreviewToolbar`, beside the viewer rather than over its gestures.
+  gestures must be disabled. Calling surfaces place their actions outside the image gestures:
+  the file viewer uses a header menu and `FileViewerFooter`, while painting previews own their
+  painting-specific controls.
 - `ArtifactImagePages` displays ordered image files with known dimensions at reading width.
   It shares the existing pinch/pan interaction, keeps bounded pages at original decode resolution,
   and disables the surrounding list during zoom. Large single images use a viewport-sized browser
@@ -24,8 +25,9 @@ of the iOS accessibility tree.
 
 Painting and drawing pages own artifact descriptors, file resolution, viewer routes, chrome, and
 capability actions such as edit, download, or retry. This family owns the transition and zoom contracts shared by those pages.
-Application-level sharing and save-to-Photos actions belong to `appShell/fileExport`. Image load
-failures stay inside the viewer, which shows its own retry state.
+Application-level sharing is coordinated by `appShell/sharing`; file delivery and save-to-Photos
+actions belong to `appShell/fileExport`. Image load failures stay inside the viewer, which shows
+its own retry state.
 
 ## Organization
 

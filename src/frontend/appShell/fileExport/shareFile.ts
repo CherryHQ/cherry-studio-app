@@ -1,10 +1,14 @@
+import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
-import type { ResolvedFile } from '@/shared/contracts/file';
-import type { ExportWatermark } from '@/shared/contracts/fileExport';
+import type { FilePreviewSource } from '@/shared/contracts/file';
+import type { ExportFile, ExportWatermark } from '@/shared/contracts/fileExport';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { prepareFileExport } from './prepareImageExport';
+
+export type ShareableFile = FilePreviewSource | ExportFile;
 
 export class FileSharingError extends Error {
   readonly code = 'unavailable';
@@ -16,10 +20,10 @@ export class FileSharingError extends Error {
 
 /** Exported bytes are disposable copies; the managed files remain authoritative. */
 export async function shareFiles(
-  source: readonly ResolvedFile[] | (() => Promise<readonly ResolvedFile[]>),
+  source: readonly ShareableFile[] | (() => Promise<readonly ShareableFile[]>),
   options: { watermark: ExportWatermark; signal?: AbortSignal },
 ): Promise<void> {
-  const { signal, watermark } = options;
+  const { signal } = options;
   signal?.throwIfAborted();
   const available = await Sharing.isAvailableAsync();
   signal?.throwIfAborted();
@@ -33,27 +37,10 @@ export async function shareFiles(
   let filename = '';
   for (const file of files) {
     signal?.throwIfAborted();
-    const prepared = await prepareFileExport(file, watermark);
-    try {
-      signal?.throwIfAborted();
-      // One path per revision and treatment, so sharing again replaces rather than adds a copy.
-      const directory = new Directory(
-        Paths.cache,
-        'FileExports',
-        file.entry.id,
-        prepared.uri === file.uri
-          ? String(file.entry.updatedAt)
-          : `${file.entry.updatedAt}-${hashWatermark(watermark)}`,
-      );
-      const exported = new File(directory, prepared.filename);
-      directory.create({ idempotent: true, intermediates: true });
-      if (!exported.exists) await new File(prepared.uri).copy(exported, { overwrite: true });
-      urls.push(exported.uri);
-      mediaTypes.push(prepared.mediaType.split(';')[0].trim().toLowerCase());
-      filename = prepared.filename;
-    } finally {
-      prepared.release();
-    }
+    const prepared = await prepareSharedFile(file, options);
+    urls.push(prepared.uri);
+    mediaTypes.push(prepared.mediaType.split(';')[0].trim().toLowerCase());
+    filename = prepared.filename;
   }
   signal?.throwIfAborted();
 
@@ -77,10 +64,76 @@ export async function shareFiles(
 }
 
 export async function shareFile(
-  source: ResolvedFile | (() => Promise<ResolvedFile>),
+  source: ShareableFile | (() => Promise<ShareableFile>),
   options: { watermark: ExportWatermark; signal?: AbortSignal },
 ): Promise<void> {
   return shareFiles(async () => [typeof source === 'function' ? await source() : source], options);
+}
+
+/** Share UTF-8 data without creating a library entry or applying a presentation watermark. */
+export async function shareTextFile(
+  source: () => Promise<{ text: string; filename: string; mediaType: string }>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const directory = new Directory(Paths.cache, 'TextExports', randomUUID());
+  try {
+    await shareFile(
+      async () => {
+        const content = await source();
+        signal?.throwIfAborted();
+        directory.create({ intermediates: true });
+        const file = new File(directory, content.filename);
+        file.writeSync(content.text);
+        return { uri: file.uri, filename: content.filename, mediaType: content.mediaType };
+      },
+      { watermark: { kind: 'none' }, signal },
+    );
+  } finally {
+    try {
+      if (directory.exists) directory.delete();
+    } catch {
+      // Delivery owns its stable OS-cache copy; temporary cleanup must not hide the outcome.
+    }
+  }
+}
+
+/** Cache a complete file before an external reader or Photos can outlive its source session. */
+export async function prepareSharedFile(
+  file: ShareableFile,
+  options: { watermark: ExportWatermark; signal?: AbortSignal },
+): Promise<ExportFile> {
+  const { signal, watermark } = options;
+  signal?.throwIfAborted();
+  const managed = 'entry' in file;
+  const prepared = managed ? await prepareFileExport(file, watermark) : { ...file, release() {} };
+  try {
+    signal?.throwIfAborted();
+    // One path per revision and treatment, so sharing again replaces rather than adds a copy.
+    const directory = new Directory(
+      Paths.cache,
+      'FileExports',
+      managed ? file.entry.id : `generated-${sha256HexOfText(file.uri)}`,
+      prepared.uri === file.uri
+        ? managed
+          ? String(file.entry.updatedAt)
+          : 'temporary'
+        : `${managed ? file.entry.updatedAt : 'temporary'}-${hashWatermark(watermark)}`,
+    );
+    const exported = new File(directory, prepared.filename);
+    directory.create({ idempotent: true, intermediates: true });
+    if (!exported.exists) {
+      try {
+        await new File(prepared.uri).copy(exported, { overwrite: true });
+      } catch (error) {
+        if (exported.exists) exported.delete();
+        throw error;
+      }
+    }
+    signal?.throwIfAborted();
+    return { uri: exported.uri, filename: prepared.filename, mediaType: prepared.mediaType };
+  } finally {
+    prepared.release();
+  }
 }
 
 /** FNV-1a over the resolved treatment; it names a cache path and is not a security boundary. */

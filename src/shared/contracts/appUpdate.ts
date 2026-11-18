@@ -1,4 +1,5 @@
-export type AppUpdateChannel = 'apk' | 'google-play' | 'app-store';
+export type DomesticAppStore = 'honor' | 'xiaomi' | 'oppo' | 'vivo';
+export type AppUpdateChannel = 'apk' | 'google-play' | 'app-store' | 'domestic-stores';
 
 export type AppUpdateRelease = {
   /** Channel-qualified release identity; also used to throttle reminders. */
@@ -11,6 +12,12 @@ export type AppUpdateRelease = {
   /** Google Play exposes a build number, not a public version name. */
   | { channel: 'google-play'; latestVersion: null; storeUrl: string }
   | { channel: 'app-store'; latestVersion: string; storeUrl: string }
+  | {
+      channel: 'domestic-stores';
+      store: DomesticAppStore;
+      latestVersion: string | null;
+      notesSource: 'gitcode' | 'store';
+    }
 );
 
 export type ApkUpdateRelease = Extract<AppUpdateRelease, { channel: 'apk' }>;

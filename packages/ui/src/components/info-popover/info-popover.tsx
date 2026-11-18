@@ -1,12 +1,26 @@
-import { type ReactNode, useCallback, useRef, useState } from 'react';
-import { ScrollView, Text, useWindowDimensions, View, type ViewInstance } from 'react-native';
+import {
+  type ComponentType,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Dimensions,
+  ScrollView,
+  Text,
+  useWindowDimensions,
+  View,
+  type ViewInstance,
+} from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getAnchoredPanelLayout } from '../menu/anchored-panel-layout';
 import { AnchoredTrigger } from '../menu/anchored-trigger';
 import { useMenuInteraction } from '../menu/menu-interaction';
-import { MenuOverlay } from '../menu/menu-overlay';
+import { KeyboardMenuOverlay, MenuOverlay } from '../menu/menu-overlay';
 import { MenuSurface } from '../menu/menu-surface';
 import type { MenuAnchor } from '../menu/menu.types';
 import { useMenuMotion } from '../menu/use-menu-motion';
@@ -19,6 +33,66 @@ export type InfoPopoverProps = {
   testID?: string;
   text: string;
 };
+
+export type InfoPopoverAnchor = MenuAnchor;
+
+/** Caller-measured anchor; opening keeps the editor and keyboard in place. */
+export function AnchoredInfoPopover({
+  anchor,
+  caption,
+  children,
+  onClose,
+  placement,
+  text,
+  testID,
+  width,
+}: {
+  anchor?: InfoPopoverAnchor;
+  caption?: string;
+  /** Optional visual readout; `text` remains its accessible description. */
+  children?: ReactNode;
+  onClose: () => void;
+  placement?: 'above' | 'below';
+  text: string;
+  testID?: string;
+  width?: number;
+}) {
+  const [retained, setRetained] = useState(
+    anchor ? { anchor, text, caption, children, width, placement } : undefined,
+  );
+  if (
+    anchor &&
+    (anchor !== retained?.anchor ||
+      text !== retained?.text ||
+      caption !== retained?.caption ||
+      children !== retained?.children ||
+      width !== retained?.width ||
+      placement !== retained?.placement)
+  )
+    setRetained({ anchor, text, caption, children, width, placement });
+  const content = anchor ? { anchor, text, caption, children, width, placement } : retained;
+  useEffect(() => {
+    if (!anchor) return;
+    const subscription = Dimensions.addEventListener('change', onClose);
+    return () => subscription.remove();
+  }, [anchor, onClose]);
+  return content ? (
+    <InfoPopoverPanel
+      anchor={content.anchor}
+      caption={content.caption}
+      isOpen={Boolean(anchor)}
+      onClose={onClose}
+      onClosed={() => setRetained(undefined)}
+      overlay={KeyboardMenuOverlay}
+      placement={content.placement}
+      text={content.text}
+      testID={testID}
+      width={content.width}
+    >
+      {content.children}
+    </InfoPopoverPanel>
+  ) : null;
+}
 
 /** Tap a presentation-only trigger to read text without changing the underlying layout. */
 export function InfoPopover({ children, ...props }: InfoPopoverProps) {
@@ -51,16 +125,26 @@ export function InfoPopover({ children, ...props }: InfoPopoverProps) {
 
 function InfoPopoverPanel({
   anchor,
+  caption,
+  children,
   isOpen,
   onClose,
   onClosed,
+  overlay: Overlay = MenuOverlay,
+  placement,
   testID,
   text,
-}: Omit<InfoPopoverProps, 'children'> & {
+  width: preferredWidth = 320,
+}: Pick<InfoPopoverProps, 'text' | 'testID'> & {
   anchor: MenuAnchor;
+  caption?: string;
+  children?: ReactNode;
   isOpen: boolean;
   onClose: () => void;
   onClosed: () => void;
+  overlay?: ComponentType<Parameters<typeof MenuOverlay>[0]>;
+  placement?: 'above' | 'below';
+  width?: number;
 }) {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -71,14 +155,15 @@ function InfoPopoverPanel({
     height,
     insets,
     panelHeight,
+    preferredPlacement: placement,
     preferredMaxHeight: 400,
-    preferredWidth: 320,
+    preferredWidth,
     width,
   });
   const style = useAnimatedStyle(() => ({ opacity: progress.value }));
 
   return (
-    <MenuOverlay
+    <Overlay
       isOpen={isOpen}
       isVisible={isVisible}
       onClose={onClose}
@@ -104,23 +189,43 @@ function InfoPopoverPanel({
             keyboardShouldPersistTaps="handled"
             style={{ maxHeight: layout.maxHeight }}
           >
-            <InfoPopoverText text={text} />
+            <InfoPopoverText text={text} caption={caption}>
+              {children}
+            </InfoPopoverText>
           </ScrollView>
         </MenuSurface>
       </Animated.View>
-    </MenuOverlay>
+    </Overlay>
   );
 }
 
-function InfoPopoverText({ text }: { text: string }) {
+function InfoPopoverText({
+  text,
+  caption,
+  children,
+}: {
+  text: string;
+  caption?: string;
+  children?: ReactNode;
+}) {
   const { registerItem } = useMenuInteraction();
   const register = useCallback(
     (target: ViewInstance | null) => (target ? registerItem?.(target) : undefined),
     [registerItem],
   );
   return (
-    <View accessibilityLabel={text} accessible ref={register}>
-      <Text className="text-base text-popover-foreground">{text}</Text>
+    <View
+      accessibilityLabel={caption ? `${text}\n${caption}` : text}
+      accessible
+      className="gap-2"
+      ref={register}
+    >
+      {children ?? (
+        <>
+          <Text className="text-base text-popover-foreground">{text}</Text>
+          {caption ? <Text className="text-xs text-muted-foreground">{caption}</Text> : null}
+        </>
+      )}
     </View>
   );
 }

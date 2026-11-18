@@ -65,6 +65,7 @@ test('stores the rendered derivative while preserving source format, provenance 
       baseFileEntryId: source.entry.id,
       mediaType: 'image/png',
       provenance: 'imported',
+      aiContentLabel: null,
     },
     undefined,
   );

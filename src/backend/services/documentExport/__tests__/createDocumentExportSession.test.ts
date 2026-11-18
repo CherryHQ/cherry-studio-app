@@ -179,7 +179,8 @@ test('Markdown materialization preserves the signature and reuses only matching 
   if (second.format !== 'markdown') throw new Error('Expected Markdown');
   expect(second.text).toContain('Get the app');
   expect(mockFiles.get(second.file.uri)).toBe(second.text);
-  expect(mockFiles.has(first.file.uri)).toBe(false);
+  expect(mockFiles.has(first.file.uri)).toBe(true);
+  await expect(session.render({ format: 'markdown', watermark })).resolves.toBe(first);
   await session.dispose();
 });
 
@@ -226,15 +227,18 @@ test('Markdown embeds managed images, retries missing bytes and shares the compl
   expect(ready.text).toContain('![Remote](https://example.com/photo.png)');
   expect(mockFiles.get(ready.file.uri)).toBe(ready.text);
   expect(ready.issues).toEqual([]);
+  if (missing.format !== 'markdown') throw new Error('Expected Markdown');
+  expect(mockFiles.has(missing.file.uri)).toBe(false);
   await expect(session.render({ format: 'markdown' })).resolves.toBe(ready);
   expect(readManagedImage).toHaveBeenCalledTimes(2);
   await session.dispose();
 });
 
-test('replacing a preview discards its file and rejects stale publication requests', async () => {
+test('switching formats reuses temporary artifacts without saving until explicitly requested', async () => {
+  const saveFile = jest.fn(async () => savedFile);
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },
-    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    { readManagedImage: jest.fn(), saveFile },
     () => {},
     () => {},
   );
@@ -242,9 +246,11 @@ test('replacing a preview discards its file and rejects stale publication reques
   const second = await session.render({ format: 'html', presentation });
   if (first.format !== 'markdown' || second.format !== 'html')
     throw new Error('Expected text artifacts');
-  expect(mockFiles.has(first.file.uri)).toBe(false);
+  expect(mockFiles.has(first.file.uri)).toBe(true);
   expect(mockFiles.get(second.file.uri)).toBe('<main>Content</main>');
-  await expect(session.save(first)).rejects.toMatchObject({ code: 'invalid-input' });
+  await expect(session.render({ format: 'markdown' })).resolves.toBe(first);
+  expect(saveFile).not.toHaveBeenCalled();
+  await expect(session.save(first)).resolves.toEqual([savedFile]);
   await session.dispose();
   expect(mockFiles.size).toBe(0);
 });

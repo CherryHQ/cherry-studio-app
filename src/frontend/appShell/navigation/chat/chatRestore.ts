@@ -6,19 +6,32 @@ export type ChatRestoreState =
   | { status: 'loading' }
   | { status: 'ready'; target: Extract<ChatTarget, { kind: 'draft' }> };
 
+type AgentReadState = {
+  error?: Error;
+  isLoading: boolean;
+  items: readonly { id: string }[];
+};
+
 export function resolveChatRestoreState({
   agents,
+  lastAgent,
 }: {
-  agents: { error?: Error; isLoading: boolean; items: readonly { id: string }[] };
+  agents: AgentReadState;
+  lastAgent?: AgentReadState;
 }): ChatRestoreState {
-  if (agents.isLoading) {
+  // Only a successful, empty ID lookup allows the fallback list to choose an Agent.
+  const source =
+    lastAgent && (lastAgent.isLoading || lastAgent.error || lastAgent.items.length > 0)
+      ? lastAgent
+      : agents;
+  if (source.isLoading) {
     return { status: 'loading' };
   }
-  if (agents.error) {
-    return { error: agents.error, status: 'error' };
+  if (source.error) {
+    return { error: source.error, status: 'error' };
   }
 
-  const agent = agents.items[0];
+  const agent = source.items[0];
   return agent
     ? { status: 'ready', target: { agentId: agent.id, kind: 'draft' } }
     : { status: 'empty' };

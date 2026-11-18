@@ -32,6 +32,19 @@ describe('anchored panel placement', () => {
     expect(layout.top + layout.visibleHeight).toBe(642);
   });
 
+  it('keeps a composer readout above its trigger even when the window includes keyboard space', () => {
+    const layout = getAnchoredPanelLayout({
+      ...viewport,
+      anchor: { height: 32, pageX: 290, pageY: 450, width: 32 },
+      panelHeight: 50,
+      preferredPlacement: 'above',
+      preferredWidth: 272,
+    });
+    expect(layout.opensAbove).toBe(true);
+    expect(layout.top + layout.visibleHeight).toBe(442);
+    expect(layout.left + layout.width).toBe(322);
+  });
+
   it('bounds long content and wide panels in a small landscape viewport', () => {
     const layout = getAnchoredPanelLayout({
       ...viewport,

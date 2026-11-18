@@ -3,7 +3,7 @@
  *
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
  * for the tools a turn may use, and the source projects only the capabilities
- * that this model can call, this platform implements, this Agent has enabled,
+ * that this model can call, this platform implements,
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
@@ -19,6 +19,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import {
+  agentGlobalSkillService,
+  type AgentGlobalSkillService,
+} from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -31,9 +35,9 @@ import {
   type PermissionStatuses,
 } from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import type { VoiceEngineId, VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isDataApiError } from '@/shared/data/api/errors';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
@@ -45,6 +49,10 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import {
+  createAgentConfigurationTools,
+  type AgentConfigurationAccess,
+} from './agentConfigurationTools';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
@@ -60,6 +68,8 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createHttpRequestTool } from './httpRequestTool';
+import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -68,8 +78,12 @@ import {
   type PaintingToolDependencies,
   resolveConfiguredPaintingModel,
 } from './painting';
-import { createReadFileTool } from './readFileTool';
+import { createReadFileContentReader, createReadFileTool } from './readFileTool';
 import { createRunJsTool } from './runJsTool';
+import { createSkillInventoryTool } from './skill/skillInventoryTool';
+import { createSshFileTools } from './sshFileTools';
+import { createSshTool, type SshToolAccess } from './sshTool';
+import { createTranscribeAudioTool } from './transcribeAudioTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { WorkspaceFileAccess } from './workspaceFileAccess';
 import { createWriteFileTool } from './writeFileTool';
@@ -88,7 +102,6 @@ type WebSearchAvailability = Readonly<Record<WebSearchCapability, boolean>>;
 /** Everything outside the tool definitions that decides what a turn may use. */
 export type BuiltInToolScope = {
   deviceAccess: DeviceAccess;
-  disabledCapabilities: ReadonlySet<AgentCapability>;
   paintingModel: ConfiguredPaintingModel | null;
   platform: string;
   webSearchAvailability: WebSearchAvailability;
@@ -100,11 +113,11 @@ export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
     workspaceFolderId?: string | null;
+    sessionId?: string;
     agentId?: string;
     /** The Host's response channel for `ask_user_question`. */
     askUser: AskUserQuestion;
     documentParserMode: DocumentParserMode;
-    disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     acceptsImages: boolean;
     resources: TurnToolResources;
@@ -115,7 +128,9 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
+    voice?: Pick<VoiceModule, 'getReadyTranscriptionEngine' | 'transcribeAudio'>;
     agents: AgentManagementData;
+    skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
@@ -123,6 +138,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     platform: string;
     preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
+    agentConfiguration?: AgentConfigurationAccess;
   };
 
 /**
@@ -132,11 +148,15 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  mcpManagement?: McpManagementAccess;
+  voice?: Pick<VoiceModule, 'getReadyTranscriptionEngine' | 'transcribeAudio'>;
+  ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
+  agentConfiguration?: AgentConfigurationAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -146,9 +166,9 @@ export function createSystemCapabilitySource(
   return {
     async getTools({
       workspaceFolderId,
+      sessionId,
       agentId,
       askUser,
-      disabledCapabilities,
       model,
       acceptsImages,
       resources,
@@ -161,11 +181,12 @@ export function createSystemCapabilitySource(
         return [];
       }
 
-      const scope = await resolveScope(deps, new Set(disabledCapabilities));
+      const scope = await resolveScope(deps);
       const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
+      const transcriptionEngine = await deps.voice?.getReadyTranscriptionEngine().catch(() => null);
       const catalog = createCatalog(
         deps,
         scope,
@@ -177,14 +198,36 @@ export function createSystemCapabilitySource(
         fileAccess,
         workspaceName,
         acceptsImages,
+        transcriptionEngine ?? null,
       );
+      if (services.mcpManagement) {
+        for (const tool of createMcpManagementTools(services.mcpManagement))
+          catalog.set(tool.providerName, tool);
+      }
+      if (sessionId && services.ssh?.isAvailable()) {
+        const target = await services.ssh.resolveAgentTarget(sessionId);
+        if (target) {
+          for (const tool of [
+            createSshTool(services.ssh, sessionId, target),
+            ...createSshFileTools(services.ssh, sessionId, target, fileAccess),
+          ]) {
+            catalog.set(tool.providerName, tool);
+          }
+        }
+      }
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
         return policy && tool
           ? [
               bindTurnResources(
-                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                {
+                  ...tool,
+                  ...policy,
+                  effect: descriptor.effect ?? 'write',
+                  // Only this explicitly scoped user grant can promote SSH approval.
+                  ...(descriptor.capabilityId === 'ssh_execute' ? { approval: tool.approval } : {}),
+                },
                 resources,
               ),
             ]
@@ -200,8 +243,8 @@ export type ResolvedToolPolicy = {
 };
 
 /**
- * Application policy is shared by every Agent; the Agent contributes only its
- * capability-group deny-list. `null` means the tool is absent for this turn.
+ * Application policy is shared by every Agent. `null` means the tool is absent
+ * for this turn.
  * A requestable permission keeps the tool present as `ask`, so in-app approval
  * precedes the system prompt and cannot be bypassed by global auto mode.
  */
@@ -210,9 +253,6 @@ export function resolveApproval(
   scope: BuiltInToolScope,
 ): ResolvedToolPolicy | null {
   if (!isPlatformSupported(descriptor, scope.platform)) {
-    return null;
-  }
-  if (descriptor.agentCapability && scope.disabledCapabilities.has(descriptor.agentCapability)) {
     return null;
   }
   if (descriptor.requiresPaintingModel && !scope.paintingModel) {
@@ -269,11 +309,17 @@ function createCatalog(
   fileAccess: WorkspaceFileAccess,
   workspaceName: string | undefined,
   acceptsImages: boolean,
-): ReadonlyMap<string, RuntimeTool> {
+  transcriptionEngine: VoiceEngineId | null,
+): Map<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
+  const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
   const tools = [
     createAskUserQuestionTool(askUser),
+    ...(deps.agentConfiguration
+      ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
+      : []),
     ...createAgentManagementTools(deps.agents, agentId),
+    createSkillInventoryTool(deps.skillLibrary, agentId),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -290,14 +336,19 @@ function createCatalog(
       documentParserMode,
       fileAccess,
       acceptsImages,
+      readContent,
     ),
     createWriteFileTool(fileContent, fileAccess),
+    ...(transcriptionEngine && deps.voice
+      ? [createTranscribeAudioTool(deps.voice, fileAccess, transcriptionEngine)]
+      : []),
     ...createFileLibraryTools(
       fileAccess,
       managedFileResolver,
       documentParserMode,
       workspaceName,
       acceptsImages,
+      readContent,
     ),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     // Office jobs read and write their files natively, which older clients cannot do.
@@ -309,6 +360,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
+    createHttpRequestTool(),
     createGenerateImageTool(
       {
         ...deps.painting,
@@ -358,24 +410,18 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
   };
 }
 
-async function resolveScope(
-  deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
-): Promise<BuiltInToolScope> {
+async function resolveScope(deps: SystemCapabilitySourceDependencies): Promise<BuiltInToolScope> {
   const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
-    resolveDeviceAccess(deps, disabledCapabilities),
-    disabledCapabilities.has('image')
-      ? null
-      : resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
-          logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
-          return null;
-        }),
-    resolveWebSearchAvailability(deps, !disabledCapabilities.has('web')),
+    resolveDeviceAccess(deps),
+    resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+      logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
+      return null;
+    }),
+    resolveWebSearchAvailability(deps),
   ]);
 
   return {
     deviceAccess,
-    disabledCapabilities,
     paintingModel,
     platform: deps.platform,
     webSearchAvailability,
@@ -389,11 +435,7 @@ async function resolveScope(
  */
 async function resolveWebSearchAvailability(
   deps: SystemCapabilitySourceDependencies,
-  enabled: boolean,
 ): Promise<WebSearchAvailability> {
-  if (!enabled) {
-    return { fetchUrls: false, searchKeywords: false };
-  }
   const [fetchProvider, searchProvider] = await Promise.all([
     readWebSearchProvider(deps, 'fetchUrls'),
     readWebSearchProvider(deps, 'searchKeywords'),
@@ -418,14 +460,11 @@ async function readWebSearchProvider(
 
 async function resolveDeviceAccess(
   deps: SystemCapabilitySourceDependencies,
-  disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<DeviceAccess> {
   const scopes = [
     ...new Set(
-      BUILT_IN_TOOL_DESCRIPTORS.filter(
-        (descriptor) =>
-          isPlatformSupported(descriptor, deps.platform) &&
-          (!descriptor.agentCapability || !disabledCapabilities.has(descriptor.agentCapability)),
+      BUILT_IN_TOOL_DESCRIPTORS.filter((descriptor) =>
+        isPlatformSupported(descriptor, deps.platform),
       ).flatMap((descriptor) => descriptor.permissionScopes),
     ),
   ];
@@ -442,8 +481,11 @@ function resolveDependencies(
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
+    voice: overrides.voice ?? services.voice,
     agents: overrides.agents ?? agentService,
+    skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,
+    agentConfiguration: overrides.agentConfiguration ?? services.agentConfiguration,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

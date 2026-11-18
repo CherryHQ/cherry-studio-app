@@ -11,7 +11,10 @@ import { usePreference } from '@/frontend/data/hooks';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useSettingPreferences } from '../hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from '../utils/fontSizeOptions';
-import { DocumentParserSetting } from './components/DocumentParserSetting';
+import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSetting';
+import { EnterToSendSetting } from './components/EnterToSendSetting';
+import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
+import { SessionBranchTreeSetting } from './components/SessionBranchTreeSetting';
 import { ThemePaletteSetting } from './components/ThemePaletteSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
@@ -21,6 +24,9 @@ export default function AppearanceSettingsScreen() {
   const router = useRouter();
   const [isLanguagePickerOpen, setIsLanguagePickerOpen] = useState(false);
   const [fontSizeStep] = usePreference('ui.font_size_step');
+  const [isKeepScreenOnEnabled, setIsKeepScreenOnEnabled] = usePreference(
+    'app.keep_screen_on.enabled',
+  );
   const [isWatermarkEnabled, setIsWatermarkEnabled] = usePreference(
     'file.export.watermark_enabled',
   );
@@ -33,6 +39,12 @@ export default function AppearanceSettingsScreen() {
   const changeWatermark = (value: boolean) => {
     void setIsWatermarkEnabled(value).catch(() => {
       toast.show({ label: t('settings.exportWatermark.saveFailed'), variant: 'danger' });
+    });
+  };
+
+  const changeKeepScreenOn = (value: boolean) => {
+    void setIsKeepScreenOnEnabled(value).catch(() => {
+      toast.show({ label: t('settings.keepScreenOn.saveFailed'), variant: 'danger' });
     });
   };
 
@@ -80,7 +92,16 @@ export default function AppearanceSettingsScreen() {
             testID="settings-export-watermark"
             value={isWatermarkEnabled}
           />
-          <DocumentParserSetting />
+          <EnterToSendSetting />
+          <Section.SwitchItem
+            label={t('settings.keepScreenOn.title')}
+            onValueChange={changeKeepScreenOn}
+            testID="settings-keep-screen-on"
+            value={isKeepScreenOnEnabled}
+          />
+          <MultiModelCardsSetting />
+          <SessionBranchTreeSetting />
+          <AutoCollapseProcessSetting />
         </Section>
       </SettingsScrollPage>
       <OptionPickerBottomSheet

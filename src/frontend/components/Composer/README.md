@@ -45,9 +45,15 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
     as it follows keyboard opening, then detaches when closing finishes. If the keyboard is
     already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
     this behavior; its list does not dismiss the keyboard again.
+- `useComposerSubmit` — returns a guarded entry to that same send protocol for field Return
+  submission with the native Markdown snapshot. It respects sendability and pending submissions, and never invokes Stop. Chat admits
+  drafted follow-ups through the ordinary queue path while the current answer streams.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
+  It also forwards `submitOnReturn` and `onReturnSubmit`; `ComposerEditor` exposes the same props.
+  When Return submits, it supplies the translated native-menu newline label. The action inserts
+  after the selection, preserving selected words; it adds no toolbar button.
   Plugin and Skill references use the link color and stay inline at the field's font size. The
   native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
   the paste wrapper excludes marked ranges from media extraction while continuing to import real
@@ -55,6 +61,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   in `NSTextAttachment.fileType`, which UIKit invalidates when assigning an image.
   Skill artwork follows desktop's Lucide ToolCase. Only the editor's raster-only inline attachment
   API uses encoded PNG bytes; normal controls use the vector icon.
+  Quote references use paired quotation marks without an inline image. `onLinkPress` reports the
+  link URL and measured window-space bounds; the feature owns its text preview. Native editor
+  updates require the development client described in the development guide.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them. Ready still images open the shared preview with optional image editing.
   Saving replaces the matching attachment in place; cancellation, failure and a removed/stale
@@ -68,7 +77,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   `children` trail the label inside the pill.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
   draft, its managed attachments, and the presentation transition for its
-  input context.
+  input context. Field changes go through `editDraft`; `subscribeDraftEdits` announces user edits
+  and accepted sends synchronously so operations such as dictation release ownership before the
+  text changes. `setDraft` remains for owned updates such as live dictation and send recovery.
 - `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
   alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
   When a software keyboard is involved, `isEditing` commits only after that keyboard has started
@@ -121,8 +132,9 @@ walk to verify it.
 - `components/ComposerSurface.tsx`: the root and the send protocol.
 - `components/ComposerField.tsx`, `components/ComposerAttachments.tsx`,
   `components/ComposerModelPill.tsx`: the parts.
-- `components/ComposerMenu.tsx`: the ＋ menu. Camera and photos hand off to
-  `expo-image-picker`. Files use the caller's destination when supplied and
+- `components/ComposerMenu.tsx`: the anchored ＋ menu used by painting.
+  `hooks/useComposerMediaActions.ts` shares camera and photo-library handoffs with the chat tools
+  sheet, retaining permission and input-replacement behavior through `expo-image-picker`. Files use the caller's destination when supplied and
   otherwise use the shared file-upload picker through the Composer adapter.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
   shows import progress, then delegates ready files to `FileEntryPreview`.

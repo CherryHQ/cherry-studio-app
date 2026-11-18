@@ -17,12 +17,18 @@ const mockClearBreadcrumbs = jest.fn();
 const mockInit = jest.fn();
 const mockRemoveReporter = jest.fn();
 const mockSetReporter = jest.fn(() => mockRemoveReporter);
+const mockWarn = jest.fn();
 let mockBeforeSend: ((event: unknown, hint: unknown) => unknown) | undefined;
 
 jest.mock('../../../../../modules/crash-reporting', () => ({
   getCrashReporting: () => mockNative,
 }));
-jest.mock('@logger', () => ({ loggerService: { setErrorReporter: mockSetReporter } }));
+jest.mock('@logger', () => ({
+  loggerService: {
+    setErrorReporter: mockSetReporter,
+    withContext: () => ({ warn: mockWarn }),
+  },
+}));
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {
@@ -180,6 +186,63 @@ describe('Sentry consent lifecycle', () => {
       available: false,
     });
     await expect(reporting.setSentryConsent(true)).rejects.toThrow('unavailable');
+    expect(mockWarn).toHaveBeenCalledWith('Sentry configuration failed', {
+      code: 'sentry.native_configure_failed',
+    });
+    expect(JSON.stringify(mockWarn.mock.calls)).not.toContain('storage unavailable');
+  });
+
+  test('does not turn invalid runtime configuration into a saved opt-out', async () => {
+    delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    mockStatus.enabled = true;
+    mockNative.configure.mockResolvedValueOnce({ enabled: true, active: false });
+    const reporting = loadReporting();
+
+    await reporting.configureSentry();
+
+    expect(mockNative.configure).toHaveBeenCalledWith('', false, '20260915');
+    expect(reporting.getSentryConsentStatus()).toEqual({
+      enabled: true,
+      active: false,
+      available: true,
+    });
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockNative.setConsent).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith('Sentry configuration is unavailable', {
+      code: 'sentry.missing_dsn',
+    });
+
+    process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.com/1';
+    mockNative.configure.mockResolvedValueOnce({ enabled: true, active: true });
+    await reporting.configureSentry();
+    expect(reporting.getSentryConsentStatus().active).toBe(true);
+  });
+
+  test('records a fixed code when native status lookup fails', async () => {
+    mockNative.getStatus.mockImplementationOnce(() => {
+      throw new Error('private native detail');
+    });
+    const reporting = loadReporting();
+    await expect(reporting.configureSentry()).resolves.toBeUndefined();
+    expect(reporting.getSentryConsentStatus().active).toBe(false);
+    expect(mockWarn).toHaveBeenCalledWith('Sentry configuration is unavailable', {
+      code: 'sentry.native_status_failed',
+    });
+    expect(JSON.stringify(mockWarn.mock.calls)).not.toContain('private native detail');
+  });
+
+  test('records a native SDK failure that did not throw across the bridge', async () => {
+    mockNative.configure.mockResolvedValueOnce({
+      enabled: true,
+      active: false,
+      initialization: 'failed',
+    });
+    const reporting = loadReporting();
+    await reporting.configureSentry();
+    expect(mockWarn).toHaveBeenCalledWith('Sentry initialization failed', {
+      code: 'sentry.native_init_failed',
+    });
+    expect(mockInit).not.toHaveBeenCalled();
   });
 
   test('does not capture in development even if a native owner returns stale active state', async () => {
@@ -309,6 +372,17 @@ describe('Sentry consent lifecycle', () => {
     await reporting.configureSentry();
     expect(mockOptions.enabled).toBe(false);
     expect(mockSetReporter).not.toHaveBeenCalled();
+    expect(reporting.getSentryConsentStatus()).toEqual({
+      enabled: true,
+      active: false,
+      available: true,
+    });
+    expect(mockBeforeSend?.(event, {})).toBeNull();
+    expect(mockWarn).toHaveBeenCalledWith('Sentry initialization failed', {
+      code: 'sentry.javascript_init_failed',
+      reasonCode: 'native_active',
+    });
+    expect(JSON.stringify(mockWarn.mock.calls)).not.toContain('private initialization detail');
     mockNative.setConsent.mockResolvedValue({ enabled: true, active: true });
     await reporting.setSentryConsent(true);
     expect(mockInit).toHaveBeenCalledTimes(2);

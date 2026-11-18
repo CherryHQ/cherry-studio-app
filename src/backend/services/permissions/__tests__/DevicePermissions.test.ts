@@ -127,6 +127,21 @@ describe('DevicePermissions', () => {
     expect(Calendar.requestCalendarPermissions).toHaveBeenCalledTimes(1);
   });
 
+  test('reports a system prompt as presented only while it is open', async () => {
+    const opened = createDeferred();
+    const answer = createDeferred();
+    const prompt = service.runWithSystemPrompt(async () => {
+      opened.resolve();
+      await answer.promise;
+    });
+    expect(service.isPresentingSystemPrompt()).toBe(false);
+    await opened.promise;
+    expect(service.isPresentingSystemPrompt()).toBe(true);
+    answer.resolve();
+    await prompt;
+    expect(service.isPresentingSystemPrompt()).toBe(false);
+  });
+
   test('skips a cancelled queued prompt and lets later requests proceed', async () => {
     const started = createDeferred();
     const finishCamera = createDeferred();

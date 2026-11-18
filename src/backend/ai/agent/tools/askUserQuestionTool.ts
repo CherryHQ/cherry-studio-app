@@ -24,7 +24,7 @@ export function createAskUserQuestionTool(ask: AskUserQuestion): RuntimeTool {
     providerName: ASK_USER_QUESTION_TOOL_NAME,
     displayName: 'Ask user',
     description:
-      'Resolve consequential missing preferences or decisions with 1–8 related, concise questions in the user’s language. Give every question a unique stable id. Each question has up to 4 options, each only a unique stable id and a short label; use an empty options array for free text only. Use single for one choice or multiple for several. Free text and skipping are always available. The user reviews and submits all answers together, associated by questionId. Do not ask for information already provided or routine implementation choices, or substitute questions for tool approval. Send related questions in one call, never parallel calls; wait for the answers before dependent work. Skipping is not consent: proceed only without that decision, or explain what is blocked.',
+      'Ask 1–8 concise, related questions in the user’s language for consequential missing decisions. Use unique stable ids and at most 4 short options per question; options: [] allows free text only. Use single for one choice, multiple for several. Free text and skipping are always available. Batch related questions in one call, never parallel calls, and wait before dependent work. Do not ask for known information, routine choices or tool approval. Skipping is not consent: continue only without that decision or explain the block.',
     inputSchema: toRuntimeInputSchema(AgentUserQuestionsSchema),
     approval: 'auto',
     async execute(call) {

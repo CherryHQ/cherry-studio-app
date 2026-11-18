@@ -51,6 +51,11 @@ function fixture(scope = 'scope', binding = 'binding') {
     listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
+    tasks: {
+      list: jest.fn(async () => ({ items: [] })),
+      listSessions: jest.fn(async () => ({ items: [session] })),
+      readSession: jest.fn(async () => session),
+    },
     peekSession: jest.fn(() => undefined),
     subscribeReads: jest.fn(() => () => undefined),
     readSession: jest.fn(async () => session),
@@ -123,6 +128,81 @@ function fixture(scope = 'scope', binding = 'binding') {
   };
 }
 const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
+
+it('exposes no mutation capabilities for a task transcript, including while execution awaits approval', async () => {
+  const test = fixture();
+  test.setState({ status: 'ready', attachments: true, preupload: true });
+  const handle = await test.source.openTaskSession('task', address, signal());
+  const release = handle.activate();
+  test.publish({
+    ...test.snapshot,
+    executions: [{ id: 'run', state: 'awaiting-approval', cancelTarget: 'cancel' }],
+    interactions: [
+      {
+        id: 'approval',
+        title: 'Approve',
+        state: 'pending',
+        input: 'input',
+        respondTarget: 'respond',
+      },
+    ],
+  });
+  const snapshot = handle.state.getSnapshot();
+  expect(snapshot.actions.send).toBeUndefined();
+  expect(snapshot.actions.inputPolicy.attachments).toBe(false);
+  expect(snapshot.attachmentPreparation).toBeUndefined();
+  expect(snapshot.upload).toBeUndefined();
+  expect(snapshot.undelivered).toBeUndefined();
+  expect(snapshot.executions[0].cancel).toBeUndefined();
+  expect(snapshot.interactions).toEqual([]);
+  expect(test.remote.start).not.toHaveBeenCalled();
+  expect(test.remote.send).not.toHaveBeenCalled();
+  expect(test.remote.cancel).not.toHaveBeenCalled();
+  expect(test.remote.respond).not.toHaveBeenCalled();
+  release();
+  handle.dispose();
+  test.source.dispose();
+});
+
+it('does not observe a session rejected by its task-scoped catalog', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.tasks.readSession).mockRejectedValueOnce({ code: 'NOT_FOUND' });
+  await expect(test.source.openTaskSession('other-task', address, signal())).rejects.toMatchObject({
+    failure: { code: 'not-found' },
+  });
+  expect(test.remote.observe).not.toHaveBeenCalled();
+  expect(test.remote.readSession).not.toHaveBeenCalled();
+  test.source.dispose();
+});
+
+it('keeps task-session cursors scoped to their task and separate from ordinary conversation cursors', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.tasks.listSessions).mockResolvedValue({ items: [session], next: 'next' });
+  const page = await test.source.tasks.listSessions('task', undefined, signal());
+  expect(page.items[0]).toMatchObject({ ref: address, title: session.title });
+  await expect(
+    test.source.tasks.listSessions('other-task', page.next, signal()),
+  ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  await expect(test.source.catalog.listSessions({}, page.next, signal())).rejects.toMatchObject({
+    failure: { code: 'invalid-input' },
+  });
+  expect(test.remote.tasks.listSessions).toHaveBeenCalledTimes(1);
+  test.source.dispose();
+});
+
+it('rejects task catalog reads after its frontend source is disposed', async () => {
+  const test = fixture();
+  const tasks = test.source.tasks;
+  test.source.dispose();
+  await expect(tasks.list(undefined, signal())).rejects.toMatchObject({
+    failure: { code: 'retired' },
+  });
+  await expect(tasks.listSessions('task', undefined, signal())).rejects.toMatchObject({
+    failure: { code: 'retired' },
+  });
+  expect(test.remote.tasks.list).not.toHaveBeenCalled();
+  expect(test.remote.tasks.listSessions).not.toHaveBeenCalled();
+});
 
 it('opens without observing, disables send until synchronized, and releases observation without cancelling execution', async () => {
   const test = fixture();
@@ -680,4 +760,104 @@ test('remote input explicitly rejects injected quote and orphan author metadata'
   expect(() =>
     remoteInput({ parts: [{ type: 'text', text: 'Request', quoteAuthor: fields.quoteAuthor }] }),
   ).toThrow();
+});
+
+test('remote input rejects local SSH display metadata instead of silently dropping it', () => {
+  expect(() =>
+    remoteInput({
+      parts: [
+        {
+          type: 'text',
+          text: 'SSH · guoxu',
+          sshReferences: [{ type: 'ssh', label: 'SSH · guoxu', offset: 0 }],
+        },
+      ],
+    }),
+  ).toThrow();
+});
+
+it('finds earlier tool sources independently of the visible window and excludes later results', async () => {
+  const test = fixture();
+  const toolMessage = (id: string, output: string) => ({
+    ...message(id),
+    parts: [
+      {
+        id: `${id}:tool`,
+        kind: 'tool' as const,
+        callId: `${id}:call`,
+        name: 'mcp__cherry-tools__web_search',
+        state: 'completed' as const,
+        output,
+      },
+    ],
+  });
+  jest
+    .mocked(test.remote.history)
+    .mockResolvedValueOnce({
+      items: [toolMessage('later', 'later-output'), message('answer')],
+      next: 'older',
+    })
+    .mockResolvedValueOnce({ items: [toolMessage('earlier', 'earlier-output')] });
+  jest.mocked(test.remote.readResource).mockImplementation(async (key) => ({
+    kind: 'text',
+    text: JSON.stringify([{ id: 'lookup-1', title: key, url: 'https://example.com' }]),
+  }));
+  const handle = await test.source.openSession(address, signal());
+  expect(await handle.history.readCitations!('answer', ['lookup-1'], signal())).toEqual([
+    { id: 'lookup-1', title: 'earlier-output', url: 'https://example.com' },
+  ]);
+  expect(test.remote.readResource).not.toHaveBeenCalledWith('later-output', expect.anything());
+  test.source.dispose();
+});
+
+it('keeps prose and other messages exportable when a remote image returns metadata only or unavailable', async () => {
+  const test = fixture();
+  jest.mocked(test.remote.history).mockResolvedValueOnce({
+    items: [
+      {
+        ...message('with-unavailable-image'),
+        parts: [
+          {
+            id: 'img-meta',
+            kind: 'file' as const,
+            name: 'Metadata.png',
+            mediaType: 'image/png',
+            resource: 'meta-res',
+          },
+          {
+            id: 'img-missing',
+            kind: 'file' as const,
+            name: 'Missing.png',
+            mediaType: 'image/png',
+            resource: 'missing-res',
+          },
+          {
+            id: 'body',
+            kind: 'text' as const,
+            text: 'Normal text remains exportable.',
+            complete: true,
+            state: 'completed' as const,
+          },
+        ],
+      },
+      message('other'),
+    ],
+  });
+  jest.mocked(test.remote.readResource).mockImplementation(async (key) => {
+    if (key === 'meta-res')
+      return { kind: 'metadata', name: 'Metadata.png', mediaType: 'image/png' };
+    throw Object.assign(new Error('Gone'), { code: 'RESOURCE_UNAVAILABLE' });
+  });
+  const handle = await test.source.openSession(address, signal());
+  const prepared = await handle.history.prepareSelection(
+    ['with-unavailable-image', 'other'],
+    signal(),
+  );
+  expect(prepared.messages.map((item) => item.id)).toEqual(['other', 'with-unavailable-image']);
+  expect(prepared.messages[1].parts).toEqual([
+    { type: 'prepared-file', id: 'img-meta', filename: 'Metadata.png', mediaType: 'image/png' },
+    { type: 'prepared-file', id: 'img-missing', filename: 'Missing.png', mediaType: 'image/png' },
+    { type: 'text', id: 'body', text: 'Normal text remains exportable.', state: 'done' },
+  ]);
+  test.source.dispose();
 });

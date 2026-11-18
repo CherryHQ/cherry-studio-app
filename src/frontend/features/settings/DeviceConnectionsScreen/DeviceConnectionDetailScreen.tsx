@@ -1,4 +1,5 @@
-import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,10 +7,13 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
+import { useUuRemoteAction } from '@/frontend/appShell/uuRemote';
+import { queryKeys, useBackendModule, useMutation } from '@/frontend/data';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
 } from '@/frontend/hooks/useDesktopConnections';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { describeCapabilities } from '../describeCapabilities';
@@ -20,8 +24,42 @@ export function DeviceConnectionDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const { connection, error, isLoading, refetch } = useDesktopConnection(connectionId);
   const { isRemoving, remove } = useDesktopConnectionActions();
+  const { isLoading: isRenaming, trigger: rename } = useMutation(
+    'PATCH',
+    '/desktop-connections/:id',
+  );
+
+  const requestRename = useCallback(() => {
+    if (!connection || isRenaming || isRemoving) return;
+    alert.prompt({
+      title: t('settings.deviceConnections.name'),
+      confirmLabel: t('common.save'),
+      input: {
+        accessibilityLabel: t('settings.deviceConnections.name'),
+        autoFocus: true,
+        initialValue: connection.alias ?? '',
+        maxLength: 128,
+        placeholder: connection.defaultName,
+      },
+      onConfirm: (value) => {
+        const alias = value.trim() || null;
+        if (alias === connection.alias) return;
+        void rename({ params: { id: connection.id }, body: { alias } })
+          .then(() => {
+            toast.show({
+              label: t('settings.deviceConnections.rename.success'),
+              variant: 'success',
+            });
+          })
+          .catch(() => {
+            toast.show({ label: t('settings.deviceConnections.rename.failed'), variant: 'danger' });
+          });
+      },
+    });
+  }, [alert, connection, isRenaming, isRemoving, rename, t, toast]);
 
   const requestRemove = useCallback(() => {
     if (!connectionId || !connection) {
@@ -66,9 +104,34 @@ export function DeviceConnectionDetailScreen() {
     );
   }
 
+  const canOpenHome = connection.capabilities.includes('agent');
+  const canSyncConfiguration = connection.capabilities.includes('configuration');
+  // Enterprise providers come from the organization, never from a desktop: the entry stays locked.
+  const isConfigurationLocked =
+    !capabilityPolicy('desktopConfigImport').canEdit('desktopConfigImport');
+
   return (
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
+        <Section.Item
+          accessibilityHint={t('common.rename')}
+          accessibilityValue={{ text: connection.name }}
+          disabled={isRenaming || isRemoving}
+          label={t('settings.deviceConnections.name')}
+          onPress={requestRename}
+          trailing={
+            <Text
+              className={
+                connection.alias === null
+                  ? 'shrink text-muted-foreground'
+                  : 'shrink text-foreground'
+              }
+              numberOfLines={1}
+            >
+              {connection.name}
+            </Text>
+          }
+        />
         <Section.Item
           label={t('settings.deviceConnections.capabilities.label')}
           trailing={
@@ -93,21 +156,24 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' && connection.capabilities.length > 0 ? (
+      {connection.status === 'paired' && (canOpenHome || canSyncConfiguration) ? (
         <Section>
-          {connection.capabilities.includes('agent') ? (
+          {canOpenHome ? (
             <Section.Item
               label={t('settings.deviceConnections.openHome')}
               onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
             />
           ) : null}
-          {connection.capabilities.includes('configuration') ? (
+          {canSyncConfiguration ? (
             <Section.Item
-              description={t('settings.deviceConnections.syncGuide.entryDescription')}
               label={t('settings.deviceConnections.syncGuide.entry')}
+              locked={isConfigurationLocked}
               onPress={() =>
-                router.replace({
-                  params: { connectionId: connection.id },
+                router.push({
+                  params: {
+                    connectionId: connection.id,
+                    returnTo: `/settings/device-connections/${encodeURIComponent(connection.id)}`,
+                  },
                   pathname: '/settings/provider/desktop-sync',
                 })
               }
@@ -117,10 +183,14 @@ export function DeviceConnectionDetailScreen() {
       ) : null}
 
       <Section>
+        <UuRemoteBindingItem connectionId={connection.id} />
+      </Section>
+
+      <Section>
         <Section.Item
           label={t('settings.deviceConnections.location.scan')}
           onPress={() =>
-            router.replace({
+            router.push({
               params: { connectionId: connection.id },
               pathname: '/settings/device-connections/scan',
             })
@@ -131,13 +201,45 @@ export function DeviceConnectionDetailScreen() {
       <Section>
         <Section.Item
           destructive
-          disabled={isRemoving}
+          disabled={isRemoving || isRenaming}
           label={t('settings.deviceConnections.remove.action')}
           onPress={requestRemove}
           showChevron={false}
         />
       </Section>
     </SettingsScrollPage>
+  );
+}
+
+function UuRemoteBindingItem({ connectionId }: { connectionId: string }) {
+  const { t } = useTranslation();
+  const uuRemote = useBackendModule('uuRemote');
+  const remoteDesktop = useUuRemoteAction();
+  const binding = useQuery({
+    queryKey: queryKeys.uuRemote.binding(connectionId),
+    queryFn: () => uuRemote.getBinding(connectionId),
+  });
+  const status = binding.isPending
+    ? t('uuRemote.binding.loading')
+    : binding.isError
+      ? t('uuRemote.binding.loadFailed')
+      : binding.data
+        ? t('uuRemote.binding.linked', { id: binding.data.displayId })
+        : t('uuRemote.binding.notLinked');
+
+  return (
+    <Section.Item
+      label={t('uuRemote.bind.title')}
+      accessibilityValue={{ text: status }}
+      disabled={remoteDesktop.isOpening}
+      onPress={() => remoteDesktop.bind({ page: 'device', connectionId })}
+      showChevron
+      trailing={
+        <Text className="text-muted-foreground" numberOfLines={1}>
+          {status}
+        </Text>
+      }
+    />
   );
 }
 

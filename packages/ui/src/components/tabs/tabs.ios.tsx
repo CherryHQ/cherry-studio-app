@@ -1,18 +1,27 @@
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
-import { PlatformColor, Pressable, Text, View } from 'react-native';
+import { PlatformColor, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
 
 import { duration, easing } from '../../motion';
+import { TabsContent } from './tabs-content';
 import type { TabsProps } from './tabs.types';
 
-const tabHeight = 34;
 const indicatorInset = 3;
 const supportsGlass = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 type Segment = { width: number; x: number };
 
-export function Tabs<TValue extends string>({
+export function Tabs<TValue extends string>(props: TabsProps<TValue>) {
+  return props.variant && props.variant !== 'floating' ? (
+    <TabsContent {...props} />
+  ) : (
+    <PlatformTabs {...props} />
+  );
+}
+
+function PlatformTabs<TValue extends string>({
   accessibilityLabel,
   items,
   layout = 'fill',
@@ -20,7 +29,11 @@ export function Tabs<TValue extends string>({
   style,
   testID,
   value,
+  variant,
 }: TabsProps<TValue>) {
+  const { fontScale } = useWindowDimensions();
+  const tabHeight = variant === 'floating' ? Math.max(42, 20 * fontScale + 22) : 34;
+  const roundStyle = useResolveClassNames('rounded-full');
   const [measuredWidth, setMeasuredWidth] = useState(0);
   // Only `hug` needs per-tab geometry: `fill` segments are the container split
   // evenly, which one measurement already gives.
@@ -47,7 +60,7 @@ export function Tabs<TValue extends string>({
     width: indicatorWidth,
   }));
   const frameStyle = {
-    borderRadius: tabHeight / 2,
+    ...(variant === 'floating' ? roundStyle : { borderRadius: 17 }),
     height: tabHeight,
     overflow: 'hidden',
     ...(layout === 'hug' ? {} : { width: '100%' as const }),
@@ -60,14 +73,16 @@ export function Tabs<TValue extends string>({
       {indicatorWidth > 0 ? (
         <Animated.View
           className={
-            supportsGlass
-              ? 'absolute left-0 rounded-full'
-              : 'absolute left-0 rounded-full bg-background'
+            variant === 'floating'
+              ? 'absolute left-0 rounded-full bg-card dark:bg-[var(--gray-500)]'
+              : supportsGlass
+                ? 'absolute left-0 rounded-full'
+                : 'absolute left-0 rounded-full bg-background'
           }
           pointerEvents="none"
           style={[
             {
-              ...(supportsGlass
+              ...(supportsGlass && variant !== 'floating'
                 ? { backgroundColor: PlatformColor('tertiarySystemFill') }
                 : undefined),
               bottom: indicatorInset,
@@ -93,7 +108,9 @@ export function Tabs<TValue extends string>({
               accessibilityState={{ disabled: item.disabled, selected: isSelected }}
               className={
                 layout === 'hug'
-                  ? 'h-full items-center justify-center px-4 disabled:opacity-40'
+                  ? variant === 'floating'
+                    ? 'h-full items-center justify-center px-3.5 disabled:opacity-40'
+                    : 'h-full items-center justify-center px-4 disabled:opacity-40'
                   : 'h-full flex-1 items-center justify-center disabled:opacity-40'
               }
               disabled={item.disabled}
@@ -139,9 +156,9 @@ export function Tabs<TValue extends string>({
     <View
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="tablist"
-      className={layout === 'hug' ? 'h-[34px] self-start' : 'h-[34px] w-full'}
+      className={layout === 'hug' ? 'self-start' : 'w-full'}
       collapsable={false}
-      style={style}
+      style={[{ height: tabHeight }, style]}
       testID={testID}
     >
       {supportsGlass ? (
@@ -155,7 +172,11 @@ export function Tabs<TValue extends string>({
         </GlassView>
       ) : (
         <View
-          className="overflow-hidden rounded-[17px] bg-secondary"
+          className={
+            variant === 'floating'
+              ? 'overflow-hidden rounded-full bg-[var(--gray-200)]/82 dark:bg-[var(--gray-200)]/88'
+              : 'overflow-hidden rounded-[17px] bg-secondary'
+          }
           onLayout={handleLayout}
           style={frameStyle}
         >

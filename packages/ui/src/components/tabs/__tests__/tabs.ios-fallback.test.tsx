@@ -4,6 +4,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { duration } from '../../../motion';
 import { Tabs } from '../tabs.ios';
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 jest.mock('expo-glass-effect', () => ({
   GlassView: () => {
     throw new Error('GlassView must not render when Liquid Glass is unavailable.');

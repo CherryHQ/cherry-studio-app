@@ -156,11 +156,20 @@ export function useManagedComposerAttachments(
         }
       }
       if (accepted.length === 0) return;
-      const sources = accepted.filter(
-        (attachment): attachment is ComposerAttachmentSource | ComposerAttachmentReady =>
-          attachment.status === undefined ||
-          (Boolean(workspaceSessionId || workspaceFolderId) &&
-            isComposerAttachmentReady(attachment)),
+      const sources = accepted.flatMap(
+        (attachment): (ComposerAttachmentSource | ComposerAttachmentReady)[] => {
+          // A restored tile still marked importing lost its import when the
+          // tokens cleared; restart it rather than leave it blocked forever.
+          if (attachment.status === 'importing') {
+            const { status: _status, ...source } = attachment;
+            return [source];
+          }
+          return attachment.status === undefined ||
+            (Boolean(workspaceSessionId || workspaceFolderId) &&
+              isComposerAttachmentReady(attachment))
+            ? [attachment]
+            : [];
+        },
       );
       commitAttachments([
         ...current,
@@ -193,8 +202,18 @@ export function useManagedComposerAttachments(
     (next: ComposerAttachmentDraft[]) => {
       importTokensRef.current.clear();
       commitAttachments([...next], false);
+      // Clearing the tokens orphaned every in-flight import, so a tile
+      // restored as still importing has no operation left that can finish
+      // it. Restart those imports instead of restoring a permanently
+      // blocked tile.
+      const restored = next.flatMap((attachment): ComposerAttachmentSource[] => {
+        if (attachment.status !== 'importing') return [];
+        const { status: _status, ...source } = attachment;
+        return [source];
+      });
+      if (restored.length > 0) void importAttachments(restored);
     },
-    [commitAttachments],
+    [commitAttachments, importAttachments],
   );
 
   const replaceAttachment = useCallback(

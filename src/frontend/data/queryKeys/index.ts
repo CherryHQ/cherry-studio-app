@@ -9,6 +9,7 @@ import { modelQueryKeys } from './models';
 import { paintingQueryKeys } from './paintings';
 import { pluginConnectionQueryKeys } from './pluginConnections';
 import { providerQueryKeys } from './providers';
+import { uuRemoteQueryKeys } from './uuRemote';
 
 export const queryKeys = {
   agentSessions: agentSessionQueryKeys,
@@ -22,4 +23,5 @@ export const queryKeys = {
   paintings: paintingQueryKeys,
   pluginConnections: pluginConnectionQueryKeys,
   providers: providerQueryKeys,
+  uuRemote: uuRemoteQueryKeys,
 };

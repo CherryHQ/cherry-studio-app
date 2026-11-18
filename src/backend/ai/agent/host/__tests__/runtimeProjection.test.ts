@@ -241,3 +241,28 @@ describe('Runtime output projection', () => {
     });
   });
 });
+
+test.each(['unknown', 'content_filter', undefined])(
+  'classifies the facts instead of accepting an injected reason %s',
+  (reasonCode) => {
+    const error = {
+      code: 'provider_error',
+      message: 'Quota exhausted; content_filter_results: filtered false',
+      retryable: true,
+      origin: 'provider' as const,
+      reasonCode,
+    };
+    const view = JSON.parse(JSON.stringify(toAgentErrorView(error)));
+    expect(view).toEqual({
+      code: 'EXECUTION_FAILED',
+      message: error.message,
+      retryable: true,
+      failure: {
+        version: 1,
+        reasonCode: 'quota',
+        source: { layer: 'provider', code: 'provider_error' },
+      },
+    });
+    expect(view).not.toHaveProperty('reasonCode');
+  },
+);

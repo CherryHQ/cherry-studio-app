@@ -68,6 +68,7 @@ jest.mock('@/frontend/appShell/header', () => ({
   },
 }));
 jest.mock('@/frontend/components/Message', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Resolve inside the hoisted mock factory, preserving Jest's native mocks.
   const { Text } = require('react-native');
   return {
     MessagePartRenderer: ({ part }: { part: { type: string } }) => (

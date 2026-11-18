@@ -1,6 +1,6 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
-import { Button, Composer } from '@cherrystudio/ui/components';
+import { Button, Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -61,11 +61,16 @@ type PaintingModelSelection = {
 type PaintingInputProps = {
   /** Chat presentation only: context the prompt carries, shown above everything else. */
   accessory?: ReactNode;
+  /** Question editing keeps the original attachments, so none may be added. */
+  attachmentsEnabled?: boolean;
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
   initialParamValues?: ImageParamDraft;
+  /** Chat presentation only: caller-owned media and conversation actions. */
+  menu?: ReactNode;
   modelSelection?: PaintingModelSelection;
   onCancel: () => void;
+  onLinkPress?: ComposerInputProps['onLinkPress'];
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
   preparePrompt?: PaintingPromptPreparation;
   onSubmissionSettled?: () => void;
@@ -86,12 +91,15 @@ export function PaintingWorkspaceInput(
 
 function PaintingInputControls({
   accessory,
+  attachmentsEnabled = true,
   canSend,
   dismissKeyboardOnSend,
   initialParamValues,
+  menu,
   modelSelection,
   onCancel,
   onGenerate,
+  onLinkPress,
   onRatioChange,
   preparePrompt,
   onSubmissionSettled,
@@ -126,6 +134,7 @@ function PaintingInputControls({
     onGenerate,
     preparePrompt,
     onSubmissionSettled,
+    attachmentsEnabled,
   });
   const { reference, strategy } = input;
   const openProviderSetup = useOpenProviderSetup(
@@ -137,7 +146,7 @@ function PaintingInputControls({
   const visibleAttachments = isReferenceVisible
     ? input.attachments
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
-  const paramFields = getImageParamFields(input.resolvedMode);
+  const paramFields = getImageParamFields(input.resolvedMode, input.paramValues);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
   const modelLabel =
     selectedModel?.name ?? historicalModelLabel(painting) ?? t('settings.model.painting.title');
@@ -189,10 +198,13 @@ function PaintingInputControls({
       ) : (
         <>
           {accessory}
-          {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
+          {attachmentsEnabled &&
+          isReferenceVisible &&
+          reference.isPickerOpen &&
+          strategy.acceptsImages ? (
             <PaintingReferencePicker reference={reference} />
           ) : null}
-          {visibleAttachments.length > 0 ? (
+          {attachmentsEnabled && visibleAttachments.length > 0 ? (
             <View className="gap-2 pb-2">
               {isReferenceVisible && input.referenceAttachment ? (
                 <View className="flex-row flex-wrap items-center justify-between gap-2">
@@ -212,9 +224,9 @@ function PaintingInputControls({
               />
             </View>
           ) : null}
-          <ComposerField placeholder={t('painting.input.placeholder')} />
+          <ComposerField onLinkPress={onLinkPress} placeholder={t('painting.input.placeholder')} />
           <Composer.Toolbar>
-            <ComposerMenu media="images" />
+            {attachmentsEnabled ? (menu ?? <ComposerMenu media="images" />) : null}
             {input.resolvedMode && paramFields.length > 0 ? (
               <Composer.Action
                 accessibilityLabel={

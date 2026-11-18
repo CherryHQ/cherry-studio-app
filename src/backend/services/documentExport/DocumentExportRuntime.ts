@@ -14,6 +14,7 @@ import {
   type DocumentExportModule,
   type HtmlConversionContext,
   type HtmlConversionInput,
+  type HtmlConversionArtifact,
 } from '@/shared/contracts/documentExport';
 
 import {
@@ -31,6 +32,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
   private foreground = AppState.currentState === 'active';
   private readonly sessions = new Set<ReturnType<typeof createDocumentExportSession>>();
   private conversion: { controller: AbortController; promise: Promise<unknown> } | undefined;
+  private readonly htmlArtifacts = new Set<HtmlConversionArtifact>();
 
   configure(dependencies: DocumentExportDependencies) {
     this.dependencies = dependencies;
@@ -63,7 +65,21 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
       .then(async () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- do not load the ZIP writer until conversion is requested
         const { convertHtml } = require('./convertHtml') as typeof import('./convertHtml');
-        return convertHtml(input, dependencies, controller.signal, context?.onProgress);
+        const prepared = await convertHtml(
+          input,
+          dependencies,
+          controller.signal,
+          context?.onProgress,
+        );
+        const artifact: HtmlConversionArtifact = {
+          ...prepared,
+          dispose: async () => {
+            await prepared.dispose();
+            this.htmlArtifacts.delete(artifact);
+          },
+        };
+        this.htmlArtifacts.add(artifact);
+        return artifact;
       })
       .finally(() => {
         context?.signal?.removeEventListener('abort', abort);
@@ -89,6 +105,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
       ...[...this.sessions].map((session) => session.dispose()),
       this.conversion?.promise,
     ]);
+    await Promise.allSettled([...this.htmlArtifacts].map((artifact) => artifact.dispose()));
   }
 
   protected onDestroy() {

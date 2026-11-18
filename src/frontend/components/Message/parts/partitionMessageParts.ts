@@ -1,4 +1,5 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   isAgentMutationToolPart,
@@ -182,7 +183,10 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
 function isInvisiblePart(part: CherryMessagePart) {
   return (
     (part.type === 'text' && !part.text.trim()) ||
-    (part.type === 'reasoning' && part.state !== 'streaming' && !part.text.trim()) ||
+    (part.type === 'reasoning' &&
+      part.state !== 'streaming' &&
+      !part.text.trim() &&
+      !readCherryMeta(part)?.hasText) ||
     part.type === 'step-start' ||
     part.type === 'source-document' ||
     part.type === 'data-video' ||

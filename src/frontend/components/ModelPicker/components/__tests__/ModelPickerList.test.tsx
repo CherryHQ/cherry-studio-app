@@ -11,10 +11,16 @@ jest.mock('@cherrystudio/ui/components', () => {
         <MockText>{children}</MockText>
       </MockPressable>
     ),
+    ContentState: {
+      Empty: ({ description, title }: { description?: string; title?: string }) => (
+        <MockText>{title ?? description}</MockText>
+      ),
+    },
   };
 });
 
 jest.mock('@cherrystudio/ui/utils', () => ({ cn: (...names: unknown[]) => names.join(' ') }));
+jest.mock('expo-blur', () => ({ BlurTargetView: jest.requireActual('react-native').View }));
 
 jest.mock('../ModelPickerFastScroller', () => ({ ModelPickerFastScroller: () => null }));
 

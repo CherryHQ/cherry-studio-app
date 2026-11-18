@@ -10,6 +10,9 @@ business-data persistence and the concrete implementations that read or write th
 - `PreferenceService.ts` owns cached access to SQLite-backed user preferences.
 - `db/` owns the Expo SQLite connection, Drizzle schemas, migrations, custom SQL, and seeders.
 - `services/` owns entity persistence and data-specific transformations.
+- `SshProfileService` owns durable SSH configuration in a separate, versioned MMKV store
+  under the active storage generation's `ssh/` directory. Credentials remain in SecureStore;
+  portable backups carry only the validated configuration JSON.
 - `DesktopConnectionService` stores paired-device metadata and atomically adds missing providers
   and models. Existing IDs are skipped without changing local configuration, credentials, notes,
   order, or timestamps. New models use the existing mobile provider's endpoint configuration for
@@ -39,4 +42,5 @@ the single Hermes runtime and are intentionally absent. Cache initialization and
 
 Domain-specific caches that need stronger invariants remain private to their owning module, such as
 MCP tool snapshots. User configuration and durable business records still belong in preferences or
-SQLite rather than either cache tier.
+SQLite rather than either cache tier. SSH connection profiles use their own durable MMKV store;
+cache resets never clear it.

@@ -1,10 +1,23 @@
-import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
-import { ActionMenu, BottomSheet, Button, SearchField } from '@cherrystudio/ui/components';
+import EyeIcon from '@cherrystudio/app-icons/icons/eye';
+import GiftIcon from '@cherrystudio/app-icons/icons/gift';
+import {
+  ActionMenu,
+  BottomSheet,
+  type BottomSheetSize,
+  type BottomSheetSizes,
+  Button,
+  ContentState,
+  SearchField,
+} from '@cherrystudio/ui/components';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { useModelChoice } from '@/frontend/components/Policy';
+import type { CloudModelUse } from '@/shared/contracts/cloud';
+import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import {
@@ -15,11 +28,15 @@ import {
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
+import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat';
 
+const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
+
 type ModelPickerDrawerProps = {
+  cloudUse?: CloudModelUse;
   emptyText?: string;
   isModelVisible?: (item: ModelPickerModelItem) => boolean;
   modelType: ModelTypeFilter;
@@ -50,6 +67,7 @@ export type ModelPickerMultiSelect = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
+  cloudUse = 'agent',
   emptyText,
   isModelVisible,
   modelType,
@@ -64,13 +82,15 @@ export function ModelPickerDrawer({
   variant = 'default',
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('large');
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
-  const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
+  // The sheet renders through a portal at the app root, outside the screen's PolicyScope.
+  const { allowedModelIds } = useModelChoice();
+  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
   const handleClose = useCallback(() => {
-    setIsSearchFocused(false);
+    setSheetSize('large');
     setSearchText('');
     setSelectedBadge(null);
     onClose();
@@ -78,6 +98,7 @@ export function ModelPickerDrawer({
 
   return (
     <BottomSheet
+      avoidKeyboard
       headerAction={
         // A mode entered and left like selecting photos, not a setting the sheet keeps.
         multiSelect ? (
@@ -88,30 +109,41 @@ export function ModelPickerDrawer({
             variant="ghost"
           >
             <Button.Label>
-              {t(multiSelect.enabled ? 'common.cancel' : 'modelPicker.multiSelect.label')}
+              {t(
+                multiSelect.enabled
+                  ? 'modelPicker.multiSelect.exit'
+                  : 'modelPicker.multiSelect.label',
+              )}
             </Button.Label>
           </Button>
         ) : undefined
       }
       onClose={handleClose}
+      onSizeChange={setSheetSize}
       open={open}
-      size={isSearchExpanded ? 'full' : 'large'}
+      size={sheetSize}
+      sizes={modelPickerSizes}
       testID="model-picker"
       title={
         multiSelect?.enabled
-          ? t('modelPicker.multiSelect.title', { selected: multiSelect.selectedModelIds.length })
+          ? t('modelPicker.multiSelect.title', {
+              max: multiSelect.maxCount,
+              selected: multiSelect.selectedModelIds.length,
+            })
           : (title ?? t('modelPicker.title'))
       }
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
+          cloudUse={cloudUse}
+          allowedModelIds={allowedModelIds}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
           modelType={modelType}
           onAddProvider={onAddProvider}
           onSelect={onSelect}
-          onSearchFocusChange={setIsSearchFocused}
+          onSearchFocus={handleSearchFocus}
           onSearchTextChange={setSearchText}
           open={open}
           providerId={providerId}
@@ -128,13 +160,15 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
+  cloudUse,
+  allowedModelIds,
   deferredSearchText,
   emptyText,
   isModelVisible,
   modelType,
   onAddProvider,
   onSelect,
-  onSearchFocusChange,
+  onSearchFocus,
   onSearchTextChange,
   open,
   providerId,
@@ -146,6 +180,7 @@ function ModelPickerDrawerContent({
   variant,
 }: Pick<
   ModelPickerDrawerProps,
+  | 'cloudUse'
   | 'isModelVisible'
   | 'emptyText'
   | 'modelType'
@@ -157,15 +192,17 @@ function ModelPickerDrawerContent({
   | 'multiSelect'
   | 'variant'
 > & {
+  allowedModelIds: ReadonlySet<string> | null;
   deferredSearchText: string;
-  onSearchFocusChange: (isFocused: boolean) => void;
+  onSearchFocus: () => void;
   onSearchTextChange: (value: string) => void;
   searchText: string;
   selectedBadge: ModelPickerBadge | null;
   setSelectedBadge: (badge: ModelPickerBadge | null) => void;
 }) {
   const { t } = useTranslation();
-  const { groups, isLoading } = useModelPickerData({
+  const { error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
+    cloudUse,
     modelType,
     providerId,
     searchText: deferredSearchText,
@@ -184,21 +221,49 @@ function ModelPickerDrawerContent({
   );
   const visibleGroups = useMemo(
     () =>
-      isModelVisible
+      isModelVisible || allowedModelIds
         ? filteredGroups.flatMap((group) => {
-            const items = group.items.filter(isModelVisible);
+            const items = group.items.filter(
+              (item) =>
+                (allowedModelIds?.has(item.modelId) ?? true) && (isModelVisible?.(item) ?? true),
+            );
             return items.length > 0 ? [{ ...group, items }] : [];
           })
         : filteredGroups,
-    [filteredGroups, isModelVisible],
+    [allowedModelIds, filteredGroups, isModelVisible],
   );
   const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
-  const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
+  const hasConditions = deferredSearchText.trim().length > 0 || hasActiveFilters;
+  const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =
-    !hasSearch && !hasActiveFilters && onAddProvider
-      ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
-      : undefined;
+    // Enterprise providers come from the organization and cannot be added here.
+    hasConditions
+      ? {
+          label: t('modelPicker.clearConditions'),
+          onPress: () => {
+            onSearchTextChange('');
+            setSelectedBadge(null);
+          },
+          variant: 'text' as const,
+        }
+      : onAddProvider &&
+          allowedModelIds === null &&
+          capabilityPolicy('providerSettings').canEdit('providerSettings')
+        ? {
+            label: t('modelPicker.addProvider'),
+            onPress: onAddProvider,
+            variant: 'default' as const,
+          }
+        : undefined;
+  const filterIcon =
+    selectedBadge === 'vision' ? (
+      <EyeIcon className="text-tag-blue-foreground" />
+    ) : selectedBadge === 'free' ? (
+      <GiftIcon className="text-tag-green-foreground" />
+    ) : (
+      <ModelPickerFilterIcon />
+    );
 
   return (
     <View className="min-h-0 flex-1">
@@ -207,13 +272,14 @@ function ModelPickerDrawerContent({
           <SearchField
             accessibilityLabel={t('modelPicker.searchPlaceholder')}
             clearAccessibilityLabel={t('common.clear')}
-            onBlur={() => onSearchFocusChange(false)}
             onChangeText={onSearchTextChange}
             onClear={() => onSearchTextChange('')}
-            onFocus={() => onSearchFocusChange(true)}
+            onFocus={onSearchFocus}
+            onSubmitEditing={Keyboard.dismiss}
             placeholder={t('modelPicker.searchPlaceholder')}
             testID="model-picker-search"
             value={searchText}
+            variant="subtle"
           />
         </View>
         {variant === 'chat' ? (
@@ -235,8 +301,11 @@ function ModelPickerDrawerContent({
           >
             <Button
               accessibilityLabel={t('common.filter')}
-              icon={<ListFilterIcon />}
-              size="sm"
+              accessibilityState={{ selected: hasActiveFilters }}
+              accessibilityValue={
+                selectedBadge ? { text: t(modelPickerBadgeLabelKeys[selectedBadge]) } : undefined
+              }
+              icon={filterIcon}
               testID="model-picker-filter"
               variant="ghost"
             />
@@ -244,23 +313,40 @@ function ModelPickerDrawerContent({
         ) : null}
       </View>
       <View className="min-h-0 flex-1">
-        <ModelPickerList
-          emptyAction={emptyAction}
-          emptyText={
-            hasSearch
-              ? t('settings.provider.models.search.empty')
-              : (emptyText ?? t('modelPicker.empty'))
-          }
-          isLoading={isLoading}
-          isOpen={open}
-          listItems={listItems}
-          loadingText={t('settings.provider.models.loading')}
-          onSelect={onSelect}
-          maxSelectedCount={multiSelect?.maxCount}
-          selectedModelIds={multiSelect?.selectedModelIds}
-          selectedModelId={selectedModelId}
-          showBadges={variant === 'chat'}
-        />
+        {!waitingForCatalog && error && listItems.length === 0 ? (
+          <View className="flex-1 justify-center px-6 py-8">
+            <ContentState.Error
+              primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+              title={t('settings.provider.models.syncRecovery.failed')}
+            />
+          </View>
+        ) : (
+          <ModelPickerList
+            emptyAction={emptyAction}
+            emptyIcon={
+              hasLoadedCatalog ? (
+                <EmptyIllustration
+                  scene={hasConditions || groups.length > 0 ? 'search' : 'connection'}
+                  size="panel"
+                />
+              ) : undefined
+            }
+            emptyText={
+              hasConditions
+                ? t('settings.provider.models.search.empty')
+                : (emptyText ?? t('modelPicker.empty'))
+            }
+            isLoading={waitingForCatalog}
+            isOpen={open}
+            listItems={listItems}
+            loadingText={t('settings.provider.models.loading')}
+            onSelect={onSelect}
+            maxSelectedCount={multiSelect?.maxCount}
+            selectedModelIds={multiSelect?.selectedModelIds}
+            selectedModelId={selectedModelId}
+            showBadges={variant === 'chat'}
+          />
+        )}
       </View>
     </View>
   );

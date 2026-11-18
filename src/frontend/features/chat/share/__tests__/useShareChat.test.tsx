@@ -2,7 +2,7 @@ import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { TranscriptSnapshot } from '@/frontend/appShell/conversation';
-import type { useDocumentExport } from '@/frontend/appShell/documentExport';
+import type { useDocumentExport } from '@/frontend/appShell/sharing';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
@@ -16,9 +16,10 @@ const mockPrepare = jest.fn<Promise<TranscriptSnapshot>, [readonly string[], Abo
 const target: ChatShareTarget = {
   ref: { source: { kind: 'local' }, sessionId: 'session' },
   prepareSelection: mockPrepare,
+  readSelectableIds: async () => [],
 };
 
-jest.mock('@/frontend/appShell/documentExport', () => ({
+jest.mock('@/frontend/appShell/sharing', () => ({
   useDocumentExport: () => ({ open: mockOpen }),
 }));
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -113,7 +114,7 @@ test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
   },
 );
 
-test('the normal share flow retains expanded translations for every format and both thinking snapshots', async () => {
+test('the normal share flow retains expanded translations for every format and always excludes thinking', async () => {
   const answer = message('answer', 'assistant');
   answer.parts.unshift({ id: 'thought', type: 'reasoning', text: 'Thought', state: 'done' });
   mockPrepare.mockResolvedValueOnce({ messages: [answer] });
@@ -131,9 +132,8 @@ test('the normal share flow retains expanded translations for every format and b
   const request = mockOpen.mock.calls[0][0];
   expect(request.allowedFormats).toEqual(['image', 'html', 'markdown']);
   expect(JSON.stringify(request.input)).toContain('译文');
-  expect(JSON.stringify(request.input)).toContain('Thought');
-  expect(JSON.stringify(request.option?.uncheckedInput)).toContain('译文');
-  expect(JSON.stringify(request.option?.uncheckedInput)).not.toContain('Thought');
+  expect(JSON.stringify(request.input)).not.toContain('Thought');
+  expect(request).not.toHaveProperty('option');
 });
 
 test('does not open the export after preparation was cancelled', async () => {

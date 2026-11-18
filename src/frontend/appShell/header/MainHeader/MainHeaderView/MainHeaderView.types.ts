@@ -9,7 +9,9 @@ export type MainHeaderViewProps = {
   agent?: Pick<Agent, 'name'> & Partial<Pick<Agent, 'avatar' | 'avatarUri'>> & { emoji?: string };
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
-  onNewChat: () => void;
+  selection?: { selectedCount: number; onExit(): void };
+  onNewChat?: () => void;
   onAgentPress?: () => void;
+  onAgentSwitch?: () => void;
   actions?: readonly HeaderToolbarAction[];
 };

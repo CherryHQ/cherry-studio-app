@@ -1,21 +1,20 @@
 import { createChatSelectionHandoff, type ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { createReadyAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
-import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 import { useReturnToChat } from './useReturnToChat';
-import { acceptsSelection, useSelectionSourceChat } from './useSelectionSourceChat';
-
-const acceptsAnyAgent = () => true;
+import { useSelectionSourceChat } from './useSelectionSourceChat';
 
 /**
- * Adds the previewed file to the chat that opened it, without sending. Every Agent takes images;
- * other files need a standard Agent, and a chat that cannot take the file offers no action.
+ * Adds the previewed file to the chat that opened it, without sending.
+ * A chat whose Agent cannot take the file offers no action.
  */
-export function useAddFileToChat(file: ResolvedFile, sourceChat: ChatTarget | undefined) {
+export function useAddFileToChat(
+  file: ResolvedFile | undefined,
+  sourceChat: ChatTarget | undefined,
+) {
   const { isResolving, returnsToSourceChat } = useSelectionSourceChat(
-    sourceChat,
-    fileEntryPreviewKind(file.entry) === 'image' ? acceptsAnyAgent : acceptsSelection,
+    file ? sourceChat : undefined,
   );
   const returnToChat = useReturnToChat();
 
@@ -23,7 +22,7 @@ export function useAddFileToChat(file: ResolvedFile, sourceChat: ChatTarget | un
     isResolving,
     returnsToSourceChat,
     add: () => {
-      if (!sourceChat) return;
+      if (!file || !sourceChat) return;
       const attachment = createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`);
       returnToChat({ ...sourceChat, selectionHandoff: createChatSelectionHandoff({ attachment }) });
     },

@@ -93,6 +93,10 @@ test.each([
       name: outputName,
       uri: 'file:///cache/encoded-0.jpg',
     });
+    expect(ImageManipulator.manipulate).toHaveBeenNthCalledWith(1, SOURCE, {
+      maxHeight: 2048,
+      maxWidth: 2048,
+    });
     expect(native.contexts[0]?.resize).toHaveBeenCalledWith({ width: 2048, height: 1536 });
     expect(native.outputs[0]?.saveAsync).toHaveBeenCalledWith({ format, compress: 0.85 });
     expect(testState.files.get(SOURCE)).toBe(9 * MIB);

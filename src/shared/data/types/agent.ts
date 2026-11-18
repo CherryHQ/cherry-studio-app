@@ -1,6 +1,5 @@
 import * as z from 'zod';
 
-import { AgentCapabilitySchema } from '@/shared/data/types/agentCapability';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
 /** Minimal Agents exclude app tools; provider-native web tools follow the web policy. */
@@ -18,24 +17,36 @@ export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
 
 export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'auto';
 export const CHERRY_AGENT_AVATAR = '🍒';
+export const DEEPSEEK_AGENT_AVATAR = 'builtin:deepseek';
+
+/** Emoji content only; managed file references still require the avatar image workflow. */
+export const AgentEmojiAvatarSchema = z
+  .string()
+  .min(1)
+  .max(32)
+  .emoji()
+  .refine((value) => /[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(value));
 
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
-  /** Built-in Cherry emoji or a managed avatar file reference; null uses the name fallback. */
+  /** Emoji, bundled avatar or managed file reference. Null uses the name fallback. */
   avatar: z.string().nullable(),
   /**
-   * Read-time projection of `avatar` into a device-local image URI; null when
-   * an emoji, unset, or when the file is gone. Absolute paths are never persisted — iOS
-   * relocates the app container — so this is rebuilt on every read.
+   * Device-local image URI resolved from a managed file reference on each read.
+   * It is null for emoji, bundled avatars, or missing files. The app container can move on iOS.
    */
   avatarUri: z.string().nullable(),
   createdAt: z.iso.datetime(),
-  /** Capability-group deny-list; a group absent from the list is enabled. */
-  disabledCapabilities: z.array(AgentCapabilitySchema),
+  /** Retired switches are projected as empty for existing Data API readers. */
+  disabledCapabilities: z.array(z.string()).max(0),
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),
+  /** Owned by the enterprise server: read-only except for the managed-Agent field allowlist. */
+  isManaged: z.boolean().optional(),
+  /** A managed Agent's model pool, default first; the user picks among them only when there are several. */
+  allowedModelIds: z.array(UniqueModelIdSchema).optional(),
   mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */
@@ -46,3 +57,11 @@ export const AgentSchema = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
+
+/** Fields a user may still change on an Agent the enterprise server manages. */
+export const MANAGED_AGENT_EDITABLE_FIELDS = [
+  'model',
+  'mode',
+  'toolApprovalMode',
+  'disabledCapabilities',
+] as const satisfies readonly (keyof Agent)[];

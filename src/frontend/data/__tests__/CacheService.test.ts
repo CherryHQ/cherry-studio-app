@@ -250,6 +250,7 @@ describe('CacheService persist tier', () => {
     const storage = createInMemoryKvStorage();
     storage.set('legacy.removed_key', JSON.stringify('stale'));
 
+    // oxlint-disable-next-line eslint/no-new -- Constructor-time pruning is the behavior under test.
     new CacheService(storage);
     expect(storage.getAllKeys()).not.toContain('legacy.removed_key');
   });

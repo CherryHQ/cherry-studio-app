@@ -11,18 +11,17 @@ const CACHE_VERSION = 4;
 const MAX_CACHE_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 256;
-const resultSchema = z.object({
-  text: z.string().max(1_000_000),
-  totalPages: z.number().int().nonnegative(),
-  extractedPages: z.number().int().min(0).max(MAX_PDF_ATTACHMENT_PAGES),
-  isTruncated: z.boolean(),
-  extractionError: z.literal(false),
-  ocrError: z.literal(false),
-  ocrUnavailable: z.boolean(),
-  unrecognizedPages: z
-    .array(z.number().int().min(1).max(MAX_PDF_ATTACHMENT_PAGES))
-    .max(MAX_PDF_ATTACHMENT_PAGES),
-});
+const resultSchema = (maxPages: number) =>
+  z.object({
+    text: z.string().max(1_000_000),
+    totalPages: z.number().int().nonnegative(),
+    extractedPages: z.number().int().min(0).max(maxPages),
+    isTruncated: z.boolean(),
+    extractionError: z.literal(false),
+    ocrError: z.literal(false),
+    ocrUnavailable: z.boolean(),
+    unrecognizedPages: z.array(z.number().int().min(1).max(maxPages)).max(maxPages),
+  });
 
 function directory(): Directory {
   return new Directory(Paths.cache, 'PdfText');
@@ -40,22 +39,29 @@ export function fileTextCacheFile(
   );
 }
 
-export async function readFileTextCache(file: File): Promise<ExtractResult | undefined> {
+export async function readFileTextCache(
+  file: File,
+  maxPages = MAX_PDF_ATTACHMENT_PAGES,
+): Promise<ExtractResult | undefined> {
   try {
     if (!file.exists || file.size > MAX_ENTRY_BYTES) return undefined;
-    return resultSchema.parse(JSON.parse(await file.text()));
+    return resultSchema(maxPages).parse(JSON.parse(await file.text()));
   } catch {
     // An interrupted write or an OS-purged cache is a miss, not a document error.
     return undefined;
   }
 }
 
-export function writeFileTextCache(file: File, result: ExtractResult): void {
+export function writeFileTextCache(
+  file: File,
+  result: ExtractResult,
+  maxPages = MAX_PDF_ATTACHMENT_PAGES,
+): void {
   if (result.extractionError || result.ocrError) return;
   try {
     const folder = directory();
     folder.create({ intermediates: true, idempotent: true });
-    const data = JSON.stringify(resultSchema.parse(result));
+    const data = JSON.stringify(resultSchema(maxPages).parse(result));
     if (new TextEncoder().encode(data).byteLength > MAX_ENTRY_BYTES) return;
     file.writeSync(data);
     // Bound disk retention. No OCR results or bitmaps accumulate in a JS memory cache.

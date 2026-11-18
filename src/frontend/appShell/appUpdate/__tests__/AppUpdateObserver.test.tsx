@@ -134,3 +134,10 @@ test('a new chat for a chosen agent still counts as the landing chat', async () 
   await launch();
   expect(mockOpen).toHaveBeenCalledTimes(1);
 });
+
+test('privacy consent prevents starting a vendor query', async () => {
+  mockPrivacyPending = true;
+  await launch();
+  expect(mockUpdate.check).not.toHaveBeenCalled();
+  expect(mockOpen).not.toHaveBeenCalled();
+});

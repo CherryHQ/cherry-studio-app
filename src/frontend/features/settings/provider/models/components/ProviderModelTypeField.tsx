@@ -1,7 +1,9 @@
-import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
+import { OptionPickerBottomSheet } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
+
+import { PolicySelectItem } from '@/frontend/components/Policy';
 
 import type { ProviderModelPrimaryType } from '../utils/providerModelAdd';
 
@@ -22,13 +24,14 @@ export function ProviderModelTypeField({
     : t('settings.provider.models.detail.unknown');
   // Embedding and rerank models cannot be used in chat, so they are not offered; a model that
   // already is one still shows its type.
-  const options = (['text', 'image', 'speech', 'transcription'] as const).map((type) => ({
+  const options = (['text', 'image'] as const).map((type) => ({
     value: type,
     label: t(`settings.provider.models.classification.${type}`),
   }));
   return (
     <>
-      <Section.SelectItem
+      <PolicySelectItem
+        field="model"
         label={title}
         value={valueLabel}
         accessibilityLabel={`${title}, ${valueLabel}`}

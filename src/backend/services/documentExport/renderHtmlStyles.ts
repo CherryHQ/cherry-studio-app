@@ -91,13 +91,44 @@ ${
   imageFrame
     ? `
 .image-print{background:${imageFrame.background}}
-.image-print .code-block pre{overflow:hidden}
+.image-print .code-block{height:auto;overflow:visible;display:block}
+.image-print .code-block pre{overflow:visible;white-space:pre-wrap;overflow-wrap:anywhere}
 .image-print .table-scroll{overflow:visible}
 .image-print table{table-layout:fixed}
 .image-print td,.image-print th{min-width:0;padding:8px}
 .image-print .formula-block{overflow:visible}
 .image-print summary{cursor:default}
 .image-print summary::after{display:none}
+${
+  imageFrame.layout === 'single'
+    ? `
+.image-print{font-size:${Math.max(12, base.fontSize - 1)}px;line-height:${base.lineHeight}px}
+.image-print .document-content{padding:24px 24px 0;gap:20px}
+.share-card-meta{display:flex;align-items:center;gap:10px;min-width:0}
+.share-card-meta .message-avatar{width:28px;height:28px;border:0;font-size:12px}
+.share-card-author{min-width:0;flex:1;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;font-weight:600}
+.share-card-date{flex-shrink:0;font-family:"GeistMono-Regular","SFMono-Regular",Consolas,monospace;font-size:12px;line-height:18px;color:${colors.muted}}
+.image-print .message-content{gap:12px}
+.image-print .bubble-column{width:auto;max-width:92%}
+.image-print .bubble{line-height:${base.lineHeight - 1}px}
+.image-print .code-block{border-radius:14.4px}
+.image-print .code-heading{border:0;padding:8px 12px 0 14px;font-size:13px;line-height:18px;font-weight:400;color:${colors.muted}}
+.image-print .code-block pre{padding:6px 14px 12px}
+.image-print .code-block pre,.image-print .code-block code{font-size:${Math.max(12, sm.fontSize - 1.5)}px;line-height:${sm.lineHeight - 1}px}
+.image-print h3,.image-print h4,.image-print h5{font-size:${base.fontSize + 1}px;line-height:${base.lineHeight + 2}px}
+.image-print .markdown h1,.image-print .markdown h2,.image-print .markdown h3{margin-bottom:12px}
+.image-print ul,.image-print ol{padding-left:18px}
+.image-print li+li{margin-top:4px}
+.image-print .table-scroll{border:0;border-radius:0}
+.image-print table{font-size:13px;line-height:19px;border-collapse:collapse}
+.image-print td,.image-print th{padding:7px 8px;border:0;border-bottom:1px solid ${colors.border}}
+.image-print th{font-size:12px;color:${colors.muted};background:transparent}
+.share-empty-excerpt{margin:0;color:${colors.muted}}
+.image-print .export-image img{max-height:320px;object-fit:contain}
+.image-print.is-unbranded{padding-bottom:24px}
+`
+    : ''
+}
 `
     : ''
 }
@@ -113,6 +144,18 @@ img.print-logo,img.print-qr{flex-shrink:0;border-radius:0;margin:0}
 img.print-logo{width:${size(footer.logoSize)}px;height:${size(footer.logoSize)}px}
 img.print-qr{width:${size(footer.qrCodeSize)}px;height:${size(footer.qrCodeSize)}px;image-rendering:pixelated}
 .print-secondary{font-size:${size(footer.secondarySize)}px;line-height:${size(footer.secondaryLineHeight)}px;opacity:${footer.secondaryOpacity}}
+${
+  imageFrame?.layout === 'single'
+    ? `
+.image-print .print-signature{margin:24px 24px 0;border-top:1px solid ${colors.subtleBorder};padding:18px 0 22px;gap:12px;background:transparent;color:${colors.foreground}}
+.image-print .print-identity{gap:12px}
+.image-print .print-brand{font-size:${sm.fontSize}px;line-height:${Math.max(18, sm.lineHeight - 2)}px}
+.image-print .print-secondary{font-size:12px;line-height:16px;opacity:1;color:${colors.muted}}
+.image-print img.print-logo{width:30px;height:30px;border-radius:8px}
+.image-print img.print-qr{width:52px;height:52px;border-radius:6px}
+`
+    : ''
+}
 `
     : ''
 }`;

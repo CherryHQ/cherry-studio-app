@@ -29,6 +29,13 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `components/ProviderConfiguration/` owns the configuration body shared by provider details,
   setup, creation and onboarding.
 
+In an enterprise profile the organization configures every provider and model. The list keeps its
+rows and locked switches inside one locked group, without creation or import. `detail/` renders
+`ManagedProviderDetail`: the same configuration and models tabs, with the keys (withheld) and
+addresses in a locked group, the connection check still available, and the model list in a locked
+group without sync, add or endpoint actions. A model opens the same details page with its settings
+locked and without its delete action.
+
 ## Provider List Motion
 
 The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows
@@ -55,14 +62,19 @@ item in the recommended section; preset rows keep their explicit Add action. Bot
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
 
+`catalog` also exports `ProviderCatalogContent` so an onboarding route can supply its own page
+frame while retaining this exact search, grouped list, import and selection flow. Onboarding's
+connection route mounts the original `ProviderConfiguration` through the `new` public entry.
+First-use selection starts at the recommended catalog entries, without a separate saved-services section.
+
 ## Desktop Provider Synchronization
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
 PC. Device details open the same sync page with a connection ID, skipping
-source selection. Dedicated onboarding routes also reuse this page with a route-owned
-`setupIntent="chat"`; successful import then opens onboarding's chat-model selection without marking
-setup complete. Entering synchronization and completing import use `replace`; settings import
-finishes at the provider list without preserving the import page in back history.
+source selection. Settings and the dedicated onboarding screen share `useDesktopProviderSync`
+for preview, selection and import. Settings import finishes at the provider list; onboarding import
+continues to model selection. Each entry owns its presentation and destination, using `replace`
+so the completed import page does not remain in back history.
 
 Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
@@ -83,7 +95,8 @@ Runtime admits compatible endpoints; native Ollama endpoints remain unsupported.
 reachability. Optional API-key authentication is persisted through `authConfig.required`, so
 keyless gateways can serve conversations and run connection checks without adding a dummy key.
 Before returning a preview with selectable providers, the workflow prepares the shared model
-catalog so its first download cannot become a new dependency failure only after confirmation.
+catalog from a compatible saved snapshot or a shared download before confirmation. A failed first
+download leaves the workflow retryable.
 
 ## Provider Configuration
 
@@ -107,18 +120,6 @@ Labels and masked suffixes appear in management, ordering and connection-test se
 keys use a stable fallback rather than a position-based name.
 
 ## Connectivity And Models
-
-Provider model synchronization admits speech synthesis (TTS) and transcription (STT) for API-key
-accounts with a configured OpenAI-compatible audio route. Known OpenAI audio families retain their
-type even when `/models` only returns IDs; other models use the catalog's capabilities and
-modalities, or a manually selected model type. Realtime and multimodal audio chat are separate
-protocols, not TTS choices. Native Gemini, Vertex and Copilot voice protocols remain unsupported.
-
-The model list and pull preview offer TTS/STT purpose filters and visible type badges. Grouped
-lists retain voice rows, and purpose tabs only show categories present in the current collection.
-Manual model settings expose TTS/STT types without chat endpoints, token limits or input switches.
-These catalog settings do not start playback or transcription; the voice feature consumes the
-saved models separately. Connectivity checks continue to select chat models only.
 
 The connectivity check selects one provider-scoped model and one enabled API key, defaulting to
 the first enabled key; the key row appears only when more than one key is enabled. Neither choice is stored. The explicit probe key disables failover and does
@@ -175,3 +176,18 @@ Each adapter declares the desktop app's registered client ID and redirect URL. C
 `cherrystudio://oauth/callback` with desktop; a custom-scheme callback only reaches the app on the
 device that opened the browser. Only production builds register the `cherrystudio` scheme, so
 development and preview builds cannot complete provider sign-in.
+
+## Regional Discovery
+
+The shared IP country selects the new-provider catalog and recommendations from the
+bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
+All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
+international discovery once detected. Discovery and first-install recommendations share
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region
+from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
+global entries; only a missing device region retains the domestic default. The detection result
+remains unknown. Mobile capability exclusions and the
+recommended-provider subset remain locally owned; model metadata is shared across editions. Saved providers keep their
+settings, visibility and runtime availability across region changes. Chat setup also lists saved
+presets absent from the current regional catalog beside custom connections, so travelling does not
+remove their setup path.

@@ -5,6 +5,7 @@ import type {
   AgentRef,
   ConversationAction,
   ConversationCatalog,
+  ConversationCitationReader,
   ConversationExecution,
   ConversationFailure,
   ConversationMessage,
@@ -16,6 +17,7 @@ import type {
   TranscriptSnapshot,
   WorkspaceRef,
 } from '../contracts';
+import type { RemoteTaskCatalogQueries } from './remoteTaskContracts';
 
 /**
  * Desktop-owned conversation contract. Everything here exists because the authoritative state lives
@@ -97,6 +99,7 @@ export type HistoryPreview = {
   complete: boolean;
 };
 export interface ConversationHistory {
+  readCitations?: ConversationCitationReader;
   peekLatest?: () => HistoryPreview | undefined;
   subscribePreview?: (listener: () => void) => () => void;
   openLatest(signal: AbortSignal): Promise<HistoryWindow>;
@@ -104,6 +107,8 @@ export interface ConversationHistory {
   prepareSelection(messageIds: readonly string[], signal: AbortSignal): Promise<TranscriptSnapshot>;
 }
 export interface RemoteConversationSession {
+  /** Stable desktop binding + Session namespace for phone-owned derived reading aids. */
+  readonly readingAidScope: string;
   readonly ref: ConversationRef;
   readonly scope: QueryScope;
   readonly state: Readable<RemoteConversationSnapshot>;
@@ -135,9 +140,16 @@ export interface RemoteConversationSource extends ConversationSource {
   /** Stable identity/grant binding for unsent drafts; independent of Query lifetime. */
   readonly draftScope: string;
   readonly catalog: RemoteConversationCatalog;
+  readonly tasks: RemoteTaskCatalogQueries;
   /** Whether the draft's input already belongs to a start; an undelivered one stays with the draft. */
   hasSubmission(draftId: DraftId): boolean;
   openSession(ref: ConversationRef, signal: AbortSignal): Promise<RemoteConversationSession>;
+  /** Task-scoped membership is verified before opening a capability-free reader. */
+  openTaskSession(
+    taskId: string,
+    ref: ConversationRef,
+    signal: AbortSignal,
+  ): Promise<RemoteConversationSession>;
 }
 export function isRemoteConversationSource(
   source: ConversationSource,

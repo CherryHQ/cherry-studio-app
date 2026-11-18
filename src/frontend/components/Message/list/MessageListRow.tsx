@@ -13,15 +13,23 @@ type MessageListRowProps = {
   extraData?: unknown;
   message: MessageListItem;
   renderMessage: MessageRenderer;
+  insets?: { horizontal: number; user: number; assistant: number };
 };
 
 export const MessageListRow = memo(function MessageListRow({
   extraData,
   message,
   renderMessage,
+  insets,
 }: MessageListRowProps) {
   return (
-    <View style={messageRowStyles[message.role]}>
+    <View
+      style={
+        insets && message.role !== 'system'
+          ? { paddingHorizontal: insets.horizontal, paddingVertical: insets[message.role] }
+          : messageRowStyles[message.role]
+      }
+    >
       {/* One message that cannot render must not take the conversation down with it. */}
       <ErrorBoundary
         fallback={renderMessageFailure}

@@ -1,6 +1,7 @@
 import { providerService } from '@/backend/data/services/ProviderService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
+import type { Provider } from '@/shared/data/types/provider';
 
 import {
   getProviderById,
@@ -14,7 +15,13 @@ type PreferenceMap = Partial<PreferenceSchema>;
 jest.mock('@/backend/data/services/ProviderService', () => ({
   providerService: {
     listApiKeys: jest.fn(),
+    getByProviderId: jest.fn(),
   },
+}));
+
+jest.mock('@cherrystudio/ai-runtime/provider', () => ({
+  getBaseUrl: (provider: Provider) =>
+    provider.endpointConfigs?.['openai-chat-completions']?.baseUrl ?? '',
 }));
 
 const listProviderApiKeysMock = providerService.listApiKeys as jest.MockedFunction<
@@ -25,6 +32,61 @@ describe('web search config', () => {
   beforeEach(() => {
     listProviderApiKeysMock.mockReset();
     listProviderApiKeysMock.mockResolvedValue({ keys: [] });
+    jest.mocked(providerService.getByProviderId).mockReset();
+  });
+
+  test('DeepSeek search prefers current model keys and address over saved or draft copies', async () => {
+    const modelProvider = {
+      id: 'deepseek',
+      isEnabled: true,
+      authType: 'api-key',
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://relay.example/deepseek/v1' },
+      },
+    } as Provider;
+    jest.mocked(providerService.getByProviderId).mockResolvedValue(modelProvider);
+    listProviderApiKeysMock.mockResolvedValue({
+      keys: [{ id: 'key', isEnabled: true, key: ' current-key ' }],
+    });
+    const preferences = createPreferenceReader({
+      'chat.web_search.provider_overrides': { deepseek: { apiKeys: ['old-key'] } },
+    });
+    const result = await getProviderById('deepseek', preferences, { apiKeys: ['draft-key'] });
+    expect(result).toMatchObject({ credentialsProviderId: 'deepseek', apiKeys: ['current-key'] });
+    expect(
+      result.capabilities.every(
+        (capability) => capability.apiHost === 'https://relay.example/deepseek',
+      ),
+    ).toBe(true);
+    jest
+      .mocked(providerService.getByProviderId)
+      .mockResolvedValue({ ...modelProvider, isEnabled: false });
+    const fallback = await getProviderById('deepseek', preferences);
+    expect(fallback.apiKeys).toEqual(['old-key']);
+    expect(fallback.credentialsProviderId).toBeUndefined();
+  });
+
+  test('keeps released DeepSeek search keys until the model provider can serve search', async () => {
+    jest
+      .mocked(providerService.getByProviderId)
+      .mockRejectedValue(DataApiErrorFactory.notFound('Provider', 'deepseek'));
+    const preferences = createPreferenceReader({
+      'chat.web_search.provider_overrides': {
+        deepseek: {
+          apiKeys: ['old-key'],
+          capabilities: { searchKeywords: { apiHost: 'https://legacy.example' } },
+        },
+      },
+    });
+    const fallback = await getProviderById('deepseek', preferences, {});
+    expect(fallback.apiKeys).toEqual(['old-key']);
+    expect(fallback.credentialsProviderId).toBeUndefined();
+    expect(
+      fallback.capabilities.find((capability) => capability.feature === 'searchKeywords')?.apiHost,
+    ).toBe('https://legacy.example');
+    await expect(getProviderById('deepseek', createPreferenceReader({}))).resolves.toMatchObject({
+      apiKeys: [],
+    });
   });
 
   test('merges provider presets with trimmed overrides', () => {

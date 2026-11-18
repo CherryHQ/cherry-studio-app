@@ -19,13 +19,17 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
-function renderSheet(spec: { default?: string }) {
+function renderSheet(
+  spec: { default?: string },
+  values: Record<string, unknown> = {},
+  onValueChange = jest.fn(),
+) {
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
       <PaintingSettingsBottomSheet
         onDismiss={jest.fn()}
-        onValueChange={jest.fn()}
+        onValueChange={onValueChange}
         resolvedMode={{
           mode: 'generate',
           definition: {
@@ -38,7 +42,7 @@ function renderSheet(spec: { default?: string }) {
             },
           },
         }}
-        values={{}}
+        values={values}
       />,
     );
   });
@@ -59,5 +63,22 @@ describe('PaintingSettingsBottomSheet', () => {
     const renderer = renderSheet({ default: 'ALLOW_ADULT' });
 
     expect(renderer.root.findByType('tabs' as never).props.value).toBe('ALLOW_ADULT');
+  });
+
+  it('lets an optional enum return to the provider default', () => {
+    const onValueChange = jest.fn();
+    const renderer = renderSheet({}, { personGeneration: 'ALLOW_ALL' }, onValueChange);
+
+    act(() => {
+      renderer.root.findByProps({ testID: 'painting-setting-personGeneration' }).props.onPress();
+    });
+    const automatic = renderer.root.findByProps({
+      testID: 'painting-setting-option-personGeneration-auto',
+    });
+    expect(automatic.props.selected).toBe(false);
+
+    act(() => automatic.props.onPress());
+
+    expect(onValueChange).toHaveBeenCalledWith('personGeneration', undefined);
   });
 });

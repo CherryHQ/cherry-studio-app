@@ -2,12 +2,14 @@ import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import {
   type AgentRow,
   agentTable,
   monotonicUpdateTimestamp,
   userModelTable,
 } from '@/backend/data/db/schemas';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   type CreateAgentDto,
@@ -19,15 +21,17 @@ import {
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import { type AgentSkillUpdate, ReplaceAgentSkillsSchema } from '@/shared/data/api/schemas/skills';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import {
   type Agent,
   CHERRY_AGENT_AVATAR,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
 } from '@/shared/data/types/agent';
-import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { agentGlobalSkillService } from './AgentGlobalSkillService';
+import { assertAgentUpdate, denyUnless, guardMethods } from './managedResources';
 import { modelService } from './ModelService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -44,9 +48,14 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     avatar: row.avatar,
     avatarUri: null,
     createdAt: timestampToISO(row.createdAt),
-    disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
+    // Old switch values stay in storage but no longer constrain task-driven tools.
+    disabledCapabilities: [],
     id: row.id,
     instructions: row.instructions,
+    isManaged: row.managedRemoteId !== null,
+    ...(row.managedRemoteId !== null && {
+      allowedModelIds: (row.allowedModelIds ?? []) as UniqueModelId[],
+    }),
     mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,
@@ -58,17 +67,21 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
 }
 
 export class AgentService {
+  constructor(
+    private readonly hostDbService?: DbService,
+    private readonly hostPreferenceService?: PreferenceService,
+  ) {}
+
   /**
-   * Resolved per call rather than injected once, so the instance holds no
-   * reference to a particular host generation and a replaced host cannot leave
-   * this singleton writing to a closed connection.
+   * Ordinary singleton calls resolve the current host. Long-lived imports may capture their
+   * originating services so cancellation cleanup cannot write into a replacement generation.
    */
   private get dbService() {
-    return application.get('DbService');
+    return this.hostDbService ?? application.get('DbService');
   }
 
   private get preferenceService() {
-    return application.get('PreferenceService');
+    return this.hostPreferenceService ?? application.get('PreferenceService');
   }
 
   private get db() {
@@ -155,19 +168,26 @@ export class AgentService {
   async create(dto: CreateAgentDto): Promise<Agent> {
     this.validateName(dto.name);
 
-    const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
+    const row = await this.dbService.withWriteTx((tx) => this.createTx(tx, dto));
     publishDataApiChanges(['/agents', `/agents/${row.id}`]);
 
     return rowToAgent(row, await this.getModelName(row.model));
   }
 
-  /** Seeds a fresh installation without recreating an Agent the user deleted. */
+  /**
+   * Seeds the profile's own Agent without recreating one the user deleted. Organization-managed
+   * Agents are not the user's, so they never replace it.
+   */
   async createInitialAgent(dto: CreateAgentDto): Promise<Agent | null> {
     this.validateName(dto.name);
 
     const row = await this.dbService.withWriteTx(async (tx) => {
-      const [existing] = await tx.select({ id: agentTable.id }).from(agentTable).limit(1);
-      return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
+      const [existing] = await tx
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(isNull(agentTable.managedRemoteId))
+        .limit(1);
+      return existing ? null : this.createTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 
     if (!row) return null;
@@ -188,38 +208,47 @@ export class AgentService {
       options.skillUpdates === undefined
         ? undefined
         : ReplaceAgentSkillsSchema.parse({ updates: options.skillUpdates }).updates;
-    const current = await this.getById(id);
     const expectedTimestamp =
       options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
     if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp)) {
       throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
     }
-    if (
-      options.expectedUpdatedAt !== undefined &&
-      Date.parse(current.updatedAt) !== expectedTimestamp
-    ) {
-      throw DataApiErrorFactory.conflict(
-        'The Agent changed since it was read. Read it again before editing.',
-      );
-    }
-
     if (dto.name !== undefined) {
       this.validateName(dto.name);
     }
 
-    const updates = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
-    ) as Partial<typeof agentTable.$inferInsert>;
+    const { row, changed } = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(agentTable)
+        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .limit(1);
+      if (!current) throw DataApiErrorFactory.notFound('Agent', id);
+      if (expectedTimestamp !== undefined && current.updatedAt !== expectedTimestamp) {
+        throw DataApiErrorFactory.conflict(
+          'The Agent changed since it was read. Read it again before editing.',
+        );
+      }
 
-    if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
-      return current;
-    }
+      // Editors resubmit whole forms. Compare and authorize against the same row we write.
+      const updates = Object.fromEntries(
+        Object.entries(dto).filter(
+          ([field, value]) =>
+            value !== undefined && !deepEqual(value, current[field as keyof AgentRow]),
+        ),
+      ) as Partial<typeof agentTable.$inferInsert>;
+      assertAgentUpdate(current, {
+        ...updates,
+        ...(skillUpdates?.length ? { skills: skillUpdates } : {}),
+      });
+      if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
+        return { row: current, changed: false };
+      }
 
-    const row = await this.dbService.withWriteTx(async (tx) => {
-      if (dto.model && !(await this.modelExistsTx(tx, dto.model))) {
+      if (updates.model && !(await this.modelExistsTx(tx, updates.model))) {
         throw DataApiErrorFactory.validation(
-          { model: [`Model '${dto.model}' is not registered in user_model`] },
-          `Agent model '${dto.model}' is not registered - add the model first or pass null`,
+          { model: [`Model '${updates.model}' is not registered in user_model`] },
+          `Agent model '${updates.model}' is not registered - add the model first or pass null`,
         );
       }
 
@@ -250,20 +279,18 @@ export class AgentService {
       if (skillUpdates?.length) {
         await agentGlobalSkillService.applyBindingUpdatesTx(tx, id, skillUpdates);
       }
-      return updated as AgentRow;
+      return { row: updated as AgentRow, changed: true };
     });
 
-    publishDataApiChanges([
-      '/agents',
-      `/agents/${id}`,
-      ...(skillUpdates?.length ? ['/skills', `/agents/${id}/skills`] : []),
-    ]);
-    const modelName =
-      dto.model !== undefined && dto.model !== current.model
-        ? await this.getModelName(dto.model)
-        : current.modelName;
+    if (changed) {
+      publishDataApiChanges([
+        '/agents',
+        `/agents/${id}`,
+        ...(skillUpdates?.length ? ['/skills', `/agents/${id}/skills`] : []),
+      ]);
+    }
 
-    return rowToAgent(row, modelName);
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /**
@@ -273,7 +300,15 @@ export class AgentService {
    * deliberately refuse managed file references: a caller must not be able to
    * point the column at an arbitrary string.
    */
-  async setAvatar(id: string, avatar: string): Promise<Agent> {
+  async setAvatar(
+    id: string,
+    avatar: string,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<Agent> {
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp))
+      throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [updated] = await tx
         .update(agentTable)
@@ -281,9 +316,21 @@ export class AgentService {
           avatar,
           updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
         })
-        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .where(
+          and(
+            eq(agentTable.id, id),
+            isNull(agentTable.deletedAt),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(agentTable.updatedAt, expectedTimestamp),
+          ),
+        )
         .returning();
       if (!updated) {
+        if (expectedTimestamp !== undefined)
+          throw DataApiErrorFactory.conflict(
+            'The Agent changed while saving its avatar. Read it again.',
+          );
         throw DataApiErrorFactory.notFound('Agent', id);
       }
       return updated as AgentRow;
@@ -395,7 +442,9 @@ export class AgentService {
     return row ? preferred : null;
   }
 
-  private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
+  /** Atomic content imports reuse creation defaults; the caller publishes changes after commit. */
+  async createTx(tx: Database, dto: CreateAgentDto): Promise<AgentRow> {
+    this.validateName(dto.name);
     const modelId = await this.resolveCreateModelId(tx, dto.model);
     return (await insertWithOrderKey(
       tx,
@@ -414,8 +463,9 @@ export class AgentService {
       return null;
     }
 
-    const model = await modelService.getById(modelId);
-    return model?.name ?? null;
+    // Startup needs only a label. Organization defaults can arrive before the public catalog.
+    const names = await modelService.getNamesByUniqueIds([modelId]);
+    return names.get(modelId) ?? null;
   }
 
   private async modelExistsTx(tx: TxLike, modelId: string): Promise<boolean> {
@@ -434,5 +484,16 @@ export class AgentService {
     }
   }
 }
+
+// The organization owns a delivered Agent's avatar and its existence.
+guardMethods(AgentService, {
+  async setAvatar(id) {
+    denyUnless(agentPolicy(await this.getById(id)).canEdit('avatar'), 'agent.setAvatar');
+  },
+  async delete(id) {
+    const agent = await this.getById(id, { includeDeleted: true });
+    denyUnless(agentPolicy(agent).canDelete, 'agent.delete');
+  },
+});
 
 export const agentService = new AgentService();

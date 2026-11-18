@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
+import { PolicySelectItem } from '@/frontend/components/Policy';
+
 import { ProviderValueSheet } from '../../../components/ProviderValueSheet';
 import type { ProviderModelAddEndpoint } from '../../utils/providerModelAdd';
 import {
@@ -34,13 +36,13 @@ const LIMIT_FIELDS: readonly ProviderModelLimitField[] = [
 
 /**
  * A model's settings as rows, shared by model details and adding a model. Switches change in
- * place; names, limits, notes and pricing open a sheet that edits a copy until Save.
+ * place; names, limits, notes and pricing open a sheet that edits a copy until Save. Inside a
+ * locked group the same rows render locked; copying the model ID still works.
  */
 export function ProviderModelSettings({ value }: { value: ProviderModelSettingsValue }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { actions, capabilities, disabled } = value;
-  const isVoiceModel = value.primaryType === 'speech' || value.primaryType === 'transcription';
   const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
   const [pricingEdit, setPricingEdit] = useState<PricingEdit | null>(null);
   const [isEndpointOpen, setIsEndpointOpen] = useState(false);
@@ -147,6 +149,7 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
           <Section.Item
             accessibilityHint={t('settings.provider.models.detail.copyId')}
             label={t('settings.provider.models.detail.modelId')}
+            locked={false}
             onPress={() => void copyModelId(value.modelId ?? '')}
             showChevron={false}
             testID="model-setting-modelId"
@@ -166,65 +169,60 @@ export function ProviderModelSettings({ value }: { value: ProviderModelSettingsV
           onChange={actions.setPrimaryType}
           value={value.primaryType}
         />
-        {!isVoiceModel ? (
-          <Section.SelectItem
-            accessibilityLabel={`${t('settings.provider.models.addEndpointTypeLabel')}, ${value.endpoint.label}`}
-            description={
-              value.endpoint.error ? (
-                <Text className="text-error text-sm">{value.endpoint.error}</Text>
-              ) : undefined
-            }
-            disabled={disabled || value.endpoint.disabled}
-            label={t('settings.provider.models.addEndpointTypeLabel')}
-            onPress={() => {
-              Keyboard.dismiss();
-              setIsEndpointOpen(true);
-            }}
-            value={value.endpoint.label}
-          />
-        ) : null}
+        <PolicySelectItem
+          accessibilityLabel={`${t('settings.provider.models.addEndpointTypeLabel')}, ${value.endpoint.label}`}
+          description={
+            value.endpoint.error ? (
+              <Text className="text-error text-sm">{value.endpoint.error}</Text>
+            ) : undefined
+          }
+          disabled={disabled || value.endpoint.disabled}
+          field="model"
+          label={t('settings.provider.models.addEndpointTypeLabel')}
+          onPress={() => {
+            Keyboard.dismiss();
+            setIsEndpointOpen(true);
+          }}
+          value={value.endpoint.label}
+        />
       </Section>
 
-      {!isVoiceModel ? (
-        <>
-          <Section title={t('settings.provider.models.classification.capabilities')}>
-            {(['reasoning', 'functionCall'] as const).map((capability) => (
-              <Section.SwitchItem
-                disabled={disabled}
-                key={capability}
-                label={t(`settings.provider.models.classification.${capability}`)}
-                onValueChange={(selected) => actions.setCapability(capability, selected)}
-                value={capabilities[capability]}
-              />
-            ))}
-            <Section.SwitchItem
-              disabled={disabled}
-              label={t('settings.provider.models.supportsStreaming')}
-              onValueChange={actions.setSupportsStreaming}
-              value={value.supportsStreaming}
-            />
-          </Section>
+      <Section title={t('settings.provider.models.classification.capabilities')}>
+        {(['reasoning', 'functionCall'] as const).map((capability) => (
+          <Section.SwitchItem
+            disabled={disabled}
+            key={capability}
+            label={t(`settings.provider.models.classification.${capability}`)}
+            onValueChange={(selected) => actions.setCapability(capability, selected)}
+            value={capabilities[capability]}
+          />
+        ))}
+        <Section.SwitchItem
+          disabled={disabled}
+          label={t('settings.provider.models.supportsStreaming')}
+          onValueChange={actions.setSupportsStreaming}
+          value={value.supportsStreaming}
+        />
+      </Section>
 
-          <Section title={t('settings.provider.models.classification.inputModalities')}>
-            {(['vision', 'audio', 'video'] as const).map((capability) => {
-              const isFixed = capability === 'vision' && value.requiresImageInput;
-              return (
-                <Section.SwitchItem
-                  disabled={disabled || isFixed}
-                  key={capability}
-                  label={t(
-                    isFixed
-                      ? 'settings.provider.models.classification.imageInputRequired'
-                      : `settings.provider.models.classification.${capability}`,
-                  )}
-                  onValueChange={(selected) => actions.setCapability(capability, selected)}
-                  value={capabilities[capability] || isFixed}
-                />
-              );
-            })}
-          </Section>
-        </>
-      ) : null}
+      <Section title={t('settings.provider.models.classification.inputModalities')}>
+        {(['vision', 'audio', 'video'] as const).map((capability) => {
+          const isFixed = capability === 'vision' && value.requiresImageInput;
+          return (
+            <Section.SwitchItem
+              disabled={disabled || isFixed}
+              key={capability}
+              label={t(
+                isFixed
+                  ? 'settings.provider.models.classification.imageInputRequired'
+                  : `settings.provider.models.classification.${capability}`,
+              )}
+              onValueChange={(selected) => actions.setCapability(capability, selected)}
+              value={capabilities[capability] || isFixed}
+            />
+          );
+        })}
+      </Section>
 
       {value.limits ? (
         <Section title={t('settings.provider.models.form.limits')}>
