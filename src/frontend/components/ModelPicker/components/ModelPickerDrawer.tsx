@@ -213,7 +213,7 @@ function ModelPickerDrawerContent({
         ? groups
         : groups.flatMap((group) => {
             const items = group.items.filter((item) =>
-              matchesModelPickerBadges(item.model, [selectedBadge]),
+              matchesModelPickerBadges(item.model, [selectedBadge], item.isCloudFree),
             );
             return items.length > 0 ? [{ ...group, items }] : [];
           }),

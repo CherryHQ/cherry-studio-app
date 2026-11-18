@@ -10,6 +10,7 @@ export type ModelPickerModelItem = {
   modelId: UniqueModelId;
   provider: Provider;
   cloudUnavailable?: CloudUnavailableReason;
+  isCloudFree?: boolean;
 };
 
 export type ModelPickerGroup = {

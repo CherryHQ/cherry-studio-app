@@ -4,9 +4,9 @@
 catalog, and request admission. Bootstrap supplies its account identity source; this module does
 not import the enterprise implementation or read Accounts Portal's private storage keys.
 `Backend.cloud` exposes only status, subscription data, model metadata and refresh methods.
-Tokens and device secrets never reach the frontend or database. Confirmed community subscribers
-see their plan and remaining quota in the sidebar badge and use their models through a managed
-`CherryAI` provider.
+Tokens and device secrets never reach the frontend or database. Community accounts use their
+eligible models through the managed `CherryAI` provider. Confirmed paid subscribers see their plan
+and remaining quota in the sidebar badge.
 
 ## Configuration
 
@@ -52,7 +52,8 @@ the identity source atomically, including when the subject and product profile s
 Product Session and device ID for signed control-plane reads and inference. Product credentials
 stay in memory. Access-token expiry rotates the refresh token once; a lost rotation response
 clears the cached session so the next attempt enters afresh. HTTP 401 invalidates the cached
-product token. Requests are not automatically replayed.
+product token on ordinary Cloud reads and paid inference. The AMD inference path retries once only
+on a gateway replay rejection or a request to rebuild the Cloud session.
 
 `cloudDevice` stores an Ed25519 seed separately from the device identifier in device-only secure
 storage. Android uses `ANDROID_ID`; iOS uses a Keychain UUID. Machine-code HMAC follows the mobile
@@ -105,11 +106,11 @@ responses. They use the same boundary without buffering the response or construc
   its generic Cloud label and omits unconfirmed quota associations. The profile exposes no purchase
   or management action. The managed provider opens a read-only model list, without connection
   settings or model mutation actions.
-  Accounts without any currently entitled Plan models do not see the provider in settings or
-  the picker.
-- An active, currently effective paid entitlement and an available model feature are required. Free
-  entitlements alone do not expose Plan models. Every window of a quota pool must have credit;
-  any independent pool can admit the model. Reserved
+  Community settings always offer the CherryAI entry. The model picker lists its provider group
+  when the current account has entitled models for the picker to display.
+- Ordinary catalog models use the model rules of an effective free or paid plan and require an
+  available feature. Every window of a quota pool must have credit. Any independent pool can admit
+  the model. Reserved
   units are already reflected in the server's remaining units. The gateway owns final admission,
   reservations and charging when requests race.
 - Agent conversations use `agent`. One-shot text generation (including translation) uses
@@ -119,9 +120,9 @@ responses. They use the same boundary without buffering the response or construc
   Money quotas use 1,000,000 units per currency unit. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
 - `cherryai-subscription` is the reserved, managed `CherryAI` provider. Provider queries
-  pin it first, including cursor pagination, so settings and model pickers share the same priority
-  without changing other providers' saved order keys. Ordinary provider/model mutation services
-  reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
+  pin it first, including cursor pagination, without changing other providers' saved order keys.
+  Settings render their own fixed entry above the saved providers. Ordinary provider/model mutation
+  services reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
   keeping their IDs/names for history; user-configured providers and conversations remain.
 - Cold start checks subscription display once after account restoration. Repeated notifications
   for that identity do not issue another read. A newly signed-in/replaced account loads its own
@@ -137,6 +138,33 @@ responses. They use the same boundary without buffering the response or construc
   queries and inference use the new one. Catalog withdrawal disables old rows without
   writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
   Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
+
+## AMD free models
+
+The community provider accepts AMD rows from the account's `/v1/models` catalog when the supplier
+is `amd` and the model has an `amd/` ID and the OpenAI chat-completions endpoint. The catalog's
+`activation_required` flag decides model admission without a paid entitlement or Cherry quota.
+Only admitted models are projected for selection. The detail page can also show offered models
+that still require activation. The gateway applies AMD limits and owns the AMD key.
+
+The detail page reads `/api/v1/amd/desktop/status` separately from the paid catalog. A missing AMD
+endpoint hides the setup section. A temporary error leaves it retryable. The registration flag
+comes from the current server status. Changes saved in the Cloud admin take effect on the next read.
+On user action, the same Product Session signs an empty `POST /api/v1/amd/desktop/entry`. The app
+opens the service-provided HTTPS URL in the system browser with its fragment intact. Linked users
+can access the same page to view usage. The app takes its full model list from `/v1/models`, and
+AMD usage stays on the web. The one-use URL remains transient.
+
+The AMD web page can return to mobile with `cherrystudio://navigate/settings/provider`. The native
+intent handler opens the CherryAI detail route using the installed app scheme. Development and
+preview use their existing `cherrystudio-dev` and `cherrystudio-preview` schemes. Opening the page
+or bringing it back to the foreground refreshes status and models through the current account.
+
+AMD inference uses the existing streaming path and retries a gateway replay rejection with a fresh
+signature and the same idempotency key. It respects `Retry-After` and refreshes status or catalog on
+activation, credential, or availability errors. AMD failures leave the Cherry login in place.
+Test and production gateways can serve models in their own `CLOUD_API_AMD_MODELS` allowlists.
+Live usage and both response modes require a deployed environment and an activated account.
 
 The source protocol reviewed for this implementation is Cloud API
 `5fbef215e3fc1309745fd754d963e5400923dc78`. Unit and database regressions cover quotas, signature

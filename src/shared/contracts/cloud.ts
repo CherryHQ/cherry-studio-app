@@ -80,7 +80,28 @@ export const CloudModelSchema = z.object({
   max_output_tokens: z.number().int().positive(),
   capabilities: z.array(z.string()),
   available_features: z.array(z.string()),
+  provider: z.string().optional(),
+  activation_required: z.boolean().optional(),
 });
+export const CloudAmdStatusSchema = z.object({
+  status: z.enum([
+    'unregistered',
+    'pending',
+    'needs_review',
+    'registered',
+    'existing_account',
+    'inactive',
+    'credential_invalid',
+  ]),
+  action: z.enum(['register', 'login', 'wait', 'continue', 'contact_support', 'none']),
+  activated: z.boolean(),
+  registration_enabled: z.boolean().default(false),
+  environment: z.enum(['simulator', 'test', 'production']),
+});
+export type CloudAmdStatus = z.infer<typeof CloudAmdStatusSchema>;
+export type CloudAmdState =
+  | Readonly<{ phase: 'loading' | 'error' }>
+  | Readonly<{ phase: 'ready'; status: CloudAmdStatus }>;
 export type CloudModel = z.infer<typeof CloudModelSchema>;
 export type CloudAccount = z.infer<typeof CloudAccountSchema>;
 export type CloudPlans = z.infer<typeof CloudPlansSchema>;
@@ -89,7 +110,8 @@ export type CloudUnavailableReason =
   | 'signed_out'
   | 'unavailable'
   | 'not_entitled'
-  | 'quota_exhausted';
+  | 'quota_exhausted'
+  | 'amd_activation_required';
 export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
   isRefreshing: boolean;
@@ -97,22 +119,42 @@ export type CloudState = Readonly<{
   /** Optional badge metadata; never controls model admission. */
   plans: CloudPlans | null;
   models: readonly CloudModel[];
+  /** Status for the AMD setup flow. The signed model catalog owns availability. */
+  amd?: CloudAmdState;
 }>;
 export interface CloudModule {
   getState(): CloudState;
   subscribe(listener: () => void): () => void;
   refresh(): Promise<void>;
+  refreshAmd(): Promise<void>;
+  createAmdEntry(): Promise<string>;
 }
 
-function isEffectivePaidEntitlement(
-  entry: CloudAccount['entitlements'][number],
-  now: number,
-): boolean {
+export function isCloudAmdModel(model: CloudModel): boolean {
+  return (
+    model.provider === 'amd' &&
+    model.id.startsWith('amd/') &&
+    model.id.length > 'amd/'.length &&
+    model.endpoint_type === 'openai-chat-completions'
+  );
+}
+
+function isEffectiveEntitlement(entry: CloudAccount['entitlements'][number], now: number): boolean {
   return (
     entry.status === 'active' &&
-    !entry.is_free &&
     (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
     (!entry.expires_at || Date.parse(entry.expires_at) > now)
+  );
+}
+
+export function isCloudFreeModel(state: CloudState, model: CloudModel, now = Date.now()): boolean {
+  return (
+    isCloudAmdModel(model) ||
+    (state.account?.entitlements.some(
+      (entry) =>
+        entry.is_free && isEffectiveEntitlement(entry, now) && entry.model_ids.includes(model.id),
+    ) ??
+      false)
   );
 }
 
@@ -133,7 +175,7 @@ export function hasActiveCloudSubscription(state: CloudState, now = Date.now()):
   return (
     state.phase === 'ready' &&
     state.account?.account.status === 'active' &&
-    state.account.entitlements.some((entry) => isEffectivePaidEntitlement(entry, now))
+    state.account.entitlements.some((entry) => !entry.is_free && isEffectiveEntitlement(entry, now))
   );
 }
 
@@ -151,8 +193,12 @@ export function cloudModelUnavailable(
   const features = use === 'agent' ? ['agent'] : ['chat', 'translate'];
   if (!model || !features.every((feature) => model.available_features.includes(feature)))
     return 'not_entitled';
+  if (model.provider === 'amd') {
+    if (!isCloudAmdModel(model)) return 'not_entitled';
+    return model.activation_required === false ? undefined : 'amd_activation_required';
+  }
   const entitled = state.account.entitlements.some(
-    (entry) => isEffectivePaidEntitlement(entry, now) && entry.model_ids.includes(modelId),
+    (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(modelId),
   );
   if (!entitled) return 'not_entitled';
   const pools = state.account.quota_pools.filter((pool) => pool.model_ids.includes(modelId));

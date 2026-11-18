@@ -110,6 +110,22 @@ test('rotation signs exact refresh JSON without a bearer header', async () => {
   });
 });
 
+test('signs the AMD entry POST with zero body bytes and the Product Session', async () => {
+  const { session } = setup();
+  mockRequest.mockResolvedValueOnce(entry()).mockResolvedValueOnce({ data: {} });
+  const path = '/api/v1/amd/desktop/entry';
+  await session.postEmpty(path);
+  const request = mockRequest.mock.calls[1][0];
+  expect(request).toMatchObject({
+    method: 'POST',
+    path,
+    redirect: 'error',
+    credentials: 'omit',
+    headers: { authorization: 'Bearer cloud-access', signatureInput: `POST\n${path}\n` },
+  });
+  expect(request).not.toHaveProperty('body');
+});
+
 test('a late product-entry response cannot reopen an account after replacement', async () => {
   const { session, source } = setup();
   let resolve!: (value: ReturnType<typeof entry>) => void;

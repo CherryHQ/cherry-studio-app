@@ -15,27 +15,32 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
+import { accountSignInHref } from '@/frontend/appShell/account';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
-import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
+import { useBackendModule, useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
-import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { SettingsGroupedSeparator } from '../components/SettingsServiceRow';
+import { SettingsGroupedSeparator, SettingsServiceRow } from '../components/SettingsServiceRow';
 import { ProviderListRow } from './components/ProviderListRow';
 import { useProviderSetup } from './hooks/useProviderSetup';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 56;
+const CLOUD_PROVIDER_HREF = `/settings/provider/${CLOUD_PROVIDER_ID}` as const;
 const providerListTransition = LinearTransition.duration(duration.base)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
 
 type ProviderListItem =
   | { id: string; kind: 'header'; isFirst: boolean; title: string }
+  | { id: typeof CLOUD_PROVIDER_ID; kind: 'cloud'; isFirst: true; isLast: true }
   | {
       id: string;
       kind: 'provider';
@@ -102,6 +107,7 @@ const getItemType = (item: ProviderListItem) => item.kind;
 function ProviderListView() {
   const { t } = useTranslation();
   const router = useRouter();
+  const account = useBackendModule('account');
   const { toast } = useToast();
   const { isPreparing, openSetup } = useProviderSetup();
   const reducedMotion = useReducedMotion();
@@ -114,6 +120,8 @@ function ProviderListView() {
   );
   const keywords = useMemo(() => toSearchKeywords(query), [query]);
   const isFiltering = keywords.length > 0;
+  const showCloudProvider =
+    !isEnterpriseProfile() && matchesSearchKeywords(keywords, [CLOUD_PROVIDER_NAME]);
   const hasPendingProviderUpdate = pendingProviderStates.size > 0;
 
   useFocusEffect(() => {
@@ -189,7 +197,7 @@ function ProviderListView() {
     const providers = isFiltering ? (allProvidersQuery.data ?? pagedProviders) : pagedProviders;
     return providers.filter(
       (provider) =>
-        (provider.id !== CLOUD_PROVIDER_ID || provider.isEnabled) &&
+        provider.id !== CLOUD_PROVIDER_ID &&
         (!isFiltering || matchesSearchKeywords(keywords, [provider.name])),
     );
   }, [allProvidersQuery.data, isFiltering, keywords, pagedProviders]);
@@ -207,8 +215,19 @@ function ProviderListView() {
     },
     [router],
   );
+  const openCloudProvider = useCallback(() => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    router.push(
+      account.getState().isSignedIn
+        ? CLOUD_PROVIDER_HREF
+        : accountSignInHref(CLOUD_PROVIDER_HREF, { cancelTo: '/settings/provider' }),
+    );
+  }, [account, router]);
   const providerItems = useMemo<ProviderListItem[]>(() => {
     const items: ProviderListItem[] = [];
+    if (showCloudProvider)
+      items.push({ id: CLOUD_PROVIDER_ID, kind: 'cloud', isFirst: true, isLast: true });
     for (const isEnabled of [true, false]) {
       // Move once, using the persisted order after refresh. The switch responds immediately.
       const providers = listedProviders.filter((provider) => provider.isEnabled === isEnabled);
@@ -238,14 +257,32 @@ function ProviderListView() {
     const last = items.at(-1);
     if (last?.kind === 'provider') last.endsList = true;
     return items;
-  }, [listedProviders, pendingProviderStates, t]);
+  }, [listedProviders, pendingProviderStates, showCloudProvider, t]);
   const renderProviderItem = useCallback(
-    ({ item }: { item: ProviderListItem }) =>
-      item.kind === 'header' ? (
-        <ProviderListSlice item={item}>
-          <Section.Header accessibilityRole="header" title={item.title} />
-        </ProviderListSlice>
-      ) : (
+    ({ item }: { item: ProviderListItem }) => {
+      if (item.kind === 'header') {
+        return (
+          <ProviderListSlice item={item}>
+            <Section.Header accessibilityRole="header" title={item.title} />
+          </ProviderListSlice>
+        );
+      }
+      if (item.kind === 'cloud') {
+        return (
+          <ProviderListSlice item={item}>
+            <SettingsServiceRow
+              avatar={
+                <ProviderAvatar providerId={CLOUD_PROVIDER_ID} providerName={CLOUD_PROVIDER_NAME} />
+              }
+              id={CLOUD_PROVIDER_ID}
+              name={CLOUD_PROVIDER_NAME}
+              onPress={openCloudProvider}
+              testID={`provider-row-${CLOUD_PROVIDER_ID}`}
+            />
+          </ProviderListSlice>
+        );
+      }
+      return (
         <ProviderListSlice item={item}>
           {item.isFirst ? null : <SettingsGroupedSeparator />}
           <ProviderListRow
@@ -256,8 +293,9 @@ function ProviderListView() {
             provider={item.provider}
           />
         </ProviderListSlice>
-      ),
-    [openProvider, toggleProviderEnabled],
+      );
+    },
+    [openCloudProvider, openProvider, toggleProviderEnabled],
   );
   const loadMoreProviders = useCallback(() => {
     if (!isFiltering && !hasPendingProviderUpdate) {
@@ -266,12 +304,20 @@ function ProviderListView() {
   }, [hasPendingProviderUpdate, isFiltering, loadNextProviderPage]);
   const listFooter = useMemo(
     () =>
-      providersPageQuery.isLoadingMore || (isFiltering && allProvidersQuery.isPending) ? (
+      providersPageQuery.isLoading ||
+      providersPageQuery.isLoadingMore ||
+      (isFiltering && allProvidersQuery.isPending) ? (
         <View className="h-16 items-center justify-center">
           <Spinner accessibilityLabel={t('settings.provider.loading')} />
         </View>
       ) : null,
-    [allProvidersQuery.isPending, isFiltering, providersPageQuery.isLoadingMore, t],
+    [
+      allProvidersQuery.isPending,
+      isFiltering,
+      providersPageQuery.isLoading,
+      providersPageQuery.isLoadingMore,
+      t,
+    ],
   );
   const openProviderCatalog = useCallback(() => {
     router.push('/settings/provider/catalog');

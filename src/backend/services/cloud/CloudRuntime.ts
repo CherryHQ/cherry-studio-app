@@ -14,15 +14,18 @@ import { Phase } from '@/backend/core/lifecycle/types';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
+import { isHttpError } from '@/backend/services/http';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import {
   CLOUD_PROVIDER_ID,
   CloudAccessError,
   CloudAccountSchema,
+  CloudAmdStatusSchema,
   CloudModelSchema,
   CloudPlansSchema,
   cloudModelUnavailable,
   hasActiveCloudSubscription,
+  isCloudAmdModel,
   isCloudModelListed,
   type CloudModelUse,
   type CloudModule,
@@ -30,6 +33,14 @@ import {
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
+import {
+  CLOUD_AMD_ENTRY_PATH,
+  CLOUD_AMD_STATUS_PATH,
+  CloudAmdRequestError,
+  cloudAmdRetryDeadline,
+  readCloudAmdEntry,
+  readCloudAmdGatewayCode,
+} from './cloudAmd';
 import { cloudClientSignatureHeaders } from './cloudClientSignature';
 import { createCloudIdempotencyKey, loadCloudDevice, type CloudDevice } from './cloudDevice';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
@@ -71,6 +82,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private device: Promise<CloudDevice> | undefined;
   private refreshing: Promise<void> | undefined;
   private loadingPlans: Promise<void> | undefined;
+  private loadingAmd: Promise<void> | undefined;
+  private readonly amdRetryUntil = new Map<string, number>();
   private projection: Promise<void> = Promise.resolve();
   private refreshedAt = 0;
   private started = false;
@@ -121,6 +134,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.identityKey = key;
     this.refreshing = undefined;
     this.loadingPlans = undefined;
+    this.loadingAmd = undefined;
+    this.amdRetryUntil.clear();
     this.refreshedAt = 0;
     this.projectedCatalog = undefined;
     this.publish(key ? { ...EMPTY, phase: 'loading' } : EMPTY);
@@ -131,6 +146,46 @@ export class CloudRuntime extends BaseService implements CloudModule {
   }
 
   readonly refresh = (): Promise<void> => this.refreshState(false);
+
+  readonly refreshAmd = async (): Promise<void> => {
+    if (!this.started || this.stopped || !this.identityKey) return;
+    if (!this.loadingAmd) {
+      const attempt = this.loadAmd(this.lifetime.signal).finally(() => {
+        if (this.loadingAmd === attempt) this.loadingAmd = undefined;
+      });
+      this.loadingAmd = attempt;
+    }
+    await this.loadingAmd;
+  };
+
+  readonly createAmdEntry = async (): Promise<string> => {
+    const session = this.session;
+    const amd = this.snapshot.amd;
+    if (!session || this.snapshot.account?.account.status !== 'active' || amd?.phase !== 'ready')
+      throw new CloudAccessError('unavailable');
+    const { activated, action } = amd.status;
+    if (!activated && action !== 'register' && action !== 'login' && action !== 'continue')
+      throw new CloudAccessError('unavailable');
+    return readCloudAmdEntry(await session.postEmpty(CLOUD_AMD_ENTRY_PATH));
+  };
+
+  private async loadAmd(signal: AbortSignal): Promise<void> {
+    if (this.snapshot.amd?.phase !== 'ready')
+      this.publish({ ...this.snapshot, amd: { phase: 'loading' } });
+    try {
+      if (!this.session) await this.refreshState(true, false);
+      signal.throwIfAborted();
+      const session = this.session;
+      if (!session) throw new CloudAccessError('unavailable');
+      const status = CloudAmdStatusSchema.parse(await session.get(CLOUD_AMD_STATUS_PATH));
+      signal.throwIfAborted();
+      this.publish({ ...this.snapshot, amd: { phase: 'ready', status } });
+    } catch (error) {
+      if (signal.aborted) return;
+      const unsupported = isHttpError(error) && error.status === 404;
+      this.publish({ ...this.snapshot, amd: unsupported ? undefined : { phase: 'error' } });
+    }
+  }
 
   private async refreshState(silent: boolean, includePlans = true): Promise<void> {
     if (!this.started || this.stopped) return;
@@ -202,7 +257,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
       await this.project(entitledModels, signal);
       signal.throwIfAborted();
       this.refreshedAt = Date.now();
-      this.publish({ ...next, plans: this.snapshot.plans });
+      this.publish({ ...next, plans: this.snapshot.plans, amd: this.snapshot.amd });
     } catch (error) {
       if (!signal.aborted) this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
       throw error;
@@ -240,6 +295,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
       lifetime.throwIfAborted();
       if (!identityKey || identityKey !== this.identityKey)
         throw new CloudAccessError('signed_out');
+      if ((this.amdRetryUntil.get(modelId) ?? 0) > Date.now())
+        throw new CloudAmdRequestError(429, 'RATE_LIMITED');
       if (Date.now() - this.refreshedAt > 30_000 || this.snapshot.phase !== 'ready') {
         try {
           // Sending revalidates account/model admission without refreshing badge metadata.
@@ -283,24 +340,30 @@ export class CloudRuntime extends BaseService implements CloudModule {
         if (!lifetime.aborted) this.refreshedAt = 0;
       };
       try {
-        const signed = await session.headers('POST', path, body, createCloudIdempotencyKey());
-        const clientHeaders = await cloudClientSignatureHeaders('POST', path, body);
-        linked.signal.throwIfAborted();
-        const currentReason = cloudModelUnavailable(this.snapshot, modelId, use);
-        if (currentReason) throw new CloudAccessError(currentReason);
-        const headers = new Headers({ ...signed, ...clientHeaders });
-        headers.set('content-type', 'application/json');
-        // Only protocol headers cross this boundary; SDK keys and arbitrary extra headers do not.
-        const anthropicVersion = request.headers.get('anthropic-version');
-        if (anthropicVersion) headers.set('anthropic-version', anthropicVersion);
-        const response = await expoFetch(url.toString(), {
-          method: 'POST',
-          headers,
-          body,
-          signal: linked.signal,
-          credentials: 'omit',
-          redirect: 'error',
-        });
+        const idempotencyKey = createCloudIdempotencyKey();
+        const send = async () => {
+          const signed = await session.headers('POST', path, body, idempotencyKey);
+          const clientHeaders = await cloudClientSignatureHeaders('POST', path, body);
+          linked.signal.throwIfAborted();
+          const currentReason = cloudModelUnavailable(this.snapshot, modelId, use);
+          if (currentReason) throw new CloudAccessError(currentReason);
+          const headers = new Headers({ ...signed, ...clientHeaders });
+          headers.set('content-type', 'application/json');
+          // Only protocol headers cross this boundary; SDK keys and arbitrary extra headers do not.
+          const anthropicVersion = request.headers.get('anthropic-version');
+          if (anthropicVersion) headers.set('anthropic-version', anthropicVersion);
+          return expoFetch(url.toString(), {
+            method: 'POST',
+            headers,
+            body,
+            signal: linked.signal,
+            credentials: 'omit',
+            redirect: 'error',
+          });
+        };
+        const response = isCloudAmdModel(model)
+          ? await this.sendAmdModel(modelId, session, linked.signal, send)
+          : await send();
         linked.signal.throwIfAborted();
         if (!response.ok) {
           if (response.status === 401) session.invalidate();
@@ -358,6 +421,46 @@ export class CloudRuntime extends BaseService implements CloudModule {
     };
   }
 
+  private async sendAmdModel(
+    modelId: string,
+    session: CloudSession,
+    signal: AbortSignal,
+    send: () => Promise<Response>,
+  ): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      const response = await send();
+      signal.throwIfAborted();
+      if (response.ok) return response;
+      const code = await readCloudAmdGatewayCode(response);
+      signal.throwIfAborted();
+      const reauthenticate =
+        code === 'REAUTH_REQUIRED' || code === 'SESSION_EXPIRED' || code === 'AUTH_REQUIRED';
+      if (reauthenticate) session.invalidate();
+      // This is the same model operation. `send` signs with a fresh nonce and the same key.
+      if (attempt === 0 && (reauthenticate || code === 'REQUEST_REPLAYED')) continue;
+
+      if (response.status === 429) {
+        const now = Date.now();
+        const retryUntil = cloudAmdRetryDeadline(response.headers.get('retry-after'), now);
+        if (retryUntil > now)
+          this.amdRetryUntil.set(
+            modelId,
+            Math.max(this.amdRetryUntil.get(modelId) ?? 0, retryUntil),
+          );
+      }
+      if (code === 'AMD_ACTIVATION_REQUIRED' || code === 'AMD_CREDENTIAL_INVALID')
+        void this.refreshAmd();
+      if (
+        code === 'AMD_ACTIVATION_REQUIRED' ||
+        code === 'AMD_CREDENTIAL_INVALID' ||
+        code === 'MODEL_UNAVAILABLE'
+      )
+        void this.refreshState(true, false).catch(() => {});
+      const failureCode = code ?? (response.status === 429 ? 'RATE_LIMITED' : 'cloud_unavailable');
+      throw new CloudAmdRequestError(response.status, failureCode);
+    }
+  }
+
   private project(models: CloudState['models'], signal: AbortSignal): Promise<void> {
     const origin = this.configuration?.apiOrigin ?? null;
     const catalog = JSON.stringify([origin, models]);
@@ -407,6 +510,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.lifetime.abort();
     this.session = undefined;
     this.publish(EMPTY);
-    await Promise.allSettled([this.refreshing, this.loadingPlans, this.projection]);
+    await Promise.allSettled([
+      this.refreshing,
+      this.loadingPlans,
+      this.loadingAmd,
+      this.projection,
+    ]);
   }
 }

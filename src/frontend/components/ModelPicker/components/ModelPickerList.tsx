@@ -349,7 +349,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
-  const badges = showBadges ? getModelPickerBadges(item.model) : [];
+  const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
   const unavailable = item.cloudUnavailable
     ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
     : undefined;

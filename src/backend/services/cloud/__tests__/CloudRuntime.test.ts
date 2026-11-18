@@ -12,6 +12,7 @@ import type { CloudIdentity } from '../CloudSession';
 import { cloudSnapshot } from './_cloudFixtures';
 
 const mockGet = jest.fn();
+const mockPostEmpty = jest.fn();
 const mockRevoke = jest.fn();
 const mockInference = jest.fn();
 const mockHeaders = jest.fn();
@@ -50,6 +51,9 @@ jest.mock('../CloudSession', () => ({
     }
     get(path: string) {
       return mockGet(this.identity.profileId, path, this.origin);
+    }
+    postEmpty(path: string) {
+      return mockPostEmpty(this.identity.profileId, path, this.origin);
     }
     async headers(...args: unknown[]) {
       return mockHeaders(...args);
@@ -165,6 +169,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (account: string, path: string) => reply(account, path));
   mockProject.mockClear();
+  mockPostEmpty.mockReset();
   mockRevoke.mockClear();
   mockInference.mockReset();
   mockHeaders
@@ -717,12 +722,13 @@ test('catalog withdrawal resumes after a backup freeze without restoring signed-
   await runtime._doStop();
 });
 
-test('Plan models appear only while the account has a paid subscription', async () => {
-  let subscribed = false;
+test('a free plan projects models only while its entitlement is active', async () => {
+  let status: 'active' | 'inactive' = 'inactive';
   mockGet.mockImplementation(async (account: string, path: string) => {
     if (path !== '/api/v1/account') return reply(account, path);
     const snapshot = cloudSnapshot(account).account!;
-    snapshot.entitlements[0].is_free = !subscribed;
+    snapshot.entitlements[0].is_free = true;
+    snapshot.entitlements[0].status = status;
     return snapshot;
   });
   const { runtime } = await setup();
@@ -733,11 +739,11 @@ test('Plan models appear only while the account has a paid subscription', async 
     fetch('https://cloud.example/v1/messages', { method: 'POST', body: '{}' }),
   ).rejects.toMatchObject({ code: 'cloud_not_entitled' });
 
-  subscribed = true;
+  status = 'active';
   await runtime.refresh();
   expect(mockProject.mock.lastCall?.[2]).toEqual(cloudSnapshot().models);
 
-  subscribed = false;
+  status = 'inactive';
   await runtime.refresh();
   expect(mockProject.mock.lastCall?.[2]).toEqual([]);
   await runtime._doStop();
@@ -758,4 +764,80 @@ test('quota exhaustion rejects a previously selected model before requesting inf
     fetch('https://cloud.example/v1/messages', { method: 'POST', body: '{}' }),
   ).rejects.toMatchObject({ code: 'cloud_quota_exhausted' });
   await runtime._doStop();
+});
+
+test('uses the AMD catalog activation flag instead of a paid entitlement and preserves the key on replay', async () => {
+  const model: CloudModel = {
+    ...cloudSnapshot().models[0],
+    id: 'amd/free-model',
+    provider: 'amd',
+    endpoint_type: 'openai-chat-completions',
+  };
+  let activationRequired = true;
+  mockGet.mockImplementation(async (account: string, path: string) => {
+    if (path === '/v1/models')
+      return { data: [{ ...model, activation_required: activationRequired }] };
+    if (path === '/api/v1/account')
+      return { ...cloudSnapshot(account).account, entitlements: [], quota_pools: [] };
+    return reply(account, path);
+  });
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    const fetch = runtime.createModelFetch(model.id, 'agent');
+    const request = () =>
+      fetch('https://cloud.example/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({ model: model.id }),
+      });
+    await expect(request()).rejects.toMatchObject({ code: 'cloud_amd_activation_required' });
+    expect(mockInference).not.toHaveBeenCalled();
+
+    activationRequired = false;
+    await runtime.refresh();
+    expect(mockProject.mock.lastCall?.[2]).toEqual([{ ...model, activation_required: false }]);
+    mockInference
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: 'REQUEST_REPLAYED' } }), { status: 409 }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await expect(request()).resolves.toMatchObject({ status: 200 });
+    expect(mockHeaders).toHaveBeenCalledTimes(2);
+    expect(mockIdempotencyKey).toHaveBeenCalledTimes(1);
+    expect(mockHeaders.mock.calls[1][3]).toBe(mockHeaders.mock.calls[0][3]);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('links existing AMD accounts and opens the usage page while registration is closed', async () => {
+  let status = { status: 'unregistered', action: 'login', activated: false, environment: 'test' };
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    path === '/api/v1/amd/desktop/status' ? status : reply(account, path),
+  );
+  const entry = 'https://public-cloud.example/amd/enter#one-use-entry';
+  mockPostEmpty.mockResolvedValue({ entry_url: entry, expires_in: 60 });
+  const { runtime, change } = await setup();
+  try {
+    await runtime.refreshAmd();
+    expect(runtime.getState().amd).toEqual({
+      phase: 'ready',
+      status: { ...status, registration_enabled: false },
+    });
+    expect(mockPostEmpty).not.toHaveBeenCalled();
+    await expect(runtime.createAmdEntry()).resolves.toBe(entry);
+    expect(mockPostEmpty).toHaveBeenCalledWith(
+      'account-a',
+      '/api/v1/amd/desktop/entry',
+      service.apiOrigin,
+    );
+    status = { ...status, status: 'registered', action: 'none', activated: true };
+    await runtime.refreshAmd();
+    await expect(runtime.createAmdEntry()).resolves.toBe(entry);
+    change(null);
+    expect(runtime.getState().amd).toBeUndefined();
+    await expect(runtime.createAmdEntry()).rejects.toMatchObject({ code: 'cloud_unavailable' });
+  } finally {
+    await runtime._doStop();
+  }
 });

@@ -63,16 +63,25 @@ export function AiFailureMessage({
 
   const titleKey = aiFailureReasonTitleKey(reasonCode);
   const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
+  const source = data.source;
+  const code =
+    source && typeof source === 'object' && 'code' in source && typeof source.code === 'string'
+      ? source.code.toLowerCase()
+      : data.code?.toLowerCase();
   const message =
     fallbackMessage ??
     t(
-      reasonCode === 'auth'
-        ? 'chat.errorPart.message.auth'
-        : reasonCode === 'context_length'
-          ? 'chat.errorPart.message.contextLength'
-          : retryable === true
-            ? 'chat.errorPart.retryable'
-            : 'chat.errorPart.message',
+      code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
+        ? 'cloud.amd.activationRequired'
+        : code === 'amd_credential_invalid'
+          ? 'cloud.amd.credentialInvalid'
+          : reasonCode === 'auth'
+            ? 'chat.errorPart.message.auth'
+            : reasonCode === 'context_length'
+              ? 'chat.errorPart.message.contextLength'
+              : retryable === true
+                ? 'chat.errorPart.retryable'
+                : 'chat.errorPart.message',
     );
 
   return (

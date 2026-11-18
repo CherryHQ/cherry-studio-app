@@ -54,10 +54,18 @@ export class CloudSession {
   }
 
   async get(path: string): Promise<unknown> {
-    const headers = await this.headers('GET', path);
+    return this.requestWithoutBody('GET', path);
+  }
+
+  async postEmpty(path: string): Promise<unknown> {
+    return this.requestWithoutBody('POST', path);
+  }
+
+  private async requestWithoutBody(method: 'GET' | 'POST', path: string): Promise<unknown> {
+    const headers = await this.headers(method, path);
     try {
       const response = await this.http.request({
-        method: 'GET',
+        method,
         path,
         headers,
         signal: this.signal,
