@@ -4,6 +4,12 @@ This app-shell owner defines what the chat workspace, sidebar, Agent picker and 
 read from either conversation source, and it retains the catalog sources those consumers share.
 It does not own local execution or observation.
 
+Remote Session `readingAidScope` is a stable desktop-binding and Session namespace for phone-owned
+translations. Message revisions travel with display/export values. The common translation store
+runs both sources; local saves patch the owning Agent message, remote saves use the bounded mobile
+cache. Neither citation arrival nor opening a tool changes the original prose hash. Cached remote
+reading aids cannot cross a binding, Session, message revision, content hash or language.
+
 ## Shared contract
 
 `contracts.ts` is a read model plus interaction callbacks with no lifecycle:
@@ -17,8 +23,13 @@ It does not own local execution or observation.
   Each source owns the hook that produces it.
 - `ConversationCatalog`, `ConversationPreview` and the summaries: sidebar and Agent picker rows,
   optional selected-session metadata, lightweight status subscriptions and bound rename/delete.
-- `TranscriptMessage`/`TranscriptSnapshot`: pure export values.
-- `ConversationSource`: a catalog owner with availability state. It never opens a transcript.
+- `TranscriptMessage`/`TranscriptSnapshot`: pure export values. A desktop selection resolves
+  citations and freezes image bytes as `prepared-file` parts before it returns; no deferred reader,
+  authenticated URL or fabricated local file ID enters document conversion. The desktop revision
+  is rechecked after resource preparation.
+- `ConversationCatalog.readTranscript`: an optional local-only complete current-path snapshot for
+  data export. It does not open chat observation or change the mounted history window.
+- `ConversationSource`: a catalog owner with availability state. It does not activate chat observation.
 
 `ConversationProvider` constructs the local catalog and the retained desktop sources
 (`createConversationSources`). `ConversationSourceBoundary` and the catalog hooks retain a source
@@ -27,12 +38,16 @@ disposes connection demand while metadata stays cached in Query for five minutes
 
 ## Local
 
-`local/createLocalConversationSource` is catalog only: Agent and Session lists, selected-session
-metadata, and row previews that map Host status and frontend read marks. It refreshes from the Data
+`local/createLocalConversationSource` owns Agent and Session lists, selected-session metadata,
+row previews and one-shot export reads. The previews map Host status and frontend read marks. It refreshes from the Data
 API change feed. Local chat observation, admission, history and message actions belong to the chat
 page (`features/chat/runtime`), which projects its own client state into the shared read model.
 Local execution settles in-process, so the shared contract never needs pending or interrupted
 outcomes, revisioned history windows or deferred content from this source.
+
+Local data export reads the selected message path and Session metadata in one SQLite snapshot,
+retaining full saved reasoning independently of the status-only list projection and message
+sharing selection limit. Desktop catalogs do not offer whole-conversation data export.
 
 The local Session catalog lists root groups by default. `listSessions({ includeBranches: true })`
 instead lists every conversation by its own latest activity, including branches. These two list
@@ -62,6 +77,16 @@ outcomes; `RemoteConversationSnapshot` with `historyVersion`, send admission and
 results. `useConversation`, `useConversationHistory`, `useConversationDraft` and
 `useRemoteConversationSource` are exported from `remote/index.ts` for the remote chat page and the
 desktop share route and scheduled-task module.
+
+Known desktop supplemental parts are validated with the existing Agent content schemas before
+entering the common renderer. Native URL sources, search suggestions and compaction anchors keep
+their source part identity. Inline and revision-bound payloads use the same backend read cache;
+unknown or invalid data does not become an executable local capability.
+
+`readToolCitations` reads only recognized, completed lookup results through their existing
+`ResourceRead` values. Chat prepares these source facts independently of history loading and
+passes them in `MessageListItem.data.citationSources`; public citation parsing and source cards
+consume the facts without treating a tool name as permission to execute a local capability.
 
 Task metadata is a separate `RemoteTaskCatalogQueries` contract in `remote/remoteTaskContracts.ts`,
 exposed as `RemoteConversationSource.tasks`. It is not part of `RemoteConversationCatalog`.

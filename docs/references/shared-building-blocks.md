@@ -37,6 +37,7 @@ it already exists.
 | Audio media-type classification, import-time type inference, and transcription source limits | `src/shared/utils/audioFileTypes.ts` |
 | Image media types, extensions and bounded-header identification | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `importManagedFile` in `src/backend/services/file/importManagedFile.ts`, used by `fileContent.createInternalEntry` and system share import |
+| AI file implicit metadata | `src/backend/services/file` metadata capability for actual AI producers; shared fields in `shared/data/types/aiContent.ts`, Markdown/HTML carriers and reading projection in `shared/utils/aiContentText.ts`; programmatic sharing/rendering does not add declarations |
 | Reading and writing ZIP archives | `readZipDirectory`, `extractZipEntries` in `src/backend/utils/zipReader.ts`; `writeZipFile` in `src/backend/utils/zipWriter.ts` |
 | Built-in tool display titles | `BUILT_IN_TOOL_TITLE_KEYS`, `getBuiltInToolTitleKey` in `src/shared/data/types/builtInToolTitles.ts`, read by the transcript and background activity |
 | Image request deadline for an Agent turn | `withImageGenerationDeadline` in `src/backend/ai/agent/host/agentImageGeneration.ts` |
@@ -88,8 +89,10 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Model selection and chat capability filtering | `ModelPickerDrawer` in `src/frontend/components/ModelPicker`; use its existing `chat` variant for the filter menu and capability badges |
+| Cherry empty-state artwork | `EmptyIllustration` in `src/frontend/components/EmptyIllustration`. The caller confirms the empty state and passes the artwork to CherryUI `ContentState.Empty`. |
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
 | Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
+| Local whole-conversation Markdown data export | `useExportConversation` in `appShell/sharing`, over `ConversationCatalog.readTranscript`; `frontend/utils/chatExportCitations` adapts saved parts to shared citation semantics in `frontend/utils/messageCitations` |
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
@@ -111,6 +114,8 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Account sign-in fields, submission and failure feedback | `AccountSignInFields`, `useAccountSignInForm` and `useAccountErrorReporter` in `frontend/appShell/account`; entries own continuation and navigation |
+| Account entry and callback continuation | `accountSignInHref` in `frontend/appShell/account`; the current profile's persistent UI cache retains its internal return target, and login/callback dismiss to it |
+| Validating an internal return href | `readInternalHref` in `frontend/utils/internalHref.ts`; shared by account entry and provider setup, rejecting external URLs, fragments and path traversal |
 | Desktop provider preview, selection and import | `frontend/hooks/useDesktopProviderSync`, over the existing desktop connection actions; entries own presentation, feedback and navigation |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Device permission actions and status presentation | `frontend/hooks/devicePermission`, shared by settings and onboarding; preserves the settings request scopes and per-item action, while the backend permission owner serializes native prompts |

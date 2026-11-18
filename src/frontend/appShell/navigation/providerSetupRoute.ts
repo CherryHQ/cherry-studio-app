@@ -1,6 +1,4 @@
-import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-
-const INTERNAL_HREF_PATTERN = /^\/(?!\/)[A-Za-z0-9()[\]_.~/-]*(?:\?[A-Za-z0-9%&=+_.~-]*)?$/;
+import { readInternalHref } from '@/frontend/utils/internalHref';
 
 export type ProviderSetupRouteParamsInput = {
   returnTo?: string | string[];
@@ -21,6 +19,5 @@ export function providerSetupHref(returnTo: string) {
 export function readProviderSetupReturnTo(
   value: ProviderSetupRouteParamsInput['returnTo'],
 ): string | undefined {
-  const returnTo = getSingleRouteParam(value)?.trim();
-  return returnTo && INTERNAL_HREF_PATTERN.test(returnTo) ? returnTo : undefined;
+  return readInternalHref(value);
 }

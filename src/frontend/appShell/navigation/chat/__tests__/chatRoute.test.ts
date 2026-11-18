@@ -54,6 +54,11 @@ describe('shared chat route contract', () => {
       '/?sessionId=session%20%2F%201',
     );
     expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
+    const workspaceDraftId = '00000000-0000-7000-8000-000000000001';
+    const sshDraftId = '00000000-0000-7000-8000-000000000002';
+    expect(
+      chatReturnToHref({ agentId: 'agent-1', kind: 'draft', workspaceDraftId, sshDraftId }),
+    ).toBe(`/?agentId=agent-1&workspaceDraftId=${workspaceDraftId}&sshDraftId=${sshDraftId}`);
   });
 
   test('carries an unsent workspace selection only with its draft', () => {

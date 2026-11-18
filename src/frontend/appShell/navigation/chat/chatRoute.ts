@@ -83,11 +83,16 @@ export function chatHref(target: ChatTarget) {
   };
 }
 
-/** Serializes complete chat identity for a return-to route parameter. */
+/** Preserves the chat and its draft workspace when returning from another screen. */
 export function chatReturnToHref(target: ChatTarget) {
-  const [key, value] =
-    target.kind === 'session' ? ['sessionId', target.sessionId] : ['agentId', target.agentId];
-  return `/?${key}=${encodeURIComponent(value)}`;
+  if (target.kind === 'session') return `/?sessionId=${encodeURIComponent(target.sessionId)}`;
+
+  const params = [`agentId=${encodeURIComponent(target.agentId)}`];
+  if (target.workspaceDraftId) {
+    params.push(`workspaceDraftId=${encodeURIComponent(target.workspaceDraftId)}`);
+  }
+  if (target.sshDraftId) params.push(`sshDraftId=${encodeURIComponent(target.sshDraftId)}`);
+  return `/?${params.join('&')}`;
 }
 
 export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {

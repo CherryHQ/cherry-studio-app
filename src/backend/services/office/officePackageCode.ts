@@ -91,4 +91,5 @@ const { readInput, saveOffice } = (() => {
 `;
 
 /** The full host prelude of an Office job, in dependency order. */
-export const officeRuntimeCode = `${officeBytesCode}\n${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${officeCheckCode}\n${officeFilesCode}`;
+export const officePackageRuntimeCode = `${officeBytesCode}\n${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${officeCheckCode}`;
+export const officeRuntimeCode = `${officePackageRuntimeCode}\n${officeFilesCode}`;

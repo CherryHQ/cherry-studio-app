@@ -1,21 +1,24 @@
 import {
   BottomSheet,
-  Button,
   ContentState,
   FilePreview,
   MessagePart,
   useToast,
 } from '@cherrystudio/ui/components';
-import * as Sharing from 'expo-sharing';
-import { useState, type PropsWithChildren } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 
-import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
-import { ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
+import type { ConversationMessage, ResourceValue } from '@/frontend/appShell/conversation';
+import {
+  openTemporaryFilePreview,
+  prepareTemporaryFilePreview,
+} from '@/frontend/appShell/filePreview';
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
-import { ToolRendererProvider } from '@/frontend/components/Message';
-import { MessageDetailText } from '@/frontend/components/MessageDetail';
+import {
+  MessageFileRendererProvider,
+  ReadOnlyToolContent,
+  ToolRendererProvider,
+} from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
@@ -25,9 +28,11 @@ export function ConversationMessageContent({
   children,
   messageState,
   tools,
+  attachments,
 }: PropsWithChildren<{
   messageState?: ConversationMessage['state'];
   tools?: ConversationMessage['tools'];
+  attachments?: ConversationMessage['attachments'];
 }>) {
   const { t } = useTranslation();
   // Remote rows always carry a list; wrapping only once a tool arrives would remount the message.
@@ -48,64 +53,61 @@ export function ConversationMessageContent({
             }
             statusTone={tool.state === 'failed' ? 'danger' : 'default'}
           >
-            {tool.output ? (
-              <ConversationResourceSection resource={tool.output} title={t('chat.tool.output')} />
-            ) : null}
-            {tool.input ? (
-              <ConversationResourceSection resource={tool.input} title={t('chat.tool.arguments')} />
-            ) : null}
-            {!tool.input && !tool.output ? (
-              <Text className="text-sm text-muted-foreground">{t('chat.tool.noOutput')}</Text>
-            ) : null}
+            <ConversationToolDetail tool={tool} />
           </MessagePart.Tool>
         ) : null;
       }}
     >
-      {children}
+      <MessageFileRendererProvider
+        renderFile={(key) => {
+          const item = attachments?.find((item) => item.key === key);
+          return item ? <ConversationAttachment item={item} presentation="result" /> : null;
+        }}
+      >
+        {children}
+      </MessageFileRendererProvider>
     </ToolRendererProvider>
   );
 }
-function ConversationResourceSection({
-  resource,
-  title,
+function toolValue(value: ResourceValue | undefined): unknown {
+  if (value?.kind === 'json') return value.value;
+  if (value?.kind !== 'text') return undefined;
+  try {
+    return JSON.parse(value.text);
+  } catch {
+    return value.text;
+  }
+}
+
+function ConversationToolDetail({
+  tool,
 }: {
-  resource: ResourceRead;
-  title: string;
+  tool: NonNullable<ConversationMessage['tools']>[number];
 }) {
   const { t } = useTranslation();
-  const result = useConversationResourceValue(resource);
-  if (result.isError)
+  const input = useConversationResourceValue(tool.input);
+  const output = useConversationResourceValue(tool.output);
+  if (input.isError || output.isError)
     return (
       <ContentState.Error
         title={t('remoteAgent.loadFailed')}
-        primaryAction={{ children: t('common.retry'), onPress: result.refetch }}
+        primaryAction={{
+          children: t('common.retry'),
+          onPress: () => {
+            if (input.isError) input.refetch();
+            if (output.isError) output.refetch();
+          },
+        }}
       />
     );
-  if (!result.data) return <ContentState.Loading title={t('remoteAgent.loading')} />;
-  const value =
-    result.data.kind === 'text'
-      ? result.data.text
-      : result.data.kind === 'json'
-        ? JSON.stringify(result.data.value, null, 2)
-        : result.data.kind === 'metadata' || result.data.kind === 'file'
-          ? result.data.name
-          : JSON.stringify(
-              result.data.kind === 'user-question' ? result.data.question : result.data.questions,
-              null,
-              2,
-            );
+  if (input.isPending || output.isPending)
+    return <ContentState.Loading title={t('remoteAgent.loading')} />;
   return (
-    <MessageDetailText
-      title={title}
-      value={value}
-      language="json"
-      variant={
-        result.data.kind === 'json' ||
-        result.data.kind === 'user-question' ||
-        result.data.kind === 'question'
-          ? 'code'
-          : 'body'
-      }
+    <ReadOnlyToolContent
+      name={tool.title}
+      input={toolValue(input.data)}
+      output={toolValue(output.data)}
+      failed={tool.state === 'failed'}
     />
   );
 }
@@ -124,7 +126,9 @@ export function ConversationAttachments({
 }
 function ConversationAttachment({
   item,
+  presentation = 'attachment',
 }: {
+  presentation?: 'attachment' | 'result';
   item: NonNullable<ConversationMessage['attachments']>[number];
 }) {
   const { t } = useTranslation();
@@ -135,19 +139,34 @@ function ConversationAttachment({
     opened || kind === 'image' ? item.resource : undefined,
   );
   const file = result.data?.kind === 'file' ? result.data : undefined;
-  const share = async () => {
-    if (!file) return;
-    try {
-      if (!(await Sharing.isAvailableAsync())) throw new Error('UNAVAILABLE');
-      await Sharing.shareAsync(file.uri, { dialogTitle: file.name, mimeType: file.mediaType });
-    } catch {
-      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
-    }
-  };
+  useEffect(() => {
+    if (!opened || !file) return;
+    const controller = new AbortController();
+    void prepareTemporaryFilePreview(
+      { uri: file.uri, filename: file.name, mediaType: file.mediaType },
+      controller.signal,
+    )
+      .then((preview) => {
+        if (controller.signal.aborted) {
+          preview.release();
+          return;
+        }
+        // The viewer retains its own bytes; closing the download sheet may release the source read.
+        openTemporaryFilePreview(preview);
+        setOpened(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+          setOpened(false);
+        }
+      });
+    return () => controller.abort();
+  }, [file, opened, t, toast]);
   return (
     <>
       <FilePreview
-        variant="attachment"
+        variant={presentation === 'result' && kind === 'image' ? 'card' : 'attachment'}
         metadata={{
           kind,
           displayName: item.name,
@@ -171,32 +190,18 @@ function ConversationAttachment({
         onPress={() => setOpened(true)}
       />
       {opened ? (
-        <BottomSheet
-          open
-          onClose={() => setOpened(false)}
-          title={item.name}
-          size="large"
-          footer={
-            file ? (
-              <Button onPress={() => void share()}>{t('filePreview.openWith')}</Button>
-            ) : undefined
-          }
-        >
-          {result.isError ? (
+        <BottomSheet open onClose={() => setOpened(false)} title={item.name} size="large">
+          {result.isError || (result.isSuccess && !file) ? (
             <ContentState.Error
-              title={t('remoteAgent.loadFailed')}
-              primaryAction={{ children: t('common.retry'), onPress: result.refetch }}
+              title={t(result.isError ? 'remoteAgent.loadFailed' : 'filePreview.unavailable')}
+              primaryAction={
+                result.isError
+                  ? { children: t('common.retry'), onPress: result.refetch }
+                  : undefined
+              }
             />
-          ) : !result.data ? (
-            <ContentState.Loading title={t('remoteAgent.loading')} />
-          ) : file?.mediaType?.startsWith('image/') ? (
-            <View className="h-96">
-              <ArtifactImageViewer accessibilityLabel={file.name} uri={file.uri} />
-            </View>
           ) : (
-            <Text className="p-4 text-foreground">
-              {file?.name ?? t('filePreview.unavailable')}
-            </Text>
+            <ContentState.Loading title={t('remoteAgent.loading')} />
           )}
         </BottomSheet>
       ) : null}

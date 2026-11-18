@@ -169,8 +169,11 @@ export function DeviceConnectionDetailScreen() {
               label={t('settings.deviceConnections.syncGuide.entry')}
               locked={isConfigurationLocked}
               onPress={() =>
-                router.replace({
-                  params: { connectionId: connection.id },
+                router.push({
+                  params: {
+                    connectionId: connection.id,
+                    returnTo: `/settings/device-connections/${encodeURIComponent(connection.id)}`,
+                  },
                   pathname: '/settings/provider/desktop-sync',
                 })
               }
@@ -187,7 +190,7 @@ export function DeviceConnectionDetailScreen() {
         <Section.Item
           label={t('settings.deviceConnections.location.scan')}
           onPress={() =>
-            router.replace({
+            router.push({
               params: { connectionId: connection.id },
               pathname: '/settings/device-connections/scan',
             })

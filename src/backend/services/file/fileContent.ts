@@ -10,6 +10,11 @@ import type {
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import {
+  AiContentLabelSchema,
+  type AiContentOperation,
+  type AiContentLabel,
+} from '@/shared/data/types/aiContent';
+import {
   type FileEntry,
   type FileEntryId,
   FileEntryIdSchema,
@@ -63,6 +68,8 @@ const createTextEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema,
   name: SafeNameSchema,
   provenance: FileEntryProvenanceSchema,
+  aiContentLabel: AiContentLabelSchema.nullish(),
+  aiOperation: z.enum(['generate', 'edit']).optional(),
 });
 
 const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true }).extend({
@@ -157,6 +164,8 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiContentLabel?: AiContentLabel | null;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) => {
@@ -173,6 +182,8 @@ export const fileContent = {
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
+      aiContentLabel?: AiContentLabel | null;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) => {
@@ -257,6 +268,7 @@ export const fileContent = {
       id: FileEntryId;
       workspaceFolderId?: string | null;
       baseUpdatedAt?: number;
+      aiOperation?: AiContentOperation;
     },
     signal?: AbortSignal,
   ) =>

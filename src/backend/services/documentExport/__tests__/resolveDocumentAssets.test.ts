@@ -132,3 +132,28 @@ test('cancelling a remote read releases its stream without caching a partial ima
   expect(cancel).toHaveBeenCalledTimes(1);
   expect(cache.size).toBe(0);
 });
+
+test('prepared image bytes render without any file or network reader and reject active formats', async () => {
+  const read = jest.fn();
+  const networkCalls = jest.mocked(fetch).mock.calls.length;
+  const result = await resolveDocumentAssets(
+    new Map([
+      [
+        'remote-snapshot',
+        { kind: 'prepared-image' as const, base64: btoa(String.fromCharCode(...png())) },
+      ],
+      [
+        'unsafe',
+        { kind: 'prepared-image' as const, base64: btoa('<svg onload="alert(1)"></svg>') },
+      ],
+    ]),
+    new Map(),
+    read,
+    new AbortController().signal,
+  );
+  expect(result.images.get('remote-snapshot')).toMatch(/^data:image\/png;base64,/);
+  expect(result.images.has('unsafe')).toBe(false);
+  expect(result.issues).toHaveLength(1);
+  expect(read).not.toHaveBeenCalled();
+  expect(fetch).toHaveBeenCalledTimes(networkCalls);
+});

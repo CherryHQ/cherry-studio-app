@@ -1,5 +1,4 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { ContentState } from '@cherrystudio/ui/components';
 import { LegendList } from '@legendapp/list/react-native';
 import { useFocusEffect, useIsFocused } from 'expo-router';
@@ -9,6 +8,7 @@ import { AppState, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useInfiniteQuery, useQuery } from '@/frontend/data/hooks';
 import { TRASH_RETENTION_MS } from '@/shared/data/api/schemas/trash';
 
@@ -114,11 +114,8 @@ export function TrashScreen() {
                 />
               ) : (
                 <ContentState.Empty
-                  icon={
-                    <ContentState.Icon className="rounded-xl">
-                      <Trash2Icon className="size-6 text-foreground" />
-                    </ContentState.Icon>
-                  }
+                  icon={<EmptyIllustration scene="trash" />}
+                  prominence="prominent"
                   title={t('trash.empty')}
                 />
               )}

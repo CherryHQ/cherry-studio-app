@@ -129,9 +129,9 @@ Completed decisions appear in terminal ToolPart state and normalized output. Mis
 is reconciled as interrupted, closing unfinished parts rather than replaying a dead callback.
 No `agent_approval` table is needed.
 
-**Avatar stores the built-in Cherry emoji or a stable file reference.** The initial Cherry Agent
-and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. Existing records are
-preserved. Uploaded avatars follow the user-avatar pattern
+**Avatar stores an emoji, a bundled avatar key or a stable file reference.** The initial Cherry
+Agent and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. DeepSeek imports
+use `builtin:deepseek` for the bundled whale image. Uploaded avatars follow the user-avatar pattern
 ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
 WebP under `{documentDirectory}/agent-avatars/`, referenced as
 `agent-avatar-file:{agentId}.{uuid}.webp`, never as an absolute `file://` path. `file_entry` is for
@@ -140,14 +140,15 @@ attached to a soft-deleted Agent for historical Sessions.
 
 Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
 `PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
-column-write failure compensating the new file. Creation accepts only the built-in `🍒` value;
-updates reject direct avatar writes, and managed file references always use the image workflow.
+column-write failure compensating the new file. Creation accepts validated emoji or
+`builtin:deepseek`. Updates reject direct avatar writes, and managed file references always use
+the image workflow.
 The uuid rotates on every replace so the uri, which doubles as the image cache key,
 changes with it.
 
-Emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
-device-local `Agent.avatarUri`, rebuilt per read because the
-absolute path does not survive container relocation. That projection happens at the Data API
+Emoji and bundled avatars render from `Agent.avatar` without a managed image URI. File references
+project into a device-local `Agent.avatarUri`, rebuilt per read because the absolute path does not
+survive container relocation. That projection happens at the Data API
 boundary, not in `AgentService`: resolving it is file-system work under `backend/services`, which
 `backend/data` must not depend on. `createAgentAvatars` owns both directions and is injected through
 `dataApiDependencies`, the same channel `mcpServerMutations` uses.
@@ -212,7 +213,7 @@ external runtime (execution targets, delivery, resume tokens) are deliberately a
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
-| `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
+| `avatar` | text | NULL | Emoji, bundled avatar key or stable file reference. NULL uses the name fallback. |
 | `model` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `auto` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |

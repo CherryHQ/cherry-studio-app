@@ -52,6 +52,7 @@ import {
 import { RemoteAttachmentDrafts } from './RemoteAttachmentDrafts';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
 import { createAttachmentDownloader } from './remoteDownloads';
+import { isPresentationData } from './remotePresentation';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import { RemoteTaskCatalog } from './RemoteTaskCatalog';
@@ -676,7 +677,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
             ...(await Promise.all(
               page.items.map(
                 async (part): Promise<AgentPart> =>
-                  (part.kind === 'text' || part.kind === 'reasoning') && 'ref' in part.content
+                  (part.kind === 'text' || part.kind === 'reasoning' || isPresentationData(part)) &&
+                  'content' in part &&
+                  'ref' in part.content
                     ? {
                         ...part,
                         content: {

@@ -44,6 +44,7 @@ export type AppSearchInput<TFilters = undefined> = {
 export type AppSearchRequest<TItem, TFilters = undefined, TFilterContext = undefined> = {
   /** Delay nonempty queries for expensive sources; local matching stays immediate by default. */
   debounceMs?: number;
+  emptyIcon?: ReactNode;
   emptyText: string;
   filter?: AppSearchFilter<TFilters, TFilterContext>;
   getAccessibilityLabel: (item: TItem) => string;

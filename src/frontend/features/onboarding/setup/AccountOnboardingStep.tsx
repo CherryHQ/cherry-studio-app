@@ -11,7 +11,7 @@ import type { OnboardingProgress } from './useOnboardingProgress';
 export function AccountOnboardingStep({ progress }: { progress: OnboardingProgress }) {
   const { t } = useTranslation();
   const { account, state } = useAccount();
-  const form = useAccountSignInForm({ isBusy: progress.isSaving });
+  const form = useAccountSignInForm({ isBusy: progress.isSaving, returnTo: '/onboarding' });
   const { isPrivate, isBusy: busy } = form;
   const restored = state.isSignedIn || state.isEnterprise;
   const continueRestored = useEffectEvent(() => {

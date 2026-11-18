@@ -1,4 +1,3 @@
-import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { BottomSheet, Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
@@ -6,6 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, Text, View } from 'react-native';
 
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { withPolicy } from '@/frontend/components/Policy';
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
@@ -136,7 +136,7 @@ function SkillsSection({
             </Section>
           ) : (
             <ContentState.Empty
-              icon={<ToolCaseIcon className="size-12 text-muted-foreground" />}
+              icon={<EmptyIllustration scene="collection" size="panel" />}
               title={t('agent.skills.empty')}
             />
           )}

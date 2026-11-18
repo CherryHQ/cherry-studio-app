@@ -40,6 +40,9 @@ jest.mock('@cherrystudio/ui/components', () => {
 jest.mock('@/frontend/components/MarkdownText', () => ({
   MarkdownText: (props: object) => jest.requireActual('react').createElement('MarkdownText', props),
 }));
+jest.mock('@/frontend/components/MessageDetail', () => ({
+  useCopyDetailText: () => jest.fn(),
+}));
 
 type ReasoningMessagePart = Extract<CherryMessagePart, { type: 'reasoning' }>;
 const longReasoning = '# Thinking\n\n' + 'Earlier content must remain readable 😀.\n'.repeat(250);

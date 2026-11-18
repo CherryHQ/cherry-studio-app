@@ -16,6 +16,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import {
   orderedSelection,
   useSelectionActions,
@@ -151,9 +152,9 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
               title={t('painting.home.loadFailed')}
             />
           ) : (
-            <View className="rounded-2xl border border-border px-6 py-8">
+            <View className="px-6 py-6">
               <ContentState.Empty
-                description={t('painting.home.emptyDescription')}
+                icon={<EmptyIllustration scene="creation" size="section" />}
                 testID="painting-boards-empty"
                 title={t('painting.home.empty')}
               />

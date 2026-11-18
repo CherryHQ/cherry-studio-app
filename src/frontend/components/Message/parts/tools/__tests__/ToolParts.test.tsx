@@ -8,15 +8,17 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { GenericToolPart } from '../GenericToolPart';
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPartRenderer } from '../metaTool/MetaToolPartRenderer';
+import { ReadOnlyToolContent } from '../ReadOnlyToolContent';
 import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
+const mockMcpAppLauncher = jest.fn(() => null);
 const mockSetStringAsync = jest.fn().mockResolvedValue(true);
 const mockToastShow = jest.fn();
 
 jest.mock('@/frontend/components/McpApp', () => ({
-  McpAppLauncher: () => null,
+  McpAppLauncher: () => mockMcpAppLauncher(),
   McpAppConversationBridge: ({ children }: { children: ReactNode }) => children,
   useMcpAppConversation: () => null,
 }));
@@ -127,12 +129,13 @@ jest.mock('@cherrystudio/ui/components', () => {
         title,
         action,
         children,
+        ...props
       }: {
         title: string;
         action?: ReactNode;
         children: ReactNode;
       }) => (
-        <MockView>
+        <MockView {...props}>
           <MockText>{title}</MockText>
           {action}
           {children}
@@ -858,3 +861,83 @@ function makeToolPart(overrides: Record<string, unknown>): ToolMessagePart {
     ...overrides,
   } as unknown as ToolMessagePart;
 }
+
+it('renders remote MCP text without activating local Apps from result metadata', async () => {
+  mockMcpAppLauncher.mockClear();
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      <ReadOnlyToolContent
+        name="mcp__other-server__read"
+        output={{
+          metadata: { type: 'mcp' },
+          content: { content: [{ type: 'text', text: 'Remote result' }] },
+          mcpApp: { resourceUri: 'ui://remote/app' },
+        }}
+      />,
+    );
+  });
+  expect(
+    renderer.root
+      .findAllByProps({ testID: 'mock-text-body' })
+      .some((node) => node.props.value === 'Remote result'),
+  ).toBe(true);
+  expect(mockMcpAppLauncher).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('preserves top-level MCP image blocks and error state when metadata sits alongside content', async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      <ReadOnlyToolContent
+        name="mcp__other-server__capture"
+        output={{
+          metadata: { type: 'mcp' },
+          isError: true,
+          content: [
+            { type: 'text', text: 'Partial screenshot' },
+            { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+          ],
+        }}
+      />,
+    );
+  });
+  expect(
+    renderer.root
+      .findAllByType(View)
+      .some((node) => node.props.source === 'data:image/png;base64,AAAA'),
+  ).toBe(true);
+  expect(
+    renderer.root
+      .findAllByProps({ testID: 'mock-text-body' })
+      .some((node) => node.props.value === 'Partial screenshot'),
+  ).toBe(true);
+  expect(renderer.root.findAllByType(View).some((node) => node.props.tone === 'danger')).toBe(true);
+  await act(async () => renderer.unmount());
+});
+
+it('renders failed web search string errors instead of showing no results', async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      <ReadOnlyToolContent
+        name="mcp__cherry-tools__web_search"
+        output="Search service timed out"
+        failed
+      />,
+    );
+  });
+  expect(
+    renderer.root
+      .findAllByType(Text)
+      .some((node) => node.props.children === 'Search service timed out'),
+  ).toBe(true);
+  expect(
+    renderer.root
+      .findAllByType(Text)
+      .some((node) => node.props.children === 'chat.webSearch.noResults'),
+  ).toBe(false);
+  expect(renderer.root.findAllByProps({ tone: 'danger' }).length).toBeGreaterThan(0);
+  await act(async () => renderer.unmount());
+});

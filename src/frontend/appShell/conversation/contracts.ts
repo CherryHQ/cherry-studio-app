@@ -1,4 +1,5 @@
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { CitationSource } from '@/frontend/utils/messageCitations';
 import type {
   AgentMessageView,
   AgentUserQuestions,
@@ -134,7 +135,10 @@ export type TranscriptMessage = Pick<AgentMessageView, 'id' | 'role' | 'status' 
   parts: (
     | AgentMessageView['parts'][number]
     | { type: 'tool-summary'; id: string; displayName: string }
+    | { type: 'prepared-file'; id: string; filename: string; mediaType: string; base64?: string }
   )[];
+  citationSources?: readonly CitationSource[];
+  revision?: string;
   createdAt?: string;
   attachments?: readonly { name: string; mediaType?: string }[];
   /** Display name of the model that produced an assistant message. */
@@ -198,6 +202,8 @@ export type ConversationSnapshot = {
 /** One paginated transcript window as the workspace consumes it; each source owns its hook. */
 export type ConversationHistoryView = {
   dataKey: string;
+  /** Immutable history revision for source reads, independent of the visible window identity. */
+  revision?: string;
   messages: readonly ConversationMessage[];
   error?: Error;
   isLoadingInitial: boolean;
@@ -211,7 +217,14 @@ export type ConversationHistoryView = {
   loadNewer(): Promise<void>;
   retry(): Promise<void>;
   returnToLatest?: () => void;
+  /** Confirm earlier tool facts without moving the visible history window. */
+  readCitations?: ConversationCitationReader;
 };
+export type ConversationCitationReader = (
+  messageId: string,
+  ids: readonly string[],
+  signal: AbortSignal,
+) => Promise<readonly CitationSource[]>;
 export type TranscriptSnapshot = {
   title?: string;
   assistantName?: string;
@@ -260,6 +273,8 @@ export interface ConversationCatalog {
   readonly cacheScope?: QueryScope;
   subscribe?(listener: (kind: 'agents' | 'sessions') => void): () => void;
   readSession?(ref: ConversationRef, signal: AbortSignal): Promise<ConversationSummary>;
+  /** Local-only full-history data export, independent of mounted chat windows. */
+  readTranscript?(ref: ConversationRef, signal: AbortSignal): Promise<TranscriptSnapshot>;
   previewSession?(
     ref: ConversationRef,
     options?: { includeDescendants?: boolean },

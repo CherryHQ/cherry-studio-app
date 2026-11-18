@@ -8,6 +8,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry } from '@/shared/data/types/file';
 
+import { readSourceAiContent } from './aiContentMetadata';
 import { generateFilePreviewUri } from './filePreviewStorage';
 import { createInternalEntry, discardInternalEntries, resolveFileEntry } from './fileStorage';
 import { renderEditedImage } from './renderEditedImage';
@@ -27,6 +28,7 @@ export async function editFileImage(
   }
   signal?.throwIfAborted();
 
+  const aiContentLabel = await readSourceAiContent({ ...source.entry, uri: source.uri }, signal);
   let temporary: Awaited<ReturnType<typeof renderEditedImage>> | undefined;
   let entry: FileEntry | undefined;
   let committed = false;
@@ -41,6 +43,7 @@ export async function editFileImage(
         baseFileEntryId: source.entry.id,
         mediaType: source.entry.mediaType,
         provenance: source.entry.provenance,
+        aiContentLabel,
         source: 'uri',
       },
       signal,

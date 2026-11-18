@@ -277,7 +277,10 @@ function ProviderListView() {
     router.push('/settings/provider/catalog');
   }, [router]);
   const openDesktopSync = useCallback(() => {
-    router.replace('/settings/provider/desktop-sync');
+    router.push({
+      pathname: '/settings/provider/desktop-sync',
+      params: { returnTo: '/settings/provider' },
+    });
   }, [router]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [

@@ -19,6 +19,7 @@ export type LoginPurpose = 'sign-in' | 'switch' | 'expired';
 
 type LoginScreenProps = {
   purpose: LoginPurpose;
+  returnTo: string;
   /** Closes from settings or signs out when expired. */
   onLeave: () => void;
   /** Called when sign-in keeps the app in place; another organization reloads it instead. */
@@ -26,7 +27,7 @@ type LoginScreenProps = {
 };
 
 /** Cloud sign-in opens Accounts Portal; private deployments use their own password endpoint. */
-export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) {
+export function LoginScreen({ onLeave, onSignedIn, purpose, returnTo }: LoginScreenProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { state } = useAccount();
@@ -34,7 +35,7 @@ export function LoginScreen({ onLeave, onSignedIn, purpose }: LoginScreenProps) 
   // An expired private session signs in again to the same server and, when known, the same user.
   const lockedAddress = isExpired ? state.privateAddress : undefined;
   const lockedUsername = lockedAddress ? state.privateUsername : undefined;
-  const form = useAccountSignInForm({ expired: isExpired });
+  const form = useAccountSignInForm({ expired: isExpired, returnTo });
   const { isPrivate, canSignIn } = form;
   const organization = organizationLabel(state);
   const signIn = () => {

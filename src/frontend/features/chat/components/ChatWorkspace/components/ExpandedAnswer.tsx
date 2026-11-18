@@ -53,10 +53,7 @@ import {
 } from '@/frontend/components/Message';
 
 import { useAgentAnswers } from '../../../runtime';
-import {
-  ConversationAttachments,
-  ConversationMessageContent,
-} from '../../ConversationMessageContent';
+import { ConversationMessageContent } from '../../ConversationMessageContent';
 import { useFullScreenLayer, useFullScreenLayerProgress } from '../../FullScreenLayer';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
@@ -517,13 +514,12 @@ function AnswerPage({
       showsVerticalScrollIndicator={false}
     >
       {answer ? (
-        <ConversationMessageContent messageState={row.messageState} tools={row.tools}>
+        <ConversationMessageContent
+          messageState={row.messageState}
+          tools={row.tools}
+          attachments={row.attachments}
+        >
           <AssistantMessage message={answer}>
-            {row.attachments?.length ? (
-              <View className="w-full gap-2">
-                <ConversationAttachments attachments={row.attachments} />
-              </View>
-            ) : null}
             <MessageTranslationContent message={answer} />
           </AssistantMessage>
         </ConversationMessageContent>

@@ -9,8 +9,8 @@ import { Text, View } from 'react-native';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
-import { pairingCancelDestination } from './pairingCancelDestination';
 import { useDesktopPairing } from './useDesktopPairing';
+import { usePairingNavigation } from './usePairingNavigation';
 
 export function DeviceConnectionPairingScreen() {
   const { input: pendingInput, setInput } = useDesktopPairingInput();
@@ -30,11 +30,14 @@ export function DeviceConnectionPairingScreen() {
       params: repairConnectionId ? { connectionId: repairConnectionId } : {},
     });
 
-  const cancel = () => router.replace(pairingCancelDestination(repairConnectionId));
+  const { cancel } = usePairingNavigation({
+    connectionId: repairConnectionId,
+    isMissingConnection: Boolean(input?.connectionId && !repairConnectionId),
+  });
 
   const finish = () => {
     if (!connection) return;
-    router.replace({
+    router.dismissTo({
       pathname: '/settings/device-connections/[connectionId]',
       params: { connectionId: connection.id },
     });
