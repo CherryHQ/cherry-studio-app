@@ -144,13 +144,14 @@ responses. They use the same boundary without buffering the response or construc
 The community provider accepts AMD rows from the account's `/v1/models` catalog when the supplier
 is `amd` and the model has an `amd/` ID and the OpenAI chat-completions endpoint. The catalog's
 `activation_required` flag decides model admission without a paid entitlement or Cherry quota.
-Only admitted models are projected for selection. The detail page can also show offered models
-that still require activation. The gateway applies AMD limits and owns the AMD key.
+Only admitted models are projected for selection. The detail page and conversation picker also
+display offered models that still require activation. The gateway applies AMD limits and owns the
+AMD key.
 
-The detail page reads `/api/v1/amd/desktop/status` separately from the paid catalog. A missing AMD
-endpoint hides the setup section. A temporary error leaves it retryable. The registration flag
-comes from the current server status. Changes saved in the Cloud admin take effect on the next read.
-On user action, the same Product Session signs an empty `POST /api/v1/amd/desktop/entry`. The app
+The AMD status read at `/api/v1/amd/desktop/status` determines the action offered when the user
+presses a model row. A temporary error leaves the row retryable. The registration flag comes from
+the current server status. Changes saved in the Cloud admin take effect on the next read.
+On confirmation, the same Product Session signs an empty `POST /api/v1/amd/desktop/entry`. The app
 opens the service-provided HTTPS URL in the system browser with its fragment intact. Linked users
 can access the same page to view usage. The app takes its full model list from `/v1/models`, and
 AMD usage stays on the web. The one-use URL remains transient.

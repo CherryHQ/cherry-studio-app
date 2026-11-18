@@ -1,5 +1,9 @@
 import { type ReactNode } from 'react';
+import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { ModelPickerList } from '../ModelPickerList';
 
@@ -21,10 +25,30 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('@cherrystudio/ui/utils', () => ({ cn: (...names: unknown[]) => names.join(' ') }));
 jest.mock('expo-blur', () => ({ BlurTargetView: jest.requireActual('react-native').View }));
+jest.mock('@/frontend/components/Avatar', () => ({ ModelAvatar: () => null }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+jest.mock('@legendapp/list/react-native', () => ({
+  LegendList: ({
+    data,
+    extraData,
+    renderItem,
+  }: {
+    data: readonly { key: string }[];
+    extraData: unknown;
+    renderItem: (input: { item: { key: string }; extraData: unknown }) => ReactNode;
+  }) => {
+    const { View: MockView } = jest.requireActual('react-native');
+    return data.map((item) => (
+      <MockView key={item.key}>{renderItem({ item, extraData })}</MockView>
+    ));
+  },
+}));
 
 jest.mock('../ModelPickerFastScroller', () => ({ ModelPickerFastScroller: () => null }));
 
-describe('ModelPickerList empty state', () => {
+describe('ModelPickerList', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -55,5 +79,53 @@ describe('ModelPickerList empty state', () => {
     act(() => renderer?.root.findByProps({ testID: 'empty-action' }).props.onPress());
 
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('pressing a locked AMD model requests activation without selecting it', () => {
+    const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
+    const modelId = 'amd/gpt-oss';
+    const id = createUniqueModelId(provider.id, modelId);
+    const onAmdActivation = jest.fn();
+    const onSelect = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <ModelPickerList
+          listItems={[
+            {
+              isFirstGroup: true,
+              key: provider.id,
+              provider,
+              title: provider.name,
+              type: 'groupHeader',
+            },
+            {
+              item: {
+                isCloudFree: true,
+                key: id,
+                model: { capabilities: [], id, modelId, name: 'GPT-OSS', providerId: provider.id },
+                modelId: id,
+                provider,
+                requiresAmdActivation: true,
+              },
+              key: id,
+              type: 'model',
+            },
+          ]}
+          onAmdActivation={onAmdActivation}
+          onSelect={onSelect}
+          selectedModelId={null}
+          showBadges
+        />,
+      );
+    });
+
+    const row = renderer?.root.findByType(Pressable);
+    expect(row?.props.accessibilityLabel).toBe('GPT-OSS, models.capability.free');
+    expect(row?.props.accessibilityHint).toBe('cloud.amd.activationRequired');
+    expect(row?.props.disabled).toBe(false);
+    act(() => row?.props.onPress());
+    expect(onAmdActivation).toHaveBeenCalledWith(modelId);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

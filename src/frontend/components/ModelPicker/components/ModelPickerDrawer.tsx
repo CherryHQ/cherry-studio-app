@@ -13,6 +13,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
+import { useCloudAmdModelAction } from '@/frontend/appShell/cloud';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
@@ -26,27 +27,22 @@ import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
+import { addAmdActivationModels, EMPTY_CHERRY_AI_GROUP } from '../utils/modelPickerAmd';
 import {
   MODEL_PICKER_BADGES,
   matchesModelPickerBadges,
   type ModelPickerBadge,
 } from '../utils/modelPickerBadges';
-import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
+import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerCherryAiEntry } from './ModelPickerCherryAiEntry';
 import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
 
-export type ModelPickerDrawerVariant = 'default' | 'chat';
+export type ModelPickerDrawerVariant = 'default' | 'chat' | 'usage';
 
 const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
-const EMPTY_CHERRY_AI_GROUP: ModelPickerGroup = {
-  items: [],
-  key: `provider:${CLOUD_PROVIDER_ID}`,
-  provider: { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME },
-  title: CLOUD_PROVIDER_NAME,
-};
 
 type ModelPickerDrawerProps = {
   cloudUse?: CloudModelUse;
@@ -217,12 +213,17 @@ function ModelPickerDrawerContent({
   setSelectedBadge: (badge: ModelPickerBadge | null) => void;
 }) {
   const { t } = useTranslation();
-  const { error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
+  const { cloudState, error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
     cloudUse,
     modelType,
     providerId,
     searchText: deferredSearchText,
   });
+  const showAmdModelAction = useCloudAmdModelAction();
+  const handleAmdActivation = useCallback(
+    (modelId: string) => void showAmdModelAction(modelId, onClose),
+    [onClose, showAmdModelAction],
+  );
   const filteredGroups = useMemo(
     () =>
       selectedBadge === null
@@ -250,33 +251,44 @@ function ModelPickerDrawerContent({
   );
   const hasActiveFilters = selectedBadge !== null;
   const hasConditions = deferredSearchText.trim().length > 0 || hasActiveFilters;
-  const showCherryAiEntry =
+  const showBadges = variant !== 'default';
+  const canOfferCherryAi =
     variant === 'chat' &&
-    hasLoadedCatalog &&
-    !hasActiveFilters &&
     !isEnterpriseProfile() &&
     allowedModelIds === null &&
-    (!providerId || providerId === CLOUD_PROVIDER_ID) &&
-    matchesSearchKeywords(toSearchKeywords(deferredSearchText), [
-      CLOUD_PROVIDER_NAME,
-      t('cloud.amd.title'),
-    ]);
-  const hasCherryAiModels = visibleGroups.some((group) => group.provider.id === CLOUD_PROVIDER_ID);
+    !isModelVisible &&
+    modelType !== 'image' &&
+    (!providerId || providerId === CLOUD_PROVIDER_ID);
+  const amdName = t('cloud.amd.title');
+  const keywords = useMemo(() => toSearchKeywords(deferredSearchText), [deferredSearchText]);
+  const displayGroups = useMemo(
+    () =>
+      canOfferCherryAi
+        ? addAmdActivationModels(visibleGroups, cloudState, {
+            amdName,
+            cloudUse,
+            keywords,
+            selectedBadge,
+          })
+        : visibleGroups,
+    [amdName, canOfferCherryAi, cloudState, cloudUse, keywords, selectedBadge, visibleGroups],
+  );
+  const showCherryAiEntry =
+    canOfferCherryAi &&
+    hasLoadedCatalog &&
+    !hasActiveFilters &&
+    !displayGroups.some((group) => group.provider.id === CLOUD_PROVIDER_ID) &&
+    matchesSearchKeywords(keywords, [CLOUD_PROVIDER_NAME, amdName]);
   const listItems = useMemo(
     () =>
       buildModelPickerListItems(
-        showCherryAiEntry && !hasCherryAiModels
-          ? [EMPTY_CHERRY_AI_GROUP, ...visibleGroups]
-          : visibleGroups,
+        showCherryAiEntry ? [EMPTY_CHERRY_AI_GROUP, ...displayGroups] : displayGroups,
       ),
-    [hasCherryAiModels, showCherryAiEntry, visibleGroups],
+    [displayGroups, showCherryAiEntry],
   );
   const cherryAiEntry = useMemo(
-    () =>
-      showCherryAiEntry ? (
-        <ModelPickerCherryAiEntry hasModels={hasCherryAiModels} onClose={onClose} />
-      ) : undefined,
-    [hasCherryAiModels, onClose, showCherryAiEntry],
+    () => (showCherryAiEntry ? <ModelPickerCherryAiEntry onClose={onClose} /> : undefined),
+    [onClose, showCherryAiEntry],
   );
   const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =
@@ -325,7 +337,7 @@ function ModelPickerDrawerContent({
             variant="subtle"
           />
         </View>
-        {variant === 'chat' ? (
+        {showBadges ? (
           <ActionMenu
             items={[
               {
@@ -384,11 +396,12 @@ function ModelPickerDrawerContent({
             isOpen={open}
             listItems={listItems}
             loadingText={t('settings.provider.models.loading')}
+            onAmdActivation={canOfferCherryAi ? handleAmdActivation : undefined}
             onSelect={onSelect}
             maxSelectedCount={multiSelect?.maxCount}
             selectedModelIds={multiSelect?.selectedModelIds}
             selectedModelId={selectedModelId}
-            showBadges={variant === 'chat'}
+            showBadges={showBadges}
           />
         )}
       </View>

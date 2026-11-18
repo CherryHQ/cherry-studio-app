@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View, type AccessibilityProps, type ViewProps } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
+import type { ModelBadgeSource } from '@/frontend/components/ModelPicker/badges';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -37,8 +38,11 @@ export function ProviderModelRow({
   children,
   className,
   model,
+  isCloudFree,
+  endMark,
   onPress,
   disabled = false,
+  accessibilityHint,
   statusLabel,
   accessibilityActions,
   onAccessibilityAction,
@@ -51,9 +55,13 @@ export function ProviderModelRow({
   children?: ReactNode;
   /** Applied last, so a row can tint itself. */
   className?: string;
-  model: Model;
+  model: ModelBadgeSource & Pick<Model, 'id'>;
+  isCloudFree?: boolean;
+  /** Inert mark inside the row's press target. */
+  endMark?: ReactNode;
   onPress?: () => void;
   disabled?: boolean;
+  accessibilityHint?: string;
   statusLabel?: string;
   accessibilityActions?: AccessibilityProps['accessibilityActions'];
   onAccessibilityAction?: ViewProps['onAccessibilityAction'];
@@ -73,7 +81,7 @@ export function ProviderModelRow({
   variant: ProviderModelRowVariant;
 }) {
   const { t } = useTranslation();
-  const badges = getProviderModelBadges(model).filter(
+  const badges = getProviderModelBadges(model, isCloudFree).filter(
     (badge) => variant === 'management' || badge === 'free',
   );
   const accessibilityDetails = badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
@@ -117,6 +125,7 @@ export function ProviderModelRow({
           ))}
         </View>
       ) : null}
+      {endMark}
     </>
   );
 
@@ -124,6 +133,7 @@ export function ProviderModelRow({
     return (
       <View className={rowClassName}>
         <Pressable
+          accessibilityHint={accessibilityHint}
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"
           disabled={disabled}

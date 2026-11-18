@@ -40,7 +40,7 @@ const providerListTransition = LinearTransition.duration(duration.base)
 
 type ProviderListItem =
   | { id: string; kind: 'header'; isFirst: boolean; title: string }
-  | { id: typeof CLOUD_PROVIDER_ID; kind: 'cloud'; isFirst: true; isLast: true }
+  | { id: typeof CLOUD_PROVIDER_ID; kind: 'cloud'; isFirst: true; isLast: boolean }
   | {
       id: string;
       kind: 'provider';
@@ -226,12 +226,12 @@ function ProviderListView() {
   }, [account, router]);
   const providerItems = useMemo<ProviderListItem[]>(() => {
     const items: ProviderListItem[] = [];
-    if (showCloudProvider)
-      items.push({ id: CLOUD_PROVIDER_ID, kind: 'cloud', isFirst: true, isLast: true });
     for (const isEnabled of [true, false]) {
       // Move once, using the persisted order after refresh. The switch responds immediately.
       const providers = listedProviders.filter((provider) => provider.isEnabled === isEnabled);
-      if (providers.length === 0) continue;
+      const includesCloud = isEnabled && showCloudProvider;
+      const count = providers.length + Number(includesCloud);
+      if (count === 0) continue;
 
       items.push({
         id: isEnabled ? 'enabled' : 'disabled',
@@ -239,16 +239,24 @@ function ProviderListView() {
         isFirst: items.length === 0,
         title: t(
           isEnabled ? 'settings.provider.section.enabled' : 'settings.provider.section.disabled',
-          { count: providers.length },
+          { count },
         ),
       });
+      if (includesCloud) {
+        items.push({
+          id: CLOUD_PROVIDER_ID,
+          kind: 'cloud',
+          isFirst: true,
+          isLast: providers.length === 0,
+        });
+      }
       providers.forEach((provider, index) => {
         items.push({
           id: provider.id,
           kind: 'provider',
           provider,
           isEnabled: pendingProviderStates.get(provider.id) ?? provider.isEnabled,
-          isFirst: index === 0,
+          isFirst: !includesCloud && index === 0,
           isLast: index === providers.length - 1,
           isPending: pendingProviderStates.has(provider.id),
         });

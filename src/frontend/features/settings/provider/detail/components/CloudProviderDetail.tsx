@@ -1,33 +1,33 @@
+import ExternalLinkIcon from '@cherrystudio/app-icons/icons/external-link';
+import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { ContentState, Section } from '@cherrystudio/ui/components';
 import { Redirect, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Text } from 'react-native';
+import { AppState, View } from 'react-native';
 
 import { useAccount } from '@/frontend/appShell/account';
-import { ModelAvatar } from '@/frontend/components/Avatar';
+import { toCloudModelPreview, useCloudAmdModelAction } from '@/frontend/appShell/cloud';
 import { useCloud } from '@/frontend/hooks/useCloud';
 import {
-  CLOUD_PROVIDER_ID,
   CLOUD_PROVIDER_NAME,
+  cloudModelUnavailable,
   isCloudAmdModel,
   isCloudFreeModel,
   isCloudModelListed,
 } from '@/shared/contracts/cloud';
-import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsScrollPage } from '../../../components/SettingsScrollPage';
-import { CloudAmdSection } from './CloudAmdSection';
+import { ProviderModelRow } from '../../models/components/ProviderModelRow';
 
 /** Plan models are supplied by the account, without editable connection or model settings. */
 export function CloudProviderDetail() {
   const { t } = useTranslation();
   const { state: account } = useAccount();
   const { cloud, state } = useCloud();
+  const showAmdModelAction = useCloudAmdModelAction();
   const canLoad = account.isSignedIn && !account.isEnterprise && !account.isRestoringSession;
-  const canLoadAmd =
-    canLoad && state.phase === 'ready' && state.account?.account.status === 'active';
   const refresh = useCallback(() => {
     if (canLoad) void cloud.refreshProvider().catch(() => {});
   }, [canLoad, cloud]);
@@ -41,26 +41,23 @@ export function CloudProviderDetail() {
       return () => subscription.remove();
     }, [canLoad, refresh]),
   );
-  useFocusEffect(
-    useCallback(() => {
-      // The account can become ready after the page first receives focus.
-      if (canLoadAmd && !cloud.getState().amd) void cloud.refreshAmd();
-    }, [canLoadAmd, cloud]),
-  );
-
   if (!account.isRestoringSession && !canLoad) {
     return <Redirect href="/settings/provider" />;
   }
-  const listedModels = state.models.filter(
-    (model) =>
-      isCloudModelListed(state, model.id) ||
-      (canLoadAmd && state.amd?.phase === 'ready' && isCloudAmdModel(model)),
-  );
+  const listedModels = state.models.flatMap((model) => {
+    const isAmd = isCloudAmdModel(model);
+    const needsActivation =
+      isAmd &&
+      (cloudModelUnavailable(state, model.id, 'agent') === 'amd_activation_required' ||
+        cloudModelUnavailable(state, model.id, 'general') === 'amd_activation_required');
+    return needsActivation || isCloudModelListed(state, model.id)
+      ? [{ model, isAmd, needsActivation }]
+      : [];
+  });
   const isLoading = account.isRestoringSession || state.phase === 'loading';
 
   return (
     <SettingsScrollPage
-      contentClassName="gap-4"
       headerProps={{
         title: CLOUD_PROVIDER_NAME,
         rightActions: [
@@ -76,9 +73,6 @@ export function CloudProviderDetail() {
         ],
       }}
     >
-      {canLoad && state.account?.account.status === 'active' ? (
-        <CloudAmdSection amd={state.amd} cloud={cloud} />
-      ) : null}
       {state.phase === 'error' ? (
         <ContentState.Error
           title={t('settings.provider.models.management.loadFailed')}
@@ -93,34 +87,35 @@ export function CloudProviderDetail() {
       ) : listedModels.length === 0 ? (
         <ContentState.Empty title={t('settings.provider.models.empty')} />
       ) : (
-        <Section>
-          {listedModels.map((model) => (
-            <Section.Item
-              accessibilityLabel={model.display_name}
-              description={
-                isCloudAmdModel(model) && model.activation_required !== false
+        <Section
+          contentClassName="overflow-hidden rounded-2xl bg-card py-1"
+          title={t('settings.provider.models.listTitle')}
+          variant="plain"
+        >
+          {listedModels.map(({ model, isAmd, needsActivation }) => (
+            <ProviderModelRow
+              accessibilityHint={
+                needsActivation
                   ? t('cloud.amd.activationRequired')
-                  : isCloudFreeModel(state, model)
-                    ? t('models.capability.free')
+                  : isAmd
+                    ? t('cloud.amd.viewUsage')
                     : undefined
               }
+              endMark={
+                <View className="w-5 items-center" importantForAccessibility="no-hide-descendants">
+                  {needsActivation ? (
+                    <LockIcon className="size-3.5 text-muted-foreground" />
+                  ) : isAmd ? (
+                    <ExternalLinkIcon className="size-3.5 text-muted-foreground" />
+                  ) : null}
+                </View>
+              }
+              isCloudFree={isCloudFreeModel(state, model)}
               key={model.id}
-              label={
-                <Text className="text-base text-foreground" numberOfLines={1}>
-                  {model.display_name}
-                </Text>
-              }
-              leading={
-                <ModelAvatar
-                  model={{
-                    id: createUniqueModelId(CLOUD_PROVIDER_ID, model.id),
-                    modelId: model.id,
-                    name: model.display_name,
-                    providerId: CLOUD_PROVIDER_ID,
-                  }}
-                />
-              }
-              showChevron={false}
+              model={toCloudModelPreview(model)}
+              onPress={isAmd ? () => void showAmdModelAction(model.id) : undefined}
+              provider={undefined}
+              variant="management"
             />
           ))}
         </Section>

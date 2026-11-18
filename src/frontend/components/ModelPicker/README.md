@@ -51,9 +51,9 @@ This module owns the model selection surface, model metadata UI, and model setti
   embedded flows; the standard picker retains its default row size.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
-  embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value
-  model traits (`Free` and `Vision`) as row badges and a compact filter menu; other workflows keep
-  the picker neutral rather than exposing the provider capability taxonomy.
+  embedded in the Android controls frame. The drawer's `chat` and `usage` variants add the two
+  high-value model traits (`Free` and `Vision`) as row badges and a compact filter menu. The
+  default variant keeps the picker neutral.
 - `useModelSettingSelections` reads model selection preferences and saves partial updates. The
   settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.
@@ -71,9 +71,14 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Community Cloud availability
 
-The community `chat` drawer keeps the built-in CherryAI group visible with no selectable models when
-browsing or searching for CherryAI or AMD. The group offers sign-in or AMD setup when the current
-account needs it. Its model rows use the same confirmed account catalog as other pickers.
+The community `chat` drawer shows AMD models that the current account's catalog offers for chat
+but requires activation to use. These rows support search and the capability filters. Their lock
+opens the shared activation prompt and never changes the current selection. They are read directly
+from the catalog alongside the selectable models projected to local storage.
+
+When there are no matching model rows, browsing or searching for CherryAI can still reveal its
+built-in group and the guest sign-in action. The `usage` filter keeps the trait badges and uses
+selectable models only.
 
 The picker observes `Backend.cloud` through `useCloud`. Models receive unavailability reasons when
 the current account cannot use them. Exhausted or unauthorized rows cannot be selected.

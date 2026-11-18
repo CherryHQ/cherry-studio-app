@@ -100,6 +100,7 @@ export function useModelPickerData({
   // defeated this memo.
   return useMemo(
     () => ({
+      cloudState: cloud,
       error,
       groups,
       hasLoadedCatalog,
@@ -111,6 +112,7 @@ export function useModelPickerData({
       refresh,
     }),
     [
+      cloud,
       error,
       getModelItem,
       groups,

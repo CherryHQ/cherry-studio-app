@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PolicyScope } from '@/frontend/components/Policy';
-import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME, type CloudState } from '@/shared/contracts/cloud';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
 import type { ModelPickerGroup } from '../../utils/modelPickerData';
@@ -11,10 +11,19 @@ import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
 
 let mockGroups: ModelPickerGroup[] = [];
+const signedOutCloud: CloudState = {
+  account: null,
+  isRefreshing: false,
+  models: [],
+  phase: 'signed_out',
+  plans: null,
+};
+let mockCloudState = signedOutCloud;
 let mockListProps:
   | {
       emptyText?: string;
       emptyAction?: { label: string; onPress: () => void };
+      cherryAiEntry?: ReactNode;
       listItems: readonly ModelPickerListItem[];
       maxSelectedCount?: number;
       selectedModelIds?: readonly string[];
@@ -91,8 +100,14 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/frontend/appShell/cloud', () => ({
+  ...jest.requireActual('@/frontend/appShell/cloud'),
+  useCloudAmdModelAction: () => jest.fn(),
+}));
+
 jest.mock('../../hooks/useModelPickerData', () => ({
   useModelPickerData: () => ({
+    cloudState: mockCloudState,
     groups: mockGroups,
     hasLoadedCatalog: true,
     isLoading: false,
@@ -116,6 +131,7 @@ describe('ModelPickerDrawer', () => {
   let renderer: ReactTestRenderer;
 
   beforeEach(() => {
+    mockCloudState = signedOutCloud;
     mockGroups = [];
     mockListProps = undefined;
     mockOnSizeChange = undefined;
@@ -160,6 +176,66 @@ describe('ModelPickerDrawer', () => {
         type: 'groupHeader',
       }),
     ]);
+  });
+
+  test('finds the locked AMD row by name and by the free badge without a local projection', () => {
+    mockCloudState = {
+      ...signedOutCloud,
+      account: {
+        account: { id: 'account', status: 'active' },
+        device: { id: 'device' },
+        entitlements: [],
+        measured_at: '2026-01-01T00:00:00Z',
+        quota_pools: [],
+      },
+      models: [
+        {
+          activation_required: true,
+          available_features: ['agent'],
+          capabilities: [],
+          context_window: 4096,
+          display_name: 'GPT-OSS',
+          endpoint_type: 'openai-chat-completions',
+          id: 'amd/gpt-oss',
+          max_output_tokens: 1024,
+          provider: 'amd',
+        },
+      ],
+      phase: 'ready',
+    };
+    const render = (variant: 'chat' | 'usage') =>
+      act(() => {
+        renderer.update(
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant={variant}
+          />,
+        );
+      });
+
+    render('chat');
+    act(() => {
+      renderer.root
+        .findByProps({ testID: 'model-picker-search-input' })
+        .props.onChangeText('gpt-oss');
+      mockFilterItems.find((item) => item.id === 'free')?.onPress();
+    });
+
+    expect(mockListProps?.cherryAiEntry).toBeUndefined();
+    expect(mockListProps?.listItems).toMatchObject([
+      { type: 'groupHeader', title: CLOUD_PROVIDER_NAME },
+      {
+        type: 'model',
+        item: { model: { name: 'GPT-OSS' }, isCloudFree: true, requiresAmdActivation: true },
+      },
+    ]);
+
+    render('usage');
+    expect(mockListProps?.listItems).toEqual([]);
   });
 
   test('retains full height after blur and clearing, and preserves search on manual collapse', () => {
