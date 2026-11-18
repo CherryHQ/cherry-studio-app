@@ -15,18 +15,18 @@ import { useBackendModule } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { CherryinSkillLibraryDetail } from '@/shared/contracts/skillMarketplace';
-import {
-  isSkillsError,
-  type SkillInspection,
-  type SkillsErrorCode,
-} from '@/shared/contracts/skills';
+import { SkillsError, type SkillInspection, type SkillsErrorCode } from '@/shared/contracts/skills';
 import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { SkillPage } from '../SkillPage';
+import {
+  describeInstallOutcome,
+  errorCode,
+  formatInstallOutcome,
+  planInstallTargets,
+  resolveFooterNotice,
+} from './installFeedback';
 import { marketplaceText } from './skillDiscovery';
-
-const errorCode = (error: unknown): SkillsErrorCode =>
-  isSkillsError(error) ? error.code : 'source-unreachable';
 
 export function CherryinSkillScreen() {
   const params = useLocalSearchParams<{ marketplaceId?: string | string[] }>();
@@ -75,22 +75,30 @@ function CherryinSkill({ id }: { id: string }) {
 
   async function prepare(signal: AbortSignal): Promise<SkillInspection[]> {
     const candidates = await skills.resolve(cherryinSkillUrl(id), signal);
+    signal.throwIfAborted();
+    if (candidates.length === 0) throw new SkillsError('not-found', 'No Skill candidates found');
     const checked: SkillInspection[] = [];
     for (const candidate of candidates) {
+      signal.throwIfAborted();
       checked.push(await skills.inspect(candidate.candidateId, signal));
+      signal.throwIfAborted();
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
+    signal.throwIfAborted();
     setInspections(checked);
     return checked;
   }
 
   async function install(items: SkillInspection[], signal: AbortSignal) {
+    signal.throwIfAborted();
+    if (items.length === 0) throw new SkillsError('not-found', 'No Skill installation targets');
     const failed: Record<string, SkillsErrorCode> = {};
     const installed = new Map<string, string>();
     for (const item of items) {
       signal.throwIfAborted();
       try {
         const skill = await skills.install({ candidateId: item.candidate.candidateId }, signal);
+        signal.throwIfAborted();
         installed.set(item.candidate.candidateId, skill.id);
         setSelected((current) => {
           if (!current.has(item.candidate.candidateId)) return current;
@@ -119,14 +127,26 @@ function CherryinSkill({ id }: { id: string }) {
       }
     }
     if (signal.aborted) return;
-    setFailures(failed);
     if (Object.values(failed).includes('candidate-expired')) {
+      toast.show({
+        label: formatInstallOutcome(
+          describeInstallOutcome({
+            installed: installed.size,
+            failed: Object.keys(failed).length,
+            expired: true,
+          }),
+          t,
+        ),
+        variant: 'danger',
+      });
       setOperationError('candidate-expired');
       setInspections(null);
       setSelected(new Set());
+      setFailures({});
       void refetch();
       return;
     }
+    setFailures(failed);
     setSelected(new Set(Object.keys(failed)));
     void refetch();
     if (items.length === 1 && installed.size === 1 && !isCollection) {
@@ -137,10 +157,14 @@ function CherryinSkill({ id }: { id: string }) {
       });
     } else {
       toast.show({
-        label: t('skills.marketplace.installResult', {
-          installed: installed.size,
-          failed: Object.keys(failed).length,
-        }),
+        label: formatInstallOutcome(
+          describeInstallOutcome({
+            installed: installed.size,
+            failed: Object.keys(failed).length,
+            expired: false,
+          }),
+          t,
+        ),
         variant: Object.keys(failed).length ? 'danger' : 'success',
       });
     }
@@ -155,18 +179,29 @@ function CherryinSkill({ id }: { id: string }) {
     setOperationError(null);
     try {
       const checked = inspections ?? (await prepare(controller.signal));
+      controller.signal.throwIfAborted();
       if (checked.length === 1 && !isCollection) {
         const item = checked[0]!;
         const installedId = isInstalled(item);
         if (installedId) {
           router.push({ pathname: '/skills/[skillId]', params: { skillId: installedId } });
         } else if (item.package) await install([item], controller.signal);
+        else {
+          const reason = resolveFooterNotice({
+            inspections: checked,
+            isCollection: false,
+            operationError: null,
+          })!;
+          toast.show({ label: t(reason.key, reason.params), variant: 'danger' });
+        }
       } else if (inspections) {
         await install(
-          checked.filter(
-            (item) =>
-              selected.has(item.candidate.candidateId) && item.package && !isInstalled(item),
-          ),
+          planInstallTargets({
+            inspections: checked,
+            selected,
+            isInstalled: (item) => Boolean(isInstalled(item)),
+            isInstallable: (item) => item.package !== null,
+          }),
           controller.signal,
         );
       }
@@ -174,9 +209,20 @@ function CherryinSkill({ id }: { id: string }) {
       if (!controller.signal.aborted) {
         const code = errorCode(error);
         setOperationError(code);
+        toast.show({
+          label:
+            code === 'candidate-expired'
+              ? formatInstallOutcome(
+                  describeInstallOutcome({ installed: 0, failed: 1, expired: true }),
+                  t,
+                )
+              : t(`skills.error.${code}`),
+          variant: 'danger',
+        });
         if (code === 'candidate-expired') {
           setInspections(null);
           setSelected(new Set());
+          setFailures({});
         }
       }
     } finally {
@@ -205,44 +251,54 @@ function CherryinSkill({ id }: { id: string }) {
   const body = marketplaceText(data.longDescription, language);
   const singleInstalled =
     !isCollection && data.installed.length === 1 ? data.installed[0]!.skillId : null;
-  const selectedCount =
-    inspections?.filter(
-      (item) => selected.has(item.candidate.candidateId) && item.package && !isInstalled(item),
-    ).length ?? 0;
+  const selectedCount = planInstallTargets({
+    inspections,
+    selected,
+    isInstalled: (item) => Boolean(isInstalled(item)),
+    isInstallable: (item) => item.package !== null,
+  }).length;
+  const footerNotice = singleInstalled
+    ? null
+    : resolveFooterNotice({ inspections, isCollection: Boolean(isCollection), operationError });
 
   return (
     <SkillPage
       headerProps={{ title: name }}
       footer={
-        singleInstalled ? (
-          <Button
-            size="lg"
-            onPress={() =>
-              router.push({ pathname: '/skills/[skillId]', params: { skillId: singleInstalled } })
-            }
-          >
-            {t('skills.candidate.openInstalled')}
-          </Button>
-        ) : (
-          <Button
-            size="lg"
-            loading={busy}
-            disabled={
-              !data.hasPackage ||
-              (Boolean(inspections) && Boolean(isCollection) && selectedCount === 0) ||
-              (inspections?.length === 1 && !inspections[0]?.package)
-            }
-            onPress={() => void act()}
-          >
-            {!data.hasPackage
-              ? t('skills.marketplace.noPackage')
-              : inspections && isCollection
-                ? t('skills.marketplace.installSelected', { total: selectedCount })
-                : isCollection
-                  ? t('skills.marketplace.viewCollection')
-                  : t('skills.candidate.install')}
-          </Button>
-        )
+        <>
+          {footerNotice ? (
+            <Text className="text-sm text-error">{t(footerNotice.key, footerNotice.params)}</Text>
+          ) : null}
+          {singleInstalled ? (
+            <Button
+              size="lg"
+              onPress={() =>
+                router.push({ pathname: '/skills/[skillId]', params: { skillId: singleInstalled } })
+              }
+            >
+              {t('skills.candidate.openInstalled')}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              loading={busy}
+              disabled={
+                !data.hasPackage ||
+                (Boolean(inspections) && Boolean(isCollection) && selectedCount === 0) ||
+                (inspections?.length === 1 && !inspections[0]?.package)
+              }
+              onPress={() => void act()}
+            >
+              {!data.hasPackage
+                ? t('skills.marketplace.noPackage')
+                : inspections && isCollection
+                  ? t('skills.marketplace.installSelected', { total: selectedCount })
+                  : isCollection
+                    ? t('skills.marketplace.viewCollection')
+                    : t('skills.candidate.install')}
+            </Button>
+          )}
+        </>
       }
     >
       <Text className="text-base text-foreground" selectable>
@@ -348,9 +404,6 @@ function CherryinSkill({ id }: { id: string }) {
         <Button variant="ghost" onPress={() => setVisibleMembers((value) => value + 20)}>
           {t('skills.loadMore')}
         </Button>
-      ) : null}
-      {operationError ? (
-        <Text className="text-sm text-error">{t(`skills.error.${operationError}`)}</Text>
       ) : null}
       {data.installed.length > 0 && !singleInstalled ? (
         <Section title={t('skills.library')}>
