@@ -35,7 +35,7 @@ describe('web search config', () => {
     jest.mocked(providerService.getByProviderId).mockReset();
   });
 
-  test('DeepSeek search always uses current model keys and address instead of saved or draft copies', async () => {
+  test('DeepSeek search prefers current model keys and address over saved or draft copies', async () => {
     const modelProvider = {
       id: 'deepseek',
       isEnabled: true,
@@ -61,17 +61,32 @@ describe('web search config', () => {
     jest
       .mocked(providerService.getByProviderId)
       .mockResolvedValue({ ...modelProvider, isEnabled: false });
-    await expect(getProviderById('deepseek', preferences)).resolves.toMatchObject({ apiKeys: [] });
+    const fallback = await getProviderById('deepseek', preferences);
+    expect(fallback.apiKeys).toEqual(['old-key']);
+    expect(fallback.credentialsProviderId).toBeUndefined();
   });
 
-  test('does not revive independent DeepSeek search keys after its model provider is removed', async () => {
+  test('keeps released DeepSeek search keys until the model provider can serve search', async () => {
     jest
       .mocked(providerService.getByProviderId)
       .mockRejectedValue(DataApiErrorFactory.notFound('Provider', 'deepseek'));
     const preferences = createPreferenceReader({
-      'chat.web_search.provider_overrides': { deepseek: { apiKeys: ['old-key'] } },
+      'chat.web_search.provider_overrides': {
+        deepseek: {
+          apiKeys: ['old-key'],
+          capabilities: { searchKeywords: { apiHost: 'https://legacy.example' } },
+        },
+      },
     });
-    await expect(getProviderById('deepseek', preferences)).resolves.toMatchObject({ apiKeys: [] });
+    const fallback = await getProviderById('deepseek', preferences, {});
+    expect(fallback.apiKeys).toEqual(['old-key']);
+    expect(fallback.credentialsProviderId).toBeUndefined();
+    expect(
+      fallback.capabilities.find((capability) => capability.feature === 'searchKeywords')?.apiHost,
+    ).toBe('https://legacy.example');
+    await expect(getProviderById('deepseek', createPreferenceReader({}))).resolves.toMatchObject({
+      apiKeys: [],
+    });
   });
 
   test('merges provider presets with trimmed overrides', () => {

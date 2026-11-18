@@ -87,9 +87,10 @@ the Responses endpoint, which conflicts with that contract; Mobile declares the 
 The 2026-11-13 suite adds different tool types on all three protocols. Mobile's DeepSeek Flash
 adapter handles those types locally without changing the published registry or web-search package.
 It captures original server-call state/signatures, converts citation indices, and clears late
-refusals. External Search/Fetch automatically uses the DeepSeek model Provider's current keys and
-address when selected. The built-in tool page links directly to that Provider's configuration;
-it does not offer another key field or service binding. Other search providers retain their existing
+refusals. External Search/Fetch uses the DeepSeek model Provider's current keys and address once
+that Provider is enabled with an API key. Until then, released search-only DeepSeek keys and
+address remain the fallback. The built-in tool page links directly to that Provider's
+configuration; it does not offer another key field or service binding. Other search providers retain their existing
 configuration. See [DeepSeek Services](./deepseek-services.md) for ownership and recovery.
 
 The published `@cherrystudio/provider-registry` package owns the `serverTools` declarations, the

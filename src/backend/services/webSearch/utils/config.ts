@@ -139,9 +139,34 @@ export async function getRuntimeConfig(
   };
 }
 
+/** The DeepSeek model provider serves search once it is enabled with an API key. */
+async function linkDeepseekModelProvider(
+  provider: WebSearchProvider,
+): Promise<WebSearchProvider | undefined> {
+  let linked: Provider;
+  try {
+    linked = await providerService.getByProviderId('deepseek');
+  } catch (error) {
+    if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND) return undefined;
+    throw error;
+  }
+  if (!linked.isEnabled || linked.authType !== 'api-key') return undefined;
+  const { keys } = await providerService.listApiKeys('deepseek', { enabled: true });
+  const apiKeys = trimStringList(keys.map((entry) => entry.key));
+  if (apiKeys.length === 0) return undefined;
+  const apiHost = deepseekServiceBaseUrl(getBaseUrl(linked));
+  return {
+    ...provider,
+    credentialsProviderId: 'deepseek',
+    apiKeys,
+    capabilities: provider.capabilities.map((capability) => ({ ...capability, apiHost })),
+  };
+}
+
 /**
  * `override` replaces independent settings so unsaved fields use the same lookup path.
- * DeepSeek always reads credentials and its service address from the model provider.
+ * DeepSeek prefers the model provider's credentials and address. Released search-only settings
+ * remain the fallback until that provider has an enabled key; the page no longer edits them.
  */
 export async function getProviderById<TProviderId extends WebSearchProvider['id']>(
   providerId: TProviderId,
@@ -150,34 +175,16 @@ export async function getProviderById<TProviderId extends WebSearchProvider['id'
 ): Promise<WebSearchProvider & { id: TProviderId }> {
   const providerOverrides = await getProviderOverrides(preferences);
   const preset = getWebSearchProviderPresetById(providerId);
-  const provider = mergeWebSearchProviderPreset(preset, override ?? providerOverrides[providerId]);
+  const provider = mergeWebSearchProviderPreset(
+    preset,
+    providerId === 'deepseek'
+      ? providerOverrides.deepseek
+      : (override ?? providerOverrides[providerId]),
+  );
 
   if (providerId === 'deepseek') {
-    let linked: Provider;
-    try {
-      linked = await providerService.getByProviderId('deepseek');
-    } catch (error) {
-      if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND)
-        return {
-          ...provider,
-          credentialsProviderId: 'deepseek',
-          apiKeys: [],
-        } as WebSearchProvider & { id: TProviderId };
-      throw error;
-    }
-    const { keys } = await providerService.listApiKeys('deepseek', { enabled: true });
-    return {
-      ...provider,
-      credentialsProviderId: 'deepseek',
-      apiKeys:
-        linked.isEnabled && linked.authType === 'api-key'
-          ? trimStringList(keys.map((entry) => entry.key))
-          : [],
-      capabilities: provider.capabilities.map((capability) => ({
-        ...capability,
-        apiHost: deepseekServiceBaseUrl(getBaseUrl(linked)),
-      })),
-    } as WebSearchProvider & { id: TProviderId };
+    const linked = await linkDeepseekModelProvider(provider);
+    if (linked) return linked as WebSearchProvider & { id: TProviderId };
   }
 
   return (await inheritZhipuModelProviderApiKeys(
