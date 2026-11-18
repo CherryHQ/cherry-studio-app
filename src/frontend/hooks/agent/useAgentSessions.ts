@@ -87,12 +87,16 @@ export function useAgentSessionMutations(sessionId?: string) {
       '/agent-sessions',
       ...(args ? [`/agent-sessions/${args.params.id}`] : []),
     ],
-    onSuccess: (saved, args) => {
+    onSuccess: async (saved, args) => {
       if (!args?.body || !('model' in args.body)) return;
-      queryClient.setQueryData<AgentSessionEntity>(
-        queryKeys.agentSessions.detail(saved.id),
-        (current) => (!current || current.updatedAt >= saved.updatedAt ? current : saved),
+      const detailKey = queryKeys.agentSessions.detail(saved.id);
+      const wasInvalidated = queryClient.getQueryState(detailKey)?.isInvalidated;
+      queryClient.setQueryData<AgentSessionEntity>(detailKey, (current) =>
+        !current || current.updatedAt >= saved.updatedAt ? current : saved,
       );
+      if (wasInvalidated) {
+        await queryClient.invalidateQueries({ queryKey: detailKey, refetchType: 'none' });
+      }
     },
   });
   const deleteMutation = useMutation('DELETE', '/agent-sessions/:id');

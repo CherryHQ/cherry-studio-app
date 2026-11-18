@@ -23,7 +23,7 @@ import {
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { parseUniqueModelId } from '@/shared/data/types/model';
+import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import {
   SKILL_ACTIVE_MAX_CHARACTERS,
   SKILL_ACTIVE_MAX_ENTRIES,
@@ -308,11 +308,21 @@ export async function prepareInitialTurn(
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const configuredAgent = await raceAbort(
-    dependencies.agents.getAgent(parsed.agentId, parsed.sessionModelId),
+    dependencies.agents.getAgent(parsed.agentId, parsed.modelId ?? parsed.sessionModelId),
     signal,
   );
   if (!configuredAgent) {
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
+  }
+  if (
+    parsed.sessionModelId &&
+    configuredAgent.allowedModelIds &&
+    !configuredAgent.allowedModelIds.includes(parsed.sessionModelId)
+  ) {
+    fail(
+      'CAPABILITY_UNSUPPORTED',
+      `Model is not in the Agent's allowed pool: ${parsed.sessionModelId}`,
+    );
   }
   const session = {
     agentId: parsed.agentId,
@@ -390,6 +400,13 @@ export async function prepareResolvedTurn(
     modelId: parsed.modelId ?? session.model ?? undefined,
     reasoningEffort: parsed.reasoningEffort,
   });
+  const resolvedModelId = createUniqueModelId(agent.model.providerId, agent.model.modelId);
+  if (
+    configuredAgent.allowedModelIds &&
+    !configuredAgent.allowedModelIds.includes(resolvedModelId)
+  ) {
+    fail('CAPABILITY_UNSUPPORTED', `Model is not in the Agent's allowed pool: ${resolvedModelId}`);
+  }
   if (
     scope.readOnlyTools &&
     (parsed.imageGeneration || parsed.skillIds?.length || parsed.skillAction)

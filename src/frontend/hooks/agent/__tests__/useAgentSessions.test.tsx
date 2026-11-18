@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import { queryKeys } from '@/frontend/data/queryKeys';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient, CursorPaginationResponse } from '@/shared/data/api/types';
 
@@ -160,6 +161,45 @@ describe('agent Session hooks', () => {
       '/agent-sessions/a',
       expect.objectContaining({ body: { model: latest.model } }),
     );
+  });
+
+  it('keeps an inactive detail query invalidated when a concurrent update invalidates it before onSuccess', async () => {
+    const nextModel = 'p::next' as const;
+    const original = { ...makeSession('a'), updatedAt: '2026-11-18T00:00:00.000Z' };
+    const saved: AgentSessionEntity = {
+      ...original,
+      model: nextModel,
+      updatedAt: '2026-11-18T00:00:00.001Z',
+    };
+    const detailKey = queryKeys.agentSessions.detail('a');
+    queryClient.setQueryData(detailKey, original);
+    const save = deferred<AgentSessionEntity>();
+    patchSession.mockReturnValueOnce(save.promise);
+
+    await act(async () =>
+      renderer?.update(
+        <QueryClientProvider client={queryClient}>
+          <DataApiProvider dataApi={dataApi}>
+            <Probe sessionId="a" />
+          </DataApiProvider>
+        </QueryClientProvider>,
+      ),
+    );
+
+    let mutation: Promise<AgentSessionEntity> | undefined;
+    await act(async () => {
+      mutation = actions?.updateAgentSession('a', { model: nextModel });
+    });
+    // Mark inactive (no observers on detailKey) and invalidate before the mutation settles.
+    await queryClient.invalidateQueries({ queryKey: detailKey });
+
+    await act(async () => {
+      save.resolve(saved);
+      await mutation;
+    });
+
+    expect(queryClient.getQueryData(detailKey)).toEqual(saved);
+    expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
   });
 });
 

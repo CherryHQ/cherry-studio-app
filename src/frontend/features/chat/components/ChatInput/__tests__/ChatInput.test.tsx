@@ -3,7 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ComposerSendPayload } from '@/frontend/components/Composer';
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
+import { PolicyScope } from '@/frontend/components/Policy';
 import type { QuoteFields } from '@/shared/contracts/agent';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { createQuoteMention, readQuoteMentions } from '../../../quotes/quoteMentions';
 import { ChatInput } from '../ChatInput';
@@ -32,6 +35,15 @@ jest.mock('../hooks/useChatEditDraft', () => ({
 
 let mockImageMode = false;
 let mockFields: QuoteFields;
+let mockAgentModel: UniqueModelId | null | undefined;
+let mockHasLoadedCatalog = false;
+let mockCatalogModels = new Set<string>(['p::m']);
+let mockPickerApi: {
+  replyModels: readonly UniqueModelId[] | null;
+  selectedModelId: UniqueModelId | null;
+  selectModel: (modelId: UniqueModelId) => void;
+  setReplyModels: (models: readonly UniqueModelId[] | null) => void;
+};
 const mockFinish = jest.fn();
 const mockCapture = jest.fn(() => ({ fields: mockFields, finish: mockFinish }));
 const mockQuoteActions = { capture: mockCapture };
@@ -63,7 +75,13 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }))
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
 jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentApiById: () => ({ agent: { id: 'a', mode: 'standard' } }),
+  useAgentApiById: (id?: string) => ({
+    agent: {
+      id: id ?? 'a',
+      mode: 'standard',
+      ...(mockAgentModel !== undefined ? { model: mockAgentModel } : {}),
+    },
+  }),
   useAgentSession: () => ({}),
   useAgentSessionMutations: () => ({ updateAgentSession: mockNoop }),
 }));
@@ -83,7 +101,13 @@ jest.mock('@/frontend/components/McpApp', () => ({
   McpAppContextNotice: () => null,
 }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
+  useModelPickerData: () => ({
+    hasLoadedCatalog: mockHasLoadedCatalog,
+    getModelItem: (id: string | null) =>
+      id && (!mockHasLoadedCatalog || mockCatalogModels.has(id))
+        ? { ...mockModelItem, modelId: id, model: { id } }
+        : undefined,
+  }),
   ModelPickerDrawer: () => null,
 }));
 jest.mock('@/shared/utils/modelPurpose', () => ({
@@ -113,7 +137,10 @@ jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
 jest.mock('../hooks/useChatInputSessionModelSelection', () => ({
-  useChatInputSessionModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
+  useChatInputSessionModelSelection: (sessionId?: string) => ({
+    selectModel: mockNoop,
+    selectedModelId: sessionId ? 'p::m' : null,
+  }),
 }));
 jest.mock('../hooks/useChatInputMcpPrompts', () => ({ useChatInputMcpPrompts: () => [] }));
 jest.mock('../hooks/useChatInputReasoningEfforts', () => ({
@@ -123,7 +150,10 @@ jest.mock('../hooks/useChatInputReasoningEffortSelection', () => ({
   useChatInputReasoningEffortSelection: () => ({ selectReasoningEffort: mockNoop }),
 }));
 jest.mock('../hooks/useChatInputModelPicker', () => ({
-  useChatInputModelPicker: () => ({ close: mockNoop, open: mockNoop, isOpen: false }),
+  useChatInputModelPicker: (props: typeof mockPickerApi) => {
+    mockPickerApi = props;
+    return { close: mockNoop, open: mockNoop, isOpen: false };
+  },
 }));
 jest.mock('../hooks/useChatSelectionHandoff', () => ({ useChatSelectionHandoff: () => undefined }));
 jest.mock('../utils/chatInputPlugins', () => ({ getConnectedChatInputPlugins: () => [] }));
@@ -142,6 +172,9 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   jest.clearAllMocks();
   mockImageMode = false;
+  mockAgentModel = undefined;
+  mockHasLoadedCatalog = false;
+  mockCatalogModels = new Set(['p::m']);
   mockEditing = null;
   mockSshTarget = null;
   mockDraft = '';
@@ -354,4 +387,64 @@ test('entering question edit removes the tools menu and restores it on cancel', 
     renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
   );
   expect(surface().props.leadingAction).not.toBeNull();
+});
+
+test('falls back from removed or disallowed draftModel to agent.model and clears replyModels on Agent switch', async () => {
+  const defaultModel = 'p::default' as UniqueModelId;
+  const customModel = 'p::custom' as UniqueModelId;
+  const thirdModel = 'p::third' as UniqueModelId;
+  mockAgentModel = defaultModel;
+  mockHasLoadedCatalog = true;
+  mockCatalogModels = new Set([defaultModel, customModel, thirdModel]);
+  const renderDraft = (agentId: string, allowedModelIds: UniqueModelId[] | null = null) => (
+    <PolicyScope
+      policy={agentPolicy(
+        allowedModelIds ? { isManaged: true, allowedModelIds } : { isManaged: false },
+      )}
+    >
+      <ChatInput agentId={agentId} controls={mockControls as never} />
+    </PolicyScope>
+  );
+
+  await act(async () => {
+    renderer = create(renderDraft('agent-a', [defaultModel, customModel, thirdModel]));
+  });
+  await act(async () => {
+    mockPickerApi.selectModel(customModel);
+    mockPickerApi.setReplyModels([customModel, thirdModel]);
+  });
+  expect(mockPickerApi.selectedModelId).toBe(customModel);
+  expect(mockPickerApi.replyModels).toEqual([customModel, thirdModel]);
+
+  // Deleting customModel from the catalog returns the draft to agent.model and clears parallel mode.
+  mockCatalogModels = new Set([defaultModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  expect(mockPickerApi.selectedModelId).toBe(defaultModel);
+  expect(mockPickerApi.replyModels).toBeNull();
+
+  // Withdrawing customModel from allowedModelIds also returns the draft to agent.model.
+  mockCatalogModels = new Set([defaultModel, customModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  await act(async () => {
+    mockPickerApi.selectModel(customModel);
+    mockPickerApi.setReplyModels([customModel, thirdModel]);
+  });
+  await act(async () => renderer.update(renderDraft('agent-a', [defaultModel])));
+  expect(mockPickerApi.selectedModelId).toBe(defaultModel);
+  expect(mockPickerApi.replyModels).toBeNull();
+
+  // Switching Agents inside a draft clears parallel replyModels from the previous Agent.
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  await act(async () => mockPickerApi.setReplyModels([customModel, thirdModel]));
+  expect(mockPickerApi.replyModels).toEqual([customModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-b', [defaultModel, customModel, thirdModel])),
+  );
+  expect(mockPickerApi.replyModels).toBeNull();
 });

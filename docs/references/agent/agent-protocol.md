@@ -153,6 +153,7 @@ type AgentMessageToolRef = AgentToolRef | { source: 'meta'; name: string }
 type AgentSessionView = {
   id: string
   agentId: string
+  model?: string | null
   name: string
   isNameManuallyEdited: boolean
   forkBoundaryMessageId: string | null

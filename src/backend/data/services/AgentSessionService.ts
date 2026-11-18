@@ -19,7 +19,7 @@ import {
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-import { assertAgentUpdate } from './managedResources';
+import { assertAgentModelAllowed } from './managedResources';
 import { toAgentSessionEntity } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
@@ -86,7 +86,7 @@ export class AgentSessionService {
         .limit(1);
       if (!current) throw DataApiErrorFactory.notFound('AgentSession', id);
       if (current.session.model === model) return current.session;
-      assertAgentUpdate(current.agent, { model });
+      assertAgentModelAllowed(current.agent, model);
       const [registered] = await tx
         .select({ id: userModelTable.id })
         .from(userModelTable)

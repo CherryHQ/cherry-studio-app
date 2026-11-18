@@ -16,6 +16,7 @@ describe('useChatInputReasoningEffortSelection', () => {
   const render = async (
     availableEfforts: readonly ChatInputReasoningEffort[] | undefined,
     agentId = 'agent-a',
+    sessionId?: string,
   ) => {
     await act(async () => {
       const harness = (
@@ -25,6 +26,7 @@ describe('useChatInputReasoningEffortSelection', () => {
           onSnapshot={(value) => {
             snapshot = value;
           }}
+          sessionId={sessionId}
         />
       );
       if (renderer) renderer.update(harness);
@@ -96,18 +98,32 @@ describe('useChatInputReasoningEffortSelection', () => {
     await render(DEFAULT_EFFORTS);
     expect(snapshot.reasoningEffort).toBe('default');
   });
+
+  test('isolates non-reasoning clamping per Session so another conversation keeps its effort', async () => {
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-a');
+    await act(async () => snapshot.selectReasoningEffort('high'));
+    expect(snapshot.reasoningEffort).toBe('high');
+
+    await render([], 'agent-a', 'session-b');
+    expect(snapshot.reasoningEffort).toBe('default');
+
+    await render(DEFAULT_EFFORTS, 'agent-a', 'session-a');
+    expect(snapshot.reasoningEffort).toBe('high');
+  });
 });
 
 function Harness({
   agentId,
   availableEfforts,
   onSnapshot,
+  sessionId,
 }: {
   agentId: string;
   availableEfforts: readonly ChatInputReasoningEffort[] | undefined;
   onSnapshot: (snapshot: Snapshot) => void;
+  sessionId?: string;
 }) {
-  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentId);
+  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentId, sessionId);
   useEffect(() => onSnapshot(snapshot), [onSnapshot, snapshot]);
   return null;
 }

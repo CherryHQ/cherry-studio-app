@@ -77,6 +77,18 @@ describe('agent-table definition source', () => {
       model: { providerId: 'openai', modelId: 'gpt-4' },
     });
   });
+
+  test('reads Agent owner identity without requiring a configured model and hides soft-deleted Agents', async () => {
+    const source = createAgentTableDefinitionSource();
+    const agent = await agentService.create({ model: null, name: 'Identity Only' });
+
+    await expect(source.getAgentOwner?.(agent.id)).resolves.toEqual({
+      id: agent.id,
+      name: 'Identity Only',
+    });
+    await agentService.delete(agent.id);
+    await expect(source.getAgentOwner?.(agent.id)).resolves.toBeNull();
+  });
 });
 
 function insertUserModel(database: DatabaseSync, providerId: string, modelId: string) {

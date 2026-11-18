@@ -65,10 +65,12 @@ the shared web policy.
 
 The Agent Data API, `Backend.agent`, and frontend surfaces share these current constraints:
 
-- Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
-  or clearing its model can therefore make its existing Sessions unavailable through the public
-  Host API even though their rows remain durable. The Data API's static Session and transcript
-  reads remain available without resolving an executable Agent definition.
+- Session observation confirms the Agent has not been soft-deleted, while turn preparation
+  resolves a model from the turn override, Session model override, or Agent default. Soft-deleting an
+  Agent therefore makes its existing Sessions unavailable through the public Host API even though
+  their rows remain durable, and clearing `agent.model` blocks only turns without a Session or
+  per-turn model. The Data API's static Session and transcript reads remain available without
+  resolving an executable Agent definition.
 - Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
   `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
 - Agent deletion is soft so historical Sessions retain their definition and avatar reference.
@@ -193,9 +195,10 @@ rows and persisted rows have identical identities. The store inserts those suppl
 existing reservation transaction; it still creates a new Session together with its first message
 pair. Record timestamps and turn IDs remain store-generated. Primary-key collisions reject the
 transaction without overwriting records or leaving a partial Session.
-Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
-transaction. The composer can therefore use it as a strict row version when reconciling optimistic
-model selection with Agent definition edits and inactive query caches.
+Agent and Session updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the
+serialized write transaction. The composer can therefore use it as a strict row version when
+reconciling optimistic model selection with concurrent edits, model removals, and inactive query
+caches.
 
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568

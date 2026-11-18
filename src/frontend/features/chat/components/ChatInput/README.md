@@ -80,7 +80,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   do not replace the Session's single-model selection.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
   `xhigh` and `max` as distinct values. The frontend's persistent `chat.reasoning_efforts` cache
-  remembers the last selection per Agent across new conversations and app restarts. It is
+  remembers the last selection per Agent across new conversations and app restarts, and isolates
+  per-Session clamping so a non-reasoning conversation does not overwrite another conversation's effort. It is
   recoverable UI state: clearing the cache restores model defaults. Agent database configuration
   is unchanged, and each submission snapshots the visible effort. Once model metadata is available,
   switching models also caches the nearest supported stop, preferring the higher stop on a tie.

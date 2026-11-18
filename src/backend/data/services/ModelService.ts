@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
-import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
+import { agentSessionTable, agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
@@ -636,6 +636,10 @@ export class ModelService {
 
     await this.dbService.withWriteTx(async (tx) => {
       await tx
+        .update(agentSessionTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(eq(agentSessionTable.model, id));
+      await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
         .where(eq(agentTable.model, id));
@@ -680,7 +684,12 @@ export class ModelService {
       }
 
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's model -> null cascade.
+        // Keep Agent and Session row versions ahead of the FK's model -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentSessionTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+          .where(inArray(agentSessionTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
@@ -842,7 +851,12 @@ export class ModelService {
       );
       const removedIds: string[] = [];
       for (const idChunk of chunks(removableIds, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's model -> null cascade.
+        // Keep Agent and Session row versions ahead of the FK's model -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentSessionTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+          .where(inArray(agentSessionTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)

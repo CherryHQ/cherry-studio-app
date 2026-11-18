@@ -54,6 +54,7 @@ import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
@@ -345,7 +346,7 @@ export class DurableAgentHost implements AgentProtocol {
           ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
         const model = prepared?.plan.inferenceSnapshot.model.uniqueModelId ?? session.model;
-        if (!(await this.ports.agents.getAgent(session.agentId, model)))
+        if (!(await this.getAgentOwner(session.agentId, model)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
         if (prepared)
           for (const id of await this.conversations.resourceFileEntryIds(identity))
@@ -937,14 +938,22 @@ export class DurableAgentHost implements AgentProtocol {
           }
         : {}),
     };
-    const reserved = reserve
-      ? await reserve()
-      : initial
-        ? await this.store.reserveInitialSubmission({
-            ...reservation,
-            ...initial,
-          })
-        : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    let reserved: ReserveSubmissionResult;
+    try {
+      reserved = reserve
+        ? await reserve()
+        : initial
+          ? await this.store.reserveInitialSubmission({
+              ...reservation,
+              ...initial,
+            })
+          : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    } catch (error) {
+      if (initial) {
+        await this.detachConversation(sessionId).catch(() => undefined);
+      }
+      throw error;
+    }
     const renameFork = !reserve && !initial && this.forksToName.get(sessionId) === null;
     if (renameFork) {
       this.forksToName.set(sessionId, reserved.assistantMessage.id);
@@ -1716,7 +1725,7 @@ export class DurableAgentHost implements AgentProtocol {
   ): Promise<AgentSessionObservation> {
     await this.resumeSuspended();
     const initialSession = await this.requireSession(sessionId);
-    const agent = await this.ports.agents.getAgent(initialSession.agentId, initialSession.model);
+    const agent = await this.getAgentOwner(initialSession.agentId, initialSession.model);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
     const states = this.accepting ? await this.attachedLanes(sessionId) : [];
     const session = await this.requireSession(sessionId);
@@ -2498,7 +2507,7 @@ export class DurableAgentHost implements AgentProtocol {
             const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
             const agent =
               prepared?.plan.agent ??
-              (session ? await this.ports.agents.getAgent(session.agentId, session.model) : null);
+              (session ? await this.getAgentOwner(session.agentId, session.model) : null);
             // The awaited lookups may outlive isolation or removal of this observed copy.
             if (
               !agent ||
@@ -3017,6 +3026,12 @@ export class DurableAgentHost implements AgentProtocol {
         });
       throw error;
     }
+  }
+
+  private getAgentOwner(agentId: string, fallbackModelId?: UniqueModelId | null) {
+    return this.ports.agents.getAgentOwner
+      ? this.ports.agents.getAgentOwner(agentId)
+      : this.ports.agents.getAgent(agentId, fallbackModelId);
   }
 }
 

@@ -11,9 +11,14 @@ import {
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
-import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionMessageTable,
+  agentSessionTable,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
-import { assertAgentUpdate } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
   messageTreeDepthsSql,
@@ -33,10 +38,13 @@ import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRo
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import {
   AgentMessageSiblingSchema,
+  AgentProtocolError,
   type AgentMessageSibling,
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { applyReplyEdits } from '@/shared/utils/assistantReply';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
@@ -140,7 +148,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Renames deliberately do not touch lastActivityAt.
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ name, isNameManuallyEdited: true })
+        .set({
+          name,
+          isNameManuallyEdited: true,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.id, sessionId))
         .returning();
       return row ? toAgentSessionView(row) : null;
@@ -155,7 +167,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const session = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ name, isNameManuallyEdited: false })
+        .set({
+          name,
+          isNameManuallyEdited: false,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(
           and(
             eq(agentSessionTable.id, sessionId),
@@ -178,7 +194,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // FK's ON DELETE SET NULL fallback can clear the lineage invisibly.
       await tx
         .update(agentSessionTable)
-        .set({ forkBoundaryMessageId: null, forkedFromSessionId: null })
+        .set({
+          forkBoundaryMessageId: null,
+          forkedFromSessionId: null,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.forkedFromSessionId, sessionId));
       // Break the tree first: a deep self-FK cascade can exceed SQLite's trigger depth.
       await tx
@@ -199,7 +219,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   ): Promise<ReserveInitialSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       if (input.workspaceFolderId) await requireActiveFolder(tx, input.workspaceFolderId);
-      if (input.sessionModelId) {
+      let sessionModelId = input.sessionModelId;
+      if (sessionModelId) {
         const [agent] = await tx
           .select({
             managedRemoteId: agentTable.managedRemoteId,
@@ -208,15 +229,37 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           .from(agentTable)
           .where(and(eq(agentTable.id, input.agentId), isNull(agentTable.deletedAt)))
           .limit(1);
-        if (!agent) throw new Error('The Agent no longer exists.');
-        assertAgentUpdate(agent, { model: input.sessionModelId });
+        if (!agent) {
+          throw new AgentProtocolError({
+            code: 'AGENT_NOT_FOUND',
+            message: `Agent does not exist: ${input.agentId}`,
+            retryable: false,
+          });
+        }
+        const { allowedModelIds } = agentPolicy({
+          isManaged: agent.managedRemoteId !== null,
+          allowedModelIds: (agent.allowedModelIds ?? undefined) as UniqueModelId[] | undefined,
+        });
+        if (allowedModelIds !== null && !allowedModelIds.includes(sessionModelId)) {
+          throw new AgentProtocolError({
+            code: 'CAPABILITY_UNSUPPORTED',
+            message: `Model is not in the Agent's allowed pool: ${sessionModelId}`,
+            retryable: false,
+          });
+        }
+        const [registered] = await tx
+          .select({ id: userModelTable.id })
+          .from(userModelTable)
+          .where(eq(userModelTable.id, sessionModelId))
+          .limit(1);
+        if (!registered) sessionModelId = undefined;
       }
       const [sessionRow] = await tx
         .insert(agentSessionTable)
         .values({
           id: input.sessionId,
           agentId: input.agentId,
-          model: input.sessionModelId,
+          model: sessionModelId,
           workspaceFolderId: input.workspaceFolderId,
         })
         .returning();
@@ -266,6 +309,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})`,
           activeNodeId: reserved.assistantMessage.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return reserved;
@@ -305,6 +349,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${assistantRow.createdAt})`,
           activeNodeId: assistantRow.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
@@ -329,7 +374,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [row] = leaf
         ? await tx
             .update(agentSessionTable)
-            .set({ activeNodeId: leaf.id })
+            .set({
+              activeNodeId: leaf.id,
+              updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+            })
             .where(eq(agentSessionTable.id, sessionId))
             .returning()
         : await tx.select().from(agentSessionTable).where(eq(agentSessionTable.id, sessionId));
@@ -567,7 +615,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (selection)
         await tx
           .update(agentSessionTable)
-          .set({ activeNodeId: selection.to })
+          .set({
+            activeNodeId: selection.to,
+            updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+          })
           .where(
             and(
               eq(agentSessionTable.id, sessionId),
@@ -666,6 +717,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           runtimeRevision: input.expectedRevision + 1,
           lastActivityAt: Date.now(),
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, session.id));
       return { status: 'edited', message: toAgentMessageView(row) };
@@ -755,6 +807,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionTable)
         .set({
           runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
           ...(session.forkBoundaryMessageId && deletedIds.has(session.forkBoundaryMessageId)
             ? { forkBoundaryMessageId: null }
             : {}),
@@ -791,7 +844,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           );
           await tx
             .update(agentSessionTable)
-            .set({ activeNodeId: leaf?.id ?? null })
+            .set({
+              activeNodeId: leaf?.id ?? null,
+              updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+            })
             .where(eq(agentSessionTable.id, input.sessionId));
         }
       } else {
@@ -814,7 +870,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (remaining && remaining.lastActivityAt !== null) {
         await tx
           .update(agentSessionTable)
-          .set({ lastActivityAt: remaining.lastActivityAt })
+          .set({
+            lastActivityAt: remaining.lastActivityAt,
+            updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+          })
           .where(eq(agentSessionTable.id, input.sessionId));
       }
 
@@ -921,6 +980,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           lastActivityAt: Date.now(),
           runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
           activeNodeId: source.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
@@ -1256,6 +1316,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             ${agentSessionTable.lastActivityAt},
             ${input.runtimeStats.runtimeTiming.completedAt}
           )`,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, existing.sessionId));
       return toAgentMessageView(row);
@@ -1415,6 +1476,9 @@ async function removeTurnRows(
   );
   await tx
     .update(agentSessionTable)
-    .set({ activeNodeId: leaf?.id ?? null })
+    .set({
+      activeNodeId: leaf?.id ?? null,
+      updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+    })
     .where(eq(agentSessionTable.id, sessionId));
 }

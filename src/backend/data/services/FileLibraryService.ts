@@ -9,6 +9,7 @@ import {
   fileEntryTable,
   fileFolderTable,
   libraryFileTable,
+  monotonicUpdateTimestamp,
   type FileFolderRow,
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
@@ -279,7 +280,10 @@ export class FileLibraryService {
       await requireActiveFolder(tx, folderId);
       const rows = await tx
         .update(agentSessionTable)
-        .set({ workspaceFolderId: folderId })
+        .set({
+          workspaceFolderId: folderId,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.id, sessionId))
         .returning({ id: agentSessionTable.id });
       if (!rows.length) throw DataApiErrorFactory.notFound('AgentSession', sessionId);

@@ -637,6 +637,56 @@ describe('SqliteAgentSessionStore conformance', () => {
     },
   );
 
+  test('reserveInitialSubmission validates sessionModelId pool membership and drops unregistered models', async () => {
+    const unmanagedAgentId = agentId;
+    const managedAgentId = await harness.makeAgentId();
+    harness.raw
+      .prepare('UPDATE agent SET managed_remote_id = ?, allowed_model_ids = ? WHERE id = ?')
+      .run('remote-1', JSON.stringify([MODEL_ID]), managedAgentId);
+
+    const allowed = await store.reserveInitialSubmission({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      agentId: managedAgentId,
+      sessionModelId: MODEL_ID,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Allowed.', state: 'done' }],
+    });
+    expect(allowed.session.model).toBe(MODEL_ID);
+
+    await expect(
+      store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        agentId: managedAgentId,
+        sessionModelId: 'mock-provider::disallowed',
+        userParts: [{ id: 'input-0', type: 'text', text: 'Disallowed.', state: 'done' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+
+    const dropped = await store.reserveInitialSubmission({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      agentId: unmanagedAgentId,
+      sessionModelId: 'mock-provider::unregistered',
+      userParts: [{ id: 'input-0', type: 'text', text: 'Unregistered.', state: 'done' }],
+    });
+    expect(dropped.session.model).toBeUndefined();
+
+    await expect(
+      store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        agentId: 'missing-agent',
+        sessionModelId: MODEL_ID,
+        userParts: [{ id: 'input-0', type: 'text', text: 'Missing agent.', state: 'done' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
+  });
+
   test('conversation activity advances the Session row timestamp', async () => {
     const reservationTime = 2_000_000_001_000;
     const finalizationTime = 2_000_000_002_000;

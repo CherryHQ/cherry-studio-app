@@ -996,6 +996,44 @@ describe('Skill turn preparation', () => {
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
     expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
   });
+
+  test('prepareInitialTurn uses parsed.modelId fallback when sessionModelId is omitted and rejects disallowed pool models', async () => {
+    const harness = createHarness();
+    const fallbackModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    harness.getAgent.mockImplementationOnce(async (_agentId, fallback) => ({
+      ...AGENT,
+      model: fallback === fallbackModelId ? OVERRIDE_MODEL : BASE_MODEL,
+      allowedModelIds: [fallbackModelId],
+    }));
+
+    const plan = await prepareInitialTurn(
+      harness.dependencies,
+      {
+        ...textInput(),
+        agentId: AGENT_ID,
+        modelId: fallbackModelId,
+      },
+      new AbortController().signal,
+    );
+    expect(harness.getAgent).toHaveBeenCalledWith(AGENT_ID, fallbackModelId);
+    expect(plan.agent.model).toEqual(OVERRIDE_MODEL);
+
+    harness.getAgent.mockResolvedValueOnce({
+      ...AGENT,
+      allowedModelIds: [createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId)],
+    });
+    await expect(
+      prepareInitialTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          agentId: AGENT_ID,
+          modelId: fallbackModelId,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
 });
 
 function createHarness() {
@@ -1003,7 +1041,10 @@ function createHarness() {
   const getSession = jest.fn(
     async (_sessionId: string): Promise<AgentSessionView | null> => SESSION,
   );
-  const getAgent = jest.fn(async (_agentId: string): Promise<AgentDefinition | null> => AGENT);
+  const getAgent = jest.fn(
+    async (_agentId: string, _fallbackModelId?: string | null): Promise<AgentDefinition | null> =>
+      AGENT,
+  );
   const getLatestContextCheckpoint = jest.fn(
     async (_sessionId: string): Promise<StoredRuntimeContextCheckpoint | null> => null,
   );

@@ -4,10 +4,11 @@ import { ZodError } from 'zod';
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
-import type {
-  AgentEvent,
-  AgentInferenceSnapshotV1,
-  AgentMessagePart,
+import {
+  AgentProtocolError,
+  type AgentEvent,
+  type AgentInferenceSnapshotV1,
+  type AgentMessagePart,
 } from '@/shared/contracts/agent';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { createUniqueModelId } from '@/shared/data/types/model';
@@ -5219,6 +5220,34 @@ describe('quoted requests through durable execution', () => {
           parts: [{ type: 'text', text: 'foreign', ...fields }],
         }),
       ).toThrow();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('observes and resumes execution via getAgentOwner when neither Agent nor Session has a configured model', async () => {
+    let expectedAgentId: string | undefined;
+    const state = fixture({
+      agents: {
+        getAgent: async () => {
+          throw new AgentProtocolError({
+            code: 'AGENT_MODEL_NOT_CONFIGURED',
+            message: 'No model configured',
+            retryable: false,
+          });
+        },
+        getAgentOwner: async (id) => (id === expectedAgentId ? { id, name: 'Agent' } : null),
+      },
+    });
+    expectedAgentId = state.agentId;
+    const running = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      expect(observation.snapshot.agent).toEqual({ id: state.agentId, name: 'Agent' });
+      await expect(
+        state.execution()!.assertExecutionAllowed(running.identity, new AbortController().signal),
+      ).resolves.toBeUndefined();
     } finally {
       await state.host.close();
     }

@@ -30,6 +30,7 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useModelChoice } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
 import { useAgentApiById, useAgentSession, useAgentSessionMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
@@ -136,9 +137,22 @@ export function ChatInput({
   const skillAction = mode === 'standard' ? readSkillMentions(draft).skillAction : undefined;
   const { data: session } = useAgentSession(sessionId);
   const { updateAgentSession } = useAgentSessionMutations(sessionId);
+  const { allowedModelIds } = useModelChoice();
   const [draftModel, setDraftModel] = useState<{ agentId: string; modelId: UniqueModelId }>();
-  const draftModelId = draftModel?.agentId === agentId ? draftModel?.modelId : undefined;
   const modelPickerData = useModelPickerData({ modelType: 'all' });
+  const isModelAvailable = useCallback(
+    (modelId: UniqueModelId | undefined) =>
+      Boolean(
+        modelId &&
+        (!allowedModelIds || allowedModelIds.has(modelId)) &&
+        (!modelPickerData.hasLoadedCatalog || modelPickerData.getModelItem(modelId)),
+      ),
+    [allowedModelIds, modelPickerData],
+  );
+  const draftModelId =
+    draftModel && draftModel.agentId === agentId && isModelAvailable(draftModel.modelId)
+      ? draftModel.modelId
+      : undefined;
   const providerSetupReturnTo = sessionId
     ? chatReturnToHref({ kind: 'session', sessionId })
     : agentId
@@ -169,12 +183,26 @@ export function ChatInput({
     (modelId: UniqueModelId) => {
       if (modelId === selectedModelId) return;
       if (sessionId) selectSessionModel(modelId);
-      else if (agentId) setDraftModel({ agentId, modelId });
+      else if (agentId) setDraftModel(modelId === agent?.model ? undefined : { agentId, modelId });
     },
-    [agentId, selectedModelId, selectSessionModel, sessionId],
+    [agent?.model, agentId, selectedModelId, selectSessionModel, sessionId],
   );
   // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
-  const [replyModels, setReplyModels] = useState<readonly UniqueModelId[] | null>(null);
+  const [replySelection, setReplySelection] = useState<{
+    agentId: string | undefined;
+    models: readonly UniqueModelId[];
+  } | null>(null);
+  const replyModels = useMemo(() => {
+    if (!replySelection || replySelection.agentId !== agentId) return null;
+    const available = replySelection.models.filter((id) => isModelAvailable(id));
+    return available.length >= 2 ? available : null;
+  }, [agentId, isModelAvailable, replySelection]);
+  const setReplyModels = useCallback(
+    (models: readonly UniqueModelId[] | null) => {
+      setReplySelection(models ? { agentId, models } : null);
+    },
+    [agentId],
+  );
   const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
   const agentModel = modelPickerData.getModelItem(selectedModelId)?.model;
   // Effort levels differ per model, so several models answer at their own defaults.
@@ -182,8 +210,9 @@ export function ChatInput({
     replyModels ? undefined : selectedModelItem?.model,
   );
   const reasoningSelection = useChatInputReasoningEffortSelection(
-    selectedModelItem ? reasoningEfforts : undefined,
+    selectedModelItem && !replyModels ? reasoningEfforts : undefined,
     agentId,
+    sessionId,
   );
   const modelSelection = useMemo(
     () => ({

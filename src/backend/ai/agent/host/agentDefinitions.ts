@@ -11,6 +11,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas';
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { AgentMode, AgentToolApprovalMode } from '@/shared/data/types/agent';
 import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
@@ -24,7 +25,10 @@ export type AgentDefinition = {
   model: RuntimeModel;
   options: RuntimeOptions;
   toolApprovalMode: AgentToolApprovalMode;
+  allowedModelIds?: readonly UniqueModelId[] | null;
 };
+
+export type AgentOwner = Pick<AgentDefinition, 'id' | 'name'>;
 
 export interface AgentDefinitionSource {
   /** The fallback lets a Session use its own model even when the Agent has no default. */
@@ -32,6 +36,8 @@ export interface AgentDefinitionSource {
     agentId: string,
     fallbackModelId?: UniqueModelId | null,
   ): Promise<AgentDefinition | null>;
+  /** Confirms the Agent still exists for identity-only callers without requiring a configured model. */
+  getAgentOwner?(agentId: string): Promise<AgentOwner | null>;
 }
 
 /** Production source: Agent definitions live in the `agent` table (AgentService CRUD). */
@@ -58,6 +64,10 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         });
       }
       const { providerId, modelId } = parseUniqueModelId(configuredModel as UniqueModelId);
+      const { allowedModelIds } = agentPolicy({
+        isManaged: agent.managedRemoteId !== null,
+        allowedModelIds: (agent.allowedModelIds ?? undefined) as UniqueModelId[] | undefined,
+      });
       return {
         id: agent.id,
         name: agent.name,
@@ -66,7 +76,17 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         model: { providerId, modelId },
         options: {},
         toolApprovalMode: agent.toolApprovalMode,
+        ...(allowedModelIds !== null ? { allowedModelIds } : {}),
       };
+    },
+    async getAgentOwner(agentId) {
+      const db = application.get('DbService').getDb();
+      const [agent] = await db
+        .select({ id: agentTable.id, name: agentTable.name })
+        .from(agentTable)
+        .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
+        .limit(1);
+      return agent ?? null;
     },
   };
 }
