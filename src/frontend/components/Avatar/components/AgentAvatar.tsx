@@ -1,6 +1,6 @@
 import { Avatar } from '@cherrystudio/ui/components';
 
-import { CHERRY_AGENT_AVATAR, DEEPSEEK_AGENT_AVATAR } from '@/shared/data/types/agent';
+import { AgentEmojiAvatarSchema, DEEPSEEK_AGENT_AVATAR } from '@/shared/data/types/agent';
 
 const DEEPSEEK_AVATAR_IMAGE = require('@/assets/avatars/deepseek.webp');
 const AGENT_AVATAR_SIZE = 40;
@@ -10,7 +10,7 @@ const INITIAL_FONT_SCALE = 0.42;
 type AgentAvatarProps = {
   /** Defaults to `name`; pass one explicitly when the name may be blank. */
   accessibilityLabel?: string;
-  /** Stored avatar value; built-in avatars are rendered without a managed image URI. */
+  /** Stored avatar value; emoji and bundled avatars render without a managed image URI. */
   avatar?: null | string;
   /** Desktop text/emoji avatar, distinct from a local managed file reference. */
   emoji?: string;
@@ -36,7 +36,9 @@ export function AgentAvatar({
 }: AgentAvatarProps) {
   const builtInImage = avatar === DEEPSEEK_AGENT_AVATAR ? DEEPSEEK_AVATAR_IMAGE : undefined;
   const source = uri ? { uri } : builtInImage;
-  const avatarEmoji = emoji?.trim() || (avatar === CHERRY_AGENT_AVATAR ? avatar : undefined);
+  const avatarEmoji =
+    emoji?.trim() ||
+    (avatar && AgentEmojiAvatarSchema.safeParse(avatar).success ? avatar : undefined);
 
   return (
     <Avatar accessibilityLabel={accessibilityLabel ?? name} size={size} testID={testID}>

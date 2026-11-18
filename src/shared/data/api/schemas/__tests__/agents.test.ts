@@ -80,15 +80,15 @@ describe('agent api schemas', () => {
     },
   );
 
-  test.each(['🍒', 'builtin:deepseek'])(
-    'accepts the built-in avatar %s only at creation',
+  test.each(['🍒', 'builtin:deepseek', '👨‍💼', '🧑🏽‍💻', '🏗️', '🧳'])(
+    'accepts avatar %s only at creation',
     (avatar) => {
       expect(CreateAgentSchema.parse({ avatar, name: 'Agent' })).toMatchObject({ avatar });
       expect(UpdateAgentSchema.safeParse({ avatar }).success).toBe(false);
     },
   );
 
-  test.each(['file:///avatar.webp', 'builtin:unknown'])(
+  test.each(['file:///avatar.webp', 'avatar.webp', '123', 'builtin:unknown'])(
     'rejects unsupported avatar %s at creation',
     (avatar) => {
       expect(CreateAgentSchema.safeParse({ avatar, name: 'Agent' }).success).toBe(false);

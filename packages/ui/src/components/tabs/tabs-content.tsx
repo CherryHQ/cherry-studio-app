@@ -26,6 +26,7 @@ export function TabsContent<TValue extends string>({
           'gap-0.5 rounded-full bg-[var(--gray-200)]/82 p-[3px] dark:bg-[var(--gray-200)]/88 shadow-lg shadow-constant-black/10',
         variant === 'underline' && 'w-full gap-6 border-b border-border-subtle',
         variant === 'chips' && 'gap-1.5',
+        variant === 'pill' && 'gap-1',
       )}
       style={style}
       testID={testID}
@@ -49,6 +50,8 @@ export function TabsContent<TValue extends string>({
               variant === 'chips' && (isSelected ? 'bg-foreground' : 'bg-secondary'),
               variant === 'underline' && 'border-b-2 py-2.5',
               variant === 'underline' && (isSelected ? 'border-foreground' : 'border-transparent'),
+              variant === 'pill' && 'min-h-10 rounded-full px-4 py-2',
+              variant === 'pill' && isSelected && 'bg-secondary',
             )}
             disabled={item.disabled}
             hitSlop={{ top: 5, bottom: 5 }}
@@ -66,8 +69,14 @@ export function TabsContent<TValue extends string>({
               <Text
                 className={cn(
                   'text-center',
-                  variant === 'underline' ? 'text-sm' : 'text-xs',
-                  isSelected ? 'font-semibold text-foreground' : 'text-muted-foreground',
+                  variant === 'pill'
+                    ? 'text-base'
+                    : variant === 'underline'
+                      ? 'text-sm'
+                      : 'text-xs',
+                  isSelected
+                    ? cn(variant === 'pill' ? 'font-medium' : 'font-semibold', 'text-foreground')
+                    : 'text-muted-foreground',
                   variant === 'chips' && isSelected && 'text-background',
                 )}
               >

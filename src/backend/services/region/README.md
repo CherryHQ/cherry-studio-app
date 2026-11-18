@@ -25,7 +25,9 @@ unavailable, only discovery and fresh-install recommendations fall back to the d
 region from `getLocales()[0]?.regionCode`: CN selects domestic entries and other regions select
 global entries. If the device region is also missing, the domestic default remains. This fallback
 never changes the detection result or its cache. Download clients retain
-their historical domestic-source preference when the country is unknown. Offline voice downloads
+their historical domestic-source preference when the country is unknown. `repositorySourceOrder`
+shares that GitCode/GitHub preference and failure fallback order between provider-registry and
+Agent-template downloads. Offline voice downloads
 use byte-identical immutable ModelScope/Hugging Face mirrors.
 App Store lookup retains its CN request fallback when unknown. Installed store
 channels retain their platform-owned update mechanism. Region policy never filters, mutates or

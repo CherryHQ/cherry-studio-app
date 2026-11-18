@@ -131,6 +131,7 @@ Private disposers stay with bootstrap, and callers release their own observation
 | `remoteAgent` | `RemoteAgentRuntime`: remote reads, observations and command recovery | Host-owned scopes; callers dispose retained sources. Desktop remains the execution and history authority |
 | `desktopConnections` | `DesktopConnectionRuntime`: pairing, credentials and configuration import | Host-owned requests and credential operations; connection leases belong to `DesktopConnectionManager` |
 | `skills` | `createSkillsModule`: discovery, validation and installation | Caller-cancelled preparation; bootstrap's private `disposeSkills` rejects and drains admitted publication writes |
+| `agentTemplates` | `createAgentTemplatesModule`: region-routed template discovery, per-field defaults and recoverable disk snapshots | Lazy language reads and shared refreshes; callers may stop waiting, while bootstrap's private `disposeAgentTemplates` aborts and joins owned work |
 | `translation` | `createTranslationModule`: language/model selection and one text-generation invocation | Per-call cancellation; no conversation or tool-loop lifetime |
 | `models` | `createModelsModule`: model pull, preview, reconcile and health checks | Per-call deadlines and cancellation; model records remain Data API resources |
 | `providers` | `createProvidersModule`: provider policy, presets, avatars, registry updates and account workflows | Calls delegate persistent state and long-lived work to their existing data, registry and account owners |

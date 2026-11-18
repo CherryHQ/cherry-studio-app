@@ -11,6 +11,10 @@ surfaces.
 - The list header's plus action opens the create-Agent route.
 - Creating from the management list returns to that list. The chat header edits the current Agent
   from its name and switches Agents from the adjacent circle-user button.
+- Creating from the Marketplace seeds the shared form with the template's name, instructions
+  and emoji, inherits the normal default model and settings, and offers a fixed, keyboard-aware
+  Create and start chatting footer. Template identity and source language are retained through
+  provider setup; subsequent form edits are never reseeded by a cache or language refresh.
 - Tapping a list row opens that Agent's editor.
 - Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
@@ -48,15 +52,20 @@ surfaces.
 - Uploaded avatars are managed files with their own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
   returns an id. Picking one saves immediately when editing; on create, Save commits the draft.
-  An avatar can be set and replaced but not cleared. The preinstalled Cherry Agent stores `🍒`;
+  An avatar can be set and replaced but not cleared. Creation also accepts emoji avatars from
+  templates without a file write. The preinstalled Cherry Agent stores `🍒`;
   onboarding uses the same emoji when it creates an Agent. Renaming preserves the stored emoji,
   and choosing a photo replaces it. Unset avatars render the name's first character on the
   neutral fallback fill, which stays empty while the name is still blank.
 
 ## Organization
 
-- `edit/AgentEditScreen.tsx` only parses route parameters. The form, auto-save hook, binding sections
-  and pure helpers belong to [AgentEditor](../../components/AgentEditor/README.md).
+- `edit/AgentEditScreen.tsx` parses route parameters and resolves template content before mounting
+  the shared editor. Once selected, template content and source language belong to the draft;
+  background refreshes or removals cannot replace user edits. First-use failures offer Retry
+  before the form opens.
+- The form, auto-save hook, binding sections and pure helpers belong to
+  [AgentEditor](../../components/AgentEditor/README.md).
 - The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
   background. Create and edit render the same form — a centered
   avatar and underlined name, then instructions, mode/model and approval, and MCP

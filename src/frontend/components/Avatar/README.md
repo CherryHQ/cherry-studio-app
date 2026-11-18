@@ -21,7 +21,7 @@ Cherry product data and presentation rules before composing that primitive.
   Compact identity rows can request `artwork="brand"` to prefer the model maker's original mark
   and its shared logo inset; model-specific artwork remains the default and the fallback when no
   maker mark exists.
-- `AgentAvatar` renders an Agent's image, then explicit desktop emoji or the built-in Cherry emoji,
+- `AgentAvatar` renders an Agent's image, then explicit desktop emoji or a persisted emoji avatar,
   then the name's initial on the neutral fallback fill, which stays empty for an unnamed draft. It
   stays round across these presentations.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving

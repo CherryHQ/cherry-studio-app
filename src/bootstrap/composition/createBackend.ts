@@ -38,6 +38,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createAgentTemplatesModule } from '@/backend/services/agentTemplates';
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
@@ -111,6 +112,7 @@ export type BackendComposition = {
   disposeSystemEntry(): Promise<void>;
   disposeVoice(): Promise<void>;
   disposeAppUpdate(): Promise<void>;
+  disposeAgentTemplates(): Promise<void>;
   disposeUuRemote(): Promise<void>;
   disposeDiagnostics(): Promise<void>;
   dataApiDependencies: {
@@ -434,6 +436,9 @@ export function createBackend(
     getCountry: async () => (await infrastructure.region.getCountry()) ?? 'CN',
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
+  const agentTemplates = createAgentTemplatesModule({
+    getCountry: () => infrastructure.region.getCountry(),
+  });
   const uuRemote = createUuRemoteModule({
     connectionExists: async (id) => {
       const connection = await desktopStore.getById(id).catch(() => null);
@@ -444,6 +449,7 @@ export function createBackend(
   return {
     disposeVoice: voice.dispose,
     disposeAppUpdate: appUpdate.dispose,
+    disposeAgentTemplates: agentTemplates.dispose,
     disposeUuRemote: uuRemote.dispose,
     disposeDiagnostics: diagnostics.dispose,
     disposeDeepseekImport: deepseekImport.dispose,
@@ -472,6 +478,7 @@ export function createBackend(
       deepseekImport,
       systemEntry: systemEntry.module,
       agent: services.agent,
+      agentTemplates,
       remoteAgent: infrastructure.remoteAgent,
       desktopConnections: infrastructure.desktopConnections,
       uuRemote: uuRemote.module,
