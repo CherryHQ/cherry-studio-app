@@ -78,6 +78,13 @@ const documentSchema = z.strictObject({
       z.discriminatedUnion('kind', [
         z.strictObject({ kind: z.literal('managed-file'), fileEntryId: FileEntryIdSchema }),
         z.strictObject({ kind: z.literal('remote-image'), url: text }),
+        z.strictObject({
+          kind: z.literal('prepared-image'),
+          base64: z
+            .string()
+            .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+            .refine((value) => value.length % 4 === 0),
+        }),
       ]),
     )
     .optional(),
@@ -91,7 +98,18 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
     if (++nodes > 10_000 || depth > 24) throw new DocumentExportError('size-limit');
     if (typeof value === 'string') characters += value.length;
     else if (value && typeof value === 'object')
-      Object.values(value).forEach((item) => visit(item, depth + 1));
+      Object.entries(value).forEach(([key, item]) => {
+        // Image bytes have the same admission policy as managed/downloaded images, outside the
+        // document's prose budget. The asset schema and image-header inspection still validate them.
+        if (
+          key === 'base64' &&
+          'kind' in value &&
+          value.kind === 'prepared-image' &&
+          typeof item === 'string'
+        )
+          return;
+        visit(item, depth + 1);
+      });
     if (characters > 500_000) throw new DocumentExportError('size-limit');
   }
   visit(input, 0);

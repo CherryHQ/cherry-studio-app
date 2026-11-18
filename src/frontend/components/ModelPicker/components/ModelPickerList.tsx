@@ -1,4 +1,4 @@
-import { Button, SelectionIndicator } from '@cherrystudio/ui/components';
+import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   LegendList,
@@ -6,7 +6,7 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { BlurTargetView } from 'expo-blur';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
@@ -37,7 +37,8 @@ type ModelPickerListProps = {
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
   density?: ModelPickerDensity;
-  emptyAction?: { label: string; onPress: () => void; variant?: 'secondary' | 'text' };
+  emptyAction?: { label: string; onPress: () => void; variant?: 'default' | 'secondary' | 'text' };
+  emptyIcon?: ReactNode;
   emptyText?: string;
   isLoading?: boolean;
   /** Whether the picker is on screen; it scrolls to the selection once per showing. */
@@ -69,6 +70,7 @@ export function ModelPickerList({
   contentInset = 'default',
   density = 'default',
   emptyAction,
+  emptyIcon,
   emptyText,
   isLoading = false,
   isOpen = false,
@@ -243,9 +245,15 @@ export function ModelPickerList({
           contentInset === 'default' && 'px-6',
         )}
       >
-        <Text className="text-center text-sm text-muted-foreground">
-          {isLoading ? loadingText : emptyText}
-        </Text>
+        {isLoading ? (
+          <Text className="text-center text-sm text-muted-foreground">{loadingText}</Text>
+        ) : (
+          <ContentState.Empty
+            description={emptyIcon ? undefined : emptyText}
+            icon={emptyIcon}
+            title={emptyIcon ? emptyText : undefined}
+          />
+        )}
         {!isLoading && emptyAction ? (
           <Button
             disabled={disabled}

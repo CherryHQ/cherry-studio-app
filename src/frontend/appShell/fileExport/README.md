@@ -78,7 +78,7 @@ supplied image bytes directly into Photos. They accept no watermark option and d
 sharing setting. After a system permission prompt, saving waits for the foreground event before
 generating images; unmount cancels that wait. Document and HTML callers prepare separate unwatermarked
 artifacts before local saving; a watermarked share preview is never reused for that save. System opening reuses
-`prepareFileExport`.
+`prepareSharedFile`, so external readers can outlive a temporary preview's cache lease.
 
 Shared/system-open copies remain in the OS-managed cache because recipients may read after the
 chooser closes. Shared copies use one path per entry revision and watermark treatment, so sharing
@@ -87,7 +87,16 @@ original. Sheet dismissal does not establish recipient delivery.
 
 Native rendering, Photos saving and recipient delivery still require device acceptance.
 
+`shareTextFile` prepares a caller-supplied UTF-8 file only after system-sharing admission. It uses
+the same stable delivery copy, adds no watermark or library entry, and releases its temporary
+source after the chooser completes or preparation fails. Conversation data exports use this path
+without document rendering or image-resource reads.
+
 `prepareSharedFile` also accepts an already-finalized temporary ExportFile. It makes the same stable
 OS-cache copy without applying another watermark or creating a managed entry. Document image saving
 uses that copy before Photos starts, so the source request can be disposed safely. Raw temporary
 paths use SHA-256 identities; managed files keep their entry/revision cache keys.
+
+Sharing and system opening do not invoke AI metadata writing. Branded copies are programmatic
+renders and do not acquire or restore AI declarations; unchanged copies retain their source bytes.
+Actual AI producers complete their own file declarations before publication.

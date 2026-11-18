@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -15,6 +15,7 @@ import {
   type ChatRouteParamsInput,
   type ChatTarget,
   type ChatComposerHandoff,
+  chatReturnToHref,
   parseChatRoute,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
@@ -31,6 +32,7 @@ import { useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { useFileWorkspace } from '@/frontend/hooks/file';
+import { citationIds, collectCitationSources } from '@/frontend/utils/messageCitations';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { agentPolicy } from '@/shared/data/managedPolicy';
@@ -63,7 +65,7 @@ import {
   useAgentChatDraftHandoff,
   useLocalConversation,
 } from './runtime';
-import { resolveMessageModel } from './runtime/agentMessageProjection';
+import { resolveMessageModel, toAgentMessageDisplayParts } from './runtime/agentMessageProjection';
 import { ChatShareComposerGuard, ChatShareSelectionControls } from './share/ChatShareControls';
 import { ChatShareSelectionProvider } from './share/ChatShareSelectionProvider';
 import type { ChatShareTarget } from './share/chatShareTarget';
@@ -138,6 +140,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !messageWindow.hasNewerMessages &&
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
+  const readCitations = messageWindow.readCitations;
+  const readCitationsRef = useRef(readCitations);
+  useEffect(() => {
+    readCitationsRef.current = readCitations;
+  }, [readCitations]);
   const shareTarget = useMemo<ChatShareTarget | undefined>(
     () =>
       sessionId
@@ -169,13 +176,24 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 query: { ids: [...ids] },
                 signal,
               });
+              const messages = await Promise.all(
+                snapshot.messages.map(async (message) => {
+                  const parts = toAgentMessageDisplayParts(message.parts).parts ?? [];
+                  const known = collectCitationSources(parts);
+                  const missing = citationIds(parts).filter((id) => !known.has(id));
+                  return {
+                    ...message,
+                    modelName: resolveMessageModel(message)?.name,
+                    citationSources: missing.length
+                      ? await readCitationsRef.current?.(message.id, missing, signal)
+                      : undefined,
+                  };
+                }),
+              );
               return {
                 title: snapshot.session.name,
                 assistantName: snapshot.assistantName,
-                messages: snapshot.messages.map((message) => ({
-                  ...message,
-                  modelName: resolveMessageModel(message)?.name,
-                })),
+                messages,
               };
             },
           }
@@ -300,6 +318,15 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           assistantName={agent.agent?.name}
                           isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
                           contentBottomInset={contentBottomInset}
+                          draftModelSetup={
+                            hasComposer && target.kind === 'draft' && agent.agent
+                              ? {
+                                  modelId: agent.agent.model,
+                                  modelType: agent.agent.mode === 'minimal' ? 'text' : 'all',
+                                  returnTo: chatReturnToHref(target),
+                                }
+                              : undefined
+                          }
                           forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
                           forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
                           keyboardOffset={keyboardOffset}

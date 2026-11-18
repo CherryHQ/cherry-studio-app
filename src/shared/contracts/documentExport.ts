@@ -56,7 +56,10 @@ export type ExportDocument = {
   assets?: Readonly<
     Record<
       string,
-      { kind: 'managed-file'; fileEntryId: FileEntryId } | { kind: 'remote-image'; url: string }
+      | { kind: 'managed-file'; fileEntryId: FileEntryId }
+      | { kind: 'remote-image'; url: string }
+      /** Source-prepared bytes, independent of a connection or cache-file lifetime. */
+      | { kind: 'prepared-image'; base64: string }
     >
   >;
 };

@@ -20,6 +20,7 @@ describe('writeFileTool', () => {
         mediaType: 'text/markdown',
         name: 'report.md',
         provenance: 'generated',
+        aiOperation: 'generate',
       },
       expect.any(AbortSignal),
     );

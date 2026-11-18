@@ -24,7 +24,7 @@ export function DeviceConnectionsScreen() {
         icon: CameraIcon,
         key: 'scan-device',
         nativeIcon: require('@/assets/header-toolbar/camera.png'),
-        onPress: () => router.replace('/settings/device-connections/scan'),
+        onPress: () => router.push('/settings/device-connections/scan'),
         type: 'icon',
       },
     ],
@@ -57,7 +57,7 @@ export function DeviceConnectionsScreen() {
           }
           primaryAction={{
             children: t('settings.deviceConnections.scan.action'),
-            onPress: () => router.replace('/settings/device-connections/scan'),
+            onPress: () => router.push('/settings/device-connections/scan'),
           }}
           title={t('settings.deviceConnections.empty')}
         />

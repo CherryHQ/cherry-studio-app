@@ -28,8 +28,8 @@ import {
 } from './localConversationPreview';
 
 /**
- * The local catalog for the sidebar and Agent picker. Local chat observation and execution stay
- * with the chat page's own client; this source never opens a transcript.
+ * Local catalogs and one-shot transcript reads for data export. Chat observation and execution
+ * stay with the chat page's own client.
  */
 export function createLocalConversationSource(input: {
   agent: AgentProtocol;
@@ -130,6 +130,29 @@ export function createLocalConversationSource(input: {
         assertSource();
         signal.throwIfAborted();
         return toSummary(session);
+      },
+      readTranscript: async (address, signal) => {
+        assertSource();
+        signal.throwIfAborted();
+        if (address.source.kind !== 'local')
+          throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+        const snapshot = await input.api.get(
+          `/agent-sessions/${address.sessionId}/messages/transcript`,
+          { signal },
+        );
+        assertSource();
+        signal.throwIfAborted();
+        return {
+          title: snapshot.session.name,
+          assistantName: snapshot.assistantName,
+          messages: snapshot.messages.map((message) => ({
+            ...message,
+            modelName:
+              message.inferenceSnapshot?.status === 'supported'
+                ? message.inferenceSnapshot.snapshot.model.name.trim() || undefined
+                : undefined,
+          })),
+        };
       },
       readSessionPath: async (address, signal) => {
         assertSource();

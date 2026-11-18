@@ -1,10 +1,19 @@
 import { useState } from 'react';
 
+import { rememberAccountReturnTo } from './accountNavigation';
 import { useAccount } from './useAccount';
 import { useAccountErrorReporter } from './useAccountErrorReporter';
 
 /** Account owns submission; each entry owns its navigation after success. */
-export function useAccountSignInForm({ expired = false, isBusy = false } = {}) {
+export function useAccountSignInForm({
+  expired = false,
+  isBusy = false,
+  returnTo,
+}: {
+  expired?: boolean;
+  isBusy?: boolean;
+  returnTo: string;
+}) {
   const { account, state } = useAccount();
   const reportError = useAccountErrorReporter('AccountSignInForm');
   const lockedAddress = expired ? state.privateAddress : undefined;
@@ -18,6 +27,7 @@ export function useAccountSignInForm({ expired = false, isBusy = false } = {}) {
   const signIn = async () => {
     if (!canSignIn) return false;
     try {
+      rememberAccountReturnTo(returnTo);
       return await account.signIn(isPrivate ? { address, username, password } : undefined);
     } catch (error) {
       reportError(error, 'account.signIn');

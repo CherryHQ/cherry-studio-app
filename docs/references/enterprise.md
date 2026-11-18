@@ -151,7 +151,13 @@ profile, only a community session counts as signed in.
   `maskedIdentifier` supplies a phone/email fallback; `username` is never displayed as a substitute
   for a missing name. The SDK supplements ID-token claims with issuer-bound, subject-checked
   userinfo. The profile's local nickname and avatar remain independent.
-- **Callback recovery:** `receiveRedirect` is the one completion entry for the live auth browser
+- **Callback recovery:** the account App Shell owns `/login` and `/auth/callback`. Sign-in records
+  its non-secret `returnTo` in the active profile's persistent UI cache before opening the browser;
+  settings and onboarding supply their own targets. Both completion paths dismiss the whole login
+  flow to that target, preserving an already mounted source page, with an explicit cold-entry
+  fallback. Callback URLs cannot become return targets. This cache belongs to the current profile
+  and cannot restore navigation from another data space.
+  `receiveRedirect` is the one completion entry for the live auth browser
   and the callback route, including cold starts. The SDK restores pending PKCE state from secure
   storage; duplicate browser/deep-link delivery shares one completion and one activation. Native
   callback URLs use the installed scheme: `cherrystudio://auth/callback`,
@@ -171,8 +177,13 @@ profile, only a community session counts as signed in.
   the user or server identity. Sign-out waits for pending rotation and deletes that profile's
   credentials; cloud sessions remain independent.
 - **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
-  matches replaces the app with the expired sign-in page (`AccountSessionGate`). Data stays on the
-  device; the page offers sign-in again or sign-out.
+  matches hides the restricted content and opens `/login` for reauthentication (`AccountSessionGate`).
+  The root navigator and its pages remain mounted, preserving unsent drafts and staged attachment
+  references. The gate also hides content from accessibility and interaction until a public account
+  route is visible. Portal sheets and menus close before login opens; a pending decision dialog is
+  answered first. Back cannot dismiss expired sign-in while the session is refused. Same-profile
+  success closes login and callback to their original page; failure keeps expired sign-in available.
+  Sign-out keeps data on the device and reloads into local data.
 - **Credential admission:** in an enterprise profile, resolving a provider key waits for the stored
   session to be restored and refuses a closed one (`AccountRuntime.admit`, injected into
   `managedResources.ts` by bootstrap), so no model request can start without a session. When the

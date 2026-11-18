@@ -107,7 +107,7 @@ describe('turn workspace file access', () => {
     const input = { data: 'new', mediaType: 'text/markdown', name: 'Notes.md' };
     await access.write(input, signal);
     expect(content.createTextEntry).toHaveBeenCalledWith(
-      { ...input, provenance: 'generated' },
+      { ...input, provenance: 'generated', aiOperation: 'generate' },
       signal,
     );
     await expect(access.write({ ...input, path: 'Reports/Notes.md' }, signal)).rejects.toThrow();

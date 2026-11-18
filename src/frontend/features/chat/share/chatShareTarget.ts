@@ -4,7 +4,12 @@ import type { AppLanguage } from '@/shared/utils/languages';
 export type ChatShareTranslations = Readonly<
   Record<
     string,
-    { readonly sourceHash: string; readonly language: AppLanguage; readonly content: string }
+    {
+      readonly revision?: string;
+      readonly sourceHash: string;
+      readonly language: AppLanguage;
+      readonly content: string;
+    }
   >
 >;
 

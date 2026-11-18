@@ -25,3 +25,19 @@ runtime is the application-shutdown backstop. OS-readable delivery copies may ou
 `features/sharing` owns the shared BottomSheet, preview and capture strategy. `Backend.documentExport`
 owns generation and explicit persistence. `appShell/fileExport` owns stable delivery copies, system
 sharing and Photos permission handling.
+
+## Conversation data export
+
+`useExportConversation` is the local sidebar conversation-menu action. It reads the local catalog's
+complete current-path transcript on demand and exports one `.md` through the system chooser,
+without a format picker, watermark, or permanent library entry. The Markdown keeps saved prose
+and reasoning in part order, full quoted passages and their recorded author, terminal status,
+portable source citations, and attachment names. Inline quote labels are replaced at their saved
+positions; older quotes without positions lead the request. Desktop conversations do not offer
+this action. Tool inputs, outputs and runtime diagnostics are omitted; attachments are not bundled.
+
+This data export bypasses document presentation and its selection/size limits. Existing message
+sharing remains final-answer-only. `frontend/utils/chatExportCitations` adapts saved local parts
+to the common source validation and conversion in `frontend/utils/messageCitations`. Leaving the
+source cancels preparation, and chooser dismissal never claims recipient delivery. Native chooser
+behavior still requires authorized device acceptance.

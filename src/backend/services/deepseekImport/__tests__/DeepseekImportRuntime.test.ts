@@ -109,9 +109,9 @@ test('creates one new DeepSeek agent and assigns every conversation while preser
     missingAttachments: 0,
     skippedConversations: 0,
   });
-  expect(sqlite.prepare('SELECT id, name FROM agent ORDER BY name').all()).toEqual([
-    { id: result.agentId, name: 'DeepSeek' },
-    { id: 'existing', name: 'Existing' },
+  expect(sqlite.prepare('SELECT id, name, avatar FROM agent ORDER BY name').all()).toEqual([
+    { id: result.agentId, name: 'DeepSeek', avatar: 'builtin:deepseek' },
+    { id: 'existing', name: 'Existing', avatar: null },
   ]);
   expect(sqlite.prepare('SELECT DISTINCT agent_id FROM agent_session').all()).toEqual([
     { agent_id: result.agentId },
@@ -125,6 +125,9 @@ test('creates one new DeepSeek agent and assigns every conversation while preser
     onProgress: () => {},
   });
   expect(second.agentId).not.toBe(result.agentId);
+  expect(sqlite.prepare('SELECT avatar FROM agent WHERE id = ?').get(second.agentId)).toEqual({
+    avatar: 'builtin:deepseek',
+  });
   expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 3 });
 });
 

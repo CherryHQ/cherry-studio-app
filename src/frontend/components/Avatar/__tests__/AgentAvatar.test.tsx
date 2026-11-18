@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AgentAvatar } from '../components/AgentAvatar';
 
+jest.mock('@/assets/avatars/deepseek.webp', () => 73);
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
@@ -42,4 +43,20 @@ test('resolved image takes precedence over emoji while local Cherry emoji still 
   act(() => tree.update(<AgentAvatar name="Developer" emoji="🤖" uri="file:///avatar.png" />));
   expect(tree.root.findAllByType('avatar-image' as never)).toHaveLength(1);
   expect(tree.root.findAllByType('avatar-fallback' as never)).toHaveLength(0);
+});
+
+test('renders the bundled DeepSeek avatar until a custom image is selected', () => {
+  act(() => {
+    tree = create(<AgentAvatar name="DeepSeek" avatar="builtin:deepseek" />);
+  });
+  expect(tree.root.findByType('avatar-image' as never).props.source).toBe(73);
+  expect(tree.root.findAllByType('avatar-fallback' as never)).toHaveLength(0);
+  act(() =>
+    tree.update(
+      <AgentAvatar name="DeepSeek" avatar="builtin:deepseek" uri="file:///custom.webp" />,
+    ),
+  );
+  expect(tree.root.findByType('avatar-image' as never).props.source).toEqual({
+    uri: 'file:///custom.webp',
+  });
 });

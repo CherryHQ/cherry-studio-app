@@ -6,12 +6,14 @@ import {
   type BottomSheetSize,
   type BottomSheetSizes,
   Button,
+  ContentState,
   SearchField,
 } from '@cherrystudio/ui/components';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
 import type { CloudModelUse } from '@/shared/contracts/cloud';
@@ -199,7 +201,7 @@ function ModelPickerDrawerContent({
   setSelectedBadge: (badge: ModelPickerBadge | null) => void;
 }) {
   const { t } = useTranslation();
-  const { groups, isLoading } = useModelPickerData({
+  const { error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
     cloudUse,
     modelType,
     providerId,
@@ -231,11 +233,12 @@ function ModelPickerDrawerContent({
     [allowedModelIds, filteredGroups, isModelVisible],
   );
   const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
-  const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
+  const hasConditions = deferredSearchText.trim().length > 0 || hasActiveFilters;
+  const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =
     // Enterprise providers come from the organization and cannot be added here.
-    hasSearch || hasActiveFilters
+    hasConditions
       ? {
           label: t('modelPicker.clearConditions'),
           onPress: () => {
@@ -244,8 +247,14 @@ function ModelPickerDrawerContent({
           },
           variant: 'text' as const,
         }
-      : onAddProvider && capabilityPolicy('providerSettings').canEdit('providerSettings')
-        ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
+      : onAddProvider &&
+          allowedModelIds === null &&
+          capabilityPolicy('providerSettings').canEdit('providerSettings')
+        ? {
+            label: t('modelPicker.addProvider'),
+            onPress: onAddProvider,
+            variant: 'default' as const,
+          }
         : undefined;
   const filterIcon =
     selectedBadge === 'vision' ? (
@@ -304,23 +313,40 @@ function ModelPickerDrawerContent({
         ) : null}
       </View>
       <View className="min-h-0 flex-1">
-        <ModelPickerList
-          emptyAction={emptyAction}
-          emptyText={
-            hasSearch || hasActiveFilters
-              ? t('settings.provider.models.search.empty')
-              : (emptyText ?? t('modelPicker.empty'))
-          }
-          isLoading={isLoading}
-          isOpen={open}
-          listItems={listItems}
-          loadingText={t('settings.provider.models.loading')}
-          onSelect={onSelect}
-          maxSelectedCount={multiSelect?.maxCount}
-          selectedModelIds={multiSelect?.selectedModelIds}
-          selectedModelId={selectedModelId}
-          showBadges={variant === 'chat'}
-        />
+        {!waitingForCatalog && error && listItems.length === 0 ? (
+          <View className="flex-1 justify-center px-6 py-8">
+            <ContentState.Error
+              primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+              title={t('settings.provider.models.syncRecovery.failed')}
+            />
+          </View>
+        ) : (
+          <ModelPickerList
+            emptyAction={emptyAction}
+            emptyIcon={
+              hasLoadedCatalog ? (
+                <EmptyIllustration
+                  scene={hasConditions || groups.length > 0 ? 'search' : 'connection'}
+                  size="panel"
+                />
+              ) : undefined
+            }
+            emptyText={
+              hasConditions
+                ? t('settings.provider.models.search.empty')
+                : (emptyText ?? t('modelPicker.empty'))
+            }
+            isLoading={waitingForCatalog}
+            isOpen={open}
+            listItems={listItems}
+            loadingText={t('settings.provider.models.loading')}
+            onSelect={onSelect}
+            maxSelectedCount={multiSelect?.maxCount}
+            selectedModelIds={multiSelect?.selectedModelIds}
+            selectedModelId={selectedModelId}
+            showBadges={variant === 'chat'}
+          />
+        )}
       </View>
     </View>
   );

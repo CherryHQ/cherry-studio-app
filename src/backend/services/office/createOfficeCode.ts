@@ -1,3 +1,5 @@
+import { GENERATED_FILE_AUTHOR } from '@/shared/data/types/file';
+
 import { officeRuntimeCode } from './officePackageCode';
 import type { OfficeFormat, OfficeRequest } from './officeSpec';
 import docx from './vendor/docx.json';
@@ -53,12 +55,13 @@ for (const [index, block] of spec.blocks.entries()) {
     })] }));
   }
 }
-const file = new Document({ creator: 'Cherry Studio', title: spec.title || '', numbering: { config: numbering }, sections: [{ children }] });
+const file = new Document({ creator: ${JSON.stringify(GENERATED_FILE_AUTHOR)}, title: spec.title || '', numbering: { config: numbering }, sections: [{ children }] });
 return saveOffice(await Packer.toArrayBuffer(file), 'docx');
 `;
 
 const workbookRenderer = `
 const book = library.utils.book_new();
+book.Props = { Author: ${JSON.stringify(GENERATED_FILE_AUTHOR)} };
 const formats = { general: 'General', integer: '0', decimal: '0.00', percent: '0.00%' };
 for (const input of spec.sheets) {
   // aoa_to_sheet preserves scalar types: strings beginning with '=' are text, never formulas.
@@ -82,7 +85,7 @@ ${workbookImagesCode}
 const presentationRenderer = `
 const deck = new library();
 deck.layout = 'LAYOUT_WIDE';
-deck.author = 'Cherry Studio';
+deck.author = ${JSON.stringify(GENERATED_FILE_AUTHOR)};
 deck.subject = spec.title || '';
 deck.title = spec.title || '';
 deck.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'en-US' };

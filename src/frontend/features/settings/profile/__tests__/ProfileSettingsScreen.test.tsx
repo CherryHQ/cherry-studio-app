@@ -34,6 +34,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 jest.mock('@/frontend/appShell/account', () => ({
+  accountSignInHref: jest.requireActual('@/frontend/appShell/account/accountRoute')
+    .accountSignInHref,
+  rememberAccountReturnTo: jest.fn(),
   useAccountErrorReporter: () => jest.fn(),
   organizationLabel: jest.requireActual('@/frontend/appShell/account/organizationLabel')
     .organizationLabel,
@@ -98,7 +101,10 @@ describe('ProfileSettingsScreen account card', () => {
       variant: 'default',
     });
     press();
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/login',
+      params: { returnTo: '/settings/profile' },
+    });
     expect(signOut).toBeUndefined();
   });
 
@@ -118,7 +124,10 @@ describe('ProfileSettingsScreen account card', () => {
     expect(card.trailing.props).toMatchObject({ children: 'account.switch' });
     expect(switchAccount).toBeUndefined();
     press();
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/login',
+      params: { returnTo: '/settings/profile' },
+    });
     expect(footer).toBe('account.signOutConfirm.description');
   });
 
@@ -139,7 +148,10 @@ describe('ProfileSettingsScreen account card', () => {
     expect(mockSwitchSpace).toHaveBeenCalled();
     switchAccount!.onPress();
     expect(mockSignIn).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/login',
+      params: { returnTo: '/settings/profile' },
+    });
   });
 
   test('keeps a community sign-out without the organization footer', () => {
@@ -151,7 +163,10 @@ describe('ProfileSettingsScreen account card', () => {
     expect(card).toMatchObject({ label: 'account.cloudAccount', description: 'Ada' });
     expect(card.trailing.props).toMatchObject({ children: 'account.switchOrganization' });
     switchAccount!.onPress();
-    expect(mockPush).toHaveBeenCalledWith('/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/login',
+      params: { returnTo: '/settings/profile' },
+    });
     expect(signOut).toBeDefined();
     expect(footer).toBeUndefined();
   });

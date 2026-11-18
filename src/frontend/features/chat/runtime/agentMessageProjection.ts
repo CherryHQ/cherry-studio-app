@@ -82,6 +82,9 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
   const result = AgentToolResultSchema.safeParse(part.output);
   const base = {
+    ...(part.toolRef.source === 'builtin'
+      ? { toolMetadata: { cherry: { tool: { type: 'builtin' as const } } } }
+      : {}),
     ...(part.toolRef.source === 'mcp'
       ? {
           toolMetadata: {
@@ -286,7 +289,7 @@ function projectAgentPart(
   return projection;
 }
 
-function toDisplayParts(
+export function toAgentMessageDisplayParts(
   parts: readonly AgentMessagePart[],
   cache?: AgentMessageListProjectionCache,
 ): Pick<NonNullable<MessageListItem['data']>, 'partKeys' | 'parts' | 'attachmentReports'> {
@@ -360,7 +363,7 @@ export function toAgentMessageListItem(
     agentSessionId: message.sessionId,
     createdAt: message.createdAt,
     data: {
-      ...toDisplayParts(
+      ...toAgentMessageDisplayParts(
         message.status === 'cancelled'
           ? projectAgentMessageDisplay(message).parts.filter(
               (part) =>
@@ -424,7 +427,7 @@ export function createPendingChatMessages(
   return [
     {
       createdAt,
-      data: toDisplayParts(parts),
+      data: toAgentMessageDisplayParts(parts),
       id: input.userMessageId,
       role: 'user',
       status: 'pending',

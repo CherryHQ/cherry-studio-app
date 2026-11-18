@@ -54,6 +54,9 @@ defaults, including the saved default model when available. It does not choose o
 provider. Every conversation is assigned to that new agent; importing again creates another agent.
 Existing agents and conversations are retained.
 
+Each new agent stores `builtin:deepseek` in `avatar`, which `AgentAvatar` resolves to the bundled
+image.
+
 All conversation/message IDs are remapped, all branches and the selected message are retained,
 and the original titles and historical timestamps are preserved. Import is the explicit
 historical timestamp exception; subsequent local mutations retain the ordinary timestamp rules.

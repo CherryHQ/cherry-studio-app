@@ -11,6 +11,11 @@ jest.mock('@cherrystudio/ui/components', () => {
         <MockText>{children}</MockText>
       </MockPressable>
     ),
+    ContentState: {
+      Empty: ({ description, title }: { description?: string; title?: string }) => (
+        <MockText>{title ?? description}</MockText>
+      ),
+    },
   };
 });
 

@@ -1,5 +1,6 @@
 import {
   Composer,
+  ContentState,
   getComposerKeyboardStickyOffset,
   ImageGenerationLoader,
   useAlert,
@@ -34,6 +35,7 @@ import {
   useComposerPresentationActions,
   useComposerSendError,
 } from '@/frontend/components/Composer';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useModelPickerData } from '@/frontend/components/ModelPicker';
 import {
   PaintingInputProvider,
@@ -485,13 +487,12 @@ function PaintingBoardContent({
     );
   } else {
     canvas = (
-      <Pressable className="flex-1 items-center justify-center gap-2 px-8" onPress={dismissInput}>
-        <Text className="font-semibold text-2xl text-foreground">
-          {t('painting.workspace.emptyTitle')}
-        </Text>
-        <Text className="text-center text-muted-foreground text-sm">
-          {t('painting.workspace.emptyDescription')}
-        </Text>
+      <Pressable className="flex-1 justify-center px-8" onPress={dismissInput}>
+        <ContentState.Empty
+          icon={<EmptyIllustration scene="creation" />}
+          prominence="prominent"
+          title={t('painting.workspace.emptyTitle')}
+        />
       </Pressable>
     );
   }

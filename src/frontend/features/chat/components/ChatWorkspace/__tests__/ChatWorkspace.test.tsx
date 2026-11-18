@@ -13,6 +13,10 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('../../../hooks/useMessageCitationSources', () => ({
+  useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
+}));
+
 jest.mock('react-native-reanimated', () => ({
   useDerivedValue: (read: () => unknown) => ({ get: read }),
 }));
@@ -119,6 +123,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
+      Empty: (props: object) => createElement('ContentState.Empty', props),
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,

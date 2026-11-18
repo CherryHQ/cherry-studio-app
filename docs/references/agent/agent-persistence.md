@@ -212,7 +212,7 @@ external runtime (execution targets, delivery, resume tokens) are deliberately a
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
-| `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
+| `avatar` | text | NULL | Built-in avatar or stable file reference. NULL uses the name fallback. |
 | `model` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `auto` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
