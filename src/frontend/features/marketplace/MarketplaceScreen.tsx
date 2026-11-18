@@ -1,11 +1,12 @@
 import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
-import { ActionMenu, Button, Tabs } from '@cherrystudio/ui/components';
+import { Tabs } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { MarketplaceSkills } from './skills/MarketplaceSkills';
@@ -21,14 +22,20 @@ export function MarketplaceScreen() {
     sessionId?: string | string[];
   }>();
   const [tab, setTab] = useState<MarketTab>('skills');
+  // Each catalog keeps its own query, so switching back finds the previous search intact.
+  const [queries, setQueries] = useState<Record<MarketTab, string>>({ skills: '', agents: '' });
+
+  // The library button follows the open catalog: one tap to what the user already has.
   const openLibrary = () =>
-    router.push({
-      pathname: '/skills/library',
-      params: {
-        agentId: getSingleRouteParam(params.agentId),
-        sessionId: getSingleRouteParam(params.sessionId),
-      },
-    });
+    tab === 'skills'
+      ? router.push({
+          pathname: '/skills/library',
+          params: {
+            agentId: getSingleRouteParam(params.agentId),
+            sessionId: getSingleRouteParam(params.sessionId),
+          },
+        })
+      : router.push('/agents');
 
   return (
     <>
@@ -36,74 +43,42 @@ export function MarketplaceScreen() {
         title={t('marketplace.title')}
         rightActions={[
           {
+            accessibilityLabel: t(tab === 'skills' ? 'skills.library' : 'marketplace.myAgents'),
+            icon: LibraryBigIcon,
             key: 'marketplace-library',
-            type: 'custom',
-            element: (
-              <ActionMenu
-                items={[
-                  { id: 'skills', label: t('skills.library'), onPress: openLibrary },
-                  {
-                    id: 'agents',
-                    label: t('marketplace.myAgents'),
-                    onPress: () => router.push('/agents'),
-                  },
-                ]}
-              >
-                <Button
-                  accessibilityLabel={t('marketplace.mine')}
-                  icon={<LibraryBigIcon className="size-5 text-foreground" />}
-                  variant="ghost"
-                  testID="marketplace-library"
-                />
-              </ActionMenu>
-            ),
+            nativeIcon: require('@/assets/header-toolbar/library-big.png'),
+            onPress: openLibrary,
+            testID: 'marketplace-library',
+            type: 'icon',
           },
         ]}
       />
+      <InlineSearch
+        onChangeText={(value) => setQueries((current) => ({ ...current, [tab]: value }))}
+        placeholder={t(
+          tab === 'skills'
+            ? 'skills.marketplace.searchPlaceholder'
+            : 'marketplace.templates.search',
+        )}
+        value={queries[tab]}
+      />
       <View className="flex-1 bg-background">
-        <View className="px-5 pt-1">
+        <View className="px-4 pt-2">
           <Tabs
+            accessibilityLabel={t('marketplace.title')}
             items={[
-              {
-                value: 'skills',
-                label: t('skills.title'),
-                testID: 'marketplace-tab-skills',
-                children: (
-                  <Text
-                    className={
-                      tab === 'skills'
-                        ? 'font-semibold text-xl text-foreground'
-                        : 'font-semibold text-xl text-muted-foreground'
-                    }
-                  >
-                    {t('skills.title')}
-                  </Text>
-                ),
-              },
-              {
-                value: 'agents',
-                label: t('navigation.agents'),
-                testID: 'marketplace-tab-agents',
-                children: (
-                  <Text
-                    className={
-                      tab === 'agents'
-                        ? 'font-semibold text-xl text-foreground'
-                        : 'font-semibold text-xl text-muted-foreground'
-                    }
-                  >
-                    {t('navigation.agents')}
-                  </Text>
-                ),
-              },
+              { value: 'skills', label: t('skills.title'), testID: 'marketplace-tab-skills' },
+              { value: 'agents', label: t('navigation.agents'), testID: 'marketplace-tab-agents' },
             ]}
-            layout="hug"
             onValueChange={setTab}
             value={tab}
-            variant="underline"
           />
         </View>
-        {tab === 'skills' ? <MarketplaceSkills /> : <AgentTemplateCatalog />}
+        {tab === 'skills' ? (
+          <MarketplaceSkills query={queries.skills} />
+        ) : (
+          <AgentTemplateCatalog query={queries.agents} />
+        )}
       </View>
     </>
   );

@@ -1,21 +1,23 @@
-import { Button, ContentState } from '@cherrystudio/ui/components';
+import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import { Button, ContentState, Section, useToast } from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { AgentAvatar } from '@/frontend/components/Avatar';
+import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
+import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 
-import { AgentTemplateDetails } from './AgentTemplateDetails';
+import { AGENT_TEMPLATE_CATEGORY_KEYS } from './templateCategories';
 
-/** Direct links retain their route; marketplace browsing previews the same content inline. */
+/** One template's page: who it is, its complete instructions, and a single create action. */
 export function AgentTemplateScreen() {
   const { t, i18n } = useTranslation();
-  const router = useRouter();
-  const navigation = useNavigation();
-  const { bottom } = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     templateId?: string | string[];
     templateLanguage?: string | string[];
@@ -27,57 +29,124 @@ export function AgentTemplateScreen() {
     (item) => item.id === getSingleRouteParam(params.templateId),
   );
 
+  if (template) return <AgentTemplatePage language={language} template={template} />;
+
   return (
     <>
       <RouteHeader title={t('marketplace.templates.details')} />
-      {template ? (
-        <View className="flex-1 bg-background">
-          <ScrollView
-            className="flex-1"
-            contentContainerClassName="px-5 pt-6 pb-8"
-            contentInsetAdjustmentBehavior="never"
-          >
-            <AgentTemplateDetails template={template} />
-          </ScrollView>
-          <View
-            className="border-t border-border-subtle px-5 pt-4"
-            style={{ paddingBottom: Math.max(bottom, 16) }}
-          >
-            <Button
-              onPress={() => {
-                if (navigation.isFocused())
-                  router.push({
-                    pathname: '/agents/new',
-                    params: {
-                      templateId: template.id,
-                      templateLanguage: language,
-                      startChat: 'true',
-                    },
-                  });
-              }}
-              size="footer"
-              testID="template-create"
-            >
-              {t('marketplace.templates.create')}
-            </Button>
+      <View className="flex-1 bg-background px-8 py-16">
+        {isLoading || isFetching ? (
+          <ContentState.Loading title={t('marketplace.templates.loading')} />
+        ) : (
+          <ContentState.Error
+            title={t(
+              error ? 'marketplace.templates.loadFailed' : 'marketplace.templates.unavailable',
+            )}
+            primaryAction={
+              error ? { children: t('common.retry'), onPress: () => void refetch() } : undefined
+            }
+          />
+        )}
+      </View>
+    </>
+  );
+}
+
+function AgentTemplatePage({ language, template }: { language: string; template: AgentTemplate }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const { toast } = useToast();
+  const { bottom } = useSafeAreaInsets();
+  const labels = template.categories.length
+    ? template.categories.map((category) => t(AGENT_TEMPLATE_CATEGORY_KEYS[category]))
+    : template.group;
+
+  async function copyInstructions() {
+    try {
+      await Clipboard.setStringAsync(template.prompt);
+      toast.show({ label: t('marketplace.templates.copied'), variant: 'success' });
+    } catch {
+      toast.show({ label: t('marketplace.templates.copyFailed'), variant: 'danger' });
+    }
+  }
+
+  return (
+    <>
+      <RouteHeader
+        title={t('marketplace.templates.details')}
+        rightActions={
+          template.prompt
+            ? [
+                {
+                  accessibilityLabel: t('marketplace.templates.copy'),
+                  icon: CopyIcon,
+                  key: 'template-copy',
+                  nativeIcon: require('@/assets/header-toolbar/copy.png'),
+                  onPress: () => void copyInstructions(),
+                  testID: 'template-copy',
+                  type: 'icon',
+                },
+              ]
+            : undefined
+        }
+      />
+      <View className="flex-1 bg-background">
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="gap-8 px-4 pt-6 pb-8"
+          contentInsetAdjustmentBehavior="never"
+          testID="template-details-content"
+        >
+          <View className="items-center gap-3 px-4">
+            <AgentAvatar emoji={template.emoji} name={template.name} size={80} />
+            <View className="items-center gap-1">
+              <Text className="text-center font-semibold text-2xl text-foreground" selectable>
+                {template.name}
+              </Text>
+              {labels.length ? (
+                <Text className="text-center text-sm text-muted-foreground">
+                  {labels.join(' · ')}
+                </Text>
+              ) : null}
+            </View>
+            {template.description ? (
+              <Text className="text-center text-base text-muted-foreground" selectable>
+                {template.description}
+              </Text>
+            ) : null}
           </View>
+          {template.prompt ? (
+            <Section title={t('agent.form.instructions')}>
+              <View className="px-4 py-3">
+                <MarkdownText markdown={template.prompt} />
+              </View>
+            </Section>
+          ) : null}
+        </ScrollView>
+        <View
+          className="border-t border-border-subtle px-4 pt-3"
+          style={{ paddingBottom: Math.max(bottom, 16) }}
+        >
+          <Button
+            onPress={() => {
+              if (navigation.isFocused())
+                router.push({
+                  pathname: '/agents/new',
+                  params: {
+                    templateId: template.id,
+                    templateLanguage: language,
+                    startChat: 'true',
+                  },
+                });
+            }}
+            size="footer"
+            testID="template-create"
+          >
+            {t('marketplace.templates.create')}
+          </Button>
         </View>
-      ) : (
-        <View className="p-5">
-          {isLoading || isFetching ? (
-            <ContentState.Loading title={t('marketplace.templates.loading')} />
-          ) : (
-            <ContentState.Error
-              title={t(
-                error ? 'marketplace.templates.loadFailed' : 'marketplace.templates.unavailable',
-              )}
-              primaryAction={
-                error ? { children: t('common.retry'), onPress: () => void refetch() } : undefined
-              }
-            />
-          )}
-        </View>
-      )}
+      </View>
     </>
   );
 }
