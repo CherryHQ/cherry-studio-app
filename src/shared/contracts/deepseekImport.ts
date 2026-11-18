@@ -15,7 +15,7 @@ export type DeepseekImportResult = {
   sessions: number;
   messages: number;
   missingAttachments: number;
-  /** Conversations whose files could not be read; the rest are imported. */
+  /** Conversations that could not be read or converted. */
   skippedConversations: number;
 };
 
@@ -27,17 +27,21 @@ export type DeepseekImportErrorCode =
   | 'disk-space'
   | 'busy'
   | 'invalid-link'
+  | 'share-link'
   | 'expired-link'
   | 'download'
   | 'failed';
 
 export class DeepseekImportError extends Error {
+  readonly reasonCode?: 'missing-directory' | 'malformed';
+
   constructor(
     readonly code: DeepseekImportErrorCode,
-    options?: ErrorOptions,
+    options?: ErrorOptions & { reasonCode?: DeepseekImportError['reasonCode'] },
   ) {
     super(`DeepSeek import: ${code}`, options);
     this.name = 'DeepseekImportError';
+    this.reasonCode = options?.reasonCode;
   }
 }
 
