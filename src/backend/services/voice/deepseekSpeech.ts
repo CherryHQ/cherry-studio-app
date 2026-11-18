@@ -31,7 +31,14 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
         if (error) reject(error);
         else resolve();
       };
-      stop = () => settle(signal.reason ?? new Error('Speech was cancelled.'));
+      stop = () => {
+        settle(signal.reason ?? new Error('Speech was cancelled.'));
+        try {
+          player.pause();
+        } catch (error) {
+          logger.warn('Cancelled speech playback could not be paused', { error });
+        }
+      };
       timer = setTimeout(
         () => settle(new VoiceError('failed', 'Speech playback did not finish.')),
         10 * 60_000,
@@ -59,7 +66,7 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
     clearTimeout(timer);
     subscription?.remove();
     if (stop) signal.removeEventListener('abort', stop);
-    player.remove();
+    player.release();
   }
 }
 
