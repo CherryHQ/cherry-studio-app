@@ -174,6 +174,8 @@ export type RuntimeToolResult = {
 };
 
 export type RuntimeTextAttachmentPart = {
+  /** Managed source revision, used to reject an edited source before a provider upload. */
+  revision?: number;
   fileEntryId: string;
   type: 'text-attachment';
   mediaType: string;
@@ -292,6 +294,8 @@ export type RuntimeTool = {
   outputSchema?: RuntimeJsonValue;
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
+  /** Settings advertised by a tool that must still match when the execution is restored. */
+  executionSettingsKey?: string;
   approval: 'auto' | 'ask' | 'deny';
   /** Escalate an auto-approved tool to a user decision for this exact input. */
   requiresApproval?: (input: RuntimeJsonValue) => boolean;

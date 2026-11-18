@@ -110,6 +110,8 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       !sameCapability(binding.tool, template)
     )
       throw new Error('A durable tool resolved to a different capability.');
+    if (binding.tool.executionSettingsKey !== template.executionSettingsKey)
+      throw new Error('Tool settings changed since it was offered. Start a new turn to retry.');
     if (failedTurnId !== binding.turnId) {
       failedGroups.clear();
       failedTurnId = binding.turnId;

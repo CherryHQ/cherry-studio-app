@@ -1,10 +1,14 @@
+import { getBaseUrl } from '@cherrystudio/ai-runtime/provider';
+
 import { providerService } from '@/backend/data/services/ProviderService';
+import { deepseekServiceBaseUrl } from '@/backend/services/providers/deepseekConnection';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
+import type { Provider } from '@/shared/data/types/provider';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -135,9 +139,34 @@ export async function getRuntimeConfig(
   };
 }
 
+/** The DeepSeek model provider serves search once it is enabled with an API key. */
+async function linkDeepseekModelProvider(
+  provider: WebSearchProvider,
+): Promise<WebSearchProvider | undefined> {
+  let linked: Provider;
+  try {
+    linked = await providerService.getByProviderId('deepseek');
+  } catch (error) {
+    if (isDataApiError(error) && error.code === ErrorCode.NOT_FOUND) return undefined;
+    throw error;
+  }
+  if (!linked.isEnabled || linked.authType !== 'api-key') return undefined;
+  const { keys } = await providerService.listApiKeys('deepseek', { enabled: true });
+  const apiKeys = trimStringList(keys.map((entry) => entry.key));
+  if (apiKeys.length === 0) return undefined;
+  const apiHost = deepseekServiceBaseUrl(getBaseUrl(linked));
+  return {
+    ...provider,
+    credentialsProviderId: 'deepseek',
+    apiKeys,
+    capabilities: provider.capabilities.map((capability) => ({ ...capability, apiHost })),
+  };
+}
+
 /**
- * `override` replaces the stored settings of this provider only, so unsaved settings can be checked
- * through the same resolution a real lookup uses.
+ * `override` replaces independent settings so unsaved fields use the same lookup path.
+ * DeepSeek prefers the model provider's credentials and address. Released search-only settings
+ * remain the fallback until that provider has an enabled key; the page no longer edits them.
  */
 export async function getProviderById<TProviderId extends WebSearchProvider['id']>(
   providerId: TProviderId,
@@ -146,7 +175,17 @@ export async function getProviderById<TProviderId extends WebSearchProvider['id'
 ): Promise<WebSearchProvider & { id: TProviderId }> {
   const providerOverrides = await getProviderOverrides(preferences);
   const preset = getWebSearchProviderPresetById(providerId);
-  const provider = mergeWebSearchProviderPreset(preset, override ?? providerOverrides[providerId]);
+  const provider = mergeWebSearchProviderPreset(
+    preset,
+    providerId === 'deepseek'
+      ? providerOverrides.deepseek
+      : (override ?? providerOverrides[providerId]),
+  );
+
+  if (providerId === 'deepseek') {
+    const linked = await linkDeepseekModelProvider(provider);
+    if (linked) return linked as WebSearchProvider & { id: TProviderId };
+  }
 
   return (await inheritZhipuModelProviderApiKeys(
     inheritExaMcpApiKeys(provider, providerOverrides),

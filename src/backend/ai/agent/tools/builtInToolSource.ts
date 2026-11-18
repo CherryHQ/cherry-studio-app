@@ -35,7 +35,7 @@ import {
   type PermissionStatuses,
 } from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
-import type { VoiceModule } from '@/shared/contracts/voice';
+import type { VoiceEngineId, VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isDataApiError } from '@/shared/data/api/errors';
 import {
@@ -128,7 +128,7 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
-    voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
+    voice?: Pick<VoiceModule, 'getReadyTranscriptionEngine' | 'transcribeAudio'>;
     agents: AgentManagementData;
     skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
@@ -149,7 +149,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  */
 export type SystemCapabilityServices = {
   mcpManagement?: McpManagementAccess;
-  voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
+  voice?: Pick<VoiceModule, 'getReadyTranscriptionEngine' | 'transcribeAudio'>;
   ssh?: SshToolAccess;
   ai: PaintingToolDependencies['ai'];
   model: Pick<ModelService, 'getById'>;
@@ -186,10 +186,7 @@ export function createSystemCapabilitySource(
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
-      const transcriptionReady = await deps.voice
-        ?.getTranscriptionStatus()
-        .then((status) => status === 'ready')
-        .catch(() => false);
+      const transcriptionEngine = await deps.voice?.getReadyTranscriptionEngine().catch(() => null);
       const catalog = createCatalog(
         deps,
         scope,
@@ -201,7 +198,7 @@ export function createSystemCapabilitySource(
         fileAccess,
         workspaceName,
         acceptsImages,
-        transcriptionReady ?? false,
+        transcriptionEngine ?? null,
       );
       if (services.mcpManagement) {
         for (const tool of createMcpManagementTools(services.mcpManagement))
@@ -312,7 +309,7 @@ function createCatalog(
   fileAccess: WorkspaceFileAccess,
   workspaceName: string | undefined,
   acceptsImages: boolean,
-  transcriptionReady: boolean,
+  transcriptionEngine: VoiceEngineId | null,
 ): Map<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const readContent = createReadFileContentReader(managedFileResolver, documentParserMode);
@@ -342,8 +339,8 @@ function createCatalog(
       readContent,
     ),
     createWriteFileTool(fileContent, fileAccess),
-    ...(transcriptionReady && deps.voice
-      ? [createTranscribeAudioTool(deps.voice, fileAccess)]
+    ...(transcriptionEngine && deps.voice
+      ? [createTranscribeAudioTool(deps.voice, fileAccess, transcriptionEngine)]
       : []),
     ...createFileLibraryTools(
       fileAccess,

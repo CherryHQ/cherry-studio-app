@@ -22,6 +22,160 @@ function message(text: string): AssistantMessage {
   };
 }
 
+test('retains DeepSeek Chat link signatures and final-step reasoning across JSON history', () => {
+  const capture = new PiWebResponse('ds-chat', 'deepseek-chat');
+  const steps = [
+    {
+      index: 0,
+      reasoning_content: 'Earlier reasoning',
+      calls: [
+        {
+          index: 0,
+          id: 'link-1',
+          type: 'deepseek_read_url',
+          kind: 'read_link',
+          action: { type: 'read_link', url: 'https://example.com/a' },
+          status: 'completed',
+          page: { url: 'https://example.com/a', title: 'A' },
+          signature: 'encrypted-page',
+        },
+      ],
+    },
+  ];
+  capture.observe({ choices: [{ delta: { reasoning_content: 'Earlier reasoning' } }] });
+  capture.observe({
+    choices: [{ delta: {}, server_tool_event: { type: 'step_reasoning_done', step: 0 } }],
+  });
+  capture.observe({
+    choices: [
+      {
+        finish_reason: 'stop',
+        delta: {
+          reasoning_content: 'Final reasoning',
+          server_tool_calls: steps,
+          annotations: [
+            {
+              type: 'url_citation',
+              url_citation: {
+                url: 'https://example.com/a',
+                title: 'A',
+                start_index: 0,
+                end_index: 3,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const settled = JSON.parse(
+    JSON.stringify(
+      capture.settle({
+        ...message('🍒中文 answer'),
+        api: 'openai-completions',
+        model: 'deepseek-flash',
+      }),
+    ),
+  ) as AssistantMessage;
+  const web = readPiWebResult(settled)!;
+  expect(web.texts).toEqual([{ contentIndex: 0, text: '🍒中文[cite:ds-chat-1] answer' }]);
+  const content = settled.content
+    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+    .join('');
+  const model = { api: settled.api, provider: settled.provider, id: settled.model } as Model<Api>;
+  const payload = {
+    messages: [
+      { role: 'assistant', content, reasoning_content: 'Earlier reasoningFinal reasoning' },
+    ],
+  };
+  expect(applyPiWebReplay(payload, model, [settled])).toEqual({
+    messages: [
+      {
+        role: 'assistant',
+        content,
+        reasoning_content: 'Final reasoning',
+        server_tool_calls: steps,
+      },
+    ],
+  });
+  expect(applyPiWebReplay(payload, { ...model, provider: 'other-account' }, [settled])).toEqual(
+    payload,
+  );
+});
+
+test('restores DeepSeek Responses calls beside their original output neighbors', () => {
+  const capture = new PiWebResponse('ds-response', 'deepseek-responses');
+  const thinking = { type: 'reasoning', id: 'rs-1', summary: [] };
+  const search = {
+    type: 'web_search_call',
+    id: 'search-1',
+    status: 'completed',
+    kind: 'search',
+    action: { type: 'search', queries: ['A'] },
+  };
+  const laterThinking = { type: 'reasoning', id: 'rs-2', summary: [] };
+  const link = {
+    type: 'web_search_call',
+    id: 'link-1',
+    status: 'completed',
+    kind: 'read_link',
+    action: { type: 'open_page', url: 'https://example.com/a' },
+    page: { url: 'https://example.com/a' },
+    signature: 'encrypted-page',
+  };
+  const answer = {
+    type: 'message',
+    id: 'msg-1',
+    role: 'assistant',
+    content: [{ type: 'output_text', text: 'Answer', annotations: [] }],
+  };
+  const output = [thinking, search, laterThinking, link, answer];
+  output.forEach((item, output_index) =>
+    capture.observe({ type: 'response.output_item.done', item, output_index }),
+  );
+  const settled = JSON.parse(
+    JSON.stringify(capture.settle({ ...message('Answer'), model: 'deepseek-flash' })),
+  ) as AssistantMessage;
+  const facts = {
+    type: 'message',
+    role: 'assistant',
+    content: [{ type: 'output_text', text: (settled.content.at(-1) as { text: string }).text }],
+  };
+  const model = { api: settled.api, provider: settled.provider, id: settled.model } as Model<Api>;
+  const payload = { input: [thinking, laterThinking, answer, facts] };
+  expect(applyPiWebReplay(payload, model, [settled])).toEqual({ input: [...output, facts] });
+  expect(applyPiWebReplay(payload, { ...model, id: 'other-model' }, [settled])).toEqual(payload);
+});
+
+test.each([
+  ['deepseek-chat', { choices: [{ delta: {}, finish_reason: 'content_filter' }] }],
+  ['deepseek-messages', { type: 'message_delta', delta: { stop_reason: 'refusal' } }],
+  [
+    'deepseek-responses',
+    {
+      type: 'response.incomplete',
+      response: { incomplete_details: { reason: 'content_filter' }, output: [] },
+    },
+  ],
+] as const)('clears streamed text and reasoning on a late refusal in %s', (dialect, event) => {
+  const capture = new PiWebResponse('ds-refusal', dialect);
+  capture.observe(event);
+  const original = {
+    ...message('Already shown'),
+    content: [
+      { type: 'thinking' as const, thinking: 'Already shown reasoning' },
+      { type: 'text' as const, text: 'Already shown' },
+    ],
+  };
+  expect(capture.contentFiltered).toBe(true);
+  expect(capture.settle(original)).toMatchObject({
+    content: [],
+    stopReason: 'error',
+    rawStopReason: 'content_filter',
+  });
+  expect(original.content).toHaveLength(2);
+});
+
 test('projects OpenAI annotations once while preserving signed replay text', () => {
   const capture = new PiWebResponse('native-turn-1', 'openai-responses');
   const text = 'Answer [1]';

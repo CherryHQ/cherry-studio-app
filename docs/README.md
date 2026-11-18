@@ -71,6 +71,7 @@ They are the source of truth for how the repository works today.
 | [Remote Access](./references/remote-access/README.md) | Plan for pairing, configuration sync, and Agent access over the desktop's encrypted channel |
 | [Voice Input And Speech](./references/voice.md) | Dictation and read-aloud engines, AI voice models, and audio attachment transcription |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
+| [DeepSeek Services](./references/deepseek-services.md) | Shared model credentials, built-in file tool settings, cloud voice and native web tools; acceptance pending |
 
 ## Documentation Governance
 

@@ -36,7 +36,7 @@ import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from '../piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { PI_CODEMODE_VM_SOURCE } from '../piCodemodeSandbox';
-import { projectPiTurn } from '../piDurableProjection';
+import { piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { ToolInstructions } from '../piToolInstructions';
@@ -212,6 +212,34 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('blocks a recovered tool call when the stored and resolved processing engines differ', async () => {
+    const execute = jest.fn(async () => ({ value: 'must not run', artifacts: [] }));
+    const local = capability({ approval: 'auto', executionSettingsKey: 'sensevoice' });
+    const extension = createPiDurableToolExtension({
+      name: 'cherry',
+      tools: [{ ...piToolBlueprint(local), execute: local.execute }],
+      resolve: async () => ({
+        tool: { ...local, executionSettingsKey: 'deepseek', execute },
+        turnId: 'turn',
+      }),
+      approve: async () => true,
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
+      expect(execute).not.toHaveBeenCalled();
+      const history = await conversation.context(BACKGROUND_CONTEXT);
+      expect(history.messages.at(-1)).toMatchObject({ role: 'toolResult', isError: true });
+      expect(JSON.stringify(history.messages.at(-1))).toContain('Tool settings changed');
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('adds the required empty properties map only to model-facing parameterless object tools', () => {
     const inputSchema = { type: 'object', additionalProperties: false };
     const referenced = {

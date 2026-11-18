@@ -20,6 +20,8 @@ export function BuiltinToolGroup() {
     <PluginGroup testID="plugins-builtin-tools" title={t('plugins.builtinTools.title')}>
       {BUILTIN_TOOL_IDS.map((toolId) => {
         const tool = BUILTIN_TOOLS[toolId];
+        if (toolId === 'documentParser' || toolId === 'ocr')
+          return <FileToolRow key={toolId} toolId={toolId} />;
         return (
           <PluginRow
             description={t(tool.summaryKey)}
@@ -36,5 +38,32 @@ export function BuiltinToolGroup() {
         );
       })}
     </PluginGroup>
+  );
+}
+
+function FileToolRow({ toolId }: { toolId: 'documentParser' | 'ocr' }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const [selected] = usePreference(
+    toolId === 'documentParser' ? 'file.document_parser.mode' : 'file.ocr.engine',
+  );
+  const tool = BUILTIN_TOOLS[toolId];
+  return (
+    <PluginRow
+      description={t(tool.summaryKey)}
+      icon={<PluginIcon glyph={tool.glyph} />}
+      onPress={() => router.push(tool.pathname)}
+      status={{
+        label:
+          selected === 'deepseek'
+            ? 'DeepSeek'
+            : toolId === 'documentParser'
+              ? t(`settings.documentParser.${selected}`)
+              : t('plugins.builtinTools.ocr.local'),
+        tone: 'default',
+      }}
+      testID={`plugins-builtin-tool-${toolId}`}
+      title={t(tool.nameKey)}
+    />
   );
 }

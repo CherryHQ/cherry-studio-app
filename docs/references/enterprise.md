@@ -41,7 +41,8 @@ enterprise profile was last reached at, so a moved server keeps its data.
 When a new enterprise or private profile is registered, it captures the current profile's
 application preferences listed in `INHERITABLE_PREFERENCE_KEYS`: language, appearance and layout,
 notifications and background presentation, feedback, privacy choices, background guidance,
-document parsing and export watermark. Its first database seeds those values before the UI reads
+document parsing and export watermark. A DeepSeek document parser falls back to the default
+because the new profile has its own model providers. Its first database seeds those values before the UI reads
 preferences. This is one-time inheritance: existing profiles retain their settings, including when
 switching back, signing in again or reopening after a restart. Account identity, onboarding,
 models and organization configuration are not inherited. Community accounts keep sharing `local`.

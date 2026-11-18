@@ -1,8 +1,9 @@
-import { Section } from '@cherrystudio/ui/components';
+import { Button, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderCredentialsLink } from '@/frontend/components/ProviderCredentialsLink';
 import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
@@ -48,6 +49,7 @@ export function WebSearchApiManagementSection({
   const providerOverride = providerOverrides[provider.id];
   const providerCapability = getWebSearchProviderCapability(provider, capability);
   const { isChecking, startCheck } = useWebSearchProviderCheck(provider.id, capability);
+  const linkedDeepseek = provider.id === 'deepseek';
 
   const openZhipuApiKeySettings = useCallback(() => {
     router.push({
@@ -105,9 +107,28 @@ export function WebSearchApiManagementSection({
         }
       >
         {children}
-        {getWebSearchProviderDetailSections(provider, capability).map((section) => (
-          <WebSearchApiServiceFieldGroup key={section.type} section={section} />
-        ))}
+        {linkedDeepseek
+          ? [
+              <ProviderCredentialsLink
+                key="deepseek-keys"
+                providerId="deepseek"
+                providerName="DeepSeek"
+              />,
+              <Section.Item key="deepseek-check">
+                <Button
+                  loading={isChecking}
+                  onPress={() => {
+                    void startCheck({});
+                  }}
+                  variant="secondary"
+                >
+                  {t('settings.websearch.provider.check')}
+                </Button>
+              </Section.Item>,
+            ]
+          : getWebSearchProviderDetailSections(provider, capability).map((section) => (
+              <WebSearchApiServiceFieldGroup key={section.type} section={section} />
+            ))}
       </Section>
     </WebSearchApiManagementContext>
   );

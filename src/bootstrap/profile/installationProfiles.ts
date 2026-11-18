@@ -3,6 +3,7 @@ import { createMMKV } from 'react-native-mmkv';
 
 import { application } from '@/backend/core/application/Application';
 import { ProfileRegistry, resetProfileCaches } from '@/backend/data/profile';
+import { DEFAULT_DOCUMENT_PARSER_MODE } from '@/shared/contracts/fileAttachment';
 import { setActiveProfile } from '@/shared/data/activeProfile';
 import { INHERITABLE_PREFERENCE_KEYS } from '@/shared/data/preference';
 
@@ -17,7 +18,15 @@ export function installationProfiles(): ProfileRegistry {
     registry = new ProfileRegistry(
       { read: () => store.getString('registry'), write: (value) => store.set('registry', value) },
       randomUUID,
-      () => application.get('PreferenceService').getMultipleRawCached(INHERITABLE_PREFERENCE_KEYS),
+      () => {
+        const values = application
+          .get('PreferenceService')
+          .getMultipleRawCached(INHERITABLE_PREFERENCE_KEYS);
+        // A new profile has its own model providers, so a provider-bound parser does not carry over.
+        return values['file.document_parser.mode'] === 'deepseek'
+          ? { ...values, 'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE }
+          : values;
+      },
     );
   }
   return registry;

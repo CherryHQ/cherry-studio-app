@@ -60,6 +60,7 @@ export const PiToolBlueprintSchema = z.object({
   inputSchema: RuntimeJsonValueSchema,
   outputSchema: RuntimeJsonValueSchema.optional(),
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
+  executionSettingsKey: z.string().optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
   failureGroup: z.string().optional(),
   autoApprovalEligible: z.boolean().optional(),

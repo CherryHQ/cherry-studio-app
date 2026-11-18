@@ -40,14 +40,19 @@ describe('createSystemCapabilitySource', () => {
     jest.restoreAllMocks();
   });
 
-  test.each(['needs-model', 'unsupported', 'ready'] as const)(
-    'offers audio transcription only when ready: %s',
-    async (status) => {
+  test.each([null, 'sensevoice', 'deepseek'] as const)(
+    'offers the available transcription engine: %s',
+    async (engine) => {
       const tools = await resolve({
-        voice: { getTranscriptionStatus: async () => status, transcribeAudio: jest.fn() },
+        voice: { getReadyTranscriptionEngine: async () => engine, transcribeAudio: jest.fn() },
       });
-      expect(capabilityIds(tools).includes('transcribe_audio')).toBe(status === 'ready');
-      if (status === 'ready') expect(approvalOf(tools, 'transcribe_audio')).toBe('auto');
+      const tool = tools.find(({ providerName }) => providerName === 'transcribe_audio');
+      if (engine) {
+        expect(tool).toMatchObject({ executionSettingsKey: engine, approval: 'auto' });
+        expect(tool?.description).toContain(
+          engine === 'deepseek' ? 'sent to DeepSeek' : 'on-device',
+        );
+      } else expect(tool).toBeUndefined();
     },
   );
 
@@ -214,6 +219,7 @@ describe('createSystemCapabilitySource', () => {
     ['anydoc', false],
     ['builtin', true],
     ['builtin', false],
+    ['deepseek', false],
   ] as const)(
     'keeps each deferred reader self-contained for parser %s and image support %s',
     async (documentParserMode, acceptsImages) => {
@@ -224,13 +230,15 @@ describe('createSystemCapabilitySource', () => {
         expect(description).toContain('startLine + lineCount');
         expect(description).toContain('lineTruncated');
         expect(description).toContain('offset set to nextOffset');
-        expect(description).toContain('never combine the two groups');
+        expect(description).toContain('Never combine the two groups');
         expect(description).toContain('sourceTruncated');
-        if (documentParserMode === 'anydoc') {
+        if (documentParserMode !== 'builtin') {
           expect(description).toContain('never line parameters');
-          expect(description).toContain('concatenate text windows');
-          expect(description).toContain('Continue with nextOffset until complete');
+          expect(description).toContain('Concatenate text windows');
+          expect(description).toContain('continue with nextOffset until complete');
           expect(description).toContain('assets are references only');
+          if (documentParserMode === 'deepseek')
+            expect(description).toContain('sent to DeepSeek OCR');
         } else {
           expect(description).toContain('return built-in extracted text');
           expect(description).toContain('unsupported by this parser');
@@ -241,7 +249,7 @@ describe('createSystemCapabilitySource', () => {
           expect(description).toContain('use this tool directly, outside Code Mode');
         } else {
           expect(description).toContain('OCR text from the first frame');
-          expect(description).toContain('No image pixels are sent');
+          expect(description).toContain('chat model receives no image pixels');
           expect(description).not.toContain('omit paging parameters');
         }
       }

@@ -57,10 +57,12 @@ function setup({
   selected = {},
   transcription,
   systemTranscription,
+  cloudTranscription,
   canSpeakInBackground,
 }: {
   transcription?: TranscriptionEngine;
   systemTranscription?: TranscriptionEngine;
+  cloudTranscription?: TranscriptionEngine;
   dictation?: Partial<Record<VoiceEngineId, DictationEngine>>;
   speech?: Partial<Record<VoiceEngineId, SpeechEngine>>;
   selected?: Partial<Record<'dictation' | 'speech' | 'transcription', VoiceEngineId>>;
@@ -71,7 +73,11 @@ function setup({
     engines: {
       dictation,
       speech,
-      transcription: { sensevoice: transcription, system: systemTranscription },
+      transcription: {
+        sensevoice: transcription,
+        system: systemTranscription,
+        deepseek: cloudTranscription,
+      },
     },
     preference: {
       get: async (key) =>
@@ -378,12 +384,35 @@ test('audio transcription defaults to SenseVoice even when system recognition is
   });
   await expect(runtime.module.getEffectiveEngine('transcription')).resolves.toBe('sensevoice');
   await expect(runtime.module.getTranscriptionStatus()).resolves.toBe('needs-model');
+  await expect(runtime.module.getReadyTranscriptionEngine()).resolves.toBeNull();
   await expect(
     runtime.module.transcribeAudio({
       fileEntryId: FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001'),
     }),
   ).rejects.toMatchObject({ code: 'model-not-downloaded' });
   expect(systemTranscription.run).not.toHaveBeenCalled();
+  await runtime.dispose();
+});
+
+test('rejects a tool prepared for local transcription after the engine changes to DeepSeek', async () => {
+  const selected: { transcription: VoiceEngineId } = { transcription: 'sensevoice' };
+  const upload = jest.fn();
+  const runtime = setup({
+    selected,
+    transcription: { status: async () => 'ready', run: jest.fn() },
+    cloudTranscription: { status: async () => 'ready', run: upload },
+  });
+  const expectedEngine = await runtime.module.getReadyTranscriptionEngine();
+  expect(expectedEngine).toBe('sensevoice');
+  selected.transcription = 'deepseek';
+
+  await expect(
+    runtime.module.transcribeAudio(
+      { fileEntryId: FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001') },
+      { expectedEngine: expectedEngine! },
+    ),
+  ).rejects.toThrow('transcription engine changed');
+  expect(upload).not.toHaveBeenCalled();
   await runtime.dispose();
 });
 

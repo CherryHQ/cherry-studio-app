@@ -22,6 +22,10 @@ export function isBuiltinOfficeFileType(type: DocumentFileType): type is Builtin
   return type === 'docx' || type === 'pptx' || type === 'xlsx';
 }
 
+export function isDeepseekOcrFileType(type: DocumentFileType): boolean {
+  return ['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(type);
+}
+
 export function documentFileTypeFromMediaType(mediaType: string): DocumentFileType | undefined {
   const normalized = mediaType.split(';', 1)[0]?.trim().toLowerCase();
   if (normalized === 'text/rtf') return 'rtf';

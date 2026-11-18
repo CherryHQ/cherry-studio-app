@@ -10,6 +10,7 @@ import {
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
+  isDeepseekOcrFileType,
 } from '@/shared/utils/documentFileTypes';
 import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -21,11 +22,12 @@ export type DocumentContentReader = {
   readDocumentText?(
     file: FileAttachmentFact,
     signal: AbortSignal,
+    mode?: DocumentParserMode,
   ): Promise<ExtractedDocumentText | undefined>;
 };
 
 export type ParsedDocument =
-  | { parser: 'builtin' | 'native-pdf'; output: ExtractedDocumentText }
+  | { parser: 'builtin' | 'native-pdf' | 'deepseek-ocr'; output: ExtractedDocumentText }
   | { parser: 'anydoc'; parserVersion: string; output: ConvertResult };
 
 export type ParsedAnydocDocument = Extract<ParsedDocument, { parser: 'anydoc' }> & {
@@ -43,15 +45,16 @@ export async function parseDocument(
 ): Promise<Exclude<ParsedDocument, { parser: 'anydoc' }> | ParsedAnydocDocument> {
   const issue = { fileEntryId: file.fileEntryId, name: file.name };
   const type = documentFileTypeFromMediaType(file.mediaType);
+  const cloud = mode === 'deepseek' && type !== undefined && isDeepseekOcrFileType(type);
   if (!type || (mode === 'builtin' && type !== 'pdf' && !isBuiltinOfficeFileType(type))) {
     throw new FileAttachmentError({ ...issue, code: 'parser-unsupported' });
   }
-  if (type === 'pdf' || mode === 'builtin') {
-    const output = await reader.readDocumentText?.(file, signal);
+  if (type === 'pdf' || mode === 'builtin' || cloud) {
+    const output = await reader.readDocumentText?.(file, signal, mode);
     signal.throwIfAborted();
     if (!output) throw new FileAttachmentError({ ...issue, code: 'unavailable' });
     if (!output.text.trim()) throw new FileAttachmentError({ ...issue, code: 'document-empty' });
-    return { parser: type === 'pdf' ? 'native-pdf' : 'builtin', output };
+    return { parser: output.parser ?? (type === 'pdf' ? 'native-pdf' : 'builtin'), output };
   }
   const bytes = await reader.readBytes(file, signal);
   signal.throwIfAborted();

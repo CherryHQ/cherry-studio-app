@@ -70,6 +70,6 @@ export async function transcribeAudioChunks(
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof VoiceError) throw error;
-    throw new VoiceError('failed', 'Offline audio transcription failed.', { cause: error });
+    throw new VoiceError('failed', 'Audio transcription failed.', { cause: error });
   }
 }
