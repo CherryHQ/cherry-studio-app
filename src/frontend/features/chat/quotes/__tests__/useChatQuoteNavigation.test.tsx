@@ -91,6 +91,20 @@ test.each([false, true])(
     expect(nav.highlight).toBeUndefined();
   },
 );
+test('a stale turn from another branch remains unavailable without switching the branch', async () => {
+  mockGet.mockResolvedValueOnce({ items: [] });
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  let pending!: Promise<QuoteNavigationOutcome>;
+  await act(async () => {
+    pending = nav.openTurn({ sourceMessageId: source.id, requestId: 'turn' });
+    await tick();
+  });
+  expect(await pending).toEqual({ state: 'unavailable' });
+  expect(mockSelect).not.toHaveBeenCalled();
+  expect(nav.navigation).toBeUndefined();
+});
 test('scroll rejection, transport errors, and supersession never highlight or install fallback windows', async () => {
   await act(async () => {
     renderer = create(<Probe />);

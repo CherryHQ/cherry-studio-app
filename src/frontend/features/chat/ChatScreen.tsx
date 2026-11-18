@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { v7 as uuidv7 } from 'uuid';
 
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
@@ -48,7 +49,9 @@ import {
   AssistantMessageUsage,
   ChatComposerClearance,
   ChatEmptyState,
+  type ChatTurnNavigator,
   ChatWorkspace,
+  toChatTurn,
 } from './components/ChatWorkspace';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
@@ -140,6 +143,24 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !messageWindow.hasNewerMessages &&
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
+  const { openTurn } = quoteNavigation;
+  const turnNavigator: ChatTurnNavigator | undefined =
+    sessionId && !isPreview
+      ? {
+          scope: `local:${sessionId}`,
+          async read(signal) {
+            const transcript = await api.get(`/agent-sessions/${sessionId}/messages/transcript`, {
+              query: { role: 'user' },
+              signal,
+            });
+            return transcript.messages.toReversed().map(({ id, parts }) => toChatTurn(id, parts));
+          },
+          async jump(sourceMessageId) {
+            const result = await openTurn({ sourceMessageId, requestId: uuidv7() });
+            return result.state;
+          },
+        }
+      : undefined;
   const readCitations = messageWindow.readCitations;
   const readCitationsRef = useRef(readCitations);
   useEffect(() => {
@@ -296,6 +317,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
                         <ChatWorkspace
                           executionSource="local"
+                          turnNavigator={turnNavigator}
                           onQuoteTargetRestored={
                             quoteNavigation.navigation
                               ? quoteNavigation.onTargetRestored

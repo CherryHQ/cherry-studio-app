@@ -1,6 +1,7 @@
 import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import {
   type AgentSessionMessageSchemas,
+  AgentTranscriptQuerySchema,
   AgentTranscriptSelectionSchema,
   ListAgentSessionMessagesQuerySchema,
   SaveAgentMessageTranslationSchema,
@@ -15,9 +16,10 @@ export function createAgentSessionMessageHandlers(
 ): HandlersFor<AgentSessionMessageSchemas> {
   return {
     '/agent-sessions/:sessionId/messages/transcript': {
-      GET: async ({ params, signal }) => {
+      GET: async ({ params, query, signal }) => {
         signal?.throwIfAborted();
-        const result = await service.readTranscript(params.sessionId);
+        const { role } = AgentTranscriptQuerySchema.parse(query ?? {});
+        const result = await service.readTranscript(params.sessionId, role);
         signal?.throwIfAborted();
         return result;
       },

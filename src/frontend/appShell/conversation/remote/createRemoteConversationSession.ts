@@ -30,6 +30,7 @@ import { readToolCitations } from '../readToolCitations';
 import type {
   ConversationInput,
   HistoryCursor,
+  HistoryPage,
   HistoryVersion,
   OperationId,
   RemoteConversationSession,
@@ -509,6 +510,53 @@ export function createRemoteConversationSession(
           };
         } catch (error) {
           dispose();
+          throw error;
+        }
+      },
+      openAround: async (message, signal) => {
+        const { id } = refs.resolve(message, 'message');
+        const window = await handle.history.openLatest(signal);
+        const cursors = createConversationReferences(
+          scope,
+          `${ref.sessionId}:${window.version}:${id}`,
+        );
+        const newerPages = new Map<HistoryCursor, HistoryPage>();
+        const visited = new Set<HistoryCursor>();
+        let page = window.initial;
+        let newer: HistoryCursor | undefined;
+        let isWindowDisposed = false;
+        try {
+          // The desktop protocol only pages backwards. Keep the traversed pages as the newer
+          // edge of this same revision, so the reader can go forward without fetching them again.
+          while (!page.items.some((item) => item.display.id === id)) {
+            const older = page.older;
+            if (!older) throw new ConversationReadError({ code: 'not-found', retry: 'read-again' });
+            if (visited.has(older))
+              throw new ConversationReadError({ code: 'internal', retry: 'none' });
+            visited.add(older);
+            const cursor = cursors.issue<HistoryCursor>('newer', String(newerPages.size));
+            newerPages.set(cursor, { ...page, newer });
+            newer = cursor;
+            page = await window.read(older, signal);
+            signal.throwIfAborted();
+          }
+          return {
+            ...window,
+            initial: { ...page, newer },
+            async read(cursor, signal) {
+              if (isWindowDisposed)
+                throw new ConversationReadError({ code: 'cancelled', retry: 'none' });
+              assertCurrent(signal);
+              return newerPages.get(cursor) ?? window.read(cursor, signal);
+            },
+            dispose() {
+              isWindowDisposed = true;
+              newerPages.clear();
+              window.dispose();
+            },
+          };
+        } catch (error) {
+          window.dispose();
           throw error;
         }
       },

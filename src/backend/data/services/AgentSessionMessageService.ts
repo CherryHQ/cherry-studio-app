@@ -192,8 +192,8 @@ export class AgentSessionMessageService {
   }
 
   /** The selected path and its metadata come from one read, without the sharing selection limit. */
-  async readTranscript(sessionId: string): Promise<AgentTranscriptSelection> {
-    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId));
+  async readTranscript(sessionId: string, role?: 'user'): Promise<AgentTranscriptSelection> {
+    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId), role);
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     return {
       assistantName: rows[0].assistantName ?? undefined,
@@ -204,7 +204,7 @@ export class AgentSessionMessageService {
     };
   }
 
-  private readTranscriptRows(sessionId: string, selection: SQL) {
+  private readTranscriptRows(sessionId: string, selection: SQL, role?: 'user') {
     // Capture this generation before awaiting; never resolve a replacement host.
     const db = this.db;
     const order = messageTreeOrder(db, sessionId);
@@ -219,7 +219,11 @@ export class AgentSessionMessageService {
       .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
       .leftJoin(
         agentSessionMessageTable,
-        and(eq(agentSessionMessageTable.sessionId, agentSessionTable.id), selection),
+        and(
+          eq(agentSessionMessageTable.sessionId, agentSessionTable.id),
+          selection,
+          role ? eq(agentSessionMessageTable.role, role) : undefined,
+        ),
       )
       .where(eq(agentSessionTable.id, sessionId))
       .leftJoin(order, eq(order.id, agentSessionMessageTable.id))

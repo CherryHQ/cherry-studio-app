@@ -54,8 +54,11 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
     return cancelWork;
   }, [cancelWork, sessionId, routeRequestId]);
   useEffect(() => () => clearTimeout(timer.current), []);
-  const openQuote = useCallback(
-    (input: { sourceMessageId: string; requestId: string }): Promise<QuoteNavigationOutcome> => {
+  const openMessage = useCallback(
+    (
+      input: { sourceMessageId: string; requestId: string },
+      shouldSelectBranch: boolean,
+    ): Promise<QuoteNavigationOutcome> => {
       cancel();
       if (!sessionId) return Promise.resolve({ state: 'unavailable' });
       return new Promise((resolve) => {
@@ -86,30 +89,30 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
           );
         void (async () => {
           try {
-            const source = await lookup();
-            if (!active()) return;
-            if (!source) return finish({ state: 'unavailable' });
-            await client.selectMessage(sessionId, source.id);
-            if (!active()) return;
+            if (shouldSelectBranch) {
+              const source = await lookup();
+              if (!active()) return;
+              if (!source) return finish({ state: 'unavailable' });
+              await client.selectMessage(sessionId, source.id);
+              if (!active()) return;
+            }
             const page = await api.get(`/agent-sessions/${sessionId}/messages`, {
-              query: { aroundMessageId: source.id, aroundMode: 'exact', limit: 50 },
+              query: { aroundMessageId: input.sourceMessageId, aroundMode: 'exact', limit: 50 },
               signal: request.controller.signal,
             });
             if (!active()) return;
-            if (!page.items.some((item) => item.id === source.id)) {
+            const target = page.items.find((item) => item.id === input.sourceMessageId);
+            if (!target) {
+              if (!shouldSelectBranch) return finish({ state: 'unavailable' });
               const fresh = await lookup();
               return finish(
                 fresh ? { state: 'retryable', reason: 'branch-changed' } : { state: 'unavailable' },
               );
             }
-            const exactSource = completeChatQuoteSource(
-              page.items.find((item) => item.id === source.id),
-              client,
-              sessionId,
-            );
+            const exactSource = completeChatQuoteSource(target, client, sessionId);
             if (!exactSource) return finish({ state: 'unavailable' });
             setNavigation({
-              messageId: source.id,
+              messageId: input.sourceMessageId,
               messageRequestId: request.windowId,
               aroundMode: 'exact',
               preparedPage: {
@@ -120,6 +123,7 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
           } catch (error) {
             if (!active()) return;
             if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
+              if (!shouldSelectBranch) return finish({ state: 'unavailable' });
               try {
                 const fresh = await lookup();
                 finish(
@@ -136,6 +140,14 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
       });
     },
     [api, cancel, client, sessionId],
+  );
+  const openQuote = useCallback(
+    (input: Parameters<typeof openMessage>[0]) => openMessage(input, true),
+    [openMessage],
+  );
+  const openTurn = useCallback(
+    (input: Parameters<typeof openMessage>[0]) => openMessage(input, false),
+    [openMessage],
   );
   const onTargetRestored = useCallback((target: { dataKey: string; messageId: string }) => {
     const request = pending.current;
@@ -168,5 +180,5 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
       request.resolve({ state: 'retryable', reason: 'scroll-failed' });
     }
   }, [navigation?.messageRequestId]);
-  return { navigation, highlight, openQuote, onTargetRestored, onReady, cancel };
+  return { navigation, highlight, openQuote, openTurn, onTargetRestored, onReady, cancel };
 }

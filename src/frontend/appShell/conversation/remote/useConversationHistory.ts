@@ -146,13 +146,19 @@ export function useConversationHistory(
     installedVersion: query.isPlaceholderData ? undefined : query.data?.pages[0]?.version,
     error: retired ? RETIRED : (query.error ?? undefined),
     isLoadingInitial: Boolean(
-      session && !retired && query.isPending && !messages.length && !preview?.complete,
+      session &&
+      !retired &&
+      (around
+        ? query.isPending || query.isPlaceholderData
+        : query.isPending && !messages.length && !preview?.complete),
     ),
     isRefreshing: Boolean(query.isFetching && (messages.length || preview?.complete)),
     isLoadingOlder: query.isFetchingNextPage,
     isLoadingNewer: query.isFetchingPreviousPage,
     hasOlderMessages: Boolean(query.hasNextPage || (!around && renderWindow.hasHiddenMessages)),
-    hasNewerMessages: Boolean(around && (!query.data || query.hasPreviousPage)),
+    hasNewerMessages: Boolean(
+      around && (!query.data || query.isPlaceholderData || query.hasPreviousPage),
+    ),
     initialScrollTarget: around
       ? {
           messageId: around,

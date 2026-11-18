@@ -166,6 +166,8 @@ describe('AgentSessionMessageService persistence', () => {
       { id: 'thought', type: 'reasoning', text: 'Saved thinking', state: 'done' },
       { id: 'answer-text', type: 'text', text: 'Saved answer', state: 'done' },
     ]);
+    const turns = await agentSessionMessageService.readTranscript('session-1', 'user');
+    expect(turns.messages.map((row) => row.id)).toEqual(['question']);
   });
 
   test('merges concurrent languages into message data and returns them with history and selection', async () => {

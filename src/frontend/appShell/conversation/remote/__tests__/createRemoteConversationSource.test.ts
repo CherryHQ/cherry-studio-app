@@ -4,9 +4,10 @@ import type {
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
 
+import { createConversationReferences } from '../../conversationState';
 import { remoteInput } from '../createRemoteConversationSession';
 import { createRemoteConversationSource } from '../createRemoteConversationSource';
-import type { DraftId } from '../remoteContracts';
+import type { DraftId, MessageRef } from '../remoteContracts';
 
 const signal = () => new AbortController().signal;
 const session = {
@@ -262,6 +263,24 @@ it('pins a history window and prepares a complete chronological selection before
   await expect(window.read(window.initial.older!, signal())).rejects.toMatchObject({
     failure: { code: 'cancelled' },
   });
+  test.source.dispose();
+});
+
+it('anchors an older desktop message and exposes the newer pages from that same revision', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  const messageRef = createConversationReferences(
+    session.scope,
+    address.sessionId,
+  ).issue<MessageRef>('message', 'm1');
+  const window = await session.history.openAround!(messageRef, signal());
+  expect(window.initial.items.map((item) => item.key)).toEqual(['m1']);
+  expect(window.initial.older).toBeUndefined();
+  const newer = await window.read(window.initial.newer!, signal());
+  expect(newer.items.map((item) => item.key)).toEqual(['m2', 'm3']);
+  expect(newer.newer).toBeUndefined();
+  expect(test.remote.history).toHaveBeenCalledTimes(2);
+  window.dispose();
   test.source.dispose();
 });
 
