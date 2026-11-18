@@ -3116,6 +3116,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       inputSchema: tool.inputSchema,
       outputSchema: tool.outputSchema,
       inputPreview: tool.inputPreview,
+      executionSettingsKey: tool.executionSettingsKey,
       approval: tool.approval,
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,

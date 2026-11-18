@@ -14,7 +14,11 @@ import {
   IMPORTED_IMAGE_MAX_BYTES,
   normalizeImportedImage,
 } from '@/backend/services/file/importedImageNormalization';
-import type { DocumentParserMode, FileAttachmentFact } from '@/shared/contracts/fileAttachment';
+import type {
+  DocumentParserMode,
+  FileAttachmentFact,
+  OcrEngine,
+} from '@/shared/contracts/fileAttachment';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -70,10 +74,12 @@ export interface ManagedFileResolver {
     file: ManagedFileFact,
     signal: AbortSignal,
     mode?: DocumentParserMode,
+    ocrEngine?: OcrEngine,
   ): Promise<ExtractedDocumentText | undefined>;
   readImageText(
     file: ManagedFileFact,
     signal: AbortSignal,
+    ocrEngine?: OcrEngine,
   ): Promise<ExtractedDocumentText | undefined>;
 }
 
@@ -90,17 +96,20 @@ export function createManagedFileResolver(
   readImageText: typeof readImageUriText = readImageUriText,
 ): ManagedFileResolver {
   return {
-    async readImageText(file, signal) {
+    async readImageText(file, signal, ocrEngine) {
       throwIfAborted(signal);
       const uri = getUri({ filename: file.name, id: file.fileEntryId });
       if (!uri) return undefined;
-      return readImageText(uri, signal);
+      return readImageText(uri, signal, ocrEngine);
     },
-    async readDocumentText(file, signal, mode) {
+    async readDocumentText(file, signal, mode, ocrEngine) {
       throwIfAborted(signal);
       const uri = getUri({ filename: file.name, id: file.fileEntryId });
       if (!uri) return undefined;
-      const result = await rejectOnAbort(readDocument(uri, file.mediaType, signal, mode), signal);
+      const result = await rejectOnAbort(
+        readDocument(uri, file.mediaType, signal, mode, ocrEngine),
+        signal,
+      );
       throwIfAborted(signal);
       return result;
     },

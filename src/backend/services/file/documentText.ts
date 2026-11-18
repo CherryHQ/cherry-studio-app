@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
+  type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import {
   documentFileTypeFromMediaType,
@@ -31,13 +32,14 @@ export async function readDocumentUriText(
   mediaType: string,
   signal: AbortSignal,
   mode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+  ocrEngine: OcrEngine = getFileOcrEngine(),
 ): Promise<ExtractedDocumentText> {
   signal.throwIfAborted();
   const type = documentFileTypeFromMediaType(mediaType);
   const cloud =
     type !== undefined &&
     ((mode === 'deepseek' && isDeepseekOcrFileType(type)) ||
-      (type === 'pdf' && getFileOcrEngine() === 'deepseek'));
+      (type === 'pdf' && ocrEngine === 'deepseek'));
   if (!type || (!cloud && type !== 'pdf' && !isBuiltinOfficeFileType(type)))
     throw new DocumentTextError('invalid');
   const maxBytes = documentAttachmentByteLimit(mediaType);

@@ -63,7 +63,9 @@ snapshots. The disposable `Paths.cache/DeepseekFiles` mapping contains remote ID
 keyed by managed ID, content hash, purpose, host and a hash of the actual credential. Different
 keys are isolated because Mobile has no confirmed remote account identity. Before reusing a
 reference, the service checks the remote file and rechecks the local source. A missing/expired
-reference is uploaded again; an edited or unavailable source fails rather than using stale bytes.
+reference is uploaded again. An edited or unavailable current attachment fails and asks for the
+current version. The same confirmed condition on a historical attachment produces a text notice
+in the request, so a later turn can continue. Authentication and transport errors still fail.
 Uploads request a 24-hour server expiry, and local mappings are bounded to 256 entries. Local
 deletion does not promise immediate remote deletion. Original downloads are not available through
 the upstream Files API, so a remote ID never replaces the managed original.
@@ -85,6 +87,10 @@ parser. Its content/credential-scoped entries reuse the existing bounded text ca
 failures do not start a second local parser. OCR returns text only; it does not preserve AnyDoc
 structure or embedded pixels.
 
+The Agent's file readers describe and use the same captured document parser and OCR engine. The
+transcription tool describes its available engine and checks that the selection still matches at
+execution. A recovered tool call fails if its resolved settings differ from the stored tool settings.
+
 Selecting AnyDoc or Built-in stops future uploads, including references retained in a Pi working
 copy. Existing envelopes still identify the local original for an ordinary `read_file` operation;
 new attachments follow the current local preparation path. A rebuilt copy reparses visible
@@ -94,7 +100,9 @@ historical attachments through that path as well.
 
 `recordedDictation.ts` owns the existing native WAV capture, cancellation and cleanup for both
 SenseVoice and DeepSeek. DeepSeek ASR consumes complete recordings or the existing bounded
-30-second decoded WAV windows. Long-file transcription still publishes one managed text document
+30-second decoded WAV windows. If a window's sample rate is unsupported, the DeepSeek adapter
+converts it to 16 kHz mono PCM16 for upload and deletes the converted file after use. Long-file
+transcription still publishes one managed text document
 through `transcribeAudioFile`. This is batch recognition, not live partial dictation.
 
 DeepSeek read aloud uses the existing voice activity and audio-session owner. It converts a settled

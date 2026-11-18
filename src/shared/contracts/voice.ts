@@ -60,6 +60,8 @@ export type AudioTranscriptionProgress = { completedSeconds: number; totalSecond
 export type AudioTranscriptionOptions = VoiceRequestOptions & {
   /** Caller identity, such as the Agent tool call, for live progress presentation. */
   key?: string;
+  /** Reject execution if the engine advertised by the caller is no longer selected. */
+  expectedEngine?: VoiceEngineId;
   onProgress?: (progress: AudioTranscriptionProgress) => void;
 };
 export type AudioTranscriptionResult = { entry: FileEntry; durationSeconds: number };
@@ -133,6 +135,7 @@ export class VoiceError extends Error {
 export interface VoiceModule {
   readonly localModel: VoiceModelModule;
   getTranscriptionStatus(options?: VoiceRequestOptions): Promise<VoiceEngineStatus>;
+  getReadyTranscriptionEngine(options?: VoiceRequestOptions): Promise<VoiceEngineId | null>;
   /** Creates a managed text document; an explicitly selected cloud engine uploads audio windows. */
   transcribeAudio(
     input: AudioTranscriptionInput,

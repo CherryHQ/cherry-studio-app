@@ -92,8 +92,9 @@ export function createFileLibraryTools(
       displayName: 'Read library file',
       deferred: true,
       approval: 'auto',
-      description: `Read a file outside the workspace using file_entry_id from library_search_files. A successful read permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access. ${buildFileReadInstructions(parser, acceptsImages)}`,
+      description: `Read a file outside the workspace using file_entry_id from library_search_files. A successful read permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access. ${buildFileReadInstructions(readContent.documentParserMode, acceptsImages, readContent.ocrEngine)}`,
       inputSchema: toRuntimeInputSchema(libraryReadSchema),
+      executionSettingsKey: readContent.executionSettingsKey,
       async execute(call) {
         const parsed = libraryReadSchema.parse(call.input);
         const id = FileEntryIdSchema.parse(parsed.file_entry_id);

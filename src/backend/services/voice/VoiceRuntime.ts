@@ -124,8 +124,14 @@ export function createVoiceRuntime({
   async function resolve<T extends DictationEngine | SpeechEngine | TranscriptionEngine>(
     capability: VoiceCapability,
     signal: AbortSignal,
+    expectedEngine?: VoiceEngineId,
   ): Promise<T> {
     const effective = await effectiveEngine(capability, signal);
+    if (expectedEngine && effective?.id !== expectedEngine)
+      throw new VoiceError(
+        'failed',
+        'The transcription engine changed. Start a new turn to retry.',
+      );
     if (!effective && capability === 'dictation')
       throw new VoiceError('not-configured', 'Select a dictation engine first.');
     if (effective?.status === 'needs-service')
@@ -177,6 +183,11 @@ export function createVoiceRuntime({
         options,
         async (signal) => (await effectiveEngine('transcription', signal))?.status ?? 'unsupported',
       ),
+    getReadyTranscriptionEngine: (options) =>
+      run(options, async (signal) => {
+        const engine = await effectiveEngine('transcription', signal);
+        return engine?.status === 'ready' ? engine.id : null;
+      }),
     async transcribeAudio(input, options) {
       if (current && current.activity.kind !== 'speaking')
         throw new VoiceError('busy', 'Another voice operation is running.');
@@ -190,7 +201,7 @@ export function createVoiceRuntime({
         await activity.ready;
         activity.signal.throwIfAborted();
         const transcription = await track(
-          resolve<TranscriptionEngine>('transcription', activity.signal),
+          resolve<TranscriptionEngine>('transcription', activity.signal, options?.expectedEngine),
         );
         activity.signal.throwIfAborted();
         return await track(

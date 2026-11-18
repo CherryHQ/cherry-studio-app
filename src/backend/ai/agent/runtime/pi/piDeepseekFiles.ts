@@ -1,10 +1,23 @@
 import type { Model, Api } from '@earendil-works/pi-ai';
 
-import { uploadDeepseekDocument } from '@/backend/services/file/deepseekFiles';
+import {
+  DeepseekDocumentUnavailableError,
+  uploadDeepseekDocument,
+} from '@/backend/services/file/deepseekFiles';
 import { createDeepseekConnection } from '@/backend/services/providers/deepseekConnection';
 
 import type { PiStreamFn } from './piModelTypes';
 import { PiProviderDocumentSchema, type PiProviderDocument } from './piProviderDocument';
+
+type PreparedDocument = NonNullable<PiProviderDocument['cherryProviderDocument']> & {
+  placeholder: string;
+  text: string;
+  isCurrent: boolean;
+};
+
+type WireDocument = { text: string; fileId?: string };
+
+const MAX_DOCUMENT_REFERENCES = 20;
 
 /** The actual serving key is bound per attempt, including Pi's credential failover. */
 export function withPiDeepseekFiles(
@@ -14,56 +27,88 @@ export function withPiDeepseekFiles(
   baseUrl: string,
 ): PiStreamFn {
   return async (model, context, options) => {
-    const documents = context.messages.flatMap((message) =>
-      message.role === 'user' && Array.isArray(message.content)
-        ? message.content.flatMap((part) => {
-            if (part.type !== 'text') return [];
-            const metadata = PiProviderDocumentSchema.safeParse(
-              (part as PiProviderDocument).cherryProviderDocument,
-            );
-            return metadata.success ? [{ marker: part.text, ...metadata.data }] : [];
-          })
-        : [],
-    );
-    if (!documents.length) return stream(model, context, options);
-    const onPayload = options?.onPayload;
-    return stream(model, context, {
-      ...options,
-      onPayload: async (payload, wire) => {
-        const sent = (await onPayload?.(payload, wire)) ?? payload;
-        const signal = options?.signal ?? new AbortController().signal;
-        const connection = createDeepseekConnection(providerId, baseUrl, apiKey);
-        const references = new Map<string, string>();
-        const unique = new Map(documents.map((document) => [document.fileEntryId, document]));
-        if (documents.length > 20)
-          throw new Error('DeepSeek accepts at most 20 document references.');
-        for (const document of documents) {
-          if (document.revision !== unique.get(document.fileEntryId)?.revision)
-            throw new Error(
-              'The document changed after it was attached. Attach its current version again.',
-            );
-        }
-        for (const [id, document] of unique) {
-          signal.throwIfAborted();
-          references.set(id, await uploadDeepseekDocument(connection, document, signal));
-        }
-        return applyFiles(
-          sent,
-          wire,
-          documents.map((document) => ({
-            marker: document.marker,
-            id: references.get(document.fileEntryId)!,
-          })),
+    const current = context.messages.findLast((message) => message.role === 'user');
+    const documents: PreparedDocument[] = [];
+    let nonce: string | undefined;
+    const messages = context.messages.map((message) => {
+      if (message.role !== 'user' || !Array.isArray(message.content)) return message;
+      const content = message.content.map((part) => {
+        if (part.type !== 'text') return part;
+        const metadata = PiProviderDocumentSchema.safeParse(
+          (part as PiProviderDocument).cherryProviderDocument,
         );
-      },
+        if (!metadata.success) return part;
+        nonce ??= globalThis.crypto.randomUUID();
+        // A request-only marker identifies this occurrence, even when two revisions share text.
+        const placeholder = `[[cherry-document:${nonce}:${documents.length}]]`;
+        documents.push({
+          ...metadata.data,
+          placeholder,
+          text: part.text,
+          isCurrent: message === current,
+        });
+        return { ...part, text: placeholder };
+      });
+      return { ...message, content };
     });
+    if (nonce === undefined) return stream(model, context, options);
+    const requestNonce = nonce;
+    const onPayload = options?.onPayload;
+    return stream(
+      model,
+      { ...context, messages },
+      {
+        ...options,
+        onPayload: async (payload, wire) => {
+          const sent = (await onPayload?.(payload, wire)) ?? payload;
+          const signal = options?.signal ?? new AbortController().signal;
+          const connection = createDeepseekConnection(providerId, baseUrl, apiKey);
+          const references = new Map<string, string | null>();
+          const wireDocuments = new Map<string, WireDocument>();
+          let referenceCount = 0;
+          for (const document of documents) {
+            signal.throwIfAborted();
+            const key = JSON.stringify([
+              document.fileEntryId,
+              document.revision,
+              document.mediaType,
+            ]);
+            let fileId = references.get(key);
+            if (fileId === undefined) {
+              try {
+                fileId = await uploadDeepseekDocument(connection, document, signal);
+              } catch (error) {
+                signal.throwIfAborted();
+                if (!(error instanceof DeepseekDocumentUnavailableError)) throw error;
+                fileId = null;
+              }
+              references.set(key, fileId);
+            }
+            if (fileId === null) {
+              if (document.isCurrent) throw new DeepseekDocumentUnavailableError();
+              wireDocuments.set(document.placeholder, {
+                text: `Historical document ${document.fileEntryId} is no longer available in its attached version. Ask the user to attach it again if needed.`,
+              });
+            } else {
+              if (++referenceCount > MAX_DOCUMENT_REFERENCES)
+                throw new Error(
+                  `DeepSeek accepts at most ${MAX_DOCUMENT_REFERENCES} document references.`,
+                );
+              wireDocuments.set(document.placeholder, { text: document.text, fileId });
+            }
+          }
+          return applyFiles(sent, wire, wireDocuments, requestNonce);
+        },
+      },
+    );
   };
 }
 
 function applyFiles(
   payload: unknown,
   model: Model<Api>,
-  documents: { marker: string; id: string }[],
+  documents: ReadonlyMap<string, WireDocument>,
+  nonce: string,
 ): unknown {
   if (!payload || typeof payload !== 'object') return payload;
   const body = payload as Record<string, unknown>;
@@ -71,37 +116,20 @@ function applyFiles(
   const key = responses ? 'input' : 'messages';
   if (!Array.isArray(body[key])) return payload;
   const textType = responses ? 'input_text' : 'text';
-  let references = 0;
-  const expand = (text: string): Record<string, unknown>[] => {
-    let parts: Record<string, unknown>[] = [{ type: textType, text }];
-    for (const document of new Map(
-      documents.map((document) => [document.marker, document]),
-    ).values()) {
-      parts = parts.flatMap((part) => {
-        if (
-          part.type !== textType ||
-          typeof part.text !== 'string' ||
-          !part.text.includes(document.marker)
-        )
-          return [part];
-        const segments = part.text.split(document.marker);
-        references += segments.length - 1;
-        if (references > 20) throw new Error('DeepSeek accepts at most 20 document references.');
-        return segments.flatMap<Record<string, unknown>>((text, index) => [
-          ...(index
-            ? [
-                model.api === 'anthropic-messages'
-                  ? { type: 'document', source: { type: 'file', file_id: document.id } }
-                  : { type: responses ? 'input_file' : 'file', file_id: document.id },
-                // Keep the Host's name, managed ID and trust label beside the native document.
-                { type: textType, text: document.marker },
-              ]
-            : []),
-          ...(text ? [{ type: textType, text }] : []),
-        ]);
-      });
-    }
-    return parts;
+  const placeholders = new RegExp(`(\\[\\[cherry-document:${nonce}:\\d+\\]\\])`);
+  const expand = (part: Record<string, unknown>, text: string) => {
+    const segments = text.split(placeholders);
+    if (segments.length === 1) return undefined;
+    return segments.flatMap<Record<string, unknown>>((segment) => {
+      if (!segment) return [];
+      const document = documents.get(segment);
+      if (!document?.fileId) return [{ ...part, text: document?.text ?? segment }];
+      const file =
+        model.api === 'anthropic-messages'
+          ? { type: 'document', source: { type: 'file', file_id: document.fileId } }
+          : { type: responses ? 'input_file' : 'file', file_id: document.fileId };
+      return [file, { ...part, text: document.text }];
+    });
   };
   return {
     ...body,
@@ -111,13 +139,13 @@ function applyFiles(
       if (message.role !== 'user') return value;
       const content =
         typeof message.content === 'string'
-          ? expand(message.content)
+          ? (expand({ type: textType }, message.content) ?? message.content)
           : Array.isArray(message.content)
             ? message.content.flatMap((value) => {
                 if (!value || typeof value !== 'object') return [value];
                 const part = value as Record<string, unknown>;
                 return part.type === textType && typeof part.text === 'string'
-                  ? expand(part.text)
+                  ? (expand(part, part.text) ?? [part])
                   : [part];
               })
             : message.content;

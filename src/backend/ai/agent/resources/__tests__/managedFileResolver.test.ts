@@ -93,7 +93,7 @@ describe('managedFileResolver', () => {
       async () => new Uint8Array(),
       readDocument,
     );
-    const pending = resolver.readDocumentText(file, controller.signal, 'deepseek');
+    const pending = resolver.readDocumentText(file, controller.signal, 'deepseek', 'local');
     controller.abort(new Error('cancelled'));
     await expect(pending).rejects.toThrow('cancelled');
     expect(readDocument).toHaveBeenCalledWith(
@@ -101,6 +101,7 @@ describe('managedFileResolver', () => {
       'application/pdf',
       controller.signal,
       'deepseek',
+      'local',
     );
     resolveRead({ text: 'late content', truncated: false });
   });

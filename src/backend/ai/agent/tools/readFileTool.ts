@@ -11,7 +11,7 @@
 import * as z from 'zod';
 
 import type { ParsedAnydocDocument, ParsedDocument } from '@/backend/services/file/documentParser';
-import { linkFileOcr } from '@/backend/services/file/fileTextExtraction';
+import { getFileOcrEngine, linkFileOcr } from '@/backend/services/file/fileTextExtraction';
 import {
   readAttachmentContent,
   type ReadAttachmentContent,
@@ -23,6 +23,7 @@ import {
   FileAttachmentError,
   type DocumentParserMode,
   type FileAttachmentIssue,
+  type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -128,24 +129,36 @@ const NEEDS_VISION =
 const MODEL_FACING_READ_ERRORS: Partial<Record<FileAttachmentIssue['code'], string>> = {
   'document-empty':
     'The document has no readable text after extraction and any applicable PDF text recognition. Ask the user for a clearer scan or to attach the relevant pages as images.',
-  'image-ocr-empty': `On-device OCR found no readable text in this image. ${NEEDS_VISION}`,
-  'image-ocr-failed': `On-device OCR could not read this image; do not retry unchanged. ${NEEDS_VISION}`,
-  'image-ocr-unsupported': `On-device OCR does not support the current app language. ${NEEDS_VISION}`,
+  'image-ocr-empty': `OCR found no readable text in this image. ${NEEDS_VISION}`,
+  'image-ocr-failed': `OCR could not read this image. ${NEEDS_VISION}`,
+  'image-ocr-unsupported': `OCR is unavailable for this image. ${NEEDS_VISION}`,
 };
+
+const ANYDOC_READ_INSTRUCTIONS =
+  'AnyDoc documents return original IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters. Concatenate text windows in order to recover JSON.stringify(original IR); continue with nextOffset until complete. Unknown fields and styles are retained. Embedded assets are references only.';
 
 /** Each deferred reader must describe its media rules without loading another tool. */
 export function buildFileReadInstructions(
   documentParserMode: DocumentParserMode,
   acceptsImages: boolean,
+  ocrEngine: OcrEngine,
 ): string {
-  return `This turn uses the ${documentParserMode} document parser. ${
-    documentParserMode === 'anydoc'
-      ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
-      : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-  } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. Use either start_line/limit or offset/max_characters; never combine the two groups. sourceTruncated means the extractor reached its own limit. ${
+  const documents =
+    documentParserMode === 'deepseek'
+      ? `PDF, DOC, DOCX, PPT, and PPTX are sent to DeepSeek OCR and return extracted text. Other supported documents use AnyDoc. ${ANYDOC_READ_INSTRUCTIONS}`
+      : documentParserMode === 'anydoc'
+        ? `Office, ODF, RTF, and EPUB use AnyDoc. ${ANYDOC_READ_INSTRUCTIONS}`
+        : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.';
+  const pdf =
+    documentParserMode !== 'deepseek' && ocrEngine === 'deepseek'
+      ? ' PDF text reads send the file to DeepSeek OCR.'
+      : '';
+  return `This turn uses the ${documentParserMode} document parser. ${documents}${pdf} Extracted and ordinary text support either start_line and limit (one-based) or offset and max_characters (Unicode code points). Never combine the two groups. Continue with startLine + lineCount for lines or nextOffset for offsets. A line larger than one window is flagged with lineTruncated; continue with offset set to nextOffset. sourceTruncated means the extractor reached its own limit. ${
     acceptsImages
       ? 'PNG, JPEG, WebP and GIF reads return bounded image pixels; omit paging parameters. Code Mode receives image metadata only: use this tool directly, outside Code Mode, to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.'
-      : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same text paging parameters. No image pixels are sent; visual details and layout may be missing.'
+      : ocrEngine === 'deepseek'
+        ? 'PNG, JPEG, WebP and GIF reads send the image to DeepSeek OCR and return text only, with the same paging parameters. The chat model receives no image pixels.'
+        : 'PNG, JPEG, WebP and GIF reads return on-device OCR text from the first frame, with the same paging parameters. The chat model receives no image pixels.'
   }`;
 }
 
@@ -153,6 +166,7 @@ export function buildFileReadInstructions(
 export function createReadFileContentReader(
   files: ReadFileFiles,
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+  ocrEngine = getFileOcrEngine(),
 ) {
   let lastDocument: { key: string; content: ReadContent } | undefined;
   const pending = new Map<
@@ -166,8 +180,8 @@ export function createReadFileContentReader(
       {
         readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
         readDocumentText: (file, readSignal, mode) =>
-          files.readDocumentText(file, readSignal, mode),
-        readImageText: (file, readSignal) => files.readImageText(file, readSignal),
+          files.readDocumentText(file, readSignal, mode, ocrEngine),
+        readImageText: (file, readSignal) => files.readImageText(file, readSignal, ocrEngine),
       },
       signal,
       READ_FILE_MAX_SOURCE_BYTES,
@@ -194,7 +208,7 @@ export function createReadFileContentReader(
     };
   };
 
-  return async (
+  const read = async (
     source: ManagedFileFact,
     signal: AbortSignal,
     toolCallId: string,
@@ -251,6 +265,12 @@ export function createReadFileContentReader(
       unlinkOcr();
     }
   };
+  return {
+    read,
+    documentParserMode,
+    ocrEngine,
+    executionSettingsKey: JSON.stringify([documentParserMode, ocrEngine]),
+  };
 }
 
 export function createReadFileTool(
@@ -266,8 +286,9 @@ export function createReadFileTool(
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
     deferred: true,
-    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. ${buildFileReadInstructions(documentParserMode, acceptsImages)}`,
+    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. ${buildFileReadInstructions(readContent.documentParserMode, acceptsImages, readContent.ocrEngine)}`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
+    executionSettingsKey: readContent.executionSettingsKey,
     approval: 'auto',
     async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
       const parsed = readFileInputSchema.safeParse(input);
@@ -344,7 +365,7 @@ export function createReadFileTool(
       let unrecognizedPages: number[] | undefined;
       let parser: 'builtin' | 'native-pdf' | 'native-image-ocr' | 'deepseek-ocr' | undefined;
       try {
-        const content = await readContent(source, signal, toolCallId);
+        const content = await readContent.read(source, signal, toolCallId);
         signal.throwIfAborted();
         if (content.kind === 'document') {
           if (hasLineParameters)

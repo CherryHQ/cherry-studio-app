@@ -6,6 +6,7 @@ import { MAX_PDF_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 import type { ManagedFileFact, TurnFileScope } from '../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
+  createReadFileContentReader,
   createReadFileTool,
   lineWindow,
   characterWindow,
@@ -53,6 +54,52 @@ test('every PDF text window retains unrecognized page metadata, including window
   const tool = createReadFileTool(files, IN_SCOPE);
   const result = await execute(tool, { file_entry_id: FILE_ID, start_line: 2, limit: 1 });
   expect(result.value).toMatchObject({ text: 'Body', unrecognizedPages: [1, 3] });
+});
+
+test('describes and uses the same DeepSeek OCR engine for a PDF and a text-only image read', async () => {
+  const files = createFiles('file');
+  const readers = createReadFileContentReader(files, 'builtin', 'deepseek');
+  const tool = createReadFileTool(files, IN_SCOPE, 'builtin', undefined, false, readers);
+  expect(tool.description).toContain('PDF text reads send the file to DeepSeek OCR');
+  expect(tool.description).toContain('send the image to DeepSeek OCR');
+  const recognized = { text: 'Cloud text', truncated: false, parser: 'deepseek-ocr' as const };
+  files.readDocumentText.mockResolvedValue(recognized);
+  files.readImageText.mockResolvedValue(recognized);
+  for (const [mediaType, name] of [
+    ['application/pdf', 'scan.pdf'],
+    ['image/png', 'scan.png'],
+  ] as const) {
+    files.resolveAvailable.mockResolvedValue(
+      new Map([
+        [
+          FILE_ID,
+          {
+            fileEntryId: FILE_ID,
+            name,
+            mediaType,
+            size: 8,
+            revision: mediaType === 'image/png' ? 2 : 1,
+          },
+        ],
+      ]),
+    );
+    expect((await execute(tool, { file_entry_id: FILE_ID })).value).toMatchObject({
+      status: 'ok',
+      parser: 'deepseek-ocr',
+      text: 'Cloud text',
+    });
+  }
+  expect(files.readDocumentText).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.any(AbortSignal),
+    'builtin',
+    'deepseek',
+  );
+  expect(files.readImageText).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.any(AbortSignal),
+    'deepseek',
+  );
 });
 
 describe('AnyDoc raw JSON reads', () => {

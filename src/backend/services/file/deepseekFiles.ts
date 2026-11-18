@@ -23,12 +23,29 @@ const cacheSchema = z.object({ id: remoteSchema.shape.id, expiresAt: z.number().
 const FILE_TTL_SECONDS = 24 * 60 * 60;
 const logger = loggerService.withContext('DeepseekFiles');
 
+export class DeepseekDocumentUnavailableError extends Error {
+  constructor() {
+    super('The attached document version is unavailable. Attach its current version again.');
+    this.name = 'DeepseekDocumentUnavailableError';
+  }
+}
+
 export function isDeepseekDocument(mediaType: string): boolean {
   const type = documentFileTypeFromMediaType(mediaType);
   return (
     type !== undefined &&
     ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xlsx', 'xls', 'epub'].includes(type)
   );
+}
+
+async function hashDocumentSource(uri: string, signal: AbortSignal): Promise<string> {
+  try {
+    return await hashLocalFile(uri, signal);
+  } catch (error) {
+    signal.throwIfAborted();
+    if (!new File(uri).exists) throw new DeepseekDocumentUnavailableError();
+    throw error;
+  }
 }
 
 /** Only the Pi adapter passes references prepared from the Host's granted attachment facts. */
@@ -45,7 +62,7 @@ export async function uploadDeepseekDocument(
     source.entry.mediaType !== input.mediaType ||
     (input.revision !== undefined && source.entry.updatedAt !== input.revision)
   )
-    throw new DeepseekServiceError('failed');
+    throw new DeepseekDocumentUnavailableError();
   if (!isDeepseekDocument(input.mediaType)) throw new DeepseekServiceError('invalid-response');
   const type = documentFileTypeFromMediaType(input.mediaType);
   const purpose =
@@ -53,15 +70,16 @@ export async function uploadDeepseekDocument(
   const maxBytes = purpose === 'user_data' ? 32 * 1024 * 1024 : 100 * 1024 * 1024;
   if (source.entry.size > maxBytes || new File(source.uri).size > maxBytes)
     throw new DeepseekServiceError('limit');
-  const hash = await hashLocalFile(source.uri, signal);
+  const hash = await hashDocumentSource(source.uri, signal);
   const requireUnchangedSource = async () => {
     const current = await fileContent.resolve(id);
+    signal.throwIfAborted();
     if (
       !current ||
       current.entry.updatedAt !== source.entry.updatedAt ||
-      (await hashLocalFile(current.uri, signal)) !== hash
+      (await hashDocumentSource(current.uri, signal)) !== hash
     )
-      throw new DeepseekServiceError('failed');
+      throw new DeepseekDocumentUnavailableError();
     signal.throwIfAborted();
   };
   const directory = new Directory(Paths.cache, 'DeepseekFiles');
@@ -100,13 +118,23 @@ export async function uploadDeepseekDocument(
       if (!isHttpError(error) || error.status !== 404) throw error;
     }
   }
-  const snapshot = await fileContent.prepareUploadSource(id);
+  const snapshot = await fileContent.prepareUploadSource(id).catch(async (error) => {
+    signal.throwIfAborted();
+    await requireUnchangedSource();
+    throw error;
+  });
   try {
     signal.throwIfAborted();
     const file = new File(snapshot.uri);
     if (file.size > maxBytes) throw new DeepseekServiceError('limit');
-    if ((await hashLocalFile(snapshot.uri, signal)) !== hash)
+    const snapshotHash = await hashLocalFile(snapshot.uri, signal).catch(async (error) => {
+      await requireUnchangedSource();
+      throw error;
+    });
+    if (snapshotHash !== hash) {
+      await requireUnchangedSource();
       throw new DeepseekServiceError('failed');
+    }
     const uploaded = await requestDeepseekJson(
       connection,
       '/files',
