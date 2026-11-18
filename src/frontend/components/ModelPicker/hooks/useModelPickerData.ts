@@ -29,14 +29,25 @@ export function useModelPickerData({
   cloudUse = 'agent',
 }: UseModelPickerDataOptions) {
   const { state: cloud } = useCloud();
-  const { isLoading: isModelsLoading, models } = useModels({
+  const {
+    isLoading: isModelsLoading,
+    models,
+    modelsQuery,
+    refetch: refetchModels,
+  } = useModels({
     enabled: true,
     isSystemSupported: true,
     providerId,
   });
-  const { isLoading: isProvidersLoading, providers: enabledProviders } = useProviders({
-    enabled: true,
-  });
+  const {
+    isLoading: isProvidersLoading,
+    providers: enabledProviders,
+    providersQuery,
+    refetch: refetchProviders,
+  } = useProviders({ enabled: true });
+  const error = modelsQuery.error ?? providersQuery.error;
+  const hasLoadedCatalog =
+    !error && modelsQuery.data !== undefined && providersQuery.data !== undefined;
   const providers = useMemo(
     () =>
       providerId
@@ -70,6 +81,10 @@ export function useModelPickerData({
     (modelId: string | null) => getModelPickerModelItem(modelId, { modelType, models, providers }),
     [modelType, models, providers],
   );
+  const refresh = useCallback(
+    () => Promise.all([refetchModels(), refetchProviders()]),
+    [refetchModels, refetchProviders],
+  );
 
   // Memoized so consumers can key their own memos/effects on the returned object.
   // Every field here is itself reference-stable (memo, useCallback, react-query
@@ -79,13 +94,27 @@ export function useModelPickerData({
   // defeated this memo.
   return useMemo(
     () => ({
+      error,
       groups,
+      hasLoadedCatalog,
       isLoading: isModelsLoading || isProvidersLoading,
       modelItems,
       models,
       providers,
       getModelItem,
+      refresh,
     }),
-    [getModelItem, groups, isModelsLoading, isProvidersLoading, modelItems, models, providers],
+    [
+      error,
+      getModelItem,
+      groups,
+      hasLoadedCatalog,
+      isModelsLoading,
+      isProvidersLoading,
+      modelItems,
+      models,
+      providers,
+      refresh,
+    ],
   );
 }

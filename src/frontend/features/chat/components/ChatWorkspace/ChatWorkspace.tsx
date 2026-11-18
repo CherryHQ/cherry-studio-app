@@ -21,7 +21,7 @@ import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
 import { ChatComposerClearance } from './components/ChatComposerClearance';
-import { ChatDraftState } from './components/ChatDraftState';
+import { type ChatDraftModelSetup, ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
 import { ExpandedAnswerProvider } from './components/ExpandedAnswer';
@@ -49,6 +49,7 @@ type ChatWorkspaceProps = {
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
+  draftModelSetup?: ChatDraftModelSetup;
   /** Copied message inside this Session that closes the inherited prefix. */
   forkBoundaryMessageId?: string;
   /** Direct source Session named by the fork-origin divider. */
@@ -82,6 +83,7 @@ export function ChatWorkspace({
   assistantEmoji,
   assistantName,
   contentBottomInset,
+  draftModelSetup,
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
@@ -254,6 +256,7 @@ export function ChatWorkspace({
         assistantEmoji={assistantEmoji}
         assistantName={assistantName}
         contentBottomInset={contentBottomInset}
+        modelSetup={draftModelSetup}
       />
     );
   }

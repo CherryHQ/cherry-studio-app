@@ -87,6 +87,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Model selection and chat capability filtering | `ModelPickerDrawer` in `src/frontend/components/ModelPicker`; use its existing `chat` variant for the filter menu and capability badges |
+| Cherry empty-state artwork | `EmptyIllustration` in `src/frontend/components/EmptyIllustration`. The caller confirms the empty state and passes the artwork to CherryUI `ContentState.Empty`. |
 | Provider selection | `ProviderPickerDrawer` in `src/frontend/components/ProviderPicker`; caller-owned candidates/search, matching model-picker sheet and row visuals |
 | Outgoing sharing, ordered previews and export lifetime | `src/frontend/appShell/sharing` and `src/frontend/features/sharing`; file delivery remains in `appShell/fileExport` |
 | Local whole-conversation Markdown data export | `useExportConversation` in `appShell/sharing`, over `ConversationCatalog.readTranscript`; `frontend/utils/chatExportCitations` adapts saved parts to shared citation semantics in `frontend/utils/messageCitations` |
