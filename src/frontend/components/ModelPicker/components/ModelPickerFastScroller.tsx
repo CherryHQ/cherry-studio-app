@@ -13,10 +13,10 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   FadeOut,
   ReduceMotion,
-  runOnJS,
   useAnimatedScrollHandler,
   useSharedValue,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 
@@ -30,6 +30,7 @@ import { ModelPickerProviderPreview } from './ModelPickerProviderPreview';
 const RAIL_INSET = 8;
 const NAVIGATION_ITEM_HEIGHT = 48;
 const MAXIMUM_PROVIDER_ICON_SIZE = 20;
+const LONG_PRESS_DURATION_MS = 500;
 const accessibilityActions = [{ name: 'increment' }, { name: 'decrement' }] as const;
 // Press feedback appears immediately; only release fades, with a reduced-motion fallback.
 const providerPreviewExit = FadeOut.duration(120).reduceMotion(ReduceMotion.System);
@@ -55,8 +56,8 @@ export function ModelPickerFastScroller({
   const scrollOffset = useSharedValue(0);
   const isDragging = useSharedValue(false);
   const isMomentum = useSharedValue(false);
-  const canNavigate = useSharedValue(false);
-  const gestureAnchorIndex = useSharedValue(-1);
+  const tapAnchorIndex = useSharedValue(-1);
+  const previewAnchorIndex = useSharedValue(-1);
   const [measuredRailHeight, setMeasuredRailHeight] = useState(0);
   const [pressPreview, setPressPreview] = useState<{ index: number; centerY: number } | null>(null);
   const [previewHeight, setPreviewHeight] = useState(0);
@@ -74,65 +75,99 @@ export function ModelPickerFastScroller({
     },
     [anchors, onNavigate],
   );
-  const showPreview = useCallback((index: number, centerY: number) => {
-    setPressPreview({ index, centerY });
-  }, []);
-  const clearPreview = useCallback(() => setPressPreview(null), []);
+  const clearPreview = useCallback(() => {
+    'worklet';
+    if (previewAnchorIndex.get() >= 0) {
+      previewAnchorIndex.set(-1);
+      scheduleOnRN(setPressPreview, null);
+    }
+  }, [previewAnchorIndex]);
   const scrollGesture = useMemo(() => Gesture.Native().disallowInterruption(true), []);
   const gesture = useMemo(() => {
-    // Retain the native press that excludes the sheet pan, while allowing the
-    // nested native scroller to handle movement. Only a completed tap navigates.
+    const updatePreviewAt = (y: number) => {
+      'worklet';
+      const offset = scrollOffset.get();
+      const index = modelPickerFastScrollIndexAtPosition(
+        y + offset,
+        contentHeight,
+        anchors.length,
+        RAIL_INSET,
+      );
+      if (index >= 0 && index !== previewAnchorIndex.get()) {
+        previewAnchorIndex.set(index);
+        scheduleOnRN(setPressPreview, {
+          index,
+          centerY: RAIL_INSET + (index + 0.5) * NAVIGATION_ITEM_HEIGHT - offset,
+        });
+      }
+      return index;
+    };
+
+    // Keep the press scoped to the rail when the sheet can also be dragged.
+    // Its lifetime also covers a held preview after the tap recognizer fails.
     const hold = Gesture.LongPress()
       .minDuration(0)
       .maxDistance(Number.MAX_SAFE_INTEGER)
       .shouldCancelWhenOutside(false)
       .cancelsTouchesInView(false)
-      .simultaneousWithExternalGesture(scrollGesture);
+      .simultaneousWithExternalGesture(scrollGesture)
+      .onFinalize(() => {
+        'worklet';
+        clearPreview();
+      });
 
     const tap = Gesture.Tap()
       .maxDuration(Number.MAX_SAFE_INTEGER)
       .simultaneousWithExternalGesture(scrollGesture)
       .onBegin((event) => {
         'worklet';
-        const offset = scrollOffset.get();
-        const index = modelPickerFastScrollIndexAtPosition(
-          event.y + offset,
-          contentHeight,
-          anchors.length,
-          RAIL_INSET,
-        );
-        gestureAnchorIndex.set(index);
-        canNavigate.set(!isMomentum.get());
-        if (index >= 0 && canNavigate.get()) {
-          runOnJS(showPreview)(index, RAIL_INSET + (index + 0.5) * NAVIGATION_ITEM_HEIGHT - offset);
-        }
+        tapAnchorIndex.set(isDragging.get() || isMomentum.get() ? -1 : updatePreviewAt(event.y));
       })
       .onEnd((_event, success) => {
         'worklet';
-        const index = gestureAnchorIndex.get();
-        if (success && canNavigate.get() && index >= 0) {
-          runOnJS(navigate)(index);
+        const index = tapAnchorIndex.get();
+        if (success && index >= 0) {
+          scheduleOnRN(navigate, index);
         }
-      })
-      .onFinalize(() => {
-        'worklet';
-        gestureAnchorIndex.set(-1);
-        canNavigate.set(false);
-        runOnJS(clearPreview)();
       });
 
-    return Gesture.Simultaneous(hold, tap);
+    // Movement before the hold scrolls the rail. Once held, movement previews
+    // the provider under the finger while the rail stays still.
+    const previewDrag = Gesture.Pan()
+      .activateAfterLongPress(LONG_PRESS_DURATION_MS)
+      .maxPointers(1)
+      .blocksExternalGesture(scrollGesture)
+      .onTouchesDown((_event, manager) => {
+        'worklet';
+        if (isDragging.get() || isMomentum.get()) {
+          manager.fail();
+        }
+      })
+      .onUpdate(({ y }) => {
+        'worklet';
+        if (previewAnchorIndex.get() < 0 || y < 0 || y >= measuredRailHeight) {
+          return;
+        }
+        const index = updatePreviewAt(y);
+        const tapIndex = tapAnchorIndex.get();
+        if (tapIndex >= 0 && index !== tapIndex) {
+          tapAnchorIndex.set(-1);
+        }
+      });
+
+    return Gesture.Simultaneous(hold, tap, previewDrag);
   }, [
     anchors.length,
-    canNavigate,
     clearPreview,
     contentHeight,
-    gestureAnchorIndex,
+    isDragging,
     isMomentum,
+    measuredRailHeight,
     navigate,
+    previewAnchorIndex,
     scrollGesture,
     scrollOffset,
-    showPreview,
+    tapAnchorIndex,
   ]);
   const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -140,8 +175,8 @@ export function ModelPickerFastScroller({
     },
     onBeginDrag: () => {
       isDragging.set(true);
-      canNavigate.set(false);
-      runOnJS(clearPreview)();
+      tapAnchorIndex.set(-1);
+      clearPreview();
     },
     onEndDrag: () => {
       isDragging.set(false);
@@ -162,7 +197,7 @@ export function ModelPickerFastScroller({
   useEffect(() => {
     if (
       measuredRailHeight <= 0 ||
-      gestureAnchorIndex.get() >= 0 ||
+      previewAnchorIndex.get() >= 0 ||
       isDragging.get() ||
       isMomentum.get()
     ) {
@@ -185,10 +220,10 @@ export function ModelPickerFastScroller({
   }, [
     activeIndex,
     contentHeight,
-    gestureAnchorIndex,
     isDragging,
     isMomentum,
     measuredRailHeight,
+    previewAnchorIndex,
     scrollOffset,
   ]);
   const handleAccessibilityAction = useCallback(

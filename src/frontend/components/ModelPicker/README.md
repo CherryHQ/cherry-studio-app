@@ -24,10 +24,11 @@ This module owns the model selection surface, model metadata UI, and model setti
   surface 152 points wide and at least 144 points tall, with a rounded 48-point provider avatar
   and a two-line name. It reuses provider identity and uploaded-avatar resolution. The preview
   remains next to the index and may temporarily cover list content or selection marks; it fades
-  out on release and respects reduced motion. A completed tap jumps to its group. Native
-  scrolling cancels the preview and navigation candidate, and a touch that stops momentum does
-  not navigate. The immediate native press excludes the sheet pan while recognizing simultaneously
-  with the navigation scroller; dragging the index scrolls its contents instead of the sheet.
+  out on release and respects reduced motion. After a long press, sliding across the visible
+  provider markers updates the preview and highlight. A completed tap jumps to its group. Moving
+  across providers during a held preview cancels that tap. Dragging before the long press scrolls
+  the index, clears the preview, and cancels the tap. A touch that stops momentum does not
+  navigate. The immediate native press keeps the interaction inside the provider index.
   The preview never intercepts touches. Scrolling the model list reveals its current provider in
   the index without interrupting a navigation drag or momentum scroll.
   Model names stay on one line with middle truncation, retaining their identifying prefix and

@@ -10,7 +10,6 @@ import { ModelPickerFastScroller } from '../ModelPickerFastScroller';
 type TapHandlers = {
   onBegin?: (event: { y: number }) => void;
   onEnd?: (event: object, success: boolean) => void;
-  onFinalize?: () => void;
 };
 type ScrollHandlers = {
   onScroll: (event: { contentOffset: { y: number } }) => void;
@@ -21,6 +20,8 @@ type ScrollHandlers = {
 };
 
 let mockTapHandlers: TapHandlers;
+let mockHoldHandlers: { onFinalize?: () => void };
+let mockPreviewDragHandlers: { onUpdate?: (event: { y: number }) => void };
 let mockScrollHandlers: ScrollHandlers;
 
 jest.mock('@/frontend/components/Avatar', () => ({ ProviderAvatar: () => null }));
@@ -43,7 +44,14 @@ jest.mock('react-native-gesture-handler', () => {
   return {
     Gesture: {
       Native: () => chain(),
-      LongPress: () => chain(),
+      LongPress: () => {
+        mockHoldHandlers = {};
+        return chain(mockHoldHandlers);
+      },
+      Pan: () => {
+        mockPreviewDragHandlers = {};
+        return chain(mockPreviewDragHandlers);
+      },
       Tap: () => {
         mockTapHandlers = {};
         return chain(mockTapHandlers);
@@ -53,6 +61,9 @@ jest.mock('react-native-gesture-handler', () => {
     GestureDetector: ({ children }: { children: ReactNode }) => children,
   };
 });
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args),
+}));
 jest.mock('react-native-reanimated', () => {
   const { useRef } = jest.requireActual('react');
   const { ScrollView, View } = jest.requireActual('react-native');
@@ -61,7 +72,6 @@ jest.mock('react-native-reanimated', () => {
     default: { ScrollView, View },
     FadeOut: { duration: () => ({ reduceMotion: () => undefined }) },
     ReduceMotion: { System: 'system' },
-    runOnJS: (callback: unknown) => callback,
     useSharedValue: (initial: unknown) => {
       const ref = useRef(initial);
       const shared = useRef({
@@ -96,8 +106,8 @@ describe('ModelPickerFastScroller interactions', () => {
   const beginTap = (y = 32) => act(() => mockTapHandlers.onBegin?.({ y }));
   const finishTap = (success = true) =>
     act(() => {
+      mockHoldHandlers.onFinalize?.();
       mockTapHandlers.onEnd?.({}, success);
-      mockTapHandlers.onFinalize?.();
     });
 
   beforeEach(() => {
@@ -111,6 +121,12 @@ describe('ModelPickerFastScroller interactions', () => {
           onNavigate={onNavigate}
         />,
       );
+    });
+    act(() => {
+      const rail = renderer.root.find(
+        (node) => node.type === View && node.props.testID === 'model-picker-fast-scroller',
+      );
+      rail.props.onLayout({ nativeEvent: { layout: { height: 200 } } });
     });
   });
   afterEach(() => act(() => renderer.unmount()));
@@ -131,6 +147,22 @@ describe('ModelPickerFastScroller interactions', () => {
     beginTap();
     finishTap();
     expect(onNavigate).toHaveBeenCalledWith(9);
+  });
+
+  test('previews providers as a held finger moves over the scrolled rail', () => {
+    act(() => mockScrollHandlers.onScroll({ contentOffset: { y: 432 } }));
+    beginTap();
+    expect(preview()[0]!.findByProps({ children: 'Provider 10' })).toBeDefined();
+
+    act(() => mockPreviewDragHandlers.onUpdate?.({ y: 80 }));
+    expect(preview()[0]!.findByProps({ children: 'Provider 11' })).toBeDefined();
+
+    act(() => mockPreviewDragHandlers.onUpdate?.({ y: 32 }));
+    expect(preview()[0]!.findByProps({ children: 'Provider 10' })).toBeDefined();
+
+    finishTap();
+    expect(preview()).toHaveLength(0);
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   test('scrolling cancels the preview and pending navigation without disabling the next tap', () => {
