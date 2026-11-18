@@ -159,6 +159,7 @@ export function createAgentImageGeneration(dependencies: {
                       ordinal: index + 1,
                     }),
                     provenance: 'generated',
+                    aiOperation: 'generate',
                     source: 'base64',
                   }),
                 );

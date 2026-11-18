@@ -35,6 +35,12 @@ jest.mock('expo-file-system', () => {
       mockFiles.add(this.uri);
       mockContents.set(this.uri, content);
     }
+    async copy(destination: Entry, options?: { overwrite?: boolean }) {
+      const content = mockContents.get(this.uri);
+      if (content === undefined) throw new Error('File does not exist');
+      if (destination.exists && !options?.overwrite) throw new Error('Destination already exists');
+      destination.writeSync(content);
+    }
     get size() {
       return new TextEncoder().encode(mockContents.get(this.uri) ?? '').byteLength;
     }
