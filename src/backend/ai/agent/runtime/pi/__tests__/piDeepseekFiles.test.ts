@@ -2,27 +2,18 @@ import type { Api, Message, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
-import {
-  DeepseekDocumentUnavailableError,
-  uploadDeepseekDocument,
-} from '@/backend/services/file/deepseekFiles';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import { withPiDeepseekFiles } from '../piDeepseekFiles';
+import { withPiDeepseekFiles, type PiDeepseekDocumentUpload } from '../piDeepseekFiles';
 import type { PiStreamFn } from '../piModelTypes';
 import type { PiProviderDocument } from '../piProviderDocument';
 
-jest.mock('@/backend/services/file/deepseekFiles', () => ({
-  DeepseekDocumentUnavailableError: class DeepseekDocumentUnavailableError extends Error {},
-  uploadDeepseekDocument: jest.fn(),
-}));
-jest.mock('@/backend/services/providers/deepseekConnection', () => ({
-  createDeepseekConnection: jest.fn(),
-}));
-
 const FILE_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
 const ATTACHMENT_TEXT = 'Managed PDF: report.pdf';
-const upload = jest.mocked(uploadDeepseekDocument);
+const upload = jest.fn<
+  ReturnType<PiDeepseekDocumentUpload>,
+  Parameters<PiDeepseekDocumentUpload>
+>();
 const model = {
   api: 'openai-completions',
   provider: 'deepseek',
@@ -55,12 +46,7 @@ async function request(messages: Message[]) {
     sent = await options?.onPayload?.(payload, wire);
     return new AssistantMessageEventStream();
   };
-  await withPiDeepseekFiles(
-    stream,
-    'deepseek',
-    'test-key',
-    'https://api.deepseek.test',
-  )(model, normalizeContext({ messages }));
+  await withPiDeepseekFiles(stream, upload)(model, normalizeContext({ messages }));
   return sent;
 }
 
@@ -69,7 +55,7 @@ beforeEach(() => {
 });
 
 test('continues a text turn when an older local document is unavailable', async () => {
-  upload.mockRejectedValue(new DeepseekDocumentUnavailableError());
+  upload.mockResolvedValue(null);
   const prompt = `What was the title? ${ATTACHMENT_TEXT}`;
   await expect(
     request([document(1), { role: 'user', content: prompt, timestamp: 2 }]),
@@ -85,10 +71,7 @@ test('continues a text turn when an older local document is unavailable', async 
 });
 
 test('sends the reattached revision without treating the old identical envelope as current', async () => {
-  upload.mockImplementation(async (_connection, input) => {
-    if (input.revision === 1) throw new DeepseekDocumentUnavailableError();
-    return 'file-current';
-  });
+  upload.mockImplementation(async (input) => (input.revision === 1 ? null : 'file-current'));
   await expect(request([document(1), document(2)])).resolves.toEqual({
     messages: [
       {
@@ -107,7 +90,7 @@ test('sends the reattached revision without treating the old identical envelope 
 });
 
 test('keeps the newest documents native and points older ones to read_file past the limit', async () => {
-  upload.mockImplementation(async (_connection, input) => `file-${input.revision}`);
+  upload.mockImplementation(async (input) => `file-${input.revision}`);
   const sent = (await request(Array.from({ length: 22 }, (_, index) => document(index + 1)))) as {
     messages: { content: { type: string; file_id?: string; text?: string }[] }[];
   };
@@ -122,9 +105,12 @@ test('keeps the newest documents native and points older ones to read_file past 
   expect(sent.messages[21]?.content[0]).toEqual({ type: 'file', file_id: 'file-22' });
 });
 
-test('rejects a missing current attachment and propagates transport failures', async () => {
-  upload.mockRejectedValueOnce(new DeepseekDocumentUnavailableError());
-  await expect(request([document(1)])).rejects.toBeInstanceOf(DeepseekDocumentUnavailableError);
+test('marks only the latest user message as current and propagates upload failures', async () => {
+  upload.mockResolvedValue('file-1');
+  await request([document(1), { role: 'user', content: 'Continue', timestamp: 2 }]);
+  expect(upload.mock.calls[0]?.[0].isCurrent).toBe(false);
+  await request([document(1)]);
+  expect(upload.mock.calls[1]?.[0].isCurrent).toBe(true);
   const transport = new Error('Provider unavailable');
   upload.mockRejectedValueOnce(transport);
   await expect(

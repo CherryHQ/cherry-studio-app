@@ -24,6 +24,11 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import {
+  DeepseekDocumentUnavailableError,
+  uploadDeepseekDocument,
+} from '@/backend/services/file/deepseekFiles';
+import { createDeepseekConnection } from '@/backend/services/providers/deepseekConnection';
 import { getProviderConfigurationIssue } from '@/backend/services/providers/providerConfiguration';
 import type { VertexAuthClient } from '@/backend/services/providers/vertex';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
@@ -369,7 +374,18 @@ export function createPiModelResolver(
             ? bearerKey
             : ''
           : (nativeKey ?? apiKey);
-        return withPiDeepseekFiles(stream, provider.id, servingKey, connection.baseUrl);
+        const serving = createDeepseekConnection(provider.id, connection.baseUrl, servingKey);
+        return withPiDeepseekFiles(stream, async (document, signal) => {
+          try {
+            return await uploadDeepseekDocument(serving, document, signal);
+          } catch (error) {
+            signal.throwIfAborted();
+            if (document.isCurrent || !(error instanceof DeepseekDocumentUnavailableError)) {
+              throw error;
+            }
+            return null;
+          }
+        });
       };
       const primaryStream = bindDocuments(
         await bindPiStream(adapter, streamBinding),

@@ -1,11 +1,5 @@
 import type { Model, Api } from '@earendil-works/pi-ai';
 
-import {
-  DeepseekDocumentUnavailableError,
-  uploadDeepseekDocument,
-} from '@/backend/services/file/deepseekFiles';
-import { createDeepseekConnection } from '@/backend/services/providers/deepseekConnection';
-
 import type { PiStreamFn } from './piModelTypes';
 import { PiProviderDocumentSchema, type PiProviderDocument } from './piProviderDocument';
 
@@ -19,12 +13,19 @@ type WireDocument = { text: string; fileId?: string };
 
 const MAX_DOCUMENT_REFERENCES = 20;
 
-/** The actual serving key is bound per attempt, including Pi's credential failover. */
+/**
+ * Returns the remote file id for a document, or `null` when a historical document's attached
+ * version is gone. It rejects when a current document is unavailable.
+ */
+export type PiDeepseekDocumentUpload = (
+  document: PreparedDocument,
+  signal: AbortSignal,
+) => Promise<string | null>;
+
+/** The Host binds `upload` per attempt, including Pi's credential failover. */
 export function withPiDeepseekFiles(
   stream: PiStreamFn,
-  providerId: string,
-  apiKey: string,
-  baseUrl: string,
+  upload: PiDeepseekDocumentUpload,
 ): PiStreamFn {
   return async (model, context, options) => {
     const current = context.messages.findLast((message) => message.role === 'user');
@@ -62,7 +63,6 @@ export function withPiDeepseekFiles(
         onPayload: async (payload, wire) => {
           const sent = (await onPayload?.(payload, wire)) ?? payload;
           const signal = options?.signal ?? new AbortController().signal;
-          const connection = createDeepseekConnection(providerId, baseUrl, apiKey);
           const references = new Map<string, string | null>();
           const wireDocuments = new Map<string, WireDocument>();
           let referenceCount = 0;
@@ -83,17 +83,10 @@ export function withPiDeepseekFiles(
             ]);
             let fileId = references.get(key);
             if (fileId === undefined) {
-              try {
-                fileId = await uploadDeepseekDocument(connection, document, signal);
-              } catch (error) {
-                signal.throwIfAborted();
-                if (!(error instanceof DeepseekDocumentUnavailableError)) throw error;
-                fileId = null;
-              }
+              fileId = await upload(document, signal);
               references.set(key, fileId);
             }
             if (fileId === null) {
-              if (document.isCurrent) throw new DeepseekDocumentUnavailableError();
               wireDocuments.set(document.placeholder, {
                 text: `Historical document ${document.fileEntryId} is no longer available in its attached version. Ask the user to attach it again if needed.`,
               });
