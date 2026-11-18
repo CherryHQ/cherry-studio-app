@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
+import { useTeamAgentState } from '@/frontend/appShell/conversation/team';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
@@ -18,8 +19,15 @@ type SidebarRecentsProps = {
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
+  const {
+    source,
+    remoteTarget,
+    teamTarget,
+    viewMode: mode,
+    setViewMode: setMode,
+  } = useChatSource();
   const { toast } = useToast();
+  const { state: team } = useTeamAgentState();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
   const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
@@ -90,6 +98,30 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
       <SidebarDesktopSource header={header} showLoading={showLoading}>
         {content}
       </SidebarDesktopSource>
+    );
+  if (source === 'team')
+    return (
+      <>
+        <View className="flex-row items-center justify-between gap-2 px-5 pt-2 pb-1">{header}</View>
+        <ConversationSourceBoundary
+          key={team.context?.key ?? 'signed-out'}
+          source={{
+            kind: 'team',
+            bindingId: teamTarget.bindingId ?? team.context?.bindingId ?? '',
+          }}
+          fallback={(state) => (
+            <View className="px-5 py-4">
+              {state === 'loading' ? (
+                <ContentState.Loading title={t('remoteAgent.loading')} />
+              ) : (
+                <ContentState.Error title={t('teamAgent.unavailable')} />
+              )}
+            </View>
+          )}
+        >
+          {content}
+        </ConversationSourceBoundary>
+      </>
     );
   return (
     <>

@@ -1,5 +1,6 @@
 import type { AgentProtocol } from '@/shared/contracts/agent';
 import type { RemoteAgentModule } from '@/shared/contracts/remoteAgent';
+import type { TeamAgentModule } from '@/shared/contracts/teamAgent';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type { ConversationSource, ConversationSourceRef } from './contracts';
@@ -7,11 +8,13 @@ import { ConversationReadError } from './conversationState';
 import { createLocalConversationSource } from './local/createLocalConversationSource';
 import type { ConversationReadMarks } from './local/localConversationPreview';
 import { createRemoteConversationSource } from './remote/createRemoteConversationSource';
+import { createTeamConversationSource } from './team/createTeamConversationSource';
 
 /** The only source-kind dispatch. Construction never opens a desktop channel. */
 export function createConversationSources(input: {
   agent: AgentProtocol;
   remoteAgent: RemoteAgentModule;
+  teamAgent: TeamAgentModule;
   api: ApiClient;
   readMarks?: ConversationReadMarks;
   onSessionChanged(sessionId: string): void;
@@ -25,6 +28,10 @@ export function createConversationSources(input: {
       if (lifetime.signal.aborted)
         throw new ConversationReadError({ code: 'retired', retry: 'none' });
       if (ref.kind === 'local') return { source: local, release() {} };
+      if (ref.kind === 'team') {
+        const source = createTeamConversationSource(ref.bindingId, input.teamAgent);
+        return { source, release: () => source.dispose() };
+      }
       const remote = await input.remoteAgent.open(
         ref.connectionId,
         AbortSignal.any([signal, lifetime.signal]),

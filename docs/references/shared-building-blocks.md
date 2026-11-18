@@ -112,6 +112,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Bounded plain-text reader blocks | `splitTextBlocks` from `@cherrystudio/ui/utils`, shared by message details and the file reader |
 | Anchored informational text | `InfoPopover` for a measured trigger, `AnchoredInfoPopover` for caller-measured text ranges, from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
+| Server-owned Team Agent sessions | `Backend.teamAgent`, `appShell/conversation/team` and the shared chat workspace; inject protocol/identity differences through backend Team adapters; see [Team Agent](./team-agent.md) |
 | Live audio-file transcription progress by file or tool call | `useAudioTranscriptionActivity` from `src/frontend/hooks/file`, over the current `VoiceModule` activity |
 | SSH authentication questions | App-shell `ssh/SshAuthenticationDialog`, observing the runtime queue through `useSshAuthentication`; answers bypass Agent and transcript state |
 | Account sign-in fields, submission and failure feedback | `AccountSignInFields`, `useAccountSignInForm` and `useAccountErrorReporter` in `frontend/appShell/account`; entries own continuation and navigation |

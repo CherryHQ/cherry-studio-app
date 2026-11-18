@@ -38,7 +38,10 @@ import type {
 } from '@/backend/services/desktopConnections';
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
-import type { EnterpriseSyncService } from '@/backend/services/enterprise';
+import {
+  createEnterpriseTeamAdapter,
+  type EnterpriseSyncService,
+} from '@/backend/services/enterprise';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import { resetFileTextCacheForRestore } from '@/backend/services/file/fileTextCache';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -51,6 +54,7 @@ import type { RegionService } from '@/backend/services/region';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import type { SshRuntime } from '@/backend/services/ssh';
+import { TeamAgentRuntime } from '@/backend/services/teamAgent';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -173,6 +177,7 @@ export function createAppBootstrapRuntime(
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const account = installationAccount();
+  const teamAgent = new TeamAgentRuntime([createEnterpriseTeamAdapter(account)]);
   const cloud = host.container.get<CloudRuntime>('CloudRuntime');
   cloud.configure(
     {
@@ -248,6 +253,7 @@ export function createAppBootstrapRuntime(
     region,
     trash,
     account,
+    teamAgent,
     cloud,
   });
   backup.configure(
@@ -319,6 +325,7 @@ export function createAppBootstrapRuntime(
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
         unsubscribeAccount();
+        teamAgent.dispose();
         await Promise.all([
           disposeSystemEntry(),
           disposeSkills(),

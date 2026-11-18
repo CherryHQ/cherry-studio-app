@@ -41,6 +41,8 @@ export type ComposerSendPayload = {
 };
 
 type ComposerSurfaceProps = PropsWithChildren<{
+  /** Remote services can require confirmed admission before text leaves the field. */
+  sendPolicy?: 'optimistic' | 'confirmed';
   /** Omit for the default: there is text, or there is an attachment. */
   canSend?: boolean;
   dismissKeyboardOnSend?: boolean;
@@ -58,14 +60,11 @@ type ComposerSurfaceProps = PropsWithChildren<{
 }>;
 
 /**
- * The composer root, and the one piece of it that is not pluggable. Everything
- * inside is the caller's to arrange, but sending is a protocol rather than a
- * part — trim, clear before awaiting, restore the draft *and* the attachments
- * if it rejects, explain the outcome, and log. Two screens assembling that
- * separately would be two implementations of it. Since this is what renders the surface, there is no
- * way to compose a composer that skips it.
+ * The composer root owns sending. Callers arrange the content while the surface applies the
+ * admission policy, preserves newer edits, and reports the outcome.
  */
 export function ComposerSurface({
+  sendPolicy = 'optimistic',
   canSend,
   children,
   dismissKeyboardOnSend = true,
@@ -91,6 +90,7 @@ export function ComposerSurface({
     clearAttachments,
     editDraft,
     endSendAttempt,
+    removeAttachment,
     setDraft,
   } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
@@ -123,22 +123,29 @@ export function ComposerSurface({
 
       const draftSnapshot = nativeDraft ?? draft;
 
-      setDraft('');
-      clearAttachments();
-      collapseEditor?.();
-      if (dismissKeyboardOnSend) {
-        // Native blur preserves the system keyboard transition that the dock follows.
-        dismissInput();
+      if (sendPolicy === 'optimistic') {
+        setDraft('');
+        clearAttachments();
+        collapseEditor?.();
+        if (dismissKeyboardOnSend) dismissInput();
       }
 
       try {
         await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
+        if (sendPolicy === 'confirmed') {
+          setDraft((current) => (current === draftSnapshot ? '' : current));
+          for (const attachment of attachmentSnapshot) removeAttachment(attachment.id);
+          collapseEditor?.();
+          if (dismissKeyboardOnSend) dismissInput();
+        }
       } catch (error) {
         reportSendError(error, attemptId);
-        setDraft((current) =>
-          current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
-        );
-        addAttachments([...attachmentSnapshot]);
+        if (sendPolicy === 'optimistic') {
+          setDraft((current) =>
+            current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
+          );
+          addAttachments([...attachmentSnapshot]);
+        }
       } finally {
         endSendAttempt();
       }
@@ -151,9 +158,11 @@ export function ComposerSurface({
       dismissKeyboardOnSend,
       endSendAttempt,
       reportSendError,
+      removeAttachment,
       labels?.sendFailed,
       addAttachments,
       setDraft,
+      sendPolicy,
       t,
       toast,
     ],

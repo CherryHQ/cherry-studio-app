@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import { application } from '@/backend/core/application/Application';
 import type { BackgroundActivityEnvironmentConfig } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { TeamAgentRuntime } from '@/backend/services/teamAgent';
 import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
@@ -35,6 +36,7 @@ const mockAccountState = { isEnterprise: true, needsSignIn: false };
 const mockAccountListeners = new Set<() => void>();
 const mockEnterpriseAccount = {
   kind: 'enterprise-account',
+  getEnterpriseContext: () => null,
   verify: jest.fn(async () => {}),
   admit: jest.fn(async () => {}),
   createEnterpriseSession: jest.fn(),
@@ -487,6 +489,7 @@ describe('createAppBootstrapRuntime', () => {
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       account: mockEnterpriseAccount,
+      teamAgent: expect.any(TeamAgentRuntime),
       cloud: mockCloud,
       languageServing: mockAgentRuntime,
       screenAwake: mockScreenAwake,

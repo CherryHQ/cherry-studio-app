@@ -21,7 +21,10 @@ export type AgentRef = Opaque<'conversation-agent'>;
 export type WorkspaceRef = Opaque<'conversation-workspace'>;
 export type CatalogCursor = Opaque<'conversation-catalog-cursor'>;
 
-export type ConversationSourceRef = { kind: 'local' } | { kind: 'desktop'; connectionId: string };
+export type ConversationSourceRef =
+  | { kind: 'local' }
+  | { kind: 'desktop'; connectionId: string }
+  | { kind: 'team'; bindingId: string };
 export type ConversationRef = { source: ConversationSourceRef; sessionId: string };
 export type Readable<T> = { getSnapshot(): T; subscribe(listener: () => void): () => void };
 export type ConversationFailure = {

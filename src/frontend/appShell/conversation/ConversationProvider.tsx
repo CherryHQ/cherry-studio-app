@@ -15,12 +15,14 @@ const ConversationContext = createContext<ReturnType<typeof createConversationSo
 export function ConversationProvider({ children }: PropsWithChildren) {
   const agent = useBackendModule('agent');
   const remoteAgent = useBackendModule('remoteAgent');
+  const teamAgent = useBackendModule('teamAgent');
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [sources] = useState(() =>
     createConversationSources({
       agent,
       remoteAgent,
+      teamAgent,
       api,
       readMarks: {
         get: (id) => cacheService.get(`chat.last_seen_turn.${id}`),
@@ -41,6 +43,21 @@ export function ConversationProvider({ children }: PropsWithChildren) {
     }),
   );
   useEffect(() => subscribeCatalogDirectoryChanges(api, queryClient), [api, queryClient]);
+  useEffect(() => {
+    let key = teamAgent.getState().context?.key;
+    return teamAgent.subscribe(() => {
+      const next = teamAgent.getState().context?.key;
+      if (key === next) return;
+      key = next;
+      const filters = {
+        predicate: (query: { queryKey: readonly unknown[] }) =>
+          query.queryKey[0] === 'conversation-catalog' &&
+          (query.queryKey[1] as { kind?: string })?.kind === 'team',
+      };
+      void queryClient.cancelQueries(filters);
+      queryClient.removeQueries(filters);
+    });
+  }, [teamAgent, queryClient]);
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;

@@ -22,8 +22,14 @@ import {
   type RemoteChatRouteParams,
   type RemoteChatTarget,
 } from './remoteChatRoute';
+import {
+  parseTeamChatRoute,
+  teamChatHref,
+  type TeamChatTarget,
+  type TeamChatRouteParams,
+} from './teamChatRoute';
 
-type ChatSource = 'local' | 'remote';
+type ChatSource = 'local' | 'remote' | 'team';
 type ChatSourceNavigation = {
   source: ChatSource;
   /** Whether a chat, rather than another page beside the sidebar, fills the content region. */
@@ -31,6 +37,8 @@ type ChatSourceNavigation = {
   /** The local chat on screen, or the last one shown while another page covers it. */
   localChat: ChatTarget | undefined;
   remoteTarget: RemoteChatTarget;
+  teamTarget: TeamChatTarget;
+  openTeam(target: TeamChatTarget): void;
   viewMode: 'sessions' | 'agents';
   setViewMode(mode: 'sessions' | 'agents'): Promise<void>;
   /** Opens the phone's own chats, or a paired desktop's when an id is given. */
@@ -48,8 +56,8 @@ const Context = createContext<ChatSourceNavigation | null>(null);
 export function ChatSourceProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useGlobalSearchParams<RemoteChatRouteParams>();
-  const isChatFocused = pathname === '/' || pathname === '/remote';
+  const params = useGlobalSearchParams<RemoteChatRouteParams & TeamChatRouteParams>();
+  const isChatFocused = pathname === '/' || pathname === '/remote' || pathname === '/team';
   const [coveredChat, setCoveredChat] = useState(() => ({
     params: isChatFocused ? params : {},
     pathname: isChatFocused ? pathname : '/',
@@ -57,7 +65,9 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   if (isChatFocused && (coveredChat.pathname !== pathname || coveredChat.params !== params))
     setCoveredChat({ params, pathname });
   const chat = isChatFocused ? { params, pathname } : coveredChat;
-  const source: ChatSource = chat.pathname === '/remote' ? 'remote' : 'local';
+  const source: ChatSource =
+    chat.pathname === '/team' ? 'team' : chat.pathname === '/remote' ? 'remote' : 'local';
+  const teamTarget = useMemo(() => parseTeamChatRoute(chat.params), [chat.params]);
   const remoteTarget = useMemo(() => parseRemoteChatRoute(chat.params), [chat.params]);
   const localRoute = useMemo(() => parseChatRoute(chat.params), [chat.params]);
   const localChat =
@@ -67,6 +77,22 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   const lastRemote = useRef<RemoteChatTarget | undefined>(undefined);
   const [localViewMode, setLocalViewMode] = usePreference('ui.sidebar.recent_view_mode');
   const [remoteViewMode, setRemoteViewMode] = useState<'sessions' | 'agents'>('agents');
+  const openTeam = useCallback(
+    (target: TeamChatTarget) => {
+      Keyboard.dismiss();
+      if (source === 'local' && localRoute.status === 'ready')
+        lastLocal.current = localRoute.target;
+      if (source === 'remote') lastRemote.current = remoteTarget;
+      if (pathname === '/team')
+        router.setParams({
+          bindingId: target.bindingId,
+          agentId: target.agentId,
+          sessionId: target.sessionId,
+        });
+      else router.replace(teamChatHref(target));
+    },
+    [source, localRoute, remoteTarget, pathname, router],
+  );
 
   const openRemote = useCallback(
     (target: RemoteChatTarget) => {
@@ -88,7 +114,7 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       if (!connectionId) {
         if (source === 'local') return;
         Keyboard.dismiss();
-        lastRemote.current = remoteTarget;
+        if (source === 'remote') lastRemote.current = remoteTarget;
         router.replace(lastLocal.current ? chatHref(lastLocal.current) : '/');
         return;
       }
@@ -132,6 +158,8 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       isChatFocused,
       localChat,
       remoteTarget,
+      teamTarget,
+      openTeam,
       selectDevice,
       openRemote,
       startRemoteChat,
@@ -143,6 +171,8 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       isChatFocused,
       localChat,
       remoteTarget,
+      teamTarget,
+      openTeam,
       selectDevice,
       openRemote,
       startRemoteChat,

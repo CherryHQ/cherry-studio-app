@@ -287,6 +287,7 @@ export class AccountRuntime implements AccountModule {
         // An in-flight rotation must finish before deletion, so it cannot restore signed-out tokens.
         this.isPrivateSessionClosed = true;
         this.credentialRevision++;
+        this.update({ isSignedIn: false });
         await this.privateRefresh?.catch(() => {});
         await this.options.credentials.delete(this.options.active.id);
         this.privateCredentials = undefined;
@@ -373,6 +374,26 @@ export class AccountRuntime implements AccountModule {
       reportRejected: () => {
         if (revision === this.sessionRevision) this.reportRejected();
       },
+    };
+  };
+
+  /** Backend-only Team context; token rotation keeps the current sign-in generation. */
+  readonly getEnterpriseContext = () => {
+    const { active } = this.options;
+    if (
+      !active.identity ||
+      !this.state.isSignedIn ||
+      this.state.isRestoringSession ||
+      this.state.needsSignIn ||
+      this.isPrivateSessionClosed ||
+      this.isCloudSessionClosing
+    )
+      return null;
+    return {
+      key: JSON.stringify([active.id, active.address, this.sessionRevision]),
+      profileId: active.id,
+      address: active.address,
+      name: this.state.organizationName,
     };
   };
 
@@ -619,6 +640,7 @@ export class AccountRuntime implements AccountModule {
       if (profile.id === this.options.active.id) {
         this.isPrivateSessionClosed = true;
         this.credentialRevision++;
+        this.update({ isSignedIn: false });
       }
       await this.privateRefresh?.catch(() => {});
       await this.options.credentials.write(profile.id, JSON.stringify(credentials));
