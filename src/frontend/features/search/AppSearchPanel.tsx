@@ -147,8 +147,8 @@ export function AppSearchPanel<TItem>({
               keyExtractor={listKeyExtractor}
               ListEmptyComponent={
                 query.trim() ? (
-                  <View className="px-6 py-12">
-                    <ContentState.Empty description={request.emptyText} />
+                  <View className={cn('px-6', request.emptyIcon ? 'py-6' : 'py-12')}>
+                    <ContentState.Empty description={request.emptyText} icon={request.emptyIcon} />
                   </View>
                 ) : null
               }

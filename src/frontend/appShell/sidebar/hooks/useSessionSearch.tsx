@@ -7,6 +7,7 @@ import { Text, View } from 'react-native';
 
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { type AppSearchRequest, useAppSearch } from '@/frontend/appShell/search';
+import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useApiClient } from '@/frontend/data';
 
 import { searchSessions, type SessionSearchResult } from './sessionSearch';
@@ -19,6 +20,7 @@ export function useSessionSearchRequest(): AppSearchRequest<SessionSearchResult>
   return useMemo(
     () => ({
       debounceMs: 250,
+      emptyIcon: <EmptyIllustration scene="search" size="section" />,
       emptyText: t('session.search.noResults'),
       getAccessibilityLabel: ({ item, kind }) =>
         kind === 'session'

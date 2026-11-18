@@ -93,6 +93,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('../../hooks/useModelPickerData', () => ({
   useModelPickerData: () => ({
     groups: mockGroups,
+    hasLoadedCatalog: true,
     isLoading: false,
   }),
 }));

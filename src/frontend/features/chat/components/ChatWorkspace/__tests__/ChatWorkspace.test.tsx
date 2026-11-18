@@ -123,6 +123,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
+      Empty: (props: object) => createElement('ContentState.Empty', props),
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,

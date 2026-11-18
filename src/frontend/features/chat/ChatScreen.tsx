@@ -15,6 +15,7 @@ import {
   type ChatRouteParamsInput,
   type ChatTarget,
   type ChatComposerHandoff,
+  chatReturnToHref,
   parseChatRoute,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
@@ -317,6 +318,15 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                           assistantName={agent.agent?.name}
                           isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
                           contentBottomInset={contentBottomInset}
+                          draftModelSetup={
+                            hasComposer && target.kind === 'draft' && agent.agent
+                              ? {
+                                  modelId: agent.agent.model,
+                                  modelType: agent.agent.mode === 'minimal' ? 'text' : 'all',
+                                  returnTo: chatReturnToHref(target),
+                                }
+                              : undefined
+                          }
                           forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
                           forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
                           keyboardOffset={keyboardOffset}
