@@ -707,7 +707,7 @@ export class PiWebResponse {
             if (!isSearchCall(item)) return [];
             const next = output
               .slice(index + 1)
-              .find((item) => !isSearchCall(item) && typeof item.id === 'string');
+              .find((item): boolean => typeof item.id === 'string' && !isSearchCall(item));
             return [
               {
                 ...(next ? { before: String(next.id) } : {}),

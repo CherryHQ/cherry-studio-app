@@ -155,7 +155,8 @@ describe('turn attachments', () => {
         mode,
         { providerId, modelId },
       );
-      expect(contents.get(FIRST_ID)?.attachmentReport?.mode).toBe(
+      const part = contents.get(FIRST_ID);
+      expect(part?.type === 'text-attachment' ? part.attachmentReport?.mode : undefined).toBe(
         native ? 'provider-document' : 'document-text',
       );
       expect(readDocumentText).toHaveBeenCalledTimes(native ? 0 : 1);

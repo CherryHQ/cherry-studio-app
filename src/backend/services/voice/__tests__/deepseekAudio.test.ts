@@ -29,7 +29,7 @@ function fixture(sampleRate: number, samples: number[]) {
       this.offset += result.length;
       return result;
     },
-    readBytes: jest.fn(async (length: number) => handle.readBytesSync(length)),
+    readBytes: jest.fn(async (length: number): Promise<Uint8Array> => handle.readBytesSync(length)),
     close: jest.fn(),
   };
   return { file: { open: () => handle } as unknown as File, handle };

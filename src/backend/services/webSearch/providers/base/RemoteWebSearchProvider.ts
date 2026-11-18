@@ -86,7 +86,6 @@ export class RemoteWebSearchProvider extends BaseWebSearchProvider {
               .value,
           }
         : this.credentials(capability));
-    options?.signal?.throwIfAborted();
     const common = {
       providerId: this.protocol.metadata.id,
       input,
