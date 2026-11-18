@@ -2,6 +2,7 @@ import { OptionPickerBottomSheet, Section, useToast } from '@cherrystudio/ui/com
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderCredentialsLink } from '@/frontend/components/ProviderCredentialsLink';
 import { usePreference } from '@/frontend/data/hooks';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 
@@ -22,6 +23,11 @@ export function DocumentParserSetting() {
       label: t('settings.documentParser.builtin'),
       description: t('settings.documentParser.builtinDescription'),
     },
+    {
+      value: 'deepseek' as const,
+      label: 'DeepSeek',
+      description: t('settings.documentParser.deepseekDescription'),
+    },
   ];
 
   const changeMode = (nextMode: DocumentParserMode) => {
@@ -38,13 +44,16 @@ export function DocumentParserSetting() {
         testID="settings-document-parser"
         value={t(`settings.documentParser.${mode}`)}
       />
+      {mode === 'deepseek' ? (
+        <ProviderCredentialsLink providerId="deepseek" providerName="DeepSeek" />
+      ) : null}
       <OptionPickerBottomSheet<DocumentParserMode>
         onClose={() => setIsPickerOpen(false)}
         onValueChange={changeMode}
         open={isPickerOpen}
         options={options}
         selectedValue={mode}
-        size="compact"
+        size="medium"
         testID="document-parser-picker"
         title={t('settings.documentParser.title')}
       />

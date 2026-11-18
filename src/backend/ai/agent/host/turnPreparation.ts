@@ -692,6 +692,7 @@ export async function prepareResolvedTurn(
     signal,
     modelPreflight,
     documentParserMode,
+    agent.model,
   );
 
   const userParts: AgentMessagePart[] = parts.map((part, index) => {

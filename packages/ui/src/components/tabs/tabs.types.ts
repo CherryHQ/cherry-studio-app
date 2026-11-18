@@ -32,6 +32,9 @@ export type TabsProps<TValue extends string> = {
   style?: StyleProp<ViewStyle>;
   testID?: string;
   value: TValue;
-  /** Omit for the existing platform control; explicit styles share one product rendering. */
-  variant?: 'segmented' | 'underline' | 'chips' | 'floating';
+  /**
+   * Omit for the existing platform control; explicit styles share one product rendering. `pill`
+   * is a page-level choice: plain labels, with a soft filled pill behind the selected one.
+   */
+  variant?: 'segmented' | 'underline' | 'chips' | 'floating' | 'pill';
 };

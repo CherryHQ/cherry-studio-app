@@ -1,37 +1,35 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
-import { Tabs } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-import type { SkillDiscoverySource } from './discover/skillDiscovery';
-import { SkillDiscoveryTab, useSkillDiscoverySearch } from './SkillDiscoveryTab';
 import { SkillLibraryTab, useSkillLibrarySearch } from './SkillLibraryTab';
 import { SkillPage } from './SkillPage';
 import { useStartSkillChat } from './useStartSkillChat';
 
-type SkillTab = 'library' | 'discover';
-
-/** Installed and discoverable skills share one page; only the content below the tabs changes. */
+/** Installed Skills are managed separately from marketplace discovery. */
 export function SkillsScreen() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SkillTab>('library');
-  const [source, setSource] = useState<SkillDiscoverySource>('cherryin');
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    agentId?: string | string[];
+    sessionId?: string | string[];
+  }>();
   const { isAvailable: canAddInChat, isOpening, open } = useStartSkillChat();
   const searchLibrary = useSkillLibrarySearch();
-  const searchDiscovery = useSkillDiscoverySearch(source);
 
   const headerProps: RouteHeaderProps = {
-    title: t('skills.title'),
+    title: t('skills.library'),
     rightActions: [
       {
-        accessibilityLabel: t(tab === 'library' ? 'skills.search' : 'skills.discover.search'),
+        accessibilityLabel: t('skills.search'),
         icon: SearchIcon,
         key: 'skill-search',
         nativeIcon: require('@/assets/header-toolbar/search.png'),
-        onPress: tab === 'library' ? searchLibrary : searchDiscovery,
+        onPress: searchLibrary,
         testID: 'skills-search',
         type: 'icon',
       },
@@ -65,19 +63,17 @@ export function SkillsScreen() {
 
   return (
     <SkillPage headerProps={headerProps} testID="skills-list">
-      <Tabs
-        items={[
-          { value: 'library', label: t('skills.library'), testID: 'skills-tab-library' },
-          { value: 'discover', label: t('skills.discover.tab'), testID: 'skills-tab-discover' },
-        ]}
-        onValueChange={setTab}
-        value={tab}
+      <SkillLibraryTab
+        onDiscover={() =>
+          router.navigate({
+            pathname: '/skills',
+            params: {
+              agentId: getSingleRouteParam(params.agentId),
+              sessionId: getSingleRouteParam(params.sessionId),
+            },
+          })
+        }
       />
-      {tab === 'library' ? (
-        <SkillLibraryTab onDiscover={() => setTab('discover')} />
-      ) : (
-        <SkillDiscoveryTab onSourceChange={setSource} source={source} />
-      )}
     </SkillPage>
   );
 }

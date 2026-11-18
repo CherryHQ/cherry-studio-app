@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { VoiceError, type VoiceModule } from '@/shared/contracts/voice';
+import { VoiceError, type VoiceEngineId, type VoiceModule } from '@/shared/contracts/voice';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
@@ -22,14 +22,19 @@ const inputSchema = z.strictObject({
 export function createTranscribeAudioTool(
   voice: Pick<VoiceModule, 'transcribeAudio'>,
   access: Pick<WorkspaceFileAccess, 'resolveRead' | 'folderId'>,
+  engine: VoiceEngineId,
 ): RuntimeTool {
+  const processing =
+    engine === 'deepseek'
+      ? 'Audio windows are sent to DeepSeek for cloud transcription.'
+      : 'The selected on-device engine transcribes the audio locally.';
   return {
     ref: { source: 'builtin', capabilityId: 'transcribe_audio' },
     providerName: 'transcribe_audio',
     displayName: 'Transcribe audio',
-    description:
-      'Transcribe an attached or workspace audio recording using the user-selected on-device engine (SenseVoice by default, or system offline recognition). No audio is uploaded. Accepts platform-decodable audio up to 100 MiB and two hours. Saves a text document in the current workspace (library root otherwise); use read_file on its returned fileEntryId to read the transcript. Recognition can contain errors and does not identify speakers.',
+    description: `Transcribe an attached or workspace audio recording. ${processing} Accepts platform-decodable audio up to 100 MiB and two hours. Saves a text document in the current workspace (library root otherwise). Use read_file on its returned fileEntryId to read the transcript. Recognition can contain errors and does not identify speakers.`,
     inputSchema: toRuntimeInputSchema(inputSchema),
+    executionSettingsKey: engine,
     approval: 'auto',
     async execute({ input, signal, toolCallId }): Promise<RuntimeToolResult> {
       const parsed = inputSchema.safeParse(input);
@@ -43,7 +48,7 @@ export function createTranscribeAudioTool(
       try {
         const { entry, durationSeconds } = await voice.transcribeAudio(
           { fileEntryId, folderId: access.folderId },
-          { signal, key: toolCallId },
+          { signal, key: toolCallId, expectedEngine: engine },
         );
         return {
           value: {

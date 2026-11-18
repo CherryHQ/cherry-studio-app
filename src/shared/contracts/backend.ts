@@ -1,5 +1,6 @@
 import type { AccountModule } from './account';
 import type { AgentProtocol } from './agent';
+import type { AgentTemplatesModule } from './agentTemplates';
 import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
@@ -35,6 +36,7 @@ export interface Backend {
   readonly deepseekImport: DeepseekImportModule;
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
+  readonly agentTemplates: AgentTemplatesModule;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly uuRemote: UuRemoteModule;

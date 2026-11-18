@@ -6,7 +6,10 @@ import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
-import { configureFileOcrLanguage } from '@/backend/services/file/fileTextExtraction';
+import {
+  configureFileOcrEngine,
+  configureFileOcrLanguage,
+} from '@/backend/services/file/fileTextExtraction';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -42,6 +45,7 @@ export function createBackendServices({
   webSearch,
 }: BackendInfrastructure) {
   const data = createDataServices({ cache, preference });
+  configureFileOcrEngine(() => preference.readCached('file.ocr.engine'));
   configureFileOcrLanguage(() =>
     resolveAppLanguage(
       preference.readCached('app.language'),

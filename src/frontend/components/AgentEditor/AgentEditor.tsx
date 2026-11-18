@@ -12,7 +12,15 @@ import { cn } from '@cherrystudio/ui/utils';
 import { loggerService } from '@logger';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { type ReactNode, useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -54,6 +62,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
+import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -81,12 +90,17 @@ type AgentEditorPresentation =
   | { presentation?: 'page'; onClose?: never }
   | { presentation: 'sheet'; onClose: () => void };
 
-type AgentEditorProps = AgentEditorPresentation & { agentId?: string; shouldStartChat?: boolean };
+type AgentEditorProps = AgentEditorPresentation & {
+  agentId?: string;
+  shouldStartChat?: boolean;
+  template?: { content: AgentTemplate; language: string };
+};
 
 /** Shared editing workflow for the management page and the current chat Agent. */
 export function AgentEditor({
   agentId,
   shouldStartChat = false,
+  template,
   ...presentation
 }: AgentEditorProps) {
   const { t } = useTranslation();
@@ -154,7 +168,7 @@ export function AgentEditor({
       // An organization Agent's fields, bindings and model pool follow its policy.
       <PolicyScope policy={agentPolicy(agent)}>
         <AgentEditForm
-          key={agentId ?? 'new'}
+          key={agentId ?? (template ? `${template.content.id}:${template.language}` : 'new')}
           agent={agent}
           agentId={agentId}
           hasServersError={Boolean(serversError)}
@@ -166,6 +180,7 @@ export function AgentEditor({
           shouldStartChat={shouldStartChat}
           presentation={presentation}
           skills={skills}
+          template={agentId ? undefined : template}
         />
       </PolicyScope>
     );
@@ -221,6 +236,7 @@ function AgentEditForm({
   shouldStartChat,
   skills,
   presentation,
+  template,
 }: {
   presentation: AgentEditorPresentation;
   agent: Agent | undefined;
@@ -233,6 +249,7 @@ function AgentEditForm({
   servers: readonly McpServer[];
   shouldStartChat: boolean;
   skills: readonly SkillListItem[];
+  template?: AgentEditorProps['template'];
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -252,14 +269,20 @@ function AgentEditForm({
     skillBindingUpdates,
   } = useAgentAutoSave(agentId, isFocused);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
-  const openProviderSetup = useOpenProviderSetup(
-    shouldStartChat ? '/agents/new?startChat=true' : undefined,
-  );
+  const createReturnTo = template
+    ? `/agents/new?startChat=true&templateId=${encodeURIComponent(template.content.id)}&templateLanguage=${encodeURIComponent(template.language)}`
+    : shouldStartChat
+      ? '/agents/new?startChat=true'
+      : undefined;
+  const openProviderSetup = useOpenProviderSetup(createReturnTo);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isModePickerOpen, setIsModePickerOpen] = useState(false);
   const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
-  const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
+  const [form, setForm] = useState<AgentFormState>(() =>
+    createAgentFormState(agent, template?.content),
+  );
+  const creating = useRef(false);
   const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
     createAgentToolBindingDraft(originalToolBindings),
   );
@@ -367,7 +390,7 @@ function AgentEditForm({
     [t, toast],
   );
   const handleSave = useCallback(async () => {
-    if (isEditing) return;
+    if (isEditing || creating.current) return;
 
     const dto = buildAgentDto(form, {
       inheritDefaultModel: !hasPickedModel,
@@ -380,9 +403,13 @@ function AgentEditForm({
 
     let savedAgentId: string;
 
+    creating.current = true;
     try {
-      savedAgentId = (await createAgent(dto.value)).id;
+      savedAgentId = (
+        await createAgent({ ...dto.value, ...(template ? { avatar: template.content.emoji } : {}) })
+      ).id;
     } catch {
+      creating.current = false;
       toast.show({ label: t('agent.toast.saveFailed'), variant: 'danger' });
       return;
     }
@@ -432,6 +459,7 @@ function AgentEditForm({
     t,
     toast,
     toolBindings,
+    template,
   ]);
   const confirmDelete = useCallback(
     (id: string) => {
@@ -462,10 +490,10 @@ function AgentEditForm({
       {
         paddingBottom:
           agentFormContentPadding +
-          (presentation.presentation === 'sheet' ? 0 : safeAreaInsets.bottom),
+          (presentation.presentation === 'sheet' || template ? 0 : safeAreaInsets.bottom),
       },
     ],
-    [presentation.presentation, safeAreaInsets.bottom],
+    [presentation.presentation, safeAreaInsets.bottom, template],
   );
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -529,7 +557,7 @@ function AgentEditForm({
                 field="avatar"
                 fallback={
                   <AgentAvatar
-                    avatar={agent?.avatar}
+                    avatar={agent?.avatar ?? template?.content.emoji}
                     name={form.name}
                     size={agentFormAvatarSize}
                     uri={form.avatarUri}
@@ -546,7 +574,7 @@ function AgentEditForm({
                   <View>
                     <AgentAvatar
                       accessibilityLabel={t('agent.form.setAvatar')}
-                      avatar={agent?.avatar}
+                      avatar={agent?.avatar ?? template?.content.emoji}
                       name={form.name}
                       size={agentFormAvatarSize}
                       uri={form.avatarUri}
@@ -713,6 +741,22 @@ function AgentEditForm({
             ) : null}
           </View>
         </ScrollView>
+        {template ? (
+          <View
+            className="border-t border-border-subtle bg-background px-4 pt-4"
+            style={{ paddingBottom: Math.max(safeAreaInsets.bottom, 16) }}
+          >
+            <Button
+              disabled={isSaving}
+              loading={isSaving}
+              onPress={() => void handleSave()}
+              size="footer"
+              testID="agent-create-and-chat"
+            >
+              {t('marketplace.templates.createAndChat')}
+            </Button>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
@@ -772,7 +816,7 @@ function AgentEditForm({
   return (
     <AgentEditorFrame
       presentation={presentation}
-      rightActions={isEditing ? undefined : saveActions}
+      rightActions={isEditing || template ? undefined : saveActions}
       title={title}
     >
       {content}

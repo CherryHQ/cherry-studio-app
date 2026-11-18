@@ -96,7 +96,7 @@ function SkillsSection({
           <Button
             onPress={() => {
               setIsAdding(false);
-              router.push({ pathname: '/skills', params: { agentId } });
+              router.push({ pathname: '/skills/library', params: { agentId } });
             }}
           >
             {t('agent.skills.manage')}

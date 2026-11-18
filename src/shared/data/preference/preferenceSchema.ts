@@ -14,6 +14,7 @@
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
+  type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import type { VoiceEngineId } from '@/shared/contracts/voice';
 import type {
@@ -90,6 +91,7 @@ export interface PreferenceSchema {
   'chat.web_search.model_tools_preferred': boolean;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
   'chat.input.enter_to_send': boolean;
+  'chat.deepseek.safety_check': boolean;
 
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
@@ -106,8 +108,10 @@ export interface PreferenceSchema {
   'feature.voice.transcription_language': LanguageVarious | null;
   /** Empty uses the system default voice for the app language. */
   'feature.voice.system_voice': string;
+  'feature.voice.deepseek_voice': 'stella' | 'tide';
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.ocr.engine': OcrEngine;
   'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
@@ -158,14 +162,17 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'chat.deepseek.safety_check': false,
   'feature.voice.dictation_engine': null,
   'feature.voice.dictation_language': null,
   'feature.voice.speech_engine': null,
   'feature.voice.system_voice': '',
+  'feature.voice.deepseek_voice': 'stella',
   'feature.voice.transcription_engine': 'sensevoice',
   'feature.voice.transcription_language': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.ocr.engine': 'local',
   'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,

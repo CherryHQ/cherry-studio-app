@@ -11,6 +11,7 @@ const mockSetDraft = jest.fn((next: string | ((current: string) => string)) => {
   mockDraft = typeof next === 'function' ? next(mockDraft) : next;
 });
 const mockStartDictation = jest.fn();
+const mockRouterPush = jest.fn();
 const mockDraftEditListeners = new Set<() => void>();
 const mockSubscribeDraftEdits = (listener: () => void) => {
   mockDraftEditListeners.add(listener);
@@ -27,6 +28,7 @@ jest.mock('expo-router', () => ({
     const focused = mockFocused;
     useEffect(() => (focused ? effect() : undefined), [effect, focused]);
   },
+  useRouter: () => ({ push: mockRouterPush }),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -236,5 +238,16 @@ describe('dictation into the composer draft', () => {
     expect(mockToast).not.toHaveBeenCalled();
     expect(mockDraft).toBe('Meeting notes:');
     expect(dictation.state).toBe('idle');
+  });
+
+  test('a missing cloud credential opens the DeepSeek model provider without a toast', async () => {
+    mockStartDictation.mockRejectedValueOnce(new VoiceError('service-not-configured', 'missing'));
+    await act(async () => dictation.start());
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/settings/provider/[providerId]',
+      params: { providerId: 'deepseek', providerName: 'DeepSeek' },
+    });
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockDraft).toBe('Meeting notes:');
   });
 });

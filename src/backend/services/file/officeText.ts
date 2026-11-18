@@ -23,6 +23,7 @@ const RELATIONSHIP_NAMESPACE =
 const NOTES_LAYOUT_PLACEHOLDERS = new Set(['sldNum', 'dt', 'hdr', 'ftr', 'sldImg']);
 
 export type ExtractedDocumentText = {
+  parser?: 'deepseek-ocr';
   text: string;
   truncated: boolean;
   unrecognizedPages?: number[];

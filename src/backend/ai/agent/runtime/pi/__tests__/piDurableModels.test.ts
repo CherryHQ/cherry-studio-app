@@ -77,6 +77,57 @@ function setup(
 }
 
 describe('Pi durable model bridge', () => {
+  test.each(['done', 'error'] as const)(
+    'clears DeepSeek refusal content before persisting a %s event',
+    async (terminal) => {
+      const model = { ...wire, id: 'deepseek-flash' };
+      const bridge = setup(undefined, preflight, model);
+      const resolved = await bridge.resolveModel();
+      bridge.resolveModel.mockResolvedValueOnce({
+        ...resolved,
+        deepseekSafetyCheck: true,
+        async streamFn(wire, _context, options) {
+          const payload = await options?.onPayload?.({ model: wire.id }, wire);
+          expect(payload).toMatchObject({ safety_check: { level: 'high' } });
+          const source = new AssistantMessageEventStream();
+          const partial: AssistantMessage = {
+            ...emptyAssistantMessage(wire),
+            content: [{ type: 'text', text: 'Already streamed' }],
+          };
+          source.push({ type: 'start', partial });
+          source.push({
+            type: 'text_delta',
+            contentIndex: 0,
+            delta: 'Already streamed',
+            partial,
+          });
+          await options?.onProviderStreamEvent?.(
+            { choices: [{ delta: {}, finish_reason: 'content_filter' }] },
+            wire,
+          );
+          if (terminal === 'done') source.push({ type: 'done', reason: 'stop', message: partial });
+          else
+            source.push({
+              type: 'error',
+              reason: 'error',
+              error: { ...partial, stopReason: 'error' },
+            });
+          source.end();
+          return source;
+        },
+      });
+      await bridge.registerModel(reference);
+      const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+        messages: [],
+      });
+      expect(result).toMatchObject({
+        stopReason: 'error',
+        rawStopReason: 'content_filter',
+        content: [],
+      });
+    },
+  );
+
   test.each([
     [1_048_576, undefined, undefined, 65_536],
     [1_048_576, 131_072, undefined, 131_072],

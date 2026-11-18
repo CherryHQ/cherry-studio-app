@@ -37,6 +37,30 @@ describe('createAgentFormState', () => {
       toolApprovalMode: 'auto',
     });
   });
+
+  it('copies template text once without importing model, mode or tool approval settings', () => {
+    const template = {
+      name: 'Product Manager',
+      prompt: 'Keep this exact text.\r\n\r\n## Instructions',
+    };
+    const form = createAgentFormState(undefined, template);
+    expect(form).toEqual({
+      ...baseForm,
+      instructions: template.prompt,
+      name: template.name,
+    });
+    form.name = 'My agent';
+    form.instructions = 'My instructions';
+    expect(template.name).toBe('Product Manager');
+    expect(template.prompt).toBe('Keep this exact text.\r\n\r\n## Instructions');
+  });
+
+  it('never replaces saved Agent content with a template', () => {
+    const agent = { name: 'Saved', instructions: 'Saved instructions' } as Agent;
+    expect(
+      createAgentFormState(agent, { name: 'Template', prompt: 'Template instructions' }),
+    ).toMatchObject({ name: 'Saved', instructions: 'Saved instructions' });
+  });
 });
 
 describe('buildAgentDto', () => {

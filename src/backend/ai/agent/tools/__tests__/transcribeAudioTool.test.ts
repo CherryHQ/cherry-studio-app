@@ -25,12 +25,16 @@ const execute = (tool: RuntimeTool) =>
 test('enforces the conversation or workspace scope before reading audio', async () => {
   const voice = { transcribeAudio: jest.fn() };
   const denied = new Error('Outside workspace');
-  const tool = createTranscribeAudioTool(voice, {
-    folderId: null,
-    resolveRead: async () => {
-      throw denied;
+  const tool = createTranscribeAudioTool(
+    voice,
+    {
+      folderId: null,
+      resolveRead: async () => {
+        throw denied;
+      },
     },
-  });
+    'sensevoice',
+  );
   await expect(execute(tool)).rejects.toBe(denied);
   expect(voice.transcribeAudio).not.toHaveBeenCalled();
 });
@@ -40,11 +44,16 @@ test('returns a managed artifact for read_file without returning audio or transc
     transcribeAudio: jest.fn(async () => ({ entry: transcript, durationSeconds: 60 })),
   };
   const folderId = '00000000-0000-7000-8000-000000000003';
-  const tool = createTranscribeAudioTool(voice, { folderId, resolveRead: async () => sourceId });
+  const tool = createTranscribeAudioTool(
+    voice,
+    { folderId, resolveRead: async () => sourceId },
+    'deepseek',
+  );
+  expect(tool.description).toContain('sent to DeepSeek');
   const result = await execute(tool);
   expect(voice.transcribeAudio).toHaveBeenCalledWith(
     { fileEntryId: sourceId, folderId },
-    { signal: expect.any(AbortSignal), key: 'call-1' },
+    { signal: expect.any(AbortSignal), key: 'call-1', expectedEngine: 'deepseek' },
   );
   expect(result).toEqual({
     value: {
@@ -73,6 +82,7 @@ test('reports an actionable offline-model failure to the model', async () => {
       },
     },
     { folderId: null, resolveRead: async () => sourceId },
+    'sensevoice',
   );
   await expect(execute(tool)).resolves.toMatchObject({
     value: { status: 'error', code: 'model-not-downloaded' },

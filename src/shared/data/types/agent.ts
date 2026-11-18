@@ -19,15 +19,22 @@ export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'auto';
 export const CHERRY_AGENT_AVATAR = '🍒';
 export const DEEPSEEK_AGENT_AVATAR = 'builtin:deepseek';
 
+/** Emoji content only; managed file references still require the avatar image workflow. */
+export const AgentEmojiAvatarSchema = z
+  .string()
+  .min(1)
+  .max(32)
+  .emoji()
+  .refine((value) => /[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(value));
+
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
-  /** Built-in avatar or a managed avatar file reference; null uses the name fallback. */
+  /** Emoji, bundled avatar or managed file reference. Null uses the name fallback. */
   avatar: z.string().nullable(),
   /**
-   * Read-time projection of `avatar` into a device-local image URI; null when
-   * a built-in avatar, unset, or when the file is gone. Absolute paths are never persisted — iOS
-   * relocates the app container — so this is rebuilt on every read.
+   * Device-local image URI resolved from a managed file reference on each read.
+   * It is null for emoji, bundled avatars, or missing files. The app container can move on iOS.
    */
   avatarUri: z.string().nullable(),
   createdAt: z.iso.datetime(),

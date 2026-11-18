@@ -3,8 +3,8 @@ import * as z from 'zod';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import {
   type Agent,
+  AgentEmojiAvatarSchema,
   AgentSchema,
-  CHERRY_AGENT_AVATAR,
   DEEPSEEK_AGENT_AVATAR,
 } from '@/shared/data/types/agent';
 
@@ -12,7 +12,7 @@ import { type OrderEndpoints } from './endpointHelpers';
 
 /**
  * Managed avatar references are written only by the image workflow.
- * Creation may select a built-in avatar without creating a file.
+ * Creation can select an emoji or bundled avatar without creating a file.
  */
 const AGENT_MUTABLE_FIELDS = {
   instructions: true,
@@ -25,7 +25,9 @@ const AGENT_MUTABLE_FIELDS = {
 export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
-  .extend({ avatar: z.enum([CHERRY_AGENT_AVATAR, DEEPSEEK_AGENT_AVATAR]).optional() })
+  .extend({
+    avatar: z.union([AgentEmojiAvatarSchema, z.literal(DEEPSEEK_AGENT_AVATAR)]).optional(),
+  })
   .strict();
 export type CreateAgentDto = z.infer<typeof CreateAgentSchema>;
 

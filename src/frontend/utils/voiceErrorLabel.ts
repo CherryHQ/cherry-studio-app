@@ -1,6 +1,7 @@
 import { VoiceError, type VoiceErrorCode } from '@/shared/contracts/voice';
 
 const VOICE_ERROR_KEYS = {
+  'service-not-configured': 'deepseek.setupRequired',
   unsupported: 'voice.error.unsupported',
   'not-configured': 'voice.error.notConfigured',
   'offline-recognition-unavailable': 'voice.error.offlineRecognitionUnavailable',
