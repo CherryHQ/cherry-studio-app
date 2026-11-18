@@ -219,7 +219,10 @@ export async function prepareTurn(
   if (!session) {
     fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
   }
-  const configuredAgent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
+  const configuredAgent = await raceAbort(
+    dependencies.agents.getAgent(session.agentId, parsed.modelId ?? session.model),
+    signal,
+  );
   if (!configuredAgent) {
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
   }
@@ -304,12 +307,16 @@ export async function prepareInitialTurn(
   scope: Pick<TurnScope, 'readOnlyTools'> = {},
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
-  const configuredAgent = await raceAbort(dependencies.agents.getAgent(parsed.agentId), signal);
+  const configuredAgent = await raceAbort(
+    dependencies.agents.getAgent(parsed.agentId, parsed.sessionModelId),
+    signal,
+  );
   if (!configuredAgent) {
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
   }
   const session = {
     agentId: parsed.agentId,
+    model: parsed.sessionModelId,
     name: '',
     workspaceFolderId: parsed.workspaceFolderId ?? null,
   };
@@ -345,7 +352,10 @@ export async function prepareDurableTurn(
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
   if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
-  const agent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
+  const agent = await raceAbort(
+    dependencies.agents.getAgent(session.agentId, parsed.modelId ?? session.model),
+    signal,
+  );
   if (!agent) fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
   return prepareResolvedTurn(
     dependencies,
@@ -368,7 +378,7 @@ export async function prepareDurableTurn(
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'name' | 'workspaceFolderId'>,
+  session: Pick<AgentSessionView, 'agentId' | 'model' | 'name' | 'workspaceFolderId'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -376,7 +386,10 @@ export async function prepareResolvedTurn(
   signal: AbortSignal,
   scope: TurnScope = {},
 ): Promise<TurnPlan> {
-  const agent = applyTurnOverrides(configuredAgent, parsed);
+  const agent = applyTurnOverrides(configuredAgent, {
+    modelId: parsed.modelId ?? session.model ?? undefined,
+    reasoningEffort: parsed.reasoningEffort,
+  });
   if (
     scope.readOnlyTools &&
     (parsed.imageGeneration || parsed.skillIds?.length || parsed.skillAction)

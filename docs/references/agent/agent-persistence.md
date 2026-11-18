@@ -244,6 +244,7 @@ listing/cascade and MCP server delete-time disabling.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v7 | |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
+| `model` | text | FK → `user_model.id` ON DELETE SET NULL | Session model override. Unset Sessions inherit the Agent's model. Forks copy the override. |
 | `name` | text | NOT NULL DEFAULT `''` | |
 | `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `workspaceFolderId` | text | FK → `file_folder.id` ON DELETE SET NULL | Optional shared library workspace; retained while trashed |

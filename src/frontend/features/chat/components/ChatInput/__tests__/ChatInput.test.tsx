@@ -64,7 +64,8 @@ jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () =>
 jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: () => ({ agent: { id: 'a', mode: 'standard' } }),
-  useAgentMutations: () => ({ updateAgent: mockNoop }),
+  useAgentSession: () => ({}),
+  useAgentSessionMutations: () => ({ updateAgentSession: mockNoop }),
 }));
 jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
@@ -111,8 +112,8 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
-jest.mock('../hooks/useChatInputAgentModelSelection', () => ({
-  useChatInputAgentModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
+jest.mock('../hooks/useChatInputSessionModelSelection', () => ({
+  useChatInputSessionModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
 }));
 jest.mock('../hooks/useChatInputMcpPrompts', () => ({ useChatInputMcpPrompts: () => [] }));
 jest.mock('../hooks/useChatInputReasoningEfforts', () => ({

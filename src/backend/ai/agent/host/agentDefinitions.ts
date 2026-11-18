@@ -27,14 +27,17 @@ export type AgentDefinition = {
 };
 
 export interface AgentDefinitionSource {
-  /** Returns null only for missing Agents; rejects unconfigured models with a protocol error. */
-  getAgent(agentId: string): Promise<AgentDefinition | null>;
+  /** The fallback lets a Session use its own model even when the Agent has no default. */
+  getAgent(
+    agentId: string,
+    fallbackModelId?: UniqueModelId | null,
+  ): Promise<AgentDefinition | null>;
 }
 
 /** Production source: Agent definitions live in the `agent` table (AgentService CRUD). */
 export function createAgentTableDefinitionSource(): AgentDefinitionSource {
   return {
-    async getAgent(agentId: string): Promise<AgentDefinition | null> {
+    async getAgent(agentId, fallbackModelId) {
       // Resolved per call so the source holds no reference to a replaced host
       // generation (same rule as the data-service singletons).
       const db = application.get('DbService').getDb();
@@ -46,14 +49,15 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
       if (!agent) {
         return null;
       }
-      if (!agent.model) {
+      const configuredModel = agent.model ?? fallbackModelId;
+      if (!configuredModel) {
         throw new AgentProtocolError({
           code: 'AGENT_MODEL_NOT_CONFIGURED',
           message: `Agent has no configured model: ${agentId}`,
           retryable: false,
         });
       }
-      const { providerId, modelId } = parseUniqueModelId(agent.model as UniqueModelId);
+      const { providerId, modelId } = parseUniqueModelId(configuredModel as UniqueModelId);
       return {
         id: agent.id,
         name: agent.name,

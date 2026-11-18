@@ -618,11 +618,13 @@ describe('SqliteAgentSessionStore conformance', () => {
         ...RESERVATION_FACTS,
         agentId,
         ...(withWorkspace ? { workspaceFolderId: folderId } : {}),
+        sessionModelId: MODEL_ID,
         userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
       });
 
       expect(reserved.session.id).toBe(ids.sessionId);
       expect(reserved.session.workspaceFolderId ?? null).toBe(withWorkspace ? folderId : null);
+      expect(reserved.session.model).toBe(MODEL_ID);
       expect(reserved.userMessage.id).toBe(ids.userMessageId);
       expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
       expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);

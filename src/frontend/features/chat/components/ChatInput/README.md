@@ -73,9 +73,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. The local chat tools
   sheet uses this replacement path; the effort overlay retains the existing keyboard context.
-- Picking a model updates the current Agent's `model`. Submission also snapshots the visible
-  model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
-  persisted serially and coalesced to the latest visible selection.
+- Single-model picks save the current Session's model. A draft saves its choice with the first
+  submission. A Session without a choice follows the Agent's default model.
+- Submissions capture the visible model even during a pending save. Session model writes run in
+  selection order across composer mounts. Parallel choices belong to the mounted composer and
+  do not replace the Session's single-model selection.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
   `xhigh` and `max` as distinct values. The frontend's persistent `chat.reasoning_efforts` cache
   remembers the last selection per Agent across new conversations and app restarts. It is

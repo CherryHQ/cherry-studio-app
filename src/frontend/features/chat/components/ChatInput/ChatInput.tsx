@@ -31,7 +31,7 @@ import {
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
 import { useBackendModule } from '@/frontend/data';
-import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { useAgentApiById, useAgentSession, useAgentSessionMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { AgentProtocolError } from '@/shared/contracts/agent';
@@ -57,11 +57,11 @@ import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
-import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { useChatInputSessionModelSelection } from './hooks/useChatInputSessionModelSelection';
 import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
@@ -134,7 +134,10 @@ export function ChatInput({
   const { agent } = useAgentApiById(agentId);
   const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
   const skillAction = mode === 'standard' ? readSkillMentions(draft).skillAction : undefined;
-  const { updateAgent } = useAgentMutations();
+  const { data: session } = useAgentSession(sessionId);
+  const { updateAgentSession } = useAgentSessionMutations(sessionId);
+  const [draftModel, setDraftModel] = useState<{ agentId: string; modelId: UniqueModelId }>();
+  const draftModelId = draftModel?.agentId === agentId ? draftModel?.modelId : undefined;
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
     ? chatReturnToHref({ kind: 'session', sessionId })
@@ -142,28 +145,35 @@ export function ChatInput({
       ? chatReturnToHref({ agentId, kind: 'draft' })
       : '/';
   const persistModel = useCallback(
-    (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
-      updateAgent(targetAgentId, { model: modelId }),
-    [updateAgent],
+    (targetSessionId: string, modelId: UniqueModelId) =>
+      updateAgentSession(targetSessionId, { model: modelId }),
+    [updateAgentSession],
   );
   const handleModelPersistenceError = useCallback(
-    (error: unknown, { agentId: targetAgentId, modelId }: { agentId: string; modelId: string }) => {
-      logger.warn('Failed to persist Agent model selection', error as Error, {
-        agentId: targetAgentId,
-        modelId,
-      });
+    (error: unknown, selection: { sessionId: string; modelId: UniqueModelId }) => {
+      logger.warn('Failed to persist Session model selection', error as Error, selection);
     },
     [],
   );
-  const { selectModel, selectedModelId } = useChatInputAgentModelSelection(
-    agentId,
-    agent,
-    persistModel,
-    handleModelPersistenceError,
+  const { selectModel: selectSessionModel, selectedModelId: sessionModelId } =
+    useChatInputSessionModelSelection(
+      sessionId,
+      session,
+      persistModel,
+      handleModelPersistenceError,
+    );
+  // The first-send handoff keeps this composer mounted before the saved Session loads.
+  const selectedModelId =
+    (session ? sessionModelId : (sessionModelId ?? draftModelId)) ?? agent?.model ?? null;
+  const selectModel = useCallback(
+    (modelId: UniqueModelId) => {
+      if (modelId === selectedModelId) return;
+      if (sessionId) selectSessionModel(modelId);
+      else if (agentId) setDraftModel({ agentId, modelId });
+    },
+    [agentId, selectedModelId, selectSessionModel, sessionId],
   );
-  // Several models keep answering until the user returns to the Agent's model, which stays
-  // unchanged. The composer session remounts this input, so another conversation starts without
-  // them.
+  // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
   const [replyModels, setReplyModels] = useState<readonly UniqueModelId[] | null>(null);
   const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
   const agentModel = modelPickerData.getModelItem(selectedModelId)?.model;
@@ -226,6 +236,7 @@ export function ChatInput({
             attempt?.fields ?? {},
           ),
           modelId: input.modelId,
+          ...(!sessionId && draftModelId ? { sessionModelId: draftModelId } : {}),
           imageGeneration: { mode: input.mode, paramValues: input.paramValues },
         });
         attempt?.finish(true);
@@ -238,6 +249,7 @@ export function ChatInput({
     [
       beginEditSend,
       commitEdit,
+      draftModelId,
       editMessage,
       editing,
       isBusy,
@@ -309,6 +321,7 @@ export function ChatInput({
         ) : (
           <TextChatInput
             sessionId={sessionId}
+            draftModelId={draftModelId}
             sshDraftId={sshDraftId}
             mode={mode}
             contextUsage={contextUsage}
@@ -337,6 +350,7 @@ export function ChatInput({
 
 function TextChatInput({
   sessionId,
+  draftModelId,
   mode,
   agentId,
   contextUsage,
@@ -357,6 +371,7 @@ function TextChatInput({
   selectModel,
   setReplyModels,
 }: ChatInputProps & {
+  draftModelId?: UniqueModelId;
   mode: AgentMode;
   canSendEdit: boolean;
   /** Edit-session ownership lifted above the text/image presentation switch. */
@@ -365,13 +380,13 @@ function TextChatInput({
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
-  /** Models answering the next send in parallel, in pick order; null asks the Agent's model. */
+  /** Models answering the next send in parallel, in pick order. */
   replyModels: readonly UniqueModelId[] | null;
-  /** Parallel answers refuse image generation, so an image Agent model starts no multi-select. */
+  /** Whether the current single model can also answer alongside others. */
   agentModelAnswersInParallel: boolean;
-  /** The Agent's model. */
+  /** The current conversation's single model. */
   selectedModelId: UniqueModelId | null;
-  /** The model the composer shows: the first parallel model, else the Agent's. */
+  /** The model the composer shows, including the first parallel model when applicable. */
   selectedModelItem?: ModelPickerModelItem;
   selectModel: (modelId: UniqueModelId) => void;
   setReplyModels: (models: readonly UniqueModelId[] | null) => void;
@@ -523,6 +538,7 @@ function TextChatInput({
         const modelId = replyModels?.[0] ?? selectedModelId;
         const result = await sendMessage({
           parts,
+          ...(!sessionId && draftModelId ? { sessionModelId: draftModelId } : {}),
           ...(skillAction ? { skillAction } : {}),
           ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
           ...(modelId ? { modelId } : {}),
@@ -546,6 +562,7 @@ function TextChatInput({
     },
     [
       beginEditSend,
+      draftModelId,
       editMessage,
       editing,
       isBusy,

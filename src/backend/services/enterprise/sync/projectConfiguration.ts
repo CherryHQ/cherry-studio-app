@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Database } from '@/backend/data/db/DbService';
 import {
   agentGlobalSkillTable,
+  agentSessionTable,
   agentSkillTable,
   agentTable,
   agentToolBindingTable,
@@ -57,6 +58,17 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
     notInArray(userModelTable.id, configuration.modelIds),
     notInArray(userModelTable.providerId, providerIds),
   );
+  const sessionsWithRemovedModels = await tx
+    .update(agentSessionTable)
+    .set({ model: null, updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+    .where(
+      inArray(
+        agentSessionTable.model,
+        tx.select({ id: userModelTable.id }).from(userModelTable).where(removedModels),
+      ),
+    )
+    .returning({ id: agentSessionTable.id });
+  const changedSessionIds = new Set(sessionsWithRemovedModels.map(({ id }) => id));
   const agentsWithRemovedModels = await tx
     .update(agentTable)
     .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
@@ -338,6 +350,18 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
           ...(keepsModel ? {} : { model: defaultModel }),
         })
         .where(eq(agentTable.id, id));
+      const withdrawnSelections = await tx
+        .update(agentSessionTable)
+        .set({ model: null, updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(
+          and(
+            eq(agentSessionTable.agentId, id),
+            isNotNull(agentSessionTable.model),
+            notInArray(agentSessionTable.model, agent.allowedModelIds),
+          ),
+        )
+        .returning({ id: agentSessionTable.id });
+      for (const session of withdrawnSelections) changedSessionIds.add(session.id);
     } else {
       id = uuidv4();
       await insertWithOrderKey(
@@ -394,6 +418,8 @@ export async function projectConfiguration(tx: Database, input: ProjectionInput)
       ...[...serverIds.values(), ...changedServers].map((id) => `/mcp-servers/${id}`),
       '/skills',
       '/agents',
+      ...(changedSessionIds.size ? ['/agent-sessions'] : []),
+      ...[...changedSessionIds].map((id) => `/agent-sessions/${id}`),
       ...[
         ...agentIds,
         ...detached,

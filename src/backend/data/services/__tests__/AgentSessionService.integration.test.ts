@@ -60,6 +60,34 @@ describe('AgentSessionService persistence', () => {
     });
   });
 
+  test('saves an override on one conversation and clears it when its model is deleted', async () => {
+    const defaultModel = 'provider::default';
+    const selectedModel = 'provider::selected';
+    sqlite.exec(`INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+                 VALUES ('provider', 'Provider', 'a0', 1, 1)`);
+    const insertModel = sqlite.prepare(`INSERT INTO user_model
+      (id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at)
+      VALUES (?, 'provider', ?, ?, ?, ?, 1, 1)`);
+    insertModel.run(defaultModel, 'default', 'Default', 'default', 'a0');
+    insertModel.run(selectedModel, 'selected', 'Selected', 'selected', 'a1');
+    sqlite.prepare('UPDATE agent SET model = ? WHERE id = ?').run(defaultModel, 'agent-1');
+    insertSession(sqlite, { agentId: 'agent-1', id: 'session-a', lastActivityAt: 100 });
+    insertSession(sqlite, { agentId: 'agent-1', id: 'session-b', lastActivityAt: 200 });
+
+    await agentSessionService.setModel('session-a', selectedModel);
+    await expect(agentSessionService.getById('session-a')).resolves.toMatchObject({
+      model: selectedModel,
+      lastActivityAt: '1970-01-01T00:00:00.100Z',
+    });
+    expect((await agentSessionService.getById('session-b')).model).toBeUndefined();
+    expect(sqlite.prepare('SELECT model FROM agent WHERE id = ?').get('agent-1')?.model).toBe(
+      defaultModel,
+    );
+
+    sqlite.prepare('DELETE FROM user_model WHERE id = ?').run(selectedModel);
+    expect((await agentSessionService.getById('session-a')).model).toBeUndefined();
+  });
+
   test('paginates root families by their latest activity and loads only direct children', async () => {
     for (const [id, lastActivityAt] of [
       ['main', 100],

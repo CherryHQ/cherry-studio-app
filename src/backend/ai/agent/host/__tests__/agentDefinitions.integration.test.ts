@@ -65,12 +65,16 @@ describe('agent-table definition source', () => {
   });
 
   test('reports an unconfigured model separately from a missing agent', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
     const source = createAgentTableDefinitionSource();
     const agent = await agentService.create({ model: null, name: 'No Model' });
 
     await expect(source.getAgent(agent.id)).rejects.toMatchObject({
       name: 'AgentProtocolError',
       view: { code: 'AGENT_MODEL_NOT_CONFIGURED', retryable: false },
+    });
+    await expect(source.getAgent(agent.id, 'openai::gpt-4')).resolves.toMatchObject({
+      model: { providerId: 'openai', modelId: 'gpt-4' },
     });
   });
 });

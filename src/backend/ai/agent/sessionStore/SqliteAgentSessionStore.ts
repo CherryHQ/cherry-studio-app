@@ -11,8 +11,9 @@ import {
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
-import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
+import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { assertAgentUpdate } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
   messageTreeDepthsSql,
@@ -198,11 +199,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   ): Promise<ReserveInitialSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       if (input.workspaceFolderId) await requireActiveFolder(tx, input.workspaceFolderId);
+      if (input.sessionModelId) {
+        const [agent] = await tx
+          .select({
+            managedRemoteId: agentTable.managedRemoteId,
+            allowedModelIds: agentTable.allowedModelIds,
+          })
+          .from(agentTable)
+          .where(and(eq(agentTable.id, input.agentId), isNull(agentTable.deletedAt)))
+          .limit(1);
+        if (!agent) throw new Error('The Agent no longer exists.');
+        assertAgentUpdate(agent, { model: input.sessionModelId });
+      }
       const [sessionRow] = await tx
         .insert(agentSessionTable)
         .values({
           id: input.sessionId,
           agentId: input.agentId,
+          model: input.sessionModelId,
           workspaceFolderId: input.workspaceFolderId,
         })
         .returning();
@@ -363,6 +377,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .insert(agentSessionTable)
         .values({
           agentId: source.agentId,
+          model: source.model,
           workspaceFolderId: source.workspaceFolderId,
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its

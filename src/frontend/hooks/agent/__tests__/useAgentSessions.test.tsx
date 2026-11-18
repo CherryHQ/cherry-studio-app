@@ -20,6 +20,7 @@ let renderer: ReactTestRenderer | undefined;
 const sessions = [makeSession('a'), makeSession('b'), makeSession('c')];
 const deleteA = deferred<void>();
 const deleteB = deferred<void>();
+const patchSession = jest.fn<Promise<AgentSessionEntity>, [string, unknown]>();
 let persistedSessions = sessions;
 
 const dataApi = {
@@ -29,17 +30,17 @@ const dataApi = {
     return Promise.resolve(undefined);
   }),
   get: jest.fn(async () => ({ items: persistedSessions })),
-  patch: jest.fn(),
+  patch: patchSession,
   post: jest.fn(),
   put: jest.fn(),
 } as unknown as ApiClient;
 
-function Probe() {
+function Probe({ sessionId }: { sessionId?: string }) {
   useAgentSessions();
   // Both list variants share the collection cache namespace and therefore
   // must keep the same InfiniteData shape for optimistic rename/delete writes.
   useLatestAgentSession();
-  const mutations = useAgentSessionMutations();
+  const mutations = useAgentSessionMutations(sessionId);
 
   useEffect(() => {
     actions = mutations;
@@ -114,6 +115,51 @@ describe('agent Session hooks', () => {
 
     // The regular list remains fresh in cache; only the one-row latest query runs again.
     expect(dataApi.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('serializes model saves to the same Session across composer mounts', async () => {
+    const first = deferred<AgentSessionEntity>();
+    const original = { ...makeSession('a'), updatedAt: '2026-11-18T00:00:00.000Z' };
+    const intermediate = {
+      ...original,
+      model: 'p::first',
+      updatedAt: '2026-11-18T00:00:00.001Z',
+    } as const;
+    const latest = {
+      ...original,
+      model: 'p::last',
+      updatedAt: '2026-11-18T00:00:00.002Z',
+    } as const;
+    patchSession.mockReturnValueOnce(first.promise).mockResolvedValueOnce(latest);
+
+    const render = (key: string) => (
+      <QueryClientProvider client={queryClient}>
+        <DataApiProvider dataApi={dataApi}>
+          <Probe key={key} sessionId="a" />
+        </DataApiProvider>
+      </QueryClientProvider>
+    );
+    await act(async () => renderer?.update(render('first')));
+    let firstSave: Promise<AgentSessionEntity> | undefined;
+    await act(async () => {
+      firstSave = actions?.updateAgentSession('a', { model: intermediate.model });
+    });
+    await act(async () => renderer?.update(render('second')));
+    let lastSave: Promise<AgentSessionEntity> | undefined;
+    await act(async () => {
+      lastSave = actions?.updateAgentSession('a', { model: latest.model });
+    });
+    expect(dataApi.patch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve(intermediate);
+      await firstSave;
+      await expect(lastSave).resolves.toEqual(latest);
+    });
+    expect(dataApi.patch).toHaveBeenLastCalledWith(
+      '/agent-sessions/a',
+      expect.objectContaining({ body: { model: latest.model } }),
+    );
   });
 });
 

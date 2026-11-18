@@ -2,7 +2,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
-import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
+import { queryKeys, useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import {
   dataApiCollectionFilters,
   removeItemsFromInfiniteData,
@@ -79,13 +79,21 @@ export function useLatestAgentSession(options: LatestAgentSessionOptions = {}) {
   };
 }
 
-export function useAgentSessionMutations() {
+export function useAgentSessionMutations(sessionId?: string) {
   const queryClient = useQueryClient();
   const updateMutation = useMutation('PATCH', '/agent-sessions/:id', {
+    scopeId: sessionId ? `agent-session:${sessionId}` : undefined,
     refresh: ({ args }) => [
       '/agent-sessions',
       ...(args ? [`/agent-sessions/${args.params.id}`] : []),
     ],
+    onSuccess: (saved, args) => {
+      if (!args?.body || !('model' in args.body)) return;
+      queryClient.setQueryData<AgentSessionEntity>(
+        queryKeys.agentSessions.detail(saved.id),
+        (current) => (!current || current.updatedAt >= saved.updatedAt ? current : saved),
+      );
+    },
   });
   const deleteMutation = useMutation('DELETE', '/agent-sessions/:id');
   const updateSessionRequest = updateMutation.trigger;
