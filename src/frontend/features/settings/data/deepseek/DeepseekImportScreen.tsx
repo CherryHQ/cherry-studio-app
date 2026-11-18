@@ -22,7 +22,7 @@ const ERROR_KEYS = {
   busy: 'settings.data.deepseek.error.busy',
   failed: 'settings.data.deepseek.error.failed',
   'invalid-link': 'settings.data.deepseek.error.invalidLink',
-  'share-link': 'settings.data.deepseek.error.shareLink',
+  'share-link': 'settings.data.deepseek.error.invalidLink',
   'expired-link': 'settings.data.deepseek.error.expiredLink',
   download: 'settings.data.deepseek.error.download',
 } as const satisfies Record<DeepseekImportErrorCode, string>;

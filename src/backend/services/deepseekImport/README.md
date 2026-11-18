@@ -13,8 +13,9 @@ entry can be skipped, and readable conversations are still imported.
 
 The shared URL parser admits any HTTPS link whose host contains `deepseek`, so export storage can
 move between buckets, regions or providers without an app update. Credentials in the authority are
-rejected. The `chat.deepseek.com/share/` route has a dedicated prompt to paste the official data
-export download link. An `Expires` query value in the past is reported before downloading.
+rejected. The settings field shows the same invalid export link message for a
+`chat.deepseek.com/share/` link as for other invalid links. An `Expires` query value in the past
+is reported before downloading.
 The original signed URL is passed unchanged to the native downloader. The application does not log
 or persist it. The archive is untrusted whatever its source and is validated after download.
 
