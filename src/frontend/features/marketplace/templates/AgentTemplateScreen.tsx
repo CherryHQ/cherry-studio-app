@@ -1,20 +1,18 @@
-import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
-import * as Clipboard from 'expo-clipboard';
+import { Button, ContentState } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { AgentAvatar } from '@/frontend/components/Avatar';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-import { AGENT_TEMPLATE_CATEGORY_KEYS } from './templateCategories';
+import { AgentTemplateDetails } from './AgentTemplateDetails';
 
+/** Direct links retain their route; marketplace browsing previews the same content inline. */
 export function AgentTemplateScreen() {
   const { t, i18n } = useTranslation();
-  const { toast } = useToast();
   const router = useRouter();
   const navigation = useNavigation();
   const { bottom } = useSafeAreaInsets();
@@ -29,16 +27,6 @@ export function AgentTemplateScreen() {
     (item) => item.id === getSingleRouteParam(params.templateId),
   );
 
-  async function copyInstructions() {
-    if (!template) return;
-    try {
-      await Clipboard.setStringAsync(template.prompt);
-      toast.show({ label: t('marketplace.templates.copied'), variant: 'success' });
-    } catch {
-      toast.show({ label: t('marketplace.templates.copyFailed'), variant: 'danger' });
-    }
-  }
-
   return (
     <>
       <RouteHeader title={t('marketplace.templates.details')} />
@@ -46,44 +34,15 @@ export function AgentTemplateScreen() {
         <View className="flex-1 bg-background">
           <ScrollView
             className="flex-1"
-            contentContainerClassName="gap-6 p-4"
+            contentContainerClassName="px-5 pt-6 pb-8"
             contentInsetAdjustmentBehavior="never"
           >
-            <View className="items-center gap-3 py-4">
-              <AgentAvatar emoji={template.emoji} name={template.name} size={80} />
-              <Text className="text-center font-semibold text-2xl text-foreground">
-                {template.name}
-              </Text>
-              <Text className="text-center text-sm text-muted-foreground">
-                {template.categories
-                  .map((category) => t(AGENT_TEMPLATE_CATEGORY_KEYS[category]))
-                  .join(' · ')}
-              </Text>
-              <Text className="text-center text-base text-muted-foreground">
-                {template.description}
-              </Text>
-            </View>
-            <View className="gap-3">
-              <View className="flex-row items-center justify-between gap-3">
-                <Text className="font-semibold text-lg text-foreground">
-                  {t('agent.form.instructions')}
-                </Text>
-                <Button onPress={() => void copyInstructions()} size="sm" variant="ghost">
-                  {t('common.copy')}
-                </Button>
-              </View>
-              <Text className="text-base text-foreground" selectable>
-                {template.prompt}
-              </Text>
-            </View>
+            <AgentTemplateDetails template={template} />
           </ScrollView>
           <View
-            className="gap-3 border-t border-border-subtle px-4 pt-4"
+            className="border-t border-border-subtle px-5 pt-4"
             style={{ paddingBottom: Math.max(bottom, 16) }}
           >
-            <Text className="text-center text-sm text-muted-foreground">
-              {t('marketplace.templates.editable')}
-            </Text>
             <Button
               onPress={() => {
                 if (navigation.isFocused())
@@ -104,7 +63,7 @@ export function AgentTemplateScreen() {
           </View>
         </View>
       ) : (
-        <View className="p-4">
+        <View className="p-5">
           {isLoading || isFetching ? (
             <ContentState.Loading title={t('marketplace.templates.loading')} />
           ) : (

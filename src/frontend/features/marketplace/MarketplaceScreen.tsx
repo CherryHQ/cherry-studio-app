@@ -1,8 +1,9 @@
+import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ActionMenu, Button, Tabs } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -48,31 +49,61 @@ export function MarketplaceScreen() {
                   },
                 ]}
               >
-                <Button size="sm" variant="ghost" testID="marketplace-library">
-                  {t('marketplace.mine')}
-                </Button>
+                <Button
+                  accessibilityLabel={t('marketplace.mine')}
+                  icon={<LibraryBigIcon className="size-5 text-foreground" />}
+                  variant="ghost"
+                  testID="marketplace-library"
+                />
               </ActionMenu>
             ),
           },
         ]}
       />
       <View className="flex-1 bg-background">
-        <View className="px-4 pt-4 pb-3">
+        <View className="px-5 pt-1">
           <Tabs
             items={[
-              { value: 'skills', label: t('skills.title'), testID: 'marketplace-tab-skills' },
-              { value: 'agents', label: t('navigation.agents'), testID: 'marketplace-tab-agents' },
+              {
+                value: 'skills',
+                label: t('skills.title'),
+                testID: 'marketplace-tab-skills',
+                children: (
+                  <Text
+                    className={
+                      tab === 'skills'
+                        ? 'font-semibold text-xl text-foreground'
+                        : 'font-semibold text-xl text-muted-foreground'
+                    }
+                  >
+                    {t('skills.title')}
+                  </Text>
+                ),
+              },
+              {
+                value: 'agents',
+                label: t('navigation.agents'),
+                testID: 'marketplace-tab-agents',
+                children: (
+                  <Text
+                    className={
+                      tab === 'agents'
+                        ? 'font-semibold text-xl text-foreground'
+                        : 'font-semibold text-xl text-muted-foreground'
+                    }
+                  >
+                    {t('navigation.agents')}
+                  </Text>
+                ),
+              },
             ]}
+            layout="hug"
             onValueChange={setTab}
             value={tab}
-            variant="segmented"
+            variant="underline"
           />
         </View>
-        {tab === 'skills' ? (
-          <MarketplaceSkills onOpenLibrary={openLibrary} />
-        ) : (
-          <AgentTemplateCatalog />
-        )}
+        {tab === 'skills' ? <MarketplaceSkills /> : <AgentTemplateCatalog />}
       </View>
     </>
   );

@@ -1,5 +1,6 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Button, ContentState, Section } from '@cherrystudio/ui/components';
+import DownloadIcon from '@cherrystudio/app-icons/icons/download';
+import { Avatar, Button, ContentState } from '@cherrystudio/ui/components';
 import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,7 @@ import {
   parseCherryinSkillUrl,
 } from '@/shared/utils/cherryinSkills';
 
+import { MarketplaceItem, MarketplaceItemContent } from '../components/MarketplaceItem';
 import type { SkillDiscoverySource } from './skillDiscovery';
 import { SkillSourceFilter } from './SkillSourceFilter';
 
@@ -95,11 +97,8 @@ export function useSkillDiscoverySearch(source: SkillDiscoverySource) {
       keyExtractor: (item) => item.url,
       placeholder: t('skills.marketplace.searchPlaceholder'),
       renderItem: (item) => (
-        <View className="gap-0.5 py-3">
-          <Text className="text-base text-foreground">{item.name}</Text>
-          <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-            {item.description}
-          </Text>
+        <View className="py-4">
+          <SkillResultContent item={item} />
         </View>
       ),
       loadRecent: async ({ filters, signal, cursor }) => {
@@ -211,45 +210,18 @@ export function SkillDiscoveryTab({
           primaryAction={{ children: t('common.retry'), onPress: () => void current.refetch() }}
         />
       ) : results.length ? (
-        <Section>
+        <View>
           {results.map((item) => (
-            <Section.Item
+            <MarketplaceItem
               accessibilityLabel={item.name}
-              density="comfortable"
+              description={item.description}
               key={item.url}
               onPress={() => open(item)}
             >
-              <View className="gap-2">
-                <View className="gap-1">
-                  <View className="flex-row items-start gap-2">
-                    <Text
-                      className="min-w-0 flex-1 font-medium text-base text-foreground"
-                      numberOfLines={2}
-                    >
-                      {item.name}
-                    </Text>
-                    <View className="min-h-6 shrink-0 flex-row items-center gap-1">
-                      {item.installs === undefined ? null : (
-                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-                          {formatCompactNumber(item.installs)}
-                        </Text>
-                      )}
-                      <ChevronRightIcon className="size-4 text-muted-foreground" />
-                    </View>
-                  </View>
-                  <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-                    {item.description}
-                  </Text>
-                </View>
-                {item.collection ? (
-                  <Text className="text-xs text-muted-foreground">
-                    {t('skills.marketplace.collection')}
-                  </Text>
-                ) : null}
-              </View>
-            </Section.Item>
+              <SkillResultContent item={item} />
+            </MarketplaceItem>
           ))}
-        </Section>
+        </View>
       ) : (
         <ContentState.Empty
           title={t('skills.discover.empty')}
@@ -270,5 +242,42 @@ export function SkillDiscoveryTab({
         </Button>
       ) : null}
     </>
+  );
+}
+
+function SkillResultContent({ item }: { item: DiscoveryResult }) {
+  const { t } = useTranslation();
+  return (
+    <MarketplaceItemContent
+      description={item.description}
+      leading={
+        <Avatar accessibilityLabel={item.name} size={48}>
+          <Avatar.Fallback>
+            {Array.from(item.name.trim())[0]?.toLocaleUpperCase() ?? ''}
+          </Avatar.Fallback>
+        </Avatar>
+      }
+      metadata={
+        item.collection || item.installs !== undefined ? (
+          <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1">
+            {item.collection ? (
+              <Text className="text-xs text-muted-foreground">
+                {t('skills.marketplace.collection')}
+              </Text>
+            ) : null}
+            {item.installs !== undefined ? (
+              <View className="flex-row items-center gap-1">
+                <DownloadIcon className="size-3 text-muted-foreground" />
+                <Text className="text-xs text-muted-foreground">
+                  {formatCompactNumber(item.installs)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : undefined
+      }
+      title={item.name}
+      trailing={<ChevronRightIcon className="size-4 text-muted-foreground" />}
+    />
   );
 }
