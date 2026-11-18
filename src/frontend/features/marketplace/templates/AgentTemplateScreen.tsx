@@ -1,5 +1,5 @@
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import { Button, ContentState, Section, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -7,13 +7,13 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { AgentAvatar } from '@/frontend/components/Avatar';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { AgentTemplate } from '@/shared/data/types/agentTemplate';
 
-import { AGENT_TEMPLATE_CATEGORY_KEYS } from './templateCategories';
+import { MarketplaceIcon } from '../components/MarketplaceIcon';
+import { TEMPLATE_COLLECTION_TITLE_KEYS } from './templateCategories';
 
 /** One template's page: who it is, its complete instructions, and a single create action. */
 export function AgentTemplateScreen() {
@@ -54,13 +54,21 @@ export function AgentTemplateScreen() {
 
 function AgentTemplatePage({ language, template }: { language: string; template: AgentTemplate }) {
   const { t } = useTranslation();
-  const router = useRouter();
   const navigation = useNavigation();
+  const router = useRouter();
   const { toast } = useToast();
   const { bottom } = useSafeAreaInsets();
   const labels = template.categories.length
-    ? template.categories.map((category) => t(AGENT_TEMPLATE_CATEGORY_KEYS[category]))
+    ? template.categories.map((category) => t(TEMPLATE_COLLECTION_TITLE_KEYS[category]))
     : template.group;
+
+  function createFromTemplate() {
+    if (!navigation.isFocused()) return;
+    router.push({
+      pathname: '/agents/new',
+      params: { templateId: template.id, templateLanguage: language, startChat: 'true' },
+    });
+  }
 
   async function copyInstructions() {
     try {
@@ -98,51 +106,42 @@ function AgentTemplatePage({ language, template }: { language: string; template:
           contentInsetAdjustmentBehavior="never"
           testID="template-details-content"
         >
-          <View className="items-center gap-3 px-4">
-            <AgentAvatar emoji={template.emoji} name={template.name} size={80} />
-            <View className="items-center gap-1">
-              <Text className="text-center font-semibold text-2xl text-foreground" selectable>
-                {template.name}
-              </Text>
-              {labels.length ? (
-                <Text className="text-center text-sm text-muted-foreground">
-                  {labels.join(' · ')}
+          <View className="gap-4">
+            <View className="flex-row items-center gap-4">
+              <MarketplaceIcon emoji={template.emoji} name={template.name} size="large" />
+              <View className="min-w-0 flex-1 gap-1">
+                <Text
+                  accessibilityRole="header"
+                  className="text-2xl font-semibold text-foreground"
+                  selectable
+                >
+                  {template.name}
                 </Text>
-              ) : null}
+                {labels.length ? (
+                  <Text className="text-sm text-muted-foreground">{labels.join(' · ')}</Text>
+                ) : null}
+              </View>
             </View>
             {template.description ? (
-              <Text className="text-center text-base text-muted-foreground" selectable>
+              <Text className="text-base text-muted-foreground" selectable>
                 {template.description}
               </Text>
             ) : null}
           </View>
           {template.prompt ? (
-            <Section title={t('agent.form.instructions')}>
-              <View className="px-4 py-3">
-                <MarkdownText markdown={template.prompt} />
-              </View>
-            </Section>
+            <View className="gap-2">
+              <Text accessibilityRole="header" className="text-lg font-semibold text-foreground">
+                {t('agent.form.instructions')}
+              </Text>
+              <MarkdownText markdown={template.prompt} />
+            </View>
           ) : null}
         </ScrollView>
         <View
           className="border-t border-border-subtle px-4 pt-3"
           style={{ paddingBottom: Math.max(bottom, 16) }}
         >
-          <Button
-            onPress={() => {
-              if (navigation.isFocused())
-                router.push({
-                  pathname: '/agents/new',
-                  params: {
-                    templateId: template.id,
-                    templateLanguage: language,
-                    startChat: 'true',
-                  },
-                });
-            }}
-            size="footer"
-            testID="template-create"
-          >
+          <Button onPress={createFromTemplate} size="footer" testID="template-create">
             {t('marketplace.templates.create')}
           </Button>
         </View>

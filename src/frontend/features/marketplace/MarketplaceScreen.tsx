@@ -25,33 +25,34 @@ export function MarketplaceScreen() {
   // Each catalog keeps its own query, so switching back finds the previous search intact.
   const [queries, setQueries] = useState<Record<MarketTab, string>>({ skills: '', agents: '' });
 
-  // The library button follows the open catalog: one tap to what the user already has.
-  const openLibrary = () =>
-    tab === 'skills'
-      ? router.push({
-          pathname: '/skills/library',
-          params: {
-            agentId: getSingleRouteParam(params.agentId),
-            sessionId: getSingleRouteParam(params.sessionId),
-          },
-        })
-      : router.push('/agents');
+  const openSkillLibrary = () =>
+    router.push({
+      pathname: '/skills/library',
+      params: {
+        agentId: getSingleRouteParam(params.agentId),
+        sessionId: getSingleRouteParam(params.sessionId),
+      },
+    });
 
   return (
     <>
       <RouteHeader
         title={t('marketplace.title')}
-        rightActions={[
-          {
-            accessibilityLabel: t(tab === 'skills' ? 'skills.library' : 'marketplace.myAgents'),
-            icon: LibraryBigIcon,
-            key: 'marketplace-library',
-            nativeIcon: require('@/assets/header-toolbar/library-big.png'),
-            onPress: openLibrary,
-            testID: 'marketplace-library',
-            type: 'icon',
-          },
-        ]}
+        rightActions={
+          tab === 'skills'
+            ? [
+                {
+                  accessibilityLabel: t('skills.library'),
+                  icon: LibraryBigIcon,
+                  key: 'marketplace-library',
+                  nativeIcon: require('@/assets/header-toolbar/library-big.png'),
+                  onPress: openSkillLibrary,
+                  testID: 'marketplace-library',
+                  type: 'icon',
+                },
+              ]
+            : undefined
+        }
       />
       <InlineSearch
         onChangeText={(value) => setQueries((current) => ({ ...current, [tab]: value }))}
@@ -63,15 +64,17 @@ export function MarketplaceScreen() {
         value={queries[tab]}
       />
       <View className="flex-1 bg-background">
-        <View className="px-4 pt-2">
+        <View className="px-4 pt-2 pb-2">
           <Tabs
             accessibilityLabel={t('marketplace.title')}
             items={[
               { value: 'skills', label: t('skills.title'), testID: 'marketplace-tab-skills' },
               { value: 'agents', label: t('navigation.agents'), testID: 'marketplace-tab-agents' },
             ]}
+            layout="hug"
             onValueChange={setTab}
             value={tab}
+            variant="pill"
           />
         </View>
         {tab === 'skills' ? (
