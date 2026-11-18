@@ -19,6 +19,7 @@ import {
   type DeepseekImportResult,
 } from '@/shared/contracts/deepseekImport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DEEPSEEK_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { type FileEntry, SafeNameSchema } from '@/shared/data/types/file';
 import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
 
@@ -176,7 +177,10 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
       const result = await this.dbService.withWriteTx(async (tx) => {
         signal.throwIfAborted();
         storageMutationGate.assertWritable();
-        const agent = await this.agents.createTx(tx, { name: 'DeepSeek' });
+        const agent = await this.agents.createTx(tx, {
+          name: 'DeepSeek',
+          avatar: DEEPSEEK_AGENT_AVATAR,
+        });
         let missingAttachments = 0;
         let sessions = 0;
         let completed = 0;
