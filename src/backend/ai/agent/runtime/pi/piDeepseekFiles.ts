@@ -66,8 +66,16 @@ export function withPiDeepseekFiles(
           const references = new Map<string, string | null>();
           const wireDocuments = new Map<string, WireDocument>();
           let referenceCount = 0;
-          for (const document of documents) {
+          // Newest documents keep native input; older ones stay readable through read_file, so
+          // a long conversation never exceeds the reference limit.
+          for (const document of documents.toReversed()) {
             signal.throwIfAborted();
+            if (referenceCount >= MAX_DOCUMENT_REFERENCES && !document.isCurrent) {
+              wireDocuments.set(document.placeholder, {
+                text: `Earlier document ${document.fileEntryId} is not attached natively to this request. Use read_file with this file_entry_id if its content is needed.`,
+              });
+              continue;
+            }
             const key = JSON.stringify([
               document.fileEntryId,
               document.revision,

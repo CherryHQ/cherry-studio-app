@@ -21,6 +21,18 @@ const remoteSchema = z.object({
 });
 const cacheSchema = z.object({ id: remoteSchema.shape.id, expiresAt: z.number().positive() });
 const FILE_TTL_SECONDS = 24 * 60 * 60;
+// Each model request of a turn, including tool steps, replays every attached document. A recently
+// confirmed reference for the same source revision skips rehashing and the remote check.
+const CONFIRMED_REUSE_MS = 10 * 60_000;
+const MAX_CONFIRMED = 256;
+const confirmed = new Map<string, { fileId: string; expiresAt: number; confirmedAt: number }>();
+
+function confirm(key: string, fileId: string, expiresAt: number): string {
+  confirmed.delete(key);
+  confirmed.set(key, { fileId, expiresAt, confirmedAt: Date.now() });
+  if (confirmed.size > MAX_CONFIRMED) confirmed.delete(confirmed.keys().next().value!);
+  return fileId;
+}
 const logger = loggerService.withContext('DeepseekFiles');
 
 export class DeepseekDocumentUnavailableError extends Error {
@@ -70,6 +82,14 @@ export async function uploadDeepseekDocument(
   const maxBytes = purpose === 'user_data' ? 32 * 1024 * 1024 : 100 * 1024 * 1024;
   if (source.entry.size > maxBytes || new File(source.uri).size > maxBytes)
     throw new DeepseekServiceError('limit');
+  const confirmedKey = JSON.stringify([connection.scope, id, source.entry.updatedAt, purpose]);
+  const recent = confirmed.get(confirmedKey);
+  if (
+    recent &&
+    Date.now() - recent.confirmedAt < CONFIRMED_REUSE_MS &&
+    recent.expiresAt > Date.now() + 60_000
+  )
+    return recent.fileId;
   const hash = await hashDocumentSource(source.uri, signal);
   const requireUnchangedSource = async () => {
     const current = await fileContent.resolve(id);
@@ -111,7 +131,11 @@ export async function uploadDeepseekDocument(
         (remote.expires_at === undefined || remote.expires_at * 1000 > Date.now() + 60_000)
       ) {
         await requireUnchangedSource();
-        return saved.id;
+        return confirm(
+          confirmedKey,
+          saved.id,
+          remote.expires_at === undefined ? saved.expiresAt : remote.expires_at * 1000,
+        );
       }
     } catch (error) {
       signal.throwIfAborted();
@@ -144,15 +168,11 @@ export async function uploadDeepseekDocument(
       300_000,
     );
     await requireUnchangedSource();
+    const expiresAt =
+      (uploaded.expires_at ?? Math.floor(Date.now() / 1000) + FILE_TTL_SECONDS) * 1000;
     try {
       directory.create({ intermediates: true, idempotent: true });
-      cache.writeSync(
-        JSON.stringify({
-          id: uploaded.id,
-          expiresAt:
-            (uploaded.expires_at ?? Math.floor(Date.now() / 1000) + FILE_TTL_SECONDS) * 1000,
-        }),
-      );
+      cache.writeSync(JSON.stringify({ id: uploaded.id, expiresAt }));
       const mappings = directory
         .list()
         .filter((entry): entry is File => entry instanceof File)
@@ -161,7 +181,7 @@ export async function uploadDeepseekDocument(
     } catch {
       // Remote files expire server-side; a local cache miss does not invalidate this upload.
     }
-    return uploaded.id;
+    return confirm(confirmedKey, uploaded.id, expiresAt);
   } finally {
     if (snapshot.entry.id !== id) {
       try {

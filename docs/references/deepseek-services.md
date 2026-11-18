@@ -72,8 +72,11 @@ the upstream Files API, so a remote ID never replaces the managed original.
 
 For example, attaching a PDF to `deepseek-flash` sends a remote file reference while retaining the
 PDF locally. A follow-up reuses a confirmed reference under the same credential. After expiry or
-cache eviction, Mobile rebuilds it from the current managed source. The server's 20-reference
-limit includes historical occurrences; ordinary attachment byte limits still apply. Parsed
+cache eviction, Mobile rebuilds it from the current managed source. Every model request of a turn,
+including tool steps, replays the attached documents, so a reference confirmed for the same source
+revision is reused for 10 minutes without rehashing or a remote check. The server's 20-reference
+limit includes historical occurrences: the newest 20 stay native, and older ones become a notice
+to use `read_file`. Ordinary attachment byte limits still apply. Parsed
 document text is not included in Pi's local text estimate, so the provider can reject a document
 context that exceeds its own limit instead of silently truncating it.
 

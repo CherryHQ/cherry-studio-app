@@ -106,6 +106,22 @@ test('sends the reattached revision without treating the old identical envelope 
   });
 });
 
+test('keeps the newest documents native and points older ones to read_file past the limit', async () => {
+  upload.mockImplementation(async (_connection, input) => `file-${input.revision}`);
+  const sent = (await request(Array.from({ length: 22 }, (_, index) => document(index + 1)))) as {
+    messages: { content: { type: string; file_id?: string; text?: string }[] }[];
+  };
+  expect(upload).toHaveBeenCalledTimes(20);
+  expect(sent.messages[0]?.content).toEqual([
+    { type: 'text', text: expect.stringContaining('read_file') },
+  ]);
+  expect(sent.messages[1]?.content).toEqual([
+    { type: 'text', text: expect.stringContaining('read_file') },
+  ]);
+  expect(sent.messages[2]?.content[0]).toEqual({ type: 'file', file_id: 'file-3' });
+  expect(sent.messages[21]?.content[0]).toEqual({ type: 'file', file_id: 'file-22' });
+});
+
 test('rejects a missing current attachment and propagates transport failures', async () => {
   upload.mockRejectedValueOnce(new DeepseekDocumentUnavailableError());
   await expect(request([document(1)])).rejects.toBeInstanceOf(DeepseekDocumentUnavailableError);
