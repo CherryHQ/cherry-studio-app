@@ -1934,6 +1934,7 @@
   "settings.data.deepseek.error.failed": "Không thể nhập dữ liệu. Các cuộc trò chuyện hiện có không thay đổi. Vui lòng thử lại.",
   "settings.data.deepseek.error.invalid": "Tệp bị hỏng hoặc chứa dữ liệu trò chuyện không hợp lệ. Hãy xuất lại từ DeepSeek.",
   "settings.data.deepseek.error.invalidLink": "Hãy dán liên kết tải xuống bản xuất DeepSeek hợp lệ.",
+  "settings.data.deepseek.error.shareLink": "Đây là liên kết chia sẻ cuộc trò chuyện DeepSeek. Hãy dán liên kết tải xuống chính thức của bản xuất dữ liệu.",
   "settings.data.deepseek.error.tooLarge": "Bản xuất quá lớn đối với thiết bị này.",
   "settings.data.deepseek.error.unsupported": "Định dạng xuất này chưa được hỗ trợ. Hãy yêu cầu bản xuất mới trên trang web DeepSeek.",
   "settings.data.deepseek.linkLabel": "Liên kết tải xuống bản xuất DeepSeek",

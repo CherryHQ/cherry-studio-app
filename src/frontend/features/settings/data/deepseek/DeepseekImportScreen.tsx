@@ -10,7 +10,6 @@ import {
   type DeepseekImportErrorCode,
   type DeepseekImportProgress,
 } from '@/shared/contracts/deepseekImport';
-import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 
@@ -23,6 +22,7 @@ const ERROR_KEYS = {
   busy: 'settings.data.deepseek.error.busy',
   failed: 'settings.data.deepseek.error.failed',
   'invalid-link': 'settings.data.deepseek.error.invalidLink',
+  'share-link': 'settings.data.deepseek.error.shareLink',
   'expired-link': 'settings.data.deepseek.error.expiredLink',
   download: 'settings.data.deepseek.error.download',
 } as const satisfies Record<DeepseekImportErrorCode, string>;
@@ -54,23 +54,22 @@ function ImportAction() {
 
   const importConversations = async () => {
     if (operation.current || backupState.phase !== 'idle') return;
-    let downloadUrl: string;
-    try {
-      downloadUrl = parseDeepseekExportUrl(url);
-      setLinkError(undefined);
-    } catch (error) {
-      setLinkError(error instanceof DeepseekImportError ? error.code : 'invalid-link');
-      return;
-    }
     const controller = new AbortController();
-    Keyboard.dismiss();
     operation.current = controller;
+    setLinkError(undefined);
     setBusy(true);
     setProgress(undefined);
+    let startedDownload = false;
     try {
-      const result = await importer.importFromUrl(downloadUrl, {
+      const result = await importer.importFromUrl(url, {
         signal: controller.signal,
-        onProgress: setProgress,
+        onProgress: (value) => {
+          if (!startedDownload && value.phase === 'downloading') {
+            startedDownload = true;
+            Keyboard.dismiss();
+          }
+          setProgress(value);
+        },
       });
       setUrl('');
       const partial = result.missingAttachments > 0 || result.skippedConversations > 0;
@@ -82,11 +81,16 @@ function ImportAction() {
         variant: partial ? 'warning' : 'success',
       });
     } catch (error) {
-      if (!controller.signal.aborted)
+      if (controller.signal.aborted) return;
+      const code = error instanceof DeepseekImportError ? error.code : 'failed';
+      if (code === 'invalid-link' || code === 'expired-link' || code === 'share-link') {
+        setLinkError(code);
+      } else {
         toast.show({
-          label: t(ERROR_KEYS[error instanceof DeepseekImportError ? error.code : 'failed']),
+          label: t(ERROR_KEYS[code]),
           variant: 'danger',
         });
+      }
     } finally {
       if (operation.current === controller) operation.current = undefined;
       if (!controller.signal.aborted) {

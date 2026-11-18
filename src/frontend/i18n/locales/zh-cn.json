@@ -1934,6 +1934,7 @@
   "settings.data.deepseek.error.failed": "导入失败，现有会话未受影响，请重试。",
   "settings.data.deepseek.error.invalid": "文件已损坏或会话数据不完整，请从 DeepSeek 重新导出。",
   "settings.data.deepseek.error.invalidLink": "请粘贴有效的 DeepSeek 官方数据导出下载链接。",
+  "settings.data.deepseek.error.shareLink": "这是 DeepSeek 会话分享链接。请粘贴官方数据导出的下载链接。",
   "settings.data.deepseek.error.tooLarge": "导出包过大，无法在此设备上导入。",
   "settings.data.deepseek.error.unsupported": "暂不支持此导出格式，请在 DeepSeek 网页端重新下载 ZIP 压缩包。",
   "settings.data.deepseek.linkLabel": "DeepSeek 导出下载链接",

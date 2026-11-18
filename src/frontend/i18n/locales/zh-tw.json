@@ -1934,6 +1934,7 @@
   "settings.data.deepseek.error.failed": "匯入失敗，現有會話未受影響，請重試。",
   "settings.data.deepseek.error.invalid": "檔案已損壞或會話資料不完整，請從 DeepSeek 重新匯出。",
   "settings.data.deepseek.error.invalidLink": "請貼上有效的 DeepSeek 官方資料匯出下載連結。",
+  "settings.data.deepseek.error.shareLink": "這是 DeepSeek 對話分享連結。請貼上官方資料匯出的下載連結。",
   "settings.data.deepseek.error.tooLarge": "匯出檔過大，無法在此裝置上匯入。",
   "settings.data.deepseek.error.unsupported": "暫不支援此匯出格式，請在 DeepSeek 網頁版重新下載 ZIP 壓縮檔。",
   "settings.data.deepseek.linkLabel": "DeepSeek 匯出下載連結",

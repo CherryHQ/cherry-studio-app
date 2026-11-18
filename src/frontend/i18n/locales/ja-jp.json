@@ -1934,6 +1934,7 @@
   "settings.data.deepseek.error.failed": "インポートできませんでした。既存の会話は変更されていません。もう一度お試しください。",
   "settings.data.deepseek.error.invalid": "ファイルが破損しているか、会話データが不正です。DeepSeek から再度エクスポートしてください。",
   "settings.data.deepseek.error.invalidLink": "有効な DeepSeek 公式エクスポート用ダウンロードリンクを貼り付けてください。",
+  "settings.data.deepseek.error.shareLink": "これは DeepSeek の会話共有リンクです。公式のデータエクスポート用ダウンロードリンクを貼り付けてください。",
   "settings.data.deepseek.error.tooLarge": "ファイルが大きすぎるため、このデバイスではインポートできません。",
   "settings.data.deepseek.error.unsupported": "このエクスポート形式には対応していません。DeepSeek のウェブ版から新しい ZIP をダウンロードしてください。",
   "settings.data.deepseek.linkLabel": "DeepSeek エクスポート用ダウンロードリンク",

@@ -1953,6 +1953,7 @@
   "settings.data.deepseek.error.failed": "Η εισαγωγή απέτυχε. Οι υπάρχουσες συνομιλίες δεν άλλαξαν. Δοκιμάστε ξανά.",
   "settings.data.deepseek.error.invalid": "Το αρχείο είναι κατεστραμμένο ή περιέχει μη έγκυρα δεδομένα συνομιλιών. Εξαγάγετέ το ξανά από το DeepSeek.",
   "settings.data.deepseek.error.invalidLink": "Επικολλήστε έναν έγκυρο σύνδεσμο λήψης εξαγωγής DeepSeek.",
+  "settings.data.deepseek.error.shareLink": "Αυτός είναι σύνδεσμος κοινοποίησης συνομιλίας DeepSeek. Επικολλήστε τον επίσημο σύνδεσμο λήψης της εξαγωγής δεδομένων.",
   "settings.data.deepseek.error.tooLarge": "Το αρχείο είναι πολύ μεγάλο για εισαγωγή σε αυτή τη συσκευή.",
   "settings.data.deepseek.error.unsupported": "Αυτή η μορφή εξαγωγής δεν υποστηρίζεται. Ζητήστε νέα εξαγωγή από τον ιστότοπο DeepSeek.",
   "settings.data.deepseek.linkLabel": "Σύνδεσμος λήψης εξαγωγής DeepSeek",

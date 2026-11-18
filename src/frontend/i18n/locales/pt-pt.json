@@ -1972,6 +1972,7 @@
   "settings.data.deepseek.error.failed": "Não foi possível importar os dados. As conversas existentes não foram alteradas. Tente novamente.",
   "settings.data.deepseek.error.invalid": "O ficheiro está danificado ou contém dados de conversa inválidos. Exporte-o novamente do DeepSeek.",
   "settings.data.deepseek.error.invalidLink": "Cole uma ligação válida de transferência de uma exportação DeepSeek.",
+  "settings.data.deepseek.error.shareLink": "Esta é uma ligação de partilha de uma conversa do DeepSeek. Cole a ligação oficial de transferência da exportação de dados.",
   "settings.data.deepseek.error.tooLarge": "Esta exportação é demasiado grande para este dispositivo.",
   "settings.data.deepseek.error.unsupported": "Este formato de exportação não é suportado. Peça uma nova exportação no site do DeepSeek.",
   "settings.data.deepseek.linkLabel": "Ligação de transferência da exportação DeepSeek",

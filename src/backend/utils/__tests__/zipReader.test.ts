@@ -52,7 +52,11 @@ function streamedZip(files: Record<string, Uint8Array>) {
 
 async function extract(
   archive: Uint8Array,
-  extractOptions: { contiguous?: boolean; verifyCrc?: boolean } = {},
+  extractOptions: {
+    contiguous?: boolean;
+    verifyCrc?: boolean;
+    onInvalidEntry?(name: string): void;
+  } = {},
 ) {
   const source = memory(archive);
   const files: Record<string, string> = {};
@@ -135,6 +139,10 @@ describe('central directory', () => {
     const zip = archive();
     corrupt(new DataView(zip.buffer), directoryStart(zip));
     expect(() => readZipDirectory(memory(zip), options())).toThrow('malformed');
+    const onInvalidEntry = jest.fn();
+    const directory = readZipDirectory(memory(zip), options({ onInvalidEntry }));
+    expect(onInvalidEntry.mock.calls).toEqual([['manifest.json']]);
+    expect(directory.entries.map(({ name }) => name)).toEqual(['database/cherry.db']);
   });
 
   test('applies record, name, duplicate and expansion limits', () => {
@@ -192,6 +200,40 @@ describe('extraction', () => {
     corrupt[30 + view.getUint16(26, true) + view.getUint16(28, true)] ^= 1;
     await expect(extract(corrupt)).resolves.toBeDefined();
     await expect(extract(corrupt, { verifyCrc: true })).rejects.toThrow('malformed');
+  });
+
+  test('continues after a malformed deflate stream when recovery is enabled', async () => {
+    const zip = zipSync({
+      'broken.txt': strToU8('broken'.repeat(20)),
+      'good.txt': strToU8('good'),
+    });
+    const view = new DataView(zip.buffer);
+    expect(view.getUint16(8, true)).toBe(8);
+    // Reserved DEFLATE block type.
+    zip[30 + view.getUint16(26, true) + view.getUint16(28, true)] = 0b110;
+    const onInvalidEntry = jest.fn();
+    await expect(extract(zip, { verifyCrc: true, onInvalidEntry })).resolves.toMatchObject({
+      files: { 'good.txt': 'good' },
+    });
+    expect(onInvalidEntry.mock.calls).toEqual([['broken.txt']]);
+  });
+
+  test('propagates a sink failure during a recoverable extraction', async () => {
+    const source = memory(zipSync({ 'image.png': strToU8('image'.repeat(20)) }));
+    const onInvalidEntry = jest.fn();
+    const diskError = Object.assign(new Error('disk full'), { code: 1 });
+    await expect(
+      extractZipEntries(source, readZipDirectory(source, options()), {
+        ...format,
+        onInvalidEntry,
+        open: () => ({
+          write() {
+            throw diskError;
+          },
+        }),
+      }),
+    ).rejects.toBe(diskError);
+    expect(onInvalidEntry).not.toHaveBeenCalled();
   });
 
   test('rejects a stored entry whose sizes disagree before writing it', async () => {

@@ -1991,6 +1991,7 @@
   "settings.data.deepseek.error.failed": "Не удалось импортировать данные. Существующие разговоры не изменены. Повторите попытку.",
   "settings.data.deepseek.error.invalid": "Файл повреждён или содержит некорректные данные разговоров. Повторите экспорт из DeepSeek.",
   "settings.data.deepseek.error.invalidLink": "Вставьте действительную ссылку для скачивания экспорта DeepSeek.",
+  "settings.data.deepseek.error.shareLink": "Это ссылка для общего доступа к чату DeepSeek. Вставьте официальную ссылку для скачивания экспорта данных.",
   "settings.data.deepseek.error.tooLarge": "Этот архив слишком велик для импорта на данном устройстве.",
   "settings.data.deepseek.error.unsupported": "Этот формат экспорта не поддерживается. Запросите новый экспорт на сайте DeepSeek.",
   "settings.data.deepseek.linkLabel": "Ссылка для скачивания экспорта DeepSeek",
