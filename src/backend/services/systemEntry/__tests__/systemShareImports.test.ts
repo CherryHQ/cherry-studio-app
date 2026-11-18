@@ -1,13 +1,18 @@
+import { readSourceAiContent } from '@/backend/services/file/aiContentMetadata';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import {
   discardNormalizedImage,
   normalizeImportedImage,
 } from '@/backend/services/file/importedImageNormalization';
+import type { AiContentLabel } from '@/shared/data/types/aiContent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import type { NativeSystemEntry } from '../../../../../modules/system-integration';
 import { createSystemShareImporter } from '../systemShareImports';
 
+jest.mock('@/backend/services/file/aiContentMetadata', () => ({
+  readSourceAiContent: jest.fn(),
+}));
 jest.mock('@/backend/services/file/filePreviewStorage', () => ({
   createInternalEntryWithPreview: jest.fn(),
 }));
@@ -34,7 +39,17 @@ beforeEach(() => jest.resetAllMocks());
 
 test('imports a shared image the way a picked one is imported', async () => {
   const normalized = { mediaType: 'image/jpeg', name: 'photo.jpg', uri: 'file:///cache/photo.jpg' };
+  const aiContentLabel: AiContentLabel = {
+    Label: '1',
+    ContentProducer: 'Example',
+    ProduceID: 'photo-1',
+    ReservedCode1: '',
+    ContentPropagator: 'Example',
+    PropagateID: 'photo-1',
+    ReservedCode2: '',
+  };
   jest.mocked(normalizeImportedImage).mockResolvedValue(normalized);
+  jest.mocked(readSourceAiContent).mockResolvedValue(aiContentLabel);
   jest.mocked(createInternalEntryWithPreview).mockResolvedValue(
     FileEntrySchema.parse({
       id: 'ac3a0b0e-1f30-4e5c-8a51-6d0f51a5b2c7',
@@ -51,9 +66,13 @@ test('imports a shared image the way a picked one is imported', async () => {
 
   const files = await createSystemShareImporter(entries as never)(entry, signal);
 
+  expect(readSourceAiContent).toHaveBeenCalledWith(
+    { uri: entry.files[0].uri, mediaType: 'image/png' },
+    signal,
+  );
   expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
     entries,
-    { ...normalized, provenance: 'imported', source: 'uri' },
+    { ...normalized, aiContentLabel, provenance: 'imported', source: 'uri' },
     signal,
   );
   expect(discardNormalizedImage).toHaveBeenCalledWith(normalized);
