@@ -102,6 +102,15 @@ export function memoryModelView(
   purpose: MemoryUse,
   extractionSources?: readonly MemoryEntry['sources'][number][],
 ): string | null {
+  return memoryModelViews(files, [target], purpose, extractionSources).contents[0] ?? null;
+}
+
+export function memoryModelViews(
+  files: ReadonlyMap<string, string>,
+  targets: readonly string[],
+  purpose: MemoryUse,
+  extractionSources?: readonly MemoryEntry['sources'][number][],
+) {
   const parsed = new Map([...files].map(([name, text]) => [name, parseMemoryEntries(text)]));
   const entries = [...parsed.values()].flatMap(entriesIn);
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -148,22 +157,25 @@ export function memoryModelView(
     extractionSources?.some((source) => sources.has(memorySourceKey(source)))
   )
     invalidEntries();
-  const parts = parsed.get(target);
-  if (!parts) return null;
-  if (protectedEntries.length && parts.some((part) => typeof part === 'string' && part.trim()))
-    invalidEntries();
-  return parts
-    .map((part) => {
-      if (typeof part === 'string') return part;
-      if (excluded.has(part.id)) return '';
-      return (
-        JSON.stringify({
-          status: part.status,
-          text: part.text,
-          validFrom: part.validFrom,
-          validTo: part.validTo,
-        }) + '\n'
-      );
-    })
-    .join('');
+  const contents = targets.map((target) => {
+    const parts = parsed.get(target);
+    if (!parts) return null;
+    if (protectedEntries.length && parts.some((part) => typeof part === 'string' && part.trim()))
+      invalidEntries();
+    return parts
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (excluded.has(part.id)) return '';
+        return (
+          JSON.stringify({
+            status: part.status,
+            text: part.text,
+            validFrom: part.validFrom,
+            validTo: part.validTo,
+          }) + '\n'
+        );
+      })
+      .join('');
+  });
+  return { contents, structured: entries.length > 0 };
 }

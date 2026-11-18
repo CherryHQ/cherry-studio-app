@@ -48,7 +48,7 @@ export class MemoryService {
     };
     const validations = new Map<string, () => Promise<void>>();
     const validateModelReads = async () => {
-      for (const validate of validations.values()) await validate();
+      for (const validate of new Set(validations.values())) await validate();
       access.assertAuthorized();
     };
     const run = <T>(operation: (store: MemoryStore) => Promise<T>, write = false): Promise<T> => {
@@ -79,6 +79,17 @@ export class MemoryService {
       this.options.changed?.(scope, origin, result);
       return result;
     };
+    const readMany = (
+      targets: readonly string[],
+      purpose: MemoryUse = 'current',
+      sources?: readonly MemoryEntry['sources'][number][],
+    ) =>
+      run(async (store) => {
+        const result = await store.modelReads(access, targets, purpose, sources);
+        access.assertAuthorized();
+        for (const file of result.reads) validations.set(file.path, result.validate);
+        return result.reads;
+      });
     return {
       scope,
       assertAuthorized: access.assertAuthorized,
@@ -91,22 +102,16 @@ export class MemoryService {
         run((store) => store.assertRuntimeSafe(access, authority.assertHistory)),
       list: () => run((store) => store.list(access)),
       entry: () => run((store) => store.entry(access)),
-      read: (
+      readMany,
+      async read(
         target: string,
         purpose: MemoryUse = 'current',
         sources?: readonly MemoryEntry['sources'][number][],
-      ) =>
-        run(async (store) => {
-          const result = await store.modelRead(access, target, purpose, sources);
-          await result.validate();
-          validations.set(target, result.validate);
-          return {
-            path: result.path,
-            content: result.content,
-            hash: result.hash,
-            receipt: result.receipt,
-          };
-        }),
+      ) {
+        const [file] = await readMany([target], purpose, sources);
+        access.assertAuthorized();
+        return file!;
+      },
       commit: (
         mutations: readonly MemoryMutation[],
         approval: MemoryApproval = approve,

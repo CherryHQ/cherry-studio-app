@@ -252,13 +252,11 @@ export function createMemoryMaintenance(deps: {
     try {
       const paths = await session.list();
       if (paths.length > 40) throw new DreamingError('budget');
-      const files: MemoryRead[] = [];
+      const files = await session.readMany(paths, 'extraction');
       let bytes = 0;
-      for (const path of paths) {
-        const file = await session.read(path, 'extraction');
+      for (const file of files) {
         bytes += new TextEncoder().encode(file.content ?? '').length;
         if (bytes > 32_000 || !file.receipt) throw new DreamingError('budget');
-        files.push(file);
       }
       const model = await deps.model();
       const modelId = deps.preference.readCached('agent.default_model_id');
@@ -331,11 +329,6 @@ export function createMemoryMaintenance(deps: {
     try {
       assertCurrent();
       const paths = await session.list();
-      const entry = await session.read('MEMORY.md');
-      if (!entry.receipt) return false;
-      const candidates: MemoryRead[] = [entry];
-      const states = new Map<string, FileState>();
-      let eligible = force;
       const topics = paths.filter((path) => path !== 'MEMORY.md');
       const cursorKey = 'memory.scan:' + key;
       const cursor = (await readState<{ index: number }>(cursorKey))?.index ?? 0;
@@ -345,11 +338,17 @@ export function createMemoryMaintenance(deps: {
             ...topics.slice(0, cursor % topics.length),
           ].slice(0, 9)
         : [];
+      const files = await session.readMany(['MEMORY.md', ...rotated]);
+      const entry = files[0]!;
+      if (!entry.receipt) return false;
+      const candidates: MemoryRead[] = [entry];
+      const states = new Map<string, FileState>();
+      let eligible = force;
       await saveState(cursorKey, {
         index: topics.length ? (cursor + rotated.length) % topics.length : 0,
       });
-      for (const path of ['MEMORY.md', ...rotated]) {
-        const file = path === 'MEMORY.md' ? entry : await session.read(path);
+      for (const file of files) {
+        const path = file.path;
         if (!file.receipt) continue;
         const previous = await state(scope, path);
         const progress = await updateFileState(scope, path, (current) => {

@@ -28,24 +28,13 @@ const batchSchema = z.strictObject({
   version: z.literal(1),
   id: z.uuid(),
   createdAt: z.number().int().nonnegative(),
-  source: z.enum(['controlled', 'dreaming', 'recovery', 'clear', 'migration', 'extraction']),
+  source: z.enum(['controlled', 'dreaming', 'recovery', 'clear', 'extraction']),
   status: z.enum(['pending', 'completed', 'partial']),
-  legacy: z
-    .strictObject({
-      path: z.string().regex(/^memory\/fact\.md$/i),
-      content: z.string(),
-      hash: z.string().regex(/^[0-9a-f]{64}$/),
-    })
-    .optional(),
   steps: z.array(stepSchema),
 });
 
 export type MemoryBatch = z.infer<typeof batchSchema>;
 export type MemoryMutationSource = MemoryBatch['source'];
-export interface MemoryLegacyOriginal {
-  path: string;
-  content: Uint8Array;
-}
 export interface MemoryFileChange {
   path: string;
   before: Uint8Array | null;
@@ -106,18 +95,6 @@ export function createMemoryBackups(files: MemoryFiles, platform: MemoryPlatform
         assertMemoryTarget(step.path);
         decodeOriginal(step);
       }
-      if (batch.legacy) {
-        const original = toByteArray(batch.legacy.content);
-        if (
-          batch.source !== 'migration' ||
-          fromByteArray(original) !== batch.legacy.content ||
-          files.hash(original) !== batch.legacy.hash
-        )
-          throw new MemoryError(
-            'invalid-backup',
-            'Legacy memory backup content does not match its hash',
-          );
-      }
       batches.push({
         filename,
         reservedBytes: Math.max(bytes.length, reservedBatchBytes(batch)),
@@ -139,13 +116,7 @@ export function createMemoryBackups(files: MemoryFiles, platform: MemoryPlatform
     root: string,
     changes: readonly MemoryFileChange[],
     source: MemoryMutationSource,
-    legacy?: MemoryLegacyOriginal,
   ): Promise<MemoryBatch> {
-    if (legacy && (source !== 'migration' || !/^memory\/fact\.md$/i.test(legacy.path)))
-      throw new MemoryError(
-        'invalid-backup',
-        'Legacy originals belong only to FACT migration backups',
-      );
     const existing = await storedBatches(root);
     const batch: MemoryBatch = {
       version: 1,
@@ -153,15 +124,6 @@ export function createMemoryBackups(files: MemoryFiles, platform: MemoryPlatform
       createdAt: Math.max(platform.now(), (existing.at(-1)?.batch.createdAt ?? 0) + 1),
       source,
       status: 'pending',
-      ...(legacy
-        ? {
-            legacy: {
-              path: legacy.path,
-              content: fromByteArray(legacy.content),
-              hash: files.hash(legacy.content)!,
-            },
-          }
-        : {}),
       steps: changes.map((change) => ({
         path: change.path,
         before: change.before === null ? null : fromByteArray(change.before),
@@ -208,13 +170,6 @@ export function createMemoryBackups(files: MemoryFiles, platform: MemoryPlatform
       ?.batch;
   }
 
-  async function findLegacyMemoryBackup(root: string, hash: string): Promise<string | undefined> {
-    const stored = await storedBatches(root);
-    return stored.findLast(
-      (item) => item.batch.source === 'migration' && item.batch.legacy?.hash === hash,
-    )?.batch.id;
-  }
-
   function memoryBatchStatus(batch: MemoryBatch): MemoryBatch['status'] {
     if (batch.steps.some((step) => step.outcome === 'pending')) return 'pending';
     if (
@@ -254,6 +209,5 @@ export function createMemoryBackups(files: MemoryFiles, platform: MemoryPlatform
     memoryBatchStatus,
     reconcileMemoryBackup,
     saveMemoryBackup,
-    findLegacyMemoryBackup,
   };
 }

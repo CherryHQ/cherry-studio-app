@@ -7,8 +7,6 @@ export const AGENT_MEMORY_FILES = {
   user: ['USER.md'],
 } as const satisfies Record<AgentMemoryKey, readonly string[]>;
 
-export const AGENT_MEMORY_KEYS = Object.keys(AGENT_MEMORY_FILES) as AgentMemoryKey[];
-
 /** Also used by backup validation, without loading Expo or the running service. */
 export function isAgentMemoryArchivePath(path: string): boolean {
   const [prefix, agentId, ...parts] = path.split('/');

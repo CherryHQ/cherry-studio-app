@@ -82,6 +82,79 @@ test('new files appearing during inference invalidate the scope evidence before 
   expect(f.text('shared/MEMORY.md')).toBe('');
 });
 
+test('batch reads and commit validation keep storage reads proportional to the scope size', async () => {
+  async function storageReads(topicCount: number) {
+    const f = memoryFixture();
+    const session = f.open();
+    const paths = [
+      'MEMORY.md',
+      ...Array.from({ length: topicCount }, (_, index) => `.memories/topic-${index}.md`),
+    ];
+    for (const path of paths) f.set('shared/' + path, 'Original ' + path);
+    await session.list();
+    const read = f.platform.files.read;
+    let count = 0;
+    f.platform.files.read = async (root, path) => {
+      if (root === 'shared') count++;
+      return read(root, path);
+    };
+    const files = await session.readMany(paths, 'extraction');
+    const result = await session.commit(
+      [{ kind: 'write', receipt: files[0].receipt, content: 'Updated entry' }],
+      undefined,
+      files.map((file) => file.receipt),
+    );
+    expect(result.error).toBeUndefined();
+    expect(f.text('shared/MEMORY.md')).toBe('Updated entry');
+    return count;
+  }
+  expect(await storageReads(12)).toBeLessThanOrEqual((await storageReads(4)) * 3);
+});
+
+test('rereading one target retains the other batch members’ original scope evidence', async () => {
+  const f = memoryFixture();
+  const session = f.open();
+  f.set('shared/.memories/topic.md', 'Original topic');
+  await session.readMany(['MEMORY.md', '.memories/topic.md']);
+  f.set('shared/.memories/topic.md', 'Newer topic');
+  const entry = await session.read('MEMORY.md');
+  await expect(
+    session.commit([{ kind: 'write', receipt: entry.receipt, content: 'Stale combined proposal' }]),
+  ).rejects.toMatchObject({ code: 'conflict' });
+  expect(f.text('shared/MEMORY.md')).toBe('');
+  expect(f.text('shared/.memories/topic.md')).toBe('Newer topic');
+});
+
+test.each(['edit', 'revoke'] as const)(
+  'a concurrent %s prevents a batch from returning unconfirmed memory',
+  async (change) => {
+    const f = memoryFixture();
+    let allowed = true;
+    const session = f.open(undefined, {
+      assertAuthorized: () => {
+        if (!allowed) throw new MemoryError('invalid-receipt', 'Access revoked');
+        return undefined;
+      },
+    });
+    f.set('shared/.memories/topic.md', 'Original topic');
+    await session.list();
+    const read = f.platform.files.read;
+    let changed = false;
+    f.platform.files.read = async (root, path) => {
+      const bytes = await read(root, path);
+      if (!changed && root === 'shared' && path === '.memories/topic.md') {
+        changed = true;
+        if (change === 'edit') f.set('shared/.memories/topic.md', 'Newer topic');
+        else allowed = false;
+      }
+      return bytes;
+    };
+    await expect(session.readMany(['MEMORY.md', '.memories/topic.md'])).rejects.toMatchObject({
+      code: change === 'edit' ? 'conflict' : 'invalid-receipt',
+    });
+  },
+);
+
 test('recovery restores confirmed old bytes but preserves files edited after the original operation', async () => {
   const f = memoryFixture();
   const session = f.open();
@@ -171,6 +244,7 @@ test('clearing keeps forgetting markers, blocks old context, and offers no model
   );
   const fresh = open('new');
   expect((await f.service.entrySnapshot('new', fresh)).content).not.toContain('A personal fact');
-  expect((await fresh.read('MEMORY.md')).receipt).toBe('');
+  const files = await fresh.readMany(['MEMORY.md', '.memories/missing.md']);
+  expect(files.map((file) => file.receipt)).toEqual(['', '']);
   expect([...f.files.keys()].some((key) => key.startsWith('backups/'))).toBe(true);
 });

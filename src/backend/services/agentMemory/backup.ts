@@ -3,8 +3,7 @@ import { Directory, File } from 'expo-file-system';
 import { AgentIdSchema } from '@/shared/data/types/agent';
 
 import { managedMemoryRoot, recoverableMemoryFile } from './managedMemoryStorage';
-import { AGENT_MEMORY_KEYS, AGENT_MEMORY_FILES, isAgentMemoryArchivePath } from './memoryFiles';
-import { memoryFile } from './memoryStorage';
+import { isAgentMemoryArchivePath } from './memoryFiles';
 
 export function captureMemoryPaths(root: Directory, agentIds: readonly string[]): string[] {
   const paths = new Set<string>();
@@ -26,9 +25,6 @@ export function captureMemoryPaths(root: Directory, agentIds: readonly string[])
   collect('backups/shared', 'memory-backups/shared');
   for (const id of agentIds) {
     AgentIdSchema.parse(id);
-    for (const key of AGENT_MEMORY_KEYS)
-      if (memoryFile(root, id, key).exists)
-        paths.add('agent-memory/' + id + '/' + AGENT_MEMORY_FILES[key].join('/'));
     collect('agent/' + id, 'agent-memory/' + id);
     collect('agent/' + id, 'agent-memory/' + id, '.memories');
     collect('backups/agent/' + id, 'memory-backups/agent/' + id);

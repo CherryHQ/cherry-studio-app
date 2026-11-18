@@ -2,7 +2,6 @@ import {
   createMemoryBackups,
   type MemoryBatch,
   type MemoryFileChange,
-  type MemoryLegacyOriginal,
   type MemoryMutationSource,
 } from './memoryBackups';
 import {
@@ -11,6 +10,7 @@ import {
   invalidEntries,
   memorySourceKey,
   memoryModelView,
+  memoryModelViews,
   type MemoryUse,
   type MemoryEntry,
   parseMemoryEntries,
@@ -86,7 +86,6 @@ interface MemoryCommitConditions {
   readReceipts?: readonly string[];
   validateReads?(): Promise<void>;
   clearTargets?: readonly string[];
-  legacy?: MemoryLegacyOriginal;
 }
 
 interface RecoveryBaseline {
@@ -158,17 +157,26 @@ export class MemoryStore {
     purpose: MemoryUse = 'current',
     extractionSources?: readonly MemoryEntry['sources'][number][],
   ) {
-    assertMemoryTarget(target);
+    const result = await this.modelReads(access, [target], purpose, extractionSources);
+    access.assertAuthorized();
+    return { ...result.reads[0]!, validate: result.validate };
+  }
+
+  async modelReads(
+    access: MemoryAccess,
+    targets: readonly string[],
+    purpose: MemoryUse = 'current',
+    extractionSources?: readonly MemoryEntry['sources'][number][],
+  ) {
+    const paths = [...targets];
+    paths.forEach(assertMemoryTarget);
     access.assertAuthorized();
     const generation = this.generation;
     const snapshot = await this.entrySnapshot();
     const files = new Map(
       [...snapshot].map(([name, bytes]) => [name, bytes ? this.decode(bytes) : '']),
     );
-    const content = memoryModelView(files, target, purpose, extractionSources);
-    const structured = [...files.values()].some(
-      (text) => entriesIn(parseMemoryEntries(text)).length > 0,
-    );
+    const view = memoryModelViews(files, paths, purpose, extractionSources);
     const validate = async () => {
       access.assertAuthorized();
       this.assertGeneration(generation);
@@ -177,13 +185,16 @@ export class MemoryStore {
       this.assertGeneration(generation);
     };
     await validate();
-    const raw = structured ? undefined : await this.read(access, target);
-    await validate();
     return {
-      path: target,
-      content,
-      hash: this.files.hash(snapshot.get(target) ?? null),
-      receipt: raw?.receipt ?? '',
+      reads: paths.map((path, index): MemoryRead => {
+        const hash = this.files.hash(snapshot.get(path) ?? null);
+        return {
+          path,
+          content: view.contents[index] ?? null,
+          hash,
+          receipt: view.structured ? '' : this.readReceipt(access, path, hash, generation),
+        };
+      }),
       validate,
     };
   }
@@ -228,15 +239,29 @@ export class MemoryStore {
     if (content !== null) parseMemoryEntries(content);
     access.assertAuthorized();
     this.assertGeneration(generation);
-    const receipt = this.platform.randomUUID();
     const hash = this.files.hash(bytes);
+    return {
+      path: target,
+      content,
+      hash,
+      receipt: this.readReceipt(access, target, hash, generation),
+    };
+  }
+
+  private readReceipt(
+    access: MemoryAccess,
+    path: string,
+    hash: string | null,
+    generation: number,
+  ): string {
+    const receipt = this.platform.randomUUID();
     let receipts = this.reads.get(access);
     if (!receipts) {
       receipts = new Map();
       this.reads.set(access, receipts);
     }
-    receipts.set(receipt, { path: target, hash, generation });
-    return { path: target, content, hash, receipt };
+    receipts.set(receipt, { path, hash, generation });
+    return receipt;
   }
 
   async commit(
@@ -263,23 +288,6 @@ export class MemoryStore {
     const dependencies = (conditions.readReceipts ?? []).map((receipt) =>
       this.baseline(access, receipt),
     );
-    const legacy = conditions.legacy
-      ? { path: conditions.legacy.path, content: new Uint8Array(conditions.legacy.content) }
-      : undefined;
-    if (legacy && (source !== 'migration' || !/^memory\/fact\.md$/i.test(legacy.path)))
-      throw new MemoryError(
-        'invalid-path',
-        'Only a trusted migration can back up legacy FACT content',
-      );
-    const assertLegacy = async () => {
-      if (
-        legacy &&
-        this.files.hash(await this.files.read(this.root, legacy.path)) !==
-          this.files.hash(legacy.content)
-      )
-        throw new MemoryError('conflict', 'Legacy FACT changed during migration');
-    };
-    await assertLegacy();
     const clearTargets = conditions.clearTargets ? [...conditions.clearTargets] : undefined;
     const changes: MemoryFileChange[] = [];
     for (const mutation of intent) {
@@ -324,7 +332,6 @@ export class MemoryStore {
           generation,
         });
       await this.assertDistinctTargets(changes);
-      await assertLegacy();
       await this.assertEntrySnapshot(scope);
       this.assertGeneration(generation);
       const advanceGeneration = source === 'clear' || source === 'recovery';
@@ -335,7 +342,6 @@ export class MemoryStore {
         source,
         validateApproval,
         generation + Number(advanceGeneration),
-        legacy,
       );
     });
   }
@@ -505,7 +511,6 @@ export class MemoryStore {
     source: MemoryMutationSource,
     approval: () => undefined,
     generation: number,
-    legacy?: MemoryLegacyOriginal,
   ): Promise<MemoryCommitResult> {
     access.assertAuthorized();
     approval();
@@ -513,7 +518,7 @@ export class MemoryStore {
     const changes = proposed.filter(
       (change) => this.files.hash(change.before) !== this.files.hash(change.after),
     );
-    if (!changes.length && !legacy) {
+    if (!changes.length) {
       return {
         batchId: null,
         files: proposed.map((change) => ({
@@ -523,7 +528,7 @@ export class MemoryStore {
         })),
       };
     }
-    const batch = await this.backups.createMemoryBackup(this.backupRoot, changes, source, legacy);
+    const batch = await this.backups.createMemoryBackup(this.backupRoot, changes, source);
     const result: MemoryCommitResult = {
       batchId: batch.id,
       files: changes.map((change) => ({

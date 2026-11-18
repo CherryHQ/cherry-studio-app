@@ -31,7 +31,7 @@ export type {
   MemoryClearPreview,
   MemoryRecoveryPreview,
 } from './MemoryStore';
-export type { MemoryMutationSource, MemoryLegacyOriginal } from './memoryBackups';
+export type { MemoryMutationSource } from './memoryBackups';
 export { createAgentMemory } from './createAgentMemory';
 export type { AgentMemory, AgentMemoryOperations, MemoryStorage } from './createAgentMemory';
 export {

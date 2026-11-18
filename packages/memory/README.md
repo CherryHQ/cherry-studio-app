@@ -41,6 +41,10 @@ Closing the service invalidates sessions and drains admitted operations.
 A complete read binds a receipt to exact bytes, scope, caller and generation. A write/delete
 requires that receipt, version rechecks and approval of the complete immutable proposal. Approval
 returns a live revocation check; custom approval also rechecks the session's storage authority.
+`session.readMany` reads a batch from one complete scope snapshot and evaluates entry policy once.
+Each file receives its own receipt after scope revalidation. Commit revalidates each retained batch
+once, including other files in the scope; rereading one target does not discard the remaining
+targets' earlier evidence. Single-file reads use the same path.
 No backup means no active-file mutation. Multi-file saves report each confirmed outcome and
 retain manifests after interruption. A returned promise alone is not evidence of a complete save.
 
