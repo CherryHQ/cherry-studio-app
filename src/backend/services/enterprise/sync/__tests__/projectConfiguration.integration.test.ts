@@ -198,8 +198,16 @@ describe('projectConfiguration', () => {
 
     // A pick withdrawn from the pool falls back to the default.
     await db.database.update(agentTable).set({ model: GPT });
-    await project(raw, [agent('1', [SONNET])]);
+    const [row] = await db.database.select({ id: agentTable.id }).from(agentTable);
+    await db.database
+      .insert(agentSessionTable)
+      .values({ id: 'session', agentId: row!.id, model: GPT });
+    const result = await project(raw, [agent('1', [SONNET])]);
     expect(await modelOf()).toBe(SONNET);
+    expect(
+      await db.database.select({ model: agentSessionTable.model }).from(agentSessionTable),
+    ).toEqual([{ model: null }]);
+    expect(result.changedPaths).toContain('/agent-sessions/session');
   });
 
   it('deletes removed resources and detaches a removed Agent into a user Agent', async () => {

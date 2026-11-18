@@ -17,21 +17,23 @@ export async function refreshProviderModelQueries(queryClient: QueryClient, prov
       queryKey: queryKeys.models.list({ enabled: true, providerId }),
     }),
     queryClient.invalidateQueries({ queryKey: queryKeys.models.list() }),
-    refreshAgentQueriesAfterModelRemoval(queryClient),
+    refreshConversationModelQueriesAfterRemoval(queryClient),
   ]);
 }
 
 /**
- * A model removal may clear any Agent's model through the database FK. Refetch detail queries,
+ * Model removal may clear an Agent or Session model through the database FK. Refetch details,
  * including inactive caches, before the mutation settles so chat cannot briefly submit a deleted
  * model snapshot when that Agent is opened again.
  */
-export async function refreshAgentQueriesAfterModelRemoval(queryClient: QueryClient) {
+export async function refreshConversationModelQueriesAfterRemoval(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.agents.all() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() }),
     queryClient.refetchQueries({
       predicate: ({ queryKey }) =>
-        typeof queryKey[0] === 'string' && queryKey[0].startsWith('/agents/'),
+        typeof queryKey[0] === 'string' &&
+        (queryKey[0].startsWith('/agents/') || /^\/agent-sessions\/[^/]+$/.test(queryKey[0])),
       type: 'all',
     }),
   ]);

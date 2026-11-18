@@ -17,8 +17,12 @@ import type {
 } from '@/shared/contracts/agent';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
-import { createSqliteStoreHarness } from './_sqliteStoreHarness';
+import type {
+  AgentSessionStore,
+  FinalizeAssistantMessageInput,
+  ReserveSubmissionInput,
+} from '../AgentSessionStore';
+import { createSqliteStoreHarness, type SqliteStoreHarness } from './_sqliteStoreHarness';
 
 const INTERRUPTED: AgentErrorView = {
   code: 'INTERRUPTED',
@@ -54,6 +58,7 @@ type StoreHarness = {
   createEmptySession: (input: { agentId: string; name?: string }) => Promise<AgentSessionView>;
   /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
+  seedModel: SqliteStoreHarness['seedModel'];
   raw: DatabaseSync;
   cleanup: () => void;
 };
@@ -618,11 +623,13 @@ describe('SqliteAgentSessionStore conformance', () => {
         ...RESERVATION_FACTS,
         agentId,
         ...(withWorkspace ? { workspaceFolderId: folderId } : {}),
+        sessionModelId: MODEL_ID,
         userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
       });
 
       expect(reserved.session.id).toBe(ids.sessionId);
       expect(reserved.session.workspaceFolderId ?? null).toBe(withWorkspace ? folderId : null);
+      expect(reserved.session.model).toBe(MODEL_ID);
       expect(reserved.userMessage.id).toBe(ids.userMessageId);
       expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
       expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
@@ -634,6 +641,109 @@ describe('SqliteAgentSessionStore conformance', () => {
       expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
     },
   );
+
+  test('reserveInitialSubmission validates sessionModelId pool membership and drops unregistered models', async () => {
+    const unmanagedAgentId = agentId;
+    const managedAgentId = await harness.makeAgentId();
+    harness.raw
+      .prepare('UPDATE agent SET managed_remote_id = ?, allowed_model_ids = ? WHERE id = ?')
+      .run('remote-1', JSON.stringify([MODEL_ID]), managedAgentId);
+
+    const allowed = await store.reserveInitialSubmission({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      agentId: managedAgentId,
+      sessionModelId: MODEL_ID,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Allowed.', state: 'done' }],
+    });
+    expect(allowed.session.model).toBe(MODEL_ID);
+
+    await expect(
+      store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        agentId: managedAgentId,
+        sessionModelId: 'mock-provider::disallowed',
+        userParts: [{ id: 'input-0', type: 'text', text: 'Disallowed.', state: 'done' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+
+    const dropped = await store.reserveInitialSubmission({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      agentId: unmanagedAgentId,
+      sessionModelId: 'mock-provider::unregistered',
+      userParts: [{ id: 'input-0', type: 'text', text: 'Unregistered.', state: 'done' }],
+    });
+    expect(dropped.session.model).toBeUndefined();
+
+    await expect(
+      store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        agentId: 'missing-agent',
+        sessionModelId: MODEL_ID,
+        userParts: [{ id: 'input-0', type: 'text', text: 'Missing agent.', state: 'done' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
+  });
+
+  test('rejects a prepared reply withdrawn before the reservation commits', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const original = await settleTurn(store, session.id, 'Original question');
+    const allowedModelId = 'mock-provider::allowed';
+    harness.seedModel(allowedModelId);
+    // The prepared model remains registered and can still be used by other Agents.
+    harness.raw
+      .prepare('UPDATE agent SET managed_remote_id = ?, allowed_model_ids = ? WHERE id = ?')
+      .run('remote-1', JSON.stringify([allowedModelId]), agentId);
+    const withdrawnError = { view: { code: 'CAPABILITY_UNSUPPORTED' } };
+    const parallel: Omit<ReserveSubmissionInput, 'sessionId'> = {
+      ...messageIds(),
+      modelId: allowedModelId,
+      inferenceSnapshot: {
+        ...INFERENCE_SNAPSHOT,
+        model: { ...INFERENCE_SNAPSHOT.model, uniqueModelId: allowedModelId, modelId: 'allowed' },
+      },
+      userParts: original.userMessage.parts,
+      additionalReplies: [{ ...RESERVATION_FACTS, assistantMessageId: uuidv7() }],
+    };
+    const newSessionId = uuidv7();
+    await expect(
+      store.reserveInitialSubmission({ ...parallel, sessionId: newSessionId, agentId }),
+    ).rejects.toMatchObject(withdrawnError);
+    expect(await store.getSession(newSessionId)).toBeNull();
+
+    await expect(
+      store.reserveSubmission({ ...parallel, sessionId: session.id }),
+    ).rejects.toMatchObject(withdrawnError);
+    await expect(
+      store.reserveAnswer({
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userMessageId: original.userMessage.id,
+        assistantMessageId: uuidv7(),
+      }),
+    ).rejects.toMatchObject(withdrawnError);
+    await expect(
+      store.reserveRetry({
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userMessageId: original.userMessage.id,
+        assistantMessageId: original.assistantMessage.id,
+        userParts: original.userMessage.parts,
+        assistantParts: [],
+      }),
+    ).rejects.toMatchObject(withdrawnError);
+    expect((await store.listMessages(session.id)).map(({ id }) => id)).toEqual([
+      original.userMessage.id,
+      original.assistantMessage.id,
+    ]);
+  });
 
   test('conversation activity advances the Session row timestamp', async () => {
     const reservationTime = 2_000_000_001_000;

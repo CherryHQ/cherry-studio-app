@@ -5,7 +5,12 @@ import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
-import { agentTable, monotonicUpdateTimestamp, userModelTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionTable,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import type {
   InsertUserProviderRow,
   UserProviderRow,
@@ -797,6 +802,10 @@ export class ProviderService {
         .select({ id: userModelTable.id })
         .from(userModelTable)
         .where(eq(userModelTable.providerId, providerId));
+      await tx
+        .update(agentSessionTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(inArray(agentSessionTable.model, providerModelIds));
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })

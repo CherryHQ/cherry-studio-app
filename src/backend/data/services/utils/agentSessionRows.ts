@@ -30,6 +30,7 @@ export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
   return AgentSessionViewSchema.parse({
     id: row.id,
     agentId: row.agentId,
+    ...(row.model ? { model: row.model } : {}),
     name: row.name,
     isNameManuallyEdited: row.isNameManuallyEdited,
     workspaceFolderId: row.workspaceFolderId,

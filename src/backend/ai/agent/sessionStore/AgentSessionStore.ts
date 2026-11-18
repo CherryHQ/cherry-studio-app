@@ -71,6 +71,7 @@ export type ReserveAnswerInput = ReservedAnswerInput & {
 
 export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'parentMessageId'> & {
   agentId: string;
+  sessionModelId?: ReservedAnswerInput['modelId'];
   workspaceFolderId?: string;
 };
 

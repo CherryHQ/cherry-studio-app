@@ -15,7 +15,7 @@ const STACKED_AVATAR_COUNT = 3;
 
 /**
  * The composer's model control. Several one-send models show as stacked
- * avatars with a count and a clear button that returns to the Agent's model.
+ * avatars with a count and a clear button that returns to the conversation's model.
  */
 export function ChatInputModelPill({
   model,

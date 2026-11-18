@@ -54,6 +54,7 @@ import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
@@ -340,15 +341,16 @@ export class DurableAgentHost implements AgentProtocol {
         const session = await this.store.getSession(identity.sessionId);
         if (!session || !(await this.isCurrentConversation(identity)))
           fail('SESSION_NOT_FOUND', 'The execution no longer has a current Cherry owner.');
-        if (session && !(await this.ports.agents.getAgent(session.agentId)))
+        if (identity.requestId) await this.waitForOwner(identity, identity.requestId, signal);
+        const prepared = identity.requestId
+          ? this.prepared.get(executionKey(identity, identity.requestId))
+          : undefined;
+        const model = prepared?.plan.inferenceSnapshot.model.uniqueModelId ?? session.model;
+        if (!(await this.getAgentOwner(session.agentId, model)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
-        if (identity.requestId) {
-          await this.waitForOwner(identity, identity.requestId, signal);
-          const prepared = this.prepared.get(executionKey(identity, identity.requestId));
-          if (prepared)
-            for (const id of await this.conversations.resourceFileEntryIds(identity))
-              prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
-        }
+        if (prepared)
+          for (const id of await this.conversations.resourceFileEntryIds(identity))
+            prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
         signal.throwIfAborted();
       },
       resolveTool: (identity, ref, signal) => this.resolveTool(identity, ref, signal),
@@ -668,6 +670,7 @@ export class DurableAgentHost implements AgentProtocol {
       );
       await this.submitTargets(parsed, null, targets, signal, {
         agentId: parsed.agentId,
+        sessionModelId: parsed.sessionModelId,
         workspaceFolderId: parsed.workspaceFolderId,
       });
       return this.requireSession(parsed.sessionId);
@@ -826,7 +829,10 @@ export class DurableAgentHost implements AgentProtocol {
         inference.snapshot.imageGeneration
       )
         return;
-      const agent = await this.ports.agents.getAgent(session.agentId);
+      const agent = await this.ports.agents.getAgent(
+        session.agentId,
+        inference.snapshot.model.uniqueModelId,
+      );
       if (!agent) return;
       const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
         this.preparation,
@@ -887,7 +893,7 @@ export class DurableAgentHost implements AgentProtocol {
     parent: string | null,
     targets: readonly ReplyTarget[],
     signal: AbortSignal,
-    initial?: { agentId: string; workspaceFolderId?: string },
+    initial?: Pick<AgentStartSessionInput, 'agentId' | 'sessionModelId' | 'workspaceFolderId'>,
     /** Replaces the new-question reservation: a sibling answer or an in-place retry. */
     reserve?: () => Promise<ReserveSubmissionResult>,
   ) {
@@ -932,15 +938,22 @@ export class DurableAgentHost implements AgentProtocol {
           }
         : {}),
     };
-    const reserved = reserve
-      ? await reserve()
-      : initial
-        ? await this.store.reserveInitialSubmission({
-            ...reservation,
-            agentId: initial.agentId,
-            ...(initial.workspaceFolderId ? { workspaceFolderId: initial.workspaceFolderId } : {}),
-          })
-        : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    let reserved: ReserveSubmissionResult;
+    try {
+      reserved = reserve
+        ? await reserve()
+        : initial
+          ? await this.store.reserveInitialSubmission({
+              ...reservation,
+              ...initial,
+            })
+          : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    } catch (error) {
+      if (initial) {
+        await this.detachConversation(sessionId).catch(() => undefined);
+      }
+      throw error;
+    }
     const renameFork = !reserve && !initial && this.forksToName.get(sessionId) === null;
     if (renameFork) {
       this.forksToName.set(sessionId, reserved.assistantMessage.id);
@@ -1317,8 +1330,7 @@ export class DurableAgentHost implements AgentProtocol {
         fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
       const parts = editedUserInput(edited.parts, parsed.text);
       // Question editing is a normal new submission from an explicit parent.
-      // Omitted composer overrides use the Agent's current defaults, never a
-      // historical answer's inference snapshot.
+      // Omitted composer overrides follow the current conversation model.
       const edit: AgentSubmitMessageInput = {
         sessionId: session.id,
         userMessageId: uuidv7(),
@@ -1328,6 +1340,9 @@ export class DurableAgentHost implements AgentProtocol {
         ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
         ...(parsed.reasoningEffort !== undefined
           ? { reasoningEffort: parsed.reasoningEffort }
+          : {}),
+        ...(parsed.reasoningEffortModelId
+          ? { reasoningEffortModelId: parsed.reasoningEffortModelId }
           : {}),
         ...(parsed.imageGeneration ? { imageGeneration: parsed.imageGeneration } : {}),
         ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined
@@ -1712,7 +1727,7 @@ export class DurableAgentHost implements AgentProtocol {
   ): Promise<AgentSessionObservation> {
     await this.resumeSuspended();
     const initialSession = await this.requireSession(sessionId);
-    const agent = await this.ports.agents.getAgent(initialSession.agentId);
+    const agent = await this.getAgentOwner(initialSession.agentId, initialSession.model);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
     const states = this.accepting ? await this.attachedLanes(sessionId) : [];
     const session = await this.requireSession(sessionId);
@@ -2494,7 +2509,7 @@ export class DurableAgentHost implements AgentProtocol {
             const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
             const agent =
               prepared?.plan.agent ??
-              (session ? await this.ports.agents.getAgent(session.agentId) : null);
+              (session ? await this.getAgentOwner(session.agentId, session.model) : null);
             // The awaited lookups may outlive isolation or removal of this observed copy.
             if (
               !agent ||
@@ -3013,6 +3028,12 @@ export class DurableAgentHost implements AgentProtocol {
         });
       throw error;
     }
+  }
+
+  private getAgentOwner(agentId: string, fallbackModelId?: UniqueModelId | null) {
+    return this.ports.agents.getAgentOwner
+      ? this.ports.agents.getAgentOwner(agentId)
+      : this.ports.agents.getAgent(agentId, fallbackModelId);
   }
 }
 

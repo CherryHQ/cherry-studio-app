@@ -190,6 +190,8 @@ export function useMutation<
       context: TContext,
     ) => Promise<void> | void;
     refresh?: RefreshOption<TPath, TMethod>;
+    /** Serialize mutations that belong to the same resource, including across mounts. */
+    scopeId?: string;
   },
 ) {
   const dataApi = useApiClient();
@@ -200,6 +202,7 @@ export function useMutation<
     TriggerArgs<TPath, TMethod> | undefined,
     TContext
   >({
+    ...(options?.scopeId ? { scope: { id: options.scopeId } } : {}),
     mutationFn: (args) => {
       const resolvedPath = resolveTemplate(
         path,
