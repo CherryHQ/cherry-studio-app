@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { organizationLabel, useAccount } from '@/frontend/appShell/account';
+import { accountSignInHref, organizationLabel, useAccount } from '@/frontend/appShell/account';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { CapabilityLabel } from '@/frontend/components/Policy';
 import { usePreference } from '@/frontend/data/hooks';
@@ -58,7 +58,9 @@ export default function SettingsScreen() {
           detail={accountDetail}
           onPress={openProfileSettings}
           onSignIn={
-            account.isSignedIn || account.isEnterprise ? undefined : () => router.push('/login')
+            account.isSignedIn || account.isEnterprise
+              ? undefined
+              : () => router.push(accountSignInHref('/settings'))
           }
           userName={userName}
         />

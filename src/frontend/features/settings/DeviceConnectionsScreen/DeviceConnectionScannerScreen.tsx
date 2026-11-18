@@ -11,8 +11,8 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 
 import { useDesktopPairingInput } from './DesktopPairingProvider';
-import { pairingCancelDestination } from './pairingCancelDestination';
 import { usePairingInvitationInput } from './usePairingInvitationInput';
+import { usePairingNavigation } from './usePairingNavigation';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen() {
@@ -44,7 +44,7 @@ export function DeviceConnectionScannerScreen() {
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanInvalid && camera?.state === 'granted';
 
-  const cancel = () => router.replace(pairingCancelDestination(connectionId));
+  const { cancel } = usePairingNavigation({ connectionId });
 
   const openSystemSettings = () => {
     void permissions.openSystemSettings().catch(() => {

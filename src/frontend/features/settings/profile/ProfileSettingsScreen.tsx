@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, TextInput, View, type TextInputInstance } from 'react-native';
 
 import {
+  accountSignInHref,
   organizationLabel,
+  rememberAccountReturnTo,
   useAccount,
   useAccountErrorReporter,
 } from '@/frontend/appShell/account';
@@ -71,11 +73,14 @@ export default function ProfileSettingsScreen() {
   }, []);
 
   const reportAccountError = useAccountErrorReporter('ProfileSettingsScreen');
-  const openSignIn = () => router.push('/login');
+  const openSignIn = () => router.push(accountSignInHref('/settings/profile'));
   const isSignedIn = state.isSignedIn || state.isEnterprise;
   // A cloud account switches organization through the portal, reusing its browser sign-in.
   const canSwitchOrganization = isSignedIn && !state.privateAddress;
-  const switchOrganization = () => void account.switchSpace().catch(reportAccountError);
+  const switchOrganization = () => {
+    rememberAccountReturnTo('/settings/profile');
+    void account.switchSpace().catch(reportAccountError);
+  };
   /** Resolves whether the sign-out completed; a failure is reported here. */
   const signOut = () =>
     account.signOut().then(

@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { isAccountRoute, useAccount } from '@/frontend/appShell/account';
 import { chatHref, createChatComposerHandoff } from '@/frontend/appShell/navigation/chat';
 import {
   type ComposerInitialAttachment,
@@ -42,6 +43,11 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
   const navigation = useRootNavigationState();
+  const { state: account } = useAccount();
+  const accountReady =
+    !isAccountRoute(pathname) &&
+    !account.isRestoringSession &&
+    !(account.isEnterprise && account.needsSignIn);
   const { t } = useTranslation();
   const { toast } = useToast();
   const [pendingAction, setPendingAction] = useState<SystemAction>();
@@ -53,15 +59,16 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
   useEffect(() => {
     if (isDestination) {
       hasEnteredDestination.current = true;
-    } else if (hasEnteredDestination.current) {
+    } else if (hasEnteredDestination.current && accountReady) {
       hasEnteredDestination.current = false;
       phase.current = 'idle';
       setPendingAction(undefined);
     }
-  }, [isDestination]);
+  }, [accountReady, isDestination]);
 
   const deliver = (action: SystemAction) => {
-    if (!navigation?.key || phase.current !== 'idle' || isDestination) return false;
+    if (!accountReady || !navigation?.key || phase.current !== 'idle' || isDestination)
+      return false;
     phase.current = 'choosing';
     setPendingAction(action);
     router.push('/share-destination');
@@ -94,7 +101,7 @@ export function SystemEntryBridge({ children }: PropsWithChildren) {
 
   useSystemEntryClaims({
     deliver,
-    isReady: Boolean(navigation?.key && !pendingAction && !isDestination),
+    isReady: Boolean(accountReady && navigation?.key && !pendingAction && !isDestination),
     module,
     onFailure: () => toast.show({ label: t('systemEntry.failed'), variant: 'danger' }),
   });

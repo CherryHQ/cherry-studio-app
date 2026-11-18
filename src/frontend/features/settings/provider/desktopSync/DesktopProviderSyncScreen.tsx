@@ -6,7 +6,7 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -16,6 +16,7 @@ import {
   useDesktopProviderSync,
   type DesktopProviderSyncPreview,
 } from '@/frontend/hooks/useDesktopProviderSync';
+import { readInternalHref } from '@/frontend/utils/internalHref';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { DesktopImportUnavailableReason } from '@/shared/data/api/schemas/desktopConnections';
 
@@ -34,15 +35,32 @@ const UNAVAILABLE_KEYS = {
 type LoadedPreview = DesktopProviderSyncPreview;
 
 export default function DesktopProviderSyncScreen() {
-  const params = useLocalSearchParams<{ connectionId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    connectionId?: string | string[];
+    returnTo?: string | string[];
+  }>();
   const connectionId = getSingleRouteParam(params.connectionId);
+  const returnTo = readInternalHref(params.returnTo) ?? '/settings/provider';
 
-  return <DesktopProviderSync connectionId={connectionId} key={connectionId ?? 'choose-device'} />;
+  return (
+    <DesktopProviderSync
+      connectionId={connectionId}
+      returnTo={returnTo}
+      key={connectionId ?? 'choose-device'}
+    />
+  );
 }
 
-function DesktopProviderSync({ connectionId }: { connectionId?: string }) {
+function DesktopProviderSync({
+  connectionId,
+  returnTo,
+}: {
+  connectionId?: string;
+  returnTo: string;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
+  const navigation = useNavigation();
   const { alert } = useAlert();
   const { toast } = useToast();
   const sync = useDesktopProviderSync(connectionId);
@@ -62,7 +80,8 @@ function DesktopProviderSync({ connectionId }: { connectionId?: string }) {
   } = sync;
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>();
 
-  const openDeviceConnections = () => router.replace('/settings/device-connections');
+  const close = () => router.dismissTo(returnTo as Href);
+  const openDeviceConnections = () => router.push('/settings/device-connections');
   const continueWithSelectedConnection = () => {
     const connection = availableConnections.find((item) => item.id === selectedConnectionId);
     if (connection) void loadPreview(connection);
@@ -74,7 +93,7 @@ function DesktopProviderSync({ connectionId }: { connectionId?: string }) {
 
     try {
       const result = await sync.apply();
-      if (!result) return;
+      if (!result || !navigation.isFocused()) return;
       toast.show({
         label: t('settings.provider.desktopSync.success', {
           models: result.modelsAdded,
@@ -84,7 +103,7 @@ function DesktopProviderSync({ connectionId }: { connectionId?: string }) {
         }),
         variant: 'success',
       });
-      router.replace('/settings/provider');
+      close();
     } catch (syncError) {
       alert.show({ title: desktopConnectionErrorMessage(syncError, t) });
     }
@@ -94,7 +113,7 @@ function DesktopProviderSync({ connectionId }: { connectionId?: string }) {
     <SettingsScrollPage
       contentClassName="flex-grow gap-4"
       headerProps={{
-        onBack: () => router.replace('/settings/provider'),
+        onBack: close,
         title: t('settings.provider.desktopSync.title'),
       }}
     >
