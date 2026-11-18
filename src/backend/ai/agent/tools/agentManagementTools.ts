@@ -195,7 +195,7 @@ export function createAgentManagementTools(
     ),
     tool(
       'agent_update',
-      'Edit a saved Cherry Agent after reading it with agent_get. Never invent model or Skill IDs. Only change mode, approval or Skill bindings when the user requests it. Changes to the current Agent apply to subsequent turns; this turn keeps its original configuration. Cannot delete Agents. Use the dedicated agent_set_avatar and agent_set_mcp_binding tools for avatar or MCP binding changes when offered.',
+      'Edit a saved Cherry Agent after reading it with agent_get. Never invent model or Skill IDs. Only change mode, approval or Skill bindings when the user requests it. Changes to the current Agent apply to subsequent turns, except model changes on conversations that selected their own model; this turn keeps its original configuration. Cannot delete Agents. Use the dedicated agent_set_avatar and agent_set_mcp_binding tools for avatar or MCP binding changes when offered.',
       updateSchema,
       'ask',
       async ({ agent_id, expected_updated_at, changes }, signal) => {

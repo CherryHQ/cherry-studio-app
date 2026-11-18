@@ -2,21 +2,37 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/frontend/data';
 
-import { refreshAgentQueriesAfterModelRemoval } from '../refreshProviderModelQueries';
+import { refreshConversationModelQueriesAfterRemoval } from '../refreshProviderModelQueries';
 
-describe('refreshAgentQueriesAfterModelRemoval', () => {
-  test('refetches inactive Agent details before returning', async () => {
+describe('refreshConversationModelQueriesAfterRemoval', () => {
+  test('refetches inactive Agent and Session details before returning without refetching messages', async () => {
     const queryClient = new QueryClient();
-    const detailKey = queryKeys.agents.detail('agent-a');
-    let persistedModelId: string | null = 'provider::model-b';
+    const agentKey = queryKeys.agents.detail('agent-a');
+    const sessionKey = queryKeys.agentSessions.detail('session-a');
+    const messagesKey = queryKeys.agentSessions.messages('session-a');
+    let persistedModel: string | null = 'provider::model-b';
+    let messageReads = 0;
+    await Promise.all(
+      [agentKey, sessionKey].map((queryKey) =>
+        queryClient.fetchQuery({
+          queryFn: async () => ({ model: persistedModel }),
+          queryKey,
+        }),
+      ),
+    );
     await queryClient.fetchQuery({
-      queryFn: async () => ({ modelId: persistedModelId }),
-      queryKey: detailKey,
+      queryFn: async () => {
+        messageReads += 1;
+        return { items: [] };
+      },
+      queryKey: messagesKey,
     });
-    persistedModelId = null;
+    persistedModel = null;
 
-    await refreshAgentQueriesAfterModelRemoval(queryClient);
+    await refreshConversationModelQueriesAfterRemoval(queryClient);
 
-    expect(queryClient.getQueryData(detailKey)).toEqual({ modelId: null });
+    expect(queryClient.getQueryData(agentKey)).toEqual({ model: null });
+    expect(queryClient.getQueryData(sessionKey)).toEqual({ model: null });
+    expect(messageReads).toBe(1);
   });
 });

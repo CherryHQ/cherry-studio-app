@@ -32,16 +32,18 @@ const file = z.object({
   export_path: optionalText,
 });
 const source = z.object({ url: optionalText, title: optionalText });
+function validItems<T extends z.ZodType>(items: unknown[], item: T): z.output<T>[] {
+  return items.flatMap((value) => {
+    const parsed = item.safeParse(value);
+    return parsed.success ? [parsed.data as z.output<T>] : [];
+  });
+}
+
 const list = <T extends z.ZodType>(item: T) =>
   z
     .array(z.unknown())
     .catch([])
-    .transform((items) =>
-      items.flatMap((value) => {
-        const parsed = item.safeParse(value);
-        return parsed.success ? [parsed.data as z.output<T>] : [];
-      }),
-    );
+    .transform((items) => validItems(items, item));
 
 const fragment = z.discriminatedUnion('type', [
   z.object({ type: z.literal('REQUEST'), content: z.string().catch('') }),
@@ -76,7 +78,14 @@ export const deepseekConversationSchema = z.object({
   title: optionalText,
   inserted_at: timestamp,
   current_message_id: z.number().int().nullable().optional().catch(null),
-  messages: list(message),
+  messages: z.array(z.unknown()).transform((items, context) => {
+    const parsed = validItems(items, message);
+    if (items.length > 0 && parsed.length === 0) {
+      context.addIssue({ code: 'custom', message: 'No readable messages' });
+      return z.NEVER;
+    }
+    return parsed;
+  }),
 });
 
 export type DeepseekConversation = z.infer<typeof deepseekConversationSchema>;

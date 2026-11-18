@@ -42,6 +42,7 @@ import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
+  sessionModelId?: UniqueModelId;
   workspaceFolderId?: string;
   isNewSession: boolean;
   isCurrent: () => boolean;
@@ -123,7 +124,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
   useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
-    async ({ agentId, isCurrent, isNewSession, ...submission }: AgentChatSendInput) => {
+    async ({
+      agentId,
+      isCurrent,
+      isNewSession,
+      sessionModelId,
+      ...submission
+    }: AgentChatSendInput) => {
       if (isNewSession) {
         if (!agentId) {
           throw new Error('Select an Agent before sending a message.');
@@ -131,6 +138,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         const session = await client.startSession({
           ...submission,
           agentId,
+          ...(sessionModelId ? { sessionModelId } : {}),
         });
         if (isCurrent()) {
           draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);
@@ -338,6 +346,7 @@ export function useAgentChatControls(input: {
   const send = useCallback(
     async ({
       additionalModelIds,
+      sessionModelId,
       ...message
     }: Omit<
       AgentSubmitMessageInput,
@@ -345,6 +354,8 @@ export function useAgentChatControls(input: {
     > & {
       /** Further models answering the same question in parallel. */
       additionalModelIds?: readonly UniqueModelId[];
+      /** The draft's persisted choice, separate from the first reply model. */
+      sessionModelId?: UniqueModelId;
     }) => {
       const isCurrent = () => mountedComposerKeyRef.current === composerKey;
       const request = {
@@ -382,6 +393,7 @@ export function useAgentChatControls(input: {
           agentId,
           isCurrent,
           isNewSession: pending.isNewSession,
+          ...(!sessionId && sessionModelId ? { sessionModelId } : {}),
           ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
         });
         if (!sessionId && sshDraftId)

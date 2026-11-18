@@ -134,6 +134,15 @@ test('caller-validated archives bypass hash reuse and still enforce the byte cei
   });
 });
 
+test('retains the HTTP status of a rejected transfer', async () => {
+  task.downloadAsync.mockResolvedValue({ status: 403 });
+  await expect(downloadFile(options())).rejects.toMatchObject({
+    code: 'download',
+    statusCode: 403,
+  });
+  expect(FileSystem.moveAsync).not.toHaveBeenCalled();
+});
+
 test('cancellation keeps a late successful transfer from publishing and excludes concurrent writers', async () => {
   const controller = new AbortController();
   let finish!: (value: { status: number }) => void;

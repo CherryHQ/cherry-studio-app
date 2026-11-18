@@ -71,6 +71,28 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 }));
 
 describe('turn preparation', () => {
+  test('falls back after a conversation pick is withdrawn and ignores its model-specific effort', async () => {
+    const harness = createHarness();
+    const oldModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    const defaultModelId = createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId);
+    // A sync committed after the Session read but before the Agent read.
+    harness.getSession.mockResolvedValue({ ...SESSION, model: oldModelId });
+    harness.getAgent.mockResolvedValue({ ...AGENT, allowedModelIds: [defaultModelId] });
+    const signal = new AbortController().signal;
+    const input = {
+      ...textInput(),
+      reasoningEffort: 'high',
+      reasoningEffortModelId: oldModelId,
+    } as const;
+
+    const plan = await prepareTurn(harness.dependencies, input, signal);
+    expect(plan.inferenceSnapshot.model.uniqueModelId).toBe(defaultModelId);
+    expect(plan.inferenceSnapshot.reasoningEffort).toBe(AGENT.options.reasoningEffort);
+    await expect(
+      prepareTurn(harness.dependencies, { ...input, modelId: oldModelId }, signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
+
   test.each(['existing', 'initial', 'durable'] as const)(
     'standard %s chat remains available without function calling or tool discovery',
     async (kind) => {
@@ -996,6 +1018,44 @@ describe('Skill turn preparation', () => {
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
     expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
   });
+
+  test('prepareInitialTurn uses parsed.modelId fallback when sessionModelId is omitted and rejects disallowed pool models', async () => {
+    const harness = createHarness();
+    const fallbackModelId = createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId);
+    harness.getAgent.mockImplementationOnce(async (_agentId, fallback) => ({
+      ...AGENT,
+      model: fallback === fallbackModelId ? OVERRIDE_MODEL : BASE_MODEL,
+      allowedModelIds: [fallbackModelId],
+    }));
+
+    const plan = await prepareInitialTurn(
+      harness.dependencies,
+      {
+        ...textInput(),
+        agentId: AGENT_ID,
+        modelId: fallbackModelId,
+      },
+      new AbortController().signal,
+    );
+    expect(harness.getAgent).toHaveBeenCalledWith(AGENT_ID, fallbackModelId);
+    expect(plan.agent.model).toEqual(OVERRIDE_MODEL);
+
+    harness.getAgent.mockResolvedValueOnce({
+      ...AGENT,
+      allowedModelIds: [createUniqueModelId(BASE_MODEL.providerId, BASE_MODEL.modelId)],
+    });
+    await expect(
+      prepareInitialTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          agentId: AGENT_ID,
+          modelId: fallbackModelId,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
 });
 
 function createHarness() {
@@ -1003,7 +1063,10 @@ function createHarness() {
   const getSession = jest.fn(
     async (_sessionId: string): Promise<AgentSessionView | null> => SESSION,
   );
-  const getAgent = jest.fn(async (_agentId: string): Promise<AgentDefinition | null> => AGENT);
+  const getAgent = jest.fn(
+    async (_agentId: string, _fallbackModelId?: string | null): Promise<AgentDefinition | null> =>
+      AGENT,
+  );
   const getLatestContextCheckpoint = jest.fn(
     async (_sessionId: string): Promise<StoredRuntimeContextCheckpoint | null> => null,
   );

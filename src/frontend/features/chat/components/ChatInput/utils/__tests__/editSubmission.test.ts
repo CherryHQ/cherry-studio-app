@@ -43,10 +43,13 @@ describe('buildEditUserMessageInput', () => {
     expect(input.text).toContain('(skill://installed/01234567-89ab-cdef-0123-456789abcdef)');
   });
 
-  it('falls back to the agent model when no parallel selection exists', () => {
+  it('lets the Host resolve the conversation model unless a pick is still being saved', () => {
     const input = buildEditUserMessageInput(base);
-    expect(input.modelId).toBe('provider/model-a');
+    expect(input.modelId).toBeUndefined();
     expect(input.additionalModelIds).toBeUndefined();
+    expect(
+      buildEditUserMessageInput({ ...base, modelOverrideId: 'provider::model-b' }).modelId,
+    ).toBe('provider::model-b');
   });
 
   it('omits reasoning effort when the model offers none', () => {

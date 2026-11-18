@@ -1,8 +1,9 @@
-import { Directory, File, FileMode, Paths } from 'expo-file-system';
+import { type Directory, File, FileMode, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
 
 import { extractZipEntries, readZipDirectory } from '@/backend/utils/zipReader';
 import { DeepseekImportError } from '@/shared/contracts/deepseekImport';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import { filenameExtension } from '@/shared/data/types/file';
 import {
   imageMediaTypeFromExtension,
@@ -11,6 +12,8 @@ import {
 
 import { DEEPSEEK_IMPORT_LIMITS, deepseekIndexSchema } from './deepseekFormat';
 
+const logger = loggerService.withContext('DeepseekImport');
+
 function isArchivePath(path: string): boolean {
   return (
     path.length <= 1024 &&
@@ -18,11 +21,6 @@ function isArchivePath(path: string): boolean {
     !/[\\:\x00-\x1f]/.test(path) &&
     path.split('/').every((part) => part && part !== '.' && part !== '..')
   );
-}
-
-export function deepseekArchiveFile(root: Directory, path: string): File {
-  if (!isArchivePath(path)) throw new DeepseekImportError('invalid');
-  return new File(root, ...path.split('/'));
 }
 
 export async function readDeepseekJson(file: File): Promise<unknown> {
@@ -37,12 +35,12 @@ export async function readDeepseekJson(file: File): Promise<unknown> {
 }
 
 /** Inspect only a bounded prefix; the archive's is_image remains the image identity. */
-export function readDeepseekImageMediaType(file: File): string {
+export function readDeepseekImageMediaType(file: File, archivePath: string): string {
   const handle = file.open(FileMode.ReadOnly);
   try {
     return (
       imageMediaTypeFromHeader(handle.readBytesSync(Math.min(file.size, 32))) ??
-      imageMediaTypeFromExtension(filenameExtension(file.name))
+      imageMediaTypeFromExtension(filenameExtension(archivePath.split('/').at(-1) ?? ''))
     );
   } finally {
     handle.close();
@@ -58,27 +56,38 @@ export type DeepseekArchiveConversation = {
 const CONVERSATION_FILE = /^chat_sessions\/([^/]+)\.json$/;
 
 /**
- * Extract through the shared bounded ZIP reader, never through an in-memory unzip. Only the ZIP
- * structure itself must be intact: entries with unusable paths, or whose names collide on a
- * case-insensitive filesystem, are skipped. Conversations are the union of readable index rows
- * and the conversation files actually present; the manifest and index are optional.
+ * Extract entries under app-owned names. The ZIP directory identifies conversation candidates;
+ * only entries that passed extraction can be read. The index enriches timestamps when available.
  */
 export async function unpackDeepseekArchive(
   input: File,
   root: Directory,
   signal: AbortSignal,
   onProgress: (completed: number, total: number) => void,
-): Promise<{ conversations: DeepseekArchiveConversation[]; names: Set<string> }> {
+): Promise<{ conversations: DeepseekArchiveConversation[]; files: Map<string, string> }> {
   if (!input.exists || input.size <= 0) throw new DeepseekImportError('invalid');
   const size = input.size;
   if (size > DEEPSEEK_IMPORT_LIMITS.archiveBytes) throw new DeepseekImportError('too-large');
   const handle = input.open(FileMode.ReadOnly);
   const format = {
-    invalid: () => new DeepseekImportError('invalid'),
-    decodeName: (bytes: Uint8Array) => strFromU8(bytes),
+    invalid: (reasonCode: DeepseekImportError['reasonCode']) =>
+      new DeepseekImportError('invalid', { reasonCode }),
+    decodeName: (bytes: Uint8Array) => {
+      try {
+        return strFromU8(bytes);
+      } catch {
+        return null;
+      }
+    },
     maxNameBytes: 1024,
   };
-  const names = new Set<string>();
+  const files = new Map<string, string>();
+  const candidateIds = new Set<string>();
+  let skippedEntries = 0;
+  const addCandidate = (name: string) => {
+    const id = CONVERSATION_FILE.exec(name)?.[1];
+    if (id) candidateIds.add(id);
+  };
   try {
     const source = {
       size,
@@ -94,15 +103,19 @@ export async function unpackDeepseekArchive(
       maxExpandedBytes: DEEPSEEK_IMPORT_LIMITS.expandedBytes,
       allowDirectories: true,
       checkRecord: () => {},
+      onInvalidEntry: (name) => {
+        skippedEntries += 1;
+        if (name !== undefined) addCandidate(name);
+      },
     });
-    const folded = new Set<string>();
     const entries = directory.entries.filter(({ name }) => {
-      const key = name.normalize('NFC').toLowerCase();
-      if (!isArchivePath(name) || folded.has(key)) return false;
-      folded.add(key);
-      names.add(name);
-      return true;
+      addCandidate(name);
+      if (isArchivePath(name)) return true;
+      skippedEntries += 1;
+      return false;
     });
+    root.create({ intermediates: true });
+    let nextEntry = 0;
     await extractZipEntries(
       source,
       { ...directory, entries },
@@ -111,11 +124,23 @@ export async function unpackDeepseekArchive(
         signal,
         verifyCrc: true,
         onRead: (position) => onProgress(Math.min(position, size), size),
+        onInvalidEntry: (name) => {
+          skippedEntries += 1;
+          const uri = files.get(name);
+          files.delete(name);
+          if (uri !== undefined) {
+            try {
+              new File(uri).delete();
+            } catch {
+              // The import finalizer also removes the entire staging directory.
+            }
+          }
+        },
         open: (entry) => {
-          const file = deepseekArchiveFile(root, entry.name);
-          file.parentDirectory.create({ intermediates: true, idempotent: true });
+          const file = new File(root, `entry-${++nextEntry}`);
           file.create();
           const output = file.open(FileMode.WriteOnly);
+          files.set(entry.name, file.uri);
           return {
             write: (chunk) => {
               if (Paths.availableDiskSpace < chunk.length + 32 * 1024 * 1024) {
@@ -133,13 +158,12 @@ export async function unpackDeepseekArchive(
   }
   signal.throwIfAborted();
   const conversations = new Map<string, DeepseekArchiveConversation>();
-  if (names.has('chat_session_index.json')) {
+  const indexUri = files.get('chat_session_index.json');
+  if (indexUri !== undefined) {
     try {
-      const index = deepseekIndexSchema.parse(
-        await readDeepseekJson(deepseekArchiveFile(root, 'chat_session_index.json')),
-      );
+      const index = deepseekIndexSchema.parse(await readDeepseekJson(new File(indexUri)));
       for (const item of index)
-        if (names.has(`chat_sessions/${item.id}.json`) && !conversations.has(item.id))
+        if (candidateIds.has(item.id) && !conversations.has(item.id))
           conversations.set(item.id, {
             id: item.id,
             insertedAt: item.inserted_at,
@@ -148,12 +172,12 @@ export async function unpackDeepseekArchive(
     } catch (error) {
       if (!(error instanceof DeepseekImportError)) throw error;
       // An unreadable index only loses its timestamps; the conversation files remain.
+      skippedEntries += 1;
     }
   }
-  for (const name of names) {
-    const id = CONVERSATION_FILE.exec(name)?.[1];
-    if (id && !conversations.has(id)) conversations.set(id, { id });
-  }
+  for (const id of candidateIds) if (!conversations.has(id)) conversations.set(id, { id });
+  if (skippedEntries > 0)
+    logger.warn('DeepSeek import skipped archive entries', { phase: 'archive', skippedEntries });
   if (conversations.size === 0) throw new DeepseekImportError('unsupported');
-  return { conversations: [...conversations.values()], names };
+  return { conversations: [...conversations.values()], files };
 }

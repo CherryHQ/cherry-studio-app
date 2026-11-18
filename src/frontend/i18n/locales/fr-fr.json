@@ -1984,7 +1984,7 @@
   "settings.data.deepseek.error.expiredLink": "Ce lien a expiré. Demandez un nouvel export dans DeepSeek.",
   "settings.data.deepseek.error.failed": "Impossible d’importer les données. Vos conversations existantes sont inchangées. Réessayez.",
   "settings.data.deepseek.error.invalid": "Le fichier est endommagé ou contient des conversations invalides. Exportez-le à nouveau depuis DeepSeek.",
-  "settings.data.deepseek.error.invalidLink": "Collez un lien valide de téléchargement d’un export DeepSeek.",
+  "settings.data.deepseek.error.invalidLink": "Ce lien d’export DeepSeek n’est pas valide.",
   "settings.data.deepseek.error.tooLarge": "Cet export est trop volumineux pour cet appareil.",
   "settings.data.deepseek.error.unsupported": "Ce format d’export n’est pas pris en charge. Demandez un nouvel export sur le site DeepSeek.",
   "settings.data.deepseek.linkLabel": "Lien de téléchargement de l’export DeepSeek",

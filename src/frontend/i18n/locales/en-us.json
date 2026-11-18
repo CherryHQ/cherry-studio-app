@@ -1965,7 +1965,7 @@
   "settings.data.deepseek.error.expiredLink": "This download link has expired. Request a new export in DeepSeek.",
   "settings.data.deepseek.error.failed": "Could not import the file. Your existing conversations are unchanged. Try again.",
   "settings.data.deepseek.error.invalid": "This file is damaged or contains invalid conversation data. Export it again from DeepSeek.",
-  "settings.data.deepseek.error.invalidLink": "Paste a valid DeepSeek export download link.",
+  "settings.data.deepseek.error.invalidLink": "This is not a valid DeepSeek export link.",
   "settings.data.deepseek.error.tooLarge": "This export is too large to import on this device.",
   "settings.data.deepseek.error.unsupported": "This export format is not supported. Download a new ZIP from the DeepSeek website.",
   "settings.data.deepseek.linkLabel": "DeepSeek export download link",

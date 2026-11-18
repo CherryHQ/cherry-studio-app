@@ -1,8 +1,14 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
-import { agentSessionTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionTable,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import type { AgentSessionRow } from '@/backend/data/db/schemas/agentSession';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
@@ -11,7 +17,9 @@ import {
   ListAgentSessionsQuerySchema,
 } from '@/shared/data/api/schemas/agentSessions';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
+import { assertAgentModelAllowed } from './managedResources';
 import { toAgentSessionEntity } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
@@ -25,7 +33,7 @@ type SessionListRow = SessionCatalogRow & {
   catalogActivityAt: number;
 };
 
-const sessionColumns = sql`agent_session.id, agent_id AS "agentId", name,
+const sessionColumns = sql`agent_session.id, agent_id AS "agentId", name, model,
   is_name_manually_edited AS "isNameManuallyEdited",
   last_activity_at AS "lastActivityAt", created_at AS "createdAt", updated_at AS "updatedAt",
   runtime_revision AS "runtimeRevision", active_node_id AS "activeNodeId",
@@ -50,7 +58,7 @@ const sessionRoots = sql`WITH RECURSIVE session_roots(id, root_id) AS (
   JOIN session_roots AS parent ON child.forked_from_session_id = parent.id
 )`;
 
-/** SQL-only static reads for Agent Sessions. Live turn state stays in MobileAgentHost. */
+/** Durable session metadata. Live turn state stays in the Agent Host. */
 export class AgentSessionService {
   private get db() {
     return application.get('DbService').getDb();
@@ -65,6 +73,35 @@ export class AgentSessionService {
     if (!row) {
       throw DataApiErrorFactory.notFound('AgentSession', id);
     }
+    return toAgentSessionEntity(row);
+  }
+
+  async setModel(id: string, model: UniqueModelId): Promise<AgentSessionEntity> {
+    const row = await application.get('DbService').withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select({ session: agentSessionTable, agent: agentTable })
+        .from(agentSessionTable)
+        .innerJoin(agentTable, eq(agentSessionTable.agentId, agentTable.id))
+        .where(and(eq(agentSessionTable.id, id), isNull(agentTable.deletedAt)))
+        .limit(1);
+      if (!current) throw DataApiErrorFactory.notFound('AgentSession', id);
+      if (current.session.model === model) return current.session;
+      assertAgentModelAllowed(current.agent, model);
+      const [registered] = await tx
+        .select({ id: userModelTable.id })
+        .from(userModelTable)
+        .where(eq(userModelTable.id, model))
+        .limit(1);
+      if (!registered)
+        throw DataApiErrorFactory.validation({ model: ['Model is not registered.'] });
+      const [updated] = await tx
+        .update(agentSessionTable)
+        .set({ model, updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(eq(agentSessionTable.id, id))
+        .returning();
+      return updated;
+    });
+    publishDataApiChanges(['/agent-sessions', `/agent-sessions/${id}`]);
     return toAgentSessionEntity(row);
   }
 

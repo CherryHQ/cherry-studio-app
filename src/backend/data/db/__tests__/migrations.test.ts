@@ -6,6 +6,56 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds optional session model overrides without changing existing sessions and resets on model delete', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0016_agent_session_model',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+        VALUES ('openai', 'OpenAI', 'a0', 1, 1);
+        INSERT INTO user_model (id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at)
+        VALUES ('openai::gpt-4o', 'openai', 'gpt-4o', 'GPT-4o', 'gpt-4o', 'a0', 1, 1);
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session-1', 'agent', 'Before 0016', 100, 1, 1);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT id, model FROM agent_session').get()).toEqual({
+        id: 'session-1',
+        model: null,
+      });
+      expect(() =>
+        database
+          .prepare('UPDATE agent_session SET model = ? WHERE id = ?')
+          .run('openai::missing', 'session-1'),
+      ).toThrow(/FOREIGN KEY/);
+      database
+        .prepare('UPDATE agent_session SET model = ? WHERE id = ?')
+        .run('openai::gpt-4o', 'session-1');
+      expect(
+        database.prepare('SELECT model FROM agent_session WHERE id = ?').get('session-1'),
+      ).toEqual({
+        model: 'openai::gpt-4o',
+      });
+      database.exec("DELETE FROM user_model WHERE id = 'openai::gpt-4o'");
+      expect(
+        database.prepare('SELECT model FROM agent_session WHERE id = ?').get('session-1'),
+      ).toEqual({
+        model: null,
+      });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds local device aliases without changing existing pairing data', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -942,6 +992,7 @@ describe('bundled SQLite migrations', () => {
         'runtime_revision',
         'workspace_folder_id',
         'active_node_id',
+        'model',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -1035,11 +1086,18 @@ describe('bundled SQLite migrations', () => {
           }),
         ]),
       );
-      expect(getForeignKeys(database, 'agent_session')).toHaveLength(3);
+      expect(getForeignKeys(database, 'agent_session')).toHaveLength(4);
       expect(getForeignKeys(database, 'agent_session')).toContainEqual(
         expect.objectContaining({
           from: 'workspace_folder_id',
           table: 'file_folder',
+          on_delete: 'SET NULL',
+        }),
+      );
+      expect(getForeignKeys(database, 'agent_session')).toContainEqual(
+        expect.objectContaining({
+          from: 'model',
+          table: 'user_model',
           on_delete: 'SET NULL',
         }),
       );

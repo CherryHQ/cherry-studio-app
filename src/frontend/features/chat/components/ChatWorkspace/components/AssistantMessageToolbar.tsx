@@ -42,6 +42,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   const { t } = useTranslation();
   const [isTranslationLanguagePickerOpen, setIsTranslationLanguagePickerOpen] = useState(false);
   const {
+    answerableMessageIds,
     copiedMessageId,
     isAssistantToolbarEnabled,
     isDeleteDisabled,
@@ -77,9 +78,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
   const turnId = message.turnId;
-  // Answering with another model is offered wherever the answer can be regenerated.
-  const isRegenerable = retryableMessageIds.has(message.id);
-
   if (!isSettled) {
     return null;
   }
@@ -170,7 +168,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      {retryAssistantMessage && isRegenerable ? (
+      {retryAssistantMessage && retryableMessageIds.has(message.id) ? (
         <Button
           accessibilityLabel={t(
             message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
@@ -183,7 +181,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      {answerWithModel && isRegenerable ? (
+      {answerWithModel && answerableMessageIds.has(message.id) ? (
         <Button
           accessibilityLabel={t('chat.messageActions.answerWith')}
           disabled={isRetryDisabled}

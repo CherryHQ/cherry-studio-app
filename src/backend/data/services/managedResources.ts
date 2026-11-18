@@ -119,3 +119,12 @@ export function assertAgentUpdate(
     'agent.update(model)',
   );
 }
+
+/** Authorizes a conversation's model override against the Agent's current pool. */
+export function assertAgentModelAllowed(
+  row: ManagedRow & { allowedModelIds: readonly string[] | null },
+  model: UniqueModelId,
+): void {
+  const { allowedModelIds } = agentRowPolicy(row);
+  denyUnless(allowedModelIds === null || allowedModelIds.includes(model), 'agentSession.setModel');
+}
