@@ -18,7 +18,6 @@ function entry(id: string, overrides: Partial<SkillTurnEntry> = {}): SkillTurnEn
 }
 
 const base = {
-  agentInstructions: '',
   appLanguage: 'en-US' as const,
   tools: [],
 };
@@ -132,11 +131,6 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('built-in tools exposed directly to you');
     expect(prompt).toContain('no tool call or SKILL.md file lookup is needed');
     expect(prompt).toContain('you need not use every one');
-    expect(prompt.indexOf('## Skills')).toBeLessThan(
-      prompt.indexOf('## Agent Instructions') === -1
-        ? Infinity
-        : prompt.indexOf('## Agent Instructions'),
-    );
   });
 
   it('seeds selected and active bodies as individually replaceable system sections', () => {

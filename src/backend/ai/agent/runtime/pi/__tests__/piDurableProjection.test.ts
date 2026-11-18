@@ -45,12 +45,13 @@ test.each(['standard', 'minimal'] as const)(
   (mode) => {
     const date = '\n\n## Current Date\n\nThe current local date is `2026-12-31`.';
     const language = '\n\n## Response Language\n';
-    const instructions = buildAgentSystemPrompt({
-      mode,
-      agentInstructions: `Keep this quoted example:${date}${language}Example language.`,
-      appLanguage: 'en-US',
-      tools: [],
-    });
+    const instructions =
+      buildAgentSystemPrompt({
+        mode,
+        appLanguage: 'en-US',
+        tools: [],
+      }) +
+      `\n\n<agent_instructions>\nKeep this quoted example:${date}${language}Example language.\n</agent_instructions>`;
     const old = {
       version: 1,
       model: { providerId: 'p', modelId: 'm' },

@@ -10,6 +10,7 @@ import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
 import type { McpModule } from './mcp';
+import type { MemoryModule } from './memory';
 import type { ModelsModule } from './models';
 import type { PaintingsModule } from './paintings';
 import type { PermissionsModule } from './permissions';
@@ -26,6 +27,7 @@ import type { VoiceModule } from './voice';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
+  readonly memory: MemoryModule;
   readonly account: AccountModule;
   readonly cloud: CloudModule;
   readonly ssh: SshModule;

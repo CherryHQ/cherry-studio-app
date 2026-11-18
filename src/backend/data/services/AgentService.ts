@@ -51,7 +51,9 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     // Old switch values stay in storage but no longer constrain task-driven tools.
     disabledCapabilities: [],
     id: row.id,
-    instructions: row.instructions,
+    // Local SOUL is projected by the profile workflow; managed instructions belong to the server.
+    instructions: row.managedRemoteId !== null ? row.instructions : '',
+    sharedMemoryEnabled: row.sharedMemoryEnabled,
     isManaged: row.managedRemoteId !== null,
     ...(row.managedRemoteId !== null && {
       allowedModelIds: (row.allowedModelIds ?? []) as UniqueModelId[],
@@ -234,7 +236,10 @@ export class AgentService {
       const updates = Object.fromEntries(
         Object.entries(dto).filter(
           ([field, value]) =>
-            value !== undefined && !deepEqual(value, current[field as keyof AgentRow]),
+            value !== undefined &&
+            (field !== 'instructions' || current.managedRemoteId !== null) &&
+            field !== 'expectedInstructionsVersion' &&
+            !deepEqual(value, current[field as keyof AgentRow]),
         ),
       ) as Partial<typeof agentTable.$inferInsert>;
       assertAgentUpdate(current, {
@@ -446,11 +451,14 @@ export class AgentService {
   async createTx(tx: Database, dto: CreateAgentDto): Promise<AgentRow> {
     this.validateName(dto.name);
     const modelId = await this.resolveCreateModelId(tx, dto.model);
+    const metadata = { ...dto };
+    delete metadata.instructions;
     return (await insertWithOrderKey(
       tx,
       agentTable,
       {
-        ...dto,
+        ...metadata,
+        bootstrapCompleted: false,
         model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },

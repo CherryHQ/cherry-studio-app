@@ -11,6 +11,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['reminders'],
       instructions: 'sys',
+      sharedMemoryEnabled: false,
       mode: 'minimal',
       model: 'openai::gpt-5',
       name: 'Researcher',
@@ -23,6 +24,7 @@ describe('createAgentFormState', () => {
     expect(state).toEqual({
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       instructions: 'sys',
+      sharedMemoryEnabled: false,
       mode: 'minimal',
       model: 'openai::gpt-5',
       name: 'Researcher',
@@ -34,6 +36,7 @@ describe('createAgentFormState', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
       mode: 'standard',
+      sharedMemoryEnabled: true,
       toolApprovalMode: 'auto',
     });
   });
@@ -78,6 +81,7 @@ describe('buildAgentDto', () => {
     expect(dto.value).toEqual({
       instructions: 'system prompt',
       mode: 'standard',
+      sharedMemoryEnabled: true,
       model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'auto',

@@ -1,5 +1,7 @@
+import { DreamingError } from '@cherrystudio/memory';
 import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
+import { estimateTokenCount } from 'tokenx';
 
 import { createDiagnosticAgent } from '@/backend/ai/agent/diagnostics';
 import type { AgentHostDependencies } from '@/backend/ai/agent/host/AgentHostDependencies';
@@ -15,6 +17,7 @@ import {
 } from '@/backend/ai/provider/systemModelSupport';
 import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import type { AgentData } from '@/backend/data/api/handlers/agents';
 import {
   createMcpServerMutations,
   type McpServerMutations,
@@ -33,11 +36,14 @@ import { materializeRemoteModels } from '@/backend/data/services/materializeRemo
 import { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import { createMemoryModule } from '@/backend/services/agentMemory/createMemoryModule';
+import { createMemoryMaintenance } from '@/backend/services/agentMemory/memoryMaintenance';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createAgentProfiles } from '@/backend/services/agents/createAgentProfiles';
 import { createAppUpdateModule } from '@/backend/services/appUpdate';
 import type { BackupRuntime } from '@/backend/services/backup';
 import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
@@ -98,7 +104,7 @@ import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { profileScopedName } from '@/shared/data/activeProfile';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
-import type { UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
@@ -115,6 +121,7 @@ export type BackendComposition = {
   disposeDiagnostics(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
+    agents: AgentData;
     mcpServerMutations: McpServerMutations;
     pluginCatalog: PluginCatalogReader;
     skillAvailability: SkillAvailabilityReader;
@@ -126,7 +133,7 @@ export type BackendComposition = {
 export function createBackend(
   services: BackendServices,
   infrastructure: {
-    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice'>;
+    agentHostDependencies: Pick<AgentHostDependencies, 'configureVoice' | 'memory'>;
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
@@ -149,6 +156,49 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const memory = infrastructure.agentHostDependencies.memory;
+  memory.configureMaintenance(
+    createMemoryMaintenance({
+      db: dbService,
+      memory,
+      preference: services.preference,
+      jobs: services.jobRuntime,
+      isIdle: () => !services.agent.hasPendingStorageWork(),
+      async model() {
+        const id = await services.preference.get('agent.default_model_id');
+        if (!id || !isUniqueModelId(id)) throw new DreamingError('model');
+        const selected = parseUniqueModelId(id);
+        const limits = await infrastructure.languageServing.preflightModel(selected);
+        if (limits.contextWindow < 4096) throw new DreamingError('budget');
+        return {
+          id,
+          contextWindow: limits.contextWindow,
+          maxInputTokens: limits.maxInputTokens,
+          maxOutputTokens: limits.maxOutputTokens,
+          countTokens: estimateTokenCount,
+          generate: (request) =>
+            infrastructure.languageServing.generateText(
+              {
+                model: selected,
+                instructions: request.instructions,
+                text: request.text,
+                options: { reasoningEffort: 'none', maxOutputTokens: request.maxOutputTokens },
+              },
+              {
+                signal: request.signal,
+                onUsage: (report) =>
+                  services.aiUsageRecord.recordInvocation({
+                    ...report,
+                    context: { ...report.context, messageRef: null, source: null },
+                    modality: 'language',
+                  }),
+              },
+            ),
+        };
+      },
+    }),
+  );
+
   const deepseekImport = new DeepseekImportRuntime(dbService, services.preference);
   infrastructure.providerAccounts.configure(
     new ProviderAccountService(dbService),
@@ -345,8 +395,16 @@ export function createBackend(
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },
   });
+  const agentProfiles = createAgentProfiles(
+    services.agentData,
+    infrastructure.agentHostDependencies.memory.operations,
+  );
   const agentAvatars = createAgentAvatars({
-    agents: services.agentData,
+    agents: {
+      getById: agentProfiles.getById,
+      setAvatar: async (...args) =>
+        agentProfiles.withSoul(await services.agentData.setAvatar(...args)),
+    },
     images: agentAvatarImages,
   });
   const userContentImages = createUserContentImageStorage(USER_AVATAR_IMAGE_CONFIG);
@@ -493,6 +551,7 @@ export function createBackend(
       },
       mcp: services.mcpRuntime,
       models,
+      memory: createMemoryModule(memory),
       paintings,
       permissions: services.devicePermissions,
       plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.pluginAuthorizations),
@@ -528,6 +587,12 @@ export function createBackend(
     },
     dataApiDependencies: {
       agentAvatars,
+      agents: {
+        ...agentProfiles,
+        delete: (...args) => services.agentData.delete(...args),
+        reorder: (...args) => services.agentData.reorder(...args),
+        reorderBatch: (...args) => services.agentData.reorderBatch(...args),
+      },
       mcpServerMutations,
       pluginCatalog: getBuiltInPluginCatalog,
       skillAvailability: skills.availability,

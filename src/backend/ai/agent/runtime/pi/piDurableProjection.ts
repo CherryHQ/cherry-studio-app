@@ -37,6 +37,7 @@ import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { readPiTerminalError } from './piModelError';
 import { applyPiReplyEdits, PI_REPLY_EDIT_KIND } from './piReplyEditing';
+import { MAX_TOOL_INSTRUCTION_CHARACTERS } from './piToolInstructions';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -75,7 +76,12 @@ export const PiConfigurationSchema = z
     model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
     instructions: z.string(),
     initialInstructions: z
-      .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+      .array(
+        z.object({
+          key: z.string().min(1).max(256),
+          text: z.string().min(1).max(MAX_TOOL_INSTRUCTION_CHARACTERS),
+        }),
+      )
       .max(64)
       .default([]),
     options: RuntimeOptionsSchema,

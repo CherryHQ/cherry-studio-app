@@ -50,6 +50,7 @@ import {
   type QuoteAuthor,
 } from '@/shared/contracts/agent';
 import { BackupError } from '@/shared/contracts/backup';
+import { MemoryContextChangedError } from '@/shared/contracts/memory';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
@@ -342,6 +343,16 @@ export class DurableAgentHost implements AgentProtocol {
           fail('SESSION_NOT_FOUND', 'The execution no longer has a current Cherry owner.');
         if (session && !(await this.ports.agents.getAgent(session.agentId)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
+        try {
+          await this.ports.memory?.assertSafe?.(
+            { agentId: session.agentId, sessionId: identity.sessionId },
+            signal,
+          );
+        } catch (error) {
+          if (error instanceof MemoryContextChangedError)
+            fail('MEMORY_CONTEXT_CHANGED', 'Memory protection changed; start a new conversation');
+          throw error;
+        }
         if (identity.requestId) {
           await this.waitForOwner(identity, identity.requestId, signal);
           const prepared = this.prepared.get(executionKey(identity, identity.requestId));
@@ -350,6 +361,35 @@ export class DurableAgentHost implements AgentProtocol {
               prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
         }
         signal.throwIfAborted();
+      },
+      resolveInstructions: async (identity, signal) => {
+        if (!this.ports.memory) return [];
+        const { plan } = await this.prepareExecution(identity, signal);
+        if (plan.imageGeneration) return [];
+        const canBootstrap = ['memory_bootstrap', 'memory_update', 'agent_update'].every((name) =>
+          plan.tools.some(
+            (tool) =>
+              tool.ref.source === 'builtin' &&
+              tool.ref.capabilityId === name &&
+              tool.approval !== 'deny',
+          ),
+        );
+        try {
+          const identityInstructions = await this.ports.memory.context(
+            plan.agent.id,
+            signal,
+            canBootstrap,
+          );
+          const managed = await this.ports.memory.managedContext?.(
+            { agentId: plan.agent.id, sessionId: identity.sessionId, hasHistory: plan.hasMessages },
+            signal,
+          );
+          return [identityInstructions, ...(managed ? [managed] : [])];
+        } catch (error) {
+          if (error instanceof MemoryContextChangedError)
+            fail('MEMORY_CONTEXT_CHANGED', 'Memory protection changed; start a new conversation');
+          throw error;
+        }
       },
       resolveTool: (identity, ref, signal) => this.resolveTool(identity, ref, signal),
       requestApproval: (identity, approval, signal) =>
@@ -840,12 +880,14 @@ export class DurableAgentHost implements AgentProtocol {
         model,
         history: toRuntimeHistory(storedTurnContext.history, new Map(), model.uniqueModelId),
         contextCheckpoint: runtimeContextCheckpoint,
-        instructions: buildAgentSystemPrompt({
-          agentInstructions: agent.instructions,
-          mode: agent.mode,
-          appLanguage: this.ports.appLanguage(),
-          tools: [],
-        }),
+        instructions: [
+          buildAgentSystemPrompt({
+            mode: agent.mode,
+            appLanguage: this.ports.appLanguage(),
+            tools: [],
+          }),
+          (await this.ports.memory?.context(agent.id, this.controller.signal))?.text ?? '',
+        ].join('\n\n'),
       });
       const current = await this.store.getSession(session.id);
       if (
@@ -1090,7 +1132,7 @@ export class DurableAgentHost implements AgentProtocol {
     signal: AbortSignal,
   ): Promise<string | undefined> {
     const { plan } = target;
-    const configuration = this.configuration(plan);
+    const configuration = await this.configuration(plan, sessionId, signal);
     const revision = (await this.store.getRuntimeRevision(sessionId)) ?? 0;
     if (target.mode === 'rebuild') {
       return this.conversations.ensureConversation(
@@ -1134,7 +1176,24 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
-  private configuration(plan: TurnPlan): RuntimeConversationSeed['configuration'] {
+  private async configuration(
+    plan: TurnPlan,
+    sessionId: string,
+    signal: AbortSignal,
+  ): Promise<RuntimeConversationSeed['configuration']> {
+    let managedMemory: { key: string; text: string } | undefined;
+    try {
+      managedMemory = !plan.imageGeneration
+        ? await this.ports.memory?.managedContext?.(
+            { agentId: plan.agent.id, sessionId, hasHistory: plan.hasMessages },
+            signal,
+          )
+        : undefined;
+    } catch (error) {
+      if (error instanceof MemoryContextChangedError)
+        fail('MEMORY_CONTEXT_CHANGED', 'Memory protection changed; start a new conversation');
+      throw error;
+    }
     return {
       kind: plan.imageGeneration ? 'image' : 'language',
       model: plan.agent.model,
@@ -1143,12 +1202,14 @@ export class DurableAgentHost implements AgentProtocol {
         ? [createImageRequestTool(plan.imageGeneration, plan.usageAttribution.resolve)]
         : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
-      initialInstructions:
-        plan.agent.mode === 'standard'
+      initialInstructions: [
+        ...(plan.memoryInstructions ? [plan.memoryInstructions] : []),
+        ...(managedMemory ? [managedMemory] : []),
+        ...(plan.agent.mode === 'standard'
           ? [...buildInitialSkillInstructions(plan.skills), ...plan.workflowInstructions]
-          : [],
+          : []),
+      ],
       instructions: buildAgentSystemPrompt({
-        agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
         appLanguage: this.ports.appLanguage(),
         tools: plan.tools,
@@ -1802,6 +1863,7 @@ export class DurableAgentHost implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
+      memory: this.ports.memory,
       runtime: this.conversations,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
@@ -2275,6 +2337,8 @@ export class DurableAgentHost implements AgentProtocol {
       signal,
     );
     signal?.throwIfAborted();
+    if (status === 'completed' && turn.identity.slot === 0)
+      this.ports.memory?.completed?.(turn.identity.sessionId, assistant.id);
     // Settlement can outlive the current UI turn, including recovery without an observer.
     this.recordTurnState({ ...turn.identity, messageId: assistant.id }, view.status, view.error);
   }

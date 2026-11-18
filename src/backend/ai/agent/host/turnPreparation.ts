@@ -100,6 +100,13 @@ export type TurnPreparationDependencies = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  memory?: {
+    context(
+      agentId: string,
+      signal?: AbortSignal,
+      canBootstrap?: boolean,
+    ): Promise<{ key: string; text: string }>;
+  };
   /** The Host keeps the engine binding; preparation consumes that local Runtime. */
   runtime: Pick<AgentRuntime, 'descriptor' | 'preflightModel'>;
   runtimeTools: AgentRuntimeToolResolver;
@@ -147,6 +154,7 @@ export type TurnPlan = {
   pluginGuides: readonly PluginGuideSnapshot[];
   /** Plugin guides loaded earlier in the Session whose connection is still in this turn. */
   workflowInstructions: readonly { key: string; text: string }[];
+  memoryInstructions?: { key: string; text: string };
   /** The Skills usable in this turn, with their pinned revisions. */
   skills: TurnSkillPlan;
   toolDiscoveryWarnings: readonly string[];
@@ -441,7 +449,7 @@ export async function prepareResolvedTurn(
   };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
     workspaceFolderId: session.workspaceFolderId ?? null,
-    instructions: agent.instructions,
+    instructions: agent.soul,
     model: agent.model,
     parts,
     resources,
@@ -743,6 +751,18 @@ export async function prepareResolvedTurn(
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,
     inferenceSnapshot,
+    memoryInstructions: await dependencies.memory?.context(
+      agent.id,
+      signal,
+      ['memory_bootstrap', 'memory_update', 'agent_update'].every((name) =>
+        tools.some(
+          (tool) =>
+            tool.ref.source === 'builtin' &&
+            tool.ref.capabilityId === name &&
+            tool.approval !== 'deny',
+        ),
+      ),
+    ),
     inputParts: parts,
     modelPreflight,
     resources,

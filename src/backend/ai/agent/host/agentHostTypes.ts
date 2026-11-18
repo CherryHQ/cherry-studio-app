@@ -1,3 +1,4 @@
+import type { MemoryCaller } from '@/backend/services/agentMemory';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -69,6 +70,19 @@ export type MobileAgentHostPorts = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
+  memory?: {
+    managedContext?(
+      caller: MemoryCaller,
+      signal?: AbortSignal,
+    ): Promise<{ key: string; text: string }>;
+    assertSafe?(caller: MemoryCaller, signal?: AbortSignal): Promise<unknown>;
+    completed?(sessionId: string, replyId: string): void;
+    context(
+      agentId: string,
+      signal?: AbortSignal,
+      canBootstrap?: boolean,
+    ): Promise<{ key: string; text: string }>;
+  };
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;

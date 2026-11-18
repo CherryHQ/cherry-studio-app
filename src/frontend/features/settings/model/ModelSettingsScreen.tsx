@@ -20,6 +20,7 @@ import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { MemorySettingsSection } from './MemorySettingsSection';
 
 // 快速模型暂无功能接入，暂时隐藏设置入口，待功能接通后恢复。
 const VISIBLE_MODEL_SETTING_KINDS = MODEL_SETTING_KINDS.filter(
@@ -156,6 +157,7 @@ function ModelSettingsView() {
             ) : null}
           </Section>
         </PolicyGroup>
+        <MemorySettingsSection />
       </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer

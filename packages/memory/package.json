@@ -1,0 +1,23 @@
+{
+  "name": "@cherrystudio/memory",
+  "version": "0.0.1-alpha.1",
+  "private": true,
+  "description": "Platform-independent managed memory contracts and behavior for Cherry Studio",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "base64-js": "1.5.1",
+    "zod": "^4.4.3",
+    "mdast-util-from-markdown": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/mdast": "4.0.4"
+  }
+}

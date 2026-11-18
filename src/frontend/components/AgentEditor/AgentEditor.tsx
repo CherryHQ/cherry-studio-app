@@ -250,7 +250,7 @@ function AgentEditForm({
     saveSkillBindings,
     saveToolBindings,
     skillBindingUpdates,
-  } = useAgentAutoSave(agentId, isFocused);
+  } = useAgentAutoSave(agentId, isFocused, agent?.instructionsVersion);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
@@ -658,6 +658,14 @@ function AgentEditForm({
                   value={t(MODE_LABEL_KEYS[form.mode])}
                 />
                 {isModelLocked ? null : modelRow}
+                <PolicyEditable field="sharedMemoryEnabled">
+                  <Section.SwitchItem
+                    label={t('agent.form.sharedMemoryEnabled')}
+                    description={t('agent.form.sharedMemoryDescription')}
+                    value={form.sharedMemoryEnabled}
+                    onValueChange={(value) => updateForm('sharedMemoryEnabled', value)}
+                  />
+                </PolicyEditable>
                 {form.mode === 'standard' ? (
                   <Section.SelectItem
                     accessibilityHint={t(

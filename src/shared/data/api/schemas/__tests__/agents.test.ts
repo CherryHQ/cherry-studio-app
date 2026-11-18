@@ -33,6 +33,18 @@ describe('agent api schemas', () => {
     expect(UpdateAgentSchema.parse({ name: 'Renamed' })).toEqual({ name: 'Renamed' });
   });
 
+  test.each([CreateAgentSchema, UpdateAgentSchema])(
+    'accepts an explicit shared memory opt-out without changing omitted fields',
+    (schema) => {
+      expect(schema.parse({ name: 'Agent', sharedMemoryEnabled: false })).toEqual({
+        name: 'Agent',
+        sharedMemoryEnabled: false,
+      });
+      expect(schema.parse({ name: 'Agent' })).not.toHaveProperty('sharedMemoryEnabled');
+      expect(schema.safeParse({ name: 'Agent', sharedMemoryEnabled: 'false' }).success).toBe(false);
+    },
+  );
+
   test('fills agent list pagination defaults', () => {
     expect(ListAgentsQuerySchema.parse({})).toMatchObject({
       limit: 100,

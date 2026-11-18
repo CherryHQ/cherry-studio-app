@@ -3,7 +3,6 @@ import { AgentMutationToolResultSchema, AgentToolRecordSchema } from '../agentMa
 const agent = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Writer',
-  instructions: 'Write clearly.',
   mode: 'standard',
   model: 'provider::model',
   modelName: 'Model',
@@ -19,6 +18,7 @@ test('reads historical tool results without a mode as standard', () => {
 test('reads released capability switches without rewriting historical tool results', () => {
   const historical = {
     ...agent,
+    instructions: 'Historical instructions remain in the saved disclosure.',
     disabledCapabilities: [
       'agents',
       'calendar',
@@ -33,6 +33,23 @@ test('reads released capability switches without rewriting historical tool resul
   const stored = JSON.stringify(historical);
   expect(AgentToolRecordSchema.parse(historical)).toEqual(agent);
   expect(JSON.stringify(historical)).toBe(stored);
+});
+
+test('renders saved-Agent receipts with identity documents without exposing them in card metadata', () => {
+  const result = {
+    status: 'updated',
+    agent,
+    soul: { key: 'soul', content: 'A private persona', version: 'soul-version', truncated: false },
+    user: {
+      key: 'user',
+      content: 'Private user background',
+      version: 'user-version',
+      truncated: false,
+    },
+    contextRefreshed: false,
+  };
+  expect(AgentMutationToolResultSchema.parse(result)).toEqual({ status: 'updated', agent });
+  expect(result.user.content).toBe('Private user background');
 });
 
 test('emits model and reads historical mutation results without rewriting their payloads', () => {

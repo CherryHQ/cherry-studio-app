@@ -64,10 +64,15 @@ values, and leaves execution and authoritative Session state on the PC. The adap
 defined separately. The local Host never turns PC tools into `RuntimeTool` callbacks. See
 [Agent Architecture](./README.md#pc-agent-controller-boundary).
 
-The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
+The Agent's SOUL persona, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
 Runtime rules, guidance for application capabilities that are actually present, and the
-user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
+response-language policy into the prepared application prompt. Full SOUL/USER snapshots enter
+their own replaceable identity section, including in minimal/no-tool turns. Managed shared/private
+memory uses a separate entry section, cached per product conversation; full reads and edits use
+the [memory service](../../../src/backend/services/agentMemory/README.md). SOUL follows Desktop's
+persona semantics and role fallback without a separate System Prompt; the legacy database
+instructions migrate into that file instead of another Agent Instructions section. Runtime adapters consume
 that policy without appending another application policy fragment; Pi appends only the
 binding-specific instructions for its deferred MCP catalog when that catalog is present and retains
 trusted built-in callback instruction contributions through native documents and prompt sections. The Host
@@ -262,7 +267,7 @@ type RuntimeExecutionRequest = {
   // Isolated-run budgets; rejected tool calls count too. Never a durable conversation policy.
   limits?: { modelCalls: number; toolCalls: number }
   turnId: string
-  // Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions.
+  // Host-prepared application prompt: mobile Runtime rules, capability guidance and App language.
   instructions: string
   model: RuntimeModel
   history: RuntimeHistoryTurn[]
@@ -643,6 +648,13 @@ do not appear twice in the request. MCP cannot supply either control field.
 The next Host configuration atomically clears contributions as it supplies the new scope's
 prepared instructions; reopening an existing working copy preserves them without reconfiguration.
 
+The optional process-local `resolveInstructions` port refreshes Host-owned sections before each
+model request, including queued/recovered work and requests after compaction. Pi merges these
+updates with the current retained document, removes earlier patches for only its native named
+instruction section, and supplies the current section once. It never searches or rewrites user
+text. Refresh failures stop the request. Live memory authority and forgetting checks remain
+Host-owned and run again at provider/tool boundaries; native transcript state is not permission.
+
 A non-artifact tool returns `artifacts: []`; an MCP
 adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.
 A file-producing application capability creates and validates each managed entry before returning
@@ -934,7 +946,7 @@ Under [Pi Durable](./pi-durable-migration.md) this turn is no longer outside Pi:
 submits it like any other, and a Pi image model schedules the Host's single `cherry_generate_image`
 tool (`createImageRequestTool`), which runs the prepared request.
 
-The image capability calls `AiService.generateImage` with the Agent instructions, current prompt,
+The image capability calls `AiService.generateImage` with the Agent's SOUL persona, current prompt,
 explicit reference attachments, and the reserved assistant message's usage attribution. It imports
 outputs as managed generated files, then the Host persists them as assistant artifact parts using
 its usual cancellation, background reply, naming, and terminal-state flow. A ten-minute request

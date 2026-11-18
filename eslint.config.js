@@ -592,4 +592,39 @@ module.exports = defineConfig([
       },
     ],
   ),
+  restrictedImports(
+    ['packages/memory/src/**/*.{ts,tsx}'],
+    [
+      {
+        group: ['@/*', '@/*/**', '@src/*', '@src/*/**', '@logger'],
+        message:
+          '@cherrystudio/memory receives platform capabilities through ports; it must not import app code.',
+      },
+      sharedPlatformIndependence,
+    ],
+    [
+      {
+        target: 'packages/memory/src',
+        from: 'src',
+        message: 'Memory core must not depend on app code.',
+      },
+    ],
+  ),
+  {
+    files: ['packages/memory/src/**/*.ts'],
+    ignores: ['packages/memory/src/**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*', 'fs', 'fs/*', 'path', 'crypto', 'buffer'],
+              message: 'Use injected MemoryPlatform ports and web-standard byte APIs.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

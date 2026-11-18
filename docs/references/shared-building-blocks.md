@@ -71,6 +71,9 @@ it already exists.
 | Desktop scheduled-task metadata, conversation membership and association caching | `RemoteTaskCatalog` in `src/backend/services/remoteAgent`, exposed through the existing Agent source's read-only `tasks` capability |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
+| Portable shared/private managed memory, receipts, forgetting, recovery and model planners | [Memory package](../../packages/memory/README.md), imported through `@cherrystudio/memory`; platform capabilities enter through ports |
+| Mobile memory storage, Agent authority, conversation context and foreground maintenance | [Agent Memory](../../src/backend/services/agentMemory/README.md); `AgentMemoryService` owns lifecycle and Agent-bound tool access |
+| Agent SOUL projection and persona creation/editing across API and tools | [Agent Profiles](../../src/backend/services/agents/README.md); `createAgentProfiles` coordinates Agent metadata and versioned memory without file I/O in data services |
 | Logging | `loggerService` in `src/shared/core/logger` |
 | Diagnostic event identity and versions | `src/backend/utils/diagnosticContext.ts`; bootstrap supplies an in-memory reader, logs and traces capture it before persistence |
 | Diagnostic temporary files | `src/backend/utils/diagnosticTemporaryFiles.ts`; bundles and trace snapshots share a runtime-owned cache parent, startup reclaims previous runs |

@@ -752,7 +752,6 @@ describe('Persistent Agent facade', () => {
       },
     ];
     const instructions = buildAgentSystemPrompt({
-      agentInstructions: 'Help.',
       appLanguage: 'en-US',
       tools,
     });
@@ -1139,6 +1138,34 @@ describe('Persistent Agent facade', () => {
     }
   });
 
+  test('renders and replaces current identity even when minimal mode has no application tools', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const configuration = {
+      ...seed.configuration,
+      instructions: buildAgentSystemPrompt({ mode: 'minimal', appLanguage: 'en-US', tools: [] }),
+      initialInstructions: [{ key: 'agent-memory', text: 'Current SOUL: Be a precise editor.' }],
+    };
+    try {
+      await runtime.ensureConversation({ ...seed, configuration });
+      await submitAndWait(runtime, input('persona-first'));
+      expect(getCurrentSystemPrompt(state.requests[0]!.messages)).toContain('Be a precise editor.');
+      expect(getCurrentTools(state.requests[0]!.messages)).toEqual([]);
+      await runtime.configure(lane, {
+        ...configuration,
+        initialInstructions: [{ key: 'agent-memory', text: 'Current SOUL: Be a gentle tutor.' }],
+      });
+      await submitAndWait(runtime, input('persona-second'));
+      const prompt = getCurrentSystemPrompt(state.requests.at(-1)!.messages);
+      expect(prompt).toContain('Be a gentle tutor.');
+      expect(prompt).not.toContain('Be a precise editor.');
+      expect(getCurrentTools(state.requests.at(-1)!.messages)).toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test.each(['openai-completions', 'openai-responses'] as const)(
     'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {
@@ -1206,7 +1233,6 @@ describe('Persistent Agent facade', () => {
       ];
       tools.push(createLoadWorkflowTool(getPluginWorkflows(pluginGuides)));
       const instructions = buildAgentSystemPrompt({
-        agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
         tools,
         skills,
@@ -1257,7 +1283,13 @@ describe('Persistent Agent facade', () => {
           configuration: {
             ...seed.configuration,
             instructions,
-            initialInstructions: buildInitialSkillInstructions(skills),
+            initialInstructions: [
+              {
+                key: 'agent-memory',
+                text: 'SOUL persona: Help me inspect my GitHub repositories.',
+              },
+              ...buildInitialSkillInstructions(skills),
+            ],
             tools,
           },
         });

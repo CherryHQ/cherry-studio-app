@@ -33,8 +33,10 @@ export const AgentSchema = z.strictObject({
   /** Retired switches are projected as empty for existing Data API readers. */
   disabledCapabilities: z.array(z.string()).max(0),
   id: AgentIdSchema,
-  /** System instructions supplied to every turn */
+  /** Local SOUL projection or server-owned instructions for an organization Agent. */
   instructions: z.string(),
+  instructionsVersion: z.string().optional(),
+  sharedMemoryEnabled: z.boolean(),
   /** Owned by the enterprise server: read-only except for the managed-Agent field allowlist. */
   isManaged: z.boolean().optional(),
   /** A managed Agent's model pool, default first; the user picks among them only when there are several. */

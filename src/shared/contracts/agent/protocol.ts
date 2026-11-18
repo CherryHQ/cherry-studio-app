@@ -29,6 +29,11 @@ import type {
  * Error wrapper is process-local transport, like subscription callbacks.
  */
 export class AgentProtocolError extends Error {
+  /** Generic execution adapters preserve the protocol code without importing this wrapper. */
+  get code() {
+    return this.view.code;
+  }
+
   constructor(readonly view: AgentErrorView) {
     super(view.message);
     this.name = 'AgentProtocolError';

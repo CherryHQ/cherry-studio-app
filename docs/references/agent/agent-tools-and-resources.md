@@ -145,6 +145,25 @@ A temporarily undiscovered tool keeps its stored `enabled` value; only its effec
 unavailable. This resolver returns configuration facts only and does not create or inject a Runtime
 tool.
 
+## Agent Memory
+
+[Agent Memory](../../../src/backend/services/agentMemory/README.md) owns private persona, user context,
+durable facts and an append-only journal for each Agent. The Host loads a complete identity snapshot
+at each language-turn preparation, independently of model tool support. Empty sections withdraw
+previous memory, including copies in compacted summaries. The snapshot is a trusted application
+section. SOUL retains Desktop's persona semantics, including role definition without a separate
+Agent System Prompt; current user requests and Runtime rules constrain it. USER/FACT/journal are
+contextual data, not behavioral authority. Image-generation turns use SOUL as their persona input,
+without adding USER/FACT or journal history. Non-empty legacy instructions migrate once into SOUL;
+the existing editor/API field then projects that file instead of a separate prompt column.
+
+`memory_read` and `memory_search` are read-only built-ins. `memory_update` and `memory_append`
+follow the system write approval policy and never enter a parallel read-only answer. Minimal mode
+receives identity context but no memory tools. Tools are bound to the current Agent; callers never
+choose another Agent or a physical path. Document updates require a fresh content revision and
+refresh the running conversation's trusted memory section after commit. Memory mutations use one
+ordered backend writer, with backup freeze and host-generation teardown.
+
 ## Snapshot Resolution
 
 Before admitting a turn, the Host resolves tools in this order:
@@ -1023,10 +1042,10 @@ writes start at `ask` and follow the current Agent's approval
 preference, without a second confirmation flow. These definition tools do not delete Agents.
 Avatar and MCP binding changes use the dedicated application workflows described below.
 
-Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
-`AgentService` resolve the global default Agent model; omitted capability settings use the same
-disabled groups as the manual create form. A saved Agent without a model remains editable
-but cannot start chatting. The model derives instructions from the conversation and may use
+Creation accepts a name, optional `soul`/`user` text, and optional definition fields. Omitting `model` lets
+`AgentService` resolve the global default Agent model. SOUL carries persona and the role fallback;
+USER carries user preferences and background. A saved Agent without a model remains editable
+but cannot start chatting. The model derives relevant content from the conversation and may use
 `ask_user_question` for material missing requirements.
 
 Every model-facing property has a concrete type, because OpenAI-compatible gateways that
@@ -1037,8 +1056,9 @@ exact Agent ID or `current`.
 
 `agent_list` lists saved Agents with optional name filtering and pagination. Call with `{}` to browse
 without a name filter; a request to list Agents does not require asking the user for a search keyword.
-It returns at most 50 compact records per call and omits instructions.
-`agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, and current Skill
+It returns at most 50 compact records per call and omits private memory.
+`agent_get` defaults to `view: definition`, returning the editable definition, `updatedAt`, complete
+`soul` and `user` documents with their versions, and current Skill
 bindings (`skillId` and `state: enabled | disabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
@@ -1047,7 +1067,12 @@ latest definition. `changes.skills` applies only the listed bindings: `state: en
 enables, `disabled` binds and disables, and `removed` removes a binding. Unlisted bindings are
 preserved; this does not change the Skill library's global enablement. Definition edits and requested binding
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
-apply to future turns only.
+apply to future turns only. `changes.soul` and `changes.user` carry `{ content, expected_version }`;
+empty content clears the document. File replacements use their own revision checks and preserve
+unlisted documents. Metadata/Skill transactions and memory publication are separate, so an
+uncertain or failed multi-field update requires reading current state before another write.
+Successful edits to the current Agent's identity refresh its running context. Edits to another
+Agent never install that Agent's persona in the caller's context.
 
 For avatar changes and version-only reads, `agent_get` accepts `view: summary`: it returns only
 `id`, `name`, and `updatedAt`, without instructions or Skill bindings. The definition view remains

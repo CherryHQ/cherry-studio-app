@@ -25,6 +25,7 @@ import {
 } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
+import type { AgentMemoryOperations } from '@/backend/services/agentMemory';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -70,6 +71,7 @@ import {
 import { createFileLibraryTools } from './fileLibraryTools';
 import { createHttpRequestTool } from './httpRequestTool';
 import { createMcpManagementTools, type McpManagementAccess } from './mcpManagementTools';
+import { createMemoryTools } from './memoryTools';
 import { officeFiles } from './officeFiles';
 import { createOfficeTools } from './officeTools';
 import {
@@ -130,6 +132,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
     agents: AgentManagementData;
+    memory?: AgentMemoryOperations;
     skillLibrary: Pick<AgentGlobalSkillService, 'list' | 'countLibrary'>;
     trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
@@ -148,6 +151,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  * generations, so reaching for one here would capture a stale binding.
  */
 export type SystemCapabilityServices = {
+  memory?: AgentMemoryOperations;
   mcpManagement?: McpManagementAccess;
   voice?: Pick<VoiceModule, 'getTranscriptionStatus' | 'transcribeAudio'>;
   ssh?: SshToolAccess;
@@ -321,8 +325,22 @@ function createCatalog(
     ...(deps.agentConfiguration
       ? createAgentConfigurationTools(deps.agentConfiguration, fileAccess, deps.agents, agentId)
       : []),
-    ...createAgentManagementTools(deps.agents, agentId),
     createSkillInventoryTool(deps.skillLibrary, agentId),
+    ...createAgentManagementTools(deps.agents, agentId, deps.memory),
+    ...(agentId && deps.memory
+      ? createMemoryTools(
+          deps.memory,
+          agentId,
+          resolveUsageAttribution
+            ? () => {
+                const ref = resolveUsageAttribution().messageRef;
+                return ref?.kind === 'agent-session'
+                  ? deps.memory?.resolveCaller(agentId, ref.id)
+                  : undefined;
+              }
+            : undefined,
+        )
+      : []),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -485,6 +503,7 @@ function resolveDependencies(
 ): SystemCapabilitySourceDependencies {
   return {
     voice: overrides.voice ?? services.voice,
+    memory: overrides.memory ?? services.memory,
     agents: overrides.agents ?? agentService,
     skillLibrary: overrides.skillLibrary ?? agentGlobalSkillService,
     trash: overrides.trash ?? services.trash,

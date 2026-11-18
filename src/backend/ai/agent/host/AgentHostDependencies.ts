@@ -34,6 +34,7 @@ import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type { AgentMemoryService } from '@/backend/services/agentMemory';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
@@ -85,6 +86,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'AgentMemoryService',
   'BackgroundActivityEnvironment',
   'SshRuntime',
   'ScreenAwakeRuntime',
@@ -207,6 +209,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    readonly memory: AgentMemoryService,
     private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
       translate: (key) => key,
     },
@@ -271,6 +274,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      memory: this.memory.operations,
       ssh: this.ssh,
       mcpManagement: {
         servers: mcpServerService,

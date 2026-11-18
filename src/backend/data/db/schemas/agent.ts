@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import {
   DEFAULT_AGENT_MODE,
@@ -31,8 +31,11 @@ export const agentTable = sqliteTable(
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    // System instructions supplied to every turn
+    // Server-owned for managed Agents; local Agents migrate their persona to SOUL.md.
     instructions: text().notNull().default(''),
+    // NULL uses Desktop's legacy SOUL-content check; false explicitly requests onboarding.
+    bootstrapCompleted: integer({ mode: 'boolean' }),
+    sharedMemoryEnabled: integer({ mode: 'boolean' }).notNull().default(true),
     mode: text({ enum: ['standard', 'minimal'] })
       .$type<AgentMode>()
       .notNull()

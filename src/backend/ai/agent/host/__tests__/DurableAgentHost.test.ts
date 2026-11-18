@@ -228,7 +228,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
           ? {
               id,
               name: 'Agent',
-              instructions: '',
+              soul: '',
               mode: 'standard',
               model: configuration.model,
               options: {},
@@ -1098,7 +1098,6 @@ describe('durable tool diagnostics', () => {
     jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
       ...configuration,
       instructions: buildAgentSystemPrompt({
-        agentInstructions: '',
         appLanguage: 'zh-CN',
         tools: [tool],
       }),
@@ -1784,7 +1783,6 @@ describe('durable tool diagnostics', () => {
     jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
       ...configuration,
       instructions: buildAgentSystemPrompt({
-        agentInstructions: '',
         appLanguage: 'zh-CN',
         tools: [],
       }),
