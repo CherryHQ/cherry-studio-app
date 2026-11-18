@@ -38,6 +38,7 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   permissions are reused.
 - Notification access is settled before sign-in when completion notifications are enabled. Prior OS
   decisions are not repeated. Background guidance is recorded before the SDK can change profiles.
+  The notification step can be skipped without requesting system notification permission.
   Login/profile switching remains in the account module; this feature supplies only its first-use
   entry and consumes the shared account form, submission and error reporter.
 - `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.

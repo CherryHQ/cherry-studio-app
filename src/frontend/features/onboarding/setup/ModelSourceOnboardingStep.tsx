@@ -24,7 +24,7 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
   const { cloud, state } = useCloud();
   const organizationManaged = !capabilityPolicy('providerOnboarding').canEdit('providerOnboarding');
   const models = useQuery('/models', {
-    enabled: account.hasPrompted && !organizationManaged,
+    enabled: !organizationManaged && (account.hasPrompted || account.isSignedIn),
     query: { enabled: true, isSystemSupported: true },
     retry: false,
   });
@@ -32,6 +32,7 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
     account,
     cloud: state,
     organizationManaged,
+    restoringSession: account.isRestoringSession,
     models: {
       hasModels: (models.data?.length ?? 0) > 0,
       isLoading: models.isPending,
@@ -40,8 +41,7 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
   });
   const finish = async () => {
     if (destination === 'permissions') await progress.advance('permissions');
-    else if (destination === 'completed' && (await progress.advance('completed')))
-      router.replace('/');
+    else if (destination === 'completed') await progress.advance('completed');
   };
   const continueRestored = useEffectEvent(finish);
   useEffect(() => {

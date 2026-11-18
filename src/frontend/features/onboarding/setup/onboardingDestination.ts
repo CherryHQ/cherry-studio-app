@@ -7,14 +7,17 @@ export function getOnboardingDestination({
   cloud,
   models,
   organizationManaged,
+  restoringSession,
 }: {
   account: Pick<AccountState, 'hasPrompted' | 'isSignedIn'>;
   cloud: CloudState;
   models: { hasModels: boolean; isLoading: boolean; isError: boolean };
   organizationManaged: boolean;
+  restoringSession: boolean;
 }) {
   if (organizationManaged) return 'completed';
-  if (!account.hasPrompted) return 'permissions';
+  if (restoringSession) return 'loading';
+  if (!account.hasPrompted && !account.isSignedIn) return 'permissions';
   if (account.isSignedIn) {
     if (cloud.phase === 'loading' || cloud.isRefreshing) return 'loading';
     if (cloud.phase !== 'ready') return 'retry';
