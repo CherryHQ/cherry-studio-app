@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { v7 as uuidv7 } from 'uuid';
 
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
@@ -28,7 +29,7 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { PolicyScope } from '@/frontend/components/Policy';
-import { useApiClient, useBackendModule } from '@/frontend/data';
+import { queryKeys, useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { useFileWorkspace } from '@/frontend/hooks/file';
@@ -48,6 +49,7 @@ import {
   AssistantMessageUsage,
   ChatComposerClearance,
   ChatEmptyState,
+  type ChatTurnNavigator,
   ChatWorkspace,
 } from './components/ChatWorkspace';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
@@ -140,6 +142,27 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !messageWindow.hasNewerMessages &&
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
+  const { openTurn } = quoteNavigation;
+  const turnNavigator: ChatTurnNavigator | undefined =
+    sessionId && !isPreview
+      ? {
+          scope: `local:${sessionId}`,
+          queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
+          async read(_, signal) {
+            const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, { signal });
+            return {
+              items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
+            };
+          },
+          async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
+            const result = await openTurn(
+              { sourceMessageId, requestId: uuidv7() },
+              activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
+            );
+            return result.state;
+          },
+        }
+      : undefined;
   const readCitations = messageWindow.readCitations;
   const readCitationsRef = useRef(readCitations);
   useEffect(() => {
@@ -296,6 +319,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
                         <ChatWorkspace
                           executionSource="local"
+                          turnNavigator={turnNavigator}
                           onQuoteTargetRestored={
                             quoteNavigation.navigation
                               ? quoteNavigation.onTargetRestored

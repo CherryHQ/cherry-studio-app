@@ -57,6 +57,7 @@ import { ConversationPresenter } from './ConversationPresenter';
 import { remoteChatShareTarget } from './remoteChatShareTarget';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+import { useRemoteChatTurns } from './useRemoteChatTurns';
 import { readRemoteDraft } from './useRemoteDraftPersistence';
 
 const renderRemoteUsage = (message: MessageListItem) => (
@@ -180,7 +181,8 @@ function RemoteChatSession() {
     sidebarPresence !== 'open',
   );
   const snapshot = useConversationSnapshot(opened.session);
-  const history = useConversationHistory(opened.session, snapshot.historyVersion);
+  const turns = useRemoteChatTurns(opened.session, snapshot.historyVersion);
+  const history = useConversationHistory(opened.session, snapshot.historyVersion, turns.navigation);
   // The presenter retains live rows until the desktop's history revision installs them.
   const [presentation, setPresentation] = useState(() => ({
     session: opened.session,
@@ -233,6 +235,7 @@ function RemoteChatSession() {
               ) : (
                 <ChatWorkspace
                   executionSource="desktop"
+                  turnNavigator={turns.navigator}
                   isTranslationEnabled={Boolean(opened.session?.readingAidScope)}
                   readingAidScope={opened.session?.readingAidScope}
                   feedbackHintBottomOffset={composerHeight}

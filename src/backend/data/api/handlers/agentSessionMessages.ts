@@ -10,7 +10,7 @@ import type { HandlersFor } from '@/shared/data/api/types';
 export function createAgentSessionMessageHandlers(
   service: Pick<
     AgentSessionMessageService,
-    'listByCursor' | 'readSelection' | 'readTranscript' | 'saveTranslation'
+    'listByCursor' | 'readSelection' | 'readTranscript' | 'readTurns' | 'saveTranslation'
   >,
 ): HandlersFor<AgentSessionMessageSchemas> {
   return {
@@ -18,6 +18,14 @@ export function createAgentSessionMessageHandlers(
       GET: async ({ params, signal }) => {
         signal?.throwIfAborted();
         const result = await service.readTranscript(params.sessionId);
+        signal?.throwIfAborted();
+        return result;
+      },
+    },
+    '/agent-sessions/:sessionId/messages/turns': {
+      GET: async ({ params, signal }) => {
+        signal?.throwIfAborted();
+        const result = await service.readTurns(params.sessionId);
         signal?.throwIfAborted();
         return result;
       },

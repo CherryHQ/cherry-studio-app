@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type {
-  ConversationHistoryView,
-  ConversationMessage,
-  ConversationSnapshot,
+import {
+  type ConversationHistoryView,
+  type ConversationMessage,
+  ConversationReadError,
+  type ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
 import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
@@ -20,6 +21,7 @@ import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
+import type { ChatTurnNavigator } from './chatTurns';
 import { ChatComposerClearance } from './components/ChatComposerClearance';
 import { type ChatDraftModelSetup, ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
@@ -40,6 +42,7 @@ type ChatWorkspaceProps = {
   onQuoteTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   onQuoteWindowReady?: () => void;
   onQuoteTakeover?: () => void;
+  turnNavigator?: ChatTurnNavigator;
   enteringUserMessageId?: string;
   pendingSend?: PendingChatSend;
   onPendingSendDisplayed: (userMessageId: string) => void;
@@ -73,6 +76,7 @@ export function ChatWorkspace({
   onQuoteTargetRestored,
   onQuoteWindowReady,
   onQuoteTakeover,
+  turnNavigator,
   snapshot: live,
   messages: sourceMessages,
   enteringUserMessageId,
@@ -277,7 +281,8 @@ export function ChatWorkspace({
                   : undefined
               }
               title={t(
-                error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+                (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) ||
+                  (error instanceof ConversationReadError && error.failure.code === 'not-found')
                   ? 'chat.history.messageUnavailable'
                   : 'chat.history.loadFailed',
               )}
@@ -318,6 +323,7 @@ export function ChatWorkspace({
                   <ChatTranscript
                     onTargetRestored={onQuoteTargetRestored}
                     onReady={onQuoteWindowReady}
+                    turnNavigator={editing ? undefined : turnNavigator}
                     requiresInitialLayout={requiresInitialHistoryLayout}
                     isLoadingMore={isLoadingOlder || isLoadingNewer}
                     contentBottomInset={contentBottomInset}
