@@ -2,7 +2,7 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { useCloseDrawerForExternalNavigation } from '../useCloseDrawerForExternalNavigation';
+import { useCloseDrawerForNavigation } from '../useCloseDrawerForNavigation';
 
 let mockStatus: 'open' | 'closed' = 'open';
 let mockProgress = 1;
@@ -49,10 +49,10 @@ const navigation = {
   addListener,
 } as unknown as DrawerContentComponentProps['navigation'];
 
-let prepare: ReturnType<typeof useCloseDrawerForExternalNavigation>;
+let prepare: ReturnType<typeof useCloseDrawerForNavigation>;
 let renderer: ReactTestRenderer;
 function Probe({ permanent = false }) {
-  const closeDrawer = useCloseDrawerForExternalNavigation(navigation, permanent);
+  const closeDrawer = useCloseDrawerForNavigation(navigation, permanent);
   useEffect(() => {
     prepare = closeDrawer;
   }, [closeDrawer]);
@@ -126,6 +126,16 @@ test('an earlier queued completion cannot finish the next request', async () => 
   progress(0);
   flushCompletions();
   await expect(next).resolves.toBe(true);
+});
+
+test('a tap after the drawer settles supersedes a queued navigation', async () => {
+  render();
+  const first = prepare();
+  progress(0);
+  const second = prepare();
+  flushCompletions();
+  await expect(first).resolves.toBe(false);
+  await expect(second).resolves.toBe(true);
 });
 
 test.each([false, true])(

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-export function useCloseDrawerForExternalNavigation(
+export function useCloseDrawerForNavigation(
   navigation: DrawerContentComponentProps['navigation'],
   isPermanent: boolean,
 ) {
@@ -53,33 +53,36 @@ export function useCloseDrawerForExternalNavigation(
 
   useEffect(() => () => pending.current?.finish(false), []);
 
-  return (signal: AbortSignal): Promise<boolean> => {
-    if (signal.aborted) return Promise.resolve(false);
-    if (
-      isPermanent ||
-      (getDrawerStatusFromState(
-        navigation.getState() as DrawerContentComponentProps['state'],
-        'closed',
-      ) === 'closed' &&
-        progress.get() === 0)
-    ) {
-      return Promise.resolve(true);
-    }
+  return useCallback(
+    (signal?: AbortSignal): Promise<boolean> => {
+      if (signal?.aborted) return Promise.resolve(false);
+      pending.current?.finish(false);
+      if (
+        isPermanent ||
+        (getDrawerStatusFromState(
+          navigation.getState() as DrawerContentComponentProps['state'],
+          'closed',
+        ) === 'closed' &&
+          progress.get() === 0)
+      ) {
+        return Promise.resolve(true);
+      }
 
-    pending.current?.finish(false);
-    const id = ++nextId.current;
-    return new Promise((resolve) => {
-      const finish = (ready: boolean) => {
-        pending.current = null;
-        requestId.set(0);
-        signal.removeEventListener('abort', abort);
-        resolve(ready);
-      };
-      const abort = () => finish(false);
-      pending.current = { id, finish };
-      signal.addEventListener('abort', abort, { once: true });
-      requestId.set(id);
-      navigation.closeDrawer();
-    });
-  };
+      const id = ++nextId.current;
+      return new Promise((resolve) => {
+        const finish = (ready: boolean) => {
+          pending.current = null;
+          requestId.set(0);
+          signal?.removeEventListener('abort', abort);
+          resolve(ready);
+        };
+        const abort = () => finish(false);
+        pending.current = { id, finish };
+        signal?.addEventListener('abort', abort, { once: true });
+        requestId.set(id);
+        navigation.closeDrawer();
+      });
+    },
+    [isPermanent, navigation, progress, requestId],
+  );
 }

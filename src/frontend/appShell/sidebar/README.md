@@ -17,16 +17,18 @@ The header's leading sidebar button is the one entry for every width. `SidebarTo
 the drawer and publishes `resolveSidebarToggleAction` for the column through `useSidebarToggle`,
 exported from `@/frontend/appShell/sidebar/toggle` so headers do not load the sidebar UI: `open`
 for the overlay, `hide` or `show` for a wide column, and nothing while the file pane or a fold holds
-it. Hiding and showing switch the drawer between its permanent and closed overlay types in one step:
-animating the column's width would relayout the chat on every frame. Swiping only opens the
-overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
+it. Wide windows keep the drawer in permanent mode. A hidden sidebar stays mounted outside the
+layout row, so opening or closing Files exchanges the left column in one layout change. Swiping
+opens the overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
 `useSidebarPresence`: `persistent`, `open`, or `closed`. Selection mode, the title marquee, and read
 receipts use it instead of the raw drawer status.
 
 In a wide window the sidebar stays beside every page in the content region, so its actions read the
 content stack when they run. Agents, Paintings, Plugins, Marketplace, and the avatar's Settings push above
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
-shows selected through `resolveSidebarDestination`. Conversation rows, New chat, device switching,
+shows selected through `resolveSidebarDestination`. Selecting the same page and chat context keeps
+the existing page mounted. In compact windows, page navigation waits for the overlay to finish
+closing. Conversation rows, New chat, device switching,
 and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills

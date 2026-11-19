@@ -25,9 +25,13 @@ type FilePaneContent = {
  * Lays the file pane out beside the chat stack whenever the drawer group provides one. On a
  * foldable the pane and chat meet at the fold instead of spanning it.
  */
-export function FilePaneHost({ children, ...content }: FilePaneContent & { children: ReactNode }) {
+export function FilePaneHost({
+  children,
+  layoutScope = 'host',
+  ...content
+}: FilePaneContent & { children: ReactNode; layoutScope?: 'host' | 'window' }) {
   const pane = useFilePane();
-  const { chatTop, insets, isLayoutCurrent, split } = usePaneSplit();
+  const { chatTop, insets, isLayoutCurrent, split } = usePaneSplit(layoutScope);
   const isTypingInChat = useIsTypingBelow(chatTop);
   // An expanded preview covers the chat; only assistive technologies need to be told.
   const isChatCovered = Boolean(
