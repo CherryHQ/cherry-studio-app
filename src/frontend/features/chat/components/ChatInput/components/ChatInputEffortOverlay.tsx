@@ -16,6 +16,7 @@ import Animated, {
   Extrapolation,
   interpolate,
   runOnJS,
+  runOnUI,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -71,6 +72,7 @@ export function ChatInputEffortOverlay({
   }));
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
+  const closeStartProgress = useSharedValue<number | null>(null);
   const rootRef = useRef<ViewInstance>(null);
   const openingRef = useRef(false);
   const revealPendingRef = useRef(false);
@@ -110,14 +112,26 @@ export function ChatInputEffortOverlay({
       return;
     }
 
-    progress.set(
-      withTiming(0, { duration: closeDurationMs, easing: easing.settle }, (finished) => {
-        if (finished) {
-          runOnJS(setLayout)(null);
-        }
-      }),
-    );
-  }, [layout, progress, reducedMotion]);
+    // Capture the shell fade's start on the UI thread to keep interrupted opens continuous.
+    // Repeated closes keep the same fade and deadline; reduced motion completes above.
+    runOnUI(() => {
+      'worklet';
+      if (closeStartProgress.value !== null) {
+        return;
+      }
+
+      closeStartProgress.value = progress.value;
+      progress.value = withTiming(
+        0,
+        { duration: closeDurationMs, easing: easing.settle },
+        (finished) => {
+          if (finished) {
+            runOnJS(setLayout)(null);
+          }
+        },
+      );
+    })();
+  }, [closeStartProgress, layout, progress, reducedMotion]);
 
   const open = useCallback(
     (gaugeFrame: ChatInputEffortFrame) => {
@@ -142,6 +156,7 @@ export function ChatInputEffortOverlay({
           return;
         }
 
+        closeStartProgress.set(null);
         progress.set(reducedMotion ? 1 : 0);
         revealPendingRef.current = !reducedMotion;
         setLayout({
@@ -154,6 +169,7 @@ export function ChatInputEffortOverlay({
       });
     },
     [
+      closeStartProgress,
       keyboard.height,
       keyboard.isVisible,
       layout,
@@ -218,6 +234,15 @@ export function ChatInputEffortOverlay({
       [gaugeFrame.left, sliderFrame.left],
       Extrapolation.CLAMP,
     ),
+    // Fade the shell to zero with the content, starting continuously at opacity 1.
+    // Before content has appeared, preserve the original opaque reverse morph.
+    // Fully-open closes leave a same-popover fade tail for 0.5 < p < 0.58:
+    // shell < 0.16, effective content < 0.0256 (at p=0.57: 0.14 and 0.0196).
+    // Both reach zero at p=0.5, versus HEAD's shell=1, so no extra motion is needed.
+    opacity:
+      closeStartProgress.value === null || closeStartProgress.value <= 0.5
+        ? 1
+        : interpolate(progress.value, [0.5, closeStartProgress.value], [0, 1], Extrapolation.CLAMP),
     top: interpolate(
       progress.value,
       [0, 1],
