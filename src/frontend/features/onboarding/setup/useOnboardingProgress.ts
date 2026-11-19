@@ -54,7 +54,7 @@ export function useOnboardingProgress() {
   const skip = async () => {
     if (await advance('skipped')) router.replace('/');
   };
-  return { advance, skip, isSaving, saveFailed, status };
+  return { advance, skip, isFocused, isSaving, saveFailed, status };
 }
 
 export type OnboardingProgress = ReturnType<typeof useOnboardingProgress>;
