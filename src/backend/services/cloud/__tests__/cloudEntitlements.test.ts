@@ -20,19 +20,6 @@ test('only an effective paid entitlement for the selected model grants Plan acce
   expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
 });
 
-test('all windows in a pool constrain credit, while another pool can independently admit a model', () => {
-  const state = cloudSnapshot();
-  const pool = state.account!.quota_pools[0];
-  pool.windows.push({ ...pool.windows[0], window_type: 'calendar_day', remaining_units: 0 });
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
-  state.account!.quota_pools.push({
-    ...pool,
-    allocation_id: 'other-pool',
-    windows: [{ ...pool.windows[0] }],
-  });
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
-});
-
 test('general generation requires both chat and translate, independently of Agent use', () => {
   const state = cloudSnapshot();
   state.models[0].available_features = ['agent', 'chat'];
@@ -59,12 +46,10 @@ test('stale or signed-out state never grants access even if it carries previous 
   ).toBe('signed_out');
 });
 
-test('a subscription-month boundary and an empty quota pool both fail closed', () => {
+test('missing quota data does not hide an entitled model', () => {
   const state = cloudSnapshot();
-  state.account!.quota_pools[0].windows[0].period_end = '2026-10-31T00:00:00Z';
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
-  state.account!.quota_pools[0].windows = [];
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
+  state.account!.quota_pools = [];
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
 });
 
 test('the wire contract retains reserved money units and subscription-month dates', () => {

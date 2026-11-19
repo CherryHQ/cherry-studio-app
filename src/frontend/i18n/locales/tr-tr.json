@@ -786,7 +786,6 @@
   "cloud.notEntitled": "Bu kullanım kapsam dışında",
   "cloud.quotaDayShort": "Gün",
   "cloud.quotaDaysShort": "{{days}}g",
-  "cloud.quotaExhausted": "Kota tükendi",
   "cloud.quotaHoursShort": "{{hours}}sa",
   "cloud.quotaMonthShort": "Ay",
   "cloud.quotaWeekShort": "Hf.",

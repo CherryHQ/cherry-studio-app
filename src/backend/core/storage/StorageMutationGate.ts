@@ -1,3 +1,4 @@
+import { raceAbort } from '@/backend/utils/raceAbort';
 import { BackupError } from '@/shared/contracts/backup';
 
 /**
@@ -5,24 +6,32 @@ import { BackupError } from '@/shared/contracts/backup';
  * the user; this keeps work that starts without the UI (new Agent turns, background jobs) out.
  */
 export class StorageMutationGate {
-  private frozen = false;
+  private frozenUntil: Promise<void> | undefined;
 
   get isFrozen(): boolean {
-    return this.frozen;
+    return this.frozenUntil !== undefined;
   }
 
   assertWritable(): void {
-    if (this.frozen) throw new BackupError('busy');
+    if (this.isFrozen) throw new BackupError('busy');
+  }
+
+  async waitUntilWritable(signal: AbortSignal): Promise<void> {
+    while (this.frozenUntil) await raceAbort(this.frozenUntil, signal);
+    signal.throwIfAborted();
   }
 
   freeze(): () => void {
-    if (this.frozen) throw new BackupError('busy');
-    this.frozen = true;
-    let released = false;
+    this.assertWritable();
+    let thaw!: () => void;
+    const frozenUntil = new Promise<void>((resolve) => {
+      thaw = resolve;
+    });
+    this.frozenUntil = frozenUntil;
     return () => {
-      if (!released) {
-        released = true;
-        this.frozen = false;
+      if (this.frozenUntil === frozenUntil) {
+        this.frozenUntil = undefined;
+        thaw();
       }
     };
   }

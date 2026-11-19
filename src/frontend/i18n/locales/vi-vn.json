@@ -777,7 +777,6 @@
   "cloud.notEntitled": "Không bao gồm mục đích sử dụng này",
   "cloud.quotaDayShort": "Ngày",
   "cloud.quotaDaysShort": "{{days}}n",
-  "cloud.quotaExhausted": "Đã hết hạn mức",
   "cloud.quotaHoursShort": "{{hours}}g",
   "cloud.quotaMonthShort": "Tháng",
   "cloud.quotaWeekShort": "Tuần",

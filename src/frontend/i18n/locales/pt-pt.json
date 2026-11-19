@@ -795,7 +795,6 @@
   "cloud.notEntitled": "Não incluído para esta utilização",
   "cloud.quotaDayShort": "Dia",
   "cloud.quotaDaysShort": "{{days}}d",
-  "cloud.quotaExhausted": "Quota esgotada",
   "cloud.quotaHoursShort": "{{hours}}h",
   "cloud.quotaMonthShort": "Mês",
   "cloud.quotaWeekShort": "Sem.",

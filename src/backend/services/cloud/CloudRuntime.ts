@@ -14,6 +14,7 @@ import { Phase } from '@/backend/core/lifecycle/types';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
+import { isHttpError } from '@/backend/services/http';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import {
   CLOUD_PROVIDER_ID,
@@ -22,7 +23,7 @@ import {
   CloudModelSchema,
   CloudPlansSchema,
   cloudModelUnavailable,
-  hasActiveCloudSubscription,
+  getActiveCloudEntitlements,
   isCloudModelListed,
   type CloudModelUse,
   type CloudModule,
@@ -72,11 +73,13 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private refreshing: Promise<void> | undefined;
   private loadingPlans: Promise<void> | undefined;
   private projection: Promise<void> = Promise.resolve();
-  private refreshedAt = 0;
+  private modelRefreshedAt = 0;
+  private quotaRevision = 0;
+  private refreshedQuotaRevision = 0;
   private started = false;
   private stopped = false;
   private projectedCatalog: string | undefined;
-  private pendingProjections = 0;
+  private writingCatalog = false;
 
   constructor(private readonly db: DbService) {
     super();
@@ -121,92 +124,119 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.identityKey = key;
     this.refreshing = undefined;
     this.loadingPlans = undefined;
-    this.refreshedAt = 0;
+    this.modelRefreshedAt = 0;
     this.projectedCatalog = undefined;
     this.publish(key ? { ...EMPTY, phase: 'loading' } : EMPTY);
     this.project([], this.lifetime.signal);
     // Restore once when the cold-start account becomes available; repeated identity notifications
     // keep the same key. A newly signed-in account must load its own state as well.
-    if (key) void this.refreshState(true).catch(() => {});
+    if (key) void this.refreshState('background').catch(() => {});
   }
 
-  readonly refresh = (): Promise<void> => this.refreshState(false);
+  readonly refresh: CloudModule['refresh'] = (mode = 'manual') => {
+    if (mode === 'manual') return this.refreshState('manual');
+    if (
+      !this.identityKey ||
+      (mode === 'if-stale' &&
+        this.refreshedQuotaRevision === this.quotaRevision &&
+        !this.needsModelRefresh())
+    )
+      return Promise.resolve();
+    return this.refreshState('background');
+  };
 
-  private async refreshState(silent: boolean, includePlans = true): Promise<void> {
+  private needsModelRefresh(): boolean {
+    return this.snapshot.phase !== 'ready' || Date.now() - this.modelRefreshedAt > 30_000;
+  }
+
+  private async refreshState(mode: 'background' | 'manual' | 'admission'): Promise<void> {
     if (!this.started || this.stopped) return;
     const current = this.lifetime.signal;
-    // Retry catalog withdrawal after a temporary storage freeze, including after sign-out.
     if (!this.identityKey) return this.project([], current);
-    if (!silent) this.publish({ ...this.snapshot, isRefreshing: true });
+    if (mode !== 'background') this.publish({ ...this.snapshot, isRefreshing: true });
     if (!this.refreshing) {
       const attempt = this.load(current).finally(() => {
         if (this.refreshing === attempt) this.refreshing = undefined;
       });
       this.refreshing = attempt;
     }
-    await this.refreshing;
+    try {
+      await this.refreshing;
+    } catch (error) {
+      const accessFailure =
+        error instanceof CloudAccessError ||
+        (isHttpError(error) && (error.status === 401 || error.status === 403));
+      if (
+        !current.aborted &&
+        (mode !== 'background' || this.snapshot.phase !== 'ready' || accessFailure)
+      )
+        this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
+      throw error;
+    }
     current.throwIfAborted();
-    if (includePlans && this.session && hasActiveCloudSubscription(this.snapshot))
+    if (
+      mode !== 'admission' &&
+      this.session &&
+      getActiveCloudEntitlements(this.snapshot).length > 0
+    )
       this.refreshPlans(this.session, current);
   }
 
   private async load(signal: AbortSignal): Promise<void> {
-    try {
-      const identity = this.source?.getIdentity();
-      if (!this.source || !identity) throw new CloudAccessError('unavailable');
-      if (!this.configuration || this.snapshot.phase === 'error') {
-        try {
-          await this.source.refreshServices?.(identity.key, signal);
-        } catch (error) {
-          signal.throwIfAborted();
-          // Keep a known service usable when only configuration discovery is unavailable.
-          loggerService
-            .withContext('CloudRuntime')
-            .warn('Could not refresh Cloud service configuration', error as Error);
-        }
+    const identity = this.source?.getIdentity();
+    if (!this.source || !identity) throw new CloudAccessError('unavailable');
+    if (!this.configuration || this.snapshot.phase === 'error') {
+      try {
+        await this.source.refreshServices?.(identity.key, signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        // Keep a known service usable when only configuration discovery is unavailable.
+        loggerService
+          .withContext('CloudRuntime')
+          .warn('Could not refresh Cloud service configuration', error as Error);
       }
-      signal.throwIfAborted();
-      const configuration = this.configuration;
-      if (!configuration) throw new CloudAccessError('unavailable');
-      this.device ??= loadCloudDevice().catch((error: unknown) => {
-        this.device = undefined;
-        throw error;
-      });
-      const device = await this.device;
-      signal.throwIfAborted();
-      this.session ??= new CloudSession(
-        configuration.apiOrigin,
-        identity,
-        this.source,
-        device,
-        this.version,
-        signal,
-      );
-      const session = this.session;
-      const [accountData, modelData] = await Promise.all([
-        session.get('/api/v1/account'),
-        session.get('/v1/models'),
-      ]);
-      signal.throwIfAborted();
-      const account = CloudAccountSchema.parse(accountData);
-      const { data: models } = z.object({ data: z.array(CloudModelSchema) }).parse(modelData);
-      if (account.account.id !== identity.profileId) throw new CloudAccessError('unavailable');
-      const next: CloudState = {
-        phase: 'ready',
-        isRefreshing: false,
-        account,
-        plans: this.snapshot.plans,
-        models,
-      };
-      const entitledModels = models.filter((model) => isCloudModelListed(next, model.id));
-      await this.project(entitledModels, signal);
-      signal.throwIfAborted();
-      this.refreshedAt = Date.now();
-      this.publish({ ...next, plans: this.snapshot.plans });
-    } catch (error) {
-      if (!signal.aborted) this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
-      throw error;
     }
+    signal.throwIfAborted();
+    const configuration = this.configuration;
+    if (!configuration) throw new CloudAccessError('unavailable');
+    this.device ??= loadCloudDevice().catch((error: unknown) => {
+      this.device = undefined;
+      throw error;
+    });
+    const device = await this.device;
+    signal.throwIfAborted();
+    this.session ??= new CloudSession(
+      configuration.apiOrigin,
+      identity,
+      this.source,
+      device,
+      this.version,
+      signal,
+    );
+    const session = this.session;
+    const quotaRevision = this.quotaRevision;
+    const [accountData, modelData] = await Promise.all([
+      session.get('/api/v1/account'),
+      session.get('/v1/models'),
+    ]);
+    signal.throwIfAborted();
+    const account = CloudAccountSchema.parse(accountData);
+    const { data: models } = z.object({ data: z.array(CloudModelSchema) }).parse(modelData);
+    if (account.account.id !== identity.profileId) throw new CloudAccessError('unavailable');
+    const checkedAt = Date.now();
+    const next: CloudState = {
+      phase: 'ready',
+      isRefreshing: false,
+      account,
+      plans: this.snapshot.plans,
+      models,
+    };
+    const entitledModels = models.filter((model) => isCloudModelListed(next, model.id));
+    await this.project(entitledModels, signal);
+    signal.throwIfAborted();
+    this.modelRefreshedAt = checkedAt;
+    this.refreshedQuotaRevision = quotaRevision;
+    this.publish({ ...next, plans: this.snapshot.plans });
   }
 
   /** Badge metadata is optional and cannot delay account/model readiness or inference. */
@@ -221,7 +251,6 @@ export class CloudRuntime extends BaseService implements CloudModule {
       })
       .catch((error: unknown) => {
         if (signal.aborted) return;
-        this.publish({ ...this.snapshot, plans: null });
         loggerService
           .withContext('CloudRuntime')
           .warn('Could not load Cloud plan display metadata', error as Error);
@@ -240,10 +269,10 @@ export class CloudRuntime extends BaseService implements CloudModule {
       lifetime.throwIfAborted();
       if (!identityKey || identityKey !== this.identityKey)
         throw new CloudAccessError('signed_out');
-      if (Date.now() - this.refreshedAt > 30_000 || this.snapshot.phase !== 'ready') {
+      if (this.needsModelRefresh()) {
         try {
           // Sending revalidates account/model admission without refreshing badge metadata.
-          await this.refreshState(false, false);
+          await this.refreshState('admission');
         } catch {
           lifetime.throwIfAborted();
           throw new CloudAccessError('unavailable');
@@ -279,8 +308,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         if (completed) return;
         completed = true;
         linked.dispose();
-        // Revalidate before the next model request without scheduling another display refresh.
-        if (!lifetime.aborted) this.refreshedAt = 0;
+        if (!lifetime.aborted) this.quotaRevision++;
       };
       try {
         const signed = await session.headers('POST', path, body, createCloudIdempotencyKey());
@@ -304,7 +332,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
         linked.signal.throwIfAborted();
         if (!response.ok) {
           if (response.status === 401) session.invalidate();
-          this.publish({ ...this.snapshot, phase: 'error' });
+          if (response.status === 401 || response.status === 403)
+            this.publish({ ...this.snapshot, phase: 'error' });
           complete();
           return response;
         }
@@ -361,7 +390,6 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private project(models: CloudState['models'], signal: AbortSignal): Promise<void> {
     const origin = this.configuration?.apiOrigin ?? null;
     const catalog = JSON.stringify([origin, models]);
-    this.pendingProjections++;
     const assertWritable = () => {
       signal.throwIfAborted();
       storageMutationGate.assertWritable();
@@ -369,23 +397,27 @@ export class CloudRuntime extends BaseService implements CloudModule {
     const work = this.projection
       .catch(() => {})
       .then(async () => {
-        assertWritable();
-        if (this.projectedCatalog === catalog) return;
-        const ids = await this.db.withWriteTx((tx) =>
-          projectCloudModels(tx, origin, models, assertWritable),
-        );
         signal.throwIfAborted();
-        this.projectedCatalog = catalog;
-        publishDataApiChanges([
-          '/providers',
-          '/providers/page',
-          `/providers/${CLOUD_PROVIDER_ID}`,
-          '/models',
-          ...ids.map((id) => `/models/${id}`),
-        ]);
-      })
-      .finally(() => {
-        this.pendingProjections--;
+        if (this.projectedCatalog === catalog) return;
+        while (storageMutationGate.isFrozen) await storageMutationGate.waitUntilWritable(signal);
+        signal.throwIfAborted();
+        this.writingCatalog = true;
+        try {
+          const ids = await this.db.withWriteTx((tx) =>
+            projectCloudModels(tx, origin, models, assertWritable),
+          );
+          signal.throwIfAborted();
+          this.projectedCatalog = catalog;
+          publishDataApiChanges([
+            '/providers',
+            '/providers/page',
+            `/providers/${CLOUD_PROVIDER_ID}`,
+            '/models',
+            ...ids.map((id) => `/models/${id}`),
+          ]);
+        } finally {
+          this.writingCatalog = false;
+        }
       });
     this.projection = work;
     // Identity changes cannot await storage; requests are already revoked synchronously.
@@ -394,7 +426,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   }
 
   hasPendingStorageWork(): boolean {
-    return this.pendingProjections > 0 || this.refreshing !== undefined;
+    return this.writingCatalog;
   }
 
   private publish(state: CloudState): void {
