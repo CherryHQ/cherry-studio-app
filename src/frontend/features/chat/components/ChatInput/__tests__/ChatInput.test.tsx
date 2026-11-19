@@ -80,9 +80,16 @@ jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
   useBackendModule: () => ({ isAvailable: () => false, getTarget: () => mockSshTarget }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ setParams: mockNoop }),
+  useLocalSearchParams: () => ({}),
+  useIsFocused: () => true,
+}));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
-jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
+jest.mock('@/frontend/appShell/navigation/chat', () => ({
+  chatReturnToHref: () => '/chat',
+  parseChatRoute: () => ({ status: 'empty' }),
+}));
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (id?: string) => ({
     agent: {

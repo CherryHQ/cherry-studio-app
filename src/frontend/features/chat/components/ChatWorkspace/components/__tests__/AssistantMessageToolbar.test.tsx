@@ -42,6 +42,7 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (callback: () => (() => void) | void) =>
     jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);

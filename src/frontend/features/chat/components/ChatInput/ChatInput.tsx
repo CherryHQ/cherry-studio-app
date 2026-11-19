@@ -1,14 +1,18 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
-import { useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
-import { chatReturnToHref } from '@/frontend/appShell/navigation/chat';
+import {
+  chatReturnToHref,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 import {
   ComposerAttachments,
   type ComposerSendPayload,
@@ -521,7 +525,22 @@ function TextChatInput({
     setReplyModels,
   });
   const clearReplyModels = useCallback(() => setReplyModels(null), [setReplyModels]);
-  const { close: closeModelPicker } = modelPicker;
+  const { close: closeModelPicker, open: openModelPicker } = modelPicker;
+  const routeParams = useLocalSearchParams<
+    ChatRouteParamsInput & { cloudModel?: string; cloudAnswerMessage?: string }
+  >();
+  const { cloudModel, cloudAnswerMessage } = routeParams;
+  const route = parseChatRoute(routeParams);
+  const cloudReturnTo =
+    route.status === 'ready' ? chatReturnToHref(route.target) : providerSetupReturnTo;
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (focused && cloudModel && !cloudAnswerMessage) openModelPicker();
+  }, [cloudAnswerMessage, cloudModel, focused, openModelPicker]);
+  const dismissPicker = () => {
+    if (cloudModel && !cloudAnswerMessage) router.setParams({ cloudModel: undefined });
+    closeModelPicker();
+  };
   const handleAddProvider = useCallback(() => {
     closeModelPicker();
     openProviderSetup();
@@ -758,9 +777,10 @@ function TextChatInput({
           multiSelect={modelPicker.multiSelect}
           open
           onAddProvider={handleAddProvider}
-          onClose={closeModelPicker}
+          onClose={dismissPicker}
           onSelect={modelPicker.select}
           selectedModelId={selectedModelId}
+          loginReturnTo={cloudReturnTo}
           variant="chat"
         />
       ) : null}

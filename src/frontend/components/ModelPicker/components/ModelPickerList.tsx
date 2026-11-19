@@ -1,3 +1,4 @@
+import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
@@ -11,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import {
   getModelPickerBadges,
@@ -22,7 +23,7 @@ import {
   buildModelPickerFastScrollNavigation,
   MIN_MODEL_PICKER_FAST_SCROLL_MODEL_COUNT,
 } from '../utils/modelPickerFastScroll';
-import type { ModelPickerListItem } from '../utils/modelPickerListItems';
+import type { ModelPickerListItem, ModelPickerRowItem } from '../utils/modelPickerListItems';
 import { ModelPickerBadge } from './ModelPickerBadge';
 import {
   MODEL_PICKER_FAST_SCROLLER_WIDTH,
@@ -33,6 +34,7 @@ const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  cherryAiEntry?: ReactNode;
   disabled?: boolean;
   /** The containing surface can own the gutter when embedding the list. */
   contentInset?: 'default' | 'none';
@@ -45,6 +47,7 @@ type ModelPickerListProps = {
   isOpen?: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
+  onCloudOffer?: (modelId: string) => void;
   onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
   /** Present in multi-select mode: every chosen model shows a selection mark. */
@@ -55,6 +58,7 @@ type ModelPickerListProps = {
 };
 
 type ModelPickerListExtraData = {
+  cherryAiEntry?: ReactNode;
   disabled: boolean;
   contentInset: 'default' | 'none';
   density: ModelPickerDensity;
@@ -66,6 +70,7 @@ type ModelPickerListExtraData = {
 
 /** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  cherryAiEntry,
   disabled = false,
   contentInset = 'default',
   density = 'default',
@@ -76,6 +81,7 @@ export function ModelPickerList({
   isOpen = false,
   listItems,
   loadingText,
+  onCloudOffer,
   onSelect,
   selectedModelId,
   selectedModelIds,
@@ -142,6 +148,7 @@ export function ModelPickerList({
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
+      cherryAiEntry,
       disabled,
       contentInset,
       density,
@@ -151,6 +158,7 @@ export function ModelPickerList({
       trailingInset: isFastScrollerVisible ? MODEL_PICKER_FAST_SCROLLER_WIDTH + 8 : undefined,
     }),
     [
+      cherryAiEntry,
       contentInset,
       density,
       disabled,
@@ -168,32 +176,44 @@ export function ModelPickerList({
             contentInset={extraData.contentInset}
             isFirstGroup={item.isFirstGroup}
             title={item.title}
-          />
+            trailingInset={extraData.trailingInset}
+          >
+            {item.provider.id === CLOUD_PROVIDER_ID ? extraData.cherryAiEntry : undefined}
+          </ModelPickerGroupHeader>
         );
       }
 
-      const isSelected = extraData.selectedModelIds
-        ? extraData.selectedModelIds.includes(item.item.modelId)
-        : item.item.modelId === extraData.selectedModelId;
+      const row = item.item;
+      const isOffer = 'offer' in row;
+      const isSelected =
+        !isOffer &&
+        (extraData.selectedModelIds
+          ? extraData.selectedModelIds.includes(row.modelId)
+          : row.modelId === extraData.selectedModelId);
       return (
         <ModelPickerRow
           contentInset={extraData.contentInset}
           density={extraData.density}
           isDisabled={
             extraData.disabled ||
-            Boolean(item.item.cloudUnavailable) ||
-            (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected)
+            (isOffer
+              ? !onCloudOffer ||
+                row.offer.reason === 'unavailable' ||
+                row.offer.reason === 'not_entitled'
+              : Boolean(row.cloudUnavailable) ||
+                (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected))
           }
           isSelected={isSelected}
-          item={item.item}
-          multiple={Boolean(extraData.selectedModelIds)}
+          item={row}
+          multiple={!isOffer && Boolean(extraData.selectedModelIds)}
+          onCloudOffer={onCloudOffer}
           onSelect={onSelect}
           showBadges={showBadges}
           trailingInset={extraData.trailingInset}
         />
       );
     },
-    [onSelect, showBadges],
+    [onCloudOffer, onSelect, showBadges],
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
   const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
@@ -237,6 +257,18 @@ export function ModelPickerList({
     },
     [fastScrollAnchors],
   );
+  const emptyButton =
+    !isLoading && emptyAction ? (
+      <Button
+        disabled={disabled}
+        onPress={emptyAction.onPress}
+        size="sm"
+        variant={emptyAction.variant ?? 'secondary'}
+      >
+        {emptyAction.label}
+      </Button>
+    ) : null;
+
   if (listItems.length === 0) {
     return (
       <View
@@ -254,16 +286,7 @@ export function ModelPickerList({
             title={emptyIcon ? emptyText : undefined}
           />
         )}
-        {!isLoading && emptyAction ? (
-          <Button
-            disabled={disabled}
-            onPress={emptyAction.onPress}
-            size="sm"
-            variant={emptyAction.variant ?? 'secondary'}
-          >
-            {emptyAction.label}
-          </Button>
-        ) : null}
+        {emptyButton}
       </View>
     );
   }
@@ -282,6 +305,11 @@ export function ModelPickerList({
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           keyExtractor={keyExtractor}
+          ListFooterComponent={
+            cherryAiEntry && modelCount === 0 && emptyButton ? (
+              <View className="items-center px-5 py-4">{emptyButton}</View>
+            ) : undefined
+          }
           maintainVisibleContentPosition={false}
           nestedScrollEnabled
           onFirstVisibleItemChanged={
@@ -306,19 +334,25 @@ export function ModelPickerList({
 }
 
 function ModelPickerGroupHeader({
+  children,
   contentInset,
   isFirstGroup,
   title,
+  trailingInset,
 }: {
+  children?: ReactNode;
   contentInset: 'default' | 'none';
   isFirstGroup: boolean;
   title: string;
+  trailingInset?: number;
 }) {
   return (
     <View
       className={cn('pb-1', contentInset === 'default' && 'px-5', isFirstGroup ? 'pt-1' : 'pt-3')}
+      style={children && trailingInset !== undefined ? { paddingRight: trailingInset } : undefined}
     >
       <Text className="font-medium text-muted-foreground text-xs">{title}</Text>
+      {children}
     </View>
   );
 }
@@ -330,6 +364,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   isSelected,
   item,
   multiple,
+  onCloudOffer,
   onSelect,
   showBadges,
   trailingInset,
@@ -338,24 +373,23 @@ const ModelPickerRow = memo(function ModelPickerRow({
   density: ModelPickerDensity;
   isDisabled: boolean;
   isSelected: boolean;
-  item: ModelPickerModelItem;
+  item: ModelPickerRowItem;
   multiple: boolean;
+  onCloudOffer?: (modelId: string) => void;
   onSelect: (item: ModelPickerModelItem) => void;
   showBadges: boolean;
   /** The list owns clearance for its floating navigation. */
   trailingInset: number | undefined;
 }) {
   const { t } = useTranslation();
-  const handleSelect = useCallback(() => {
-    onSelect(item);
-  }, [item, onSelect]);
-  const badges = showBadges ? getModelPickerBadges(item.model) : [];
-  const unavailable = item.cloudUnavailable
-    ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
-    : undefined;
+  const isOffer = 'offer' in item;
+  const handlePress = useCallback(() => {
+    if (isOffer) onCloudOffer?.(item.model.modelId);
+    else onSelect(item);
+  }, [item, isOffer, onCloudOffer, onSelect]);
+  const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
   const accessibilityLabel = [
     item.model.name,
-    ...(unavailable ? [unavailable] : []),
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
   ].join(', ');
   return (
@@ -375,7 +409,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
         isDisabled && 'opacity-40',
       )}
       disabled={isDisabled}
-      onPress={handleSelect}
+      onPress={handlePress}
       style={trailingInset === undefined ? undefined : { paddingRight: trailingInset }}
     >
       <View className={cn('h-6 justify-center', density === 'compact' ? 'w-6' : 'w-7')}>
@@ -398,9 +432,8 @@ const ModelPickerRow = memo(function ModelPickerRow({
         >
           {item.model.name}
         </Text>
-        {unavailable ? <Text className="text-xs text-muted-foreground">{unavailable}</Text> : null}
         {badges.length > 0 ? (
-          <View className="h-4 flex-row items-center gap-1">
+          <View className="flex-row items-center gap-1">
             {badges.map((badge) => (
               <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} variant="icon" />
             ))}
@@ -408,7 +441,9 @@ const ModelPickerRow = memo(function ModelPickerRow({
         ) : null}
       </View>
       <View className="size-6 shrink-0 items-center justify-center">
-        {multiple ? (
+        {isOffer ? (
+          <LockIcon className="size-3.5 text-muted-foreground" />
+        ) : multiple ? (
           <SelectionIndicator className="size-5" selected={isSelected} />
         ) : isSelected ? (
           <SelectionIndicator className="size-5" selected />
