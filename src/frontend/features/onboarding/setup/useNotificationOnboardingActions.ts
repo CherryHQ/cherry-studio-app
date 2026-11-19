@@ -19,38 +19,41 @@ export function useNotificationOnboardingActions({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isActing, setIsActing] = useState(false);
-  const acting = useRef(false);
-  const actionBusy = useRef(false);
-  const permissionGeneration = useRef(0);
+  const activeAction = useRef<{ kind: 'settings' | 'permission' } | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      permissionGeneration.current += 1;
+      activeAction.current = null;
     };
   }, []);
 
-  const act = async (work: () => Promise<unknown>) => {
-    if (!mounted.current || actionBusy.current || acting.current || progress.isSaving) return;
-    actionBusy.current = true;
+  const run = async (
+    kind: 'settings' | 'permission',
+    work: (isCurrent: () => boolean) => Promise<unknown>,
+  ) => {
+    if (!mounted.current || activeAction.current || progress.isSaving) return;
+    const action = { kind };
+    activeAction.current = action;
+    const isCurrent = () => activeAction.current === action;
+    setIsActing(true);
     try {
-      await work();
+      await work(isCurrent);
     } catch {
-      if (mounted.current) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
+      if (isCurrent()) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
     } finally {
-      actionBusy.current = false;
+      if (isCurrent()) {
+        activeAction.current = null;
+        setIsActing(false);
+      }
     }
   };
 
-  const continueOnboarding = async () => {
-    if (!mounted.current || acting.current || progress.isSaving) return;
-    const current = ++permissionGeneration.current;
-    const isCurrent = () => mounted.current && permissionGeneration.current === current;
-    acting.current = true;
-    setIsActing(true);
-    try {
+  const act = (work: () => Promise<unknown>) => run('settings', work);
+  const continueOnboarding = () =>
+    run('permission', async (isCurrent) => {
       if (notifications) {
         let next = await getPermissionsAsync();
         if (!isCurrent()) return;
@@ -61,21 +64,14 @@ export function useNotificationOnboardingActions({
         setPermission(next);
       }
       await progress.advance('login');
-    } catch {
-      if (isCurrent()) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
-    } finally {
-      if (isCurrent()) {
-        acting.current = false;
-        setIsActing(false);
-      }
-    }
-  };
+    });
 
   const skip = async () => {
     if (!mounted.current || progress.isSaving) return;
-    permissionGeneration.current += 1;
-    acting.current = false;
-    setIsActing(false);
+    if (activeAction.current?.kind === 'permission') {
+      activeAction.current = null;
+      setIsActing(false);
+    }
     await progress.advance('login');
   };
 

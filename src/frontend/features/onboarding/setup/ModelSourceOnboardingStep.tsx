@@ -29,7 +29,6 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
   const destination = getOnboardingDestination({
     account,
     organizationManaged,
-    restoringSession: account.isRestoringSession,
     models: {
       hasModels: (models.data?.length ?? 0) > 0,
       isLoading: models.isPending || models.isRefreshing,

@@ -79,8 +79,10 @@ it.each([
   let continued!: Promise<void>;
   await act(async () => {
     continued = hook.current.continue();
+    await hook.current.continue();
   });
   expect(hook.current.isActing).toBe(true);
+  expect(getPermissions).toHaveBeenCalledTimes(1);
   await act(async () => hook.current.skip());
   expect(hook.current.isActing).toBe(false);
   expect(hook.current.progress.status).toBe('login');
@@ -125,7 +127,7 @@ it.each(['setNotifications', 'setLiveActivity'] as const)(
     await act(async () => {
       saving = hook.current.act(() => hook.current[setter](true, { optimistic: false }));
     });
-    expect(hook.current.isActing).toBe(false);
+    expect(hook.current.isActing).toBe(true);
     await act(async () => hook.current.skip());
     expect(hook.current.progress.status).toBe('login');
     await act(async () => {
@@ -170,7 +172,7 @@ it('ignores repeated actions while work is pending and allows another after it s
     repeated = hook.current.act(work);
   });
   expect(work).toHaveBeenCalledTimes(1);
-  expect(hook.current.isActing).toBe(false);
+  expect(hook.current.isActing).toBe(true);
   await act(async () => {
     pending.resolve();
     await Promise.all([saving, repeated]);
@@ -181,37 +183,33 @@ it('ignores repeated actions while work is pending and allows another after it s
   await hook.unmount();
 });
 
-it('locks only permission continuation while another action is pending', async () => {
+it('uses the saved notification setting when continuing after a pending change', async () => {
   const client = createPreferenceClient({ 'chat.completion_notifications.enabled': true });
   const write = deferred<void>();
-  const pending = deferred<Awaited<ReturnType<typeof getPermissionsAsync>>>();
-  client.set.mockReturnValueOnce(write.promise);
-  getPermissions.mockReturnValueOnce(pending.promise);
+  const save = client.set.getMockImplementation()!;
+  client.set.mockImplementationOnce(async (...args) => {
+    await write.promise;
+    await save(...args);
+  });
+  getPermissions.mockResolvedValue(permission('undetermined'));
   const hook = await mountHook(useActions, client);
   let saving!: Promise<void>;
-  let continued!: Promise<void>;
   await act(async () => {
-    saving = hook.current.act(() => hook.current.setLiveActivity(true, { optimistic: false }));
-  });
-  expect(hook.current.isActing).toBe(false);
-  await act(async () => {
-    continued = hook.current.continue();
+    saving = hook.current.act(() => hook.current.setNotifications(false, { optimistic: false }));
     await hook.current.continue();
-    await hook.current.act(() => hook.current.setNotifications(false, { optimistic: false }));
   });
   expect(hook.current.isActing).toBe(true);
-  expect(getPermissions).toHaveBeenCalledTimes(1);
-  expect(client.set).toHaveBeenCalledTimes(1);
+  expect(getPermissions).not.toHaveBeenCalled();
+  expect(hook.current.progress.status).not.toBe('login');
   await act(async () => {
     write.resolve();
     await saving;
   });
-  expect(hook.current.isActing).toBe(true);
-  await act(async () => {
-    pending.resolve(permission('granted'));
-    await continued;
-  });
   expect(hook.current.isActing).toBe(false);
+  expect(client.getCachedValue('chat.completion_notifications.enabled')).toBe(false);
+  await act(async () => hook.current.continue());
+  expect(getPermissions).not.toHaveBeenCalled();
+  expect(requestPermissions).not.toHaveBeenCalled();
   expect(hook.current.progress.status).toBe('login');
   await hook.unmount();
 });
