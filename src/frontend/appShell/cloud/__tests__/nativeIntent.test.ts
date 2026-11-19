@@ -33,3 +33,13 @@ test('leaves unrelated links to the rest of the native router', () => {
   ).toBeUndefined();
   expect(cloudAmdReturn.getSnapshot()).toBe(false);
 });
+
+test('a manual browser return remembers the activating account exactly once', () => {
+  cloudAmdReturn.markBrowserOpened({ accountId: 'cloud-user', activating: true });
+  expect(cloudAmdReturn.consumeBrowserOpen()).toEqual({
+    accountId: 'cloud-user',
+    activating: true,
+  });
+  expect(cloudAmdReturn.consumeBrowserOpen()).toBeUndefined();
+  expect(cloudAmdReturn.getSnapshot()).toBe(false);
+});

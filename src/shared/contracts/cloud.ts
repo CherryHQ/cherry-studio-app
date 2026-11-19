@@ -33,6 +33,7 @@ const PlanSchema = z.object({
   id: z.string().min(1),
   display_name: z.string(),
   is_free: z.boolean(),
+  models: z.array(z.object({ id: z.string().min(1) })).optional(),
   subscription_price: z
     .object({
       product_name: z.string(),
@@ -78,11 +79,21 @@ export const CloudModelSchema = z.object({
   endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
   context_window: z.number().int().positive(),
   max_output_tokens: z.number().int().positive(),
-  capabilities: z.array(z.string()),
-  available_features: z.array(z.string()),
+  capabilities: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
+  available_features: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
   provider: z.string().optional(),
+  requires_login: z.boolean().optional(),
+  standalone: z.boolean().optional(),
   activation_required: z.boolean().optional(),
+  activation_endpoint: z.string().nullish(),
 });
+export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
 export const CloudAmdStatusSchema = z.object({
   status: z.enum([
     'unregistered',
@@ -116,11 +127,13 @@ export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
   isRefreshing: boolean;
   account: CloudAccount | null;
-  /** Optional badge metadata; never controls model admission. */
+  /** Named plan coverage and badge metadata. Inference uses the account and model directory. */
   plans: CloudPlans | null;
+  plansPending?: boolean;
   models: readonly CloudModel[];
   /** Status for the AMD setup flow. The signed model catalog owns availability. */
   amd?: CloudAmdState;
+  guestCatalog?: 'loading' | 'ready' | 'error';
 }>;
 export interface CloudModule {
   getState(): CloudState;
@@ -128,19 +141,17 @@ export interface CloudModule {
   refresh(): Promise<void>;
   refreshProvider(): Promise<void>;
   refreshAmd(): Promise<void>;
-  createAmdEntry(): Promise<string>;
+  createAmdEntry(modelId: string): Promise<string>;
 }
 
 export function isCloudAmdModel(model: CloudModel): boolean {
-  return (
-    model.provider === 'amd' &&
-    model.id.startsWith('amd/') &&
-    model.id.length > 'amd/'.length &&
-    model.endpoint_type === 'openai-chat-completions'
-  );
+  return model.provider === 'amd' && model.endpoint_type === 'openai-chat-completions';
 }
 
-function isEffectiveEntitlement(entry: CloudAccount['entitlements'][number], now: number): boolean {
+export function isEffectiveEntitlement(
+  entry: CloudAccount['entitlements'][number],
+  now: number,
+): boolean {
   return (
     entry.status === 'active' &&
     (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
@@ -151,12 +162,23 @@ function isEffectiveEntitlement(entry: CloudAccount['entitlements'][number], now
 export function isCloudFreeModel(state: CloudState, model: CloudModel, now = Date.now()): boolean {
   return (
     isCloudAmdModel(model) ||
+    model.standalone === true ||
+    model.requires_login === false ||
     (state.account?.entitlements.some(
       (entry) =>
         entry.is_free && isEffectiveEntitlement(entry, now) && entry.model_ids.includes(model.id),
     ) ??
       false)
   );
+}
+
+export function supportsCloudModelUse(model: CloudModel, use: CloudModelUse): boolean {
+  const features = model.available_features;
+  return use === 'agent'
+    ? features.includes('agent') ||
+        ((isCloudAmdModel(model) || model.standalone || model.requires_login === false) &&
+          features.includes('chat'))
+    : features.includes('chat') && features.includes('translate');
 }
 
 /** Quota exhaustion keeps a model visible; the selected use still determines its capabilities. */
@@ -187,17 +209,20 @@ export function cloudModelUnavailable(
   use: CloudModelUse,
   now = Date.now(),
 ): CloudUnavailableReason | undefined {
-  if (state.phase === 'signed_out') return 'signed_out';
+  const model = state.models.find((entry) => entry.id === modelId);
+  if (state.phase === 'signed_out') {
+    if (!model || model.requires_login !== false || model.provider === 'amd') return 'signed_out';
+    if (state.guestCatalog !== 'ready') return 'unavailable';
+    return supportsCloudModelUse(model, use) ? undefined : 'not_entitled';
+  }
   if (state.phase !== 'ready' || !state.account) return 'unavailable';
   if (state.account.account.status !== 'active') return 'not_entitled';
-  const model = state.models.find((entry) => entry.id === modelId);
-  const features = use === 'agent' ? ['agent'] : ['chat', 'translate'];
-  if (!model || !features.every((feature) => model.available_features.includes(feature)))
-    return 'not_entitled';
+  if (!model || !supportsCloudModelUse(model, use)) return 'not_entitled';
   if (model.provider === 'amd') {
     if (!isCloudAmdModel(model)) return 'not_entitled';
     return model.activation_required === false ? undefined : 'amd_activation_required';
   }
+  if (model.standalone === true || model.requires_login === false) return undefined;
   const entitled = state.account.entitlements.some(
     (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(modelId),
   );

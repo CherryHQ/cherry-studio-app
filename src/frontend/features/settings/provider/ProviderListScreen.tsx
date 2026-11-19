@@ -15,12 +15,11 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
-import { accountSignInHref } from '@/frontend/appShell/account';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
-import { useBackendModule, useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
+import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
@@ -107,7 +106,6 @@ const getItemType = (item: ProviderListItem) => item.kind;
 function ProviderListView() {
   const { t } = useTranslation();
   const router = useRouter();
-  const account = useBackendModule('account');
   const { toast } = useToast();
   const { isPreparing, openSetup } = useProviderSetup();
   const reducedMotion = useReducedMotion();
@@ -218,12 +216,8 @@ function ProviderListView() {
   const openCloudProvider = useCallback(() => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
-    router.push(
-      account.getState().isSignedIn
-        ? CLOUD_PROVIDER_HREF
-        : accountSignInHref(CLOUD_PROVIDER_HREF, { cancelTo: '/settings/provider' }),
-    );
-  }, [account, router]);
+    router.push(CLOUD_PROVIDER_HREF);
+  }, [router]);
   const providerItems = useMemo<ProviderListItem[]>(() => {
     const items: ProviderListItem[] = [];
     for (const isEnabled of [true, false]) {

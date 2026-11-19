@@ -8,6 +8,7 @@ import {
 } from 'expo-router';
 import { useState } from 'react';
 
+import { clearCloudModelTap } from './accountNavigation';
 import { readAccountReturnTo } from './accountRoute';
 import { type LoginPurpose, LoginScreen } from './LoginScreen';
 import { useAccount } from './useAccount';
@@ -60,7 +61,14 @@ export function LoginRoute() {
       <Stack.Screen options={{ gestureEnabled: purpose !== 'expired' }} />
       <LoginScreen
         key={purpose}
-        onLeave={purpose === 'expired' ? signOut : () => leave(cancelTo)}
+        onLeave={
+          purpose === 'expired'
+            ? signOut
+            : () => {
+                clearCloudModelTap(returnTo);
+                leave(cancelTo);
+              }
+        }
         onSignedIn={() => leave(returnTo)}
         purpose={purpose}
         returnTo={returnTo}

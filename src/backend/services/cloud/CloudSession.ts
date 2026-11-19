@@ -21,6 +21,7 @@ export interface CloudIdentity {
 export interface CloudIdentitySource {
   getIdentity(): CloudIdentity | null;
   getTokens(key: string): Promise<{ accessToken: string; idToken: string }>;
+  getGuestCatalogOrigin?(signal: AbortSignal): Promise<string>;
   refreshServices?(key: string, signal: AbortSignal): Promise<void>;
   subscribe(listener: () => void): () => void;
 }

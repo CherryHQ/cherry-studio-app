@@ -808,6 +808,7 @@
   "cloud.rollingHours_one": "Rolling {{hours}} hour",
   "cloud.rollingHours_other": "Rolling {{hours}} hours",
   "cloud.subscriptionMonth": "Subscription month allowance",
+  "cloud.subscriptionRequired": "Subscription required: {{plans}}",
   "cloud.title": "Subscription and quota",
   "cloud.weeklyQuota": "Weekly allowance",
   "common.add": "Add",

@@ -85,7 +85,7 @@ describe('ModelPickerList', () => {
     const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
     const modelId = 'amd/gpt-oss';
     const id = createUniqueModelId(provider.id, modelId);
-    const onAmdActivation = jest.fn();
+    const onCloudOffer = jest.fn();
     const onSelect = jest.fn();
 
     act(() => {
@@ -106,13 +106,27 @@ describe('ModelPickerList', () => {
                 model: { capabilities: [], id, modelId, name: 'GPT-OSS', providerId: provider.id },
                 modelId: id,
                 provider,
-                requiresAmdActivation: true,
+                offer: {
+                  isAmd: true,
+                  isFree: true,
+                  reason: 'amd_activation_required',
+                  plans: [],
+                  model: {
+                    id: modelId,
+                    display_name: 'GPT-OSS',
+                    endpoint_type: 'openai-chat-completions',
+                    context_window: 4096,
+                    max_output_tokens: 512,
+                    capabilities: [],
+                    available_features: ['agent'],
+                  },
+                },
               },
               key: id,
               type: 'model',
             },
           ]}
-          onAmdActivation={onAmdActivation}
+          onCloudOffer={onCloudOffer}
           onSelect={onSelect}
           selectedModelId={null}
           showBadges
@@ -125,7 +139,7 @@ describe('ModelPickerList', () => {
     expect(row?.props.accessibilityHint).toBe('cloud.amd.activationRequired');
     expect(row?.props.disabled).toBe(false);
     act(() => row?.props.onPress());
-    expect(onAmdActivation).toHaveBeenCalledWith(modelId);
+    expect(onCloudOffer).toHaveBeenCalledWith(modelId);
     expect(onSelect).not.toHaveBeenCalled();
   });
 });

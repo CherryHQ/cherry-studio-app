@@ -11,6 +11,7 @@ import { CloudRuntime } from '../CloudRuntime';
 import type { CloudIdentity } from '../CloudSession';
 import { cloudSnapshot } from './_cloudFixtures';
 
+const mockPublicRequest = jest.fn();
 const mockGet = jest.fn();
 const mockPostEmpty = jest.fn();
 const mockRevoke = jest.fn();
@@ -31,6 +32,10 @@ const mockProject = jest.fn(
     return [];
   },
 );
+jest.mock('@/backend/services/http', () => ({
+  ...jest.requireActual('@/backend/services/http'),
+  createHttpClient: () => ({ request: mockPublicRequest }),
+}));
 jest.mock('../cloudDevice', () => ({
   createCloudIdempotencyKey: () => mockIdempotencyKey(),
   loadCloudDevice: async () => ({}),
@@ -130,6 +135,7 @@ async function setup(configuration: Pick<CloudIdentity, 'apiOrigin'> | null = se
   let changed: () => void = () => {};
   const source = {
     getIdentity: () => identity,
+    getGuestCatalogOrigin: async () => service.apiOrigin,
     getTokens: async () => ({ accessToken: '', idToken: '' }),
     refreshServices: (key: string, signal: AbortSignal) => mockRefreshServices(key, signal),
     subscribe: (listener: () => void) => {
@@ -168,6 +174,7 @@ beforeEach(() => {
   mockGet
     .mockReset()
     .mockImplementation(async (account: string, path: string) => reply(account, path));
+  mockPublicRequest.mockReset();
   mockProject.mockClear();
   mockPostEmpty.mockReset();
   mockRevoke.mockClear();
@@ -586,7 +593,7 @@ test.each(['paid', 'unsubscribed', 'failed'])(
     });
     const { runtime } = await setup();
     await jest.advanceTimersByTimeAsync(0);
-    expect(mockGet).toHaveBeenCalledTimes(result === 'paid' ? 3 : 2);
+    expect(mockGet).toHaveBeenCalledTimes(result === 'failed' ? 2 : 3);
     expect(runtime.getState()).toMatchObject({
       phase: result === 'failed' ? 'error' : 'ready',
       isRefreshing: false,
@@ -596,7 +603,7 @@ test.each(['paid', 'unsubscribed', 'failed'])(
     changeAppState('background');
     changeAppState('active');
     await jest.advanceTimersByTimeAsync(120_000);
-    expect(mockGet).toHaveBeenCalledTimes(result === 'paid' ? 3 : 2);
+    expect(mockGet).toHaveBeenCalledTimes(result === 'failed' ? 2 : 3);
     await runtime._doStop();
   },
 );
@@ -716,6 +723,8 @@ test('catalog withdrawal resumes after a backup freeze without restoring signed-
   } finally {
     release();
   }
+  mockClientSignatureHeaders.mockResolvedValue({ 'X-Signature': 'guest-signature' });
+  mockPublicRequest.mockResolvedValue({ data: { data: [] } });
   await runtime.refresh();
   expect(mockProject.mock.lastCall?.[2]).toEqual([]);
   expect(runtime.getState().phase).toBe('signed_out');
@@ -812,9 +821,24 @@ test('uses the AMD catalog activation flag instead of a paid entitlement and pre
 
 test('links existing AMD accounts and opens the usage page while registration is closed', async () => {
   let status = { status: 'unregistered', action: 'login', activated: false, environment: 'test' };
-  mockGet.mockImplementation(async (account: string, path: string) =>
-    path === '/api/v1/amd/desktop/status' ? status : reply(account, path),
-  );
+  let endpoint: string | undefined = '/api/v1/amd/mobile/activation';
+  const modelId = 'amd/catalog-id';
+  mockGet.mockImplementation(async (account: string, path: string) => {
+    if (path === '/v1/models')
+      return {
+        data: [
+          {
+            ...cloudSnapshot(account).models[0],
+            id: modelId,
+            endpoint_type: 'openai-chat-completions',
+            provider: 'amd',
+            activation_required: !status.activated,
+            activation_endpoint: endpoint,
+          },
+        ],
+      };
+    return path === '/api/v1/amd/desktop/status' ? status : reply(account, path);
+  });
   const entry = 'https://public-cloud.example/amd/enter#one-use-entry';
   mockPostEmpty.mockResolvedValue({ entry_url: entry, expires_in: 60 });
   const { runtime, change } = await setup();
@@ -825,18 +849,23 @@ test('links existing AMD accounts and opens the usage page while registration is
       status: { ...status, registration_enabled: false },
     });
     expect(mockPostEmpty).not.toHaveBeenCalled();
-    await expect(runtime.createAmdEntry()).resolves.toBe(entry);
-    expect(mockPostEmpty).toHaveBeenCalledWith(
-      'account-a',
-      '/api/v1/amd/desktop/entry',
-      service.apiOrigin,
-    );
+    await expect(runtime.createAmdEntry(modelId)).resolves.toBe(entry);
+    expect(mockPostEmpty).toHaveBeenCalledWith('account-a', endpoint, service.apiOrigin);
     status = { ...status, status: 'registered', action: 'none', activated: true };
     await runtime.refreshAmd();
-    await expect(runtime.createAmdEntry()).resolves.toBe(entry);
+    await expect(runtime.createAmdEntry(modelId)).resolves.toBe(entry);
+    for (endpoint of ['https://another.example/entry', '//another.example/entry', undefined]) {
+      await runtime.refresh();
+      await expect(runtime.createAmdEntry(modelId)).rejects.toMatchObject({
+        code: 'cloud_unavailable',
+      });
+    }
+    expect(mockPostEmpty).toHaveBeenCalledTimes(2);
     change(null);
     expect(runtime.getState().amd).toBeUndefined();
-    await expect(runtime.createAmdEntry()).rejects.toMatchObject({ code: 'cloud_unavailable' });
+    await expect(runtime.createAmdEntry(modelId)).rejects.toMatchObject({
+      code: 'cloud_unavailable',
+    });
   } finally {
     await runtime._doStop();
   }
@@ -886,6 +915,92 @@ test('refreshes AMD status and models on return even while pre-activation reads 
     expect(mockProject.mock.lastCall?.[2]).toEqual([{ ...model, activation_required: false }]);
   } finally {
     releaseOldReads();
+    await runtime._doStop();
+  }
+});
+
+test('guest discovery and inference sign the exact request without sending account or device credentials', async () => {
+  const open = { ...cloudSnapshot().models[0], id: 'public', requires_login: false };
+  const locked = { ...open, id: 'member', requires_login: true };
+  const legacy = { ...cloudSnapshot().models[0], id: 'legacy' };
+  const headers = { 'X-Client-ID': 'cherry-studio', 'X-Timestamp': '123', 'X-Signature': 'signed' };
+  mockClientSignatureHeaders.mockResolvedValue(headers);
+  mockPublicRequest.mockResolvedValue({ data: { data: [open, locked, legacy] } });
+  const { runtime, change } = await setup(null);
+  try {
+    await runtime.refresh();
+    expect(mockClientSignatureHeaders).toHaveBeenCalledWith('GET', '/v1/models?limit=1000', '');
+    expect(mockPublicRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        path: '/v1/models?limit=1000',
+        headers,
+        credentials: 'omit',
+        redirect: 'error',
+      }),
+    );
+    expect(runtime.getState().models.map((m) => m.id)).toEqual(['public', 'member', 'legacy']);
+    expect(mockProject.mock.lastCall?.[2].map((m) => m.id)).toEqual(['public']);
+    const body = JSON.stringify({ model: 'public', stream: true });
+    const url = service.apiOrigin + '/v1/messages';
+    const init = {
+      method: 'POST',
+      body,
+      headers: { authorization: 'Bearer sdk', 'Cherry-Device-ID': 'stale', Cookie: 'stale' },
+    };
+    const send = runtime.createModelFetch('public', 'agent');
+    mockInference.mockResolvedValue(new Response(null, { status: 200 }));
+    for (const model of [locked, legacy]) {
+      await expect(runtime.createModelFetch(model.id, 'agent')(url, init)).rejects.toMatchObject({
+        reason: 'signed_out',
+      });
+    }
+    expect(mockInference).not.toHaveBeenCalled();
+    await expect(send(url, init)).resolves.toMatchObject({ status: 200 });
+    expect(mockClientSignatureHeaders).toHaveBeenCalledWith('POST', '/v1/messages', body);
+    const sent = mockInference.mock.lastCall![1];
+    expect(sent.body).toBe(body);
+    expect(sent.headers.get('X-Signature')).toBe('signed');
+    for (const key of ['Authorization', 'Cherry-Device-ID', 'Cherry-Signature', 'Cookie'])
+      expect(sent.headers.get(key)).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockHeaders).not.toHaveBeenCalled();
+    change({ key: 'a', profileId: 'account-a', ...service });
+    await expect(send(url, init)).rejects.toBeDefined();
+    await runtime.refresh();
+    expect(mockGet).toHaveBeenCalledWith('account-a', '/v1/models', service.apiOrigin);
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('a missing guest HMAC stops the catalog request', async () => {
+  const { runtime } = await setup(null);
+  await expect(runtime.refresh()).rejects.toBeDefined();
+  expect(mockPublicRequest).not.toHaveBeenCalled();
+  expect(runtime.getState().guestCatalog).toBe('error');
+  await runtime._doStop();
+});
+
+test('guest inference honors the gateway IP cooldown across model IDs', async () => {
+  const model = { ...cloudSnapshot().models[0], requires_login: false };
+  mockClientSignatureHeaders.mockResolvedValue({ 'X-Signature': 'signed' });
+  mockPublicRequest.mockResolvedValue({ data: { data: [model, { ...model, id: 'another' }] } });
+  const { runtime } = await setup(null);
+  try {
+    await runtime.refresh();
+    const send = (id: string) =>
+      runtime.createModelFetch(id, 'agent')(service.apiOrigin + '/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: id }),
+      });
+    mockInference.mockResolvedValueOnce(
+      new Response(null, { status: 429, headers: { 'retry-after': '60' } }),
+    );
+    await expect(send(model.id)).rejects.toMatchObject({ statusCode: 429 });
+    await expect(send('another')).rejects.toMatchObject({ statusCode: 429 });
+    expect(mockInference).toHaveBeenCalledTimes(1);
+  } finally {
     await runtime._doStop();
   }
 });

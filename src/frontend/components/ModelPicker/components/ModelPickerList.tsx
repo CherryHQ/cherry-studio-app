@@ -48,7 +48,7 @@ type ModelPickerListProps = {
   isOpen?: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
-  onAmdActivation?: (modelId: string) => void;
+  onCloudOffer?: (modelId: string) => void;
   onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
   /** Present in multi-select mode: every chosen model shows a selection mark. */
@@ -82,7 +82,7 @@ export function ModelPickerList({
   isOpen = false,
   listItems,
   loadingText,
-  onAmdActivation,
+  onCloudOffer,
   onSelect,
   selectedModelId,
   selectedModelIds,
@@ -185,9 +185,9 @@ export function ModelPickerList({
       }
 
       const row = item.item;
-      const needsActivation = 'requiresAmdActivation' in row;
+      const isOffer = 'offer' in row;
       const isSelected =
-        !needsActivation &&
+        !isOffer &&
         (extraData.selectedModelIds
           ? extraData.selectedModelIds.includes(row.modelId)
           : row.modelId === extraData.selectedModelId);
@@ -197,22 +197,22 @@ export function ModelPickerList({
           density={extraData.density}
           isDisabled={
             extraData.disabled ||
-            (needsActivation
-              ? !onAmdActivation
+            (isOffer
+              ? !onCloudOffer
               : Boolean(row.cloudUnavailable) ||
                 (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected))
           }
           isSelected={isSelected}
           item={row}
-          multiple={!needsActivation && Boolean(extraData.selectedModelIds)}
-          onAmdActivation={onAmdActivation}
+          multiple={!isOffer && Boolean(extraData.selectedModelIds)}
+          onCloudOffer={onCloudOffer}
           onSelect={onSelect}
           showBadges={showBadges}
           trailingInset={extraData.trailingInset}
         />
       );
     },
-    [onAmdActivation, onSelect, showBadges],
+    [onCloudOffer, onSelect, showBadges],
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
   const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
@@ -363,7 +363,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
   isSelected,
   item,
   multiple,
-  onAmdActivation,
+  onCloudOffer,
   onSelect,
   showBadges,
   trailingInset,
@@ -374,21 +374,21 @@ const ModelPickerRow = memo(function ModelPickerRow({
   isSelected: boolean;
   item: ModelPickerRowItem;
   multiple: boolean;
-  onAmdActivation?: (modelId: string) => void;
+  onCloudOffer?: (modelId: string) => void;
   onSelect: (item: ModelPickerModelItem) => void;
   showBadges: boolean;
   /** The list owns clearance for its floating navigation. */
   trailingInset: number | undefined;
 }) {
   const { t } = useTranslation();
-  const needsActivation = 'requiresAmdActivation' in item;
+  const isOffer = 'offer' in item;
   const handlePress = useCallback(() => {
-    if (needsActivation) onAmdActivation?.(item.model.modelId);
+    if (isOffer) onCloudOffer?.(item.model.modelId);
     else onSelect(item);
-  }, [item, needsActivation, onAmdActivation, onSelect]);
+  }, [item, isOffer, onCloudOffer, onSelect]);
   const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
   const unavailable =
-    !needsActivation && item.cloudUnavailable
+    !isOffer && item.cloudUnavailable
       ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
       : undefined;
   const accessibilityLabel = [
@@ -398,7 +398,13 @@ const ModelPickerRow = memo(function ModelPickerRow({
   ].join(', ');
   return (
     <Pressable
-      accessibilityHint={needsActivation ? t('cloud.amd.activationRequired') : undefined}
+      accessibilityHint={
+        isOffer && item.offer.reason
+          ? item.offer.reason === 'subscription_required'
+            ? t('cloud.subscriptionRequired', { plans: item.offer.plans.join(' / ') })
+            : t(CLOUD_UNAVAILABLE_KEYS[item.offer.reason])
+          : undefined
+      }
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={multiple ? 'checkbox' : 'button'}
       accessibilityState={
@@ -447,7 +453,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
         ) : null}
       </View>
       <View className="size-6 shrink-0 items-center justify-center">
-        {needsActivation ? (
+        {isOffer ? (
           <LockIcon className="size-3.5 text-muted-foreground" />
         ) : multiple ? (
           <SelectionIndicator className="size-5" selected={isSelected} />

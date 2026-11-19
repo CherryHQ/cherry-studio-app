@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 
 let pendingReturn = false;
-let openedBrowser = false;
+type AmdBrowserVisit = { accountId: string; activating: boolean };
+let openedBrowser: AmdBrowserVisit | undefined;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
 
@@ -19,12 +20,12 @@ export const cloudAmdReturn = {
     notify();
     return true;
   },
-  markBrowserOpened() {
-    openedBrowser = true;
+  markBrowserOpened(visit: AmdBrowserVisit) {
+    openedBrowser = visit;
   },
   consumeBrowserOpen() {
     const wasOpened = openedBrowser;
-    openedBrowser = false;
+    openedBrowser = undefined;
     return wasOpened;
   },
 };

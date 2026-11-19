@@ -33,6 +33,11 @@ let mockOnSizeChange: ((size: BottomSheetSize) => void) | undefined;
 let mockFilterItems: { id: string; onPress: () => void }[] = [];
 const chosenModelId = 'provider::chosen';
 
+jest.mock('expo-router', () => ({
+  ...jest.requireActual('expo-router'),
+  useGlobalSearchParams: () => ({}),
+}));
+
 jest.mock('@/frontend/components/ModelRegistry', () => ({
   ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
 }));
@@ -102,7 +107,16 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('@/frontend/appShell/cloud', () => ({
   ...jest.requireActual('@/frontend/appShell/cloud'),
-  useCloudAmdModelAction: () => jest.fn(),
+  useCloudModelBrowser: (_enabled: boolean, use: 'agent' | 'general') => ({
+    state: mockCloudState,
+    accountState: { isRestoringSession: false },
+    offers: jest
+      .requireActual('@/frontend/appShell/cloud/cloudModelOffers')
+      .getCloudModelOffers(mockCloudState, use),
+    press: jest.fn(),
+    refresh: jest.fn(),
+  }),
+  useReturnedCloudModel: () => {},
 }));
 
 jest.mock('../../hooks/useModelPickerData', () => ({
@@ -230,7 +244,11 @@ describe('ModelPickerDrawer', () => {
       { type: 'groupHeader', title: CLOUD_PROVIDER_NAME },
       {
         type: 'model',
-        item: { model: { name: 'GPT-OSS' }, isCloudFree: true, requiresAmdActivation: true },
+        item: {
+          model: { name: 'GPT-OSS' },
+          isCloudFree: true,
+          offer: { reason: 'amd_activation_required' },
+        },
       },
     ]);
 

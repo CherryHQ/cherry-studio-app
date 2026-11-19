@@ -819,6 +819,7 @@
   "cloud.rollingHours_one": "Ventana móvil de {{hours}} hora",
   "cloud.rollingHours_other": "Ventana móvil de {{hours}} horas",
   "cloud.subscriptionMonth": "Cuota del mes de suscripción",
+  "cloud.subscriptionRequired": "Se requiere una suscripción: {{plans}}",
   "cloud.title": "Suscripción y cuota",
   "cloud.weeklyQuota": "Cuota semanal",
   "common.add": "Añadir",

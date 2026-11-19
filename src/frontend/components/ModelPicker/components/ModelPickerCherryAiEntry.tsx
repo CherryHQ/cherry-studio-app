@@ -1,53 +1,36 @@
 import { Section } from '@cherrystudio/ui/components';
-import { useGlobalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { accountSignInHref, useAccount } from '@/frontend/appShell/account';
-import {
-  type ChatRouteParamsInput,
-  chatReturnToHref,
-  parseChatRoute,
-} from '@/frontend/appShell/navigation/chat';
-import { useCloud } from '@/frontend/hooks/useCloud';
+import type { CloudState } from '@/shared/contracts/cloud';
 
-export function ModelPickerCherryAiEntry({ onClose }: { onClose: () => void }) {
+export function ModelPickerCherryAiEntry({
+  state,
+  restoring,
+  onRetry,
+}: {
+  state: CloudState;
+  restoring: boolean;
+  onRetry: () => void;
+}) {
   const { t } = useTranslation();
-  const router = useRouter();
-  const params = useGlobalSearchParams<ChatRouteParamsInput>();
-  const { state: account } = useAccount();
-  const { cloud, state } = useCloud();
-
-  if (!account.isRestoringSession && !account.isSignedIn) {
+  if (state.guestCatalog === 'error' || state.phase === 'error') {
     return (
       <Section.Item
         inset="none"
-        label={t('account.login.signIn')}
-        onPress={() => {
-          const chat = parseChatRoute(params);
-          const returnTo = chat.status === 'ready' ? chatReturnToHref(chat.target) : '/';
-          onClose();
-          router.push(accountSignInHref(returnTo, { cancelTo: returnTo }));
-        }}
-      />
-    );
-  }
-
-  if (state.phase === 'error') {
-    return (
-      <Section.Item
         description={t('chat.errorPart.reason.providerUnavailable')}
-        inset="none"
         label={t('common.retry')}
-        onPress={() => void cloud.refreshProvider().catch(() => {})}
+        onPress={onRetry}
       />
     );
   }
-
-  const isLoading = account.isRestoringSession || state.phase === 'loading';
+  const loading =
+    restoring ||
+    state.phase === 'loading' ||
+    (state.phase === 'signed_out' && state.guestCatalog !== 'ready');
   return (
     <Section.Item
       inset="none"
-      label={t(isLoading ? 'settings.provider.models.loading' : 'modelPicker.empty')}
+      label={t(loading ? 'settings.provider.models.loading' : 'modelPicker.empty')}
     />
   );
 }

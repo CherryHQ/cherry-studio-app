@@ -26,8 +26,8 @@ function amdActionLabel({ action, activated, registration_enabled, status }: Clo
   }
 }
 
-async function openAmdBrowser(url: string) {
-  cloudAmdReturn.markBrowserOpened();
+async function openAmdBrowser(url: string, accountId: string, activating: boolean) {
+  cloudAmdReturn.markBrowserOpened({ accountId, activating });
   try {
     await Linking.openURL(url);
   } catch (error) {
@@ -85,7 +85,7 @@ export function useCloudAmdModelAction() {
         toast.show({ label: t('cloud.amd.openFailed'), variant: 'danger' });
       isPending.current = true;
       try {
-        if (state.amd?.phase !== 'ready') await cloud.refreshAmd();
+        await cloud.refreshAmd();
         if (!isCurrentAccount()) return;
         const { amd } = cloud.getState();
         if (amd?.phase !== 'ready') {
@@ -127,9 +127,9 @@ export function useCloudAmdModelAction() {
             if (isPending.current || !isCurrentAccount()) return;
             isPending.current = true;
             try {
-              const entry = await cloud.createAmdEntry();
+              const entry = await cloud.createAmdEntry(modelId);
               if (!isCurrentAccount()) return;
-              await openAmdBrowser(entry);
+              await openAmdBrowser(entry, account.id, !status.activated);
               if (!signal.aborted) onOpened?.();
             } catch {
               if (isCurrentAccount()) {

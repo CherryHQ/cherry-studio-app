@@ -797,6 +797,7 @@
   "cloud.rollingDays_other": "直近 {{days}} 日間",
   "cloud.rollingHours_other": "直近 {{hours}} 時間",
   "cloud.subscriptionMonth": "契約月の利用枠",
+  "cloud.subscriptionRequired": "利用には {{plans}} のサブスクリプションが必要です",
   "cloud.title": "サブスクリプションと利用枠",
   "cloud.weeklyQuota": "週間利用枠",
   "common.add": "追加",

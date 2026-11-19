@@ -797,6 +797,7 @@
   "cloud.rollingDays_other": "{{days}} 天滾動視窗",
   "cloud.rollingHours_other": "滾動 {{hours}} 小時",
   "cloud.subscriptionMonth": "訂閱月額度",
+  "cloud.subscriptionRequired": "使用此模型需要訂閱 {{plans}}",
   "cloud.title": "訂閱與額度",
   "cloud.weeklyQuota": "每週額度",
   "common.add": "新增",

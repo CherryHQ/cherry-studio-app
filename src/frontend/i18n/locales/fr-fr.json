@@ -819,6 +819,7 @@
   "cloud.rollingHours_one": "Fenêtre glissante de {{hours}} heure",
   "cloud.rollingHours_other": "Fenêtre glissante de {{hours}} heures",
   "cloud.subscriptionMonth": "Quota du mois d’abonnement",
+  "cloud.subscriptionRequired": "Abonnement requis : {{plans}}",
   "cloud.title": "Abonnement et quota",
   "cloud.weeklyQuota": "Quota hebdomadaire",
   "common.add": "Ajouter",

@@ -37,3 +37,10 @@ test('propagates a configured signing failure', async () => {
     'Native signing failed',
   );
 });
+
+test('signs the encoded path, raw catalog query and zero-byte body separately', async () => {
+  await cloudClientSignatureHeaders('GET', '/v1/models?limit=1000', '');
+  expect(mockSignCloudRequest).toHaveBeenCalledWith(
+    'GET\n/v1/models\nlimit=1000\ncherry-studio\n1710000000\n',
+  );
+});

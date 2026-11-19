@@ -7,16 +7,13 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, View } from 'react-native';
 
-import { useAccount } from '@/frontend/appShell/account';
-import { toCloudModelPreview, useCloudAmdModelAction } from '@/frontend/appShell/cloud';
-import { useCloud } from '@/frontend/hooks/useCloud';
 import {
-  CLOUD_PROVIDER_NAME,
-  cloudModelUnavailable,
-  isCloudAmdModel,
-  isCloudFreeModel,
-  isCloudModelListed,
-} from '@/shared/contracts/cloud';
+  toCloudModelPreview,
+  useCloudModelBrowser,
+  useReturnedCloudModel,
+} from '@/frontend/appShell/cloud';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import { SettingsScrollPage } from '../../../components/SettingsScrollPage';
 import { ProviderModelRow } from '../../models/components/ProviderModelRow';
@@ -24,37 +21,39 @@ import { ProviderModelRow } from '../../models/components/ProviderModelRow';
 /** Plan models are supplied by the account, without editable connection or model settings. */
 export function CloudProviderDetail() {
   const { t } = useTranslation();
-  const { state: account } = useAccount();
-  const { cloud, state } = useCloud();
-  const showAmdModelAction = useCloudAmdModelAction();
-  const canLoad = account.isSignedIn && !account.isEnterprise && !account.isRestoringSession;
-  const refresh = useCallback(() => {
-    if (canLoad) void cloud.refreshProvider().catch(() => {});
-  }, [canLoad, cloud]);
+  const path = `/settings/provider/${CLOUD_PROVIDER_ID}`;
+  const {
+    accountState: account,
+    state,
+    offers,
+    press,
+    refresh,
+    explain,
+  } = useCloudModelBrowser(!isEnterpriseProfile());
   useFocusEffect(
     useCallback(() => {
-      if (!canLoad) return;
       refresh();
       const subscription = AppState.addEventListener('change', (appState) => {
         if (appState === 'active') refresh();
       });
       return () => subscription.remove();
-    }, [canLoad, refresh]),
+    }, [refresh]),
   );
-  if (!account.isRestoringSession && !canLoad) {
-    return <Redirect href="/settings/provider" />;
-  }
-  const listedModels = state.models.flatMap((model) => {
-    const isAmd = isCloudAmdModel(model);
-    const needsActivation =
-      isAmd &&
-      (cloudModelUnavailable(state, model.id, 'agent') === 'amd_activation_required' ||
-        cloudModelUnavailable(state, model.id, 'general') === 'amd_activation_required');
-    return needsActivation || isCloudModelListed(state, model.id)
-      ? [{ model, isAmd, needsActivation }]
-      : [];
+  useReturnedCloudModel({
+    enabled: true,
+    pathname: path,
+    destination: path,
+    state,
+    account,
+    resume: (id) => () => press(id, path),
   });
-  const isLoading = account.isRestoringSession || state.phase === 'loading';
+  if (isEnterpriseProfile() || account.isEnterprise) return <Redirect href="/settings/provider" />;
+  const failed = state.phase === 'error' || state.guestCatalog === 'error';
+  const isLoading =
+    account.isRestoringSession ||
+    (offers.size === 0 &&
+      (state.phase === 'loading' ||
+        (state.phase === 'signed_out' && state.guestCatalog !== 'ready')));
 
   return (
     <SettingsScrollPage
@@ -73,7 +72,7 @@ export function CloudProviderDetail() {
         ],
       }}
     >
-      {state.phase === 'error' ? (
+      {failed && offers.size === 0 ? (
         <ContentState.Error
           title={t('settings.provider.models.management.loadFailed')}
           primaryAction={{
@@ -84,7 +83,7 @@ export function CloudProviderDetail() {
         />
       ) : isLoading ? (
         <ContentState.Loading title={t('settings.provider.models.loading')} />
-      ) : listedModels.length === 0 ? (
+      ) : offers.size === 0 ? (
         <ContentState.Empty title={t('settings.provider.models.empty')} />
       ) : (
         <Section
@@ -92,28 +91,24 @@ export function CloudProviderDetail() {
           title={t('settings.provider.models.listTitle')}
           variant="plain"
         >
-          {listedModels.map(({ model, isAmd, needsActivation }) => (
+          {Array.from(offers.values(), (offer) => (
             <ProviderModelRow
               accessibilityHint={
-                needsActivation
-                  ? t('cloud.amd.activationRequired')
-                  : isAmd
-                    ? t('cloud.amd.viewUsage')
-                    : undefined
+                offer.reason ? explain(offer) : offer.isAmd ? t('cloud.amd.viewUsage') : undefined
               }
               endMark={
                 <View className="w-5 items-center" importantForAccessibility="no-hide-descendants">
-                  {needsActivation ? (
+                  {offer.reason ? (
                     <LockIcon className="size-3.5 text-muted-foreground" />
-                  ) : isAmd ? (
+                  ) : offer.isAmd ? (
                     <ExternalLinkIcon className="size-3.5 text-muted-foreground" />
                   ) : null}
                 </View>
               }
-              isCloudFree={isCloudFreeModel(state, model)}
-              key={model.id}
-              model={toCloudModelPreview(model)}
-              onPress={isAmd ? () => void showAmdModelAction(model.id) : undefined}
+              isCloudFree={offer.isFree}
+              key={offer.model.id}
+              model={toCloudModelPreview(offer.model)}
+              onPress={offer.reason || offer.isAmd ? () => press(offer.model.id, path) : undefined}
               provider={undefined}
               variant="management"
             />

@@ -1,5 +1,11 @@
 # CherryAI entry
 
+Settings and the chat model picker display the full server model directory and resolve actions against the current account.
+Guest models with explicit anonymous access use signed inference. Login-required taps return through the existing login route with the selected model ID. The signed-in
+catalog and effective entitlements decide whether to select, explain a plan requirement, or offer
+AMD activation. The profile-scoped login intent binds the original tap to its model and destination.
+It is consumed once before resuming the action, including an answer on an existing message.
+
 `useCloudAmdModelAction` shows the account-scoped AMD action when a model row is pressed in the chat
 picker or provider settings. The App requests a browser entry on confirmation. These surfaces
 derive read-only model identities from the current Cloud catalog with `toCloudModelPreview`.
