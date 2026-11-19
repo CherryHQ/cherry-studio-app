@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
@@ -81,65 +81,82 @@ describe('ModelPickerList', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  test('pressing a locked AMD model requests activation without selecting it', () => {
-    const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
-    const modelId = 'amd/gpt-oss';
-    const id = createUniqueModelId(provider.id, modelId);
-    const onCloudOffer = jest.fn();
-    const onSelect = jest.fn();
+  test.each(['activation_required', 'subscription_required'] as const)(
+    'a free model with %s shows the free badge and handles access on tap',
+    (reason) => {
+      const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
+      const isAmd = reason === 'activation_required';
+      const modelId = isAmd ? 'amd/gpt-oss' : 'gpt-oss';
+      const id = createUniqueModelId(provider.id, modelId);
+      const onCloudOffer = jest.fn();
+      const onSelect = jest.fn();
 
-    act(() => {
-      renderer = create(
-        <ModelPickerList
-          listItems={[
-            {
-              isFirstGroup: true,
-              key: provider.id,
-              provider,
-              title: provider.name,
-              type: 'groupHeader',
-            },
-            {
-              item: {
-                isCloudFree: true,
-                key: id,
-                model: { capabilities: [], id, modelId, name: 'GPT-OSS', providerId: provider.id },
-                modelId: id,
+      act(() => {
+        renderer = create(
+          <ModelPickerList
+            listItems={[
+              {
+                isFirstGroup: true,
+                key: provider.id,
                 provider,
-                offer: {
-                  isAmd: true,
-                  isFree: true,
-                  reason: 'amd_activation_required',
-                  plans: [],
+                title: provider.name,
+                type: 'groupHeader',
+              },
+              {
+                item: {
+                  isCloudFree: true,
+                  key: id,
                   model: {
-                    id: modelId,
-                    display_name: 'GPT-OSS',
-                    endpoint_type: 'openai-chat-completions',
-                    context_window: 4096,
-                    max_output_tokens: 512,
                     capabilities: [],
-                    available_features: ['agent'],
+                    id,
+                    modelId,
+                    name: 'GPT-OSS',
+                    providerId: provider.id,
+                  },
+                  modelId: id,
+                  provider,
+                  offer: {
+                    isAmd,
+                    reason,
+                    canViewUsage: false,
+                    plans: [],
+                    model: {
+                      id: modelId,
+                      display_name: 'GPT-OSS',
+                      endpoint_type: 'openai-chat-completions',
+                      requires_login: true,
+                      requires_plan: !isAmd,
+                      standalone: false,
+                      is_free: true,
+                      provider: isAmd ? 'amd' : null,
+                      activation_endpoint: isAmd ? '/api/v1/amd/desktop/entry' : null,
+                      activation_required: isAmd,
+                      context_window: 4096,
+                      max_output_tokens: 512,
+                      capabilities: [],
+                      available_features: ['agent'],
+                    },
                   },
                 },
+                key: id,
+                type: 'model',
               },
-              key: id,
-              type: 'model',
-            },
-          ]}
-          onCloudOffer={onCloudOffer}
-          onSelect={onSelect}
-          selectedModelId={null}
-          showBadges
-        />,
-      );
-    });
+            ]}
+            onCloudOffer={onCloudOffer}
+            onSelect={onSelect}
+            selectedModelId={null}
+            showBadges
+          />,
+        );
+      });
 
-    const row = renderer?.root.findByType(Pressable);
-    expect(row?.props.accessibilityLabel).toBe('GPT-OSS, models.capability.free');
-    expect(row?.props.accessibilityHint).toBe('cloud.amd.activationRequired');
-    expect(row?.props.disabled).toBe(false);
-    act(() => row?.props.onPress());
-    expect(onCloudOffer).toHaveBeenCalledWith(modelId);
-    expect(onSelect).not.toHaveBeenCalled();
-  });
+      const row = renderer?.root.findByType(Pressable);
+      expect(row?.findAllByType(Text).map((text) => text.props.children)).toEqual(['GPT-OSS']);
+      expect(row?.props.accessibilityLabel).toBe('GPT-OSS, models.capability.free');
+      expect(row?.props.disabled).toBe(false);
+      act(() => row?.props.onPress());
+      expect(onCloudOffer).toHaveBeenCalledWith(modelId);
+      expect(onSelect).not.toHaveBeenCalled();
+    },
+  );
 });

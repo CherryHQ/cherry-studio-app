@@ -14,9 +14,7 @@ function amdActionLabel({ action, activated, registration_enabled, status }: Clo
     case 'register':
       return registration_enabled ? 'cloud.amd.activate' : 'cloud.amd.link';
     case 'login':
-      return status === 'credential_invalid' || status === 'inactive'
-        ? 'cloud.amd.verify'
-        : 'cloud.amd.link';
+      return status === 'credential_invalid' ? 'cloud.amd.verify' : 'cloud.amd.link';
     case 'continue':
       return 'cloud.amd.continue';
     case 'none':
@@ -26,7 +24,7 @@ function amdActionLabel({ action, activated, registration_enabled, status }: Clo
   }
 }
 
-async function openAmdBrowser(url: string, accountId: string, activating: boolean) {
+async function openActivationPage(url: string, accountId: string, activating: boolean) {
   cloudAmdReturn.markBrowserOpened({ accountId, activating });
   try {
     await Linking.openURL(url);
@@ -36,8 +34,8 @@ async function openAmdBrowser(url: string, accountId: string, activating: boolea
   }
 }
 
-/** Opens the account-scoped AMD flow only after a model row was pressed and confirmed. */
-export function useCloudAmdModelAction() {
+/** Issues a fresh browser entry for the selected model after the user confirms. */
+export function useCloudModelActivation() {
   const { t } = useTranslation();
   const cloud = useBackendModule('cloud');
   const { alert } = useAlert();
@@ -68,7 +66,7 @@ export function useCloudAmdModelAction() {
         state.phase !== 'ready' ||
         account?.status !== 'active' ||
         !model ||
-        !isCloudAmdModel(model)
+        !model.activation_endpoint
       )
         return;
 
@@ -81,27 +79,35 @@ export function useCloudAmdModelAction() {
           current.account.account.status === 'active'
         );
       };
+      const amdModel = isCloudAmdModel(model);
       const showOpenFailed = () =>
-        toast.show({ label: t('cloud.amd.openFailed'), variant: 'danger' });
+        toast.show({
+          label: t(amdModel ? 'cloud.amd.openFailed' : 'onboarding.linkFailed'),
+          variant: 'danger',
+        });
       isPending.current = true;
       try {
-        await cloud.refreshAmd();
+        if (amdModel) await cloud.refreshAmd();
         if (!isCurrentAccount()) return;
         const { amd } = cloud.getState();
-        if (amd?.phase !== 'ready') {
-          showOpenFailed();
+        if (amdModel && amd?.phase !== 'ready') {
+          if (amd?.phase !== 'unsupported')
+            toast.show({
+              label: t('chat.errorPart.reason.providerUnavailable'),
+              variant: 'danger',
+            });
           return;
         }
 
-        const { status } = amd;
-        const label = amdActionLabel(status);
+        const status = amdModel && amd?.phase === 'ready' ? amd.status : undefined;
+        const label = status ? amdActionLabel(status) : 'cloud.activate';
         if (!label) {
           alert.show({
             title: t('cloud.amd.title'),
             description: t(
-              status.action === 'contact_support'
+              status?.action === 'contact_support'
                 ? 'cloud.amd.contactSupport'
-                : status.action === 'wait'
+                : status?.action === 'wait'
                   ? 'cloud.amd.pending'
                   : 'chat.errorPart.reason.providerUnavailable',
             ),
@@ -111,13 +117,11 @@ export function useCloudAmdModelAction() {
 
         const isActivation = label === 'cloud.amd.activate';
         const isUsage = label === 'cloud.amd.viewUsage';
-        // The catalog may still require activation while the AMD account is already linked.
-        const showActivation = isActivation || (isUsage && model.activation_required !== false);
         alert.confirm({
-          title: t(showActivation ? 'cloud.amd.activate' : label),
-          confirmLabel: t(showActivation ? 'cloud.amd.openActivation' : label),
+          title: t(label),
+          confirmLabel: t(isActivation ? 'cloud.amd.openActivation' : label),
           description: t(
-            showActivation
+            isActivation
               ? 'cloud.amd.activationPromptDescription'
               : isUsage
                 ? 'cloud.amd.linked'
@@ -127,14 +131,14 @@ export function useCloudAmdModelAction() {
             if (isPending.current || !isCurrentAccount()) return;
             isPending.current = true;
             try {
-              const entry = await cloud.createAmdEntry(modelId);
+              const entry = await cloud.createActivationEntry(modelId);
               if (!isCurrentAccount()) return;
-              await openAmdBrowser(entry, account.id, !status.activated);
+              await openActivationPage(entry, account.id, Boolean(status && !status.activated));
               if (!signal.aborted) onOpened?.();
             } catch {
               if (isCurrentAccount()) {
                 showOpenFailed();
-                void cloud.refreshAmd();
+                if (amdModel) void cloud.refreshAmd();
               }
             } finally {
               isPending.current = false;

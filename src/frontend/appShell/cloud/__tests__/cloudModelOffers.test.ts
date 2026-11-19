@@ -11,16 +11,32 @@ const model: CloudModel = {
   capabilities: [],
   available_features: ['agent'],
   requires_login: true,
+  requires_plan: true,
+  is_free: false,
+  standalone: false,
+  provider: null,
+  activation_required: false,
+  activation_endpoint: null,
 };
-const open = { ...model, id: 'guest', requires_login: false };
-const member = { ...model, id: 'member', standalone: true };
+const open = {
+  ...model,
+  id: 'guest',
+  requires_login: false,
+  requires_plan: false,
+  standalone: true,
+  is_free: true,
+};
+const member = { ...model, id: 'member', standalone: true, requires_plan: false, is_free: true };
 const amd: CloudModel = {
   ...model,
   id: 'amd/one',
   provider: 'amd',
   endpoint_type: 'openai-chat-completions',
   available_features: ['chat', 'translate'],
+  requires_plan: false,
+  is_free: true,
   activation_required: true,
+  activation_endpoint: '/api/v1/amd/desktop/entry',
 };
 const guest: CloudState = {
   phase: 'signed_out',
@@ -69,7 +85,7 @@ test('login, personal subscription and AMD activation are separate admission dec
   const offers = getCloudModelOffers(user, 'agent');
   expect(offers.get(model.id)).toMatchObject({ reason: 'subscription_required', plans: ['Plus'] });
   expect(offers.get(member.id)?.reason).toBeUndefined();
-  expect(offers.get(amd.id)).toMatchObject({ isAmd: true, reason: 'amd_activation_required' });
+  expect(offers.get(amd.id)).toMatchObject({ isAmd: true, reason: 'activation_required' });
   const activated = getCloudModelOffers(
     { ...user, models: [{ ...amd, activation_required: false }] },
     'agent',
@@ -78,4 +94,30 @@ test('login, personal subscription and AMD activation are separate admission dec
   expect(getCloudModelOffers({ ...user, phase: 'error' }).get(model.id)?.reason).toBe(
     'unavailable',
   );
+});
+
+test('a free plan offer always carries its free badge, even before the account receives an entitlement', () => {
+  const free = { ...model, is_free: true };
+  expect(getCloudModelOffers({ ...user, models: [free], plans: null }).get(free.id)).toMatchObject({
+    model: { is_free: true },
+    reason: 'subscription_required',
+  });
+  expect(getCloudModelOffers({ ...guest, models: [free] }).get(free.id)).toMatchObject({
+    model: { is_free: true },
+    reason: 'signed_out',
+  });
+});
+test('activation follows the advertised endpoint and the availability of the AMD status route', () => {
+  expect(
+    getCloudModelOffers({ ...user, models: [{ ...amd, activation_endpoint: null }] }).get(amd.id)
+      ?.reason,
+  ).toBe('unavailable');
+  expect(getCloudModelOffers({ ...user, amd: { phase: 'unsupported' } }).get(amd.id)?.reason).toBe(
+    'unavailable',
+  );
+  const partner = { ...amd, id: 'other', provider: 'partner' };
+  expect(getCloudModelOffers({ ...user, models: [partner] }).get(partner.id)).toMatchObject({
+    isAmd: false,
+    reason: 'activation_required',
+  });
 });

@@ -79,19 +79,15 @@ export const CloudModelSchema = z.object({
   endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
   context_window: z.number().int().positive(),
   max_output_tokens: z.number().int().positive(),
-  capabilities: z
-    .array(z.string())
-    .nullable()
-    .transform((value) => value ?? []),
-  available_features: z
-    .array(z.string())
-    .nullable()
-    .transform((value) => value ?? []),
-  provider: z.string().optional(),
-  requires_login: z.boolean().optional(),
-  standalone: z.boolean().optional(),
-  activation_required: z.boolean().optional(),
-  activation_endpoint: z.string().nullish(),
+  capabilities: z.array(z.string()),
+  available_features: z.array(z.string()),
+  requires_login: z.boolean(),
+  requires_plan: z.boolean(),
+  is_free: z.boolean(),
+  standalone: z.boolean(),
+  provider: z.string().nullable(),
+  activation_required: z.boolean(),
+  activation_endpoint: z.string().nullable(),
 });
 export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
 export const CloudAmdStatusSchema = z.object({
@@ -111,7 +107,7 @@ export const CloudAmdStatusSchema = z.object({
 });
 export type CloudAmdStatus = z.infer<typeof CloudAmdStatusSchema>;
 export type CloudAmdState =
-  | Readonly<{ phase: 'loading' | 'error' }>
+  | Readonly<{ phase: 'loading' | 'error' | 'unsupported' }>
   | Readonly<{ phase: 'ready'; status: CloudAmdStatus }>;
 export type CloudModel = z.infer<typeof CloudModelSchema>;
 export type CloudAccount = z.infer<typeof CloudAccountSchema>;
@@ -121,14 +117,17 @@ export type CloudUnavailableReason =
   | 'signed_out'
   | 'unavailable'
   | 'not_entitled'
-  | 'amd_activation_required';
+  | 'subscription_required'
+  | 'activation_required'
+  | 'reauth_required'
+  | 'account_disabled';
 export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
   isRefreshing: boolean;
   account: CloudAccount | null;
   /** Named plan coverage and badge metadata. Inference uses the account and model directory. */
   plans: CloudPlans | null;
-  plansPending?: boolean;
+  accountIssue?: 'reauth_required' | 'account_disabled';
   models: readonly CloudModel[];
   /** Status for the AMD setup flow. The signed model catalog owns availability. */
   amd?: CloudAmdState;
@@ -141,17 +140,14 @@ export interface CloudModule {
   refresh(mode?: CloudRefreshMode): Promise<void>;
   refreshProvider(): Promise<void>;
   refreshAmd(): Promise<void>;
-  createAmdEntry(modelId: string): Promise<string>;
+  createActivationEntry(modelId: string): Promise<string>;
 }
 
 export function isCloudAmdModel(model: CloudModel): boolean {
   return model.provider === 'amd' && model.endpoint_type === 'openai-chat-completions';
 }
 
-export function isEffectiveEntitlement(
-  entry: CloudAccount['entitlements'][number],
-  now: number,
-): boolean {
+function isEffectiveEntitlement(entry: CloudAccount['entitlements'][number], now: number): boolean {
   return (
     entry.status === 'active' &&
     (!entry.starts_at || Date.parse(entry.starts_at) <= now) &&
@@ -159,25 +155,11 @@ export function isEffectiveEntitlement(
   );
 }
 
-export function isCloudFreeModel(state: CloudState, model: CloudModel, now = Date.now()): boolean {
-  return (
-    isCloudAmdModel(model) ||
-    model.standalone === true ||
-    model.requires_login === false ||
-    (state.account?.entitlements.some(
-      (entry) =>
-        entry.is_free && isEffectiveEntitlement(entry, now) && entry.model_ids.includes(model.id),
-    ) ??
-      false)
-  );
-}
-
 export function supportsCloudModelUse(model: CloudModel, use: CloudModelUse): boolean {
   const features = model.available_features;
   return use === 'agent'
     ? features.includes('agent') ||
-        ((isCloudAmdModel(model) || model.standalone || model.requires_login === false) &&
-          features.includes('chat'))
+        ((isCloudAmdModel(model) || model.standalone) && features.includes('chat'))
     : features.includes('chat') && features.includes('translate');
 }
 
@@ -213,26 +195,31 @@ export function cloudModelUnavailable(
   now = Date.now(),
 ): CloudUnavailableReason | undefined {
   const model = state.models.find((entry) => entry.id === modelId);
+  if (!model) return 'unavailable';
   if (state.phase === 'signed_out') {
-    if (!model || model.requires_login !== false || model.provider === 'amd') return 'signed_out';
+    if (model.requires_login) return 'signed_out';
     if (state.guestCatalog !== 'ready') return 'unavailable';
-    return supportsCloudModelUse(model, use) ? undefined : 'not_entitled';
+  } else {
+    if (state.accountIssue) return state.accountIssue;
+    if (state.phase !== 'ready' || !state.account) return 'unavailable';
+    if (state.account.account.status === 'disabled') return 'account_disabled';
   }
-  if (state.phase !== 'ready' || !state.account) return 'unavailable';
-  if (state.account.account.status !== 'active') return 'not_entitled';
-  if (!model || !supportsCloudModelUse(model, use)) return 'not_entitled';
-  if (model.provider === 'amd') {
-    if (!isCloudAmdModel(model)) return 'not_entitled';
-    return model.activation_required === false ? undefined : 'amd_activation_required';
-  }
-  if (model.standalone === true || model.requires_login === false) return undefined;
   if (
-    !state.account.entitlements.some(
-      (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(modelId),
+    model.requires_plan &&
+    !state.account?.entitlements.some(
+      (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(model.id),
     )
   )
-    return 'not_entitled';
-  return undefined;
+    return 'subscription_required';
+  if (model.activation_required) {
+    if (
+      !model.activation_endpoint ||
+      (isCloudAmdModel(model) && state.amd?.phase === 'unsupported')
+    )
+      return 'unavailable';
+    return 'activation_required';
+  }
+  return supportsCloudModelUse(model, use) ? undefined : 'not_entitled';
 }
 
 export class CloudAccessError extends Error {

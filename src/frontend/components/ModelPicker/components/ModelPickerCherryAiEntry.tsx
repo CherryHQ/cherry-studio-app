@@ -17,8 +17,14 @@ export function ModelPickerCherryAiEntry({
     return (
       <Section.Item
         inset="none"
-        description={t('chat.errorPart.reason.providerUnavailable')}
-        label={t('common.retry')}
+        description={t(
+          state.accountIssue === 'account_disabled'
+            ? 'cloud.accountDisabled'
+            : 'chat.errorPart.reason.providerUnavailable',
+        )}
+        label={t(
+          state.accountIssue === 'reauth_required' ? 'account.login.reSignIn' : 'common.retry',
+        )}
         onPress={onRetry}
       />
     );

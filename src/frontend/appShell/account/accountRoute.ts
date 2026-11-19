@@ -18,7 +18,7 @@ export function readAccountReturnTo(
 
 export function accountSignInHref(
   returnTo: string,
-  options?: { purpose?: 'expired'; cancelTo?: string },
+  options?: { purpose?: 'expired' | 'sign-in'; cancelTo?: string },
 ) {
   const cancelTo = readAccountReturnTo(options?.cancelTo);
   return {

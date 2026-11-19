@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
-import { CLOUD_UNAVAILABLE_KEYS } from '@/frontend/hooks/useCloud';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import {
@@ -198,7 +197,9 @@ export function ModelPickerList({
           isDisabled={
             extraData.disabled ||
             (isOffer
-              ? !onCloudOffer
+              ? !onCloudOffer ||
+                row.offer.reason === 'unavailable' ||
+                row.offer.reason === 'not_entitled'
               : Boolean(row.cloudUnavailable) ||
                 (Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected))
           }
@@ -387,24 +388,12 @@ const ModelPickerRow = memo(function ModelPickerRow({
     else onSelect(item);
   }, [item, isOffer, onCloudOffer, onSelect]);
   const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
-  const unavailable =
-    !isOffer && item.cloudUnavailable
-      ? t(CLOUD_UNAVAILABLE_KEYS[item.cloudUnavailable])
-      : undefined;
   const accessibilityLabel = [
     item.model.name,
-    ...(unavailable ? [unavailable] : []),
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
   ].join(', ');
   return (
     <Pressable
-      accessibilityHint={
-        isOffer && item.offer.reason
-          ? item.offer.reason === 'subscription_required'
-            ? t('cloud.subscriptionRequired', { plans: item.offer.plans.join(' / ') })
-            : t(CLOUD_UNAVAILABLE_KEYS[item.offer.reason])
-          : undefined
-      }
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={multiple ? 'checkbox' : 'button'}
       accessibilityState={
@@ -443,7 +432,6 @@ const ModelPickerRow = memo(function ModelPickerRow({
         >
           {item.model.name}
         </Text>
-        {unavailable ? <Text className="text-xs text-muted-foreground">{unavailable}</Text> : null}
         {badges.length > 0 ? (
           <View className="h-4 flex-row items-center gap-1">
             {badges.map((badge) => (

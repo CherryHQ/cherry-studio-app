@@ -26,24 +26,26 @@ import {
   cloudModelUnavailable,
   isCloudAmdModel,
   isCloudModelListed,
+  supportsCloudModelUse,
   type CloudModelUse,
   type CloudModule,
   type CloudState,
 } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
-import {
-  cloudActivationPath,
-  CLOUD_AMD_STATUS_PATH,
-  CloudGatewayRequestError,
-  cloudRetryDeadline,
-  readCloudAmdEntry,
-  readCloudAmdGatewayCode,
-} from './cloudAmd';
+import { cloudActivationPath, CLOUD_AMD_STATUS_PATH, readCloudActivationEntry } from './cloudAmd';
 import { cloudClientSignatureHeaders } from './cloudClientSignature';
 import { createCloudIdempotencyKey, loadCloudDevice, type CloudDevice } from './cloudDevice';
+import {
+  CloudGatewayRequestError,
+  cloudRetryDeadline,
+  cloudSessionIssue,
+  readCloudGatewayCode,
+} from './cloudGatewayError';
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
+
+const MODEL_CATALOG_PATH = '/v1/models?limit=1000';
 
 const EMPTY: CloudState = {
   phase: 'signed_out',
@@ -84,7 +86,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private guestRetryUntil = 0;
   private loadingPlans: Promise<void> | undefined;
   private loadingAmd: Promise<void> | undefined;
-  private readonly amdRetryUntil = new Map<string, number>();
+  private readonly modelRetryUntil = new Map<string, number>();
   private projection: Promise<void> = Promise.resolve();
   private modelRefreshedAt = 0;
   private quotaRevision = 0;
@@ -140,7 +142,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
     this.loadingPlans = undefined;
     this.guestOrigin = undefined;
     this.loadingAmd = undefined;
-    this.amdRetryUntil.clear();
+    this.modelRetryUntil.clear();
     this.modelRefreshedAt = 0;
     this.projectedCatalog = undefined;
     this.publish(key ? { ...EMPTY, phase: 'loading' } : EMPTY);
@@ -192,7 +194,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const config = CloudServiceConfigSchema.safeParse({ apiOrigin });
       if (!config.success) throw new CloudAccessError('unavailable');
       const origin = config.data.apiOrigin;
-      const path = '/v1/models?limit=1000';
+      const path = MODEL_CATALOG_PATH;
       const headers = await cloudClientSignatureHeaders('GET', path, '');
       signal.throwIfAborted();
       if (!headers['X-Signature']) throw new CloudAccessError('unavailable');
@@ -248,22 +250,38 @@ export class CloudRuntime extends BaseService implements CloudModule {
     await this.loadingAmd;
   };
 
-  readonly createAmdEntry = async (modelId: string): Promise<string> => {
+  readonly createActivationEntry = async (modelId: string): Promise<string> => {
     const session = this.session;
     const amd = this.snapshot.amd;
-    if (!session || this.snapshot.account?.account.status !== 'active' || amd?.phase !== 'ready')
+    const model = this.snapshot.models.find((item) => item.id === modelId);
+    if (
+      !session ||
+      !model ||
+      this.snapshot.phase !== 'ready' ||
+      this.snapshot.account?.account.status !== 'active'
+    )
       throw new CloudAccessError('unavailable');
-    const { activated, action } = amd.status;
-    if (!activated && action !== 'register' && action !== 'login' && action !== 'continue')
-      throw new CloudAccessError('unavailable');
-    const model = this.snapshot.models.find((model) => model.id === modelId);
-    if (!model || !isCloudAmdModel(model)) throw new CloudAccessError('unavailable');
+    const use = supportsCloudModelUse(model, 'agent') ? 'agent' : 'general';
+    const reason = cloudModelUnavailable(this.snapshot, modelId, use);
+    if (reason && reason !== 'activation_required') throw new CloudAccessError(reason);
+    if (isCloudAmdModel(model)) {
+      if (amd?.phase !== 'ready') throw new CloudAccessError('unavailable');
+      const { activated, action } = amd.status;
+      if (!activated && action !== 'register' && action !== 'login' && action !== 'continue')
+        throw new CloudAccessError('unavailable');
+    } else if (!model.activation_required) throw new CloudAccessError('unavailable');
     const path = cloudActivationPath(model.activation_endpoint, session.origin);
-    return readCloudAmdEntry(await session.postEmpty(path));
+    const { signal } = this.lifetime;
+    try {
+      return readCloudActivationEntry(await session.postEmpty(path));
+    } catch (error) {
+      if (!signal.aborted) this.reportSessionIssue(error);
+      throw error;
+    }
   };
 
   private async loadAmd(signal: AbortSignal): Promise<void> {
-    if (this.snapshot.amd?.phase !== 'ready')
+    if (!this.snapshot.amd || this.snapshot.amd.phase === 'error')
       this.publish({ ...this.snapshot, amd: { phase: 'loading' } });
     try {
       if (!this.session) await this.refreshState('admission');
@@ -275,9 +293,18 @@ export class CloudRuntime extends BaseService implements CloudModule {
       this.publish({ ...this.snapshot, amd: { phase: 'ready', status } });
     } catch (error) {
       if (signal.aborted) return;
+      this.reportSessionIssue(error);
       const unsupported = isHttpError(error) && error.status === 404;
-      this.publish({ ...this.snapshot, amd: unsupported ? undefined : { phase: 'error' } });
+      this.publish({ ...this.snapshot, amd: { phase: unsupported ? 'unsupported' : 'error' } });
     }
+  }
+
+  private reportSessionIssue(error: unknown) {
+    if (!isHttpError(error)) return undefined;
+    const issue = cloudSessionIssue(error.status, error.code);
+    if (issue)
+      this.publish({ ...this.snapshot, phase: 'error', accountIssue: issue, isRefreshing: false });
+    return issue;
   }
 
   private needsModelRefresh(): boolean {
@@ -307,7 +334,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
       if (
         this.identityKey &&
         !current.aborted &&
-        (mode !== 'background' || this.snapshot.phase !== 'ready' || accessFailure)
+        (mode !== 'background' || this.snapshot.phase !== 'ready' || accessFailure) &&
+        !this.reportSessionIssue(error)
       )
         this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
       throw error;
@@ -355,10 +383,18 @@ export class CloudRuntime extends BaseService implements CloudModule {
     const quotaRevision = this.quotaRevision;
     const [accountRead, catalogRead] = await Promise.allSettled([
       session.get('/api/v1/account'),
-      session.get('/v1/models'),
+      session.get(MODEL_CATALOG_PATH),
     ]);
     signal.throwIfAborted();
-    if (catalogRead.status === 'rejected') throw catalogRead.reason;
+    if (catalogRead.status === 'rejected') {
+      if (
+        accountRead.status === 'rejected' &&
+        isHttpError(accountRead.reason) &&
+        accountRead.reason.status === 401
+      )
+        throw accountRead.reason;
+      throw catalogRead.reason;
+    }
     const { data: models } = CloudModelCatalogSchema.parse(catalogRead.value);
     if (accountRead.status === 'rejected') {
       if (mode !== 'background' || this.snapshot.phase !== 'ready') {
@@ -386,12 +422,10 @@ export class CloudRuntime extends BaseService implements CloudModule {
       ...next,
       plans: this.snapshot.plans,
       amd: this.snapshot.amd,
-      plansPending:
-        Boolean(this.loadingPlans) || (mode !== 'admission' && account.account.status === 'active'),
     });
   }
 
-  /** Badge metadata is optional and cannot delay account/model readiness or inference. */
+  /** Plan descriptions and sidebar metadata can load after account and model admission. */
   private refreshPlans(session: CloudSession, signal: AbortSignal): void {
     if (this.loadingPlans) return;
     const attempt = session
@@ -399,11 +433,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
       .then((data) => {
         const plans = CloudPlansSchema.parse(data);
         signal.throwIfAborted();
-        this.publish({ ...this.snapshot, plans, plansPending: false });
+        this.publish({ ...this.snapshot, plans });
       })
       .catch((error: unknown) => {
         if (signal.aborted) return;
-        this.publish({ ...this.snapshot, plansPending: false });
+        this.reportSessionIssue(error);
         loggerService
           .withContext('CloudRuntime')
           .warn('Could not load Cloud plan display metadata', error as Error);
@@ -424,7 +458,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         throw new CloudAccessError('signed_out');
       if (!identityKey && this.guestRetryUntil > Date.now())
         throw new CloudGatewayRequestError(429, 'RATE_LIMITED');
-      if ((this.amdRetryUntil.get(modelId) ?? 0) > Date.now())
+      if ((this.modelRetryUntil.get(modelId) ?? 0) > Date.now())
         throw new CloudGatewayRequestError(429, 'RATE_LIMITED');
       if (this.needsModelRefresh()) {
         try {
@@ -437,7 +471,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
             (this.guestRetryUntil > Date.now() || (isHttpError(error) && error.status === 429))
           )
             throw new CloudGatewayRequestError(429, 'RATE_LIMITED');
-          throw new CloudAccessError('unavailable');
+          throw new CloudAccessError(this.snapshot.accountIssue ?? 'unavailable');
         }
       }
       lifetime.throwIfAborted();
@@ -478,22 +512,23 @@ export class CloudRuntime extends BaseService implements CloudModule {
       try {
         const idempotencyKey = session ? createCloudIdempotencyKey() : undefined;
         const send = async () => {
-          const signed = await session?.headers('POST', path, body, idempotencyKey);
-          const clientHeaders = await cloudClientSignatureHeaders('POST', path, body);
+          const signed = session
+            ? await session.headers('POST', path, body, idempotencyKey)
+            : await cloudClientSignatureHeaders('POST', path, body);
           linked.signal.throwIfAborted();
-          if (!session && (!clientHeaders['X-Signature'] || origin !== this.guestOrigin))
+          if (!session && (!signed['X-Signature'] || origin !== this.guestOrigin))
             throw new CloudAccessError('unavailable');
           const currentModel = this.snapshot.models.find((item) => item.id === modelId);
           if (currentModel?.endpoint_type !== model.endpoint_type)
             throw new CloudAccessError('unavailable');
           const currentReason = cloudModelUnavailable(this.snapshot, modelId, use);
           if (currentReason) throw new CloudAccessError(currentReason);
-          const headers = new Headers({ ...signed, ...clientHeaders });
+          const headers = new Headers(signed);
           headers.set('content-type', 'application/json');
           // Only protocol headers cross this boundary; SDK keys and arbitrary extra headers do not.
           const anthropicVersion = request.headers.get('anthropic-version');
           if (anthropicVersion) headers.set('anthropic-version', anthropicVersion);
-          return expoFetch(url.toString(), {
+          const response = await expoFetch(url.toString(), {
             method: 'POST',
             headers,
             body,
@@ -501,22 +536,11 @@ export class CloudRuntime extends BaseService implements CloudModule {
             credentials: 'omit',
             redirect: 'error',
           });
+          return { response, authorization: signed.authorization };
         };
-        const response =
-          session && isCloudAmdModel(model)
-            ? await this.sendAmdModel(modelId, session, linked.signal, send)
-            : await send();
+        const response = await this.sendModel(modelId, session, linked.signal, send);
         linked.signal.throwIfAborted();
         if (!response.ok) {
-          if (session) {
-            if (response.status === 401) session.invalidate();
-            if (response.status === 401 || response.status === 403)
-              this.publish({ ...this.snapshot, phase: 'error' });
-          } else if (response.status === 429) {
-            this.rememberGuestRateLimit(response.headers.get('retry-after'));
-            await response.body?.cancel().catch(() => {});
-            throw new CloudGatewayRequestError(429, 'RATE_LIMITED');
-          }
           complete();
           return response;
         }
@@ -565,48 +589,64 @@ export class CloudRuntime extends BaseService implements CloudModule {
         return response;
       } catch (error) {
         complete();
+        const issue = session && !lifetime.aborted && this.reportSessionIssue(error);
+        if (issue) throw new CloudAccessError(issue);
         throw error;
       }
     };
   }
 
-  private async sendAmdModel(
+  private async sendModel(
     modelId: string,
-    session: CloudSession,
+    session: CloudSession | undefined,
     signal: AbortSignal,
-    send: () => Promise<Response>,
+    send: () => Promise<{ response: Response; authorization?: string }>,
   ): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
-      const response = await send();
+      const { response, authorization } = await send();
       signal.throwIfAborted();
       if (response.ok) return response;
-      const code = await readCloudAmdGatewayCode(response);
+      // Preserve the original error response for the protocol SDK when the gateway forwards an upstream error.
+      const code = readCloudGatewayCode(
+        await response
+          .clone()
+          .json()
+          .catch(() => undefined),
+      );
       signal.throwIfAborted();
-      const reauthenticate =
-        code === 'REAUTH_REQUIRED' || code === 'SESSION_EXPIRED' || code === 'AUTH_REQUIRED';
-      if (reauthenticate) session.invalidate();
-      // This is the same model operation. `send` signs with a fresh nonce and the same key.
-      if (attempt === 0 && (reauthenticate || code === 'REQUEST_REPLAYED')) continue;
-
-      if (response.status === 429) {
-        const now = Date.now();
-        const retryUntil = cloudRetryDeadline(response.headers.get('retry-after'), now);
-        if (retryUntil > now)
-          this.amdRetryUntil.set(
-            modelId,
-            Math.max(this.amdRetryUntil.get(modelId) ?? 0, retryUntil),
-          );
+      if (attempt === 0 && session?.recoverRequest(response.status, code, authorization)) {
+        await response.body?.cancel().catch(() => {});
+        continue;
       }
-      if (code === 'AMD_ACTIVATION_REQUIRED' || code === 'AMD_CREDENTIAL_INVALID')
+      const { status } = response;
+      if (status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        if (session)
+          this.modelRetryUntil.set(
+            modelId,
+            Math.max(
+              this.modelRetryUntil.get(modelId) ?? 0,
+              cloudRetryDeadline(retryAfter, Date.now()),
+            ),
+          );
+        else this.rememberGuestRateLimit(retryAfter);
+      }
+      const accountIssue = session && code && cloudSessionIssue(status, code);
+      if (accountIssue) this.publish({ ...this.snapshot, phase: 'error', accountIssue });
+      if (session && (code === 'AMD_CREDENTIAL_INVALID' || code === 'AMD_ACTIVATION_REQUIRED'))
         void this.refreshAmd();
       if (
-        code === 'AMD_ACTIVATION_REQUIRED' ||
+        code === 'MODEL_UNAVAILABLE' ||
+        code === 'ENTITLEMENT_INACTIVE' ||
         code === 'AMD_CREDENTIAL_INVALID' ||
-        code === 'MODEL_UNAVAILABLE'
+        code === 'AMD_ACTIVATION_REQUIRED'
       )
         void this.refreshState('admission').catch(() => {});
-      const failureCode = code ?? (response.status === 429 ? 'RATE_LIMITED' : 'cloud_unavailable');
-      throw new CloudGatewayRequestError(response.status, failureCode);
+      if (!code && (session || (status !== 401 && status !== 429))) return response;
+      await response.body?.cancel().catch(() => {});
+      const failureCode =
+        !session && status === 401 ? 'cloud_unavailable' : (code ?? 'RATE_LIMITED');
+      throw new CloudGatewayRequestError(status, failureCode);
     }
   }
 

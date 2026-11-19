@@ -5,7 +5,6 @@ import { useCloud } from '@/frontend/hooks/useCloud';
 import {
   CLOUD_PROVIDER_ID,
   cloudModelUnavailable,
-  isCloudFreeModel,
   type CloudModelUse,
 } from '@/shared/contracts/cloud';
 
@@ -70,7 +69,7 @@ export function useModelPickerData({
                 {
                   ...item,
                   cloudUnavailable: cloudModelUnavailable(cloud, model.id, cloudUse),
-                  isCloudFree: isCloudFreeModel(cloud, model),
+                  isCloudFree: model.is_free,
                 },
               ];
             }),

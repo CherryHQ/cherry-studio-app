@@ -34,10 +34,11 @@ export function addCloudOffers(
       ])
     )
       continue;
-    if (selectedBadge && !matchesModelPickerBadges(model, [selectedBadge], offer.isFree)) continue;
+    if (selectedBadge && !matchesModelPickerBadges(model, [selectedBadge], offer.model.is_free))
+      continue;
     locked.push({
       offer,
-      isCloudFree: offer.isFree,
+      isCloudFree: offer.model.is_free,
       key: `${model.id}:provider`,
       model,
       modelId: model.id,

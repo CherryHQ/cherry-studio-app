@@ -58,6 +58,15 @@ export function readKnownAiFinishReason(value: unknown): string | undefined {
 
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   cloud_signed_out: 'auth',
+  cloud_subscription_required: 'permission',
+  entitlement_inactive: 'permission',
+  cloud_activation_required: 'permission',
+  cloud_account_disabled: 'permission',
+  account_disabled: 'permission',
+  cloud_reauth_required: 'auth',
+  concurrency_limited: 'rate_limit',
+  upstream_unavailable: 'provider_unavailable',
+  cloud_service_unavailable: 'provider_unavailable',
   cloud_unavailable: 'provider_unavailable',
   cloud_not_entitled: 'permission',
   cloud_quota_exhausted: 'quota',
@@ -167,7 +176,7 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .join('\n')
     .toLowerCase();
   const cloudCode =
-    /\b(?:cloud_(?:signed_out|unavailable|not_entitled|quota_exhausted|amd_activation_required)|amd_(?:activation_required|credential_invalid|access_denied))\b/.exec(
+    /\b(?:cloud_(?:signed_out|unavailable|not_entitled|subscription_required|activation_required|account_disabled|reauth_required|quota_exhausted|amd_activation_required)|amd_(?:activation_required|credential_invalid|access_denied))\b/.exec(
       text,
     )?.[0];
   if (cloudCode && CODE_REASONS[cloudCode]) return CODE_REASONS[cloudCode];

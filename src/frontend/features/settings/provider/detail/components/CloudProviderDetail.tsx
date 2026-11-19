@@ -28,7 +28,7 @@ export function CloudProviderDetail() {
     offers,
     press,
     refresh,
-    explain,
+    signInAgain,
   } = useCloudModelBrowser(!isEnterpriseProfile());
   useFocusEffect(
     useCallback(() => {
@@ -74,11 +74,17 @@ export function CloudProviderDetail() {
     >
       {failed && offers.size === 0 ? (
         <ContentState.Error
-          title={t('settings.provider.models.management.loadFailed')}
+          title={t(
+            state.accountIssue === 'account_disabled'
+              ? 'cloud.accountDisabled'
+              : 'settings.provider.models.management.loadFailed',
+          )}
           primaryAction={{
-            children: t('common.retry'),
+            children: t(
+              state.accountIssue === 'reauth_required' ? 'account.login.reSignIn' : 'common.retry',
+            ),
             disabled: state.isRefreshing,
-            onPress: refresh,
+            onPress: state.accountIssue === 'reauth_required' ? () => signInAgain(path) : refresh,
           }}
         />
       ) : isLoading ? (
@@ -93,22 +99,23 @@ export function CloudProviderDetail() {
         >
           {Array.from(offers.values(), (offer) => (
             <ProviderModelRow
-              accessibilityHint={
-                offer.reason ? explain(offer) : offer.isAmd ? t('cloud.amd.viewUsage') : undefined
-              }
+              accessibilityHint={offer.canViewUsage ? t('cloud.amd.viewUsage') : undefined}
               endMark={
                 <View className="w-5 items-center" importantForAccessibility="no-hide-descendants">
                   {offer.reason ? (
                     <LockIcon className="size-3.5 text-muted-foreground" />
-                  ) : offer.isAmd ? (
+                  ) : offer.canViewUsage ? (
                     <ExternalLinkIcon className="size-3.5 text-muted-foreground" />
                   ) : null}
                 </View>
               }
-              isCloudFree={offer.isFree}
+              disabled={offer.reason === 'unavailable' || offer.reason === 'not_entitled'}
+              isCloudFree={offer.model.is_free}
               key={offer.model.id}
               model={toCloudModelPreview(offer.model)}
-              onPress={offer.reason || offer.isAmd ? () => press(offer.model.id, path) : undefined}
+              onPress={
+                offer.reason || offer.canViewUsage ? () => press(offer.model.id, path) : undefined
+              }
               provider={undefined}
               variant="management"
             />

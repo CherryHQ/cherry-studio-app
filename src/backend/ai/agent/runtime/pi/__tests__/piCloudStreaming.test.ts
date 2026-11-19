@@ -43,6 +43,9 @@ jest.mock('@/backend/services/cloud/CloudSession', () => ({
     async headers() {
       return {};
     }
+    recoverRequest() {
+      return false;
+    }
     async revoke() {}
   },
 }));
@@ -53,7 +56,7 @@ function reply(account: string, path: string) {
   const state = cloudSnapshot(account);
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
-  if (path === '/v1/models') return { data: state.models };
+  if (path === '/v1/models?limit=1000') return { data: state.models };
   throw new Error(`Unexpected Cloud endpoint: ${path}`);
 }
 
@@ -168,7 +171,7 @@ test.each([
   'streams $endpoint through the existing Pi binding before EOF',
   async ({ endpoint, streamSimple, first, last }) => {
     mockGet.mockImplementation(async (account: string, path: string) =>
-      path === '/v1/models'
+      path === '/v1/models?limit=1000'
         ? {
             data: cloudSnapshot(account).models.map((model) => ({
               ...model,
@@ -260,13 +263,16 @@ test.each([
 ])('preserves a terminal AMD $status through the OpenAI stream', async ({ status, code }) => {
   const amd: CloudModel = {
     ...cloudSnapshot().models[0],
+    activation_endpoint: '/api/v1/amd/desktop/entry',
     id: 'amd/free-model',
     provider: 'amd',
+    requires_plan: false,
+    is_free: true,
     endpoint_type: 'openai-chat-completions',
     activation_required: false,
   };
   mockGet.mockImplementation(async (account: string, path: string) =>
-    path === '/v1/models' ? { data: [amd] } : reply(account, path),
+    path === '/v1/models?limit=1000' ? { data: [amd] } : reply(account, path),
   );
   mockInference.mockResolvedValue(new Response(JSON.stringify({ error: { code } }), { status }));
   const runtime = await setup();

@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 
 import { consumeCloudModelTap } from '@/frontend/appShell/account';
 import type { AccountState } from '@/shared/contracts/account';
-import { cloudModelUnavailable, type CloudState } from '@/shared/contracts/cloud';
+import type { CloudState } from '@/shared/contracts/cloud';
 
 /** Consume the successful login destination once, after the account catalog is ready. */
 export function useReturnedCloudModel({
@@ -37,16 +37,9 @@ export function useReturnedCloudModel({
       return;
     const signedIn = account.isSignedIn && !account.needsSignIn && !account.isEnterprise;
     if (signedIn && (state.phase === 'loading' || state.phase === 'signed_out')) return;
-    if (
-      signedIn &&
-      state.plansPending &&
-      !state.plans &&
-      cloudModelUnavailable(state, cloudModel, 'agent') === 'not_entitled' &&
-      cloudModelUnavailable(state, cloudModel, 'general') === 'not_entitled'
-    )
-      return;
-    const proceed = signedIn ? resume(cloudModel) : undefined;
-    if (signedIn && !proceed) return;
+    const mayResume = signedIn && !state.accountIssue;
+    const proceed = mayResume ? resume(cloudModel) : undefined;
+    if (mayResume && !proceed) return;
     const authorized = consumeCloudModelTap(destination, cloudModel, cloudReturn);
     router.setParams({ cloudModel: undefined, cloudReturn: undefined });
     if (authorized) proceed?.();

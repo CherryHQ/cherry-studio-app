@@ -4,7 +4,7 @@ import { cloudSnapshot } from './_cloudFixtures';
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({ request: mockRequest }),
-  isHttpError: () => false,
+  isHttpError: (error: unknown) => error instanceof Error && error.name === 'HttpError',
 }));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({ defaultAppHeaders: () => ({}) }));
 jest.mock('../cloudDevice', () => ({
@@ -58,7 +58,7 @@ test('concurrent reads share device-bound product entry and never send IdP crede
   mockRequest.mockImplementation(async ({ path }) =>
     path === '/accounts-portal/v1/enter' ? entry() : { data: {} },
   );
-  await Promise.all([session.get('/api/v1/account'), session.get('/v1/models')]);
+  await Promise.all([session.get('/api/v1/account'), session.get('/v1/models?limit=1000')]);
   const requests = mockRequest.mock.calls.map(([request]) => request);
   expect(requests.filter((request) => request.path === '/accounts-portal/v1/enter')).toEqual([
     expect.objectContaining({
@@ -93,11 +93,11 @@ test('concurrent reads share device-bound product entry and never send IdP crede
 test('rotation signs exact refresh JSON without a bearer header', async () => {
   const { session } = setup();
   mockRequest.mockResolvedValueOnce(entry(1));
-  await session.headers('GET', '/v1/models');
+  await session.headers('GET', '/v1/models?limit=1000');
   mockRequest.mockResolvedValueOnce({
     data: { token_set: { ...entry().data.token_set, access_token: 'rotated-access' } },
   });
-  expect(await session.headers('GET', '/v1/models')).toMatchObject({
+  expect(await session.headers('GET', '/v1/models?limit=1000')).toMatchObject({
     authorization: 'Bearer rotated-access',
   });
   const request = mockRequest.mock.calls[1][0];
@@ -135,7 +135,7 @@ test('a late product-entry response cannot reopen an account after replacement',
         resolve = done;
       }),
   );
-  const pending = session.headers('GET', '/v1/models');
+  const pending = session.headers('GET', '/v1/models?limit=1000');
   await Promise.resolve();
   source.getIdentity.mockReturnValue({ ...source.getIdentity(), key: 'b', profileId: 'account-b' });
   resolve(entry());
@@ -147,7 +147,30 @@ test.each([{ apiOrigin: 'https://replacement.example' }])(
   async (service) => {
     const { session, source } = setup();
     source.getIdentity.mockReturnValue({ ...source.getIdentity(), ...service });
-    await expect(session.get('/v1/models')).rejects.toMatchObject({ code: 'cloud_signed_out' });
+    await expect(session.get('/v1/models?limit=1000')).rejects.toMatchObject({
+      code: 'cloud_signed_out',
+    });
     expect(mockRequest).not.toHaveBeenCalled();
+  },
+);
+
+test.each(['SESSION_EXPIRED', 'REAUTH_REQUIRED', 'REQUEST_REPLAYED'])(
+  'recovers %s once and signs the same catalog target again',
+  async (code) => {
+    const { session } = setup();
+    const path = '/v1/models?limit=1000';
+    const failure = Object.assign(new Error(code), {
+      name: 'HttpError',
+      status: code === 'REQUEST_REPLAYED' ? 409 : 401,
+      code,
+    });
+    mockRequest.mockResolvedValueOnce(entry()).mockRejectedValueOnce(failure);
+    if (code !== 'REQUEST_REPLAYED') mockRequest.mockResolvedValueOnce(entry());
+    mockRequest.mockResolvedValueOnce({ data: { data: [] } });
+    await expect(session.get(path)).resolves.toEqual({ data: [] });
+    const calls = mockRequest.mock.calls.map(([request]) => request);
+    expect(calls.filter((request) => request.path === path)).toHaveLength(2);
+    if (code === 'SESSION_EXPIRED') expect(calls[2].path).toBe('/api/v1/product-sessions/refresh');
+    if (code === 'REAUTH_REQUIRED') expect(calls[2].path).toBe('/accounts-portal/v1/enter');
   },
 );

@@ -204,6 +204,11 @@ describe('ModelPickerDrawer', () => {
       },
       models: [
         {
+          requires_login: true,
+          requires_plan: false,
+          standalone: false,
+          is_free: true,
+          activation_endpoint: '/api/v1/amd/desktop/entry',
           activation_required: true,
           available_features: ['agent'],
           capabilities: [],
@@ -247,7 +252,7 @@ describe('ModelPickerDrawer', () => {
         item: {
           model: { name: 'GPT-OSS' },
           isCloudFree: true,
-          offer: { reason: 'amd_activation_required' },
+          offer: { reason: 'activation_required' },
         },
       },
     ]);

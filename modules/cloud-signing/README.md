@@ -9,11 +9,6 @@ never returned to JavaScript. Its UTF-8 value is used directly, without the Cher
 iOS application metadata and Android string resources, outside Expo's public `extra` configuration.
 Android resource shrinking retains the dynamically resolved resource.
 
-The Cloud inference boundary uses this signer only after validating the configured origin,
-model, method and route. Product Session and device-signature authentication remain in place.
-For signed-in inference, missing credentials or older native clients return `null` and retain device-only requests;
-configured signing errors propagate instead of silently sending an unsigned application request.
-
 Guest model discovery signs `GET /v1/models?limit=1000` with the raw query in the third canonical
 field and a zero-byte body. Guest inference signs the final POST body. Both operations require
 the application signature and send no Product Bearer or device signature.

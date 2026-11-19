@@ -51,9 +51,9 @@ the identity source atomically, including when the subject and product profile s
 `CloudSession` exchanges the IdP pair at `/accounts-portal/v1/enter`, then uses the returned
 Product Session and device ID for signed control-plane reads and inference. Product credentials
 stay in memory. Access-token expiry rotates the refresh token once; a lost rotation response
-clears the cached session so the next attempt enters afresh. HTTP 401 invalidates the cached
-product token on ordinary Cloud reads and paid inference. The AMD inference path retries once only
-on a gateway replay rejection or a request to rebuild the Cloud session.
+clears the cached session so the next attempt enters afresh. On a signed read or inference request,
+`AUTH_REQUIRED` and `SESSION_EXPIRED` trigger token refresh, and `REAUTH_REQUIRED` re-enters with
+the device. Those errors and `REQUEST_REPLAYED` allow one retry with a fresh signature.
 
 `cloudDevice` stores an Ed25519 seed separately from the device identifier in device-only secure
 storage. Android uses `ANDROID_ID`; iOS uses a Keychain UUID. Machine-code HMAC follows the mobile
@@ -65,17 +65,8 @@ nonce. Each inference request generates a separate 32-byte random idempotency ke
 43 unpadded base64url characters; the same value is signed and sent in `Idempotency-Key`.
 `Cherry-Request-ID` remains a UUID. Redirects and cookies are disabled.
 
-When `CHERRY_CLOUD_CLIENT_SECRET` is provisioned, inference also sends application HMAC headers
-`X-Client-ID`, `X-Timestamp` and `X-Signature`. The canonical text follows the Cloud client helper:
-uppercase method, path, empty query, `cherry-studio`, Unix timestamp and the exact request body,
-joined with newlines. The native signer uses the unmodified UTF-8 Cloud credential, independently
-of the CherryAI diagnostics credential and suffix. `MAIN_VITE_CHERRY_CLOUD_CLIENT_SECRET` is an
-accepted build-name fallback. The credential stays out of Expo's public config and JavaScript;
-`modules/cloud-signing` owns native signing. For inference this applies only to the validated model routes,
-with existing Product Session and device-signature headers retained. Login and account reads are
-unchanged. Provisioning requires a new native build; older clients or builds without the optional
-credential retain device-only authentication for signed-in inference. Live gateway acceptance of the additional application
-headers has not been verified.
+Guest discovery and inference require the native HMAC credential. Member requests use the Product
+Session and device signature. The bytes used for signing are the bytes sent to the gateway.
 
 Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
 accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
@@ -139,21 +130,21 @@ responses. They use the same boundary without buffering the response or construc
 
 ## Signed model discovery and guest inference
 
-The model directory is `/v1/models` for both identities. On a CN guest install, Config Service
+The model directory is `/v1/models?limit=1000` for both identities. On a CN guest install, Config Service
 resolves the Cloud origin without creating a login registration. The client signs the zero-byte
 `GET /v1/models?limit=1000` with the native HMAC credential, including the exact raw query
 `limit=1000`. Guest inference signs the final POST body with the same application credential.
 Guest transport omits cookies, Product Bearer and device headers. The gateway rate-limits requests
 by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
 
-All published rows come from the current identity's directory, including locked models. An explicit
-`requires_login=false` permits anonymous inference for an eligible non-AMD model. Missing flags
-never grant guest access. Login replaces the guest snapshot and transport lifetime. Member requests
-fetch the directory using a Product Session and v2 device signature with a fresh nonce. Account and
-plan reads provide personal entitlements, quota and plan descriptions. Signed-in standalone models
-need no subscription. Only models admitted by the current identity and model rules enter the local
-managed provider; locked offers remain available to browse in memory. Invalid Product credentials
-do not fall back to a guest request.
+The directory supplies all published models and requires all 14 fields on each row. A guest may
+call an eligible model with `requires_login=false`. Login replaces the guest snapshot and transport.
+Member requests sign the same directory path and query using a Product Session and v2 device
+signature with a fresh nonce. The catalog owns the free badge (`is_free`) and the plan gate
+(`requires_plan`). A free plan model still needs an active account entitlement containing its ID.
+The picker checks login, plan coverage and activation in order. If activation is required and
+the endpoint is empty, the row is unavailable. Locked offers stay visible in the directory.
+Only admitted models enter the locally managed provider.
 
 ## AMD free models
 
@@ -165,7 +156,7 @@ display offered models that still require activation. The gateway applies AMD li
 AMD key.
 
 The AMD status read at `/api/v1/amd/desktop/status` determines the action offered when the user
-presses a model row. A temporary error leaves the row retryable. The registration flag comes from
+presses a model row. A 404 hides the AMD entry. A 503 leaves the row retryable. The registration flag comes from
 the current server status. Changes saved in the Cloud admin take effect on the next read.
 On confirmation, the same Product Session signs a zero-byte POST to that model’s same-origin `activation_endpoint`. The app
 opens the service-provided HTTPS URL in the system browser with its fragment intact. Linked users
@@ -178,12 +169,12 @@ intent handler opens chat using the installed app scheme. Development and previe
 The app shell refreshes status and models after browser return, so the picker can show newly
 available AMD models in the CherryAI group.
 
-AMD inference uses the existing streaming path and retries a gateway replay rejection with a fresh
-signature and the same idempotency key. It respects `Retry-After` and refreshes status or catalog on
-activation, credential, or availability errors. Pi treats the remaining gateway failures as terminal.
+All member inference uses the existing streaming path and keeps the idempotency key when re-signing
+a retry. It respects `Retry-After` and refreshes account or catalog on entitlement and availability
+errors. AMD activation and credential errors also refresh AMD status.
 AMD failures leave the Cherry login in place. A credential rejection prompts the user to check AMD
 status. The detail page offers re-verification when the server confirms it is needed.
-Test and production gateways can serve models in their own `CLOUD_API_AMD_MODELS` allowlists.
+Test and production gateways advertise their own model catalogs.
 Live usage and both response modes require a deployed environment and an activated account.
 
-Mobile follows the [Cloud model and AMD client protocol](https://github.com/CherryInternal/cherry-studio-cloud-api/blob/de4a4092cea9058ace7688871dda70b0fb9d9a4b/docs/amd-mobile-integration.md).
+Mobile follows the [Cloud model and AMD client protocol](https://github.com/CherryInternal/cherry-studio-cloud-api/blob/4f5e6946af0015da475f63a94fe59b9b8f83dd56/docs/amd-mobile-integration.md).

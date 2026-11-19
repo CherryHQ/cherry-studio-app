@@ -7,7 +7,10 @@ export const CLOUD_UNAVAILABLE_KEYS = {
   signed_out: 'account.notSignedIn',
   unavailable: 'chat.errorPart.reason.providerUnavailable',
   not_entitled: 'cloud.notEntitled',
-  amd_activation_required: 'cloud.amd.activationRequired',
+  account_disabled: 'cloud.accountDisabled',
+  reauth_required: 'account.login.reSignIn',
+  subscription_required: 'cloud.planRequired',
+  activation_required: 'cloud.activate',
 } as const satisfies Record<CloudUnavailableReason, string>;
 
 /** React binding for the account-scoped Cloud snapshot; credentials stay behind the module. */

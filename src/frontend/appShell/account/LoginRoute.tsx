@@ -21,6 +21,7 @@ export function LoginRoute() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{
+    purpose?: string;
     cancelTo?: string | string[];
     returnTo?: string | string[];
   }>();
@@ -32,7 +33,7 @@ export function LoginRoute() {
   const [entryPurpose] = useState<LoginPurpose>(
     state.isEnterprise && state.needsSignIn
       ? 'expired'
-      : state.isSignedIn || state.isEnterprise
+      : (state.isSignedIn && params.purpose !== 'sign-in') || state.isEnterprise
         ? 'switch'
         : 'sign-in',
   );

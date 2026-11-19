@@ -272,6 +272,7 @@ function ModelPickerDrawerContent({
     offers,
     press,
     refresh: refreshCloud,
+    signInAgain,
   } = useCloudModelBrowser(canOfferCherryAi && open, cloudUse);
   const { sessionId, agentId, workspaceDraftId, sshDraftId } =
     useGlobalSearchParams<ChatRouteParamsInput>();
@@ -333,10 +334,25 @@ function ModelPickerDrawerContent({
         <ModelPickerCherryAiEntry
           state={cloudState}
           restoring={accountState.isRestoringSession}
-          onRetry={refreshCloud}
+          onRetry={
+            cloudState.accountIssue === 'reauth_required'
+              ? () => {
+                  onClose();
+                  signInAgain(returnTo);
+                }
+              : refreshCloud
+          }
         />
       ) : undefined,
-    [accountState.isRestoringSession, cloudState, refreshCloud, showCloudEntry],
+    [
+      accountState.isRestoringSession,
+      cloudState,
+      refreshCloud,
+      showCloudEntry,
+      onClose,
+      returnTo,
+      signInAgain,
+    ],
   );
   const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =

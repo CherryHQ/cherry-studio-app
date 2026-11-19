@@ -68,21 +68,30 @@ export function AiFailureMessage({
     source && typeof source === 'object' && 'code' in source && typeof source.code === 'string'
       ? source.code.toLowerCase()
       : data.code?.toLowerCase();
-  const message =
-    fallbackMessage ??
-    t(
-      code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
-        ? 'cloud.amd.activationRequired'
-        : code === 'amd_credential_invalid'
-          ? 'cloud.amd.checkStatus'
-          : reasonCode === 'auth'
-            ? 'chat.errorPart.message.auth'
-            : reasonCode === 'context_length'
-              ? 'chat.errorPart.message.contextLength'
-              : retryable === true
-                ? 'chat.errorPart.retryable'
-                : 'chat.errorPart.message',
-    );
+  const cloudMessage =
+    code === 'account_disabled' || code === 'cloud_account_disabled'
+      ? 'cloud.accountDisabled'
+      : code === 'entitlement_inactive' || code === 'cloud_subscription_required'
+        ? 'cloud.planRequired'
+        : code === 'cloud_activation_required'
+          ? 'cloud.activate'
+          : undefined;
+  const message = cloudMessage
+    ? t(cloudMessage)
+    : (fallbackMessage ??
+      t(
+        code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
+          ? 'cloud.amd.activationRequired'
+          : code === 'amd_credential_invalid'
+            ? 'cloud.amd.checkStatus'
+            : reasonCode === 'auth'
+              ? 'chat.errorPart.message.auth'
+              : reasonCode === 'context_length'
+                ? 'chat.errorPart.message.contextLength'
+                : retryable === true
+                  ? 'chat.errorPart.retryable'
+                  : 'chat.errorPart.message',
+      ));
 
   return (
     <>

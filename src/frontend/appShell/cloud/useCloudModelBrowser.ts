@@ -8,7 +8,7 @@ import { CLOUD_UNAVAILABLE_KEYS, useCloud } from '@/frontend/hooks/useCloud';
 import { CLOUD_PROVIDER_NAME, type CloudModelUse } from '@/shared/contracts/cloud';
 
 import { getCloudModelOffers, type CloudModelOffer } from './cloudModelOffers';
-import { useCloudAmdModelAction } from './useCloudAmdModelAction';
+import { useCloudModelActivation } from './useCloudModelActivation';
 
 export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
   const { cloud, state } = useCloud();
@@ -16,7 +16,7 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const router = useRouter();
-  const amdAction = useCloudAmdModelAction();
+  const activate = useCloudModelActivation();
   const canBrowse = enabled && !accountState.isEnterprise && !accountState.isRestoringSession;
   const refresh = useCallback(() => {
     if (canBrowse) void cloud.refreshProvider().catch(() => {});
@@ -26,9 +26,16 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
   }, [canBrowse, cloud]);
   const offers = useMemo(() => getCloudModelOffers(state, use), [state, use]);
 
+  const signInAgain = useCallback(
+    (destination: string) => {
+      router.push(accountSignInHref(destination, { purpose: 'sign-in', cancelTo: destination }));
+    },
+    [router],
+  );
+
   const explain = useCallback(
     (offer: CloudModelOffer) => {
-      if (offer.reason === 'subscription_required') {
+      if (offer.reason === 'subscription_required' && offer.plans.length) {
         return t('cloud.subscriptionRequired', { plans: offer.plans.join(' / ') });
       }
       return offer.reason ? t(CLOUD_UNAVAILABLE_KEYS[offer.reason]) : undefined;
@@ -41,14 +48,22 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
       const current = account.getState();
       if (current.isRestoringSession || current.isEnterprise) return;
       const offer = getCloudModelOffers(cloud.getState(), use).get(id);
-      if ((!current.isSignedIn || current.needsSignIn) && offer?.reason === 'signed_out') {
+      if (
+        (offer?.reason === 'signed_out' && (!current.isSignedIn || current.needsSignIn)) ||
+        offer?.reason === 'reauth_required'
+      ) {
         const destination = resume ? rememberCloudModelTap(returnTo, id) : returnTo;
         close?.();
-        router.push(accountSignInHref(destination, { cancelTo: returnTo }));
+        router.push(
+          accountSignInHref(destination, {
+            cancelTo: returnTo,
+            purpose: offer.reason === 'reauth_required' ? 'sign-in' : undefined,
+          }),
+        );
         return;
       }
-      if (offer?.isAmd && (!offer.reason || offer.reason === 'amd_activation_required')) {
-        void amdAction(id, close);
+      if (offer?.reason === 'activation_required' || offer?.canViewUsage) {
+        void activate(id, close);
         return;
       }
       if (!offer || offer.reason) {
@@ -61,7 +76,7 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
         });
       }
     },
-    [account, alert, amdAction, cloud, explain, router, t, use],
+    [account, alert, activate, cloud, explain, router, t, use],
   );
-  return { state, offers, refresh, press, explain, accountState };
+  return { state, offers, refresh, press, accountState, signInAgain };
 }
