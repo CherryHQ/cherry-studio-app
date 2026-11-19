@@ -194,9 +194,10 @@ export class CloudSession {
         });
       } catch (error) {
         this.assertCurrent();
-        // A lost refresh response may have rotated its token; the next attempt enters afresh.
+        // A lost refresh response may have rotated its token; fall back to device entry on 401.
         this.tokens = undefined;
-        throw error;
+        if (!isHttpError(error) || error.status !== 401 || error.code === 'ACCOUNT_DISABLED')
+          throw error;
       }
     }
     const pair = await this.source.getTokens(this.identity.key);

@@ -74,7 +74,7 @@ export function AiFailureMessage({
       : code === 'entitlement_inactive' || code === 'cloud_subscription_required'
         ? 'cloud.planRequired'
         : code === 'cloud_activation_required'
-          ? 'cloud.activate'
+          ? 'cloud.activationRequired'
           : undefined;
   const message = cloudMessage
     ? t(cloudMessage)

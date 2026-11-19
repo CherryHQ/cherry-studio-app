@@ -1186,6 +1186,16 @@ test('guest inference honors the gateway IP cooldown across model IDs', async ()
     await expect(send(model.id)).rejects.toMatchObject({ statusCode: 429 });
     await expect(send('another')).rejects.toMatchObject({ statusCode: 429 });
     expect(mockInference).toHaveBeenCalledTimes(1);
+    const catalogCalls = mockPublicRequest.mock.calls.length;
+    const projectCalls = mockProject.mock.calls.length;
+    await expect(runtime.refresh()).rejects.toMatchObject({ statusCode: 429 });
+    expect(mockPublicRequest).toHaveBeenCalledTimes(catalogCalls);
+    expect(mockProject).toHaveBeenCalledTimes(projectCalls);
+    expect(runtime.getState()).toMatchObject({
+      guestCatalog: 'ready',
+      isRefreshing: false,
+      models: [model, { ...model, id: 'another' }],
+    });
   } finally {
     await runtime._doStop();
   }

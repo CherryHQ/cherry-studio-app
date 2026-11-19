@@ -37,9 +37,10 @@ group without sync, add or endpoint actions. A model opens the same details page
 locked and without its delete action.
 
 Community profiles count CherryAI as a built-in service at the top of the enabled group.
-Opening it while signed out pushes the app login route. Success opens the CherryAI model page and
-cancel returns to the provider list. Rows in the current account's catalog use the standard free
-and vision badges. An AMD model that needs activation has a lock and opens the confirmation
+Opening it opens the CherryAI model page directly, showing the signed guest or account catalog
+with the standard free and vision badges. Tapping a login-required row while signed out pushes
+the app login route; success returns to the CherryAI model page and resumes that row, while cancel
+returns without resuming. An AMD model that needs activation has a lock and opens the confirmation
 dialog when pressed. Available AMD model rows link to their web account and usage actions.
 The app refreshes the catalog and status on browser return.
 

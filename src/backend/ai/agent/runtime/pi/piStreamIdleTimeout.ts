@@ -74,7 +74,8 @@ export function withPiStreamIdleTimeout(
             terminalFetchError =
               error instanceof Error &&
               facts?.retryable === false &&
-              typeof (facts.statusCode ?? facts.status) === 'number'
+              (typeof (facts.statusCode ?? facts.status) === 'number' ||
+                typeof facts.code === 'string')
                 ? error
                 : undefined;
           },

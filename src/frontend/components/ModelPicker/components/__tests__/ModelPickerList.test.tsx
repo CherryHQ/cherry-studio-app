@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
@@ -149,7 +149,7 @@ describe('ModelPickerList', () => {
         );
       });
 
-      const row = renderer?.root.findByType(Pressable);
+      const row = renderer?.root.findByProps({ accessibilityRole: 'button' });
       expect(row?.findAllByType(Text).map((text) => text.props.children)).toEqual([
         'GPT-OSS',
         'models.badge.free',

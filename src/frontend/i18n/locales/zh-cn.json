@@ -775,6 +775,7 @@
   "chat.webSearch.searching": "搜索中",
   "cloud.accountDisabled": "此 Cherry 账号已停用。",
   "cloud.activate": "开通",
+  "cloud.activationRequired": "请在 CherryAI 开通此模型后使用。",
   "cloud.amd.activate": "开通 AMD 免费模型？",
   "cloud.amd.activationPromptDescription": "此模型需在 CherryAI 网页开通，请使用同一个 Cherry 账号。",
   "cloud.amd.activationRequired": "请在 CherryAI 开通 AMD 免费模型后使用此模型。",

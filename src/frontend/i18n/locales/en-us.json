@@ -784,6 +784,7 @@
   "chat.webSearch.searching": "Searching",
   "cloud.accountDisabled": "This Cherry account has been disabled.",
   "cloud.activate": "Activate",
+  "cloud.activationRequired": "Activate this model in CherryAI to use it.",
   "cloud.amd.activate": "Activate free AMD models?",
   "cloud.amd.activationPromptDescription": "Activate this model on the CherryAI website using the same Cherry account.",
   "cloud.amd.activationRequired": "Activate AMD free models in CherryAI to use this model.",

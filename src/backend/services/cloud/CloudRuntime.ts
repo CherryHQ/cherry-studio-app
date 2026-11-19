@@ -222,8 +222,16 @@ export class CloudRuntime extends BaseService implements CloudModule {
       this.publish(next);
     } catch (error) {
       signal.throwIfAborted();
-      if (isHttpError(error) && error.status === 429)
-        this.rememberGuestRateLimit(error.retryAfter ?? null);
+      const http429 = isHttpError(error) && error.status === 429;
+      if (http429) this.rememberGuestRateLimit(error.retryAfter ?? null);
+      if (
+        (http429 || (error instanceof CloudGatewayRequestError && error.statusCode === 429)) &&
+        this.snapshot.guestCatalog === 'ready' &&
+        this.guestOrigin
+      ) {
+        this.publish({ ...this.snapshot, isRefreshing: false });
+        throw error;
+      }
       this.guestOrigin = undefined;
       this.modelRefreshedAt = 0;
       this.publish({ ...EMPTY, guestCatalog: 'error' });
@@ -284,7 +292,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
     if (!this.snapshot.amd || this.snapshot.amd.phase === 'error')
       this.publish({ ...this.snapshot, amd: { phase: 'loading' } });
     try {
-      if (!this.session) await this.refreshState('admission');
+      if (!this.session || this.snapshot.phase === 'loading') await this.refreshState('admission');
       signal.throwIfAborted();
       const session = this.session;
       if (!session) throw new CloudAccessError('unavailable');

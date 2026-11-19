@@ -177,3 +177,45 @@ test.each(['SESSION_EXPIRED', 'REAUTH_REQUIRED', 'REQUEST_REPLAYED'])(
     if (code === 'REAUTH_REQUIRED') expect(calls[2].path).toBe('/accounts-portal/v1/enter');
   },
 );
+
+test('falls back to device entry when refresh returns 401, except for disabled accounts', async () => {
+  const { session } = setup();
+  mockRequest
+    .mockResolvedValueOnce(entry(1))
+    .mockRejectedValueOnce(
+      Object.assign(new Error('SESSION_EXPIRED'), {
+        name: 'HttpError',
+        status: 401,
+        code: 'SESSION_EXPIRED',
+      }),
+    )
+    .mockResolvedValueOnce(entry(3600));
+  await session.headers('GET', '/api/v1/account');
+  await expect(session.headers('GET', '/api/v1/account')).resolves.toMatchObject({
+    authorization: 'Bearer cloud-access',
+  });
+  expect(mockRequest.mock.calls.map(([request]) => request.path)).toEqual([
+    '/accounts-portal/v1/enter',
+    '/api/v1/product-sessions/refresh',
+    '/accounts-portal/v1/enter',
+  ]);
+
+  const disabled = setup();
+  mockRequest.mockReset();
+  mockRequest.mockResolvedValueOnce(entry(1)).mockRejectedValueOnce(
+    Object.assign(new Error('ACCOUNT_DISABLED'), {
+      name: 'HttpError',
+      status: 401,
+      code: 'ACCOUNT_DISABLED',
+    }),
+  );
+  await disabled.session.headers('GET', '/api/v1/account');
+  await expect(disabled.session.headers('GET', '/api/v1/account')).rejects.toMatchObject({
+    status: 401,
+    code: 'ACCOUNT_DISABLED',
+  });
+  expect(mockRequest.mock.calls.map(([request]) => request.path)).toEqual([
+    '/accounts-portal/v1/enter',
+    '/api/v1/product-sessions/refresh',
+  ]);
+});
