@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { ESLint } from 'eslint';
@@ -244,5 +245,78 @@ describe('resolved architecture boundaries', () => {
         expect(await schedulingErrors(filePath, source)).toEqual([]);
       },
     );
+  });
+
+  describe('page useEffect guardrail', () => {
+    async function pageEffectErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter((message) =>
+        ['no-restricted-imports', 'no-restricted-properties'].includes(message.ruleId ?? ''),
+      );
+    }
+
+    it.each([
+      [
+        'src/frontend/features/chat/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      ['src/app/probe.ts', "import { useEffect } from 'react'; export const ref = useEffect;"],
+      [
+        'src/frontend/features/chat/probe.ts',
+        "import React from 'react'; export const ref = React.useEffect;",
+      ],
+      // Verify flat-config rule composition keeps retiredImports, tombstones, toSorted, and timers active.
+      ['src/frontend/features/chat/probe.ts', "import 'heroui-native/toast';"],
+      ['src/frontend/features/chat/probe.ts', "import '@/features/chat';"],
+    ])(
+      'rejects new page useEffect and preserves existing restrictions in %s',
+      async (filePath, source) => {
+        expect(await pageEffectErrors(filePath, source)).not.toHaveLength(0);
+      },
+    );
+
+    it.each([
+      [
+        'src/frontend/hooks/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/appShell/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/components/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/features/chat/__tests__/probe.test.tsx',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+    ])('allows useEffect in shared frontend owners and tests (%s)', async (filePath, source) => {
+      expect(await pageEffectErrors(filePath, source)).toEqual([]);
+    });
+
+    it('keeps legacyPageUseEffectFiles strictly ratcheted to existing files that still use useEffect', () => {
+      const guardrail = (eslintConfig as { name?: string; ignores?: string[] }[]).find(
+        (entry) => entry.name === 'page-use-effect-guardrail',
+      );
+      expect(guardrail).toBeDefined();
+
+      const legacyFiles = (guardrail?.ignores ?? []).filter((entry) => entry.startsWith('src/'));
+      expect(legacyFiles.length).toBeGreaterThan(0);
+
+      const staleEntries = legacyFiles.filter((relPath) => {
+        const fullPath = path.join(root, relPath);
+        if (!fs.existsSync(fullPath)) return true;
+        const stripped = fs
+          .readFileSync(fullPath, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*$/gm, '');
+        return !/\buseEffect\b/.test(stripped);
+      });
+
+      expect(staleEntries).toEqual([]);
+    });
   });
 });
