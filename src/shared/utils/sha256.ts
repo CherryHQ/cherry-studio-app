@@ -1,6 +1,8 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
+import { yieldToRuntime } from './yieldToRuntime';
+
 const HASH_CHUNK_BYTES = 64 * 1024;
 
 /** Returns the lowercase hexadecimal SHA-256 digest of `data`. */
@@ -24,12 +26,12 @@ export async function sha256HexChunks(chunks: Iterable<Uint8Array>): Promise<str
       processed += end - offset;
       offset = end;
       if (processed === HASH_CHUNK_BYTES) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await yieldToRuntime();
         processed = 0;
       }
     }
   }
   // Small files must also let input and rendering run between consecutive package digests.
-  if (processed) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  if (processed) await yieldToRuntime();
   return bytesToHex(hash.digest());
 }

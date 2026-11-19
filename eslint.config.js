@@ -393,6 +393,28 @@ const sharedFrontendDirectories = [
   'src/frontend/utils/**/*.{ts,tsx}',
 ];
 
+const toSortedRestriction = {
+  property: 'toSorted',
+  message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
+};
+
+const pageRawSchedulingMessage = {
+  setTimeout:
+    'Do not call raw setTimeout in page code. Use useDebouncedValue, useTransientValue, createDebouncedAction, createScheduledFlush, or yieldToRuntime from shared building blocks.',
+  setInterval:
+    'Do not call raw setInterval in page code. Use useElapsedTime or a shared hook in src/frontend/hooks.',
+  requestAnimationFrame:
+    'Do not call raw requestAnimationFrame in page code. Prefer declarative layout/state, or use useNextFrame / createFrameLoop.',
+};
+
+const pageRawSchedulingPropertyRestrictions = ['globalThis', 'window', 'global'].flatMap((object) =>
+  Object.entries(pageRawSchedulingMessage).map(([property, message]) => ({
+    object,
+    property,
+    message,
+  })),
+);
+
 module.exports = defineConfig([
   expoConfig,
   {
@@ -402,13 +424,7 @@ module.exports = defineConfig([
       'react-hooks/immutability': 'off',
       // Jest runs on Node, which has toSorted, but the app's Hermes engine does not,
       // so a call passes tests and then throws on device.
-      'no-restricted-properties': [
-        'error',
-        {
-          property: 'toSorted',
-          message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
-        },
-      ],
+      'no-restricted-properties': ['error', toSortedRestriction],
     },
   },
   {
@@ -565,6 +581,25 @@ module.exports = defineConfig([
     [frontendLayer, frontendImplementationPackages],
     frontendPageZones,
   ),
+  {
+    files: ['src/app/**/*.{ts,tsx}', 'src/frontend/features/**/*.{ts,tsx}'],
+    ignores: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...Object.entries(pageRawSchedulingMessage).map(([name, message]) => ({
+          name,
+          message,
+        })),
+      ],
+      // Flat-config blocks replace matching rules, so retain the global toSorted guard here.
+      'no-restricted-properties': [
+        'error',
+        toSortedRestriction,
+        ...pageRawSchedulingPropertyRestrictions,
+      ],
+    },
+  },
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
     ['src/shared/{contracts,data,utils}/**/*.{ts,tsx}'],

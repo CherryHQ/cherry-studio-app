@@ -9,6 +9,7 @@ import {
 import { File, type FileHandle, FileMode } from 'expo-file-system';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
 
 const logger = loggerService.withContext('FilePreviewBridge');
 
@@ -45,10 +46,6 @@ function openReadOnly(uri: string): FileHandle {
   return new File(uri).open(FileMode.ReadOnly);
 }
 
-function nextTask(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 export function encodeBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -72,7 +69,7 @@ export class FilePreviewBridge {
 
   constructor(private readonly options: FilePreviewBridgeOptions) {
     this.openFile = options.openFile ?? openReadOnly;
-    this.yieldToEventLoop = options.yieldToEventLoop ?? nextTask;
+    this.yieldToEventLoop = options.yieldToEventLoop ?? yieldToRuntime;
   }
 
   handle(message: BridgeRequest): void {

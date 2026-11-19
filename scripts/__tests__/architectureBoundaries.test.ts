@@ -202,4 +202,47 @@ describe('resolved architecture boundaries', () => {
       expect(await boundaryErrors(filePath, `import '${moduleId}';`)).toEqual([]);
     });
   });
+
+  describe('page raw timer and animation-frame guardrails', () => {
+    async function schedulingErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter((message) =>
+        ['no-restricted-globals', 'no-restricted-properties'].includes(message.ruleId ?? ''),
+      );
+    }
+
+    it.each([
+      ['src/frontend/features/chat/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      ['src/frontend/features/chat/probe.ts', 'export const id = setInterval(() => {}, 10);'],
+      ['src/frontend/features/chat/probe.ts', 'export const id = requestAnimationFrame(() => {});'],
+      ['src/app/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      [
+        'src/frontend/features/chat/probe.ts',
+        'export const id = globalThis.setTimeout(() => {}, 10);',
+      ],
+      [
+        'src/frontend/features/chat/probe.ts',
+        'export const id = window.requestAnimationFrame(() => {});',
+      ],
+      ['src/frontend/features/chat/probe.ts', 'export const sorted = [1, 2].toSorted();'],
+    ])('rejects restricted timer/frame or toSorted usage in %s: %s', async (filePath, source) => {
+      expect(await schedulingErrors(filePath, source)).not.toHaveLength(0);
+    });
+
+    it.each([
+      ['src/frontend/hooks/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      ['src/frontend/utils/probe.ts', 'export const id = requestAnimationFrame(() => {});'],
+      ['src/shared/utils/probe.ts', 'export const id = setTimeout(() => {}, 0);'],
+      [
+        'src/frontend/features/chat/__tests__/probe.test.ts',
+        'export const id = setTimeout(() => {}, 10);',
+      ],
+    ])(
+      'allows raw scheduling primitives in shared owners and tests (%s)',
+      async (filePath, source) => {
+        expect(await schedulingErrors(filePath, source)).toEqual([]);
+      },
+    );
+  });
 });

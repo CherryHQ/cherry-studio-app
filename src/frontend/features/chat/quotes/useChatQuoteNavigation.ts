@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { MessageListHandle } from '@/frontend/components/Message';
 import { useApiClient } from '@/frontend/data';
+import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { useAgentChatClient } from '../runtime/ChatProvider';
@@ -32,43 +33,45 @@ export function useChatQuoteNavigation(sessionId?: string, routeRequestId?: stri
   const { client } = useAgentChatClient();
   const sequence = useRef(0);
   const pending = useRef<Request | undefined>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const currentScope = useRef(sessionId);
+  const scopeKey = JSON.stringify([sessionId, routeRequestId]);
   const [navigation, setNavigation] = useState<MessageNavigation>();
-  const [highlight, setHighlight] = useState<string>();
+  const {
+    value: highlight,
+    show: showHighlight,
+    clear: clearHighlight,
+  } = useTransientValue<string>(1_200, scopeKey);
   const cancelWork = useCallback(() => {
     pending.current?.controller.abort();
     pending.current?.resolve({ state: 'cancelled' });
     pending.current = undefined;
-    clearTimeout(timer.current);
   }, []);
   const cancel = useCallback(() => {
     cancelWork();
-    setHighlight(undefined);
-  }, [cancelWork]);
-  const scopeKey = JSON.stringify([sessionId, routeRequestId]);
+    clearHighlight();
+  }, [cancelWork, clearHighlight]);
   const [scope, setScope] = useState(scopeKey);
   if (scope !== scopeKey) {
     setScope(scopeKey);
     setNavigation(undefined);
-    setHighlight(undefined);
   }
   useLayoutEffect(() => {
     currentScope.current = sessionId;
     cancelWork();
     return cancelWork;
   }, [cancelWork, sessionId, routeRequestId]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const restore = useCallback((request: Request) => {
-    pending.current = undefined;
-    setHighlight(request.sourceMessageId);
-    timer.current = setTimeout(() => setHighlight(undefined), 1_200);
-    request.resolve({
-      state: 'restored',
-      messageId: request.sourceMessageId,
-      requestId: request.requestId,
-    });
-  }, []);
+  const restore = useCallback(
+    (request: Request) => {
+      pending.current = undefined;
+      showHighlight(request.sourceMessageId);
+      request.resolve({
+        state: 'restored',
+        messageId: request.sourceMessageId,
+        requestId: request.requestId,
+      });
+    },
+    [showHighlight],
+  );
   const openMessage = useCallback(
     (
       input: { sourceMessageId: string; requestId: string },
