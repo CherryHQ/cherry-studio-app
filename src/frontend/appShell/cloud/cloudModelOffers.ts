@@ -46,6 +46,8 @@ export function getCloudModelTapNotice(offer: CloudModelOffer | undefined) {
       return 'cloud.accountDisabled';
     case 'not_entitled':
       return 'cloud.notEntitled';
+    case 'subscription_required':
+      return 'cloud.planRequired';
     default:
       return undefined;
   }

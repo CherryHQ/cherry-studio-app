@@ -1,4 +1,3 @@
-import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
@@ -12,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View, type ViewInstance } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/Avatar';
+import { CloudModelLock, getCloudModelLockLabelKey } from '@/frontend/components/CloudModelLock';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import {
@@ -388,10 +388,15 @@ const ModelPickerRow = memo(function ModelPickerRow({
     else onSelect(item);
   }, [item, isOffer, onCloudOffer, onSelect]);
   const badges = showBadges ? getModelPickerBadges(item.model, item.isCloudFree) : [];
+  const lockLabelKey = isOffer ? getCloudModelLockLabelKey(item.offer) : undefined;
+  const lockLabel = lockLabelKey ? t(lockLabelKey) : undefined;
   const accessibilityLabel = [
     item.model.name,
     ...badges.map((badge) => t(modelPickerBadgeLabelKeys[badge])),
-  ].join(', ');
+    lockLabel,
+  ]
+    .filter(Boolean)
+    .join(', ');
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -440,15 +445,15 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </View>
         ) : null}
       </View>
-      <View className="size-6 shrink-0 items-center justify-center">
-        {isOffer ? (
-          <LockIcon className="size-3.5 text-muted-foreground" />
-        ) : multiple ? (
-          <SelectionIndicator className="size-5" selected={isSelected} />
-        ) : isSelected ? (
-          <SelectionIndicator className="size-5" selected />
-        ) : null}
-      </View>
+      {isOffer ? (
+        <CloudModelLock label={lockLabel} />
+      ) : (
+        <View className="size-6 shrink-0 items-center justify-center">
+          {multiple || isSelected ? (
+            <SelectionIndicator className="size-5" selected={isSelected} />
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 });

@@ -145,11 +145,11 @@ keep the full-width avatar/name/disclosure row; tapping anywhere on that row onl
 group. The bottom dock has a New chat row above the profile/settings row with its avatar and
 nickname. In a wide window the Files/library pane takes the sidebar column, so the dock is not
 visible beside that pane. Community accounts with a confirmed, currently effective paid subscription
-also show the dashed plan badge beside the nickname. Opening the sidebar refreshes subscription and
-quota in the background, including for accounts that have yet to show the badge. A permanent sidebar
-refreshes stale data when it becomes visible in the foreground. The badge keeps the last confirmed
-values during a refresh or temporary failure while the entitlement is still effective. Remaining
-percentages use the account quota snapshot, matched to confirmed plan metadata by allocation ID.
+also show the dashed plan badge beside the nickname. Opening the overlay displays the Cloud service's
+last confirmed snapshot without triggering a refresh. A permanent sidebar refreshes stale data when it
+becomes visible in the foreground. The badge keeps the last confirmed values during a refresh or
+temporary failure while the entitlement is still effective. Remaining percentages use the account
+quota snapshot, matched to confirmed plan metadata by allocation ID.
 Exhausted quotas show 0%.
 The badge cycles the plan name for four seconds and each quota for three seconds through CherryUI
 `TextAnimation.Rotating`. Rotation stops while the drawer is hidden, the app is backgrounded, or

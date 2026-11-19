@@ -65,5 +65,12 @@ export interface SshModule {
   /** Copies a user-selected draft binding to the session allocated by its first send. */
   attachDraftTarget(draftId: string, sessionId: string): Promise<void>;
   getTarget(sessionId: string): SshTarget | null;
+  /** Returns the previous selection only when it is still valid and needs confirmation. */
+  getRememberedTarget(sessionId: string): Promise<SshProfile | null>;
+  decideRememberedTarget(
+    sessionId: string,
+    reference: SshReference,
+    decision: 'restore' | 'forget',
+  ): Promise<void>;
   subscribeTargets(listener: () => void): () => void;
 }

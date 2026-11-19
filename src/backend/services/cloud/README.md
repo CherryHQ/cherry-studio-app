@@ -115,9 +115,10 @@ responses. They use the same boundary without buffering the response or construc
   keeping their IDs/names for history; user-configured providers and conversations remain.
 - Cold start checks subscription display once after account restoration. A newly signed-in or
   replaced account loads its own state, while signed-out installations fetch the HMAC model directory
-  without querying personal account endpoints. Opening the sidebar triggers a silent refresh. A permanent sidebar checks when it
-  becomes visible in the foreground if the snapshot is stale. Concurrent reads share the
-  account/model request. A transient background failure preserves the previous confirmed state.
+  without querying personal account endpoints. The sidebar overlay reads the current snapshot on
+  open. A permanent sidebar checks when it becomes visible in the foreground if the snapshot is
+  stale. Concurrent reads share the account/model request. A transient background failure preserves
+  the previous confirmed state.
 - Sending revalidates stale model access. Inference completion or cancellation marks the sidebar
   quota stale, including if an earlier read is still in progress. The gateway decides whether
   quota permits the request.

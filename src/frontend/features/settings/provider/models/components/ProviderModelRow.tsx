@@ -58,7 +58,7 @@ export function ProviderModelRow({
   model: ModelBadgeSource & Pick<Model, 'id'>;
   isCloudFree?: boolean;
   /** Inert mark inside the row's press target. */
-  endMark?: ReactNode;
+  endMark?: { content: ReactNode; label?: string };
   onPress?: () => void;
   disabled?: boolean;
   accessibilityHint?: string;
@@ -85,7 +85,7 @@ export function ProviderModelRow({
     (badge) => variant === 'management' || badge === 'free',
   );
   const accessibilityDetails = badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
-  const accessibilityLabel = [model.name, statusLabel, ...accessibilityDetails]
+  const accessibilityLabel = [model.name, statusLabel, ...accessibilityDetails, endMark?.label]
     .filter(Boolean)
     .join(', ');
   const rowClassName = [
@@ -125,7 +125,7 @@ export function ProviderModelRow({
           ))}
         </View>
       ) : null}
-      {endMark}
+      {endMark?.content}
     </>
   );
 
