@@ -31,9 +31,6 @@ AI usage, voice, data management, privacy, and diagnostics.
 
 ## Known Pitfalls
 
-- `.maestro/flows/appearance-persistence.yaml` still references legacy `onboarding-skip` and
-  `settings-appearance` IDs and needs device-verified updating to the current settings entry
-  structure.
 - `.maestro/flows/appearance-persistence.yaml` runs `clearState`; run it on a temporary workspace
   device rather than the shared resident device.
 - Always verify preference persistence after a full app relaunch (`--relaunch` or `stopApp` +
