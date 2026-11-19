@@ -131,7 +131,7 @@ describe('deviceVerify CLI helpers', () => {
     fs.mkdirSync(path.join(root, 'src', 'frontend', 'features', 'chat'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'src', 'frontend', 'features', 'chat', 'ChatScreen.tsx'),
-      'export const a = <View testID="chat-send-button" />; export const b = <View testID={`row-${id}`} />;',
+      "export const a = <View testID=\"chat-send-button\" />; export const b = <View testID={`row-${id}`} />; export const c = <View testID={ok ? 'chat-stop' : 'chat-send'} />;",
       'utf8',
     );
     fs.mkdirSync(path.join(root, '.maestro', 'flows'), { recursive: true });
@@ -147,7 +147,7 @@ describe('deviceVerify CLI helpers', () => {
       [
         '# Chat',
         '## User Entry',
-        '- Tap `testID:chat-send-button` or `testID:row-42`',
+        '- Tap `testID:chat-send-button`, `testID:row-42`, or `testID:chat-stop`',
         '## Verification Driver',
         '- `.maestro/flows/chat.yaml`',
         '## Observable Acceptance',
@@ -161,7 +161,7 @@ describe('deviceVerify CLI helpers', () => {
     const passing = checkFeatureMap(root);
     expect(passing.issues).toEqual([]);
     expect(passing.checkedPages).toBe(1);
-    expect(passing.checkedTestIds).toBe(2);
+    expect(passing.checkedTestIds).toBe(3);
     expect(passing.checkedFlows).toBe(1);
 
     // Introduce drift: stale testID, missing flow, missing section, unindexed file.

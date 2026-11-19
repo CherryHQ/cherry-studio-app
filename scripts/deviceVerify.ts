@@ -292,13 +292,20 @@ function collectSourceTestIds(rootDir: string): Set<string> {
         walk(fullPath);
       } else if (/\.(ts|tsx)$/u.test(entry.name) && !/\.test\.(ts|tsx)$/u.test(entry.name)) {
         const content = fs.readFileSync(fullPath, 'utf8');
+        const addToken = (raw: string) => {
+          const prefix = raw.includes('${') ? raw.slice(0, raw.indexOf('${')) : raw;
+          if (prefix) ids.add(prefix);
+        };
         for (const match of content.matchAll(
           /\btestID\s*(?:=|:)\s*(?:\{\s*)?['"`]([A-Za-z0-9_.:/${}-]+)['"`]/gu,
         )) {
-          const raw = match[1];
-          // Store exact literal testIDs and static prefixes before template interpolation.
-          const prefix = raw.includes('${') ? raw.slice(0, raw.indexOf('${')) : raw;
-          if (prefix) ids.add(prefix);
+          addToken(match[1]);
+        }
+        // Also extract string literals inside JSX expressions such as `testID={cond ? 'a' : 'b'}`.
+        for (const exprMatch of content.matchAll(/\btestID\s*=\s*\{([^}\n]+)\}/gu)) {
+          for (const literalMatch of exprMatch[1].matchAll(/['"`]([A-Za-z0-9_.:/${}-]+)['"`]/gu)) {
+            addToken(literalMatch[1]);
+          }
         }
       }
     }
