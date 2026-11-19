@@ -14,11 +14,11 @@ selection, notification permission, and device permissions into the main chat co
 
 ## Verification Driver
 
-- Deterministic Maestro flow (fresh install path; see Known Pitfalls regarding drifted selectors):
+- Deterministic Maestro flow (fresh install path, using shared `.maestro/flows/_skip-onboarding.yaml`):
   - `.maestro/flows/onboarding-skip.yaml`
   - Run via `pnpm verify:device run --flow .maestro/flows/onboarding-skip.yaml --platform ios --device <UDID> --dev-client-url "<DEV_CLIENT_URL>"`
-- Interactive multi-step check: `agent-device` on a temporary device (never clear state on the
-  resident test device without explicit authorization).
+- Interactive fallback: `agent-device` on a temporary device only when diagnosing a new screen
+  (prefer Maestro flows for repeated verification to minimize agent token usage).
 
 ## Observable Acceptance
 
@@ -31,10 +31,8 @@ selection, notification permission, and device permissions into the main chat co
 
 ## Known Pitfalls
 
-- `.maestro/flows/onboarding-skip.yaml` still references legacy `onboarding-skip` and
-  `chat-composer-input` IDs from an earlier onboarding layout and needs device-verified updating to
-  the current multi-step IDs (`testID:onboarding-start` / `testID:onboarding-skip-login` /
-  `testID:chat-composer`).
+- `pnpm verify:features` validates every `id:` selector inside `.maestro/flows/*.yaml` in PR CI;
+  whenever onboarding steps change, update `.maestro/flows/_skip-onboarding.yaml` in the same PR.
 - `.maestro/flows/onboarding-skip.yaml` executes `clearState`; run it on a temporary workspace
   device so shared resident-device configuration is preserved.
 - OS notification/permission alerts are native system sheets outside React Native's view hierarchy;

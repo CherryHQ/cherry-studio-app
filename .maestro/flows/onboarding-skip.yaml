@@ -9,15 +9,6 @@ name: Fresh install skips onboarding
       visible: "Open|打开"
     commands:
       - tapOn: "Open|打开"
-- extendedWaitUntil:
-    visible:
-      id: onboarding-welcome
-    timeout: 30000
-- tapOn:
-    id: onboarding-skip
-- extendedWaitUntil:
-    visible:
-      id: chat-composer
-    timeout: 30000
+- runFlow: _skip-onboarding.yaml
 - assertVisible:
-    id: chat-composer-input
+    id: chat-composer-send

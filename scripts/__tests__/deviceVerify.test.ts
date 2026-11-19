@@ -135,7 +135,11 @@ describe('deviceVerify CLI helpers', () => {
       'utf8',
     );
     fs.mkdirSync(path.join(root, '.maestro', 'flows'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.maestro', 'flows', 'chat.yaml'), 'appId: test\n', 'utf8');
+    fs.writeFileSync(
+      path.join(root, '.maestro', 'flows', 'chat.yaml'),
+      'appId: test\n---\n- tapOn:\n    id: chat-send-button\n',
+      'utf8',
+    );
     fs.mkdirSync(path.join(root, 'docs', 'features'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'docs', 'features', 'README.md'),
@@ -163,8 +167,14 @@ describe('deviceVerify CLI helpers', () => {
     expect(passing.checkedPages).toBe(1);
     expect(passing.checkedTestIds).toBe(3);
     expect(passing.checkedFlows).toBe(1);
+    expect(passing.checkedMaestroIds).toBe(1);
 
-    // Introduce drift: stale testID, missing flow, missing section, unindexed file.
+    // Introduce drift: stale testID, missing flow, stale Maestro selector, missing section, unindexed file.
+    fs.writeFileSync(
+      path.join(root, '.maestro', 'flows', 'drifted.yaml'),
+      'appId: test\n---\n- tapOn:\n    id: retired-button-id\n',
+      'utf8',
+    );
     fs.writeFileSync(
       path.join(root, 'docs', 'features', 'broken.md'),
       '# Broken\n## User Entry\n- `testID:does-not-exist`\n- `.maestro/flows/missing.yaml`\n',
@@ -177,6 +187,7 @@ describe('deviceVerify CLI helpers', () => {
         'missing-section',
         'missing-testid',
         'missing-flow',
+        'missing-maestro-testid',
       ]),
     );
   });

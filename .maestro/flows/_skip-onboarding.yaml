@@ -1,0 +1,48 @@
+appId: ${APP_ID}
+name: Shared helper - advance fresh onboarding to chat
+---
+- extendedWaitUntil:
+    visible:
+      id: onboarding-welcome
+    timeout: 30000
+- tapOn:
+    id: onboarding-start
+- runFlow:
+    when:
+      visible:
+        id: onboarding-privacy-continue
+    commands:
+      - tapOn:
+          id: onboarding-privacy-continue
+- runFlow:
+    when:
+      visible:
+        id: onboarding-permissions-continue
+    commands:
+      - tapOn:
+          id: onboarding-permissions-continue
+- runFlow:
+    when:
+      visible:
+        id: onboarding-notifications-skip
+    commands:
+      - tapOn:
+          id: onboarding-notifications-skip
+- runFlow:
+    when:
+      visible:
+        id: onboarding-skip-login
+    commands:
+      - tapOn:
+          id: onboarding-skip-login
+- runFlow:
+    when:
+      visible:
+        id: onboarding-model-source-skip
+    commands:
+      - tapOn:
+          id: onboarding-model-source-skip
+- extendedWaitUntil:
+    visible:
+      id: chat-composer
+    timeout: 30000
