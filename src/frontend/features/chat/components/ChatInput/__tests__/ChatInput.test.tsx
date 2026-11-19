@@ -23,6 +23,7 @@ const mockSettleEditSend = jest.fn(() => true);
 const mockEditMessage = jest.fn();
 jest.mock('@cherrystudio/ui/components', () => ({
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
+  Dialog: (props: object) => jest.requireActual('react').createElement('Dialog', props),
 }));
 jest.mock('../hooks/useChatEditDraft', () => ({
   useChatEditDraft: () => ({
@@ -71,6 +72,15 @@ const mockSshProfile = {
   revision: '22222222-2222-4222-8222-222222222222',
 };
 let mockSshTarget: { profile: typeof mockSshProfile } | null = null;
+let mockSshAvailable = false;
+const mockGetRememberedTarget = jest.fn();
+const mockDecideRememberedTarget = jest.fn();
+const mockSsh = {
+  isAvailable: () => mockSshAvailable,
+  getTarget: () => mockSshTarget,
+  getRememberedTarget: mockGetRememberedTarget,
+  decideRememberedTarget: mockDecideRememberedTarget,
+};
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => mockQuoteActions,
@@ -78,7 +88,7 @@ jest.mock('../../../quotes/ChatQuoteContext', () => ({
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
-  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => mockSshTarget }),
+  useBackendModule: () => mockSsh,
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ setParams: mockNoop }),
@@ -188,6 +198,9 @@ beforeEach(() => {
   mockCatalogModels = new Set(['p::m']);
   mockEditing = null;
   mockSshTarget = null;
+  mockSshAvailable = false;
+  mockGetRememberedTarget.mockReset();
+  mockDecideRememberedTarget.mockReset();
   mockDraft = '';
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -289,6 +302,87 @@ test('a stale SSH mention is rejected before sending its display snapshot', asyn
     }),
   ).rejects.toThrow();
   expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('one SSH restore confirmation lets the original message use the selected target', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValueOnce(mockSshProfile);
+  mockDecideRememberedTarget.mockImplementationOnce(async () => {
+    mockSshTarget = { profile: mockSshProfile };
+  });
+  await mount();
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: `${createSshMention('SSH · router', mockSshProfile)} Check status`,
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  expect(mockSend).not.toHaveBeenCalled();
+  const dialog = renderer.root.findByType('Dialog' as never);
+  expect(dialog.findAllByType('Button' as never)).toHaveLength(2);
+  const confirm = dialog.findByProps({ children: 'ssh.restoreTarget.confirm' });
+  await act(async () => {
+    confirm.props.onPress();
+    await pending;
+  });
+  expect(mockDecideRememberedTarget).toHaveBeenCalledWith('s', mockSshProfile, 'restore');
+  expect(mockSend).toHaveBeenCalledTimes(1);
+  expect(mockSend.mock.calls[0][0].parts).toEqual([
+    {
+      type: 'text',
+      text: 'SSH · router Check status',
+      sshReferences: [{ type: 'ssh', label: 'SSH · router', offset: 0 }],
+    },
+  ]);
+});
+
+test('dismissing SSH restoration cancels admission so the composer can keep the draft', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValueOnce(mockSshProfile);
+  await mount();
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: 'Check status',
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  await act(async () => {
+    renderer.root.findByType('Dialog' as never).props.onOpenChange(false);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+  expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('parallel sends skip SSH restoration and reject drafts that explicitly mention SSH', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValue(mockSshProfile);
+  await mount();
+  await act(async () => mockPickerApi.setReplyModels(['p::m', 'p::other']));
+  const composer = renderer.root.findByType('TextComposer' as never);
+  let ordinarySend!: Promise<void>;
+  await act(async () => {
+    ordinarySend = composer.props.onSend({ text: 'Summarize this chat', attachments: [] });
+    void ordinarySend.catch(() => {});
+  });
+  expect(mockGetRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledWith(
+    expect.objectContaining({ additionalModelIds: ['p::other'] }),
+  );
+  await ordinarySend;
+
+  const sshSend: Promise<void> = composer.props.onSend({
+    text: `${createSshMention('SSH · router', mockSshProfile)} Check status`,
+    attachments: [],
+  });
+  await expect(sshSend).rejects.toThrow('SSH requires a single reply model.');
+  await expect(
+    sshSend.catch((error: unknown) => composer.props.getSendErrorLabel(error)),
+  ).resolves.toBe('chat.input.sendError.sshParallelUnsupported');
+  expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledTimes(1);
 });
 
 test('image send captures before attachment preparation and consumes that attempt after an await', async () => {
