@@ -28,7 +28,8 @@ content stack when they run. Agents, Paintings, Plugins, Marketplace, and the av
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
 shows selected through `resolveSidebarDestination`. Selecting the same page and chat context keeps
 the existing page mounted. In compact windows, page navigation waits for the overlay to finish
-closing. Conversation rows, New chat, device switching,
+closing. Selecting a conversation, starting a search, or navigating through another link during
+the close cancels the pending page change. Conversation rows, New chat, device switching,
 and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills

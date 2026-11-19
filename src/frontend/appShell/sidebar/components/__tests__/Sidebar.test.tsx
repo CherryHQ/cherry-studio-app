@@ -9,6 +9,7 @@ import { Sidebar } from '../Sidebar';
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockCloseDrawer = jest.fn();
+const mockCancelPending = jest.fn();
 const mockWaitForClose = jest.fn(async () => {
   if (!mockCanDock) mockCloseDrawer();
   return true;
@@ -65,7 +66,10 @@ jest.mock('../../hooks/useSessionSearch', () => ({
   useSessionSearchRequest: () => ({}),
 }));
 jest.mock('../../hooks/useCloseDrawerForNavigation', () => ({
-  useCloseDrawerForNavigation: () => mockWaitForClose,
+  useCloseDrawerForNavigation: () => ({
+    cancelPending: mockCancelPending,
+    waitForClose: mockWaitForClose,
+  }),
 }));
 jest.mock('../../SidebarSelectionProvider', () => ({
   SidebarSelectionProvider: ({ children }: { children: ReactNode }) => children,
@@ -204,6 +208,31 @@ describe('Sidebar', () => {
 
     expect(mockDispatch).toHaveBeenCalledWith({ target: 'main', type: 'POP_TO_TOP' });
   });
+
+  test.each(['recent conversation', 'search', 'incoming link'])(
+    'a newer %s supersedes Drawings while the drawer is closing',
+    async (next) => {
+      render();
+      const closed = Promise.withResolvers<boolean>();
+      mockWaitForClose.mockReturnValueOnce(closed.promise);
+      mockCancelPending.mockImplementationOnce(() => closed.resolve(false));
+
+      act(() => {
+        mockActions.openPaintings();
+      });
+      act(() => {
+        if (next === 'recent conversation') mockActions.closeDrawer();
+        else if (next === 'search') mockActions.openSearch?.();
+        else {
+          mockParams = { sessionId: 'notification-session' };
+          renderer.update(<Sidebar navigation={navigation} />);
+        }
+      });
+      await act(async () => closed.resolve(true));
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+    },
+  );
 
   test('leaves the stack alone when the chat is already showing', () => {
     render();

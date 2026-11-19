@@ -17,6 +17,7 @@ export function useCloseDrawerForNavigation(
   const requestId = useSharedValue(0);
   const nextId = useRef(0);
   const pending = useRef<{ id: number; finish(ready: boolean): void } | null>(null);
+  const cancelPending = useCallback(() => pending.current?.finish(false), []);
 
   const finishClose = useCallback(
     (id: number) => {
@@ -47,16 +48,16 @@ export function useCloseDrawerForNavigation(
     if (isPermanent || (status === 'closed' && progress.get() === 0)) {
       pending.current?.finish(true);
     } else if (status === 'open') {
-      pending.current?.finish(false);
+      cancelPending();
     }
-  }, [isPermanent, progress, status]);
+  }, [cancelPending, isPermanent, progress, status]);
 
-  useEffect(() => () => pending.current?.finish(false), []);
+  useEffect(() => cancelPending, [cancelPending]);
 
-  return useCallback(
+  const waitForClose = useCallback(
     (signal?: AbortSignal): Promise<boolean> => {
       if (signal?.aborted) return Promise.resolve(false);
-      pending.current?.finish(false);
+      cancelPending();
       if (
         isPermanent ||
         (getDrawerStatusFromState(
@@ -83,6 +84,7 @@ export function useCloseDrawerForNavigation(
         navigation.closeDrawer();
       });
     },
-    [isPermanent, navigation, progress, requestId],
+    [cancelPending, isPermanent, navigation, progress, requestId],
   );
+  return { cancelPending, waitForClose };
 }

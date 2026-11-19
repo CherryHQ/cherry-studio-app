@@ -1,7 +1,7 @@
 import { type Href, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { type NavigationState, StackActions } from 'expo-router/react-navigation';
-import { type ComponentType, useCallback, useEffect, useMemo } from 'react';
+import { type ComponentType, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Keyboard, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
@@ -67,7 +67,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   const canDock = useCanDockSidebar();
   const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
-  const closeDrawerForNavigation = useCloseDrawerForNavigation(navigation, canDock);
+  const { cancelPending, waitForClose } = useCloseDrawerForNavigation(navigation, canDock);
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
@@ -78,19 +78,23 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
     if (canDock) navigation.closeDrawer();
   }, [canDock, navigation]);
 
+  // A link or notification may already have navigated while the drawer was closing.
+  useLayoutEffect(() => cancelPending, [cancelPending, page, params]);
+
   // Conversation actions assume the chat is on screen. Beside a wide window's page, return to the
   // chat first; pages above it are dismissed, as their own back steps would.
   const returnToChat = useCallback(() => {
+    cancelPending();
     const stack = getContentStack(navigation);
     if (stack && stack.index > 0)
       navigation.dispatch({ ...StackActions.popToTop(), target: stack.key });
-  }, [navigation]);
+  }, [cancelPending, navigation]);
 
   // From the chat a destination opens above it; from another destination it takes that one's place,
   // so moving between sidebar entries never builds a back history.
   const openDestination = useCallback(
     async (href: Href, history: 'swap' | 'push' = 'swap') => {
-      if (!(await closeDrawerForNavigation())) return;
+      if (!(await waitForClose())) return;
       const pathname = typeof href === 'string' ? href : href.pathname;
       if (
         page === pathname &&
@@ -102,7 +106,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       if (history === 'swap' && stack && stack.index > 0) router.replace(href);
       else router.push(href);
     },
-    [closeDrawerForNavigation, navigation, page, params, router],
+    [waitForClose, navigation, page, params, router],
   );
 
   const actions = useMemo<SidebarActions>(
@@ -111,11 +115,12 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
-      prepareExternalNavigation: closeDrawerForNavigation,
+      prepareExternalNavigation: waitForClose,
       returnToChat,
       openSearch:
         source === 'local'
           ? () => {
+              cancelPending();
               navigation.closeDrawer();
               // A wide window searches in the column, beside the chat its results open.
               if (canDock && SearchPanel) setContent('search');
@@ -151,7 +156,8 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       sessionId,
       sourceChat,
       navigation,
-      closeDrawerForNavigation,
+      cancelPending,
+      waitForClose,
       canDock,
       openDestination,
       openSessionSearch,

@@ -49,13 +49,15 @@ const navigation = {
   addListener,
 } as unknown as DrawerContentComponentProps['navigation'];
 
-let prepare: ReturnType<typeof useCloseDrawerForNavigation>;
+let prepare: ReturnType<typeof useCloseDrawerForNavigation>['waitForClose'];
+let cancelPending: () => void;
 let renderer: ReactTestRenderer;
 function Probe({ permanent = false }) {
-  const closeDrawer = useCloseDrawerForNavigation(navigation, permanent);
+  const close = useCloseDrawerForNavigation(navigation, permanent);
   useEffect(() => {
-    prepare = closeDrawer;
-  }, [closeDrawer]);
+    prepare = close.waitForClose;
+    cancelPending = close.cancelPending;
+  }, [close]);
   return null;
 }
 function render(permanent = false) {
@@ -136,6 +138,15 @@ test('a tap after the drawer settles supersedes a queued navigation', async () =
   flushCompletions();
   await expect(first).resolves.toBe(false);
   await expect(second).resolves.toBe(true);
+});
+
+test('an immediate sidebar action cancels navigation with a close completion already queued', async () => {
+  render();
+  const ready = prepare();
+  progress(0);
+  cancelPending();
+  flushCompletions();
+  await expect(ready).resolves.toBe(false);
 });
 
 test.each([false, true])(
