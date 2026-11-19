@@ -1,9 +1,9 @@
 # First-use onboarding
 
-New installations enter a dedicated visual flow: welcome → inline privacy choice → device
-permissions → notifications/background guidance → account SDK → subscription/model preparation.
-`app.onboarding.status` persists the resume point. The welcome action is **Get started**; provider
-connection and computer synchronization appear after account admission, not on another welcome page.
+New installations go through welcome, inline privacy choice, device permissions,
+notifications/background guidance, and the account entry. `app.onboarding.status` persists the
+resume point. Successful sign-in completes onboarding and opens the main app. Skipping sign-in
+continues to model setup, where users can choose a saved model or configure a provider.
 Previously completed/skipped users and installations with saved models or Sessions retain their entry.
 
 ## Presentation
@@ -40,19 +40,16 @@ support light/dark tokens, scrolling text and safe areas. Provider/model catalog
   decisions are not repeated. Background guidance is recorded before the SDK can change profiles.
   Login/profile switching remains in the account module; this feature supplies only its first-use
   entry and consumes the shared account form, submission and error reporter.
-- `setup/onboardingDestination.ts` keeps subscription admission separate from its presentation.
-  A paid, active, effective entitlement skips provider configuration and opens account-model selection.
-  `OnboardingModelList` adapts both paths to the existing `ModelPickerList` and CherryUI `SearchField`,
-  reusing provider groups, model avatars, chat badges, and selection marks rather than drawing rows.
+- A successful sign-in saves `completed` before opening the main app. Organization profiles use
+  their managed models. After skipping sign-in, the current enabled and system-supported models
+  decide between model selection and the provider/desktop setup choices. A pending read shows
+  loading and a failed read stays retryable. Skipping model setup saves `skipped` before opening
+  the main app. Provider and model configuration remains available in settings.
+- `OnboardingModelList` uses the existing `ModelPickerList` and CherryUI `SearchField` to present
+  model candidates with provider groups, model avatars, chat badges, and selection marks.
   Discovery candidates may be unsaved or disabled, so onboarding retains its own model data source
   instead of using the picker's enabled-model query. Saving disables the shared list and search.
-  Saved model rows supply their identities, while the current account catalog and entitlements decide
-  which account models can be offered. Selection is confirmed by the user, never automatically saved.
-  A loading or failed lookup never means no subscription.
-  Organization profiles use their managed models; other accounts and skipped sign-ins can configure
-  a model or skip setup from the source/provider selection pages. Skipping commits the existing
-  `skipped` status before opening the main app, so an unconfigured model does not restart onboarding.
-  Provider and model configuration remains available in settings.
+  The user confirms their model selection before saving.
 - Provider routes compose the original `ProviderCatalogContent` and `ProviderConfiguration` with
   the first-use header, step progress and continuation. Provider fields, account actions, connection
   checks, catalog grouping and import behavior have one implementation in settings/provider.

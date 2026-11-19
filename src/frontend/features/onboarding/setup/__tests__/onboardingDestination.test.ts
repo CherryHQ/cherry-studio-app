@@ -1,62 +1,37 @@
-import type { CloudState } from '@/shared/contracts/cloud';
-
 import { getOnboardingDestination } from '../onboardingDestination';
 
-const cloud: CloudState = {
-  plans: null,
-  phase: 'signed_out',
-  isRefreshing: false,
-  account: null,
-  models: [],
-};
 const base = {
   account: { hasPrompted: true, isSignedIn: false },
-  cloud,
   models: { hasModels: false, isLoading: false, isError: false },
   organizationManaged: false,
 };
 
 describe('onboarding account destination', () => {
-  it('requires model configuration after skipping sign-in, including when a model was already saved', () => {
+  it('offers model setup after skipping sign-in and uses saved models when available', () => {
     expect(getOnboardingDestination(base)).toBe('source');
     expect(getOnboardingDestination({ ...base, models: { ...base.models, hasModels: true } })).toBe(
       'model',
     );
   });
 
-  it('waits for the subscription result and never treats a failed lookup as no subscription', () => {
-    const account = { ...base.account, isSignedIn: true };
-    expect(
-      getOnboardingDestination({ ...base, account, cloud: { ...cloud, phase: 'loading' } }),
-    ).toBe('loading');
-    expect(
-      getOnboardingDestination({ ...base, account, cloud: { ...cloud, phase: 'error' } }),
-    ).toBe('retry');
-    expect(
-      getOnboardingDestination({ ...base, account, cloud: { ...cloud, phase: 'ready' } }),
-    ).toBe('source');
+  it('waits for local models and keeps a failed lookup retryable after skipping sign-in', () => {
+    expect(getOnboardingDestination({ ...base, models: { ...base.models, isLoading: true } })).toBe(
+      'loading',
+    );
+    expect(getOnboardingDestination({ ...base, models: { ...base.models, isError: true } })).toBe(
+      'retry',
+    );
   });
 
-  it('skips provider setup but keeps model selection for a paid entitlement', () => {
-    const subscribed: CloudState = {
-      ...cloud,
-      phase: 'ready',
-      account: {
-        measured_at: '2026-11-12T00:00:00Z',
-        account: { id: 'account-1', status: 'active' },
-        device: { id: 'device-1' },
-        entitlements: [{ plan_id: 'paid', is_free: false, status: 'active', model_ids: ['chat'] }],
-        quota_pools: [],
-      },
-    };
+  it.each([
+    base.models,
+    { ...base.models, hasModels: true },
+    { ...base.models, isLoading: true },
+    { ...base.models, isError: true },
+  ])('completes after sign-in regardless of local model state (%j)', (models) => {
     expect(
-      getOnboardingDestination({
-        ...base,
-        account: { ...base.account, isSignedIn: true },
-        cloud: subscribed,
-        models: { ...base.models, isLoading: true },
-      }),
-    ).toBe('subscription');
+      getOnboardingDestination({ ...base, account: { ...base.account, isSignedIn: true }, models }),
+    ).toBe('completed');
   });
 
   it('retains organization-owned configuration and restarts device preparation if sign-in was never presented', () => {
