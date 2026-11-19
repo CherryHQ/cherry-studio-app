@@ -1,4 +1,4 @@
-import ListIcon from '@cherrystudio/app-icons/icons/list-filter';
+import ListOrderedIcon from '@cherrystudio/app-icons/icons/list-ordered';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { BackgroundPressExclusion, Button, Spinner, useToast } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -65,13 +65,14 @@ export function ChatTurnDirectory({
         pointerEvents="box-none"
         style={position}
       >
-        <BackgroundPressExclusion>
+        <BackgroundPressExclusion className="size-11 items-center justify-center">
           <Button
             accessibilityLabel={t(isOpen ? 'common.close' : 'chat.turns.title')}
             accessibilityState={{ expanded: isOpen }}
-            icon={isOpen ? <XIcon /> : <ListIcon />}
+            hitSlop={6}
+            icon={isOpen ? <XIcon /> : <ListOrderedIcon />}
             onPress={() => setIsOpen((open) => !open)}
-            size="footer"
+            size="sm"
             testID="chat-turn-directory-trigger"
             variant={isOpen ? 'default' : 'secondary'}
           />
@@ -101,16 +102,10 @@ function ChatTurnDirectoryPanel({
 
   return (
     <BackgroundPressExclusion
-      className="shrink rounded-3xl border border-border bg-popover px-2 pb-2 shadow-sm"
+      className="shrink rounded-3xl border border-border bg-popover p-2 shadow-sm"
       style={PANEL_LIMIT}
       testID="chat-turn-directory"
     >
-      <Text
-        accessibilityRole="header"
-        className="px-2 py-3 font-semibold text-popover-foreground text-sm"
-      >
-        {t('chat.turns.title')}
-      </Text>
       {turns.isPending ? (
         <View className="items-center py-4">
           <Spinner
