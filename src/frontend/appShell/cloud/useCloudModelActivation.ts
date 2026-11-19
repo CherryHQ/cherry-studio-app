@@ -121,10 +121,10 @@ export function useCloudModelActivation() {
           title: t(label),
           confirmLabel: t(isActivation ? 'cloud.amd.openActivation' : label),
           description: t(
-            isActivation
-              ? 'cloud.amd.activationPromptDescription'
-              : isUsage
-                ? 'cloud.amd.linked'
+            isUsage
+              ? 'cloud.amd.linked'
+              : status
+                ? 'cloud.amd.activationPromptDescription'
                 : 'cloud.amd.sameAccount',
           ),
           onConfirm: async () => {
