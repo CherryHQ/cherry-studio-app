@@ -33,11 +33,13 @@ import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoor
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
+  RemoteHistoryIndexItem,
   RemoteSessionSnapshot,
   RemoteSourceState,
   RemoteResourceValue,
   RemoteTaskQueries,
 } from '@/shared/contracts/remoteAgent';
+import { formatConversationTurnPreview } from '@/shared/utils/conversationTurnPreview';
 
 import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
@@ -708,6 +710,55 @@ export class RemoteAgentScope implements RemoteAgentSource {
       (signal) => this.readHistory(sessionId, version, cursor, signal),
     );
   }
+  private listHistoryPage(
+    sessionId: string,
+    version: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ) {
+    return this.reads.share(
+      JSON.stringify(['history-index', sessionId, version, cursor]),
+      signal,
+      (signal) =>
+        this.historyRequest(
+          'agent.messages.list',
+          { sessionId, historyRevision: version, cursor },
+          signal,
+        ),
+    );
+  }
+
+  async historyIndex(
+    sessionId: string,
+    version: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+    includeTurnPreviews = false,
+  ) {
+    const entry = this.cacheEntry(sessionId);
+    if (!this.readCache.beginHistory(entry, version))
+      throw new RemoteAgentError('REVISION_EXPIRED');
+    const generation = entry.generation;
+    const page = await this.listHistoryPage(sessionId, version, cursor, signal);
+    const items = await Promise.all(
+      page.items.map(async (message): Promise<RemoteHistoryIndexItem> => {
+        const item = { id: message.messageId, role: message.role };
+        if (!includeTurnPreviews || message.role !== 'user') return item;
+        const parts = await this.messageParts(sessionId, message, signal);
+        for (const part of parts) {
+          if (part.kind === 'text' && 'text' in part.content && part.content.text.trim()) {
+            return { ...item, preview: formatConversationTurnPreview(part.content.text) };
+          }
+        }
+        return item;
+      }),
+    );
+    signal.throwIfAborted();
+    if (entry.invalidated || entry.generation !== generation)
+      throw new RemoteAgentError('REVISION_EXPIRED');
+    return { items, next: page.nextCursor ?? undefined };
+  }
+
   private async readHistory(
     sessionId: string,
     version: string,
@@ -718,11 +769,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (!this.readCache.beginHistory(entry, version))
       throw new RemoteAgentError('REVISION_EXPIRED');
     const generation = entry.generation;
-    const page = await this.historyRequest(
-      'agent.messages.list',
-      { sessionId, historyRevision: version, cursor },
-      signal,
-    );
+    const page = await this.listHistoryPage(sessionId, version, cursor, signal);
     const window = {
       messages: page.items,
       version,

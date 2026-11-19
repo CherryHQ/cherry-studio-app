@@ -66,6 +66,7 @@ export function MessageList({
     handleScrollToEnd,
     handleTouchStart,
     isFollowing,
+    scrollToMessage,
   } = useMessageListScrollController({
     contentTopInset,
     dataKey,
@@ -94,6 +95,7 @@ export function MessageList({
     () => ({
       beginInteraction: handleScrollBeginDrag,
       endInteraction: handleScrollEndDrag,
+      scrollToMessage,
       scrollBy(distance) {
         const maximum = Math.max(
           0,
@@ -111,6 +113,7 @@ export function MessageList({
       handleScrollBeginDrag,
       handleScrollEndDrag,
       scrollOffset,
+      scrollToMessage,
       viewportHeight,
     ],
   );

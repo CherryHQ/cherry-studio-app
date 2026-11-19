@@ -528,6 +528,34 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     enterReadingForUser('user-toggled-disclosure');
   }, [enterReadingForUser]);
 
+  const scrollToMessage = useCallback(
+    async (messageId: string) => {
+      const current = inputsRef.current;
+      const list = current.listRef.current;
+      if (!list || !current.initialLayoutReady || !didRestoreRef.current || suppressSaveRef.current)
+        return false;
+      const index = current.messages.findIndex((message) => message.id === messageId);
+      if (index < 0) return false;
+      const generation = restoreGenerationRef.current;
+      enterReadingForUser('navigation');
+      try {
+        await list.scrollToIndex({
+          index,
+          animated: false,
+          viewOffset: current.contentTopInset,
+          viewPosition: 0,
+        });
+      } catch {
+        return false;
+      }
+      return (
+        generation === restoreGenerationRef.current &&
+        inputsRef.current.messages.some((message) => message.id === messageId)
+      );
+    },
+    [enterReadingForUser],
+  );
+
   const finishUserScroll = useCallback(() => {
     const state = inputsRef.current.listRef.current?.getState();
     // LegendList's isAtEnd excludes the keyboard inset from its edge check.
@@ -617,5 +645,6 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     handleScrollToEnd,
     handleTouchStart,
     isFollowing: isFollowingForRender,
+    scrollToMessage,
   };
 }

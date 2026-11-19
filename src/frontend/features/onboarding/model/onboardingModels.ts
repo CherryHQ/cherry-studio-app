@@ -1,9 +1,3 @@
-import {
-  CLOUD_PROVIDER_ID,
-  isCloudModelListed,
-  hasActiveCloudSubscription,
-  type CloudState,
-} from '@/shared/contracts/cloud';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
@@ -32,24 +26,5 @@ export function getOnboardingModels({
         (!providerId || model.providerId === providerId) &&
         isTextGenerationModel(model),
     )
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-/** Saved rows provide model identities; the current account owns their entitlement. */
-export function getOnboardingSubscriptionModels(
-  cloud: CloudState,
-  models: readonly Model[],
-): Model[] {
-  if (cloud.isRefreshing || !hasActiveCloudSubscription(cloud)) return [];
-  return models
-    .filter((model) => {
-      if (
-        model.providerId !== CLOUD_PROVIDER_ID ||
-        !model.isEnabled ||
-        model.isHidden ||
-        !isTextGenerationModel(model)
-      )
-        return false;
-      return isCloudModelListed(cloud, model.modelId, ['agent']);
-    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }

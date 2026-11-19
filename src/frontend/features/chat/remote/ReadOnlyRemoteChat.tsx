@@ -22,6 +22,7 @@ import { ChatShareSelectionControls } from '../share/ChatShareControls';
 import { ChatShareSelectionProvider } from '../share/ChatShareSelectionProvider';
 import { ConversationPresenter } from './ConversationPresenter';
 import { remoteChatShareTarget } from './remoteChatShareTarget';
+import { useRemoteChatTurns } from './useRemoteChatTurns';
 
 type ReaderAgent = { name: string; emoji?: string };
 const HeaderAgent = createContext<ReaderAgent | undefined>(undefined);
@@ -97,7 +98,8 @@ function ReaderContent({
 }) {
   const { bottom } = useSafeAreaInsets();
   const snapshot = useConversationSnapshot(session);
-  const history = useConversationHistory(session, snapshot.historyVersion);
+  const turns = useRemoteChatTurns(session, snapshot.historyVersion);
+  const history = useConversationHistory(session, snapshot.historyVersion, turns.navigation);
   const [presenter] = useState(() => new ConversationPresenter());
   const messages = presenter.update(
     snapshot,
@@ -110,6 +112,7 @@ function ReaderContent({
     <ChatShareSelectionProvider target={shareTarget} messages={messages}>
       <ChatWorkspace
         executionSource="desktop"
+        turnNavigator={turns.navigator}
         isTranslationEnabled
         readingAidScope={session.readingAidScope}
         messages={messages}

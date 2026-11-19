@@ -8,6 +8,7 @@ const mockShareApi = { get: jest.fn() };
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => mockShareApi,
   useBackendModule: () => ({ getTarget: () => null }),
+  queryKeys: { agentSessions: { messages: (id: string) => ['agentSessions', id, 'messages'] } },
 }));
 jest.mock('../share/ChatShareSelectionProvider', () => ({
   ChatShareSelectionProvider: ({ children }: { children: React.ReactNode }) => children,

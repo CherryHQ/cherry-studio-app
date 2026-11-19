@@ -5,7 +5,6 @@ import { View } from 'react-native';
 
 import { useAccount } from '@/frontend/appShell/account';
 import { useQuery } from '@/frontend/data';
-import { useCloud } from '@/frontend/hooks/useCloud';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import {
@@ -21,41 +20,36 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
   const { t } = useTranslation();
   const router = useRouter();
   const { state: account } = useAccount();
-  const { cloud, state } = useCloud();
   const organizationManaged = !capabilityPolicy('providerOnboarding').canEdit('providerOnboarding');
   const models = useQuery('/models', {
-    enabled: account.hasPrompted && !organizationManaged,
+    enabled: account.hasPrompted && !account.isSignedIn && !organizationManaged,
     query: { enabled: true, isSystemSupported: true },
     retry: false,
   });
   const destination = getOnboardingDestination({
     account,
-    cloud: state,
     organizationManaged,
     models: {
       hasModels: (models.data?.length ?? 0) > 0,
-      isLoading: models.isPending,
+      isLoading: models.isPending || models.isRefreshing,
       isError: models.isError,
     },
   });
   const finish = async () => {
-    if (destination === 'permissions') await progress.advance('permissions');
-    else if (destination === 'completed' && (await progress.advance('completed')))
-      router.replace('/');
+    if (destination === 'permissions' || destination === 'completed')
+      await progress.advance(destination);
   };
   const continueRestored = useEffectEvent(finish);
   useEffect(() => {
     if (
       (destination === 'completed' || destination === 'permissions') &&
+      progress.isFocused &&
       !progress.isSaving &&
       !progress.saveFailed
     )
       void continueRestored();
-  }, [destination, progress.isSaving, progress.saveFailed]);
-  if (!progress.isSaving) {
-    if (destination === 'subscription') return <Redirect href="/onboarding/subscription" />;
-    if (destination === 'model') return <Redirect href="/onboarding/model" />;
-  }
+  }, [destination, progress.isFocused, progress.isSaving, progress.saveFailed]);
+  if (!progress.isSaving && destination === 'model') return <Redirect href="/onboarding/model" />;
   const waiting =
     destination === 'loading' || destination === 'completed' || destination === 'permissions';
   const failed = destination === 'retry' || progress.saveFailed;
@@ -74,7 +68,6 @@ export function ModelSourceOnboardingStep({ progress }: { progress: OnboardingPr
                   return;
                 }
                 void models.refetch();
-                void cloud.refresh().catch(() => {});
               }}
             >
               {t('common.retry')}

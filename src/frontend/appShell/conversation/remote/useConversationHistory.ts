@@ -9,6 +9,7 @@ import { createConversationReferences, ConversationReadError } from '../conversa
 import type {
   HistoryCursor,
   HistoryPage,
+  HistoryPosition,
   HistoryVersion,
   HistoryWindow,
   MessageRef,
@@ -27,7 +28,7 @@ export type RemoteConversationHistoryView = ConversationHistoryView & {
 export function useConversationHistory(
   session: RemoteConversationSession | undefined,
   version: HistoryVersion | undefined,
-  navigation?: { messageId: string; key: string },
+  navigation?: { messageId: string; key: string; position?: HistoryPosition },
 ): RemoteConversationHistoryView {
   const queryClient = useQueryClient();
   const consumer = useId();
@@ -85,11 +86,11 @@ export function useConversationHistory(
   const [owned, setOwned] = useState(() => ({
     key: readerKey,
     session,
-    reader: createHistoryReader(session, around, version, extent),
+    reader: createHistoryReader(session, around, version, extent, navigation?.position),
   }));
   let reader = owned.reader;
   if (owned.key !== readerKey || owned.session !== session) {
-    reader = createHistoryReader(session, around, version, extent);
+    reader = createHistoryReader(session, around, version, extent, navigation?.position);
     setOwned({ key: readerKey, session, reader });
   }
   useEffect(
@@ -146,13 +147,19 @@ export function useConversationHistory(
     installedVersion: query.isPlaceholderData ? undefined : query.data?.pages[0]?.version,
     error: retired ? RETIRED : (query.error ?? undefined),
     isLoadingInitial: Boolean(
-      session && !retired && query.isPending && !messages.length && !preview?.complete,
+      session &&
+      !retired &&
+      (around
+        ? query.isPending || query.isPlaceholderData
+        : query.isPending && !messages.length && !preview?.complete),
     ),
     isRefreshing: Boolean(query.isFetching && (messages.length || preview?.complete)),
     isLoadingOlder: query.isFetchingNextPage,
     isLoadingNewer: query.isFetchingPreviousPage,
     hasOlderMessages: Boolean(query.hasNextPage || (!around && renderWindow.hasHiddenMessages)),
-    hasNewerMessages: Boolean(around && (!query.data || query.hasPreviousPage)),
+    hasNewerMessages: Boolean(
+      around && (!query.data || query.isPlaceholderData || query.hasPreviousPage),
+    ),
     initialScrollTarget: around
       ? {
           messageId: around,
@@ -187,6 +194,7 @@ function createHistoryReader(
   around: string | undefined,
   version: HistoryVersion | undefined,
   extent: { older: number; newer: number },
+  position: HistoryPosition | undefined,
 ) {
   let lifetime: AbortController | undefined;
   let window: HistoryWindow | undefined;
@@ -204,15 +212,18 @@ function createHistoryReader(
       const signal = AbortSignal.any([caller, lifetime.signal]);
       signal.throwIfAborted();
       if (!cursor) {
-        const opened = await (around && session.history.openAround
-          ? session.history.openAround(
-              createConversationReferences(session.scope, session.ref.sessionId).issue<MessageRef>(
-                'message',
-                around,
-              ),
-              signal,
-            )
-          : session.history.openLatest(signal));
+        let opened: HistoryWindow;
+        if (around && session.history.openAround) {
+          const target = createConversationReferences(
+            session.scope,
+            session.ref.sessionId,
+          ).issue<MessageRef>('message', around);
+          opened = position
+            ? await session.history.openAround(target, signal, position)
+            : await session.history.openAround(target, signal);
+        } else {
+          opened = await session.history.openLatest(signal);
+        }
         if (signal.aborted) {
           opened.dispose();
           signal.throwIfAborted();

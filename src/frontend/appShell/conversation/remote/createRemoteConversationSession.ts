@@ -30,7 +30,9 @@ import { readToolCitations } from '../readToolCitations';
 import type {
   ConversationInput,
   HistoryCursor,
+  HistoryPosition,
   HistoryVersion,
+  HistoryWindow,
   OperationId,
   RemoteConversationSession,
   RemoteConversationSnapshot,
@@ -391,6 +393,67 @@ export function createRemoteConversationSession(
     publish();
   });
   const unoperations = isReadOnly ? () => {} : source.subscribeOperations(publish);
+  const historyRoot = (version: string): HistoryPosition => ({
+    revision: refs.issue<HistoryVersion>('history', version, String(historyReset)),
+  });
+  const readHistoryHead = (signal: AbortSignal) =>
+    read(signal, (signal) => source.readSession(ref.sessionId, signal));
+
+  async function openHistoryWindow(
+    start: HistoryPosition,
+    signal: AbortSignal,
+  ): Promise<HistoryWindow> {
+    assertCurrent(signal);
+    const { id: version } = refs.resolve(start.revision, 'history');
+    const controller = new AbortController();
+    const cursors = createConversationReferences(scope, `${ref.sessionId}:${start.revision}`);
+    const positions = new Map<HistoryCursor, HistoryPosition>();
+    const issue = (position: HistoryPosition) => {
+      const cursor = cursors.issue<HistoryCursor>('page', JSON.stringify([position.cursor]));
+      if (!positions.has(cursor)) positions.set(cursor, position);
+      return cursor;
+    };
+    const dispose = () => {
+      controller.abort();
+      positions.clear();
+      windows.delete(dispose);
+    };
+    const page = async (position: HistoryPosition, signal: AbortSignal) => {
+      const value = await read(AbortSignal.any([signal, controller.signal]), (signal) =>
+        source.history(ref.sessionId, version, position.cursor, signal),
+      );
+      return {
+        items: value.items.toReversed().map(projectHistory),
+        older:
+          value.next && value.next !== position.cursor
+            ? issue({ revision: start.revision, cursor: value.next, newer: position })
+            : undefined,
+        newer: position.newer ? issue(position.newer) : undefined,
+      };
+    };
+    windows.add(dispose);
+    issue(start);
+    try {
+      return {
+        scope,
+        version: start.revision,
+        initial: await page(start, signal),
+        read(cursor, signal) {
+          if (controller.signal.aborted)
+            return Promise.reject(new ConversationReadError({ code: 'cancelled', retry: 'none' }));
+          cursors.resolve(cursor, 'page');
+          const position = positions.get(cursor);
+          if (!position) throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
+          return page(position, signal);
+        },
+        dispose,
+      };
+    } catch (error) {
+      dispose();
+      throw error;
+    }
+  }
+
   const handle: RemoteConversationSession = {
     readingAidScope: JSON.stringify([source.draftScope, ref.sessionId]),
     ref,
@@ -476,41 +539,61 @@ export function createRemoteConversationSession(
           : undefined;
       },
       subscribePreview: (listener) => source.subscribeReads(ref.sessionId, listener),
+      readTurns: async (cursor, signal) => {
+        const position = cursor ?? historyRoot((await readHistoryHead(signal)).historyVersion);
+        const { id: version, version: epoch } = refs.resolve(position.revision, 'history');
+        if (epoch !== String(historyReset))
+          throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
+        const page = await read(signal, (signal) =>
+          source.historyIndex(ref.sessionId, version, position.cursor, signal, true),
+        );
+        if (page.next && page.next === position.cursor)
+          throw new ConversationReadError({ code: 'internal', retry: 'none' });
+        return {
+          items: page.items.flatMap(({ id, role, preview }) =>
+            role === 'user' ? [{ id, preview: preview ?? '', position }] : [],
+          ),
+          next: page.next
+            ? { revision: position.revision, cursor: page.next, newer: position }
+            : undefined,
+        };
+      },
       openLatest: async (signal) => {
         const verified = bootstrap;
         bootstrap = undefined;
-        const fixed =
-          verified ?? (await read(signal, (signal) => source.readSession(ref.sessionId, signal)));
-        assertCurrent(signal);
-        const controller = new AbortController();
-        const version = refs.issue<HistoryVersion>('history', fixed.historyVersion);
-        const cursors = createConversationReferences(scope, `${ref.sessionId}:${version}`);
-        const dispose = () => {
-          controller.abort();
-          windows.delete(dispose);
-        };
-        windows.add(dispose);
-        const page = async (cursor: string | undefined, signal: AbortSignal) => {
-          const value = await read(AbortSignal.any([signal, controller.signal]), (signal) =>
-            source.history(ref.sessionId, fixed.historyVersion, cursor, signal),
-          );
-          return {
-            items: value.items.toReversed().map(projectHistory),
-            ...(value.next ? { older: cursors.issue<HistoryCursor>('older', value.next) } : {}),
-          };
-        };
-        try {
-          return {
-            scope,
-            version,
-            initial: await page(undefined, signal),
-            read: (cursor, signal) => page(cursors.resolve(cursor, 'older').id, signal),
-            dispose,
-          };
-        } catch (error) {
-          dispose();
-          throw error;
+        const fixed = verified ?? (await readHistoryHead(signal));
+        return openHistoryWindow(historyRoot(fixed.historyVersion), signal);
+      },
+      openAround: async (message, signal, hint) => {
+        const { id } = refs.resolve(message, 'message');
+        const fixed = await readHistoryHead(signal);
+        const root = historyRoot(fixed.historyVersion);
+        let position = root;
+        if (hint?.revision === root.revision) {
+          position = hint;
+        } else {
+          // A directory cursor belongs to one revision. Recover a stale location using IDs
+          // alone, then load the target page's bodies only once.
+          const visited = new Set<string>();
+          while (true) {
+            const index = await read(signal, (signal) =>
+              source.historyIndex(ref.sessionId, fixed.historyVersion, position.cursor, signal),
+            );
+            if (index.items.some((item) => item.id === id)) break;
+            if (!index.next)
+              throw new ConversationReadError({ code: 'not-found', retry: 'read-again' });
+            if (visited.has(index.next))
+              throw new ConversationReadError({ code: 'internal', retry: 'none' });
+            visited.add(index.next);
+            position = { revision: root.revision, cursor: index.next, newer: position };
+          }
         }
+        const window = await openHistoryWindow(position, signal);
+        if (!window.initial.items.some((item) => item.display.id === id)) {
+          window.dispose();
+          throw new ConversationReadError({ code: 'not-found', retry: 'read-again' });
+        }
+        return window;
       },
       prepareSelection: async (messageIds, signal) => {
         const ids = new Set(messageIds);

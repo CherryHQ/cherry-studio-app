@@ -84,6 +84,16 @@ export type HistoryPage = {
   older?: HistoryCursor;
   newer?: HistoryCursor;
 };
+/** Page addresses are revision-scoped. The prefix keeps cursors only. */
+export type HistoryPosition = Readonly<{
+  revision: HistoryVersion;
+  cursor?: string;
+  newer?: HistoryPosition;
+}>;
+export type RemoteTurnPage = {
+  items: readonly { id: string; preview: string; position: HistoryPosition }[];
+  next?: HistoryPosition;
+};
 export interface HistoryWindow {
   readonly scope: QueryScope;
   readonly version: HistoryVersion;
@@ -103,7 +113,15 @@ export interface ConversationHistory {
   peekLatest?: () => HistoryPreview | undefined;
   subscribePreview?: (listener: () => void) => () => void;
   openLatest(signal: AbortSignal): Promise<HistoryWindow>;
-  openAround?: (message: MessageRef, signal: AbortSignal) => Promise<HistoryWindow>;
+  readTurns?: (
+    position: HistoryPosition | undefined,
+    signal: AbortSignal,
+  ) => Promise<RemoteTurnPage>;
+  openAround?: (
+    message: MessageRef,
+    signal: AbortSignal,
+    position?: HistoryPosition,
+  ) => Promise<HistoryWindow>;
   prepareSelection(messageIds: readonly string[], signal: AbortSignal): Promise<TranscriptSnapshot>;
 }
 export interface RemoteConversationSession {

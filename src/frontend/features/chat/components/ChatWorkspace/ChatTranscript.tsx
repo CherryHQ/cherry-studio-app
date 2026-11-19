@@ -11,14 +11,16 @@ import { MessageList, type MessageListHandle } from '@/frontend/components/Messa
 
 import { ChatShareDragSelection } from '../../share/ChatShareDragSelection';
 import { useChatShareFooterHeight, useIsChatShareSelecting } from '../../share/chatShareSelection';
+import type { ChatTurnNavigator } from './chatTurns';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
+import { ChatTurnDirectory } from './components/ChatTurnDirectory';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
 
 type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
   'bottomAccessoryHeight' | 'contentTopInset'
-> & { requiresInitialLayout: boolean; isLoadingMore: boolean };
+> & { requiresInitialLayout: boolean; isLoadingMore: boolean; turnNavigator?: ChatTurnNavigator };
 
 const SELECTION_ROW_INSETS = { horizontal: 8, user: 0, assistant: 0 };
 
@@ -26,6 +28,7 @@ export function ChatTranscript({
   requiresInitialLayout,
   isLoadingMore,
   onReady,
+  turnNavigator,
   ...list
 }: ChatTranscriptProps) {
   const composer = useComposerExpansion();
@@ -68,6 +71,19 @@ export function ChatTranscript({
           }}
         />
       </ChatShareDragSelection>
+      {turnNavigator && list.messages.length > 0 && !isSelecting && !isCoverVisible ? (
+        <ChatTurnDirectory
+          key={turnNavigator.scope}
+          bottomAccessoryHeight={bottomAccessoryHeight}
+          contentBottomInset={list.contentBottomInset}
+          contentTopInset={contentTopInset}
+          keyboardOffset={list.keyboardOffset}
+          navigator={turnNavigator}
+          scrollToMessage={(messageId) =>
+            listRef.current?.scrollToMessage(messageId) ?? Promise.resolve(false)
+          }
+        />
+      ) : null}
       <ChatInitialRenderCover isVisible={isCoverVisible} />
     </View>
   );

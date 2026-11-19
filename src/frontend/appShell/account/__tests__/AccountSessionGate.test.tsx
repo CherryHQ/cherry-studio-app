@@ -64,6 +64,7 @@ beforeEach(() => {
     isEnterprise: true,
     needsSignIn: false,
     isRestoringSession: false,
+    isRestoringCommunitySession: false,
     isBusy: false,
     hasPrompted: true,
   };
