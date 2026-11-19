@@ -1,0 +1,1179 @@
+{
+  "schemaVersion": 1,
+  "name": "Cherry Mobile main-path baseline",
+  "purpose": "Broad, shallow functional stability checks. No performance score or exhaustive parameter matrix.",
+  "resultStatuses": {
+    "passed": "The action and its expected visible outcome were observed, with evidence.",
+    "problem": "An established product failure was observed; preserve its evidence.",
+    "incomplete": "Not exercised, missing prerequisites, unavailable capability or unresolved attribution; never count as passed."
+  },
+  "sharedRules": [
+    "Resolve target, environment, device and dataset with the initiating user; only ask for missing choices.",
+    "Markdown runbooks remain exploratory drafts; executable scope and replay status are recorded in scripts metadata. Automated runs do not fall back to ad hoc agent UI actions.",
+    "Read each selected case's expected outcome before acting. Missing UI is not replaced silently with a different path.",
+    "Use only caller-approved data and model calls. Preserve dedicated data and restore reversible settings.",
+    "Record a separate result for every selected case/device pair, including incomplete cases.",
+    "A crash, hang or fatal UI error in any case must be retained; continue only independent checks."
+  ],
+  "dataRequirements": {
+    "runContext": "Caller-selected code target, existing environment, device and dataset; record identifiers, not secrets.",
+    "chatAgent": "A caller-approved in-app Agent with a usable text model.",
+    "twoTextModels": "Two caller-approved text models usable by the selected app.",
+    "ownedChat": "A conversation created for this run; keep a known message and distinguish it from existing user data.",
+    "ownedAgent": "An in-app Agent created for this run; retain its identity until dependent checks finish.",
+    "attachmentImage": "A caller-approved image available through the app or system picker.",
+    "attachmentDocument": "A caller-approved document and a model that supports its intended use.",
+    "imageModel": "A caller-approved image-generation model and allowance for the selected real generation calls.",
+    "imageEditModel": "A caller-approved model supporting reference-image editing.",
+    "templatePhoto": "A caller-approved reference photo when the selected template requires one.",
+    "ownedBoard": "A board created for this run with at least one successful image.",
+    "ownedVersion": "A disposable run-created image version; preserve another version for navigation.",
+    "editableImage": "A caller-approved static JPEG, PNG or WebP image; edits must preserve its original.",
+    "testProvider": "A dedicated provider configuration that the caller permits changing; retain its original values.",
+    "modelDefinition": "A valid model identifier and settings supplied by the caller for the test provider.",
+    "profileImage": "A caller-approved avatar image accessible to the selected device.",
+    "reversiblePrivacyControl": "A privacy control offered by this build that can be restored without submitting diagnostics.",
+    "photoDestination": "A caller-approved device-local save destination with the necessary existing permission.",
+    "assistantFile": "An existing caller-approved assistant-produced file, or one explicitly requested during this run.",
+    "fileSamples": "Caller-selected known-good files with recognizable content; use fixtures/README.md for requirements and optional bundled samples."
+  },
+  "scripts": [
+    {
+      "path": "scenarios/common.md",
+      "kind": "agent-runbook",
+      "status": "draft",
+      "validationRuns": []
+    },
+    {
+      "path": "scenarios/chat.md",
+      "kind": "agent-runbook",
+      "status": "draft",
+      "validationRuns": []
+    },
+    {
+      "path": "scenarios/drawings.md",
+      "kind": "agent-runbook",
+      "status": "draft",
+      "validationRuns": []
+    },
+    {
+      "path": "scenarios/files.md",
+      "kind": "agent-runbook",
+      "status": "draft",
+      "validationRuns": []
+    },
+    {
+      "path": "scenarios/settings.md",
+      "kind": "agent-runbook",
+      "status": "draft",
+      "validationRuns": []
+    },
+    {
+      "path": "tests/",
+      "entry": "e2e.config.ts",
+      "kind": "e2e",
+      "status": "draft",
+      "caseIds": [
+        "common.launch",
+        "common.onboarding",
+        "common.relaunch-chat",
+        "chat.send",
+        "chat.delete-conversation",
+        "chat.agent-create",
+        "chat.agent-chat",
+        "chat.agent-delete"
+      ],
+      "platforms": ["ios", "android"],
+      "locale": "zh-CN",
+      "deviceClass": "phone",
+      "toolVersion": "e2e 0.21.3, @e2e-dev/mobile 0.12.4 (agent-device 0.21.29)",
+      "startingState": "Disposable device with the development client installed and the workspace Metro running. Each test clears app data and completes onboarding against the local mock chat service.",
+      "sourceObservation": "Written from the app source; no replay with the e2e runner yet.",
+      "validationRuns": []
+    }
+  ],
+  "cases": [
+    {
+      "id": "common.launch",
+      "module": "common",
+      "title": "Open the selected app",
+      "steps": [
+        "Open the caller-selected compatible app on the selected device and code target.",
+        "Wait for its ordinary starting screen."
+      ],
+      "expected": "The starting screen is usable without a fatal error, persistent blank screen or unexpected exit.",
+      "requires": ["runContext"],
+      "script": "scenarios/common.md",
+      "automation": "tests/common.e2e.ts"
+    },
+    {
+      "id": "common.onboarding",
+      "module": "common",
+      "title": "Complete first-run setup",
+      "steps": [
+        "Start from empty app data.",
+        "Connect a custom OpenAI-compatible service, enter its model ID and start chatting."
+      ],
+      "expected": "Setup completes after its connection check and opens a usable chat screen.",
+      "requires": ["runContext"],
+      "script": "scenarios/common.md",
+      "automation": "tests/common.e2e.ts"
+    },
+    {
+      "id": "common.navigate",
+      "module": "common",
+      "title": "Move between main modules",
+      "steps": [
+        "Visit chat, drawings, the file library, in-app Agents and settings.",
+        "Return to chat."
+      ],
+      "expected": "Each destination opens and the final chat screen remains usable.",
+      "requires": ["runContext"],
+      "script": "scenarios/common.md"
+    },
+    {
+      "id": "common.background",
+      "module": "common",
+      "title": "Background and return",
+      "steps": ["During ordinary use, put the app in the background.", "Return to the same app."],
+      "expected": "The app resumes into a usable state and the current content is accessible.",
+      "requires": ["runContext"],
+      "script": "scenarios/common.md"
+    },
+    {
+      "id": "common.relaunch-chat",
+      "module": "common",
+      "title": "Reopen recent chat after relaunch",
+      "steps": [
+        "Fully close and reopen the selected app; reconnect to the same code target if needed.",
+        "Open the run-created recent conversation and send a short follow-up."
+      ],
+      "expected": "The prior messages are visible and the follow-up completes.",
+      "requires": ["chatAgent", "ownedChat"],
+      "script": "scenarios/common.md",
+      "automation": "tests/chat.e2e.ts"
+    },
+    {
+      "id": "common.relaunch-board",
+      "module": "common",
+      "title": "Reopen recent board after relaunch",
+      "steps": [
+        "After a full app relaunch, open the run-created recent board.",
+        "Open an existing image and return to its canvas."
+      ],
+      "expected": "The board and image remain accessible and navigation works.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/common.md"
+    },
+    {
+      "id": "chat.send",
+      "module": "chat",
+      "title": "Send and follow up",
+      "steps": [
+        "Create a run-labelled conversation with the selected in-app Agent.",
+        "Send a short harmless question, observe the reply, then ask a follow-up."
+      ],
+      "expected": "Both replies appear and the conversation remains usable.",
+      "requires": ["chatAgent"],
+      "script": "scenarios/chat.md",
+      "automation": "tests/chat.e2e.ts"
+    },
+    {
+      "id": "chat.stop",
+      "module": "chat",
+      "title": "Stop an active answer",
+      "steps": [
+        "Start an answer long enough to expose the stop control.",
+        "Use stop while that answer is active."
+      ],
+      "expected": "The selected answer stops and the composer becomes usable; a response that finished before stop was exercised is not a pass for this case.",
+      "requires": ["chatAgent", "ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.retry",
+      "module": "chat",
+      "title": "Retry an answer",
+      "steps": [
+        "Use the normal retry/regenerate action on a run-created answer.",
+        "Observe the new answer."
+      ],
+      "expected": "A new answer is produced and the conversation can continue.",
+      "requires": ["chatAgent", "ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.at-model",
+      "module": "chat",
+      "title": "Select a model through @",
+      "steps": [
+        "Type @ in the composer and inspect the offered model entry.",
+        "Select an approved model through that entry and send a short question."
+      ],
+      "expected": "The @ selection is accepted and a reply associated with that model appears; an ordinary model picker does not substitute for this path.",
+      "requires": ["chatAgent"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.multiple-models",
+      "module": "chat",
+      "title": "Request two model answers",
+      "steps": [
+        "Select two approved models using the app's multiple-model flow.",
+        "Send one question, inspect both answers, then continue from a chosen answer."
+      ],
+      "expected": "Both answers are accessible and continuation from the selected answer works.",
+      "requires": ["twoTextModels", "ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.answer-branches",
+      "module": "chat",
+      "title": "Switch answer branches",
+      "steps": [
+        "Use run-created alternative answers, generating an alternative only when needed.",
+        "Switch between the answers and continue from one selected branch."
+      ],
+      "expected": "Alternatives remain accessible and the new turn follows the selected branch.",
+      "requires": ["chatAgent", "ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.fork",
+      "module": "chat",
+      "title": "Fork into a new conversation",
+      "steps": [
+        "Use the offered fork/new-conversation action on a run-created message.",
+        "Enter the new conversation and send a follow-up."
+      ],
+      "expected": "A distinct conversation opens with the expected context and accepts the follow-up.",
+      "requires": ["chatAgent", "ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.delete-message",
+      "module": "chat",
+      "title": "Delete a message or turn",
+      "steps": [
+        "Choose a run-created message/turn and use the offered delete action.",
+        "Confirm that item is gone and continue using the conversation."
+      ],
+      "expected": "The selected content is removed while the remaining conversation stays usable.",
+      "requires": ["ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.delete-conversation",
+      "module": "chat",
+      "title": "Delete a conversation",
+      "steps": [
+        "After dependent checks, delete a run-created disposable conversation.",
+        "Return to the conversation list."
+      ],
+      "expected": "The conversation is absent from the list and another conversation can still be opened.",
+      "requires": ["ownedChat"],
+      "script": "scenarios/chat.md",
+      "automation": "tests/chat.e2e.ts"
+    },
+    {
+      "id": "chat.history",
+      "module": "chat",
+      "title": "Switch conversations",
+      "steps": [
+        "Open another caller-approved or run-created conversation.",
+        "Return to the run-created recent conversation."
+      ],
+      "expected": "The selected conversation's messages are shown each time.",
+      "requires": ["ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.search",
+      "module": "chat",
+      "title": "Find a known message",
+      "steps": [
+        "Search for a distinctive phrase sent during this run.",
+        "Open its result, inspect the matching conversation, then return to its latest messages."
+      ],
+      "expected": "The known message can be located and normal conversation navigation resumes.",
+      "requires": ["ownedChat"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.attachment-preview",
+      "module": "chat",
+      "title": "Preview a draft attachment",
+      "steps": [
+        "Attach a caller-approved image or document to a draft.",
+        "Open its preview and return to the draft."
+      ],
+      "expected": "Recognizable content opens and the draft remains available.",
+      "requires": ["chatAgent", "attachmentImage"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.attachment-remove",
+      "module": "chat",
+      "title": "Remove a draft attachment",
+      "steps": [
+        "Remove a selected draft attachment using its composer control.",
+        "Inspect the remaining draft."
+      ],
+      "expected": "The selected attachment is removed without deleting the source library file or losing unrelated draft content.",
+      "requires": ["chatAgent", "attachmentImage"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.attachment-send",
+      "module": "chat",
+      "title": "Send a retained attachment",
+      "steps": [
+        "Attach a caller-approved document supported by the chosen model.",
+        "Send a short question about it and observe the answer."
+      ],
+      "expected": "The submitted attachment remains accessible with the message and an answer appears.",
+      "requires": ["chatAgent", "attachmentDocument"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.agent-create",
+      "module": "chat",
+      "title": "Create a test Agent",
+      "steps": [
+        "Create an in-app Agent with a run-specific name and an approved model.",
+        "Return to the Agent list."
+      ],
+      "expected": "The new Agent appears and can be opened.",
+      "requires": ["chatAgent"],
+      "script": "scenarios/chat.md",
+      "automation": "tests/agents.e2e.ts"
+    },
+    {
+      "id": "chat.agent-edit",
+      "module": "chat",
+      "title": "Edit the test Agent",
+      "steps": [
+        "Change the run-created Agent's name and approved model.",
+        "Save, leave and reopen its settings."
+      ],
+      "expected": "Both selected values are visible after reopening.",
+      "requires": ["chatAgent", "ownedAgent"],
+      "script": "scenarios/chat.md"
+    },
+    {
+      "id": "chat.agent-chat",
+      "module": "chat",
+      "title": "Chat with the test Agent",
+      "steps": ["Open the run-created Agent and start a conversation.", "Send a short question."],
+      "expected": "The conversation uses that Agent and receives a reply.",
+      "requires": ["chatAgent", "ownedAgent"],
+      "script": "scenarios/chat.md",
+      "automation": "tests/agents.e2e.ts"
+    },
+    {
+      "id": "chat.agent-delete",
+      "module": "chat",
+      "title": "Delete the test Agent",
+      "steps": [
+        "After its dependent checks, delete only the run-created Agent.",
+        "Return to the Agent list."
+      ],
+      "expected": "That Agent is absent and the list remains usable.",
+      "requires": ["ownedAgent"],
+      "script": "scenarios/chat.md",
+      "automation": "tests/agents.e2e.ts"
+    },
+    {
+      "id": "drawings.create",
+      "module": "drawings",
+      "title": "Create a board through generation",
+      "steps": [
+        "Enter Drawings and send a simple prompt using the approved image model.",
+        "Wait for the new board and generated image."
+      ],
+      "expected": "The first generation creates a board and a readable image appears.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.template-browse",
+      "module": "drawings",
+      "title": "Browse and filter templates",
+      "steps": [
+        "Open the template stage.",
+        "Switch templates, select an available category and dismiss the stage."
+      ],
+      "expected": "The visible template/category changes and the gallery remains usable.",
+      "requires": ["runContext"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.template-generate",
+      "module": "drawings",
+      "title": "Generate from a template",
+      "steps": [
+        "Choose a template and use it.",
+        "Complete its fields and provide the approved photo if required, then generate."
+      ],
+      "expected": "The resulting board opens with a readable generated image.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md",
+      "condition": "If the selected template needs a photo, resolve templatePhoto with the caller before sending."
+    },
+    {
+      "id": "drawings.canvas",
+      "module": "drawings",
+      "title": "Navigate the board canvas",
+      "steps": [
+        "Pan and zoom a run-created board canvas.",
+        "Select a node and return to the overview framing."
+      ],
+      "expected": "The canvas responds and its nodes remain accessible.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.image-focus",
+      "module": "drawings",
+      "title": "Open a board image",
+      "steps": [
+        "Open a selected image from the canvas.",
+        "Inspect it in focus and return to the canvas."
+      ],
+      "expected": "The image is readable and the board remains navigable.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.reference-edit",
+      "module": "drawings",
+      "title": "Edit a reference image with AI",
+      "steps": [
+        "Select a run-created generated image as the reference.",
+        "Request one simple change and open the resulting version."
+      ],
+      "expected": "A new readable version appears and its source image remains accessible.",
+      "requires": ["imageEditModel", "ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.positional-edit",
+      "module": "drawings",
+      "title": "Edit using an image note",
+      "steps": [
+        "In image focus, add a positional note and enter a simple edit instruction.",
+        "Generate and open the result."
+      ],
+      "expected": "The note/instruction can be submitted and a new readable result appears; aesthetic precision is not scored.",
+      "requires": ["imageEditModel", "ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.model",
+      "module": "drawings",
+      "title": "Select the generation model",
+      "steps": [
+        "Open generation settings and choose an approved compatible image model.",
+        "Generate a simple image and inspect its generation information."
+      ],
+      "expected": "Generation completes and the recorded model matches the selection.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.ratio",
+      "module": "drawings",
+      "title": "Change the generation ratio",
+      "steps": [
+        "Choose one ratio supported by the approved model.",
+        "Generate once using that selection."
+      ],
+      "expected": "The selected ratio is retained in the generation information and a readable image appears.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md",
+      "condition": "Use an available ratio control; do not invent a control for a model that does not expose one."
+    },
+    {
+      "id": "drawings.count",
+      "module": "drawings",
+      "title": "Change the image count",
+      "steps": [
+        "Choose a supported image count within the caller's allowance.",
+        "Generate once and inspect the returned images."
+      ],
+      "expected": "The selected count is retained and the expected number of readable images is accessible.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md",
+      "condition": "Only exercise a count offered by this model; the model/ratio/count checks may share one generation when all outcomes are observed separately."
+    },
+    {
+      "id": "drawings.stop",
+      "module": "drawings",
+      "title": "Stop an active generation",
+      "steps": [
+        "Start an approved generation and use stop while it is active.",
+        "Inspect the board and composer after cancellation."
+      ],
+      "expected": "The generation stops and another request can be entered; cancellation may discard its receipt.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.restart",
+      "module": "drawings",
+      "title": "Generate after stopping",
+      "steps": ["After stopping, send one new approved generation request.", "Open its result."],
+      "expected": "Generation can start again and produces a readable image; if the previous board had no surviving generation, a new board may be created.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.retry",
+      "module": "drawings",
+      "title": "Retry a failed generation receipt",
+      "steps": [
+        "Use retry on a real failed receipt that offers it, within the caller's model-call allowance.",
+        "Inspect the retry outcome."
+      ],
+      "expected": "Retry submits successfully and produces a readable result.",
+      "requires": ["imageModel"],
+      "script": "scenarios/drawings.md",
+      "condition": "Requires a naturally occurring or caller-provided disposable failed receipt. Do not induce failure or repeatedly pay for generation to obtain a passing result; otherwise record incomplete."
+    },
+    {
+      "id": "drawings.rename",
+      "module": "drawings",
+      "title": "Rename a board",
+      "steps": [
+        "Rename a run-created board from its offered action.",
+        "Leave and reopen the gallery entry."
+      ],
+      "expected": "The new board name remains visible.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.reopen",
+      "module": "drawings",
+      "title": "Reopen a board",
+      "steps": [
+        "Leave the run-created board.",
+        "Open it again from the gallery and inspect a recent image."
+      ],
+      "expected": "The expected board and its images are available.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.info",
+      "module": "drawings",
+      "title": "Inspect generation information",
+      "steps": [
+        "Open generation information for a run-created image.",
+        "Read its model and prompt information, then dismiss it."
+      ],
+      "expected": "Information corresponding to that generation appears and the image remains usable.",
+      "requires": ["ownedBoard"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.delete-version",
+      "module": "drawings",
+      "title": "Delete an image version",
+      "steps": [
+        "Delete a disposable run-created version while retaining another version.",
+        "Inspect the surviving board."
+      ],
+      "expected": "The selected version is removed and focus/navigation reaches a surviving version.",
+      "requires": ["ownedBoard", "ownedVersion"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.save",
+      "module": "drawings",
+      "title": "Save an image locally",
+      "steps": [
+        "Save a generated image to the caller-approved local destination.",
+        "Confirm the saved image is accessible there."
+      ],
+      "expected": "A readable saved image is accessible at the chosen destination.",
+      "requires": ["ownedBoard", "photoDestination"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.crop",
+      "module": "drawings",
+      "title": "Crop and save a local image",
+      "steps": [
+        "Open a caller-approved editable image through the library or composer.",
+        "Make an obvious crop, save and inspect the result."
+      ],
+      "expected": "The cropped result is visible; the source remains intact and the library/composer points to the appropriate edited result.",
+      "requires": ["editableImage"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.rotate",
+      "module": "drawings",
+      "title": "Rotate and save a local image",
+      "steps": [
+        "Open a caller-approved editable image and rotate it once.",
+        "Save and inspect the result."
+      ],
+      "expected": "The rotated result is visible and the source remains intact.",
+      "requires": ["editableImage"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "drawings.cancel-edit",
+      "module": "drawings",
+      "title": "Cancel a local image edit",
+      "steps": [
+        "Open an editable image, change its crop or rotation, then cancel.",
+        "Inspect the original view."
+      ],
+      "expected": "The unsaved adjustment is discarded and the original image remains accessible.",
+      "requires": ["editableImage"],
+      "script": "scenarios/drawings.md"
+    },
+    {
+      "id": "files.jpeg",
+      "module": "files",
+      "title": "Preview JPEG",
+      "steps": [
+        "Open the caller-selected known-good JPEG sample from the library.",
+        "Display the recognizable image; zoom/pan where supported, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the JPEG sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.png",
+      "module": "files",
+      "title": "Preview PNG",
+      "steps": [
+        "Open the caller-selected known-good PNG sample from the library.",
+        "Display the recognizable image; zoom/pan where supported, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the PNG sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.webp",
+      "module": "files",
+      "title": "Preview WebP",
+      "steps": [
+        "Open the caller-selected known-good WebP sample from the library.",
+        "Display the recognizable image; zoom/pan where supported, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the WebP sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.gif",
+      "module": "files",
+      "title": "Preview GIF",
+      "steps": [
+        "Open the caller-selected known-good GIF sample from the library.",
+        "Display the recognizable GIF using this target's supported rendering, then return; record whether animation is supported without substituting a different file."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the GIF sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.svg",
+      "module": "files",
+      "title": "Preview SVG",
+      "steps": [
+        "Open the caller-selected known-good SVG sample from the library.",
+        "Display the recognizable vector image using this target's supported rendering or offered fallback, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the SVG sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.txt",
+      "module": "files",
+      "title": "Preview TXT",
+      "steps": [
+        "Open the caller-selected known-good TXT sample from the library.",
+        "Read recognizable text, scroll to a known later marker, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the TXT sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.json",
+      "module": "files",
+      "title": "Preview JSON",
+      "steps": [
+        "Open the caller-selected known-good JSON sample from the library.",
+        "Read recognizable JSON source, scroll to a known later marker, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the JSON sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.xml",
+      "module": "files",
+      "title": "Preview XML",
+      "steps": [
+        "Open the caller-selected known-good XML sample from the library.",
+        "Read recognizable XML source, scroll to a known later marker, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the XML sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.yaml",
+      "module": "files",
+      "title": "Preview YAML",
+      "steps": [
+        "Open the caller-selected known-good YAML sample from the library.",
+        "Read recognizable YAML source, scroll to a known later marker, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the YAML sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.markdown",
+      "module": "files",
+      "title": "Preview Markdown",
+      "steps": [
+        "Open the caller-selected known-good Markdown sample from the library.",
+        "Inspect rendered headings, body and a code block or table; scroll and return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the Markdown sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.html",
+      "module": "files",
+      "title": "Preview HTML",
+      "steps": [
+        "Open the caller-selected known-good HTML sample from the library.",
+        "Inspect the rendered page content, scroll to a later section, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the HTML sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.pdf",
+      "module": "files",
+      "title": "Preview PDF",
+      "steps": [
+        "Open the caller-selected known-good PDF sample from the library.",
+        "Inspect a known page, move to a second page, zoom where supported, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the PDF sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.docx",
+      "module": "files",
+      "title": "Preview DOCX",
+      "steps": [
+        "Open the caller-selected known-good DOCX sample from the library.",
+        "Read recognizable document content, scroll to later content, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the DOCX sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.xlsx",
+      "module": "files",
+      "title": "Preview XLSX",
+      "steps": [
+        "Open the caller-selected known-good XLSX sample from the library.",
+        "Inspect known cells, switch to a second worksheet and inspect its content, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the XLSX sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.pptx",
+      "module": "files",
+      "title": "Preview PPTX",
+      "steps": [
+        "Open the caller-selected known-good PPTX sample from the library.",
+        "Inspect a known slide, move to a second slide, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the PPTX sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.rtf",
+      "module": "files",
+      "title": "Preview RTF",
+      "steps": [
+        "Open the caller-selected known-good RTF sample from the library.",
+        "Read recognizable formatted text, scroll to later content, then return."
+      ],
+      "expected": "The expected content and basic viewer interaction work, and the app remains usable after returning.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Use the RTF sample specified by the caller. Record the actual MIME type and viewing path; host-file presence alone does not prove on-device availability."
+    },
+    {
+      "id": "files.doc",
+      "module": "files",
+      "title": "Open DOC through the platform viewer",
+      "steps": [
+        "Open the caller-selected DOC sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.xls",
+      "module": "files",
+      "title": "Open XLS through the platform viewer",
+      "steps": [
+        "Open the caller-selected XLS sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.ppt",
+      "module": "files",
+      "title": "Open PPT through the platform viewer",
+      "steps": [
+        "Open the caller-selected PPT sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.odt",
+      "module": "files",
+      "title": "Open ODT through the platform viewer",
+      "steps": [
+        "Open the caller-selected ODT sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.ods",
+      "module": "files",
+      "title": "Open ODS through the platform viewer",
+      "steps": [
+        "Open the caller-selected ODS sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.odp",
+      "module": "files",
+      "title": "Open ODP through the platform viewer",
+      "steps": [
+        "Open the caller-selected ODP sample through the offered platform-viewer handoff.",
+        "Inspect recognizable content, then return to the app."
+      ],
+      "expected": "The external/platform viewer displays recognizable content and return navigation works.",
+      "requires": ["fileSamples"],
+      "script": "scenarios/files.md",
+      "condition": "Exercise when this format is exposed and a compatible viewer/sample is available. Missing support, viewer or sample is incomplete with an explicit reason, not a successful preview or proof of an app crash."
+    },
+    {
+      "id": "files.chat-entry",
+      "module": "files",
+      "title": "Open a sent chat attachment",
+      "steps": [
+        "Open one caller-approved sent attachment from a conversation.",
+        "Inspect recognizable content and return to that conversation."
+      ],
+      "expected": "The preview works from the message entry and the same conversation remains usable.",
+      "requires": ["ownedChat", "attachmentDocument"],
+      "script": "scenarios/files.md"
+    },
+    {
+      "id": "files.assistant-entry",
+      "module": "files",
+      "title": "Open an assistant-produced file",
+      "steps": [
+        "Open one accessible assistant-produced file from its message.",
+        "Inspect recognizable content and return."
+      ],
+      "expected": "The file opens from its assistant message and the conversation remains usable.",
+      "requires": ["assistantFile"],
+      "script": "scenarios/files.md"
+    },
+    {
+      "id": "settings.provider-edit",
+      "module": "settings",
+      "title": "Edit and save a test provider",
+      "steps": [
+        "Open the dedicated test provider and record the original non-secret values.",
+        "Change a caller-approved reversible field, save, reopen, then restore it."
+      ],
+      "expected": "The changed value persists and the original configuration is restored.",
+      "requires": ["testProvider"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.models-load",
+      "module": "settings",
+      "title": "Load a provider's models",
+      "steps": [
+        "Open the dedicated provider's model-management entry.",
+        "Use its offered model-list loading action."
+      ],
+      "expected": "A usable model list appears and settings remain navigable.",
+      "requires": ["testProvider"],
+      "script": "scenarios/settings.md",
+      "condition": "Only use an offered model-list action; lack of provider support is reported as incomplete."
+    },
+    {
+      "id": "settings.model-add",
+      "module": "settings",
+      "title": "Add a test model",
+      "steps": [
+        "Add the caller-specified valid model to the dedicated test provider.",
+        "Save and reopen its model list; remove only the run-created entry after dependent checks."
+      ],
+      "expected": "The added model is visible with the selected identifier and settings.",
+      "requires": ["testProvider", "modelDefinition"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.provider-toggle",
+      "module": "settings",
+      "title": "Toggle provider enablement",
+      "steps": [
+        "Record the test provider's enabled state.",
+        "Toggle it, leave and return, then restore the original state."
+      ],
+      "expected": "The selected state persists and the provider is restored for other checks.",
+      "requires": ["testProvider"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.default-chat",
+      "module": "settings",
+      "title": "Change the default chat model",
+      "steps": [
+        "Record the original default chat model and select an approved replacement.",
+        "Enter the feature that consumes this default and send a short question, then restore the default."
+      ],
+      "expected": "The relevant new/default-model flow uses the selected model and receives a reply.",
+      "requires": ["chatAgent"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.default-image",
+      "module": "settings",
+      "title": "Change the default image model",
+      "steps": [
+        "Record the original default image model and select an approved replacement.",
+        "Enter the relevant default-model generation flow and generate once, then restore the default."
+      ],
+      "expected": "The flow uses the selected image model and produces a readable result.",
+      "requires": ["imageModel"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.theme",
+      "module": "settings",
+      "title": "Change the theme",
+      "steps": [
+        "Record the current theme, choose another offered theme and visit chat.",
+        "Reopen the setting and restore it."
+      ],
+      "expected": "The selection is retained, the visible theme changes and normal navigation works.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.language",
+      "module": "settings",
+      "title": "Change the language",
+      "steps": [
+        "Record the current language and choose another supported language.",
+        "Visit a main screen, then restore the original language."
+      ],
+      "expected": "Visible interface copy follows the chosen language and can be restored.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.font-size",
+      "module": "settings",
+      "title": "Change the font size",
+      "steps": [
+        "Record the current font size and change it.",
+        "Inspect chat text, reopen the setting and restore it."
+      ],
+      "expected": "Text size visibly changes, the setting is retained and essential controls stay usable.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.watermark",
+      "module": "settings",
+      "title": "Change the share-watermark setting",
+      "steps": [
+        "Record the share-watermark value, change it, save if required and reopen the setting.",
+        "Restore its original value."
+      ],
+      "expected": "The changed value is retained and restored; this case does not claim that an exported image was checked.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.profile-name",
+      "module": "settings",
+      "title": "Change the test profile name",
+      "steps": [
+        "Record the test profile name, change it to a run-labelled value and save.",
+        "Reopen the profile and restore the original name."
+      ],
+      "expected": "The saved name is visible and can be restored.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.profile-avatar",
+      "module": "settings",
+      "title": "Change the test profile avatar",
+      "steps": [
+        "Record how to restore the current test avatar, then select the approved image and save.",
+        "Inspect the updated profile and restore the prior avatar."
+      ],
+      "expected": "The selected avatar appears and the prior state can be restored.",
+      "requires": ["profileImage"],
+      "script": "scenarios/settings.md",
+      "condition": "If the current avatar cannot be restored, ask for a disposable test profile before modifying it."
+    },
+    {
+      "id": "settings.notifications",
+      "module": "settings",
+      "title": "Operate a notification control",
+      "steps": [
+        "Record an available notification toggle's value.",
+        "Change it, leave and return, then restore it."
+      ],
+      "expected": "The offered control responds and its state is visible after returning.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md",
+      "condition": "Use the control available on this platform; do not send a notification as an extra test."
+    },
+    {
+      "id": "settings.permission-details",
+      "module": "settings",
+      "title": "Open permission details",
+      "steps": [
+        "Open an available permission-detail entry from settings.",
+        "Inspect its state and return."
+      ],
+      "expected": "The permission detail is accessible and app navigation resumes.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.system-settings",
+      "module": "settings",
+      "title": "Return from system settings",
+      "steps": [
+        "Use an offered permission/system-settings link.",
+        "Return to the selected app without changing unrelated system configuration."
+      ],
+      "expected": "The intended system page opens and the app remains usable after returning.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.privacy",
+      "module": "settings",
+      "title": "Operate a reversible privacy control",
+      "steps": [
+        "Record the selected privacy setting, change it, leave and return.",
+        "Restore the initial value."
+      ],
+      "expected": "The control's saved value changes and is restored without submitting diagnostics.",
+      "requires": ["reversiblePrivacyControl"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.data-page",
+      "module": "settings",
+      "title": "Open data and storage settings",
+      "steps": [
+        "Open the available data/storage settings page.",
+        "Inspect its displayed state and return."
+      ],
+      "expected": "The page is usable; no backup restore, clearing or migration is claimed.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.about",
+      "module": "settings",
+      "title": "Open About",
+      "steps": ["Open About and inspect the displayed app information.", "Return to settings."],
+      "expected": "App information is visible and return navigation works.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md"
+    },
+    {
+      "id": "settings.info-dialog",
+      "module": "settings",
+      "title": "Open a non-destructive settings dialog",
+      "steps": [
+        "Open an offered informational dialog, such as license or storage details.",
+        "Dismiss it and continue navigating."
+      ],
+      "expected": "The dialog opens and closes without leaving an unusable overlay.",
+      "requires": ["runContext"],
+      "script": "scenarios/settings.md",
+      "condition": "Do not use a destructive action or trigger an update download to manufacture this case."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Standalone project: the acceptance toolchain needs AI SDK 7 while the app pins AI SDK 6, so it
+# keeps its own lockfile and never joins the application's dependency graph or patches.
+packages: []
+
+minimumReleaseAge: 1440
