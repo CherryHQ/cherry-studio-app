@@ -76,7 +76,7 @@ import { deriveContextUsage } from './utils/contextUsage';
 import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
-import { getSendErrorLabelKey } from './utils/sendErrorLabel';
+import { getSendErrorLabelKey, ParallelSshSendError } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 import { readSshMentions } from './utils/sshMentions';
 
@@ -537,7 +537,7 @@ function TextChatInput({
   const focused = useIsFocused();
   const { prepare: prepareSshTarget, prompt: restoreSshTarget } = useSshTargetRestore(
     sessionId,
-    isSshAvailable && focused,
+    isSshAvailable && focused && !isParallel,
   );
   useEffect(() => {
     if (focused && cloudModel && !cloudAnswerMessage) openModelPicker();
@@ -598,6 +598,8 @@ function TextChatInput({
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         const sshMentions = readSshMentions(prompt);
+        if (isParallel && sshMentions.references.length > 0)
+          throw new ParallelSshSendError('SSH requires a single reply model.');
         const sshPreparation = prepareSshTarget(sshMentions.references);
         if (sshPreparation) await sshPreparation;
         const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
@@ -672,6 +674,7 @@ function TextChatInput({
       editMessage,
       editing,
       isBusy,
+      isParallel,
       commitEdit,
       settleEditSend,
       quoteActions,

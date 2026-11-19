@@ -523,6 +523,7 @@
   "chat.input.sendError.modelNotConfigured": "此 Agent 尚未設定模型，請先選擇模型再傳送。",
   "chat.input.sendError.sessionBusy": "該對話仍在回復中，請等待完成後重試。",
   "chat.input.sendError.sessionNotFound": "該對話已不存在。",
+  "chat.input.sendError.sshParallelUnsupported": "並行回答不支援 SSH。請切回單一模型後再試。",
   "chat.input.sendError.toolCallingUnsupported": "當前模型不支持工具調用，請切換到支持工具的模型後重試。",
   "chat.input.sendError.unsupported": "所選模型無法處理此請求，請檢查模型、工具和附件。",
   "chat.input.sendFailed": "消息未發送，請重試。",

@@ -523,6 +523,7 @@
   "chat.input.sendError.modelNotConfigured": "このエージェントにはモデルが設定されていません。送信する前にモデルを選択してください。",
   "chat.input.sendError.sessionBusy": "このチャットはまだ返信中です。完了するまで待ってから、もう一度試してください。",
   "chat.input.sendError.sessionNotFound": "このチャットはもう存在しません。",
+  "chat.input.sendError.sshParallelUnsupported": "並列応答では SSH を使用できません。モデルを1つに切り替えて、もう一度お試しください。",
   "chat.input.sendError.toolCallingUnsupported": "このモデルはツール呼び出しをサポートしていません。ツールサポートのあるモデルを選択して、再試行してください。",
   "chat.input.sendError.unsupported": "選択されたモデルはこのリクエストを実行できません。モデル、ツール、付属品を確認してください。",
   "chat.input.sendFailed": "メッセージは送信されませんでした。もう一度やり直してください。",

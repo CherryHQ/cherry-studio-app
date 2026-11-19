@@ -535,6 +535,7 @@
   "chat.input.sendError.modelNotConfigured": "Для этого Агента не настроена модель. Выберите модель перед отправкой.",
   "chat.input.sendError.sessionBusy": "Этот чат все еще отвечает. Подождите, пока он закончится, затем повторите попытку.",
   "chat.input.sendError.sessionNotFound": "Этот чат больше не существует.",
+  "chat.input.sendError.sshParallelUnsupported": "SSH недоступен для параллельных ответов. Выберите одну модель и повторите попытку.",
   "chat.input.sendError.toolCallingUnsupported": "Эта модель не поддерживает вызовы инструментов. Выберите модель с поддержкой инструмента и повторите попытку.",
   "chat.input.sendError.unsupported": "Выбранная модель не может выполнить этот запрос. Проверьте модель, ее инструменты и все насадки.",
   "chat.input.sendFailed": "Сообщение не было отправлено. Попробуйте еще раз.",

@@ -531,6 +531,7 @@
   "chat.input.sendError.modelNotConfigured": "Este Agente não tem um modelo configurado. Selecione um modelo antes de enviar.",
   "chat.input.sendError.sessionBusy": "Este chat ainda está a responder. Espere terminar e tente novamente.",
   "chat.input.sendError.sessionNotFound": "Este chat já não existe.",
+  "chat.input.sendError.sshParallelUnsupported": "O SSH não está disponível para respostas em paralelo. Selecione um único modelo e tente novamente.",
   "chat.input.sendError.toolCallingUnsupported": "Este modelo não suporta chamadas de ferramentas. Escolha um modelo com suporte de ferramenta e tente novamente.",
   "chat.input.sendError.unsupported": "O modelo selecionado não pode executar este pedido. Verifique o modelo, as suas ferramentas e quaisquer acessórios.",
   "chat.input.sendFailed": "A mensagem não foi enviada. Tente novamente.",

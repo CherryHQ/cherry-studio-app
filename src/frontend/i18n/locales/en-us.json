@@ -527,6 +527,7 @@
   "chat.input.sendError.modelNotConfigured": "This Agent has no model configured. Select a model before sending.",
   "chat.input.sendError.sessionBusy": "This chat is still replying. Wait for it to finish, then try again.",
   "chat.input.sendError.sessionNotFound": "This chat no longer exists.",
+  "chat.input.sendError.sshParallelUnsupported": "SSH is unavailable for parallel replies. Switch to one model and try again.",
   "chat.input.sendError.toolCallingUnsupported": "This model doesn't support tool calls. Choose a model with tool support and try again.",
   "chat.input.sendError.unsupported": "The selected model can't run this request. Check the model, its tools, and any attachments.",
   "chat.input.sendFailed": "Message was not sent. Try again.",

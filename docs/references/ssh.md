@@ -103,6 +103,8 @@ connection only through exclusive leases. All conversation bindings and grants d
 process restarts. The device remembers the most recent 64 explicit Session selections as profile
 IDs and revisions in the active storage generation. When a standard chat sends a new message with
 no live target, it can offer to restore a remembered selection before resolving the turn's tools.
+Parallel replies skip this prompt. If a draft explicitly mentions SSH, the composer asks the user
+to switch to one model and keeps the draft.
 The runtime checks the current profile again when the user confirms and restores it with a new
 selection identity and no grant. Cancelling keeps the draft. A message without an explicit SSH
 mention can send without a target and forget the previous selection. Changed or removed profiles

@@ -199,6 +199,8 @@ beforeEach(() => {
   mockEditing = null;
   mockSshTarget = null;
   mockSshAvailable = false;
+  mockGetRememberedTarget.mockReset();
+  mockDecideRememberedTarget.mockReset();
   mockDraft = '';
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -352,6 +354,35 @@ test('dismissing SSH restoration cancels admission so the composer can keep the 
   });
   expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
   expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('parallel sends skip SSH restoration and reject drafts that explicitly mention SSH', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValue(mockSshProfile);
+  await mount();
+  await act(async () => mockPickerApi.setReplyModels(['p::m', 'p::other']));
+  const composer = renderer.root.findByType('TextComposer' as never);
+  let ordinarySend!: Promise<void>;
+  await act(async () => {
+    ordinarySend = composer.props.onSend({ text: 'Summarize this chat', attachments: [] });
+    void ordinarySend.catch(() => {});
+  });
+  expect(mockGetRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledWith(
+    expect.objectContaining({ additionalModelIds: ['p::other'] }),
+  );
+  await ordinarySend;
+
+  const sshSend: Promise<void> = composer.props.onSend({
+    text: `${createSshMention('SSH · router', mockSshProfile)} Check status`,
+    attachments: [],
+  });
+  await expect(sshSend).rejects.toThrow('SSH requires a single reply model.');
+  await expect(
+    sshSend.catch((error: unknown) => composer.props.getSendErrorLabel(error)),
+  ).resolves.toBe('chat.input.sendError.sshParallelUnsupported');
+  expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledTimes(1);
 });
 
 test('image send captures before attachment preparation and consumes that attempt after an await', async () => {
