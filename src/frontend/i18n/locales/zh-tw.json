@@ -771,7 +771,6 @@
   "cloud.notEntitled": "目前用途不在權益範圍內",
   "cloud.quotaDayShort": "日",
   "cloud.quotaDaysShort": "{{days}}天",
-  "cloud.quotaExhausted": "額度已用盡",
   "cloud.quotaHoursShort": "{{hours}}h",
   "cloud.quotaMonthShort": "月",
   "cloud.quotaWeekShort": "週",

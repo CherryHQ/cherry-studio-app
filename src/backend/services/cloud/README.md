@@ -109,10 +109,8 @@ responses. They use the same boundary without buffering the response or construc
   Accounts without any currently entitled Plan models do not see the provider in settings or
   the picker.
 - An active, currently effective paid entitlement and an available model feature are required. Free
-  entitlements alone do not expose Plan models. Every window of a quota pool must have credit;
-  any independent pool can admit the model. Reserved
-  units are already reflected in the server's remaining units. The gateway owns final admission,
-  reservations and charging when requests race.
+  entitlements alone do not expose Plan models. The gateway checks quota and returns its refusal
+  to the caller. The sidebar displays remaining units, including the effect of server reservations.
 - Agent conversations use `agent`. One-shot text generation (including translation) uses
   `general`, requiring both `chat` and `translate`. Picker callers can select the same purpose;
   its default is `agent`, and translation model settings request `general`.
@@ -127,17 +125,17 @@ responses. They use the same boundary without buffering the response or construc
 - Cold start checks subscription display once after account restoration. A newly signed-in or
   replaced account loads its own state, while signed-out installations make no subscription
   requests. Opening the sidebar triggers a silent refresh. A permanent sidebar checks when it
-  becomes visible in the foreground if the snapshot is stale. The model picker also rechecks when
-  opened with exhausted or temporarily unavailable Cloud models. Concurrent reads share the
-  account/model request. These triggers use no polling or automatic retries.
-- Model admission revalidates stale state before sending. Inference completion or cancellation
-  marks quota stale without starting a read, including if an earlier read is still in progress.
-  Failures preserve the last confirmed display data while new Cloud requests require revalidation.
+  becomes visible in the foreground if the snapshot is stale. Concurrent reads share the
+  account/model request. A transient background failure preserves the previous confirmed state.
+- Sending revalidates stale model access. Inference completion or cancellation marks the sidebar
+  quota stale, including if an earlier read is still in progress. The gateway decides whether
+  quota permits the request.
 - Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's
   queries and inference use the new one. Catalog withdrawal disables old rows without
-  writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
-  Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
+  writing a fabricated empty service address. Projection is serialized and generation-checked in its
+  write transaction. Only catalog writes count as storage work. They wait for a backup or restore
+  to release the write gate.
 
 The source protocol reviewed for this implementation is Cloud API
 `5fbef215e3fc1309745fd754d963e5400923dc78`. Unit and database regressions cover quotas, signature

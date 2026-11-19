@@ -22,11 +22,6 @@ let mockListProps:
 let mockOnSizeChange: ((size: BottomSheetSize) => void) | undefined;
 let mockFilterItems: { id: string; onPress: () => void }[] = [];
 const chosenModelId = 'provider::chosen';
-const mockCloud = { getState: () => ({ models: [] }) };
-
-jest.mock('@/frontend/data', () => ({
-  useBackendModule: () => mockCloud,
-}));
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
   ModelRegistryGate: ({ children }: { children: ReactNode }) => children,

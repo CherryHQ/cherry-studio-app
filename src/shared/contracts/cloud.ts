@@ -85,11 +85,7 @@ export type CloudModel = z.infer<typeof CloudModelSchema>;
 export type CloudAccount = z.infer<typeof CloudAccountSchema>;
 export type CloudPlans = z.infer<typeof CloudPlansSchema>;
 export type CloudQuotaWindow = z.infer<typeof CloudQuotaWindowSchema>;
-export type CloudUnavailableReason =
-  | 'signed_out'
-  | 'unavailable'
-  | 'not_entitled'
-  | 'quota_exhausted';
+export type CloudUnavailableReason = 'signed_out' | 'unavailable' | 'not_entitled';
 export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
   isRefreshing: boolean;
@@ -117,16 +113,13 @@ function isEffectivePaidEntitlement(
   );
 }
 
-/** Quota exhaustion keeps a model visible; the selected use still determines its capabilities. */
+/** Model visibility follows the entitlement and the features required for the selected use. */
 export function isCloudModelListed(
   state: CloudState,
   modelId: string,
   uses: readonly CloudModelUse[] = ['agent', 'general'],
 ): boolean {
-  return uses.some((use) => {
-    const reason = cloudModelUnavailable(state, modelId, use);
-    return reason === undefined || reason === 'quota_exhausted';
-  });
+  return uses.some((use) => cloudModelUnavailable(state, modelId, use) === undefined);
 }
 
 /** The last confirmed paid entitlements can still be displayed if a refresh fails. */
@@ -142,7 +135,7 @@ export function getActiveCloudEntitlements(
   return state.account.entitlements.filter((entry) => isEffectivePaidEntitlement(entry, now));
 }
 
-/** Windows constrain the same pool; independent pools are alternative sources of credit. */
+/** Model access here depends on identity, entitlement and features. The gateway checks quota. */
 export function cloudModelUnavailable(
   state: CloudState,
   modelId: string,
@@ -156,23 +149,12 @@ export function cloudModelUnavailable(
   const features = use === 'agent' ? ['agent'] : ['chat', 'translate'];
   if (!model || !features.every((feature) => model.available_features.includes(feature)))
     return 'not_entitled';
-  const entitled = state.account.entitlements.some(
-    (entry) => isEffectivePaidEntitlement(entry, now) && entry.model_ids.includes(modelId),
-  );
-  if (!entitled) return 'not_entitled';
-  const pools = state.account.quota_pools.filter((pool) => pool.model_ids.includes(modelId));
   if (
-    !pools.some(
-      (pool) =>
-        pool.windows.length > 0 &&
-        pool.windows.every(
-          (window) =>
-            window.remaining_units > 0 &&
-            (!window.period_end || Date.parse(window.period_end) > now),
-        ),
+    !state.account.entitlements.some(
+      (entry) => isEffectivePaidEntitlement(entry, now) && entry.model_ids.includes(modelId),
     )
   )
-    return 'quota_exhausted';
+    return 'not_entitled';
   return undefined;
 }
 

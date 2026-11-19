@@ -771,7 +771,6 @@
   "cloud.notEntitled": "この用途は利用権限に含まれていません",
   "cloud.quotaDayShort": "日",
   "cloud.quotaDaysShort": "{{days}}日",
-  "cloud.quotaExhausted": "利用枠を使い切りました",
   "cloud.quotaHoursShort": "{{hours}}h",
   "cloud.quotaMonthShort": "月",
   "cloud.quotaWeekShort": "週",

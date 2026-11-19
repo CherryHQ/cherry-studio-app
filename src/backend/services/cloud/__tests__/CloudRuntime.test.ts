@@ -667,7 +667,7 @@ test('cold-start discovery recovers missing metadata before one subscription che
   await runtime._doStop();
 });
 
-test('inference completion defers entitlement revalidation until the next model request', async () => {
+test('reuses recently verified model access across requests and revalidates it when stale', async () => {
   mockInference.mockImplementation(async () => new Response(null, { status: 200 }));
   const { runtime } = await setup();
   await jest.advanceTimersByTimeAsync(0);
@@ -678,6 +678,8 @@ test('inference completion defers entitlement revalidation until the next model 
       body: JSON.stringify({ model: 'cloud-model' }),
     });
   await request();
+  await request();
+  expect(mockGet).toHaveBeenCalledTimes(3);
   await jest.advanceTimersByTimeAsync(120_000);
   expect(mockGet).toHaveBeenCalledTimes(3);
   await request();
@@ -685,7 +687,7 @@ test('inference completion defers entitlement revalidation until the next model 
   await runtime._doStop();
 });
 
-test('a refresh started before inference completion cannot make the earlier quota fresh', async () => {
+test('an older background read cannot block sending or mark displayed quota fresh', async () => {
   const upstream = inferenceResponse();
   mockInference
     .mockResolvedValueOnce(upstream.response)
@@ -710,11 +712,19 @@ test('a refresh started before inference completion cannot make the earlier quot
     await jest.advanceTimersByTimeAsync(0);
     upstream.close();
     await expect(response.body!.getReader().read()).resolves.toMatchObject({ done: true });
-    finishAccount(cloudSnapshot().account);
+    const next = request();
+    void next.catch(() => {});
+    await jest.advanceTimersByTimeAsync(0);
+    const sendsWhileReading = mockInference.mock.calls.length;
+    const oldAccount = cloudSnapshot().account!;
+    oldAccount.quota_pools[0]!.windows[0]!.remaining_units = 0;
+    finishAccount(oldAccount);
     await background;
+    await expect(next).resolves.toMatchObject({ status: 200 });
+    expect(sendsWhileReading).toBe(2);
 
     mockGet.mockClear();
-    await request();
+    await runtime.refresh('if-stale');
     expect(mockGet).toHaveBeenCalledWith('account-a', '/api/v1/account', service.apiOrigin);
   } finally {
     finishAccount(cloudSnapshot().account);
@@ -762,18 +772,84 @@ test('an outage keeps display data but fails closed, and unchanged refreshes do 
   await runtime._doStop();
 });
 
-test('catalog withdrawal resumes after a backup freeze without restoring signed-out access', async () => {
-  const { runtime, change } = await setup();
-  await runtime.refresh();
+test('a failed background catalog read leaves a send using recently verified access intact', async () => {
+  const { runtime } = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  let finishSigning!: (headers: Record<string, string>) => void;
+  mockClientSignatureHeaders.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishSigning = resolve;
+    }),
+  );
+  const response = new Response(null, { status: 200 });
+  mockInference.mockResolvedValue(response);
+  const send = runtime.createModelFetch('cloud-model', 'agent')(
+    'https://cloud.example/v1/messages',
+    {
+      method: 'POST',
+      body: JSON.stringify({ model: 'cloud-model' }),
+    },
+  );
+  try {
+    await jest.advanceTimersByTimeAsync(0);
+    mockGet.mockImplementation(async (id: string, path: string) => {
+      if (path === '/v1/models') throw new Error('Catalog unavailable');
+      return reply(id, path);
+    });
+    await expect(runtime.refresh('background')).rejects.toThrow('Catalog unavailable');
+    finishSigning({});
+    await expect(send).resolves.toBe(response);
+    expect(runtime.getState().phase).toBe('ready');
+  } finally {
+    finishSigning({});
+    await runtime._doStop();
+  }
+});
+
+test('an in-flight network read allows a backup freeze and applies catalog changes after thaw', async () => {
+  const { runtime } = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  mockProject.mockClear();
+  let finishModels!: (value: unknown) => void;
+  const pendingModels = new Promise((resolve) => {
+    finishModels = resolve;
+  });
+  mockGet.mockImplementation(async (id: string, path: string) =>
+    path === '/v1/models' ? pendingModels : reply(id, path),
+  );
+  const background = runtime.refresh('background');
+  const models = cloudSnapshot().models.map((model) => ({ ...model, display_name: 'New name' }));
   const release = storageMutationGate.freeze();
   try {
-    change(null);
-    await expect(runtime.refresh()).rejects.toBeDefined();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(runtime.hasPendingStorageWork()).toBe(false);
+    finishModels({ data: models });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(mockProject).not.toHaveBeenCalled();
+  } finally {
+    finishModels({ data: models });
+    release();
+    await background;
+    await runtime._doStop();
+  }
+  expect(mockProject.mock.lastCall?.[2]).toEqual(models);
+});
+
+test('catalog withdrawal waits for a backup freeze to end without restoring signed-out access', async () => {
+  const { runtime, change } = await setup();
+  await runtime.refresh();
+  mockProject.mockClear();
+  const release = storageMutationGate.freeze();
+  change(null);
+  const withdrawal = runtime.refresh();
+  try {
+    await jest.advanceTimersByTimeAsync(0);
     expect(runtime.getState().phase).toBe('signed_out');
+    expect(mockProject).not.toHaveBeenCalled();
   } finally {
     release();
   }
-  await runtime.refresh();
+  await withdrawal;
   expect(mockProject.mock.lastCall?.[2]).toEqual([]);
   expect(runtime.getState().phase).toBe('signed_out');
   await runtime._doStop();
@@ -805,7 +881,11 @@ test('Plan models appear only while the account has a paid subscription', async 
   await runtime._doStop();
 });
 
-test('quota exhaustion rejects a previously selected model before requesting inference', async () => {
+test('forwards the server quota refusal even when the local snapshot already shows zero quota', async () => {
+  const refusal = new Response(JSON.stringify({ error: { message: 'Quota exhausted' } }), {
+    status: 429,
+  });
+  mockInference.mockResolvedValue(refusal);
   const { runtime } = await setup();
   await runtime.refresh();
   const fetch = runtime.createModelFetch('cloud-model', 'agent');
@@ -817,7 +897,11 @@ test('quota exhaustion rejects a previously selected model before requesting inf
   });
   await runtime.refresh();
   await expect(
-    fetch('https://cloud.example/v1/messages', { method: 'POST', body: '{}' }),
-  ).rejects.toMatchObject({ code: 'cloud_quota_exhausted' });
+    fetch('https://cloud.example/v1/messages', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'cloud-model' }),
+    }),
+  ).resolves.toBe(refusal);
+  expect(runtime.getState().phase).toBe('ready');
   await runtime._doStop();
 });
