@@ -81,9 +81,13 @@ describe('ModelPickerList', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  test.each(['activation_required', 'subscription_required'] as const)(
+  test.each([
+    ['signed_out', 'account.login.signIn'],
+    ['activation_required', 'cloud.amd.shortName'],
+    ['subscription_required', 'cloud.subscription'],
+  ] as const)(
     'a free model with %s shows the free badge and handles access on tap',
-    (reason) => {
+    (reason, lockLabel) => {
       const provider = { id: CLOUD_PROVIDER_ID, name: CLOUD_PROVIDER_NAME };
       const isAmd = reason === 'activation_required';
       const modelId = isAmd ? 'amd/gpt-oss' : 'gpt-oss';
@@ -153,8 +157,9 @@ describe('ModelPickerList', () => {
       expect(row?.findAllByType(Text).map((text) => text.props.children)).toEqual([
         'GPT-OSS',
         'models.badge.free',
+        lockLabel,
       ]);
-      expect(row?.props.accessibilityLabel).toBe('GPT-OSS, models.capability.free');
+      expect(row?.props.accessibilityLabel).toBe(`GPT-OSS, models.capability.free, ${lockLabel}`);
       expect(row?.props.disabled).toBe(false);
       act(() => row?.props.onPress());
       expect(onCloudOffer).toHaveBeenCalledWith(modelId);

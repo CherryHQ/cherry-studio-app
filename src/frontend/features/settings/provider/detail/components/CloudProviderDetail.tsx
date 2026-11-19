@@ -1,5 +1,4 @@
 import ExternalLinkIcon from '@cherrystudio/app-icons/icons/external-link';
-import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { ContentState, Section } from '@cherrystudio/ui/components';
 import { Redirect, useFocusEffect } from 'expo-router';
@@ -12,6 +11,7 @@ import {
   useCloudModelBrowser,
   useReturnedCloudModel,
 } from '@/frontend/appShell/cloud';
+import { CloudModelLock, getCloudModelLockLabelKey } from '@/frontend/components/CloudModelLock';
 import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
@@ -97,29 +97,39 @@ export function CloudProviderDetail() {
           title={t('settings.provider.models.listTitle')}
           variant="plain"
         >
-          {Array.from(offers.values(), (offer) => (
-            <ProviderModelRow
-              accessibilityHint={offer.canViewUsage ? t('cloud.amd.viewUsage') : undefined}
-              endMark={
-                <View className="w-5 items-center" importantForAccessibility="no-hide-descendants">
-                  {offer.reason ? (
-                    <LockIcon className="size-3.5 text-muted-foreground" />
-                  ) : offer.canViewUsage ? (
-                    <ExternalLinkIcon className="size-3.5 text-muted-foreground" />
-                  ) : null}
-                </View>
-              }
-              disabled={offer.reason === 'unavailable' || offer.reason === 'not_entitled'}
-              isCloudFree={offer.model.is_free}
-              key={offer.model.id}
-              model={toCloudModelPreview(offer.model)}
-              onPress={
-                offer.reason || offer.canViewUsage ? () => press(offer.model.id, path) : undefined
-              }
-              provider={undefined}
-              variant="management"
-            />
-          ))}
+          {Array.from(offers.values(), (offer) => {
+            const lockLabelKey = getCloudModelLockLabelKey(offer);
+            const lockLabel = lockLabelKey ? t(lockLabelKey) : undefined;
+            return (
+              <ProviderModelRow
+                accessibilityHint={offer.canViewUsage ? t('cloud.amd.viewUsage') : undefined}
+                endMark={{
+                  label: lockLabel,
+                  content: offer.reason ? (
+                    <CloudModelLock label={lockLabel} />
+                  ) : (
+                    <View
+                      className="w-5 items-center"
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      {offer.canViewUsage ? (
+                        <ExternalLinkIcon className="size-3.5 text-muted-foreground" />
+                      ) : null}
+                    </View>
+                  ),
+                }}
+                disabled={offer.reason === 'unavailable' || offer.reason === 'not_entitled'}
+                isCloudFree={offer.model.is_free}
+                key={offer.model.id}
+                model={toCloudModelPreview(offer.model)}
+                onPress={
+                  offer.reason || offer.canViewUsage ? () => press(offer.model.id, path) : undefined
+                }
+                provider={undefined}
+                variant="management"
+              />
+            );
+          })}
         </Section>
       )}
     </SettingsScrollPage>

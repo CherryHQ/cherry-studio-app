@@ -96,11 +96,11 @@ test('login, personal subscription and AMD activation are separate admission dec
   );
 });
 
-test.each([true, false])('missing plan access is silent on tap (is_free=%s)', (is_free) => {
+test.each([true, false])('missing plan access explains the requirement (is_free=%s)', (is_free) => {
   const state = { ...user, models: [{ ...model, is_free }] };
   const offer = getCloudModelOffers(state).get(model.id);
   expect(offer?.reason).toBe('subscription_required');
-  expect(getCloudModelTapNotice(offer)).toBeUndefined();
+  expect(getCloudModelTapNotice(offer)).toBe('cloud.planRequired');
 });
 
 test('a free plan offer always carries its free badge, even before the account receives an entitlement', () => {
