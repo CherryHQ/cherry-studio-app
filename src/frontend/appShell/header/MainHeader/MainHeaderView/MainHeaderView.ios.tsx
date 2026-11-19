@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { useReportChatHeaderHeight } from '@/frontend/appShell/layout';
@@ -16,6 +17,9 @@ import { MainHeaderAgentLabel, MainHeaderAgentSwitch } from '../MainHeaderAgentL
 import { useMainHeaderActions } from '../useMainHeaderActions';
 import type { MainHeaderViewProps } from './MainHeaderView.types';
 
+const MAX_AGENT_LABEL_WIDTH = 176;
+// UIKit adds margins and gaps around the items before deciding whether they fit.
+const NATIVE_HEADER_SPACING_BUDGET = 104;
 const HEADER_BLUR_BAND_HEIGHT_RATIOS = [1, 0.72, 0.46, 0.22] as const;
 // Several overlapping bands create the fade; a low per-band intensity avoids
 // turning the top of the header into an opaque blur after the passes accumulate.
@@ -54,9 +58,12 @@ export function MainHeaderView({
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
   const { width } = useWindowDimensions();
-  const agentWidth = Math.max(
-    40,
-    width - 40 - (leadingAction ? 44 : 0) - rightActions.length * 44 - (onAgentSwitch ? 48 : 0),
+  const { left, right } = useSafeAreaInsets();
+  const actionWidth =
+    (leadingAction ? 44 : 0) + rightActions.length * 44 + (onAgentSwitch ? 48 : 0);
+  const agentWidth = Math.min(
+    MAX_AGENT_LABEL_WIDTH,
+    Math.max(40, width - left - right - actionWidth - NATIVE_HEADER_SPACING_BUDGET),
   );
   useReportChatHeaderHeight();
   if (isPreview) {
