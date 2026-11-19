@@ -788,6 +788,7 @@
   "chat.turns.jumpFailed": "Не удалось перейти к этому ходу. Попробуйте ещё раз.",
   "chat.turns.noText": "Сообщение без текста",
   "chat.turns.row": "Ход {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Ход {{number}}, считая с самого нового, {{preview}}",
   "chat.turns.title": "Ходы диалога",
   "chat.webSearch.approvalRequested": "Запрошено одобрение",
   "chat.webSearch.approved": "Одобрено",

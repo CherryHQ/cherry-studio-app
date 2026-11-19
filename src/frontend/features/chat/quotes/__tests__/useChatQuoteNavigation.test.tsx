@@ -5,9 +5,10 @@ import { useChatQuoteNavigation, type QuoteNavigationOutcome } from '../useChatQ
 
 const mockGet = jest.fn();
 const mockSelect = jest.fn(async () => undefined);
+const mockGetState = jest.fn();
 const mockApi = { get: mockGet };
 const mockClient = {
-  client: { selectMessage: mockSelect, getState: () => ({ liveMessages: [] }) },
+  client: { selectMessage: mockSelect, getState: mockGetState },
 };
 jest.mock('@/frontend/data', () => ({ useApiClient: () => mockApi }));
 jest.mock('../../runtime/ChatProvider', () => ({ useAgentChatClient: () => mockClient }));
@@ -34,6 +35,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   mockGet.mockReset();
   mockSelect.mockClear();
+  mockGetState.mockReset().mockReturnValue({ liveMessages: [] });
   mockGet.mockResolvedValue({ items: [source] });
 });
 afterEach(() => {
@@ -104,6 +106,28 @@ test('a stale turn from another branch remains unavailable without switching the
   expect(await pending).toEqual({ state: 'unavailable' });
   expect(mockSelect).not.toHaveBeenCalled();
   expect(nav.navigation).toBeUndefined();
+});
+test('jumps inside the confirmed branch window without reading another history page', async () => {
+  mockGetState.mockReturnValue({
+    status: 'ready',
+    snapshot: { session: { activeNodeId: 'head' } },
+  });
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  const scrollToMessage = jest.fn(async () => true);
+  await act(async () => {
+    await expect(
+      nav.openTurn(
+        { sourceMessageId: source.id, requestId: 'visible' },
+        { activeNodeId: 'head', scrollToMessage },
+      ),
+    ).resolves.toEqual({ state: 'restored', messageId: source.id, requestId: 'visible' });
+  });
+  expect(scrollToMessage).toHaveBeenCalledWith(source.id);
+  expect(mockGet).not.toHaveBeenCalled();
+  expect(nav.navigation).toBeUndefined();
+  expect(nav.highlight).toBe(source.id);
 });
 test('scroll rejection, transport errors, and supersession never highlight or install fallback windows', async () => {
   await act(async () => {

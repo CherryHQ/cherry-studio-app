@@ -17,6 +17,12 @@ import type {
   RemoteStartOperation,
 } from './views';
 
+export type RemoteHistoryIndexItem = {
+  id: string;
+  role: RemoteMessageView['role'];
+  preview?: string;
+};
+
 /** One retained credential-free scope. Disposing observations never cancels desktop execution. */
 export interface RemoteAgentSource {
   readonly scope: string;
@@ -50,6 +56,13 @@ export interface RemoteAgentSource {
     cursor: string | undefined,
     signal: AbortSignal,
   ): Promise<RemotePage<RemoteMessageView>>;
+  historyIndex(
+    sessionId: string,
+    version: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+    includeTurnPreviews?: boolean,
+  ): Promise<RemotePage<RemoteHistoryIndexItem>>;
   readResource(resource: RemoteResource, signal: AbortSignal): Promise<RemoteResourceValue>;
   start(input: RemoteStartInput): Promise<RemoteStartOperation>;
   send(target: string, text: string, attachments?: RemoteAttachment[]): Promise<RemoteCommand>;

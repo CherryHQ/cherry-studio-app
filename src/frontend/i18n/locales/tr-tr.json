@@ -770,6 +770,7 @@
   "chat.turns.jumpFailed": "Bu tura geçilemedi. Lütfen tekrar deneyin.",
   "chat.turns.noText": "Metinsiz mesaj",
   "chat.turns.row": "{{number}}. tur, {{preview}}",
+  "chat.turns.rowFromLatest": "En yeniden itibaren {{number}}. tur, {{preview}}",
   "chat.turns.title": "Konuşma turları",
   "chat.webSearch.approvalRequested": "Onay istendi",
   "chat.webSearch.approved": "Onaylandı",

@@ -770,6 +770,7 @@
   "chat.turns.jumpFailed": "Η μετάβαση στον γύρο απέτυχε. Δοκιμάστε ξανά.",
   "chat.turns.noText": "Μήνυμα χωρίς κείμενο",
   "chat.turns.row": "Γύρος {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Γύρος {{number}} μετρώντας από τον πιο πρόσφατο, {{preview}}",
   "chat.turns.title": "Γύροι συνομιλίας",
   "chat.webSearch.approvalRequested": "Ζητήθηκε έγκριση",
   "chat.webSearch.approved": "Εγκρίθηκε",

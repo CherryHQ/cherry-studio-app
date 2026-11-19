@@ -98,7 +98,7 @@ function ReaderContent({
 }) {
   const { bottom } = useSafeAreaInsets();
   const snapshot = useConversationSnapshot(session);
-  const turns = useRemoteChatTurns(session);
+  const turns = useRemoteChatTurns(session, snapshot.historyVersion);
   const history = useConversationHistory(session, snapshot.historyVersion, turns.navigation);
   const [presenter] = useState(() => new ConversationPresenter());
   const messages = presenter.update(

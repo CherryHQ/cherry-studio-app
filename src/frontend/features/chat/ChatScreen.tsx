@@ -29,7 +29,7 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { PolicyScope } from '@/frontend/components/Policy';
-import { useApiClient, useBackendModule } from '@/frontend/data';
+import { queryKeys, useApiClient, useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { useFileWorkspace } from '@/frontend/hooks/file';
@@ -51,7 +51,6 @@ import {
   ChatEmptyState,
   type ChatTurnNavigator,
   ChatWorkspace,
-  toChatTurn,
 } from './components/ChatWorkspace';
 import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
@@ -148,15 +147,18 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     sessionId && !isPreview
       ? {
           scope: `local:${sessionId}`,
-          async read(signal) {
-            const transcript = await api.get(`/agent-sessions/${sessionId}/messages/transcript`, {
-              query: { role: 'user' },
-              signal,
-            });
-            return transcript.messages.toReversed().map(({ id, parts }) => toChatTurn(id, parts));
+          queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
+          async read(_, signal) {
+            const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, { signal });
+            return {
+              items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
+            };
           },
-          async jump(sourceMessageId) {
-            const result = await openTurn({ sourceMessageId, requestId: uuidv7() });
+          async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
+            const result = await openTurn(
+              { sourceMessageId, requestId: uuidv7() },
+              activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
+            );
             return result.state;
           },
         }

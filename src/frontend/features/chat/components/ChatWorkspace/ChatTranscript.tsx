@@ -79,6 +79,9 @@ export function ChatTranscript({
           contentTopInset={contentTopInset}
           keyboardOffset={list.keyboardOffset}
           navigator={turnNavigator}
+          scrollToMessage={(messageId) =>
+            listRef.current?.scrollToMessage(messageId) ?? Promise.resolve(false)
+          }
         />
       ) : null}
       <ChatInitialRenderCover isVisible={isCoverVisible} />

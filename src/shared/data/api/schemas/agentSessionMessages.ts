@@ -90,14 +90,22 @@ export type AgentTranscriptSelection = {
   messages: AgentMessageView[];
 };
 
-export const AgentTranscriptQuerySchema = z.strictObject({ role: z.literal('user').optional() });
+export type AgentSessionTurns = {
+  activeNodeId: string | null;
+  items: { id: string; preview: string }[];
+};
 
 export type AgentSessionMessageSchemas = {
   '/agent-sessions/:sessionId/messages/transcript': {
     GET: {
       params: { sessionId: string };
-      query?: z.input<typeof AgentTranscriptQuerySchema>;
       response: AgentTranscriptSelection;
+    };
+  };
+  '/agent-sessions/:sessionId/messages/turns': {
+    GET: {
+      params: { sessionId: string };
+      response: AgentSessionTurns;
     };
   };
   '/agent-sessions/:sessionId/messages/:messageId/translations': {

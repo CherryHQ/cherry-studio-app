@@ -1,7 +1,6 @@
 import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import {
   type AgentSessionMessageSchemas,
-  AgentTranscriptQuerySchema,
   AgentTranscriptSelectionSchema,
   ListAgentSessionMessagesQuerySchema,
   SaveAgentMessageTranslationSchema,
@@ -11,15 +10,22 @@ import type { HandlersFor } from '@/shared/data/api/types';
 export function createAgentSessionMessageHandlers(
   service: Pick<
     AgentSessionMessageService,
-    'listByCursor' | 'readSelection' | 'readTranscript' | 'saveTranslation'
+    'listByCursor' | 'readSelection' | 'readTranscript' | 'readTurns' | 'saveTranslation'
   >,
 ): HandlersFor<AgentSessionMessageSchemas> {
   return {
     '/agent-sessions/:sessionId/messages/transcript': {
-      GET: async ({ params, query, signal }) => {
+      GET: async ({ params, signal }) => {
         signal?.throwIfAborted();
-        const { role } = AgentTranscriptQuerySchema.parse(query ?? {});
-        const result = await service.readTranscript(params.sessionId, role);
+        const result = await service.readTranscript(params.sessionId);
+        signal?.throwIfAborted();
+        return result;
+      },
+    },
+    '/agent-sessions/:sessionId/messages/turns': {
+      GET: async ({ params, signal }) => {
+        signal?.throwIfAborted();
+        const result = await service.readTurns(params.sessionId);
         signal?.throwIfAborted();
         return result;
       },

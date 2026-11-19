@@ -761,6 +761,7 @@
   "chat.turns.jumpFailed": "无法跳转到该轮对话，请重试。",
   "chat.turns.noText": "无文字消息",
   "chat.turns.row": "第 {{number}} 轮，{{preview}}",
+  "chat.turns.rowFromLatest": "倒数第 {{number}} 轮，{{preview}}",
   "chat.turns.title": "对话轮次",
   "chat.webSearch.approvalRequested": "请求审批",
   "chat.webSearch.approved": "已批准",

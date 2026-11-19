@@ -9,6 +9,7 @@ import { createConversationReferences, ConversationReadError } from '../conversa
 import type {
   HistoryCursor,
   HistoryPage,
+  HistoryPosition,
   HistoryVersion,
   HistoryWindow,
   MessageRef,
@@ -27,7 +28,7 @@ export type RemoteConversationHistoryView = ConversationHistoryView & {
 export function useConversationHistory(
   session: RemoteConversationSession | undefined,
   version: HistoryVersion | undefined,
-  navigation?: { messageId: string; key: string },
+  navigation?: { messageId: string; key: string; position?: HistoryPosition },
 ): RemoteConversationHistoryView {
   const queryClient = useQueryClient();
   const consumer = useId();
@@ -85,11 +86,11 @@ export function useConversationHistory(
   const [owned, setOwned] = useState(() => ({
     key: readerKey,
     session,
-    reader: createHistoryReader(session, around, version, extent),
+    reader: createHistoryReader(session, around, version, extent, navigation?.position),
   }));
   let reader = owned.reader;
   if (owned.key !== readerKey || owned.session !== session) {
-    reader = createHistoryReader(session, around, version, extent);
+    reader = createHistoryReader(session, around, version, extent, navigation?.position);
     setOwned({ key: readerKey, session, reader });
   }
   useEffect(
@@ -193,6 +194,7 @@ function createHistoryReader(
   around: string | undefined,
   version: HistoryVersion | undefined,
   extent: { older: number; newer: number },
+  position: HistoryPosition | undefined,
 ) {
   let lifetime: AbortController | undefined;
   let window: HistoryWindow | undefined;
@@ -217,6 +219,7 @@ function createHistoryReader(
                 around,
               ),
               signal,
+              position,
             )
           : session.history.openLatest(signal));
         if (signal.aborted) {

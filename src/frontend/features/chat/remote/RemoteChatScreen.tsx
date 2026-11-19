@@ -181,7 +181,7 @@ function RemoteChatSession() {
     sidebarPresence !== 'open',
   );
   const snapshot = useConversationSnapshot(opened.session);
-  const turns = useRemoteChatTurns(opened.session);
+  const turns = useRemoteChatTurns(opened.session, snapshot.historyVersion);
   const history = useConversationHistory(opened.session, snapshot.historyVersion, turns.navigation);
   // The presenter retains live rows until the desktop's history revision installs them.
   const [presentation, setPresentation] = useState(() => ({

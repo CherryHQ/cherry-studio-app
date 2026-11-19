@@ -770,6 +770,7 @@
   "chat.turns.jumpFailed": "Die Runde konnte nicht geöffnet werden. Bitte versuche es erneut.",
   "chat.turns.noText": "Nachricht ohne Text",
   "chat.turns.row": "Runde {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Runde {{number}} von der neuesten aus, {{preview}}",
   "chat.turns.title": "Gesprächsrunden",
   "chat.webSearch.approvalRequested": "Genehmigung beantragt",
   "chat.webSearch.approved": "Genehmigt",

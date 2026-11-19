@@ -1,14 +1,16 @@
 import ListOrderedIcon from '@cherrystudio/app-icons/icons/list-ordered';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { BackgroundPressExclusion, Button, Spinner, useToast } from '@cherrystudio/ui/components';
-import { useQuery } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
+import type { HistoryPosition } from '@/frontend/appShell/conversation/remote';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
+import type { MessageListHandle } from '@/frontend/components/Message';
 
 import type { ChatTurn, ChatTurnNavigator } from '../chatTurns';
 
@@ -24,12 +26,14 @@ export function ChatTurnDirectory({
   contentBottomInset,
   contentTopInset,
   keyboardOffset,
+  scrollToMessage,
 }: {
   navigator: ChatTurnNavigator;
   bottomAccessoryHeight: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
   keyboardOffset: number;
+  scrollToMessage: MessageListHandle['scrollToMessage'];
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -45,9 +49,9 @@ export function ChatTurnDirectory({
       Math.max(contentBottomInset, 12),
   }));
 
-  async function select(messageId: string) {
+  async function select(turn: ChatTurn) {
     close();
-    const result = await navigator.jump(messageId);
+    const result = await navigator.jump(turn, scrollToMessage);
     if (result === 'unavailable') toast.show({ label: t('chat.history.messageUnavailable') });
     if (result === 'retryable')
       toast.show({ label: t('chat.turns.jumpFailed'), variant: 'danger' });
@@ -88,17 +92,32 @@ function ChatTurnDirectoryPanel({
   onSelect,
 }: {
   navigator: ChatTurnNavigator;
-  onSelect(messageId: string): Promise<void>;
+  onSelect(turn: ChatTurn): Promise<void>;
 }) {
   const { i18n, t } = useTranslation();
-  const turns = useQuery({
-    queryKey: ['chat-turns', navigator.scope],
-    queryFn: ({ signal }) => navigator.read(signal),
-    gcTime: 0,
-    refetchOnMount: 'always',
+  const turns = useInfiniteQuery({
+    queryKey: navigator.queryKey,
+    initialPageParam: undefined as HistoryPosition | undefined,
+    queryFn: ({ pageParam, signal }) => navigator.read(pageParam, signal),
+    getNextPageParam: (last, _pages, _previous, positions) => {
+      const next = last.next;
+      return next && !positions.some((position) => position?.cursor === next.cursor)
+        ? next
+        : undefined;
+    },
+    staleTime: navigator.numbersFromLatest ? Infinity : 60_000,
     retry: false,
   });
-  const rows = turns.data ?? [];
+  const rows = useMemo(() => {
+    const byId = new Map<string, ChatTurn>();
+    for (const page of turns.data?.pages ?? []) {
+      for (const item of page.items) if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+    return [...byId.values()];
+  }, [turns.data?.pages]);
+  const loadMore = () => {
+    if (turns.hasNextPage && !turns.isFetching) void turns.fetchNextPage({ cancelRefetch: false });
+  };
 
   return (
     <BackgroundPressExclusion
@@ -114,14 +133,14 @@ function ChatTurnDirectoryPanel({
             size="sm"
           />
         </View>
-      ) : turns.isError ? (
+      ) : turns.isError && rows.length === 0 ? (
         <View className="items-start gap-2 px-2 pb-2">
           <Text className="text-popover-foreground text-sm">{t('chat.history.loadFailed')}</Text>
           <Button onPress={() => void turns.refetch()} size="sm" variant="tonal">
             {t('common.retry')}
           </Button>
         </View>
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && !turns.hasNextPage ? (
         <Text className="px-2 pb-3 text-muted-foreground text-sm">{t('chat.turns.empty')}</Text>
       ) : (
         <FlatList
@@ -129,17 +148,49 @@ function ChatTurnDirectoryPanel({
           data={rows}
           keyboardShouldPersistTaps="always"
           keyExtractor={turnKey}
+          onEndReached={turns.isFetchNextPageError ? undefined : loadMore}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={
+            turns.hasNextPage ? (
+              <View className="items-center py-2">
+                {turns.isFetchingNextPage ? (
+                  <Spinner
+                    accessibilityLabel={t('chat.history.loading')}
+                    accessibilityRole="progressbar"
+                    size="sm"
+                  />
+                ) : (
+                  <Button onPress={loadMore} size="sm" variant="ghost">
+                    {t(turns.isFetchNextPageError ? 'common.retry' : 'common.more')}
+                  </Button>
+                )}
+              </View>
+            ) : null
+          }
           renderItem={({ item, index }) => {
-            const number = (rows.length - index).toLocaleString(i18n.resolvedLanguage);
+            const number = (
+              navigator.numbersFromLatest ? index + 1 : rows.length - index
+            ).toLocaleString(i18n.resolvedLanguage);
             const preview = item.preview || t('chat.turns.noText');
             return (
               <Pressable
-                accessibilityLabel={t('chat.turns.row', { number, preview })}
+                accessibilityLabel={t(
+                  navigator.numbersFromLatest ? 'chat.turns.rowFromLatest' : 'chat.turns.row',
+                  { number, preview },
+                )}
                 accessibilityRole="button"
                 className="min-h-11 flex-row items-center gap-2 rounded-xl px-2 py-2 active:bg-secondary"
-                onPress={() => void onSelect(item.id)}
+                onPress={() =>
+                  void onSelect(
+                    turns.isStale && item.activeNodeId
+                      ? { ...item, activeNodeId: undefined }
+                      : item,
+                  )
+                }
               >
-                <Text className="min-w-6 text-muted-foreground text-xs tabular-nums">{number}</Text>
+                <Text className="min-w-6 text-muted-foreground text-xs tabular-nums">
+                  {navigator.numbersFromLatest ? `−${number}` : number}
+                </Text>
                 <Text className="flex-1 text-popover-foreground text-sm" numberOfLines={1}>
                   {preview}
                 </Text>

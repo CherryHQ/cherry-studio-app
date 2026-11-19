@@ -44,16 +44,22 @@ export function activeNodeIdSql(sessionId: string): SQL {
  * `null` node selects nothing; omit it to use the Session's selected leaf.
  */
 export function messagePathIdsSql(sessionId: string, node?: string | null): SQL {
-  if (node === null) return sql`SELECT NULL WHERE 0`;
+  return sql`SELECT id FROM (${messagePathRowsSql(sessionId, node)})`;
+}
+
+/** The selected chain with distance from its leaf, so directories need no full-tree sort. */
+export function messagePathRowsSql(sessionId: string, node?: string | null): SQL {
+  if (node === null) return sql`SELECT NULL AS id, NULL AS distance WHERE 0`;
   const leaf = node === undefined ? activeNodeIdSql(sessionId) : sql`${node}`;
-  return sql`WITH RECURSIVE tree_path(id, parent_id) AS (
-      SELECT tree_leaf.id, tree_leaf.parent_id FROM agent_session_message AS tree_leaf
+  return sql`WITH RECURSIVE tree_path(id, parent_id, distance) AS (
+      SELECT tree_leaf.id, tree_leaf.parent_id, 0 FROM agent_session_message AS tree_leaf
       WHERE tree_leaf.session_id = ${sessionId} AND tree_leaf.id = ${leaf}
       UNION ALL
-      SELECT tree_parent.id, tree_parent.parent_id FROM agent_session_message AS tree_parent
+      SELECT tree_parent.id, tree_parent.parent_id, tree_path.distance + 1
+      FROM agent_session_message AS tree_parent
       JOIN tree_path ON tree_parent.id = tree_path.parent_id
     )
-    SELECT id FROM tree_path`;
+    SELECT id, distance FROM tree_path`;
 }
 
 /**

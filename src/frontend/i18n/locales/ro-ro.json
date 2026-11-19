@@ -779,6 +779,7 @@
   "chat.turns.jumpFailed": "Nu s-a putut naviga la runda respectivă. Încearcă din nou.",
   "chat.turns.noText": "Mesaj fără text",
   "chat.turns.row": "Runda {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Runda {{number}} numărând de la cea mai recentă, {{preview}}",
   "chat.turns.title": "Runde de conversație",
   "chat.webSearch.approvalRequested": "Aprobare solicitată",
   "chat.webSearch.approved": "Aprobat",

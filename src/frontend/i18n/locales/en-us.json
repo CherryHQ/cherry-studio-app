@@ -770,6 +770,7 @@
   "chat.turns.jumpFailed": "Couldn't jump to that turn. Please try again.",
   "chat.turns.noText": "Message without text",
   "chat.turns.row": "Turn {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Turn {{number}} from the newest, {{preview}}",
   "chat.turns.title": "Conversation turns",
   "chat.webSearch.approvalRequested": "Approval requested",
   "chat.webSearch.approved": "Approved",

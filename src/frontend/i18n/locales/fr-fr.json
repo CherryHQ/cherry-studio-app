@@ -779,6 +779,7 @@
   "chat.turns.jumpFailed": "Impossible d’accéder à ce tour. Réessayez.",
   "chat.turns.noText": "Message sans texte",
   "chat.turns.row": "Tour {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Tour {{number}} en partant du plus récent, {{preview}}",
   "chat.turns.title": "Tours de conversation",
   "chat.webSearch.approvalRequested": "Approbation demandée",
   "chat.webSearch.approved": "Approuvé",

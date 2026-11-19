@@ -23,6 +23,7 @@ import {
   AgentTranscriptSelectionSchema,
   type AgentTranscriptSelection,
   type AgentSessionMessagePage,
+  type AgentSessionTurns,
   type ListAgentSessionMessagesQueryParams,
   ListAgentSessionMessagesQuerySchema,
   SaveAgentMessageTranslationSchema,
@@ -33,10 +34,14 @@ import {
   type MessageTranslations,
 } from '@/shared/data/types/messageTranslation';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
+import {
+  CONVERSATION_TURN_PREVIEW_LENGTH,
+  formatConversationTurnPreview,
+} from '@/shared/utils/conversationTurnPreview';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import { messageTreeOrder, messagePathIdsSql } from './utils/agentMessageTree';
+import { messageTreeOrder, messagePathIdsSql, messagePathRowsSql } from './utils/agentMessageTree';
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
@@ -192,8 +197,8 @@ export class AgentSessionMessageService {
   }
 
   /** The selected path and its metadata come from one read, without the sharing selection limit. */
-  async readTranscript(sessionId: string, role?: 'user'): Promise<AgentTranscriptSelection> {
-    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId), role);
+  async readTranscript(sessionId: string): Promise<AgentTranscriptSelection> {
+    const rows = await this.readTranscriptRows(sessionId, this.onSelectedPath(sessionId));
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     return {
       assistantName: rows[0].assistantName ?? undefined,
@@ -204,7 +209,42 @@ export class AgentSessionMessageService {
     };
   }
 
-  private readTranscriptRows(sessionId: string, selection: SQL, role?: 'user') {
+  async readTurns(sessionId: string): Promise<AgentSessionTurns> {
+    // The leaf and all previews come from the same database snapshot. Return only the first
+    // readable text part's bounded prefix, without materializing message bodies in JavaScript.
+    const rows = this.db.all<{
+      activeNodeId: string | null;
+      id: string | null;
+      preview: string | null;
+    }>(sql`
+      SELECT session.active_node_id AS activeNodeId, turn.id, turn.preview
+      FROM agent_session AS session
+      LEFT JOIN (
+        SELECT message.id, path.distance, (
+          SELECT substr(ltrim(json_extract(part.value, '$.text'), ${' \t\r\n'}), 1,
+            ${CONVERSATION_TURN_PREVIEW_LENGTH + 1})
+          FROM json_each(CASE WHEN json_valid(message.data) THEN message.data ELSE '{}' END, '$.parts') AS part
+          WHERE CASE WHEN part.type = 'object' THEN json_extract(part.value, '$.type') END = 'text'
+            AND CASE WHEN part.type = 'object' THEN json_type(part.value, '$.text') END = 'text'
+            AND CASE WHEN part.type = 'object' THEN trim(json_extract(part.value, '$.text'), ${' \t\r\n'}) END <> ''
+          ORDER BY part.key LIMIT 1
+        ) AS preview
+        FROM (${messagePathRowsSql(sessionId)}) AS path
+        JOIN agent_session_message AS message ON message.id = path.id AND message.role = 'user'
+      ) AS turn ON 1 = 1
+      WHERE session.id = ${sessionId}
+      ORDER BY turn.distance
+    `);
+    if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+    return {
+      activeNodeId: rows[0].activeNodeId,
+      items: rows.flatMap(({ id, preview }) =>
+        id ? [{ id, preview: formatConversationTurnPreview(preview ?? '') }] : [],
+      ),
+    };
+  }
+
+  private readTranscriptRows(sessionId: string, selection: SQL) {
     // Capture this generation before awaiting; never resolve a replacement host.
     const db = this.db;
     const order = messageTreeOrder(db, sessionId);
@@ -219,11 +259,7 @@ export class AgentSessionMessageService {
       .leftJoin(agentTable, eq(agentTable.id, agentSessionTable.agentId))
       .leftJoin(
         agentSessionMessageTable,
-        and(
-          eq(agentSessionMessageTable.sessionId, agentSessionTable.id),
-          selection,
-          role ? eq(agentSessionMessageTable.role, role) : undefined,
-        ),
+        and(eq(agentSessionMessageTable.sessionId, agentSessionTable.id), selection),
       )
       .where(eq(agentSessionTable.id, sessionId))
       .leftJoin(order, eq(order.id, agentSessionMessageTable.id))

@@ -779,6 +779,7 @@
   "chat.turns.jumpFailed": "Não foi possível ir para esse turno. Tente novamente.",
   "chat.turns.noText": "Mensagem sem texto",
   "chat.turns.row": "Turno {{number}}, {{preview}}",
+  "chat.turns.rowFromLatest": "Turno {{number}} a contar do mais recente, {{preview}}",
   "chat.turns.title": "Turnos da conversa",
   "chat.webSearch.approvalRequested": "Aprovação solicitada",
   "chat.webSearch.approved": "Aprovado",
