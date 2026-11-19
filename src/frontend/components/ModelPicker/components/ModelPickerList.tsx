@@ -433,7 +433,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           {item.model.name}
         </Text>
         {badges.length > 0 ? (
-          <View className="h-4 flex-row items-center gap-1">
+          <View className="flex-row items-center gap-1">
             {badges.map((badge) => (
               <ModelPickerBadge badge={badge} key={`${item.model.id}:${badge}`} variant="icon" />
             ))}

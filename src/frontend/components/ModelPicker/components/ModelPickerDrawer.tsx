@@ -1,5 +1,4 @@
 import EyeIcon from '@cherrystudio/app-icons/icons/eye';
-import GiftIcon from '@cherrystudio/app-icons/icons/gift';
 import {
   ActionMenu,
   BottomSheet,
@@ -42,6 +41,7 @@ import { addCloudOffers, EMPTY_CHERRY_AI_GROUP } from '../utils/modelPickerCloud
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
+import { ModelPickerBadge as ModelBadge } from './ModelPickerBadge';
 import { ModelPickerCherryAiEntry } from './ModelPickerCherryAiEntry';
 import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
@@ -379,7 +379,7 @@ function ModelPickerDrawerContent({
     selectedBadge === 'vision' ? (
       <EyeIcon className="text-tag-blue-foreground" />
     ) : selectedBadge === 'free' ? (
-      <GiftIcon className="text-tag-green-foreground" />
+      <ModelBadge badge="free" testIDPrefix="model-picker-filter-badge" />
     ) : (
       <ModelPickerFilterIcon />
     );

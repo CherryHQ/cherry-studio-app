@@ -1190,6 +1190,7 @@
   "modelPicker.searchPlaceholder": "Αναζήτηση μοντέλων",
   "modelPicker.title": "Επιλέξτε μοντέλο",
   "models.all": "Όλα",
+  "models.badge.free": "free",
   "models.capability.free": "δωρεάν",
   "models.capability.imageRecognition": "εικόνα",
   "models.filter.by_tag": "Φίλτρο",

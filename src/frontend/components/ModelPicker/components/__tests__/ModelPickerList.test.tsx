@@ -150,7 +150,10 @@ describe('ModelPickerList', () => {
       });
 
       const row = renderer?.root.findByType(Pressable);
-      expect(row?.findAllByType(Text).map((text) => text.props.children)).toEqual(['GPT-OSS']);
+      expect(row?.findAllByType(Text).map((text) => text.props.children)).toEqual([
+        'GPT-OSS',
+        'models.badge.free',
+      ]);
       expect(row?.props.accessibilityLabel).toBe('GPT-OSS, models.capability.free');
       expect(row?.props.disabled).toBe(false);
       act(() => row?.props.onPress());

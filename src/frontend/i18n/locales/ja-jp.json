@@ -1178,6 +1178,7 @@
   "modelPicker.searchPlaceholder": "検索モデル",
   "modelPicker.title": "モデルを選択してください",
   "models.all": "すべて",
+  "models.badge.free": "free",
   "models.capability.free": "無料",
   "models.capability.imageRecognition": "画像",
   "models.filter.by_tag": "フィルター",

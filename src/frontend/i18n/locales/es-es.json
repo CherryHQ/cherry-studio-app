@@ -1202,6 +1202,7 @@
   "modelPicker.searchPlaceholder": "Modelos de búsqueda",
   "modelPicker.title": "Seleccionar modelo",
   "models.all": "Todo",
+  "models.badge.free": "free",
   "models.capability.free": "Gratis",
   "models.capability.imageRecognition": "Imagen",
   "models.filter.by_tag": "Filtro",

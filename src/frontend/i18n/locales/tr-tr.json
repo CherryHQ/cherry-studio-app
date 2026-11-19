@@ -1190,6 +1190,7 @@
   "modelPicker.searchPlaceholder": "Modelleri ara",
   "modelPicker.title": "Modeli seçin",
   "models.all": "Tümü",
+  "models.badge.free": "free",
   "models.capability.free": "Ücretsiz",
   "models.capability.imageRecognition": "Görsel algılama",
   "models.filter.by_tag": "Filtre",

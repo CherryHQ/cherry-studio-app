@@ -1178,6 +1178,7 @@
   "modelPicker.searchPlaceholder": "Tìm kiếm mô hình",
   "modelPicker.title": "Chọn mẫu",
   "models.all": "Tất cả",
+  "models.badge.free": "free",
   "models.capability.free": "Libre",
   "models.capability.imageRecognition": "Tầm nhìn",
   "models.filter.by_tag": "Lọc",

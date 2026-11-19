@@ -1214,6 +1214,7 @@
   "modelPicker.searchPlaceholder": "Поиск моделей",
   "modelPicker.title": "Выберите модель",
   "models.all": "Все",
+  "models.badge.free": "free",
   "models.capability.free": "Бесплатные",
   "models.capability.imageRecognition": "Визуальные",
   "models.filter.by_tag": "Фильтр",

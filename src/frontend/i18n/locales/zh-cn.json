@@ -1178,6 +1178,7 @@
   "modelPicker.searchPlaceholder": "搜索模型",
   "modelPicker.title": "选择模型",
   "models.all": "全部",
+  "models.badge.free": "免费",
   "models.capability.free": "免费",
   "models.capability.imageRecognition": "视觉",
   "models.filter.by_tag": "筛选",

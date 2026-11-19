@@ -1202,6 +1202,7 @@
   "modelPicker.searchPlaceholder": "Căutați modele",
   "modelPicker.title": "Selectați modelul",
   "models.all": "Toate",
+  "models.badge.free": "free",
   "models.capability.free": "Gratuit",
   "models.capability.imageRecognition": "Vizual",
   "models.filter.by_tag": "Filtru",
