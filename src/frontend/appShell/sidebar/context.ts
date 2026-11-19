@@ -7,6 +7,8 @@ export type SidebarActions = {
   prepareExternalNavigation: (signal: AbortSignal) => Promise<boolean>;
   /** Brings the chat back in front of any page beside the sidebar, leaving an overlay open. */
   returnToChat: () => void;
+  /** Returns to the current source's chat and opens an empty draft after focus commits. */
+  startNewChat: () => void;
   navigateAgents: () => void;
   openLibrary: () => void;
   openPlugins: () => void;

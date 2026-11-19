@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useDerivedValue } from 'react-native-reanimated';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import { ProfileAvatarImage } from '@/frontend/components/Avatar';
@@ -25,7 +25,16 @@ import { SidebarPlanBadge } from './SidebarPlanBadge';
 export function SidebarFooter() {
   const { t } = useTranslation();
   const [userName] = usePreference('app.user.name');
-  const { bottomPadding, insetEnd, insetStart } = useDockMetrics();
+  const {
+    bottomPadding,
+    insetEnd,
+    insetStart,
+    contentHeight,
+    normalContentHeight,
+    fadeHeight,
+    normalBackgroundHeight,
+    selectionBackgroundHeight,
+  } = useDockMetrics();
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
   const { backgroundColor: transparentSurfaceColor } = useResolveClassNames(
@@ -34,9 +43,7 @@ export function SidebarFooter() {
   // iOS needs the surface RGB at zero alpha to avoid interpolating through black.
   const fadeStartColor =
     Platform.OS === 'ios' ? (transparentSurfaceColor ?? 'transparent') : 'transparent';
-  const fadeHeight = appSidebar.headerGapY * 2;
-  const backgroundHeight = bottomPadding + appSidebar.dockHeight + fadeHeight;
-  const { openSettings } = useSidebarActions('SidebarFooter');
+  const { openSettings, startNewChat } = useSidebarActions('SidebarFooter');
   const displayName = userName.trim();
   const isSettingsOpen = useSidebarDestination() === 'settings';
   const selection = useSidebarSelection();
@@ -44,8 +51,23 @@ export function SidebarFooter() {
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
   const selectedCount = useSidebarSelectionSnapshot((state) => state.selectedIds.size);
+  // Fade the rows before shrinking most of their backdrop; retain coverage during overlap.
+  const backgroundHeight = useDerivedValue(
+    () =>
+      normalBackgroundHeight +
+      (selectionBackgroundHeight - normalBackgroundHeight) *
+        Math.max(0, (progress.get() - 0.4) / 0.6),
+  );
+  const backgroundStyle = useAnimatedStyle(() => ({ height: backgroundHeight.get() }));
+  // Keep the blur bands' proportions, compensating RN's centre-anchored scale at the bottom.
+  const blurStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: (normalBackgroundHeight - backgroundHeight.get()) / 2 },
+      { scaleY: backgroundHeight.get() / normalBackgroundHeight },
+    ],
+  }));
   const normalStyle = useAnimatedStyle(() => ({
-    opacity: 1 - progress.get(),
+    opacity: Math.max(0, 1 - 2 * progress.get()),
     transform: [{ translateY: -8 * progress.get() }],
   }));
   const selectionStyle = useAnimatedStyle(() => ({
@@ -64,34 +86,72 @@ export function SidebarFooter() {
         zIndex: 2,
       }}
     >
-      {/* Tint the profile row through the bottom safe area, with a soft leading edge above it. */}
-      <View
-        className="absolute right-0 bottom-0 left-0"
+      {/* Tint the dock through the bottom safe area, with a soft leading edge above it. */}
+      <Animated.View
+        className="absolute right-0 bottom-0 left-0 overflow-hidden"
         pointerEvents="none"
-        style={{ height: backgroundHeight }}
+        style={backgroundStyle}
       >
-        <SidebarFade edge="bottom" size={backgroundHeight} />
-        <LinearGradient
-          colors={[fadeStartColor, surfaceColor, surfaceColor]}
-          locations={[0, fadeHeight / backgroundHeight, 1]}
-          style={[StyleSheet.absoluteFill, { opacity: 0.9 }]}
+        <Animated.View
+          className="absolute right-0 bottom-0 left-0"
+          style={[{ height: normalBackgroundHeight }, blurStyle]}
+        >
+          <SidebarFade edge="bottom" size={normalBackgroundHeight} />
+        </Animated.View>
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: surfaceColor, opacity: 0.9, top: fadeHeight },
+          ]}
         />
-      </View>
-      <View style={{ height: appSidebar.dockHeight }}>
+        <LinearGradient
+          colors={[fadeStartColor, surfaceColor]}
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            left: 0,
+            height: fadeHeight,
+            opacity: 0.9,
+          }}
+        />
+      </Animated.View>
+      <View pointerEvents="box-none" style={{ height: contentHeight }}>
         <Animated.View
           accessibilityElementsHidden={isSelecting}
-          className="absolute inset-0 flex-row items-center justify-between"
+          className="absolute right-0 bottom-0 left-0"
           importantForAccessibility={isSelecting ? 'no-hide-descendants' : 'auto'}
-          pointerEvents={isSelecting ? 'none' : 'auto'}
-          style={normalStyle}
+          pointerEvents={isSelecting ? 'none' : 'box-none'}
+          style={[normalStyle, { height: normalContentHeight, gap: appSidebar.dockRowGap }]}
         >
+          <Pressable
+            accessibilityLabel={t('navigation.newChat')}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isSelecting || isDeleting }}
+            disabled={isSelecting || isDeleting}
+            onPress={startNewChat}
+            style={{ height: appSidebar.dockHeight }}
+            testID="sidebar-new-chat"
+          >
+            {({ pressed }) => (
+              <View className={cn('h-11 justify-center rounded-xl px-1', pressed && 'opacity-60')}>
+                <Text
+                  className="font-medium text-base text-sidebar-foreground"
+                  ellipsizeMode="tail"
+                  numberOfLines={1}
+                >
+                  {t('navigation.newChat')}
+                </Text>
+              </View>
+            )}
+          </Pressable>
           <Pressable
             accessibilityLabel={t('navigation.settings')}
             accessibilityRole="button"
             accessibilityState={{ disabled: isSelecting || isDeleting, selected: isSettingsOpen }}
             disabled={isSelecting || isDeleting}
             onPress={openSettings}
-            style={{ flex: 1 }}
+            style={{ height: appSidebar.dockHeight }}
             testID="sidebar-settings"
           >
             {({ pressed }) => (
@@ -119,10 +179,10 @@ export function SidebarFooter() {
         </Animated.View>
         <Animated.View
           accessibilityElementsHidden={!isSelecting}
-          className="absolute inset-0 flex-row items-center justify-between gap-2"
+          className="absolute right-0 bottom-0 left-0 flex-row items-center justify-between gap-2"
           importantForAccessibility={isSelecting ? 'auto' : 'no-hide-descendants'}
           pointerEvents={isSelecting ? 'auto' : 'none'}
-          style={selectionStyle}
+          style={[selectionStyle, { height: appSidebar.dockHeight }]}
         >
           <Surface interactive shape="pill">
             <Pressable

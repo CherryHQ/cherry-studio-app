@@ -37,7 +37,7 @@ export function SidebarBody() {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const backgroundColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
-  const { bottomPadding: dockBottomPadding } = useDockMetrics();
+  const { scrollBottomPadding } = useDockMetrics();
   const headerInset = useSidebarHeaderTop() + appSidebar.headerRowHeight + appSidebar.headerGapY;
   const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
   const registerEndReachedHandler = useCallback<RegisterEndReachedHandler>((handler) => {
@@ -55,7 +55,7 @@ export function SidebarBody() {
             onEndReached={handleEndReached}
             contentContainerStyle={{
               // Clears the floating dock at its shared composer-aligned position.
-              paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
+              paddingBottom: scrollBottomPadding,
               paddingLeft: insets.left,
               paddingTop: headerInset,
             }}
