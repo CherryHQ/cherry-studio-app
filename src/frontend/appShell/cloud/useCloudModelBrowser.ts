@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountSignInHref, rememberCloudModelTap, useAccount } from '@/frontend/appShell/account';
-import { CLOUD_UNAVAILABLE_KEYS, useCloud } from '@/frontend/hooks/useCloud';
+import { useCloud } from '@/frontend/hooks/useCloud';
 import { CLOUD_PROVIDER_NAME, type CloudModelUse } from '@/shared/contracts/cloud';
 
-import { getCloudModelOffers, type CloudModelOffer } from './cloudModelOffers';
+import { getCloudModelOffers, getCloudModelTapNotice } from './cloudModelOffers';
 import { useCloudModelActivation } from './useCloudModelActivation';
 
 export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
@@ -33,16 +33,6 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
     [router],
   );
 
-  const explain = useCallback(
-    (offer: CloudModelOffer) => {
-      if (offer.reason === 'subscription_required' && offer.plans.length) {
-        return t('cloud.subscriptionRequired', { plans: offer.plans.join(' / ') });
-      }
-      return offer.reason ? t(CLOUD_UNAVAILABLE_KEYS[offer.reason]) : undefined;
-    },
-    [t],
-  );
-
   const press = useCallback(
     (id: string, returnTo: string, close?: () => void, resume = true) => {
       const current = account.getState();
@@ -66,17 +56,15 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
         void activate(id, close);
         return;
       }
-      if (!offer || offer.reason) {
+      const notice = getCloudModelTapNotice(offer);
+      if (notice) {
         alert.show({
           title: offer?.model.display_name ?? CLOUD_PROVIDER_NAME,
-          description:
-            offer && offer.reason !== 'signed_out'
-              ? explain(offer)
-              : t('chat.errorPart.reason.providerUnavailable'),
+          description: t(notice),
         });
       }
     },
-    [account, alert, activate, cloud, explain, router, t, use],
+    [account, alert, activate, cloud, router, t, use],
   );
   return { state, offers, refresh, press, accountState, signInAgain };
 }

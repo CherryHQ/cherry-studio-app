@@ -13,22 +13,15 @@ export type CloudModelOffer = {
   isAmd: boolean;
   canViewUsage: boolean;
   reason: CloudUnavailableReason | undefined;
-  plans: string[];
 };
 
-/** The directory owns visibility. Account plans only explain why a listed model is locked. */
+/** The directory owns visibility. Current account entitlements determine access. */
 export function getCloudModelOffers(state: CloudState, use?: CloudModelUse) {
   const offers = new Map<string, CloudModelOffer>();
   for (const model of state.models) {
     const purpose = use ?? (supportsCloudModelUse(model, 'agent') ? 'agent' : 'general');
     const reason = cloudModelUnavailable(state, model.id, purpose);
     const isAmd = isCloudAmdModel(model);
-    const plans =
-      reason === 'subscription_required'
-        ? state.plans?.available_plans.filter((plan) =>
-            plan.models?.some((item) => item.id === model.id),
-          )
-        : undefined;
     offers.set(model.id, {
       model,
       isAmd,
@@ -38,8 +31,22 @@ export function getCloudModelOffers(state: CloudState, use?: CloudModelUse) {
         Boolean(model.activation_endpoint) &&
         state.amd?.phase !== 'unsupported',
       reason,
-      plans: plans?.map((plan) => plan.display_name) ?? [],
     });
   }
   return offers;
+}
+
+/** Notices for taps that did not already open login or activation. */
+export function getCloudModelTapNotice(offer: CloudModelOffer | undefined) {
+  switch (offer ? offer.reason : 'unavailable') {
+    case 'signed_out':
+    case 'unavailable':
+      return 'chat.errorPart.reason.providerUnavailable';
+    case 'account_disabled':
+      return 'cloud.accountDisabled';
+    case 'not_entitled':
+      return 'cloud.notEntitled';
+    default:
+      return undefined;
+  }
 }

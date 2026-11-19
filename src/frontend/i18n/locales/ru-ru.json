@@ -838,7 +838,6 @@
   "cloud.rollingHours_one": "Скользящее окно: {{hours}} ч",
   "cloud.rollingHours_other": "Скользящее окно: {{hours}} ч",
   "cloud.subscriptionMonth": "Лимит на месяц подписки",
-  "cloud.subscriptionRequired": "Требуется подписка: {{plans}}",
   "cloud.title": "Подписка и квота",
   "cloud.weeklyQuota": "Недельный лимит",
   "common.add": "Добавить",

@@ -816,7 +816,6 @@
   "cloud.rollingHours_one": "Rollierender Zeitraum: {{hours}} Stunde",
   "cloud.rollingHours_other": "Rollierender Zeitraum: {{hours}} Stunden",
   "cloud.subscriptionMonth": "Kontingent pro Abonnementmonat",
-  "cloud.subscriptionRequired": "Erfordert ein Abonnement: {{plans}}",
   "cloud.title": "Abonnement und Kontingent",
   "cloud.weeklyQuota": "Wöchentliches Kontingent",
   "common.add": "Hinzufügen",

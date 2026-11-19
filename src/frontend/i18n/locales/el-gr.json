@@ -816,7 +816,6 @@
   "cloud.rollingHours_one": "Κυλιόμενο διάστημα {{hours}} ώρας",
   "cloud.rollingHours_other": "Κυλιόμενο διάστημα {{hours}} ωρών",
   "cloud.subscriptionMonth": "Όριο μήνα συνδρομής",
-  "cloud.subscriptionRequired": "Απαιτείται συνδρομή: {{plans}}",
   "cloud.title": "Συνδρομή και όριο χρήσης",
   "cloud.weeklyQuota": "Εβδομαδιαίο όριο",
   "common.add": "Προσθήκη",

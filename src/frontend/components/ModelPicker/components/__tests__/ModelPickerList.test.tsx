@@ -119,7 +119,6 @@ describe('ModelPickerList', () => {
                     isAmd,
                     reason,
                     canViewUsage: false,
-                    plans: [],
                     model: {
                       id: modelId,
                       display_name: 'GPT-OSS',

@@ -827,7 +827,6 @@
   "cloud.rollingHours_one": "Interval mobil de {{hours}} oră",
   "cloud.rollingHours_other": "Interval mobil de {{hours}} de ore",
   "cloud.subscriptionMonth": "Cotă pe luna de abonament",
-  "cloud.subscriptionRequired": "Este necesar un abonament: {{plans}}",
   "cloud.title": "Abonament și cotă",
   "cloud.weeklyQuota": "Cotă săptămânală",
   "common.add": "Adăugați",

@@ -1,6 +1,6 @@
 import type { CloudModel, CloudState } from '@/shared/contracts/cloud';
 
-import { getCloudModelOffers } from '../cloudModelOffers';
+import { getCloudModelOffers, getCloudModelTapNotice } from '../cloudModelOffers';
 
 const model: CloudModel = {
   id: 'paid',
@@ -83,7 +83,7 @@ test('all published rows remain visible before and after sign-in', () => {
 
 test('login, personal subscription and AMD activation are separate admission decisions', () => {
   const offers = getCloudModelOffers(user, 'agent');
-  expect(offers.get(model.id)).toMatchObject({ reason: 'subscription_required', plans: ['Plus'] });
+  expect(offers.get(model.id)?.reason).toBe('subscription_required');
   expect(offers.get(member.id)?.reason).toBeUndefined();
   expect(offers.get(amd.id)).toMatchObject({ isAmd: true, reason: 'activation_required' });
   const activated = getCloudModelOffers(
@@ -94,6 +94,13 @@ test('login, personal subscription and AMD activation are separate admission dec
   expect(getCloudModelOffers({ ...user, phase: 'error' }).get(model.id)?.reason).toBe(
     'unavailable',
   );
+});
+
+test.each([true, false])('missing plan access is silent on tap (is_free=%s)', (is_free) => {
+  const state = { ...user, models: [{ ...model, is_free }] };
+  const offer = getCloudModelOffers(state).get(model.id);
+  expect(offer?.reason).toBe('subscription_required');
+  expect(getCloudModelTapNotice(offer)).toBeUndefined();
 });
 
 test('a free plan offer always carries its free badge, even before the account receives an entitlement', () => {

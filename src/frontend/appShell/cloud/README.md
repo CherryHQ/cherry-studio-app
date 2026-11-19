@@ -1,10 +1,11 @@
 # CherryAI entry
 
 Settings and the chat model picker display the full server model directory and resolve actions against the current account.
-The catalog's `is_free` flag drives the Free badge and filter. Login, plan and activation
+The catalog's `is_free` flag drives the Free badge and filter. Login and activation
 guidance appears after the user taps a model. Guest models with anonymous access use
 signed inference. A login-required tap returns through the existing login route with the selected
-model ID. After login, a model with `requires_plan` needs a current entitlement containing its ID.
+model ID. After login, tapping a model that lacks its required plan entitlement leaves the current
+selection and screen in place.
 Models requiring activation expose an action only when the directory supplies an entry endpoint.
 The profile-scoped login intent binds the original tap to its model and destination.
 It is consumed once before resuming the action, including an answer on an existing message.

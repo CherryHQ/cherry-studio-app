@@ -816,7 +816,6 @@
   "cloud.rollingHours_one": "Kayan {{hours}} saatlik pencere",
   "cloud.rollingHours_other": "Kayan {{hours}} saatlik pencere",
   "cloud.subscriptionMonth": "Abonelik ayı kotası",
-  "cloud.subscriptionRequired": "Abonelik gerekiyor: {{plans}}",
   "cloud.title": "Abonelik ve kota",
   "cloud.weeklyQuota": "Haftalık kota",
   "common.add": "Ekle",

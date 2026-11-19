@@ -827,7 +827,6 @@
   "cloud.rollingHours_one": "Janela móvel de {{hours}} hora",
   "cloud.rollingHours_other": "Janela móvel de {{hours}} horas",
   "cloud.subscriptionMonth": "Quota do mês de subscrição",
-  "cloud.subscriptionRequired": "É necessária uma subscrição: {{plans}}",
   "cloud.title": "Subscrição e quota",
   "cloud.weeklyQuota": "Quota semanal",
   "common.add": "Adicionar",
