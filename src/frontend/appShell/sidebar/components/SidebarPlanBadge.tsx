@@ -7,7 +7,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 
 import { useAccount } from '@/frontend/appShell/account';
 import { useCloud } from '@/frontend/hooks/useCloud';
-import { hasActiveCloudSubscription } from '@/shared/contracts/cloud';
+import { getActiveCloudEntitlements } from '@/shared/contracts/cloud';
 
 import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
@@ -17,8 +17,9 @@ import { formatQuotaWindow, formatQuotaWindowShort } from '../utils/cloudQuota';
 export function SidebarPlanBadge() {
   const { t, i18n } = useTranslation();
   const { state: account } = useAccount();
-  const { state } = useCloud();
-  const isVisible = useSidebarPresence() !== 'closed';
+  const { cloud, state } = useCloud();
+  const presence = useSidebarPresence();
+  const isVisible = presence !== 'closed';
   const isSelecting = useSidebarSelectionSnapshot((selection) => selection.isSelecting);
   const initialReducedMotion = useReducedMotion();
   const [reducedMotion, setReducedMotion] = useState(initialReducedMotion);
@@ -35,9 +36,21 @@ export function SidebarPlanBadge() {
     };
   }, []);
 
-  if (account.isEnterprise || !hasActiveCloudSubscription(state)) return null;
+  useEffect(() => {
+    if (presence === 'open') void cloud.refresh('background').catch(() => {});
+  }, [cloud, presence]);
+
+  useEffect(() => {
+    if (presence === 'persistent' && isForeground) void cloud.refresh('if-stale').catch(() => {});
+  }, [cloud, isForeground, presence]);
+
+  const activeEntitlements = getActiveCloudEntitlements(state);
+  if (account.isEnterprise || activeEntitlements.length === 0) return null;
   const activePlan = state.plans?.entitlements.find(
-    (entry) => entry.state === 'active' && !entry.plan.is_free,
+    (entry) =>
+      entry.state === 'active' &&
+      !entry.plan.is_free &&
+      activeEntitlements.some((entitlement) => entitlement.plan_id === entry.plan.id),
   );
   const planName = activePlan?.plan.display_name ?? t('cloud.title');
   const quotas =

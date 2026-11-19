@@ -97,13 +97,14 @@ responses. They use the same boundary without buffering the response or construc
   features. Both are required for model admission. The separate `/api/v1/account/plans` read
   supplies optional badge metadata after account/model readiness; a slow request, failed response
   or invalid display payload cannot delay or reject inference. Admission revalidation does not
-  request this display metadata. Cold start and explicit refresh load it only for paid subscribers.
+  request this display metadata. Subscription display refreshes load it only for paid subscribers.
 - The sidebar badge requires a confirmed, currently effective paid entitlement, independently of
-  quota exhaustion or model catalog availability. It hides for free, expired, signed-out,
-  unavailable and enterprise accounts. Plan metadata supplies its name; remaining quotas come from
-  matching allocation IDs in the account snapshot. When metadata is unavailable, the badge uses
-  its generic Cloud label and omits unconfirmed quota associations. The profile exposes no purchase
-  or management action. The managed provider opens a read-only model list, without connection
+  quota exhaustion or model catalog availability. It hides for free, expired, signed-out and
+  enterprise accounts, and keeps a still-effective subscription visible after a temporary read
+  failure. Plan metadata for a confirmed entitlement supplies its name. Remaining quotas come from
+  matching allocation IDs in the account snapshot. When matching metadata is unavailable, the
+  badge uses its generic Cloud label and omits unconfirmed quota associations. The profile exposes
+  no purchase or management action. The managed provider opens a read-only model list, without connection
   settings or model mutation actions.
   Accounts without any currently entitled Plan models do not see the provider in settings or
   the picker.
@@ -123,15 +124,15 @@ responses. They use the same boundary without buffering the response or construc
   without changing other providers' saved order keys. Ordinary provider/model mutation services
   reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
   keeping their IDs/names for history; user-configured providers and conversations remain.
-- Cold start checks subscription display once after account restoration. Repeated notifications
-  for that identity do not issue another read. A newly signed-in/replaced account loads its own
-  state, while signed-out installations make no subscription requests. Foreground transitions,
-  elapsed time and inference completion do not trigger another display check; there is no polling
-  or automatic retry. A failed cold-start check remains an error until an explicit retry or the
-  next start. The automatic read is silent and does not set the explicit-refresh flag.
-  Model admission still revalidates a stale snapshot before sending. Completion/cancellation only
-  marks it stale for the next request, preserving quota checks without an idle background read.
-  Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
+- Cold start checks subscription display once after account restoration. A newly signed-in or
+  replaced account loads its own state, while signed-out installations make no subscription
+  requests. Opening the sidebar triggers a silent refresh. A permanent sidebar checks when it
+  becomes visible in the foreground if the snapshot is stale. The model picker also rechecks when
+  opened with exhausted or temporarily unavailable Cloud models. Concurrent reads share the
+  account/model request. These triggers use no polling or automatic retries.
+- Model admission revalidates stale state before sending. Inference completion or cancellation
+  marks quota stale without starting a read, including if an earlier read is still in progress.
+  Failures preserve the last confirmed display data while new Cloud requests require revalidation.
 - Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's
   queries and inference use the new one. Catalog withdrawal disables old rows without

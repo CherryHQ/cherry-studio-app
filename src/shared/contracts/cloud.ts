@@ -98,10 +98,11 @@ export type CloudState = Readonly<{
   plans: CloudPlans | null;
   models: readonly CloudModel[];
 }>;
+type CloudRefreshMode = 'manual' | 'background' | 'if-stale';
 export interface CloudModule {
   getState(): CloudState;
   subscribe(listener: () => void): () => void;
-  refresh(): Promise<void>;
+  refresh(mode?: CloudRefreshMode): Promise<void>;
 }
 
 function isEffectivePaidEntitlement(
@@ -128,13 +129,17 @@ export function isCloudModelListed(
   });
 }
 
-/** A current paid subscription, independent of remaining quota or catalog availability. */
-export function hasActiveCloudSubscription(state: CloudState, now = Date.now()): boolean {
-  return (
-    state.phase === 'ready' &&
-    state.account?.account.status === 'active' &&
-    state.account.entitlements.some((entry) => isEffectivePaidEntitlement(entry, now))
-  );
+/** The last confirmed paid entitlements can still be displayed if a refresh fails. */
+export function getActiveCloudEntitlements(
+  state: CloudState,
+  now = Date.now(),
+): CloudAccount['entitlements'] {
+  if (
+    (state.phase !== 'ready' && state.phase !== 'error') ||
+    state.account?.account.status !== 'active'
+  )
+    return [];
+  return state.account.entitlements.filter((entry) => isEffectivePaidEntitlement(entry, now));
 }
 
 /** Windows constrain the same pool; independent pools are alternative sources of credit. */

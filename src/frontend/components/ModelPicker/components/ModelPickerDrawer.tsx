@@ -9,14 +9,19 @@ import {
   ContentState,
   SearchField,
 } from '@cherrystudio/ui/components';
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
-import type { CloudModelUse } from '@/shared/contracts/cloud';
+import { useBackendModule } from '@/frontend/data';
+import {
+  CLOUD_PROVIDER_ID,
+  cloudModelUnavailable,
+  type CloudModelUse,
+} from '@/shared/contracts/cloud';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
@@ -67,7 +72,7 @@ export type ModelPickerMultiSelect = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
-  cloudUse = 'agent',
+  cloudUse,
   emptyText,
   isModelVisible,
   modelType,
@@ -160,7 +165,7 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
-  cloudUse,
+  cloudUse = 'agent',
   allowedModelIds,
   deferredSearchText,
   emptyText,
@@ -201,6 +206,17 @@ function ModelPickerDrawerContent({
   setSelectedBadge: (badge: ModelPickerBadge | null) => void;
 }) {
   const { t } = useTranslation();
+  const cloud = useBackendModule('cloud');
+  useEffect(() => {
+    if (!open || modelType === 'image' || (providerId && providerId !== CLOUD_PROVIDER_ID)) return;
+    const state = cloud.getState();
+    const needsQuotaCheck = state.models.some((model) => {
+      const reason = cloudModelUnavailable(state, model.id, cloudUse);
+      return reason === 'quota_exhausted' || reason === 'unavailable';
+    });
+    if (needsQuotaCheck) void cloud.refresh('background').catch(() => {});
+  }, [cloud, cloudUse, modelType, open, providerId]);
+
   const { error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
     cloudUse,
     modelType,

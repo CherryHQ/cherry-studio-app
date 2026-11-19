@@ -1,4 +1,4 @@
-import { type CloudState, hasActiveCloudSubscription } from '../cloud';
+import { type CloudState, getActiveCloudEntitlements } from '../cloud';
 
 const now = Date.parse('2026-11-12T00:00:00Z');
 const active: CloudState = {
@@ -26,7 +26,7 @@ const active: CloudState = {
 
 describe('active cloud subscriptions', () => {
   test('recognizes a paid subscription even when quota and model projection are not available', () => {
-    expect(hasActiveCloudSubscription(active, now)).toBe(true);
+    expect(getActiveCloudEntitlements(active, now)).toEqual(active.account!.entitlements);
   });
 
   test.each([
@@ -38,32 +38,38 @@ describe('active cloud subscriptions', () => {
   ])('rejects an entitlement that is not a current paid subscription: %p', (change) => {
     const account = active.account!;
     expect(
-      hasActiveCloudSubscription(
+      getActiveCloudEntitlements(
         {
           ...active,
           account: { ...account, entitlements: [{ ...account.entitlements[0]!, ...change }] },
         },
         now,
       ),
-    ).toBe(false);
+    ).toEqual([]);
   });
 
-  test.each(['loading', 'error', 'signed_out'] as const)(
+  test.each(['loading', 'signed_out'] as const)(
     'does not trust an old snapshot while %s',
     (phase) => {
-      expect(hasActiveCloudSubscription({ ...active, phase }, now)).toBe(false);
+      expect(getActiveCloudEntitlements({ ...active, phase }, now)).toEqual([]);
     },
   );
 
+  test('a failed refresh keeps the last confirmed subscription visible until it expires', () => {
+    const stale = { ...active, phase: 'error' } as const;
+    expect(getActiveCloudEntitlements(stale, now)).toEqual(active.account!.entitlements);
+    expect(getActiveCloudEntitlements(stale, Date.parse('2026-12-01T00:00:00Z'))).toEqual([]);
+  });
+
   test('rejects a disabled cloud account', () => {
     expect(
-      hasActiveCloudSubscription(
+      getActiveCloudEntitlements(
         {
           ...active,
           account: { ...active.account!, account: { id: 'account-1', status: 'disabled' } },
         },
         now,
       ),
-    ).toBe(false);
+    ).toEqual([]);
   });
 });

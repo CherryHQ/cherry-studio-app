@@ -22,7 +22,7 @@ import {
   CloudModelSchema,
   CloudPlansSchema,
   cloudModelUnavailable,
-  hasActiveCloudSubscription,
+  getActiveCloudEntitlements,
   isCloudModelListed,
   type CloudModelUse,
   type CloudModule,
@@ -73,6 +73,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
   private loadingPlans: Promise<void> | undefined;
   private projection: Promise<void> = Promise.resolve();
   private refreshedAt = 0;
+  private quotaRevision = 0;
   private started = false;
   private stopped = false;
   private projectedCatalog: string | undefined;
@@ -130,7 +131,16 @@ export class CloudRuntime extends BaseService implements CloudModule {
     if (key) void this.refreshState(true).catch(() => {});
   }
 
-  readonly refresh = (): Promise<void> => this.refreshState(false);
+  readonly refresh: CloudModule['refresh'] = (mode = 'manual') => {
+    if (mode === 'manual') return this.refreshState(false);
+    if (!this.identityKey || (mode === 'if-stale' && !this.needsRefresh()))
+      return Promise.resolve();
+    return this.refreshState(true);
+  };
+
+  private needsRefresh(): boolean {
+    return this.snapshot.phase !== 'ready' || Date.now() - this.refreshedAt > 30_000;
+  }
 
   private async refreshState(silent: boolean, includePlans = true): Promise<void> {
     if (!this.started || this.stopped) return;
@@ -146,7 +156,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
     }
     await this.refreshing;
     current.throwIfAborted();
-    if (includePlans && this.session && hasActiveCloudSubscription(this.snapshot))
+    if (includePlans && this.session && getActiveCloudEntitlements(this.snapshot).length > 0)
       this.refreshPlans(this.session, current);
   }
 
@@ -183,6 +193,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         signal,
       );
       const session = this.session;
+      const quotaRevision = this.quotaRevision;
       const [accountData, modelData] = await Promise.all([
         session.get('/api/v1/account'),
         session.get('/v1/models'),
@@ -201,7 +212,8 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const entitledModels = models.filter((model) => isCloudModelListed(next, model.id));
       await this.project(entitledModels, signal);
       signal.throwIfAborted();
-      this.refreshedAt = Date.now();
+      // A model request may have completed while these reads were in flight.
+      if (quotaRevision === this.quotaRevision) this.refreshedAt = Date.now();
       this.publish({ ...next, plans: this.snapshot.plans });
     } catch (error) {
       if (!signal.aborted) this.publish({ ...this.snapshot, phase: 'error', isRefreshing: false });
@@ -221,7 +233,6 @@ export class CloudRuntime extends BaseService implements CloudModule {
       })
       .catch((error: unknown) => {
         if (signal.aborted) return;
-        this.publish({ ...this.snapshot, plans: null });
         loggerService
           .withContext('CloudRuntime')
           .warn('Could not load Cloud plan display metadata', error as Error);
@@ -240,7 +251,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
       lifetime.throwIfAborted();
       if (!identityKey || identityKey !== this.identityKey)
         throw new CloudAccessError('signed_out');
-      if (Date.now() - this.refreshedAt > 30_000 || this.snapshot.phase !== 'ready') {
+      if (this.needsRefresh()) {
         try {
           // Sending revalidates account/model admission without refreshing badge metadata.
           await this.refreshState(false, false);
@@ -280,7 +291,10 @@ export class CloudRuntime extends BaseService implements CloudModule {
         completed = true;
         linked.dispose();
         // Revalidate before the next model request without scheduling another display refresh.
-        if (!lifetime.aborted) this.refreshedAt = 0;
+        if (!lifetime.aborted) {
+          this.refreshedAt = 0;
+          this.quotaRevision++;
+        }
       };
       try {
         const signed = await session.headers('POST', path, body, createCloudIdempotencyKey());

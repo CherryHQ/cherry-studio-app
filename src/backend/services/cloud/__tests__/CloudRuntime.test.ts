@@ -622,6 +622,31 @@ test('a new cold-start runtime checks the same saved account again', async () =>
   await second.runtime._doStop();
 });
 
+test('background refresh publishes new quota silently and coalesces concurrent reads', async () => {
+  const { runtime } = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  mockGet.mockClear();
+  const account = cloudSnapshot().account!;
+  account.quota_pools[0]!.windows[0]!.remaining_units = 500;
+  mockGet.mockImplementation(async (id: string, path: string) =>
+    path === '/api/v1/account' ? account : reply(id, path),
+  );
+
+  const first = runtime.refresh('background');
+  const second = runtime.refresh('background');
+  expect(runtime.getState().isRefreshing).toBe(false);
+  await Promise.all([first, second]);
+  expect(runtime.getState().account).toEqual(account);
+  expect(mockGet.mock.calls.filter(([, path]) => path === '/api/v1/account')).toHaveLength(1);
+
+  await runtime.refresh('if-stale');
+  expect(mockGet.mock.calls.filter(([, path]) => path === '/api/v1/account')).toHaveLength(1);
+  await jest.advanceTimersByTimeAsync(31_000);
+  await runtime.refresh('if-stale');
+  expect(mockGet.mock.calls.filter(([, path]) => path === '/api/v1/account')).toHaveLength(2);
+  await runtime._doStop();
+});
+
 test('cold-start discovery recovers missing metadata before one subscription check', async () => {
   let finish!: () => void;
   mockRefreshServices.mockImplementationOnce(
@@ -658,6 +683,43 @@ test('inference completion defers entitlement revalidation until the next model 
   await request();
   expect(mockGet).toHaveBeenCalledTimes(5);
   await runtime._doStop();
+});
+
+test('a refresh started before inference completion cannot make the earlier quota fresh', async () => {
+  const upstream = inferenceResponse();
+  mockInference
+    .mockResolvedValueOnce(upstream.response)
+    .mockImplementation(async () => new Response(null, { status: 200 }));
+  const { runtime } = await setup();
+  await jest.advanceTimersByTimeAsync(0);
+  const send = runtime.createModelFetch('cloud-model', 'agent');
+  const request = () =>
+    send('https://cloud.example/v1/messages', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'cloud-model' }),
+    });
+  const response = await request();
+  let finishAccount!: (value: unknown) => void;
+  mockGet.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishAccount = resolve;
+    }),
+  );
+  const background = runtime.refresh('background');
+  try {
+    await jest.advanceTimersByTimeAsync(0);
+    upstream.close();
+    await expect(response.body!.getReader().read()).resolves.toMatchObject({ done: true });
+    finishAccount(cloudSnapshot().account);
+    await background;
+
+    mockGet.mockClear();
+    await request();
+    expect(mockGet).toHaveBeenCalledWith('account-a', '/api/v1/account', service.apiOrigin);
+  } finally {
+    finishAccount(cloudSnapshot().account);
+    await runtime._doStop();
+  }
 });
 
 test('healthy configured subscription reads do not wait for configuration rediscovery', async () => {
