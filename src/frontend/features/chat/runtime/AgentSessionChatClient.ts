@@ -806,6 +806,14 @@ export class AgentSessionChatClient {
         return;
       }
       case 'approval.requested':
+        // Ignore a late approval request for an active turn that has already settled.
+        if (
+          entry.state.activeTurn &&
+          entry.state.activeTurn.id === event.approval.turnId &&
+          TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status)
+        ) {
+          return;
+        }
         this.updateState(entry, {
           ...entry.state,
           pendingApprovals: [

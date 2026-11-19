@@ -120,6 +120,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 | --- | --- |
 | [Pi Durable Migration](./pi-durable-migration.md) | Active experimental runtime, history authority, lifecycle, rebuilding, operations, and backup |
 | [Agent Protocol](./agent-protocol.md) | Application values, operations, events, snapshots, errors, and invariants |
+| [Agent Statecharts And Invariants](./statecharts.md) | User-visible Mermaid statecharts, forbidden states, and automated model-checked invariants |
 | [Agent Runtime](./agent-runtime.md) | Historical per-turn contract |
 | [Agent Persistence](./agent-persistence.md) | Authoritative Cherry transcript schema, settlement and deletion |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
