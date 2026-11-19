@@ -16,6 +16,7 @@ import { getLowerBaseModelName, isDeepSeekModel } from '@cherrystudio/universal/
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
+import { createDevMockFetch } from '@/backend/ai/provider/devMockProviderFetch';
 import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
 import { application } from '@/backend/core/application/Application';
 import { modelService } from '@/backend/data/services/ModelService';
@@ -36,6 +37,7 @@ import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import { resolveEndpointDialect } from '@/shared/data/types/provider';
 import type { Provider } from '@/shared/data/types/provider';
+import { DEV_MOCK_PROVIDER_ID, isDevMockProviderEnabled } from '@/shared/utils/devMockProvider';
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
@@ -337,7 +339,9 @@ export function createPiModelResolver(
         sessionId,
         fetch: (provider.id === CLOUD_PROVIDER_ID
           ? application.get('CloudRuntime').createModelFetch(modelId, cloudUse)
-          : expoFetch) as unknown as FetchFunction,
+          : isDevMockProviderEnabled() && provider.id === DEV_MOCK_PROVIDER_ID
+            ? createDevMockFetch()
+            : expoFetch) as unknown as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: oauth ? Math.min(outputReservation, piModel.maxTokens) : outputReservation,

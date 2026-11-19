@@ -1,8 +1,10 @@
 import type { ProviderEdition } from '@cherrystudio/provider-registry';
 
 import { editionCapabilities } from '@/shared/data/managedPolicy';
+import { isDevMockProviderEnabled } from '@/shared/utils/devMockProvider';
 
 import type { DbService } from '../DbService';
+import { DevMockProviderSeeder } from './seeders/DevMockProviderSeeder';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
 import { SeedRunner } from './SeedRunner';
@@ -23,5 +25,8 @@ export async function seedPresetProviders(
 }
 
 function createSeeders(): DatabaseSeeder[] {
-  return [new PreferenceSeeder()];
+  return [
+    new PreferenceSeeder(),
+    ...(isDevMockProviderEnabled() ? [new DevMockProviderSeeder()] : []),
+  ];
 }

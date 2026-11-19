@@ -1,0 +1,23 @@
+appId: ${APP_ID}
+name: Offline dev-mock chat streaming round-trip
+---
+# Requires a dev client started with EXPO_PUBLIC_DEV_MOCK_PROVIDER=1
+- clearState
+- openLink:
+    link: ${DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: "Open|打开"
+    commands:
+      - tapOn: "Open|打开"
+- runFlow: _skip-onboarding.yaml
+- tapOn:
+    id: chat-composer
+- inputText: "hello offline maestro"
+- tapOn:
+    id: chat-composer-send
+- extendedWaitUntil:
+    visible: "[dev-mock] Echo: hello offline maestro"
+    timeout: 15000
+- assertVisible:
+    id: assistant-message-toolbar
