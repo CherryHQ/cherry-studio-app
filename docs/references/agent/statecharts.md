@@ -95,3 +95,41 @@ stateDiagram-v2
 - `isAgentSessionBusy(state)` remains `true` whenever `state.activeTurn` is non-terminal,
   `state.queuedInputs.length > 0`, or `state.isSubmitting === true`, and returns `false` once all
   three settle.
+
+## 4. iOS Background Execution Leases
+
+Owned by `IosBackgroundExecutionSource`
+(`src/backend/services/keepAlive/IosBackgroundExecutionSource.ts`), verified across 50 seeded
+randomized sequences in
+[IosBackgroundExecutionSource.invariants.test.ts](../../../src/backend/services/keepAlive/__tests__/IosBackgroundExecutionSource.invariants.test.ts).
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> protected: acquire() while active/background
+    protected --> protected: concurrent acquire() / idempotent release()
+    protected --> idle: final lease release()
+    protected --> interrupted: platform background expiry while backgrounded
+    interrupted --> idle: final lease release() or dispose
+```
+
+| ID | Invariant | Forbidden State |
+| --- | --- | --- |
+| `K1` | **Zero leaked OS tasks:** Releasing every acquired lease returns `getStatus()` to `'idle'` and ends every started native background task. | Background execution or audio session left running after all work completes. |
+| `K2` | **Idempotent release:** Calling `lease.release()` repeatedly never throws or underflows sibling leases. | Double release prematurely stopping another active task's protection. |
+| `K3` | **Foreground safety:** An expiry event queued before returning to foreground (`AppState === 'active'`) never interrupts foreground holders. | Active foreground generation cancelled by a stale background-expiry callback. |
+| `K4` | **Clean shutdown:** After `_doStop()`, `acquire()` degrades to a no-op and starts zero new native tasks. | Native background API calls after service teardown. |
+
+## 5. Remote Session Read Cache Generation Fencing
+
+Owned by `RemoteSessionReadCache`
+(`src/backend/services/remoteAgent/RemoteSessionReadCache.ts`), verified across 60 seeded
+randomized sequences in
+[RemoteSessionReadCache.invariants.test.ts](../../../src/backend/services/remoteAgent/__tests__/RemoteSessionReadCache.invariants.test.ts).
+
+| ID | Invariant | Forbidden State |
+| --- | --- | --- |
+| `R1` | **Generation fencing:** Writes with a stale `generation` (after `beginHistory`, `setEpoch`, or invalidation) never land in the cache. | Late in-flight network read overwriting newer transcript history. |
+| `R2` | **Monotonic history versions:** `beginHistory` rejects strictly older versions without mutating `historyVersion` or `generation`. | History cache rolling backward on out-of-order responses. |
+| `R3` | **Bounded byte budget:** Retained value bytes never exceed `policy.maxBytes`, and repeated `retain()` releases never underflow `active`. | Unbounded memory growth or negative refcounts. |
+| `R4` | **Active entry retention:** Entries with `active > 0` remain findable past `idleMs` until released or invalidated. | Open conversation view losing its cache entry while mounted. |
