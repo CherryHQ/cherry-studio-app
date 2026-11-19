@@ -1,5 +1,6 @@
 import { createAudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 import { createHttpClient } from '@/backend/services/http';
 import {
@@ -21,6 +22,20 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
   let stop: (() => void) | undefined;
   let subscription: { remove(): void } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let isReleased = false;
+
+  function releasePlayer() {
+    if (isReleased) return;
+    isReleased = true;
+    clearTimeout(timer);
+    if (stop) signal.removeEventListener('abort', stop);
+    try {
+      subscription?.remove();
+    } finally {
+      player.release();
+    }
+  }
+
   try {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -34,9 +49,11 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
       stop = () => {
         settle(signal.reason ?? new Error('Speech was cancelled.'));
         try {
-          player.pause();
+          // iOS pause schedules shared session deactivation. Release stops this player directly.
+          if (Platform.OS === 'ios') releasePlayer();
+          else player.pause();
         } catch (error) {
-          logger.warn('Cancelled speech playback could not be paused', { error });
+          logger.warn('Cancelled speech playback could not be stopped', { error });
         }
       };
       timer = setTimeout(
@@ -63,10 +80,7 @@ async function play(uri: string, signal: AbortSignal): Promise<void> {
       }
     });
   } finally {
-    clearTimeout(timer);
-    subscription?.remove();
-    if (stop) signal.removeEventListener('abort', stop);
-    player.release();
+    releasePlayer();
   }
 }
 
