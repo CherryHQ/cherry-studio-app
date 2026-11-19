@@ -9,6 +9,12 @@ Apply the user's active authorization before execution. Designing this workflow 
 builds, device creation/startup, tests, or model/tool calls. Follow authorization already given for
 the task without asking again; this standard does not enable automatic acceptance after every edit.
 
+Use `pnpm verify:device` (`scripts/deviceVerify.ts`) for repeatable host orchestration instead of
+assembling ad-hoc shell commands: `doctor` inspects host tools and workspace ports, `evidence`
+initializes and summarizes redacted receipts under `.context/agent-self-testing/`, `run` drives
+explicit Maestro flows with `--dry-run` / `--json`, `cleanup` shuts down workspace sessions while
+refusing resident-device deletion, and `check-map` validates feature map consistency.
+
 ## Self-Test Preparation
 
 > Status: design
