@@ -52,7 +52,7 @@ describe('createPpioProvider', () => {
     const model = provider.languageModel('llama-3') as unknown as { provider: string };
     expect(model.provider).toBe('ppio.chat');
 
-    const [modelId, config] = ChatCtor.mock.calls[0];
+    const [modelId, config] = ChatCtor.mock.calls[0]!;
     expect(modelId).toBe('llama-3');
     expect(config.url({ path: '/chat/completions', modelId: 'llama-3' })).toBe(
       'https://api.ppinfra.com/v3/openai/chat/completions',

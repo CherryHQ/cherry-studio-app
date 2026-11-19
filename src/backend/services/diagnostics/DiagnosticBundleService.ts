@@ -88,7 +88,7 @@ export class DiagnosticBundleService
     super();
   }
 
-  protected async onInit(): Promise<void> {
+  protected override async onInit(): Promise<void> {
     try {
       await cleanupDiagnosticTemporaryDirectories();
     } catch {
@@ -96,7 +96,7 @@ export class DiagnosticBundleService
     }
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.disposed = true;
     this.abort.abort();
     try {

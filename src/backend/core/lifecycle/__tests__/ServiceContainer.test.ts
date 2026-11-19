@@ -37,7 +37,7 @@ class Sneaky extends BaseService {
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     // Resolving something it never declared — legal at runtime, reportable here.
     this.resolved = this.container.get<Database>('Database');
   }

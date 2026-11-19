@@ -1036,7 +1036,7 @@ export class SshRuntime extends BaseService implements SshModule {
     return pending;
   }
 
-  protected async onStop() {
+  protected override async onStop() {
     this.lifetime.abort();
     this.targets.clear();
     this.probes.clear();
@@ -1060,7 +1060,7 @@ export class SshRuntime extends BaseService implements SshModule {
     this.targets.clear();
     this.probes.clear();
   }
-  protected onDestroy() {
+  protected override onDestroy() {
     return this.onStop();
   }
 }

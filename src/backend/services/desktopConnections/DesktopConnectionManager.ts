@@ -184,7 +184,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       [...entry.leases].some((lease) => !lease.controller.signal.aborted)
     );
   }
-  protected onInit() {
+  protected override onInit() {
     // iOS reports `inactive` for Control Center, system alerts and Face ID; only `background` hides the app.
     const onAppState = (state: typeof AppState.currentState) => {
       if (state === 'active' || state === 'background') this.setForeground(state === 'active');
@@ -988,7 +988,7 @@ export class DesktopConnectionManager extends BaseService implements DesktopConn
       signal.removeEventListener('abort', cancel);
     }
   }
-  protected async onStop() {
+  protected override async onStop() {
     this.stopped = true;
     this.discovery.setActive(false);
     for (const id of this.entries.keys()) this.invalidate(id);

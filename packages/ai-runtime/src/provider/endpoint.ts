@@ -73,13 +73,13 @@ export function resolveProviderVariant(
     endpointType === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS ||
     endpointType === ENDPOINT_TYPE.OLLAMA_CHAT
   ) {
-    const chatVariant = `${baseProviderId}-chat`;
-    if (chatVariant in appProviderIdMap) return appProviderIdMap[chatVariant];
+    const chatVariant = appProviderIdMap[`${baseProviderId}-chat`];
+    if (chatVariant !== undefined) return chatVariant;
   }
 
   if (endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES) {
-    const responsesVariant = `${baseProviderId}-responses`;
-    if (responsesVariant in appProviderIdMap) return appProviderIdMap[responsesVariant];
+    const responsesVariant = appProviderIdMap[`${baseProviderId}-responses`];
+    if (responsesVariant !== undefined) return responsesVariant;
   }
 
   return baseProviderId;
@@ -92,8 +92,9 @@ export function resolveAiSdkProviderId(
   const adapterFamily = endpointType
     ? provider.endpointConfigs?.[endpointType]?.adapterFamily
     : undefined;
-  if (adapterFamily && adapterFamily in appProviderIdMap) {
-    return resolveProviderVariant(appProviderIdMap[adapterFamily], endpointType);
+  const mappedProviderId = adapterFamily ? appProviderIdMap[adapterFamily] : undefined;
+  if (mappedProviderId !== undefined) {
+    return resolveProviderVariant(mappedProviderId, endpointType);
   }
-  return appProviderIdMap['openai-compatible'];
+  return 'openai-compatible';
 }

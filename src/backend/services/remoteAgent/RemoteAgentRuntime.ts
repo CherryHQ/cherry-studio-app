@@ -255,7 +255,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     this.drains.add(drain);
     void drain.finally(() => this.drains.delete(drain)).catch(() => undefined);
   }
-  protected async onStop() {
+  protected override async onStop() {
     this.lifetime.abort();
     this.uninvalidate?.();
     this.readCache.clear();

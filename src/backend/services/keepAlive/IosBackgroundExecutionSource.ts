@@ -64,7 +64,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     if (Platform.OS !== 'ios') return;
     this.native = getSystemIntegration();
     if (this.native?.beginBackgroundExecution) {
@@ -175,7 +175,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     };
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.disposed = true;
     this.holders.clear();
     this.publishStatus();

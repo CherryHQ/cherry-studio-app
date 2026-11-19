@@ -193,10 +193,12 @@ function encodeEmissions(invocation: ResolvedReasoningInvocation): Record<string
     let cursor = result;
     for (let index = 0; index < path.length - 1; index += 1) {
       const key = path[index];
+      if (!key) continue;
       cursor[key] ??= {};
       cursor = cursor[key] as Record<string, unknown>;
     }
-    cursor[path[path.length - 1]] = emission.value;
+    const leaf = path[path.length - 1];
+    if (leaf) cursor[leaf] = emission.value;
   }
 
   return result;
