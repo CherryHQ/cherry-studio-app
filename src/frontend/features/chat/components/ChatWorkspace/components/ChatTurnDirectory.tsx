@@ -165,7 +165,7 @@ function ChatTurnDirectoryPanel({
                   </Button>
                 )}
               </View>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item, index }) => {
             const number = (
