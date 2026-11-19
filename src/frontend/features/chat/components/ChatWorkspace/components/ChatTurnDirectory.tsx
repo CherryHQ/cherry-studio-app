@@ -120,86 +120,88 @@ function ChatTurnDirectoryPanel({
   };
 
   return (
-    <BackgroundPressExclusion
-      className="shrink rounded-3xl border border-border bg-popover p-2 shadow-sm"
+    <View
+      className="shrink rounded-3xl border border-border bg-popover shadow-sm"
       style={PANEL_LIMIT}
       testID="chat-turn-directory"
     >
-      {turns.isPending ? (
-        <View className="items-center py-4">
-          <Spinner
-            accessibilityLabel={t('chat.history.loading')}
-            accessibilityRole="progressbar"
-            size="sm"
+      <BackgroundPressExclusion className="shrink p-2">
+        {turns.isPending ? (
+          <View className="items-center py-4">
+            <Spinner
+              accessibilityLabel={t('chat.history.loading')}
+              accessibilityRole="progressbar"
+              size="sm"
+            />
+          </View>
+        ) : turns.isError && rows.length === 0 ? (
+          <View className="items-start gap-2 px-2 pb-2">
+            <Text className="text-popover-foreground text-sm">{t('chat.history.loadFailed')}</Text>
+            <Button onPress={() => void turns.refetch()} size="sm" variant="tonal">
+              {t('common.retry')}
+            </Button>
+          </View>
+        ) : rows.length === 0 && !turns.hasNextPage ? (
+          <Text className="px-2 pb-3 text-muted-foreground text-sm">{t('chat.turns.empty')}</Text>
+        ) : (
+          <FlatList
+            className="shrink"
+            data={rows}
+            keyboardShouldPersistTaps="always"
+            keyExtractor={turnKey}
+            onEndReached={turns.isFetchNextPageError ? undefined : loadMore}
+            onEndReachedThreshold={0.2}
+            ListFooterComponent={
+              turns.hasNextPage ? (
+                <View className="items-center py-2">
+                  {turns.isFetchingNextPage ? (
+                    <Spinner
+                      accessibilityLabel={t('chat.history.loading')}
+                      accessibilityRole="progressbar"
+                      size="sm"
+                    />
+                  ) : (
+                    <Button onPress={loadMore} size="sm" variant="ghost">
+                      {t(turns.isFetchNextPageError ? 'common.retry' : 'common.more')}
+                    </Button>
+                  )}
+                </View>
+              ) : undefined
+            }
+            renderItem={({ item, index }) => {
+              const number = (
+                navigator.numbersFromLatest ? index + 1 : rows.length - index
+              ).toLocaleString(i18n.resolvedLanguage);
+              const preview = item.preview || t('chat.turns.noText');
+              return (
+                <Pressable
+                  accessibilityLabel={t(
+                    navigator.numbersFromLatest ? 'chat.turns.rowFromLatest' : 'chat.turns.row',
+                    { number, preview },
+                  )}
+                  accessibilityRole="button"
+                  className="min-h-11 flex-row items-center gap-2 rounded-xl px-2 py-2 active:bg-secondary"
+                  onPress={() =>
+                    void onSelect(
+                      turns.isStale && item.activeNodeId
+                        ? { ...item, activeNodeId: undefined }
+                        : item,
+                    )
+                  }
+                >
+                  <Text className="min-w-6 text-muted-foreground text-xs tabular-nums">
+                    {navigator.numbersFromLatest ? `−${number}` : number}
+                  </Text>
+                  <Text className="flex-1 text-popover-foreground text-sm" numberOfLines={1}>
+                    {preview}
+                  </Text>
+                </Pressable>
+              );
+            }}
+            style={LIST_LIMIT}
           />
-        </View>
-      ) : turns.isError && rows.length === 0 ? (
-        <View className="items-start gap-2 px-2 pb-2">
-          <Text className="text-popover-foreground text-sm">{t('chat.history.loadFailed')}</Text>
-          <Button onPress={() => void turns.refetch()} size="sm" variant="tonal">
-            {t('common.retry')}
-          </Button>
-        </View>
-      ) : rows.length === 0 && !turns.hasNextPage ? (
-        <Text className="px-2 pb-3 text-muted-foreground text-sm">{t('chat.turns.empty')}</Text>
-      ) : (
-        <FlatList
-          className="shrink"
-          data={rows}
-          keyboardShouldPersistTaps="always"
-          keyExtractor={turnKey}
-          onEndReached={turns.isFetchNextPageError ? undefined : loadMore}
-          onEndReachedThreshold={0.2}
-          ListFooterComponent={
-            turns.hasNextPage ? (
-              <View className="items-center py-2">
-                {turns.isFetchingNextPage ? (
-                  <Spinner
-                    accessibilityLabel={t('chat.history.loading')}
-                    accessibilityRole="progressbar"
-                    size="sm"
-                  />
-                ) : (
-                  <Button onPress={loadMore} size="sm" variant="ghost">
-                    {t(turns.isFetchNextPageError ? 'common.retry' : 'common.more')}
-                  </Button>
-                )}
-              </View>
-            ) : undefined
-          }
-          renderItem={({ item, index }) => {
-            const number = (
-              navigator.numbersFromLatest ? index + 1 : rows.length - index
-            ).toLocaleString(i18n.resolvedLanguage);
-            const preview = item.preview || t('chat.turns.noText');
-            return (
-              <Pressable
-                accessibilityLabel={t(
-                  navigator.numbersFromLatest ? 'chat.turns.rowFromLatest' : 'chat.turns.row',
-                  { number, preview },
-                )}
-                accessibilityRole="button"
-                className="min-h-11 flex-row items-center gap-2 rounded-xl px-2 py-2 active:bg-secondary"
-                onPress={() =>
-                  void onSelect(
-                    turns.isStale && item.activeNodeId
-                      ? { ...item, activeNodeId: undefined }
-                      : item,
-                  )
-                }
-              >
-                <Text className="min-w-6 text-muted-foreground text-xs tabular-nums">
-                  {navigator.numbersFromLatest ? `−${number}` : number}
-                </Text>
-                <Text className="flex-1 text-popover-foreground text-sm" numberOfLines={1}>
-                  {preview}
-                </Text>
-              </Pressable>
-            );
-          }}
-          style={LIST_LIMIT}
-        />
-      )}
-    </BackgroundPressExclusion>
+        )}
+      </BackgroundPressExclusion>
+    </View>
   );
 }
