@@ -13,6 +13,7 @@ import {
   OnboardingMessage,
   OnboardingPage,
 } from '../components/OnboardingPage';
+import { useOnboardingProgress } from '../setup/useOnboardingProgress';
 import { OnboardingModelList } from './OnboardingModelList';
 import { useCompleteOnboarding } from './useCompleteOnboarding';
 import { useOnboardingModels } from './useOnboardingModels';
@@ -54,7 +55,9 @@ function OnboardingModelSelection({
     staleTime: Infinity,
   });
   const data = useOnboardingModels(providerId);
-  const { complete, isSaving: isBusy, cancel } = useCompleteOnboarding();
+  const progress = useOnboardingProgress();
+  const { complete, isSaving: isCompleting, cancel } = useCompleteOnboarding();
+  const isBusy = isCompleting || progress.isSaving;
   const openProviderSetup = () => router.replace('/onboarding/provider');
   const syncAgain = () =>
     router.replace({ pathname: '/onboarding/provider-sync', params: { connectionId } });
@@ -106,20 +109,21 @@ function OnboardingModelSelection({
         <>
           {(selectionMode === 'manual' || data.items.length > 0) && !loading ? (
             <OnboardingButton
-              disabled={!canStart || Boolean(data.error)}
-              loading={isBusy}
+              disabled={!canStart || Boolean(data.error) || progress.isSaving}
+              loading={isCompleting}
               onPress={start}
               testID="onboarding-model-start"
             >
-              {t(isBusy ? 'onboarding.model.saving' : 'onboarding.model.continue')}
+              {t(isCompleting ? 'onboarding.model.saving' : 'onboarding.model.continue')}
             </OnboardingButton>
           ) : null}
-          {isBusy ? (
+          {isCompleting ? (
             <OnboardingButton onPress={cancel} variant="text">
               {t('common.cancel')}
             </OnboardingButton>
           ) : providerId && data.provider ? (
             <OnboardingButton
+              disabled={progress.isSaving}
               onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
               testID="onboarding-model-mode-toggle"
               variant="text"
@@ -131,16 +135,28 @@ function OnboardingModelSelection({
               )}
             </OnboardingButton>
           ) : null}
-          {!isBusy &&
+          {!isCompleting &&
           (providerId || (connectionId && selectedModel)) &&
           !(isShowingLoadError && shouldEditConnection) ? (
-            <OnboardingButton onPress={editConnection} variant="text">
+            <OnboardingButton disabled={progress.isSaving} onPress={editConnection} variant="text">
               {t('onboarding.connection.edit')}
+            </OnboardingButton>
+          ) : null}
+          {!isCompleting ? (
+            <OnboardingButton
+              loading={progress.isSaving}
+              onPress={() => void progress.skip()}
+              testID="onboarding-model-skip"
+              variant="text"
+            >
+              {t('onboarding.skip')}
             </OnboardingButton>
           ) : null}
         </>
       }
-      onBack={isBusy ? undefined : () => router.replace('/onboarding')}
+      onBack={
+        isBusy || (!providerId && !connectionId) ? undefined : () => router.replace('/onboarding')
+      }
       step={
         providerId || connectionId
           ? { current: 3, total: 3, label: t('onboarding.step', { current: 3 }) }
@@ -153,7 +169,7 @@ function OnboardingModelSelection({
       {!registry.data && registry.isError ? (
         <View className="gap-4 px-6">
           <OnboardingMessage>{t('models.registry.failed')}</OnboardingMessage>
-          <OnboardingButton onPress={() => void registry.refetch()}>
+          <OnboardingButton disabled={progress.isSaving} onPress={() => void registry.refetch()}>
             {t('common.retry')}
           </OnboardingButton>
         </View>
@@ -178,7 +194,10 @@ function OnboardingModelSelection({
           <OnboardingMessage>
             {t(`onboarding.model.error.${data.loadError.reason}`)}
           </OnboardingMessage>
-          <OnboardingButton onPress={shouldEditConnection ? editConnection : data.retry}>
+          <OnboardingButton
+            disabled={progress.isSaving}
+            onPress={shouldEditConnection ? editConnection : data.retry}
+          >
             {t(shouldEditConnection ? 'onboarding.connection.edit' : 'common.retry')}
           </OnboardingButton>
         </View>
@@ -190,6 +209,7 @@ function OnboardingModelSelection({
             )}
           </OnboardingMessage>
           <OnboardingButton
+            disabled={progress.isSaving}
             onPress={
               connectionId
                 ? syncAgain
@@ -207,7 +227,11 @@ function OnboardingModelSelection({
             )}
           </OnboardingButton>
           {connectionId ? (
-            <OnboardingButton onPress={openProviderSetup} variant="text">
+            <OnboardingButton
+              disabled={progress.isSaving}
+              onPress={openProviderSetup}
+              variant="text"
+            >
               {t('onboarding.welcome.connect')}
             </OnboardingButton>
           ) : null}
@@ -228,6 +252,7 @@ function OnboardingModelSelection({
                 })}
               </Text>
               <OnboardingButton
+                disabled={progress.isSaving}
                 onPress={data.pullError.action === 'editConnection' ? editConnection : data.retry}
                 variant="text"
               >
