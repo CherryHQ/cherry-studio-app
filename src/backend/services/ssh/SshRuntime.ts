@@ -60,6 +60,18 @@ import {
   stageSshUpload,
 } from './sshFileStorage';
 
+const DISCONNECTED_ERRORS = new Set<string>([
+  'resolve',
+  'connection',
+  'handshake',
+  'host-key',
+  'authentication',
+  'authentication-required',
+  'credential',
+  'unavailable',
+  'timeout',
+  'channel',
+]);
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const secretKey = (id: string) => `ssh-secret.${id}`;
 const NativeResultSchema = z.object({
@@ -159,28 +171,30 @@ export class SshRuntime extends BaseService implements SshModule {
   }
 
   protected async onInit() {
-    try {
-      const saved = this.bindings.read();
-      const profiles = await this.profiles.list();
-      if (this.lifetime.signal.aborted) throw new SshError('cancelled');
-      const valid = saved.filter(({ profileId }) => {
-        const profile = profiles.find((item) => item.id === profileId);
-        return profile?.isEnabled && profile.fingerprint;
-      });
-      if (valid.length !== saved.length) this.tryPersist(() => this.bindings.write(valid));
-      for (const { contextId, profileId } of valid) {
-        const profile = profiles.find((item) => item.id === profileId)!;
-        this.targets.set(contextId, { selectionId: randomUUID(), profile, grant: null });
+    await this.serialize(async () => {
+      try {
+        const saved = this.bindings.read();
+        const profiles = await this.profiles.list();
+        if (this.lifetime.signal.aborted) return;
+        const valid = saved.filter(({ contextId, profileId }) => {
+          if (this.targets.has(contextId)) return true;
+          const profile = profiles.find((item) => item.id === profileId);
+          return profile?.isEnabled && profile.fingerprint;
+        });
+        if (valid.length !== saved.length && !storageMutationGate.isFrozen)
+          this.tryPersist(() => this.bindings.write(valid));
+        for (const { contextId, profileId } of valid) {
+          if (this.targets.has(contextId)) continue;
+          const profile = profiles.find((item) => item.id === profileId)!;
+          this.targets.set(contextId, { selectionId: randomUUID(), profile, grant: null });
+        }
+        this.notifyTargets();
+      } catch (error) {
+        loggerService
+          .withContext('SshRuntime')
+          .warn('Failed to restore SSH bindings', error as Error);
       }
-      this.notifyTargets();
-    } catch (error) {
-      this.targets.clear();
-      loggerService
-        .withContext('SshRuntime')
-        .error('Failed to restore SSH bindings', error as Error);
-      if (!this.lifetime.signal.aborted) this.tryPersist(() => this.bindings.write([]));
-      this.notifyTargets();
-    }
+    }, true);
   }
 
   private tryPersist(write: () => void) {
@@ -339,10 +353,21 @@ export class SshRuntime extends BaseService implements SshModule {
     void this.tail.catch(() => {});
     return result;
   }
-  private invalidate(profileId: string) {
-    this.tryPersist(() =>
-      this.bindings.write(this.bindings.read().filter((item) => item.profileId !== profileId)),
-    );
+  private async invalidate(profileId: string) {
+    try {
+      const profiles = await this.profiles.list();
+      this.tryPersist(() => {
+        const saved = this.bindings.read();
+        const valid = saved.filter((item) =>
+          profiles.some((profile) => profile.id === item.profileId),
+        );
+        if (valid.length !== saved.length) this.bindings.write(valid);
+      });
+    } catch (error) {
+      loggerService
+        .withContext('SshRuntime')
+        .warn('Failed to validate SSH bindings', error as Error);
+    }
     for (const run of this.active) if (run.profileId === profileId) run.cancel();
     for (const run of this.transfers) if (run.profileId === profileId) run.cancel();
     for (const [sessionId, target] of this.targets)
@@ -374,7 +399,7 @@ export class SshRuntime extends BaseService implements SshModule {
         throw new SshError('credential');
       const reference = credential ? randomUUID() : old!.credentialReference;
       if (previous) {
-        this.invalidate(previous.id);
+        await this.invalidate(previous.id);
         getSshNative()?.closePool(poolKey(previous));
       }
       let result: SshProfile;
@@ -408,9 +433,10 @@ export class SshRuntime extends BaseService implements SshModule {
   remove = (reference: SshReference) =>
     this.serialize(async () => {
       const row = await this.profiles.getRow(SshReferenceSchema.parse(reference));
-      this.invalidate(row.id);
+      await this.invalidate(row.id);
       getSshNative()?.closePool(poolKey(reference));
       await this.profiles.remove(reference);
+      await this.invalidate(row.id);
       await this.removeSecret(row.credentialReference);
       this.changed();
     });
@@ -452,7 +478,7 @@ export class SshRuntime extends BaseService implements SshModule {
       this.probes.delete(token);
       if (!probe || probe.expiresAt < Date.now()) throw new SshError('changed');
       const row = await this.profiles.getRow(probe.reference);
-      this.invalidate(row.id);
+      await this.invalidate(row.id);
       getSshNative()?.closePool(poolKey(probe.reference));
       const { id: _id, ...profile } = toSshProfile(row);
       const result = await this.profiles.save(
@@ -524,7 +550,7 @@ export class SshRuntime extends BaseService implements SshModule {
       const target = this.targets.get(`draft:${draftId}`);
       if (!target) return;
       await this.profiles.getRow(target.profile);
-      this.persistTarget(sessionId, target.profile.id, `draft:${draftId}`);
+      this.tryPersist(() => this.persistTarget(sessionId, target.profile.id));
       const attached: SshTarget = {
         ...target,
         grant: target.grant && target.grant.expiresAt > Date.now() ? target.grant : null,
@@ -541,8 +567,27 @@ export class SshRuntime extends BaseService implements SshModule {
       if (!target) return null;
       try {
         await this.profiles.getRow(target.profile);
-      } catch {
-        this.invalidate(target.profile.id);
+      } catch (error) {
+        if (error instanceof SshError && error.code === 'not-found') {
+          const profileId = target.profile.id;
+          this.tryPersist(() =>
+            this.bindings.write(
+              this.bindings.read().filter((item) => item.profileId !== profileId),
+            ),
+          );
+          for (const [contextId, selected] of this.targets) {
+            if (selected.profile.id === profileId) {
+              this.targets.delete(contextId);
+              this.statuses.delete(contextId);
+              this.clearGrantTimer(contextId);
+            }
+          }
+          this.notifyTargets();
+        } else {
+          loggerService
+            .withContext('SshRuntime')
+            .warn('Failed to resolve SSH target', error as Error);
+        }
         return null;
       }
       if (target.grant && target.grant.expiresAt <= Date.now()) {
@@ -851,10 +896,7 @@ export class SshRuntime extends BaseService implements SshModule {
     try {
       const result = await this.runOperationInner(...args);
       if (agent) {
-        if (
-          result.error &&
-          ['connection', 'timeout', 'channel', 'authentication', 'host-key'].includes(result.error)
-        )
+        if (result.error && DISCONNECTED_ERRORS.has(result.error))
           this.setTargetStatus(agent, 'disconnected');
         else this.setTargetStatus(agent, result.error ? 'idle' : 'connected');
       }
@@ -863,8 +905,7 @@ export class SshRuntime extends BaseService implements SshModule {
       if (agent)
         this.setTargetStatus(
           agent,
-          error instanceof SshError &&
-            ['connection', 'timeout', 'channel', 'authentication', 'host-key'].includes(error.code)
+          error instanceof SshError && DISCONNECTED_ERRORS.has(error.code)
             ? 'disconnected'
             : 'idle',
         );

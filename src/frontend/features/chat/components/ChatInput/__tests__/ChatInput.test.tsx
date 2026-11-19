@@ -71,7 +71,7 @@ const mockSshProfile = {
   revision: '22222222-2222-4222-8222-222222222222',
 };
 let mockSshAvailable = false;
-let mockSshStatus = 'idle';
+let mockSshStatuses: Record<string, string> = {};
 let mockSshTarget: { profile: typeof mockSshProfile } | null = null;
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
@@ -83,7 +83,7 @@ jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({
     isAvailable: () => mockSshAvailable,
     getTarget: () => mockSshTarget,
-    getTargetStatus: () => mockSshStatus,
+    getTargetStatus: (contextId: string) => mockSshStatuses[contextId] ?? 'idle',
     subscribeTargets: () => () => {},
   }),
 }));
@@ -196,7 +196,7 @@ beforeEach(() => {
   mockEditing = null;
   mockSshTarget = null;
   mockSshAvailable = false;
-  mockSshStatus = 'idle';
+  mockSshStatuses = {};
   mockDraft = '';
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -504,9 +504,27 @@ test('falls back from removed or disallowed draftModel to agent.model and clears
 
 test('shows disconnected SSH status without disabling send', async () => {
   mockSshAvailable = true;
-  mockSshStatus = 'disconnected';
+  mockSshStatuses.s = 'disconnected';
   await mount();
   expect(renderer.root.findByType('TextComposer' as never).props.canSend).toBe(true);
+  expect(
+    renderer.root.findAll((node) => node.props.children === 'ssh.disconnectedReconnect'),
+  ).not.toHaveLength(0);
+});
+
+test('shows session SSH status after a draft becomes a session', async () => {
+  mockSshAvailable = true;
+  mockSshStatuses = { 'draft:d1': 'idle', s: 'disconnected' };
+  await act(async () => {
+    renderer = create(<ChatInput agentId="a" sshDraftId="d1" controls={mockControls as never} />);
+  });
+  const menu = renderer.root.findByType('TextSurface' as never).props.leadingAction;
+  await act(async () => menu.props.onPickSsh());
+  await act(async () =>
+    renderer.update(
+      <ChatInput agentId="a" sessionId="s" sshDraftId="d1" controls={mockControls as never} />,
+    ),
+  );
   expect(
     renderer.root.findAll((node) => node.props.children === 'ssh.disconnectedReconnect'),
   ).not.toHaveLength(0);

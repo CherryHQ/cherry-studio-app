@@ -501,6 +501,7 @@ function TextChatInput({
   const ssh = useBackendModule('ssh');
   const sshContextId = sessionId ?? (sshDraftId ? `draft:${sshDraftId}` : undefined);
   const [sshPickerContext, setSshPickerContext] = useState<string | null>(null);
+  const activeSshPickerContext = sessionId ? undefined : (sshPickerContext ?? undefined);
   const { cancel, canSend, editMessage, isApprovalPending, isBusy, sendMessage } = controls;
   const { beginEditSend, commitEdit, editing, settleEditSend } = edit;
   const mcpApps = useMcpAppConversation();
@@ -615,7 +616,7 @@ function TextChatInput({
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         const sshMentions = readSshMentions(prompt);
-        const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
+        const selectedSsh = ssh.getTarget(sshContextId ?? activeSshPickerContext ?? '');
         if (
           sshMentions.references.some(
             (reference) =>
@@ -703,7 +704,7 @@ function TextChatInput({
       sendMessage,
       ssh,
       sshContextId,
-      sshPickerContext,
+      activeSshPickerContext,
     ],
   );
   const getSendErrorLabel = useCallback(
@@ -747,7 +748,7 @@ function TextChatInput({
                   <ComposerAttachments />
                   <AudioAttachmentNotice />
                   {isSshAvailable ? (
-                    <SshStatusNotice contextId={sshPickerContext ?? sshContextId} />
+                    <SshStatusNotice contextId={sshContextId ?? activeSshPickerContext} />
                   ) : null}
                   {mode === 'standard' ? <McpAppContextNotice /> : null}
                 </View>
@@ -772,7 +773,7 @@ function TextChatInput({
                       agentId={agentId}
                       enabled={!isApprovalPending}
                       onPickSsh={isSshAvailable ? prepareSshPicker : undefined}
-                      sshContextId={sshPickerContext ?? sshContextId}
+                      sshContextId={sshContextId ?? activeSshPickerContext}
                       media={mode === 'minimal' ? 'images' : 'all'}
                       plugins={mode === 'standard' && !isParallel ? connectedPlugins : undefined}
                       prompts={prompts}

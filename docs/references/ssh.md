@@ -100,8 +100,8 @@ cancel affected AI operations. SSH file tools always require their own approval;
 does not promote them. If approval submission fails, only the grant created for that submission is
 revoked; a newer selection or replacement grant is preserved. Browser and AI operations share a
 connection only through exclusive leases. Conversation and draft bindings survive process restarts;
-temporary grants do not. Restored bindings use the current enabled, trusted profile and require approval. Draft bindings are copied to the session
-allocated by its first send; a failed admission removes that session's temporary binding.
+temporary grants do not. Restored bindings use the current enabled, trusted profile and require approval. While storage is frozen, bindings are restored only in memory without writing back. Draft bindings are copied to the session
+allocated by its first send; the draft binding remains until that send succeeds, while a failed admission removes the session binding.
 
 The runtime admits one native operation per target and at most four native operations overall. A busy
 target reports busy instead of silently queueing commands. Transfers retain a separate four-operation

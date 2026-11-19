@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
 import { SshProfileService } from '@/backend/data/services/SshProfileService';
-import type { SaveSshProfile, SshProfile } from '@/shared/data/types/ssh';
+import { SshError, type SaveSshProfile, type SshProfile } from '@/shared/data/types/ssh';
 
 import { getSshNative, type SshNative } from '../../../../../modules/ssh';
 import { SshBindingStorage } from '../SshBindingStorage';
@@ -731,22 +731,33 @@ test('binding write failures do not prevent target resolution or profile removal
   expect(runtime.getTarget('conversation')).toBeNull();
 });
 
-test('attaching a draft migrates its persisted binding to the session', async () => {
+test('attaching a draft tolerates a binding write failure and migrates in memory', async () => {
   const profile = await trusted();
   const draftId = mockRandomUUID();
   const sessionId = mockRandomUUID();
-  const draft = `draft:${draftId}`;
-  await runtime.selectTarget(draft, profile);
+  await runtime.selectTarget(`draft:${draftId}`, profile);
   bindingStorage.set.mockImplementationOnce(() => {
     throw new Error('disk full');
   });
-  await expect(runtime.attachDraftTarget(draftId, sessionId)).rejects.toMatchObject({
-    code: 'storage',
-  });
-  expect(bindings.read()).toEqual([{ contextId: draft, profileId: profile.id }]);
-  expect(runtime.getTarget(sessionId)).toBeNull();
+  await expect(runtime.attachDraftTarget(draftId, sessionId)).resolves.toBeUndefined();
+  expect(runtime.getTarget(sessionId)?.profile).toEqual(profile);
+  expect(bindings.read()).toEqual([{ contextId: `draft:${draftId}`, profileId: profile.id }]);
+});
+
+test.each(['success', 'failure'])('retains the draft until send %s cleanup', async (result) => {
+  const profile = await trusted();
+  const draftId = mockRandomUUID();
+  const draft = `draft:${draftId}`;
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(draft, profile);
   await runtime.attachDraftTarget(draftId, sessionId);
-  expect(bindings.read()).toEqual([{ contextId: sessionId, profileId: profile.id }]);
+  expect(bindings.read()).toEqual([
+    { contextId: draft, profileId: profile.id },
+    { contextId: sessionId, profileId: profile.id },
+  ]);
+  await runtime.selectTarget(result === 'success' ? draft : sessionId, null);
+  const remaining = result === 'success' ? sessionId : draft;
+  expect(bindings.read()).toEqual([{ contextId: remaining, profileId: profile.id }]);
   await runtime._doStop();
   runtime = new SshRuntime(
     {} as DbService,
@@ -755,8 +766,82 @@ test('attaching a draft migrates its persisted binding to the session', async ()
     bindings,
   );
   await runtime._doInit();
-  expect(runtime.getTarget(sessionId)?.profile).toEqual(profile);
-  expect(runtime.getTarget(draft)).toBeNull();
+  expect(runtime.getTarget(remaining)?.profile).toEqual(profile);
+});
+
+test.each(['bindings', 'profiles'])(
+  'preserves stored bindings when %s restoration fails',
+  async (failure) => {
+    const profile = await trusted();
+    await runtime.selectTarget('conversation', profile);
+    await runtime._doStop();
+    runtime = new SshRuntime(
+      {} as DbService,
+      { acquire: () => ({ release() {} }) },
+      profiles,
+      bindings,
+    );
+    const spy =
+      failure === 'bindings'
+        ? jest.spyOn(bindings, 'read').mockImplementationOnce(() => {
+            throw new Error('read failed');
+          })
+        : jest.spyOn(profiles, 'list').mockRejectedValueOnce(new Error('read failed'));
+    await runtime._doInit();
+    spy.mockRestore();
+    expect(bindings.read()).toEqual([{ contextId: 'conversation', profileId: profile.id }]);
+  },
+);
+
+test.each(['storage', 'not-found'] as const)(
+  'resolving a target with %s preserves only transient failures',
+  async (code) => {
+    const profile = await trusted();
+    await runtime.selectTarget('conversation', profile);
+    jest.spyOn(profiles, 'getRow').mockRejectedValueOnce(new SshError(code));
+    expect(await runtime.resolveAgentTarget('conversation')).toBeNull();
+    expect(bindings.read()).toEqual(
+      code === 'storage' ? [{ contextId: 'conversation', profileId: profile.id }] : [],
+    );
+  },
+);
+
+test('invalidation preserves bindings when listing profiles fails', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  jest.spyOn(profiles, 'list').mockRejectedValueOnce(new Error('read failed'));
+  await runtime.save({ previous: profile, profile: input.profile });
+  expect(bindings.read()).toEqual([{ contextId: 'conversation', profileId: profile.id }]);
+});
+
+test('startup restoration is serialized with target selection', async () => {
+  const oldProfile = await trusted();
+  const profile = await runtime.save({ ...input, profile: { ...input.profile, name: 'Second' } });
+  const probe = await runtime.probe(profile, new AbortController().signal);
+  const newProfile = await runtime.trust(probe.token);
+  await runtime.selectTarget('draft:d1', oldProfile);
+  await runtime._doStop();
+  runtime = new SshRuntime(
+    {} as DbService,
+    { acquire: () => ({ release() {} }) },
+    profiles,
+    bindings,
+  );
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const list = profiles.list.bind(profiles);
+  jest.spyOn(profiles, 'list').mockImplementationOnce(async () => {
+    await gate;
+    return list();
+  });
+  const initializing = runtime._doInit();
+  const selecting = runtime.selectTarget('draft:d1', newProfile);
+  release();
+  await Promise.all([initializing, selecting]);
+  expect(runtime.getTarget('draft:d1')?.profile).toEqual(newProfile);
+  expect(bindings.read()).toEqual([{ contextId: 'draft:d1', profileId: newProfile.id }]);
 });
 
 test('restores the binding without its temporary grant and removes deselected bindings', async () => {
@@ -783,6 +868,32 @@ test('restores the binding without its temporary grant and removes deselected bi
   );
   await runtime._doInit();
   expect(await runtime.resolveAgentTarget('conversation')).toBeNull();
+});
+
+test('restores valid bindings without writing while storage is frozen', async () => {
+  const profile = await trusted();
+  const disabled = await runtime.save({
+    profile: { ...input.profile, name: 'Disabled', isEnabled: false },
+    credential: input.credential,
+  });
+  const saved = [
+    { contextId: 'valid', profileId: profile.id },
+    { contextId: 'disabled', profileId: disabled.id },
+  ];
+  bindings.write(saved);
+  const write = jest.spyOn(bindings, 'write');
+  const thaw = storageMutationGate.freeze();
+  try {
+    await runtime._doInit();
+    expect(runtime.getTarget('valid')?.profile).toEqual(profile);
+    expect(runtime.getTarget('disabled')).toBeNull();
+    expect(bindings.read()).toEqual(saved);
+    expect(write).not.toHaveBeenCalled();
+  } finally {
+    thaw();
+  }
+  await runtime.remove(disabled);
+  expect(bindings.read()).toEqual([saved[0]]);
 });
 
 test.each(['deleted', 'disabled', 'untrusted'])(
@@ -832,7 +943,7 @@ test('evicts the least recently used binding and invalidates profile bindings', 
 test('corrupt binding storage does not prevent startup', async () => {
   bindingValues.set('bindings', '{');
   await runtime._doInit();
-  expect(bindings.read()).toEqual([]);
+  expect(bindingValues.get('bindings')).toBe('{');
 });
 
 test('reports connection state without removing the binding after a failure', async () => {
@@ -857,3 +968,22 @@ test('reports connection state without removing the binding after a failure', as
   expect(runtime.getTargetStatus('conversation')).toBe('disconnected');
   expect(await runtime.resolveAgentTarget('conversation')).not.toBeNull();
 });
+
+test.each(['resolve', 'handshake', 'credential', 'cancelled', 'command'])(
+  'reports %s operation status',
+  async (code) => {
+    const profile = await trusted();
+    await runtime.selectTarget('conversation', profile);
+    const target = runtime.getTarget('conversation')!;
+    native.run.mockResolvedValueOnce(outcome('not-started', code));
+    await runtime.executeForAgent(
+      'conversation',
+      target,
+      { command: 'pwd' },
+      new AbortController().signal,
+    );
+    expect(runtime.getTargetStatus('conversation')).toBe(
+      ['resolve', 'handshake', 'credential'].includes(code) ? 'disconnected' : 'idle',
+    );
+  },
+);
