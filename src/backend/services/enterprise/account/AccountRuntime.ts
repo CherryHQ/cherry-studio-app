@@ -118,6 +118,7 @@ export class AccountRuntime implements AccountModule {
       isSignedIn: false,
       isEnterprise: active.identity !== null,
       isRestoringSession: isPrivateProfile || (portal !== null && isCloudProfile),
+      isRestoringCommunitySession: active.identity === null && portal !== null,
       needsSignIn: portal === null && isCloudProfile,
       hasPrompted: options.prompt.read(),
       isBusy: false,
@@ -132,18 +133,21 @@ export class AccountRuntime implements AccountModule {
     this.unsubscribePortal?.();
     this.portal = portal;
     this.unsubscribePortal = portal.subscribe((session) => {
-      if (!this.state.isRestoringSession) this.updateCloudSession(session);
+      if (!this.state.isRestoringSession && !this.state.isRestoringCommunitySession)
+        this.updateCloudSession(session);
     });
     void portal.ready.then(
       () => {
         if (this.portal !== portal) return;
         this.updateCloudSession(portal.getState());
-        if (!this.state.privateAddress) this.update({ isRestoringSession: false });
+        if (!this.state.privateAddress)
+          this.update({ isRestoringSession: false, isRestoringCommunitySession: false });
       },
       () => {
         if (this.portal === portal && !this.state.privateAddress)
           this.update({
             isRestoringSession: false,
+            isRestoringCommunitySession: false,
             ...(this.state.isEnterprise && { needsSignIn: true }),
           });
       },

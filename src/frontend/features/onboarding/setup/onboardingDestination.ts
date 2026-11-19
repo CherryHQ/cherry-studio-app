@@ -5,11 +5,15 @@ export function getOnboardingDestination({
   models,
   organizationManaged,
 }: {
-  account: Pick<AccountState, 'hasPrompted' | 'isSignedIn'>;
+  account: Pick<
+    AccountState,
+    'hasPrompted' | 'isSignedIn' | 'isRestoringSession' | 'isRestoringCommunitySession'
+  >;
   models: { hasModels: boolean; isLoading: boolean; isError: boolean };
   organizationManaged: boolean;
 }) {
   if (organizationManaged || account.isSignedIn) return 'completed';
+  if (account.isRestoringSession || account.isRestoringCommunitySession) return 'loading';
   if (!account.hasPrompted) return 'permissions';
   if (models.isLoading) return 'loading';
   if (models.isError) return 'retry';

@@ -1,7 +1,12 @@
 import { getOnboardingDestination } from '../onboardingDestination';
 
 const base = {
-  account: { hasPrompted: true, isSignedIn: false },
+  account: {
+    hasPrompted: true,
+    isSignedIn: false,
+    isRestoringSession: false,
+    isRestoringCommunitySession: false,
+  },
   models: { hasModels: false, isLoading: false, isError: false },
   organizationManaged: false,
 };
@@ -34,10 +39,25 @@ describe('onboarding account destination', () => {
     ).toBe('completed');
   });
 
-  it('retains organization-owned configuration and restarts device preparation if sign-in was never presented', () => {
-    expect(getOnboardingDestination({ ...base, organizationManaged: true })).toBe('completed');
+  it('resumes pending setup without returning to permissions while the community session restores', () => {
+    const account = { ...base.account, hasPrompted: false };
     expect(
-      getOnboardingDestination({ ...base, account: { ...base.account, hasPrompted: false } }),
-    ).toBe('permissions');
+      getOnboardingDestination({
+        ...base,
+        account: { ...account, isRestoringCommunitySession: true },
+      }),
+    ).toBe('loading');
+    expect(getOnboardingDestination({ ...base, account })).toBe('permissions');
+    expect(getOnboardingDestination({ ...base, account: { ...account, isSignedIn: true } })).toBe(
+      'completed',
+    );
+  });
+
+  it('retains organization-owned configuration while its session is restoring', () => {
+    const account = { ...base.account, isRestoringSession: true };
+    expect(getOnboardingDestination({ ...base, account })).toBe('loading');
+    expect(getOnboardingDestination({ ...base, account, organizationManaged: true })).toBe(
+      'completed',
+    );
   });
 });

@@ -1,6 +1,5 @@
-import { useToast } from '@cherrystudio/ui/components';
-import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications';
-import { useEffect, useRef, useState } from 'react';
+import { getPermissionsAsync } from 'expo-notifications';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, Platform, Text, View } from 'react-native';
 
@@ -12,19 +11,27 @@ import {
 } from '@/shared/notifications/notificationPermission';
 
 import { OnboardingButton, OnboardingChoice, OnboardingPage } from '../components/OnboardingPage';
+import { useNotificationOnboardingActions } from './useNotificationOnboardingActions';
 import type { OnboardingProgress } from './useOnboardingProgress';
 
 export function NotificationsOnboardingStep({ progress }: { progress: OnboardingProgress }) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const execution = useBackendModule('backgroundExecution');
   const permissions = useBackendModule('permissions');
   const [notifications, setNotifications] = usePreference('chat.completion_notifications.enabled');
   const [liveActivity, setLiveActivity] = usePreference('chat.background_reply.enabled');
   const [settings, setSettings] = useState<BackgroundRunSettings | null>(null);
   const [permission, setPermission] = useState<NotificationPermissionStatusLike | null>(null);
-  const [isActing, setIsActing] = useState(false);
-  const acting = useRef(false);
+  const {
+    act,
+    continue: next,
+    skip,
+    isActing,
+  } = useNotificationOnboardingActions({
+    progress,
+    notifications,
+    setPermission,
+  });
   const busy = progress.isSaving || isActing;
 
   useEffect(() => {
@@ -54,41 +61,29 @@ export function NotificationsOnboardingStep({ progress }: { progress: Onboarding
     };
   }, [execution]);
 
-  const act = async (work: () => Promise<unknown>) => {
-    if (acting.current || progress.isSaving) return;
-    acting.current = true;
-    setIsActing(true);
-    try {
-      await work();
-    } catch {
-      toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
-    } finally {
-      acting.current = false;
-      setIsActing(false);
-    }
-  };
-  const next = () =>
-    act(async () => {
-      if (notifications) {
-        const current = await getPermissionsAsync();
-        const next = current.status === 'undetermined' ? await requestPermissionsAsync() : current;
-        setPermission(next);
-      }
-      await progress.advance('login');
-    });
   const blocked = permission && isNotificationBlocked(permission);
 
   return (
     <OnboardingPage
       description={t('onboarding.notifications.description')}
       footer={
-        <OnboardingButton
-          loading={busy}
-          onPress={() => void next()}
-          testID="onboarding-notifications-continue"
-        >
-          {t('onboarding.continue')}
-        </OnboardingButton>
+        <>
+          <OnboardingButton
+            loading={busy}
+            onPress={() => void next()}
+            testID="onboarding-notifications-continue"
+          >
+            {t('onboarding.continue')}
+          </OnboardingButton>
+          <OnboardingButton
+            disabled={progress.isSaving}
+            onPress={() => void skip()}
+            testID="onboarding-notifications-skip"
+            variant="text"
+          >
+            {t('onboarding.skip')}
+          </OnboardingButton>
+        </>
       }
       onBack={busy ? undefined : () => void progress.advance('permissions')}
       step={{ current: 3, total: 4, label: t('onboarding.preparation.step', { current: 3 }) }}
@@ -115,6 +110,9 @@ export function NotificationsOnboardingStep({ progress }: { progress: Onboarding
           />
         ) : null}
       </View>
+      {progress.saveFailed ? (
+        <Text className="text-sm text-destructive">{t('onboarding.saveFailed')}</Text>
+      ) : null}
       {blocked ? (
         <View className="items-start gap-2">
           <Text className="text-sm text-muted-foreground">

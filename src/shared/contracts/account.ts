@@ -33,6 +33,8 @@ export type AccountState = Readonly<{
   isEnterprise: boolean;
   /** The stored session has not yet been matched to this enterprise profile. */
   isRestoringSession: boolean;
+  /** The account SDK is still reading the stored session for the local profile. */
+  isRestoringCommunitySession: boolean;
   /** The session was rejected, does not match this profile, or is being replaced by sign-in. */
   needsSignIn: boolean;
   /** The account entry has been completed or skipped during onboarding. */
