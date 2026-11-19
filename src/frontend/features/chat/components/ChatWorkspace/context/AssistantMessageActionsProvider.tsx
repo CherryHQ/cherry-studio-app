@@ -46,6 +46,14 @@ function editInitialText(message: ConversationMessage): string {
     : copyAssistantMessageText(message.display.data.parts ?? []);
 }
 
+function isRetryModelWithdrawn(
+  message: ConversationMessage,
+  allowedModelIds: ReadonlySet<string> | null,
+): boolean {
+  const modelId = message.actions.retry?.modelId;
+  return Boolean(modelId && allowedModelIds && !allowedModelIds.has(modelId));
+}
+
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
@@ -55,8 +63,9 @@ type AssistantMessageActionsState = {
   isEditAnswerDisabled: boolean;
   isEditQuestionDisabled: boolean;
   isRetryDisabled: boolean;
-  /** Answers that can be regenerated, retried, or answered again with another model. */
+  /** Answers that can be regenerated or retried with the model previously used. */
   retryableMessageIds: ReadonlySet<string>;
+  answerableMessageIds: ReadonlySet<string>;
   /** Successful answers that can be edited in place. */
   editableAnswerIds: ReadonlySet<string>;
   /** Sent questions the reader can branch and send again with edited text. */
@@ -114,7 +123,7 @@ export function AssistantMessageActionsProvider({
   const isSelecting = useIsChatShareSelecting();
   // The answer whose question the model picker adds an answer to.
   const [answeringMessageId, setAnsweringMessageId] = useState<string>();
-  const { isLocked: isModelLocked } = useModelChoice();
+  const { allowedModelIds, isLocked: isModelLocked } = useModelChoice();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -123,11 +132,28 @@ export function AssistantMessageActionsProvider({
   }, []);
   // Keyed by content so streamed transcript updates keep the rows' state context stable.
   const retryableKey = messages
-    .flatMap((message) => (message.actions.retry ? [message.key] : []))
+    .flatMap((message) =>
+      message.actions.retry && !isRetryModelWithdrawn(message, allowedModelIds)
+        ? [message.key]
+        : [],
+    )
     .join('\n');
   const retryableMessageIds = useMemo(
     () => new Set(retryableKey ? retryableKey.split('\n') : []),
     [retryableKey],
+  );
+  const answerableKey = messages
+    .flatMap((message) =>
+      message.actions.answerWith &&
+      (!isModelLocked ||
+        (allowedModelIds?.size === 1 && isRetryModelWithdrawn(message, allowedModelIds)))
+        ? [message.key]
+        : [],
+    )
+    .join('\n');
+  const answerableMessageIds = useMemo(
+    () => new Set(answerableKey ? answerableKey.split('\n') : []),
+    [answerableKey],
   );
   const editableAnswerKey = messages
     .flatMap((message) => (message.actions.editAnswer ? [message.key] : []))
@@ -367,21 +393,17 @@ export function AssistantMessageActionsProvider({
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
       onRetry={retryableMessageIds.size ? retry : undefined}
       onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
-      onAnswerWithModel={
-        // A model scope with one model leaves no other model to answer with.
-        !isModelLocked && messages.some((message) => message.actions.answerWith)
-          ? answerWithModel
-          : undefined
-      }
+      onAnswerWithModel={answerableMessageIds.size ? answerWithModel : undefined}
       onEditQuestion={editableQuestionIds.size ? editQuestion : undefined}
       isDeleteDisabled={isBusy}
       isRetryDisabled={isBusy}
       retryableMessageIds={retryableMessageIds}
+      answerableMessageIds={answerableMessageIds}
     >
       {children}
       {answeringMessage ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType={isRetryModelWithdrawn(answeringMessage, allowedModelIds) ? 'all' : 'text'}
           onClose={closeAnswerModelPicker}
           onSelect={answerWith}
           open
@@ -409,6 +431,7 @@ export function ChatMessageActionsProvider({
   isDeleteDisabled = true,
   isRetryDisabled = true,
   retryableMessageIds = EMPTY_MESSAGE_IDS,
+  answerableMessageIds = EMPTY_MESSAGE_IDS,
   editableAnswerIds = EMPTY_MESSAGE_IDS,
   editableQuestionIds = EMPTY_MESSAGE_IDS,
   isEditAnswerDisabled = true,
@@ -428,6 +451,7 @@ export function ChatMessageActionsProvider({
   isEditQuestionDisabled?: boolean;
   isRetryDisabled?: boolean;
   retryableMessageIds?: ReadonlySet<string>;
+  answerableMessageIds?: ReadonlySet<string>;
   editableAnswerIds?: ReadonlySet<string>;
   editableQuestionIds?: ReadonlySet<string>;
 }>) {
@@ -476,6 +500,7 @@ export function ChatMessageActionsProvider({
 
   const stateValue = useMemo(
     () => ({
+      answerableMessageIds,
       copiedMessageId,
       editableAnswerIds,
       editableQuestionIds,
@@ -487,6 +512,7 @@ export function ChatMessageActionsProvider({
       retryableMessageIds,
     }),
     [
+      answerableMessageIds,
       copiedMessageId,
       editableAnswerIds,
       editableQuestionIds,

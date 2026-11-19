@@ -174,7 +174,10 @@ export type ConversationMessage = {
   actions: {
     /** Opens the reply editor, which commits its own optimistic edit through the Agent protocol. */
     editAnswer?: { availability: Availability };
-    retry?: ConversationAction<void, ConversationRef | void>;
+    retry?: ConversationAction<void, ConversationRef | void> & {
+      /** The model the source will reuse from the saved reply, when present. */
+      modelId?: UniqueModelId | null;
+    };
     /** Adds one more answer to this answer's question, from the chosen model. */
     answerWith?: ConversationAction<{ modelId: UniqueModelId }, void>;
     /** Sends the edited text as a sibling question of this message; the original stays. */

@@ -144,7 +144,7 @@ describe('useCompleteOnboarding', () => {
     expect(mockShowToast).not.toHaveBeenCalled();
   });
 
-  test('saves the chosen subscription model without a paid probe or configuration writes', async () => {
+  test('saves the chosen account model without a paid probe or configuration writes', async () => {
     const accountModel = {
       ...model,
       id: createUniqueModelId(CLOUD_PROVIDER_ID, 'chat'),
@@ -152,7 +152,7 @@ describe('useCompleteOnboarding', () => {
     };
     mockUpdateAgent.mockResolvedValue({ id: 'seed', model: accountModel.id });
     await act(async () => {
-      await onboarding.complete({ kind: 'subscription', model: accountModel });
+      await onboarding.complete({ kind: 'catalog', model: accountModel, isLocal: true });
     });
     expect(mockCheckChat).not.toHaveBeenCalled();
     expect(mockEnableModel).not.toHaveBeenCalled();

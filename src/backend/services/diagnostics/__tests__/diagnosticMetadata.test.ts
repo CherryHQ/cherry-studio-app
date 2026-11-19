@@ -153,6 +153,29 @@ test('retains useful error facts without free text, credentials, payloads or sta
   );
 });
 
+test.each([
+  ['DeepSeek import failed', { phase: 'link', code: 'share-link' }],
+  ['DeepSeek import failed', { phase: 'download', code: 'download', statusCode: 403 }],
+  [
+    'DeepSeek import failed',
+    { phase: 'archive', code: 'invalid', reasonCode: 'missing-directory' },
+  ],
+  ['DeepSeek import skipped archive entries', { phase: 'archive', skippedEntries: 2 }],
+  [
+    'DeepSeek import completed with skips',
+    { importedConversations: 9, skippedConversations: 1, missingAttachments: 3 },
+  ],
+])('exports the fixed %s summary without the link, filename or chat content', (message, facts) => {
+  const raw = createLogRecord('warn', message, 'DeepseekImport', {}, [
+    { ...facts, url: 'private-signed-link', filename: 'private.zip', body: 'private chat' },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toMatchObject({ module: 'DeepseekImport', message });
+  expect(exported?.facts).toMatchObject(facts);
+  expect(JSON.stringify(exported)).not.toContain('private');
+});
+
 test('retains startup timings through file export while rejecting other info logs and private fields', () => {
   const raw = createLogRecord('info', 'Startup stage', 'Startup', {}, [
     {

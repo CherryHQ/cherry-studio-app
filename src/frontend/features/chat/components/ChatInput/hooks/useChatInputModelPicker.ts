@@ -11,10 +11,8 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 const MIN_PARALLEL_MODELS = 2;
 
 /**
- * The composer's model sheet. Choosing one model makes it the Agent's model.
- * The multi-select mode chooses several models that answer each send
- * without changing the Agent, and applies each change at once; leaving the mode returns to the
- * Agent's model.
+ * The composer's model sheet. Single selection sets the conversation's model.
+ * Multi-select applies to sends from this composer until the user exits it.
  */
 export function useChatInputModelPicker({
   agentId,
@@ -25,17 +23,17 @@ export function useChatInputModelPicker({
   setReplyModels,
 }: {
   agentId?: string;
-  /** Whether the Agent's model can be one of several; image models cannot. */
+  /** Whether the conversation's single model can answer alongside others. */
   agentModelAnswersInParallel: boolean;
   replyModels: readonly UniqueModelId[] | null;
-  /** The Agent's model. */
+  /** The conversation's single model. */
   selectedModelId: UniqueModelId | null;
   selectModel: (modelId: UniqueModelId) => void;
   setReplyModels: (models: readonly UniqueModelId[] | null) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   // Non-null while the sheet is in multi-select mode, in pick order. Fewer than two
-  // models ask the Agent's model, so the sheet keeps the partial choice itself.
+  // models use the single selection, so the sheet keeps the partial choice itself.
   const [pickerModels, setPickerModels] = useState<readonly UniqueModelId[] | null>(null);
   const open = useCallback(() => {
     setPickerModels(replyModels);
@@ -56,9 +54,9 @@ export function useChatInputModelPicker({
       }
       setIsOpen(false);
       setReplyModels(null);
-      if (agentId && selectedModelId !== item.modelId) selectModel(item.modelId);
+      if (agentId) selectModel(item.modelId);
     },
-    [agentId, pickerModels, selectModel, selectedModelId, setReplyModels],
+    [agentId, pickerModels, selectModel, setReplyModels],
   );
   const multiSelect = useMemo<ModelPickerMultiSelect>(
     () => ({

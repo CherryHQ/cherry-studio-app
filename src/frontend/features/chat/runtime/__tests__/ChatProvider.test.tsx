@@ -325,10 +325,18 @@ describe('ChatProvider Draft handoff', () => {
     });
 
     await act(async () => {
-      await currentControls().sendMessage({ parts: [{ text: 'Hello', type: 'text' }] });
+      await currentControls().sendMessage({
+        parts: [{ text: 'Hello', type: 'text' }],
+        modelId: 'provider::reply',
+        sessionModelId: 'provider::selected',
+      });
     });
 
     const { sessionId } = mockStartSession.mock.calls[0][0];
+    expect(mockStartSession.mock.calls[0][0]).toMatchObject({
+      modelId: 'provider::reply',
+      sessionModelId: 'provider::selected',
+    });
     expect(mockSetParams).toHaveBeenCalledWith({ agentId: undefined, sessionId });
     const pending = currentControls().pendingSend;
 

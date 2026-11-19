@@ -337,9 +337,9 @@ dimmed; it renders locked, in one visual language:
 - **Mark.** `ManagedMark` follows a delivered Agent, MCP server or Skill's name in lists;
   `CapabilityLabel` marks settings entries the organization owns.
 
-Model pickers offer only the scope's allowed models, and "answer with another model" disappears
-with a single model. Business screens do not branch on the edition or on `isManaged`. Users may still
-create their own Agents, MCP servers and Skills.
+Model pickers offer only the scope's allowed models. A single-model pool offers "answer with another
+model" when the original reply used a withdrawn model. Business screens do not branch on the
+edition or on `isManaged`. Users may still create their own Agents, MCP servers and Skills.
 Every profile seeds the Cherry Agent once, after the first resource sync so it takes the
 organization's default model; delivered Agents do not replace it, and a deleted one is not recreated.
 

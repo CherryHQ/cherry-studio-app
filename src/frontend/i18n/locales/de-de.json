@@ -1952,7 +1952,7 @@
   "settings.data.deepseek.error.expiredLink": "Der Download-Link ist abgelaufen. Fordere in DeepSeek einen neuen Export an.",
   "settings.data.deepseek.error.failed": "Import fehlgeschlagen. Bestehende Unterhaltungen sind unverändert. Versuche es erneut.",
   "settings.data.deepseek.error.invalid": "Die Datei ist beschädigt oder enthält ungültige Unterhaltungsdaten. Exportiere sie erneut aus DeepSeek.",
-  "settings.data.deepseek.error.invalidLink": "Füge einen gültigen DeepSeek-Download-Link für den Export ein.",
+  "settings.data.deepseek.error.invalidLink": "Das ist kein gültiger DeepSeek-Exportlink.",
   "settings.data.deepseek.error.tooLarge": "Dieser Export ist für den Import auf diesem Gerät zu groß.",
   "settings.data.deepseek.error.unsupported": "Dieses Exportformat wird nicht unterstützt. Lade eine neue ZIP-Datei von der DeepSeek-Website herunter.",
   "settings.data.deepseek.linkLabel": "DeepSeek-Download-Link für den Export",

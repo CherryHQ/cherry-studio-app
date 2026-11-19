@@ -15,14 +15,14 @@ export function AccountOnboardingStep({ progress }: { progress: OnboardingProgre
   const { isPrivate, isBusy: busy } = form;
   const restored = state.isSignedIn || state.isEnterprise;
   const continueRestored = useEffectEvent(() => {
-    void progress.advance('pending');
+    void progress.advance('completed');
   });
   useEffect(() => {
-    if (restored && !progress.isSaving && !state.isBusy && !progress.saveFailed) continueRestored();
-  }, [restored, progress.isSaving, progress.saveFailed, state.isBusy]);
+    if (restored && progress.isFocused && !busy && !progress.saveFailed) continueRestored();
+  }, [restored, progress.isFocused, busy, progress.saveFailed]);
 
   const signIn = async () => {
-    if (await form.signIn()) await progress.advance('pending');
+    if (await form.signIn()) await progress.advance('completed');
   };
   return (
     <OnboardingPage
@@ -31,7 +31,7 @@ export function AccountOnboardingStep({ progress }: { progress: OnboardingProgre
         restored ? (
           <OnboardingButton
             loading={progress.isSaving}
-            onPress={() => void progress.advance('pending')}
+            onPress={() => void progress.advance('completed')}
           >
             {t('onboarding.continue')}
           </OnboardingButton>

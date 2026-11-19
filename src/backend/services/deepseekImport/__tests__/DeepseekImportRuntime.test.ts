@@ -9,7 +9,7 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 import { DeepseekImportRuntime } from '../DeepseekImportRuntime';
 
 const mockConversations = new Map<string, unknown>();
-const mockArchiveNames = new Set<string>();
+const mockArchiveFiles = new Map<string, string>();
 const mockDeleteStaging = jest.fn();
 jest.mock('expo-file-system', () => {
   class Entry {
@@ -39,12 +39,11 @@ jest.mock('@/backend/services/file/fileStorage', () => ({
 }));
 jest.mock('@/backend/services/file/importManagedFile', () => ({ importManagedFile: jest.fn() }));
 jest.mock('../deepseekArchive', () => ({
-  deepseekArchiveFile: (_root: unknown, path: string) => ({ uri: path }),
   readDeepseekImageMediaType: () => 'image/png',
   readDeepseekJson: async (file: { uri: string }) => mockConversations.get(file.uri),
   unpackDeepseekArchive: async () => ({
     conversations: ['first', 'second'].map((id) => ({ id, insertedAt: 1, updatedAt: 2 })),
-    names: mockArchiveNames,
+    files: mockArchiveFiles,
   }),
 }));
 
@@ -57,7 +56,7 @@ let importer: DeepseekImportRuntime;
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(importManagedFile).mockReset();
-  mockArchiveNames.clear();
+  mockArchiveFiles.clear();
   sqlite = new DatabaseSync(':memory:');
   db = createTestDb(sqlite);
   importer = new DeepseekImportRuntime(db.dbService, {
@@ -67,8 +66,10 @@ beforeEach(() => {
     "INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('existing', 'Existing', 'a0', 1, 1)",
   );
   mockConversations.clear();
-  for (const id of ['first', 'second'])
-    mockConversations.set(`chat_sessions/${id}.json`, {
+  for (const id of ['first', 'second']) {
+    const path = `chat_sessions/${id}.json`;
+    mockArchiveFiles.set(path, path);
+    mockConversations.set(path, {
       id,
       title: id,
       current_message_id: 2,
@@ -92,6 +93,7 @@ beforeEach(() => {
         },
       ],
     });
+  }
 });
 afterEach(async () => {
   await importer.dispose();
@@ -154,21 +156,37 @@ test('imports a mixed archive without letting an empty conversation block other 
   });
 });
 
-test.each([undefined, 'not json', { messages: 'not a list', title: 7 }])(
-  'skips an unreadable conversation %p and imports the rest',
-  async (content) => {
-    mockConversations.set('chat_sessions/first.json', content);
-    const result = await importer.importFromUrl(url, {
-      signal: new AbortController().signal,
-      onProgress: () => {},
-    });
-    const skipped = typeof content === 'object' ? 0 : 1;
-    expect(result).toMatchObject({ sessions: 2 - skipped, skippedConversations: skipped });
-    expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
-      count: 2,
-    });
-  },
-);
+test.each([
+  undefined,
+  'not json',
+  { messages: 'not a list' },
+  { messages: [{ id: 'bad', role: 'USER' }] },
+  { messages: [{ id: 2, parent_id: 1, role: 'ASSISTANT' }] },
+])('skips an unreadable conversation %p and imports the rest', async (content) => {
+  mockConversations.set('chat_sessions/first.json', content);
+  const result = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+  expect(result).toMatchObject({ sessions: 1, skippedConversations: 1, messages: 2 });
+  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+    count: 2,
+  });
+});
+
+test('counts a failed ZIP entry as skipped and counts only the messages that were saved', async () => {
+  mockArchiveFiles.delete('chat_sessions/first.json');
+  const second = mockConversations.get('chat_sessions/second.json') as { messages: unknown[] };
+  second.messages.unshift({ id: 0, parent_id: null, role: 'ASSISTANT' });
+
+  const result = await importer.importFromUrl(url, {
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+
+  expect(result).toMatchObject({ sessions: 1, skippedConversations: 1, messages: 2 });
+  expect(sqlite.prepare('SELECT name FROM agent_session').all()).toEqual([{ name: 'second' }]);
+});
 
 test('rejects an archive with no readable conversation without creating an agent', async () => {
   mockConversations.clear();
@@ -198,7 +216,7 @@ test.each(['scan', 'photo.txt', 'photo.PNG'])(
   'imports a present image named %s and stores its canonical file metadata',
   async (filename) => {
     const path = `chat_sessions/first_files/image_${filename}`;
-    mockArchiveNames.add(path);
+    mockArchiveFiles.set(path, path);
     mockConversations.set('chat_sessions/first.json', {
       id: 'first',
       title: 'Image conversation',
@@ -256,7 +274,7 @@ test.each(['scan', 'photo.txt', 'photo.PNG'])(
 
 test('an image that cannot be imported becomes a missing attachment instead of failing', async () => {
   const path = 'elsewhere/photo.png';
-  mockArchiveNames.add(path);
+  mockArchiveFiles.set(path, path);
   const conversation = mockConversations.get('chat_sessions/first.json') as {
     messages: { fragments: unknown[] }[];
   };
@@ -305,13 +323,16 @@ test('cancelling between conversations rolls back imported rows', async () => {
   expect(importer.hasPendingStorageWork()).toBe(false);
 });
 
-test('invalid links never start a download or create an agent', async () => {
+test.each([
+  ['https://example.com/data.zip', 'invalid-link'],
+  ['https://chat.deepseek.com/share/example', 'share-link'],
+])('rejected links never start a download or create an agent (%s)', async (link, code) => {
   await expect(
-    importer.importFromUrl('https://example.com/data.zip', {
+    importer.importFromUrl(link, {
       signal: new AbortController().signal,
       onProgress: () => {},
     }),
-  ).rejects.toMatchObject({ code: 'invalid-link' });
+  ).rejects.toMatchObject({ code });
   expect(downloadFile).not.toHaveBeenCalled();
   expect(sqlite.prepare('SELECT count(*) AS count FROM agent').get()).toEqual({ count: 1 });
 });

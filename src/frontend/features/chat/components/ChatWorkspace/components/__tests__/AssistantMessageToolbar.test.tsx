@@ -1,6 +1,9 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import { PolicyScope } from '@/frontend/components/Policy';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { AssistantMessageActionsProvider } from '../../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
@@ -269,6 +272,20 @@ describe('AssistantMessageToolbar', () => {
     expect(renderer?.root.findAllByType('ModelPickerDrawer' as never)).toHaveLength(0);
   });
 
+  test('offers the remaining approved model instead of retrying with a withdrawn one', async () => {
+    renderToolbar(createMessage('success', 'Old answer'), true, ['openai::gpt-5']);
+
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-retry' })).toHaveLength(0);
+    act(() => {
+      renderer!.root.findByProps({ testID: 'assistant-message-answer-with' }).props.onPress();
+    });
+    const picker = renderer!.root.findByType('ModelPickerDrawer' as never);
+    expect(picker.props.title).toBe('chat.messageActions.answerWith');
+    await act(async () => picker.props.onSelect({ modelId: 'openai::gpt-5' }));
+    expect(mockAnswerWith).toHaveBeenCalledWith({ modelId: 'openai::gpt-5' });
+    expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
   test('disables @ while the session is busy', () => {
     mockIsSessionBusy = true;
     renderToolbar(createMessage('success', 'Answer'));
@@ -291,9 +308,13 @@ describe('AssistantMessageToolbar', () => {
     ).find((item) => item.id === id);
   }
 
-  function renderToolbar(message: MessageListItem, retryable = true) {
+  function renderToolbar(
+    message: MessageListItem,
+    retryable = true,
+    allowedModelIds?: UniqueModelId[],
+  ) {
     act(() => {
-      renderer = create(
+      const toolbar = (
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
           onShare={mockShare}
@@ -321,9 +342,13 @@ describe('AssistantMessageToolbar', () => {
                         },
                       },
                       retry: {
+                        modelId: message.model?.id,
                         availability: { state: 'enabled' as const },
                         execute: async () => {
-                          await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+                          await mockRetryMessage({
+                            sessionId: 'session-1',
+                            messageId: message.id,
+                          });
                           return { state: 'applied' as const, value: undefined };
                         },
                       },
@@ -355,8 +380,10 @@ describe('AssistantMessageToolbar', () => {
           ]}
         >
           <AssistantMessageToolbar message={message} />
-        </AssistantMessageActionsProvider>,
+        </AssistantMessageActionsProvider>
       );
+      const policy = agentPolicy({ isManaged: Boolean(allowedModelIds), allowedModelIds });
+      renderer = create(<PolicyScope policy={policy}>{toolbar}</PolicyScope>);
     });
   }
 });

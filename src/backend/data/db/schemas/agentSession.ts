@@ -3,6 +3,7 @@ import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentTable } from './agent';
 import { fileFolderTable } from './fileLibrary';
+import { userModelTable } from './userModel';
 
 /**
  * Agent Session table - one long-lived conversation whose messages form a tree
@@ -21,6 +22,8 @@ export const agentSessionTable = sqliteTable(
     agentId: text()
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
+    /** Per-session model override; null follows the Agent's default. */
+    model: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     name: text().notNull().default(''),
     workspaceFolderId: text().references(() => fileFolderTable.id, { onDelete: 'set null' }),
     // Whether the name was manually edited by user

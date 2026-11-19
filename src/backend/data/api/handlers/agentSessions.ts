@@ -44,9 +44,10 @@ export function createAgentSessionHandlers(
       },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => {
-        const { name } = UpdateAgentSessionSchema.parse(body);
+        const patch = UpdateAgentSessionSchema.parse(body);
+        if ('model' in patch) return service.setModel(params.id, patch.model);
         await runSessionMutation(params.id, () =>
-          mutations.renameSession({ sessionId: params.id, name }),
+          mutations.renameSession({ sessionId: params.id, name: patch.name }),
         );
         return service.getById(params.id);
       },

@@ -19,7 +19,6 @@ const ONBOARDING_PREFERENCES = {
 
 type OnboardingModelSelection =
   | { kind: 'catalog'; model: Model; isLocal: boolean }
-  | { kind: 'subscription'; model: Model }
   | { kind: 'manual'; modelId: string; provider: Provider };
 
 export function useCompleteOnboarding() {
@@ -81,12 +80,9 @@ export function useCompleteOnboarding() {
         modelId = model.id;
         providerId = model.providerId;
       } else {
-        if (selection.kind === 'subscription' && selection.model.providerId !== CLOUD_PROVIDER_ID)
-          throw new Error('Subscription setup requires an account model');
         modelId = selection.model.id;
         providerId = selection.model.providerId;
-        if (selection.kind === 'catalog' && !selection.isLocal)
-          await models.reconcile(providerId, { toAdd: [selection.model] });
+        if (!selection.isLocal) await models.reconcile(providerId, { toAdd: [selection.model] });
       }
       signal.throwIfAborted();
       // Account models are already enabled by Cloud and reject user configuration writes.

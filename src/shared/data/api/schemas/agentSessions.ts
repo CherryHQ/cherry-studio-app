@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 import { AgentSessionViewSchema } from '@/shared/contracts/agent';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
 export const AgentSessionEntitySchema = AgentSessionViewSchema.extend({
   /** Last real conversation activity, used for recency ordering. */
@@ -28,9 +29,10 @@ export const ListAgentSessionsQuerySchema = z
 export type ListAgentSessionsQueryParams = z.input<typeof ListAgentSessionsQuerySchema>;
 export type ListAgentSessionsQuery = z.output<typeof ListAgentSessionsQuerySchema>;
 
-export const UpdateAgentSessionSchema = z.strictObject({
-  name: z.string().trim().min(1).max(255),
-});
+export const UpdateAgentSessionSchema = z.union([
+  z.strictObject({ name: z.string().trim().min(1).max(255) }),
+  z.strictObject({ model: UniqueModelIdSchema }),
+]);
 export type UpdateAgentSessionDto = z.infer<typeof UpdateAgentSessionSchema>;
 
 export type AgentSessionSchemas = {

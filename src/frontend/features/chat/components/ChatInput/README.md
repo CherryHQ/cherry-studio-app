@@ -73,18 +73,21 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. The local chat tools
   sheet uses this replacement path; the effort overlay retains the existing keyboard context.
-- Picking a model updates the current Agent's `model`. Submission also snapshots the visible
-  model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
-  persisted serially and coalesced to the latest visible selection.
+- Single-model picks save the current Session's model. A draft saves its choice with the first
+  submission. A later pick during that submission saves after the Session is created. A Session
+  without a choice follows the Agent's default model.
+- The Host reads the confirmed conversation model for ordinary submissions. A pending pick for an
+  existing Session, a parallel answer, and an image request each capture an explicit model. Session
+  model writes run in selection order across composer mounts.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
   `xhigh` and `max` as distinct values. The frontend's persistent `chat.reasoning_efforts` cache
-  remembers the last selection per Agent across new conversations and app restarts. It is
-  recoverable UI state: clearing the cache restores model defaults. Agent database configuration
-  is unchanged, and each submission snapshots the visible effort. Once model metadata is available,
-  switching models also caches the nearest supported stop, preferring the higher stop on a tie.
-  Models without selectable reasoning, including image models, reset it to `default`; loading model
-  metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
-  fallback ordering.
+  remembers the last user selection per Agent across new conversations and app restarts. Model
+  capabilities adjust the effort locally. A saved Session remembers its adjusted stop, while a
+  draft keeps the shared preference available for compatible models and other conversations.
+  Clearing the cache restores model defaults. Submissions associate the effort with the model
+  whose controls produced it. For the closest supported stop, a tie picks the higher stop. Models
+  without selectable reasoning display `default`. `auto` retains its provider-controlled meaning
+  and shared fallback ordering.
 - The plus action opens a content-height tools sheet with camera, photos, files, workspace,
   Plugins, Skills, SSH and available MCP prompts. Child sheets cover the menu, keeping its content
   mounted and inactive. Drag, scrim, Back and Escape dismiss only the top layer; the handle retains
