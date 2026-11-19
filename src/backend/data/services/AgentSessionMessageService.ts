@@ -212,11 +212,9 @@ export class AgentSessionMessageService {
   async readTurns(sessionId: string): Promise<AgentSessionTurns> {
     // The leaf and all previews come from the same database snapshot. Return only the first
     // readable text part's bounded prefix, without materializing message bodies in JavaScript.
-    const rows = this.db.all<{
-      activeNodeId: string | null;
-      id: string | null;
-      preview: string | null;
-    }>(sql`
+    const rows = await this.db.values<
+      [activeNodeId: string | null, id: string | null, preview: string | null]
+    >(sql`
       SELECT session.active_node_id AS activeNodeId, turn.id, turn.preview
       FROM agent_session AS session
       LEFT JOIN (
@@ -237,8 +235,8 @@ export class AgentSessionMessageService {
     `);
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     return {
-      activeNodeId: rows[0].activeNodeId,
-      items: rows.flatMap(({ id, preview }) =>
+      activeNodeId: rows[0][0],
+      items: rows.flatMap(([, id, preview]) =>
         id ? [{ id, preview: formatConversationTurnPreview(preview ?? '') }] : [],
       ),
     };

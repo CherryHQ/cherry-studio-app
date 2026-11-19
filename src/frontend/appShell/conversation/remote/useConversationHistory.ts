@@ -212,16 +212,18 @@ function createHistoryReader(
       const signal = AbortSignal.any([caller, lifetime.signal]);
       signal.throwIfAborted();
       if (!cursor) {
-        const opened = await (around && session.history.openAround
-          ? session.history.openAround(
-              createConversationReferences(session.scope, session.ref.sessionId).issue<MessageRef>(
-                'message',
-                around,
-              ),
-              signal,
-              position,
-            )
-          : session.history.openLatest(signal));
+        let opened: HistoryWindow;
+        if (around && session.history.openAround) {
+          const target = createConversationReferences(
+            session.scope,
+            session.ref.sessionId,
+          ).issue<MessageRef>('message', around);
+          opened = position
+            ? await session.history.openAround(target, signal, position)
+            : await session.history.openAround(target, signal);
+        } else {
+          opened = await session.history.openLatest(signal);
+        }
         if (signal.aborted) {
           opened.dispose();
           signal.throwIfAborted();
