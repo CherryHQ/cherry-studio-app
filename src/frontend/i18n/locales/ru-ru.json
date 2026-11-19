@@ -819,7 +819,6 @@
   "cloud.notEntitled": "Этот способ использования не включён",
   "cloud.quotaDayShort": "Д.",
   "cloud.quotaDaysShort": "{{days}}д",
-  "cloud.quotaExhausted": "Квота исчерпана",
   "cloud.quotaHoursShort": "{{hours}}ч",
   "cloud.quotaMonthShort": "Мес.",
   "cloud.quotaWeekShort": "Нед.",

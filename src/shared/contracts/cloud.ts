@@ -121,7 +121,6 @@ export type CloudUnavailableReason =
   | 'signed_out'
   | 'unavailable'
   | 'not_entitled'
-  | 'quota_exhausted'
   | 'amd_activation_required';
 export type CloudState = Readonly<{
   phase: 'signed_out' | 'loading' | 'ready' | 'error';
@@ -135,10 +134,11 @@ export type CloudState = Readonly<{
   amd?: CloudAmdState;
   guestCatalog?: 'loading' | 'ready' | 'error';
 }>;
+type CloudRefreshMode = 'manual' | 'background' | 'if-stale';
 export interface CloudModule {
   getState(): CloudState;
   subscribe(listener: () => void): () => void;
-  refresh(): Promise<void>;
+  refresh(mode?: CloudRefreshMode): Promise<void>;
   refreshProvider(): Promise<void>;
   refreshAmd(): Promise<void>;
   createAmdEntry(modelId: string): Promise<string>;
@@ -181,28 +181,31 @@ export function supportsCloudModelUse(model: CloudModel, use: CloudModelUse): bo
     : features.includes('chat') && features.includes('translate');
 }
 
-/** Quota exhaustion keeps a model visible; the selected use still determines its capabilities. */
+/** Model visibility follows the entitlement and the features required for the selected use. */
 export function isCloudModelListed(
   state: CloudState,
   modelId: string,
   uses: readonly CloudModelUse[] = ['agent', 'general'],
 ): boolean {
-  return uses.some((use) => {
-    const reason = cloudModelUnavailable(state, modelId, use);
-    return reason === undefined || reason === 'quota_exhausted';
-  });
+  return uses.some((use) => cloudModelUnavailable(state, modelId, use) === undefined);
 }
 
-/** A current paid subscription, independent of remaining quota or catalog availability. */
-export function hasActiveCloudSubscription(state: CloudState, now = Date.now()): boolean {
-  return (
-    state.phase === 'ready' &&
-    state.account?.account.status === 'active' &&
-    state.account.entitlements.some((entry) => !entry.is_free && isEffectiveEntitlement(entry, now))
+/** The last confirmed paid entitlements can still be displayed if a refresh fails. */
+export function getActiveCloudEntitlements(
+  state: CloudState,
+  now = Date.now(),
+): CloudAccount['entitlements'] {
+  if (
+    (state.phase !== 'ready' && state.phase !== 'error') ||
+    state.account?.account.status !== 'active'
+  )
+    return [];
+  return state.account.entitlements.filter(
+    (entry) => !entry.is_free && isEffectiveEntitlement(entry, now),
   );
 }
 
-/** Windows constrain the same pool; independent pools are alternative sources of credit. */
+/** Model access here depends on identity, entitlement and features. The gateway checks quota. */
 export function cloudModelUnavailable(
   state: CloudState,
   modelId: string,
@@ -223,23 +226,12 @@ export function cloudModelUnavailable(
     return model.activation_required === false ? undefined : 'amd_activation_required';
   }
   if (model.standalone === true || model.requires_login === false) return undefined;
-  const entitled = state.account.entitlements.some(
-    (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(modelId),
-  );
-  if (!entitled) return 'not_entitled';
-  const pools = state.account.quota_pools.filter((pool) => pool.model_ids.includes(modelId));
   if (
-    !pools.some(
-      (pool) =>
-        pool.windows.length > 0 &&
-        pool.windows.every(
-          (window) =>
-            window.remaining_units > 0 &&
-            (!window.period_end || Date.parse(window.period_end) > now),
-        ),
+    !state.account.entitlements.some(
+      (entry) => isEffectiveEntitlement(entry, now) && entry.model_ids.includes(modelId),
     )
   )
-    return 'quota_exhausted';
+    return 'not_entitled';
   return undefined;
 }
 

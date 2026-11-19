@@ -100,19 +100,17 @@ responses. They use the same boundary without buffering the response or construc
   or invalid display payload cannot delay or reject inference. Admission revalidation does not
   request this display metadata. Cold start and explicit refresh load it for active accounts, including accounts without a subscription.
 - The sidebar badge requires a confirmed, currently effective paid entitlement, independently of
-  quota exhaustion or model catalog availability. It hides for free, expired, signed-out,
-  unavailable and enterprise accounts. Plan metadata supplies its name; remaining quotas come from
-  matching allocation IDs in the account snapshot. When metadata is unavailable, the badge uses
-  its generic Cloud label and omits unconfirmed quota associations. The profile exposes no purchase
-  or management action. The managed provider opens a read-only model list, without connection
+  quota exhaustion or model catalog availability. It hides for free, expired, signed-out and
+  enterprise accounts, and keeps a still-effective subscription visible after a temporary read
+  failure. Plan metadata for a confirmed entitlement supplies its name. Remaining quotas come from
+  matching allocation IDs in the account snapshot. When matching metadata is unavailable, the
+  badge uses its generic Cloud label and omits unconfirmed quota associations. The profile exposes
+  no purchase or management action. The managed provider opens a read-only model list, without connection
   settings or model mutation actions.
-  Community settings always offer the CherryAI entry. The model picker lists its provider group
-  when the current account has entitled models for the picker to display.
-- Ordinary catalog models use the model rules of an effective free or paid plan and require an
-  available feature. Every window of a quota pool must have credit. Any independent pool can admit
-  the model. Reserved
-  units are already reflected in the server's remaining units. The gateway owns final admission,
-  reservations and charging when requests race.
+  Community settings and the chat picker show the published catalog, including locked models.
+- Ordinary plan models require an effective free or paid entitlement and support for the selected
+  use. The gateway enforces quotas on each request. The sidebar displays the most recently
+  confirmed remaining units, including the effect of server reservations.
 - Agent conversations use `agent`. One-shot text generation (including translation) uses
   `general`, requiring both `chat` and `translate`. Picker callers can select the same purpose;
   its default is `agent`, and translation model settings request `general`.
@@ -124,20 +122,20 @@ responses. They use the same boundary without buffering the response or construc
   Settings render their own fixed entry above the saved providers. Ordinary provider/model mutation
   services reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
   keeping their IDs/names for history; user-configured providers and conversations remain.
-- Cold start checks subscription display once after account restoration. Repeated notifications
-  for that identity do not issue another read. A newly signed-in/replaced account loads its own
-  state, while signed-out installations read the HMAC model directory without querying personal account endpoints. Foreground transitions,
-  elapsed time and inference completion do not trigger another display check; there is no polling
-  or automatic retry. A failed cold-start check remains an error until an explicit retry or the
-  next start. The automatic read is silent and does not set the explicit-refresh flag.
-  Model admission still revalidates a stale snapshot before sending. Completion/cancellation only
-  marks it stale for the next request, preserving quota checks without an idle background read.
-  Failures preserve display data but deny new Cloud requests, rather than manufacturing zero usage.
+- Cold start checks subscription display once after account restoration. A newly signed-in or
+  replaced account loads its own state, while signed-out installations fetch the HMAC model directory
+  without querying personal account endpoints. Opening the sidebar triggers a silent refresh. A permanent sidebar checks when it
+  becomes visible in the foreground if the snapshot is stale. Concurrent reads share the
+  account/model request. A transient background failure preserves the previous confirmed state.
+- Sending revalidates stale model access. Inference completion or cancellation marks the sidebar
+  quota stale, including if an earlier read is still in progress. The gateway decides whether
+  quota permits the request.
 - Account or service-address replacement clears the public snapshot synchronously, cancels old
   requests and discards late results. Revocation uses the old session's service; the replacement's
   queries and inference use the new one. Catalog withdrawal disables old rows without
-  writing a fabricated empty service address. Projection is serialized and generation-checked in its write transaction.
-  Unchanged catalogs are not rewritten. Cloud writes participate in backup storage admission.
+  writing a fabricated empty service address. Projection is serialized and generation-checked in its
+  write transaction. Only catalog writes count as storage work. They wait for a backup or restore
+  to release the write gate.
 
 ## Signed model discovery and guest inference
 
@@ -153,7 +151,7 @@ All published rows come from the current identity's directory, including locked 
 never grant guest access. Login replaces the guest snapshot and transport lifetime. Member requests
 fetch the directory using a Product Session and v2 device signature with a fresh nonce. Account and
 plan reads provide personal entitlements, quota and plan descriptions. Signed-in standalone models
-need no subscription. Only callable models and visible quota-exhausted account rows enter the local
+need no subscription. Only models admitted by the current identity and model rules enter the local
 managed provider; locked offers remain available to browse in memory. Invalid Product credentials
 do not fall back to a guest request.
 

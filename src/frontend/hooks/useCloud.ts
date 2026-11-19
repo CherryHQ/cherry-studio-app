@@ -7,7 +7,6 @@ export const CLOUD_UNAVAILABLE_KEYS = {
   signed_out: 'account.notSignedIn',
   unavailable: 'chat.errorPart.reason.providerUnavailable',
   not_entitled: 'cloud.notEntitled',
-  quota_exhausted: 'cloud.quotaExhausted',
   amd_activation_required: 'cloud.amd.activationRequired',
 } as const satisfies Record<CloudUnavailableReason, string>;
 

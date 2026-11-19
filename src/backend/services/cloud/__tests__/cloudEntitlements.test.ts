@@ -2,7 +2,7 @@ import {
   CloudAccountSchema,
   CloudPlansSchema,
   cloudModelUnavailable,
-  hasActiveCloudSubscription,
+  getActiveCloudEntitlements,
   isCloudFreeModel,
 } from '@/shared/contracts/cloud';
 
@@ -16,7 +16,7 @@ test('effective free and paid plans grant access to the models in their rules', 
   entitlement.is_free = true;
   expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
   expect(isCloudFreeModel(state, state.models[0], now)).toBe(true);
-  expect(hasActiveCloudSubscription(state, now)).toBe(false);
+  expect(getActiveCloudEntitlements(state, now)).toEqual([]);
   entitlement.model_ids = ['another-model'];
   expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('not_entitled');
   const paid = { ...entitlement, is_free: false, model_ids: ['another-model'] };
@@ -25,19 +25,6 @@ test('effective free and paid plans grant access to the models in their rules', 
   paid.model_ids.push('cloud-model');
   expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
   expect(isCloudFreeModel(state, state.models[0], now)).toBe(false);
-});
-
-test('all windows in a pool constrain credit, while another pool can independently admit a model', () => {
-  const state = cloudSnapshot();
-  const pool = state.account!.quota_pools[0];
-  pool.windows.push({ ...pool.windows[0], window_type: 'calendar_day', remaining_units: 0 });
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
-  state.account!.quota_pools.push({
-    ...pool,
-    allocation_id: 'other-pool',
-    windows: [{ ...pool.windows[0] }],
-  });
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
 });
 
 test('general generation requires both chat and translate, independently of Agent use', () => {
@@ -66,12 +53,10 @@ test('stale or signed-out state never grants access even if it carries previous 
   ).toBe('signed_out');
 });
 
-test('a subscription-month boundary and an empty quota pool both fail closed', () => {
+test('missing quota data does not hide an entitled model', () => {
   const state = cloudSnapshot();
-  state.account!.quota_pools[0].windows[0].period_end = '2026-10-31T00:00:00Z';
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
-  state.account!.quota_pools[0].windows = [];
-  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBe('quota_exhausted');
+  state.account!.quota_pools = [];
+  expect(cloudModelUnavailable(state, 'cloud-model', 'agent', now)).toBeUndefined();
 });
 
 test('the wire contract retains reserved money units and subscription-month dates', () => {
