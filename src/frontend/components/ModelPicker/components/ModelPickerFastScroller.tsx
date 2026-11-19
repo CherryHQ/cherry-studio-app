@@ -82,7 +82,19 @@ export function ModelPickerFastScroller({
       scheduleOnRN(setPressPreview, null);
     }
   }, [previewAnchorIndex]);
-  const scrollGesture = useMemo(() => Gesture.Native().disallowInterruption(true), []);
+  const scrollGesture = useMemo(
+    () =>
+      Gesture.Native()
+        .disallowInterruption(true)
+        .onFinalize((_event, success) => {
+          'worklet';
+          // Android may cancel the gesture without emitting a scroll-end-drag event.
+          if (!success) {
+            isDragging.set(false);
+          }
+        }),
+    [isDragging],
+  );
   const gesture = useMemo(() => {
     const updatePreviewAt = (y: number) => {
       'worklet';
@@ -143,15 +155,14 @@ export function ModelPickerFastScroller({
           manager.fail();
         }
       })
+      .onStart(() => {
+        'worklet';
+        tapAnchorIndex.set(-1);
+      })
       .onUpdate(({ y }) => {
         'worklet';
-        if (previewAnchorIndex.get() < 0 || y < 0 || y >= measuredRailHeight) {
-          return;
-        }
-        const index = updatePreviewAt(y);
-        const tapIndex = tapAnchorIndex.get();
-        if (tapIndex >= 0 && index !== tapIndex) {
-          tapAnchorIndex.set(-1);
+        if (previewAnchorIndex.get() >= 0 && y >= 0 && y < measuredRailHeight) {
+          updatePreviewAt(y);
         }
       });
 
