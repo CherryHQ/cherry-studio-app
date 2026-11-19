@@ -86,7 +86,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private stopped = false;
   private cacheInFlight: Promise<void> | undefined;
 
-  protected async onReady(signal?: AbortSignal): Promise<void> {
+  protected override async onReady(signal?: AbortSignal): Promise<void> {
     this.stopped = false;
     const cancel = () => this.stopRequests();
     signal?.addEventListener('abort', cancel, { once: true });
@@ -142,7 +142,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     return this.applyInFlight;
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.stopRequests();
     await Promise.allSettled([this.cacheInFlight, this.applyInFlight]);
     this.cacheInFlight = undefined;

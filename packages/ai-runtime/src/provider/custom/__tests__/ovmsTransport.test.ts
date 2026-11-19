@@ -40,7 +40,7 @@ describe('OvmsTransport', () => {
       providerParams: { model: 'sd', num_inference_steps: 8 },
     });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('http://localhost:8000/images/generations');
     const init = call[1] as RequestInit;
     expect(Object.keys(init.headers as Record<string, string>)).toEqual(['Content-Type']);
@@ -68,7 +68,7 @@ describe('OvmsTransport', () => {
       providerParams: { model: 'sd' },
     });
 
-    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toMatchObject({
       size: '512x512',
       num_inference_steps: 4,
       rng_seed: 0,
@@ -147,7 +147,7 @@ describe('OvmsTransport', () => {
     controller.abort();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
-    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBe(controller.signal);
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).signal).toBe(controller.signal);
   });
 
   it('does not expose polling for the single-shot path', () => {

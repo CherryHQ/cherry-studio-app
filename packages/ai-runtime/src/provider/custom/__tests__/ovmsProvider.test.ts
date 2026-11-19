@@ -47,7 +47,7 @@ describe('createOvmsProvider', () => {
       'ovms.chat',
     );
 
-    const [, config] = ChatCtor.mock.calls[0];
+    const [, config] = ChatCtor.mock.calls[0]!;
     expect(config.url({ path: '/chat/completions', modelId: 'llama' })).toBe(
       'http://localhost:8000/v3/chat/completions',
     );
@@ -56,7 +56,7 @@ describe('createOvmsProvider', () => {
   it('OVMS omits Authorization (local server, no auth)', () => {
     const provider = createOvmsProvider({ apiKey: 'ignored', baseURL: 'http://localhost:8000/v3' });
     provider.languageModel('llama');
-    const headers = ChatCtor.mock.calls[0][1].headers();
+    const headers = ChatCtor.mock.calls[0]![1].headers();
     expect(headers.Authorization).toBeUndefined();
   });
 

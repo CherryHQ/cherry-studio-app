@@ -56,7 +56,7 @@ describe('createMinimaxProvider', () => {
       'https://api.minimax.io/v1/image_generation',
       expect.objectContaining({ method: 'POST' }),
     );
-    const sent = JSON.parse((fetch.mock.calls[0][1] as RequestInit).body as string);
+    const sent = JSON.parse((fetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(sent).toEqual({
       model: 'image-01',
       prompt: 'a lighthouse in a storm',
@@ -102,7 +102,7 @@ describe('createMinimaxProvider', () => {
       providerOptions: {},
     });
 
-    const sent = JSON.parse((fetch.mock.calls[0][1] as RequestInit).body as string);
+    const sent = JSON.parse((fetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(sent.subject_reference).toEqual([
       { type: 'character', image_file: 'https://cdn.example.com/character.jpg' },
       { type: 'character', image_file: 'data:image/png;base64,AQID' },

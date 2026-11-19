@@ -15,23 +15,23 @@ jest.mock('@logger', () => ({
 class Recorder extends BaseService {
   readonly calls: string[] = [];
 
-  protected onInit(): void {
+  protected override onInit(): void {
     this.calls.push('onInit');
   }
 
-  protected onReady(): void {
+  protected override onReady(): void {
     this.calls.push('onReady');
   }
 
-  protected onAllReady(): void {
+  protected override onAllReady(): void {
     this.calls.push('onAllReady');
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     this.calls.push('onStop');
   }
 
-  protected onDestroy(): void {
+  protected override onDestroy(): void {
     this.calls.push('onDestroy');
   }
 
@@ -144,7 +144,7 @@ describe('BaseService disposables', () => {
   it('releases them even when onStop throws', async () => {
     @Injectable('Exploding')
     class Exploding extends BaseService {
-      protected onStop(): void {
+      protected override onStop(): void {
         throw new Error('boom');
       }
 
@@ -225,13 +225,13 @@ describe('BaseService destroy under an in-flight stop', () => {
     class SlowStop extends BaseService {
       destroyed = false;
 
-      protected onStop(): Promise<void> {
+      protected override onStop(): Promise<void> {
         return new Promise<void>((resolve) => {
           releaseStop = resolve;
         });
       }
 
-      protected onDestroy(): void {
+      protected override onDestroy(): void {
         this.destroyed = true;
       }
     }
@@ -257,11 +257,11 @@ describe('BaseService destroy under an in-flight stop', () => {
     class RejectingStop extends BaseService {
       destroyed = false;
 
-      protected onStop(): Promise<void> {
+      protected override onStop(): Promise<void> {
         return Promise.reject(new Error('stop failed'));
       }
 
-      protected onDestroy(): void {
+      protected override onDestroy(): void {
         this.destroyed = true;
       }
     }
@@ -366,7 +366,7 @@ describe('BaseService activation', () => {
         this.calls.push('deactivate');
       }
 
-      protected onStop(): void {
+      protected override onStop(): void {
         this.calls.push('stop');
       }
     }

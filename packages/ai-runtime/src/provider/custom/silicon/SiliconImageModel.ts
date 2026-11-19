@@ -113,7 +113,9 @@ export class SiliconImageModel implements ImageModelV3 {
     if (files && files.length > 0) {
       const slots = ['image', 'image2', 'image3'] as const;
       for (let i = 0; i < Math.min(files.length, slots.length); i++) {
-        body[slots[i]] = fileToDataUrl(files[i]);
+        const slot = slots[i];
+        const file = files[i];
+        if (slot && file) body[slot] = fileToDataUrl(file);
       }
     }
 

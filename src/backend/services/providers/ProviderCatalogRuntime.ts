@@ -58,7 +58,7 @@ export class ProviderCatalogRuntime extends BaseService {
     });
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.stopped = true;
     this.controller.abort();
     await this.initialization?.catch(() => {});

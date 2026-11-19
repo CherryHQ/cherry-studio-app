@@ -49,7 +49,7 @@ export class WebSearchService extends BaseService {
     super();
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     this.apiKeyRotationState.clear();
   }
 

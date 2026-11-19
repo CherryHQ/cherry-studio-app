@@ -47,10 +47,10 @@ jest.mock('expo-file-system', () => {
     }
   }
   class Directory extends File {
-    get exists() {
+    override get exists() {
       return [...mockFiles].some((path) => path.startsWith(`${this.uri}/`));
     }
-    delete() {
+    override delete() {
       if (mockDeletionFails) throw new Error('Cache unavailable');
       for (const path of mockFiles) if (path.startsWith(`${this.uri}/`)) mockFiles.delete(path);
     }

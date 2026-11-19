@@ -30,7 +30,7 @@ export class RegionService extends BaseService {
   private inflight: Promise<string | null> | undefined;
   private readonly controller = new AbortController();
 
-  protected onInit(signal?: AbortSignal): void {
+  protected override onInit(signal?: AbortSignal): void {
     const abort = () => this.controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     this.registerDisposable(() => signal?.removeEventListener('abort', abort));
@@ -70,7 +70,7 @@ export class RegionService extends BaseService {
     }
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.controller.abort();
     await this.inflight?.catch(() => {});
   }

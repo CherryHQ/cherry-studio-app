@@ -17,12 +17,12 @@ let journal: string[] = [];
 class Connection extends BaseService {
   open = false;
 
-  protected onInit(): void {
+  protected override onInit(): void {
     this.open = true;
     journal.push('Connection:open');
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     this.open = false;
     journal.push('Connection:close');
   }
@@ -31,7 +31,7 @@ class Connection extends BaseService {
 @Injectable('LateWork')
 @ServicePhase(Phase.PostReady)
 class LateWork extends BaseService {
-  protected onInit(): void {
+  protected override onInit(): void {
     journal.push('LateWork:init');
   }
 }
@@ -43,7 +43,7 @@ class ResolveOnStop extends BaseService {
     super();
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     const connection = application.get('Connection' as never) as Connection;
     journal.push(`ResolveOnStop:${connection.open ? 'open' : 'closed'}`);
   }
@@ -53,7 +53,7 @@ class ResolveOnStop extends BaseService {
 class SlowClose extends BaseService {
   static release: (() => void) | undefined;
 
-  protected onStop(): Promise<void> {
+  protected override onStop(): Promise<void> {
     journal.push('SlowClose:closing');
     return new Promise<void>((resolve) => {
       SlowClose.release = () => {
@@ -121,14 +121,14 @@ describe('ApplicationHost construction', () => {
     @Injectable('SlowPostReady')
     @ServicePhase(Phase.PostReady)
     class SlowPostReady extends BaseService {
-      protected async onInit(): Promise<void> {
+      protected override async onInit(): Promise<void> {
         journal.push('SlowPostReady:init-started');
         markInitializationStarted();
         await initializationGate;
         journal.push('SlowPostReady:init-finished');
       }
 
-      protected onStop(): void {
+      protected override onStop(): void {
         journal.push('SlowPostReady:stop');
       }
     }
@@ -168,7 +168,7 @@ describe('ApplicationHost construction', () => {
       @Injectable('NeverPostReady')
       @ServicePhase(Phase.PostReady)
       class NeverPostReady extends BaseService {
-        protected async onInit(): Promise<void> {
+        protected override async onInit(): Promise<void> {
           journal.push('NeverPostReady:init');
           markInitializationStarted();
           await new Promise<void>(() => {});
@@ -232,7 +232,7 @@ describe('ApplicationHost construction', () => {
             super();
           }
 
-          protected async onInit(): Promise<void> {
+          protected override async onInit(): Promise<void> {
             this.registerDisposable(releaseEarlyDisposable);
             journal.push('LatePostReady:init-started');
             markInitializationStarted();
@@ -241,20 +241,20 @@ describe('ApplicationHost construction', () => {
             if (outcome === 'reject') throw new Error('late initialization failed');
           }
 
-          protected onReady(): void {
+          protected override onReady(): void {
             journal.push('LatePostReady:ready');
           }
 
-          protected onAllReady(): void {
+          protected override onAllReady(): void {
             journal.push('LatePostReady:all-ready');
           }
 
-          protected onStop(): void {
+          protected override onStop(): void {
             journal.push('LatePostReady:stop');
             releaseRawResource();
           }
 
-          protected onDestroy(): void {
+          protected override onDestroy(): void {
             journal.push('LatePostReady:destroy');
             markDestroyed();
           }
@@ -268,15 +268,15 @@ describe('ApplicationHost construction', () => {
             super();
           }
 
-          protected onReady(): void {
+          protected override onReady(): void {
             markPeerReady();
           }
 
-          protected onAllReady(): void {
+          protected override onAllReady(): void {
             journal.push('CompletedPeer:all-ready');
           }
 
-          protected onStop(): void {
+          protected override onStop(): void {
             journal.push(`CompletedPeer:stop:${this.connection.open}`);
           }
         }
@@ -289,7 +289,7 @@ describe('ApplicationHost construction', () => {
             super();
           }
 
-          protected onInit(): void {
+          protected override onInit(): void {
             journal.push('LaterLayer:init');
           }
         }
@@ -395,7 +395,7 @@ describe('application.install', () => {
 
     @Injectable('SelfResolving')
     class SelfResolving extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         resolvedDuringInit = application.get('Connection' as never);
       }
     }
@@ -410,7 +410,7 @@ describe('application.install', () => {
   it('installs nothing when the incoming host fails to start', async () => {
     @Injectable('Exploding')
     class Exploding extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('cannot start');
       }
     }
@@ -454,13 +454,13 @@ describe('application.install', () => {
         super();
       }
 
-      protected async onInit(): Promise<void> {
+      protected override async onInit(): Promise<void> {
         failedResourceOpen = true;
         await Promise.resolve();
         throw new Error('migration failed after opening');
       }
 
-      protected onStop(): void {
+      protected override onStop(): void {
         const connection = application.get('Connection' as never) as Connection;
         journal.push(`PartiallyOpened:stop:${connection.open}`);
         failedResourceOpen = false;
@@ -474,11 +474,11 @@ describe('application.install', () => {
         super();
       }
 
-      protected onInit(): void {
+      protected override onInit(): void {
         peerResourceOpen = true;
       }
 
-      protected onStop(): void {
+      protected override onStop(): void {
         const connection = application.get('Connection' as never) as Connection;
         journal.push(`OpenedPeer:stop:${connection.open}`);
         peerResourceOpen = false;
@@ -519,7 +519,7 @@ describe('application.install', () => {
   it('installs no host when startup fails', async () => {
     @Injectable('FailsToStart')
     class FailsToStart extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('migration failed');
       }
     }
@@ -534,7 +534,7 @@ describe('application.install', () => {
   it('keeps accepting installs after a failed one', async () => {
     @Injectable('AlsoFails')
     class AlsoFails extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('nope');
       }
     }

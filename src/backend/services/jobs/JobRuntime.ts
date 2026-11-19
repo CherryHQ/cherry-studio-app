@@ -264,7 +264,7 @@ export class JobRuntime extends BaseService {
    * The cold-start pump: lazy startup recovery over prior-process leftovers,
    * the terminal-row GC sweep, and whatever is already runnable.
    */
-  protected async onInit(signal?: AbortSignal): Promise<void> {
+  protected override async onInit(signal?: AbortSignal): Promise<void> {
     const cancel = () => this.stopDispatch();
     signal?.addEventListener('abort', cancel, { once: true });
     try {
@@ -428,7 +428,7 @@ export class JobRuntime extends BaseService {
    * `running` when the drain times out are left for the next cold start's
    * recovery.
    */
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.stopDispatch();
 
     // Snapshot before awaiting: each task removes itself in its `finally`.

@@ -49,7 +49,9 @@ export const AiUsagePricingSnapshotSchema = z.strictObject({
     )
     .superRefine((tiers, ctx) => {
       for (let index = 1; index < tiers.length; index++) {
-        if (tiers[index].minInputTokens <= tiers[index - 1].minInputTokens) {
+        const current = tiers[index];
+        const previous = tiers[index - 1];
+        if (current && previous && current.minInputTokens <= previous.minInputTokens) {
           ctx.addIssue({
             code: 'custom',
             path: [index, 'minInputTokens'],
