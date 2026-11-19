@@ -70,6 +70,8 @@ const mockSshProfile = {
   id: '11111111-1111-4111-8111-111111111111',
   revision: '22222222-2222-4222-8222-222222222222',
 };
+let mockSshAvailable = false;
+let mockSshStatus = 'idle';
 let mockSshTarget: { profile: typeof mockSshProfile } | null = null;
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
@@ -78,7 +80,12 @@ jest.mock('../../../quotes/ChatQuoteContext', () => ({
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
-  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => mockSshTarget }),
+  useBackendModule: () => ({
+    isAvailable: () => mockSshAvailable,
+    getTarget: () => mockSshTarget,
+    getTargetStatus: () => mockSshStatus,
+    subscribeTargets: () => () => {},
+  }),
 }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ setParams: mockNoop }),
@@ -188,6 +195,8 @@ beforeEach(() => {
   mockCatalogModels = new Set(['p::m']);
   mockEditing = null;
   mockSshTarget = null;
+  mockSshAvailable = false;
+  mockSshStatus = 'idle';
   mockDraft = '';
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
@@ -491,4 +500,14 @@ test('falls back from removed or disallowed draftModel to agent.model and clears
     renderer.update(renderDraft('agent-b', [defaultModel, customModel, thirdModel])),
   );
   expect(mockPickerApi.replyModels).toBeNull();
+});
+
+test('shows disconnected SSH status without disabling send', async () => {
+  mockSshAvailable = true;
+  mockSshStatus = 'disconnected';
+  await mount();
+  expect(renderer.root.findByType('TextComposer' as never).props.canSend).toBe(true);
+  expect(
+    renderer.root.findAll((node) => node.props.children === 'ssh.disconnectedReconnect'),
+  ).not.toHaveLength(0);
 });

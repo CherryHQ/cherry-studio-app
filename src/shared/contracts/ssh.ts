@@ -15,6 +15,7 @@ import type {
 
 import type { ResolvedFile, TemporaryFilePreview } from './file';
 
+export type SshTargetStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 export type SshHostProbe = { token: string; fingerprint: string };
 export interface SshModule {
   isAvailable(): boolean;
@@ -64,6 +65,7 @@ export interface SshModule {
   ): Promise<SshTarget>;
   /** Copies a user-selected draft binding to the session allocated by its first send. */
   attachDraftTarget(draftId: string, sessionId: string): Promise<void>;
+  getTargetStatus(sessionId: string): SshTargetStatus;
   getTarget(sessionId: string): SshTarget | null;
   subscribeTargets(listener: () => void): () => void;
 }

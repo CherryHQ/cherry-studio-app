@@ -99,8 +99,8 @@ for SSH approvals. Revocation, expiry, target changes, profile changes and delet
 cancel affected AI operations. SSH file tools always require their own approval; the command grant
 does not promote them. If approval submission fails, only the grant created for that submission is
 revoked; a newer selection or replacement grant is preserved. Browser and AI operations share a
-connection only through exclusive leases. All conversation bindings and grants disappear when the
-process restarts. Draft bindings are copied to the session
+connection only through exclusive leases. Conversation and draft bindings survive process restarts;
+temporary grants do not. Restored bindings use the current enabled, trusted profile and require approval. Draft bindings are copied to the session
 allocated by its first send; a failed admission removes that session's temporary binding.
 
 The runtime admits one native operation per target and at most four native operations overall. A busy
@@ -108,7 +108,7 @@ target reports busy instead of silently queueing commands. Transfers retain a se
 bound through local file publication. Profiles are limited to 100, remembered
 conversation/draft bindings to 64, pending admission/storage work to 16, and pending trust probes
 to 16. Up to four connections can be retained for five idle minutes, with 15-second keepalive
-maintenance while the app is scheduled. There are no startup probes or background retries. An explicit command may reconnect once if
+maintenance while the app is scheduled. There are no startup probes or background retries. A restored binding reconnects silently when a command runs; connection failure does not prevent sending a message, and the composer shows a disconnected or reconnecting status. An explicit command may reconnect once if
 a reused connection fails before execution, using only its remaining deadline and rechecking the
 profile, target, grant and cancellation state. Unknown outcomes are never replayed. Pooling does not preserve shell state or recover an interrupted task.
 The Agent runtime already marks tool side effects unsafe to replay after uncertain recovery.
@@ -118,7 +118,7 @@ closes. Long-lived remote jobs require a future remote task protocol and are out
 
 ## Persistence and distribution
 
-Profiles use a versioned MMKV document, with at most 100 connections and a 1 MiB serialized bound.
+Bindings use a separate versioned MMKV document containing context and profile IDs only, bounded to 64 entries and 1 MiB. Least recently used bindings are evicted. Profiles use a versioned MMKV document, with at most 100 connections and a 1 MiB serialized bound.
 Only opaque credential references are stored alongside connection metadata. Passwords/private keys
 use `WHEN_UNLOCKED_THIS_DEVICE_ONLY` storage. Cache clearing does not remove profiles. Corrupt or
 unsupported stored configuration fails explicitly instead of silently resetting the connection list.

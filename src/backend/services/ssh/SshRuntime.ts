@@ -25,7 +25,8 @@ import type {
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type { ResolvedFile } from '@/shared/contracts/file';
-import type { SshHostProbe, SshModule } from '@/shared/contracts/ssh';
+import type { SshHostProbe, SshModule, SshTargetStatus } from '@/shared/contracts/ssh';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   SaveSshProfileSchema,
   SshCommandInputSchema,
@@ -51,6 +52,7 @@ import {
 } from '@/shared/data/types/ssh';
 
 import { getSshNative, type SshNativeOptions } from '../../../../modules/ssh';
+import { SshBindingStorage } from './SshBindingStorage';
 import {
   cacheSshPreview,
   createSshStagingFile,
@@ -133,6 +135,7 @@ export class SshRuntime extends BaseService implements SshModule {
     { reference: SshReference; fingerprint: string; expiresAt: number }
   >();
   private readonly targets = new Map<string, SshTarget>();
+  private readonly statuses = new Map<string, SshTargetStatus>();
   private readonly grantTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly listeners = new Set<() => void>();
   private readonly transfers = new Set<ActiveRun>();
@@ -150,8 +153,67 @@ export class SshRuntime extends BaseService implements SshModule {
     _database: DbService,
     private readonly keepAlive: KeepAliveSource,
     private readonly profiles: SshProfileService = sshProfileService,
+    private readonly bindings = new SshBindingStorage(),
   ) {
     super();
+  }
+
+  protected async onInit() {
+    try {
+      const saved = this.bindings.read();
+      const profiles = await this.profiles.list();
+      if (this.lifetime.signal.aborted) throw new SshError('cancelled');
+      const valid = saved.filter(({ profileId }) => {
+        const profile = profiles.find((item) => item.id === profileId);
+        return profile?.isEnabled && profile.fingerprint;
+      });
+      if (valid.length !== saved.length) this.tryPersist(() => this.bindings.write(valid));
+      for (const { contextId, profileId } of valid) {
+        const profile = profiles.find((item) => item.id === profileId)!;
+        this.targets.set(contextId, { selectionId: randomUUID(), profile, grant: null });
+      }
+      this.notifyTargets();
+    } catch (error) {
+      this.targets.clear();
+      loggerService
+        .withContext('SshRuntime')
+        .error('Failed to restore SSH bindings', error as Error);
+      if (!this.lifetime.signal.aborted) this.tryPersist(() => this.bindings.write([]));
+      this.notifyTargets();
+    }
+  }
+
+  private tryPersist(write: () => void) {
+    try {
+      write();
+    } catch (error) {
+      loggerService
+        .withContext('SshRuntime')
+        .warn('Failed to persist SSH bindings', error as Error);
+    }
+  }
+
+  private persistTarget(contextId: string, profileId: string | null, removeContextId?: string) {
+    const bindings = this.bindings
+      .read()
+      .filter((item) => item.contextId !== contextId && item.contextId !== removeContextId);
+    if (profileId) bindings.push({ contextId, profileId });
+    const evicted = bindings.splice(0, Math.max(0, bindings.length - 64));
+    this.bindings.write(bindings);
+    for (const item of evicted) {
+      for (const run of [...this.active, ...this.transfers])
+        if (run.sessionId === item.contextId) run.cancel();
+      this.targets.delete(item.contextId);
+      this.statuses.delete(item.contextId);
+      this.clearGrantTimer(item.contextId);
+    }
+  }
+
+  getTargetStatus = (contextId: string): SshTargetStatus => this.statuses.get(contextId) ?? 'idle';
+  private setTargetStatus(agent: AgentAccess, status: SshTargetStatus) {
+    if (this.targets.get(agent.sessionId)?.selectionId !== agent.target.selectionId) return;
+    this.statuses.set(agent.sessionId, status);
+    this.notifyTargets();
   }
 
   isAvailable = () => !!getSshNative();
@@ -259,13 +321,15 @@ export class SshRuntime extends BaseService implements SshModule {
     storageMutationGate.assertWritable();
   }
   /** Serialize storage and operation admission, never a running command. */
-  private serialize<T>(work: () => Promise<T>): Promise<T> {
+  private serialize<T>(work: () => Promise<T>, readOnly = false): Promise<T> {
     if (this.queued >= 16) return Promise.reject(new SshError('busy'));
     this.queued++;
     const result = this.tail
       .catch(() => {})
       .then(() => {
-        this.assertActive();
+        if (readOnly) {
+          if (this.lifetime.signal.aborted) throw new SshError('cancelled');
+        } else this.assertActive();
         return work();
       });
     this.tail = result.finally(() => {
@@ -276,11 +340,15 @@ export class SshRuntime extends BaseService implements SshModule {
     return result;
   }
   private invalidate(profileId: string) {
+    this.tryPersist(() =>
+      this.bindings.write(this.bindings.read().filter((item) => item.profileId !== profileId)),
+    );
     for (const run of this.active) if (run.profileId === profileId) run.cancel();
     for (const run of this.transfers) if (run.profileId === profileId) run.cancel();
     for (const [sessionId, target] of this.targets)
       if (target.profile.id === profileId) {
         this.targets.delete(sessionId);
+        this.statuses.delete(sessionId);
         this.clearGrantTimer(sessionId);
       }
     for (const [token, probe] of this.probes)
@@ -408,12 +476,13 @@ export class SshRuntime extends BaseService implements SshModule {
         : null;
       if (row && !row.fingerprint) throw new SshError('host-key');
       if (row && !row.isEnabled) throw new SshError('disabled');
+      this.persistTarget(sessionId, row?.id ?? null);
       for (const run of [...this.active, ...this.transfers])
         if (run.sessionId === sessionId) run.cancel();
+      this.statuses.delete(sessionId);
       this.targets.delete(sessionId);
       this.clearGrantTimer(sessionId);
       if (row) {
-        if (this.targets.size >= 64) throw new SshError('busy');
         const target: SshTarget = {
           selectionId: randomUUID(),
           profile: toSshProfile(row),
@@ -455,7 +524,7 @@ export class SshRuntime extends BaseService implements SshModule {
       const target = this.targets.get(`draft:${draftId}`);
       if (!target) return;
       await this.profiles.getRow(target.profile);
-      if (this.targets.size >= 64) throw new SshError('busy');
+      this.persistTarget(sessionId, target.profile.id, `draft:${draftId}`);
       const attached: SshTarget = {
         ...target,
         grant: target.grant && target.grant.expiresAt > Date.now() ? target.grant : null,
@@ -482,8 +551,9 @@ export class SshRuntime extends BaseService implements SshModule {
         this.clearGrantTimer(sessionId);
         this.notifyTargets();
       }
+      this.tryPersist(() => this.persistTarget(sessionId, target.profile.id));
       return target;
-    });
+    }, true);
   }
 
   executeForAgent(
@@ -774,6 +844,35 @@ export class SshRuntime extends BaseService implements SshModule {
   }
 
   private async runOperation(
+    ...args: Parameters<SshRuntime['runOperationInner']>
+  ): Promise<NativeResult> {
+    const agent = args[4];
+    if (agent) this.setTargetStatus(agent, 'connecting');
+    try {
+      const result = await this.runOperationInner(...args);
+      if (agent) {
+        if (
+          result.error &&
+          ['connection', 'timeout', 'channel', 'authentication', 'host-key'].includes(result.error)
+        )
+          this.setTargetStatus(agent, 'disconnected');
+        else this.setTargetStatus(agent, result.error ? 'idle' : 'connected');
+      }
+      return result;
+    } catch (error) {
+      if (agent)
+        this.setTargetStatus(
+          agent,
+          error instanceof SshError &&
+            ['connection', 'timeout', 'channel', 'authentication', 'host-key'].includes(error.code)
+            ? 'disconnected'
+            : 'idle',
+        );
+      throw error;
+    }
+  }
+
+  private async runOperationInner(
     reference: SshReference,
     operation: Partial<
       Pick<
@@ -861,7 +960,7 @@ export class SshRuntime extends BaseService implements SshModule {
       !this.lifetime.signal.aborted
     ) {
       getSshNative()?.closePool(poolKey(reference));
-      return this.runOperation(
+      return this.runOperationInner(
         reference,
         { ...operation, timeoutMs: remaining },
         signal,

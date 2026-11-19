@@ -2,7 +2,15 @@ import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -93,6 +101,20 @@ type ChatInputProps = {
 };
 
 const logger = loggerService.withContext('ChatInput');
+
+function SshStatusNotice({ contextId }: { contextId: string | undefined }) {
+  const ssh = useBackendModule('ssh');
+  const { t } = useTranslation();
+  const status = useSyncExternalStore(ssh.subscribeTargets, () =>
+    contextId ? ssh.getTargetStatus(contextId) : 'idle',
+  );
+  if (status !== 'connecting' && status !== 'disconnected') return null;
+  return (
+    <Text className="text-xs text-warning">
+      {t(status === 'connecting' ? 'ssh.reconnecting' : 'ssh.disconnectedReconnect')}
+    </Text>
+  );
+}
 
 export function ChatInput({
   agentId,
@@ -724,6 +746,9 @@ function TextChatInput({
                 <View>
                   <ComposerAttachments />
                   <AudioAttachmentNotice />
+                  {isSshAvailable ? (
+                    <SshStatusNotice contextId={sshPickerContext ?? sshContextId} />
+                  ) : null}
                   {mode === 'standard' ? <McpAppContextNotice /> : null}
                 </View>
               </ChatInputAccessories>
