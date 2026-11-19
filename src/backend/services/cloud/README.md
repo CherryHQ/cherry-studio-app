@@ -130,10 +130,10 @@ responses. They use the same boundary without buffering the response or construc
 
 ## Signed model discovery and guest inference
 
-The model directory is `/v1/models?limit=1000` for both identities. On a CN guest install, Config Service
-resolves the Cloud origin without creating a login registration. The client signs the zero-byte
-`GET /v1/models?limit=1000` with the native HMAC credential, including the exact raw query
-`limit=1000`. Guest inference signs the final POST body with the same application credential.
+Guests and members request the full model directory with `GET /v1/models?limit=1000&catalog=full`.
+On a CN guest install, Config Service resolves the Cloud origin without creating a login registration.
+The client signs the exact raw query `limit=1000&catalog=full` and a zero-byte body with the native
+HMAC credential. Guest inference signs the final POST body with the same application credential.
 Guest transport omits cookies, Product Bearer and device headers. The gateway rate-limits requests
 by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
 

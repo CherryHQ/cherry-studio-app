@@ -56,7 +56,7 @@ function reply(account: string, path: string) {
   const state = cloudSnapshot(account);
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
-  if (path === '/v1/models?limit=1000') return { data: state.models };
+  if (path === '/v1/models?limit=1000&catalog=full') return { data: state.models };
   throw new Error(`Unexpected Cloud endpoint: ${path}`);
 }
 
@@ -171,7 +171,7 @@ test.each([
   'streams $endpoint through the existing Pi binding before EOF',
   async ({ endpoint, streamSimple, first, last }) => {
     mockGet.mockImplementation(async (account: string, path: string) =>
-      path === '/v1/models?limit=1000'
+      path === '/v1/models?limit=1000&catalog=full'
         ? {
             data: cloudSnapshot(account).models.map((model) => ({
               ...model,
@@ -272,7 +272,7 @@ test.each([
     activation_required: false,
   };
   mockGet.mockImplementation(async (account: string, path: string) =>
-    path === '/v1/models?limit=1000' ? { data: [amd] } : reply(account, path),
+    path === '/v1/models?limit=1000&catalog=full' ? { data: [amd] } : reply(account, path),
   );
   mockInference.mockResolvedValue(new Response(JSON.stringify({ error: { code } }), { status }));
   const runtime = await setup();

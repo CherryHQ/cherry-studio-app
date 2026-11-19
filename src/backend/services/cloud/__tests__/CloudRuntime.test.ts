@@ -80,7 +80,7 @@ function reply(account: string, path: string) {
   const state = cloudSnapshot(account);
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
-  if (path === '/v1/models?limit=1000') return { data: state.models };
+  if (path === '/v1/models?limit=1000&catalog=full') return { data: state.models };
   throw new Error(`Unexpected Cloud endpoint: ${path}`);
 }
 
@@ -286,7 +286,7 @@ test.each([
       'Idempotency-Key': key,
     }));
     mockGet.mockImplementation(async (account: string, resource: string) => {
-      if (resource !== '/v1/models?limit=1000') return reply(account, resource);
+      if (resource !== '/v1/models?limit=1000&catalog=full') return reply(account, resource);
       return {
         data: cloudSnapshot(account).models.map((model) => ({ ...model, endpoint_type: endpoint })),
       };
@@ -344,7 +344,7 @@ test.each([
   ['openai-chat-completions', 'https://cloud.example/v1/chat/completions?beta=true'],
 ] as const)('does not sign or send an unsupported %s request at %s', async (endpoint, url) => {
   mockGet.mockImplementation(async (account: string, resource: string) =>
-    resource === '/v1/models?limit=1000'
+    resource === '/v1/models?limit=1000&catalog=full'
       ? {
           data: cloudSnapshot(account).models.map((model) => ({
             ...model,
@@ -810,7 +810,7 @@ test('a failed background catalog read leaves a send using recently verified acc
   try {
     await jest.advanceTimersByTimeAsync(0);
     mockGet.mockImplementation(async (id: string, path: string) => {
-      if (path === '/v1/models?limit=1000') throw new Error('Catalog unavailable');
+      if (path === '/v1/models?limit=1000&catalog=full') throw new Error('Catalog unavailable');
       return reply(id, path);
     });
     await expect(runtime.refresh('background')).rejects.toThrow('Catalog unavailable');
@@ -832,7 +832,7 @@ test('an in-flight network read allows a backup freeze and applies catalog chang
     finishModels = resolve;
   });
   mockGet.mockImplementation(async (id: string, path: string) =>
-    path === '/v1/models?limit=1000' ? pendingModels : reply(id, path),
+    path === '/v1/models?limit=1000&catalog=full' ? pendingModels : reply(id, path),
   );
   const background = runtime.refresh('background');
   const models = cloudSnapshot().models.map((model) => ({ ...model, display_name: 'New name' }));
@@ -938,7 +938,7 @@ test('uses the AMD catalog activation flag instead of a paid entitlement and pre
   };
   let activationRequired = true;
   mockGet.mockImplementation(async (account: string, path: string) => {
-    if (path === '/v1/models?limit=1000')
+    if (path === '/v1/models?limit=1000&catalog=full')
       return { data: [{ ...model, activation_required: activationRequired }] };
     if (path === '/api/v1/account')
       return { ...cloudSnapshot(account).account, entitlements: [], quota_pools: [] };
@@ -978,7 +978,7 @@ test('links existing AMD accounts and opens the usage page while registration is
   let endpoint: string | null = '/api/v1/amd/mobile/activation';
   const modelId = 'amd/catalog-id';
   mockGet.mockImplementation(async (account: string, path: string) => {
-    if (path === '/v1/models?limit=1000')
+    if (path === '/v1/models?limit=1000&catalog=full')
       return {
         data: [
           {
@@ -1049,11 +1049,11 @@ test('refreshes AMD status and models on return even while pre-activation reads 
     releaseOldReads = resolve;
   });
   mockGet.mockImplementation(async (account: string, path: string) => {
-    if (path !== '/v1/models?limit=1000' && path !== '/api/v1/amd/desktop/status')
+    if (path !== '/v1/models?limit=1000&catalog=full' && path !== '/api/v1/amd/desktop/status')
       return reply(account, path);
     const wasActivated = activated;
     if (delayOldReads && !wasActivated) await oldReads;
-    return path === '/v1/models?limit=1000'
+    return path === '/v1/models?limit=1000&catalog=full'
       ? { data: [{ ...model, activation_required: !wasActivated }] }
       : {
           status: wasActivated ? 'registered' : 'unregistered',
@@ -1101,11 +1101,15 @@ test('guest discovery and inference sign the exact request without sending accou
   const { runtime, change } = await setup(null);
   try {
     await runtime.refresh();
-    expect(mockClientSignatureHeaders).toHaveBeenCalledWith('GET', '/v1/models?limit=1000', '');
+    expect(mockClientSignatureHeaders).toHaveBeenCalledWith(
+      'GET',
+      '/v1/models?limit=1000&catalog=full',
+      '',
+    );
     expect(mockPublicRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'GET',
-        path: '/v1/models?limit=1000',
+        path: '/v1/models?limit=1000&catalog=full',
         headers,
         credentials: 'omit',
         redirect: 'error',
@@ -1140,7 +1144,11 @@ test('guest discovery and inference sign the exact request without sending accou
     change({ key: 'a', profileId: 'account-a', ...service });
     await expect(send(url, init)).rejects.toBeDefined();
     await runtime.refresh();
-    expect(mockGet).toHaveBeenCalledWith('account-a', '/v1/models?limit=1000', service.apiOrigin);
+    expect(mockGet).toHaveBeenCalledWith(
+      'account-a',
+      '/v1/models?limit=1000&catalog=full',
+      service.apiOrigin,
+    );
   } finally {
     await runtime._doStop();
   }

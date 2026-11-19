@@ -9,9 +9,10 @@ never returned to JavaScript. Its UTF-8 value is used directly, without the Cher
 iOS application metadata and Android string resources, outside Expo's public `extra` configuration.
 Android resource shrinking retains the dynamically resolved resource.
 
-Guest model discovery signs `GET /v1/models?limit=1000` with the raw query in the third canonical
-field and a zero-byte body. Guest inference signs the final POST body. Both operations require
-the application signature and send no Product Bearer or device signature.
+Guest model discovery signs `GET /v1/models?limit=1000&catalog=full`. The third canonical field
+contains the raw query `limit=1000&catalog=full`, and the body is empty. Guest inference signs the
+final POST body. Both operations require the application signature and send no Product Bearer or
+device signature.
 
 Changing this credential or adding this module requires a new native build. An EAS environment
 change or an OTA update alone cannot provision the credential in an installed client. Local EAS

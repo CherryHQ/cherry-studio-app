@@ -45,7 +45,7 @@ import {
 import { CloudSession, type CloudIdentitySource } from './CloudSession';
 import { projectCloudModels } from './projectCloudModels';
 
-const MODEL_CATALOG_PATH = '/v1/models?limit=1000';
+const MODEL_CATALOG_PATH = '/v1/models?limit=1000&catalog=full';
 
 const EMPTY: CloudState = {
   phase: 'signed_out',
