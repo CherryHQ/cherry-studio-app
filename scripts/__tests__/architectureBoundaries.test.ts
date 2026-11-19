@@ -319,4 +319,36 @@ describe('resolved architecture boundaries', () => {
       expect(staleEntries).toEqual([]);
     });
   });
+
+  describe('tracked TODO/FIXME guardrail', () => {
+    async function todoErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter(
+        (message) => message.ruleId === 'cherry/require-todo-issue-ref',
+      );
+    }
+
+    it.each([
+      ['src/frontend/utils/probe.ts', '// TODO: clean this up later\nexport const x = 1;'],
+      ['src/frontend/utils/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
+      ['src/frontend/utils/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
+    ])('rejects untracked TODO/FIXME comments in %s', async (filePath, source) => {
+      expect(await todoErrors(filePath, source)).not.toHaveLength(0);
+    });
+
+    it.each([
+      [
+        'src/frontend/utils/probe.ts',
+        '// TODO(#1234): remove after migration\nexport const x = 1;',
+      ],
+      ['src/frontend/utils/probe.ts', '/* FIXME(#42): upstream bug */\nexport const x = 1;'],
+      ['src/frontend/utils/probe.ts', "export const text = 'TODO inside string literal';"],
+    ])(
+      'allows tracked issue references and non-comment literals in %s',
+      async (filePath, source) => {
+        expect(await todoErrors(filePath, source)).toEqual([]);
+      },
+    );
+  });
 });
