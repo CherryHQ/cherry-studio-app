@@ -11,6 +11,7 @@ import {
 import { ChatSourceProvider, useChatSource } from '@/frontend/appShell/navigation/chat';
 import { FilePaneProvider } from '@/frontend/appShell/pane';
 import {
+  resolveSidebarDrawer,
   Sidebar,
   SidebarColumnProvider,
   SidebarToggleProvider,
@@ -68,7 +69,8 @@ function SidebarDrawer() {
     'sidebar-border',
     'scrim',
   ]);
-  const isPermanent = column.kind === 'permanent';
+  const overlayWidth = Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth);
+  const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth);
 
   return (
     <Drawer
@@ -81,15 +83,14 @@ function SidebarDrawer() {
         drawerStyle: {
           backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
           borderEndColor: sidebarBorderColor,
-          borderEndWidth: isPermanent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-          width: isPermanent
-            ? column.width
-            : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+          borderEndWidth:
+            drawerType === 'permanent' || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+          ...drawerStyle,
         },
         // The content region is stable context. In compact windows the sidebar is a temporary
         // surface sliding over it; wide windows keep it beside every page until the file pane
         // takes its column or the user hides it. Switching keeps the same content tree mounted.
-        drawerType: isPermanent ? 'permanent' : 'front',
+        drawerType,
         headerShown: false,
         // Dim the exposed scene while preserving the drawer's native progress
         // animation and tap-to-close interaction.

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,7 +12,10 @@ import {
   isVersionAtLeast,
   redactSecrets,
   renderEvidenceMarkdown,
+  runCli,
 } from '../deviceVerify';
+
+jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }));
 
 describe('deviceVerify CLI helpers', () => {
   const tempDirs: string[] = [];
@@ -23,6 +27,7 @@ describe('deviceVerify CLI helpers', () => {
   }
 
   afterEach(() => {
+    jest.mocked(spawnSync).mockReset();
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -124,6 +129,75 @@ describe('deviceVerify CLI helpers', () => {
     expect(md).toContain('[REDACTED_TOKEN]');
     expect(md).not.toContain('secret-token-123456');
     expect(md).toContain('onboarding=1240ms');
+  });
+
+  it('validates the receipt before launch and records the actual target on a pass', () => {
+    const root = makeTempDir();
+    const flow = path.join(root, 'onboarding.yaml');
+    fs.writeFileSync(flow, '');
+    const run = initEvidenceRun({
+      rootDir: root,
+      scenario: 'Onboarding',
+      platform: 'unknown',
+      baseline: 'first-run',
+      workspace: 'ws-alpha',
+      device: null,
+      metroPort: null,
+    });
+    const env = { CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
+    const args = [
+      'run',
+      '--flow',
+      flow,
+      '--platform',
+      'android',
+      '--device',
+      'emulator-5554',
+      '--dev-client-url',
+      'cherrystudio-dev://expo-development-client/?url=http://127.0.0.1:42000',
+      '--evidence-dir',
+    ];
+    expect(() => runCli([...args, root], env)).toThrow(/receipt.json/);
+    expect(spawnSync).not.toHaveBeenCalled();
+
+    jest.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      signal: null,
+      pid: 1,
+      output: [],
+      stdout: '',
+      stderr: '',
+    });
+    expect(runCli([...args, run.dir], env)).toBe(0);
+    expect(JSON.parse(fs.readFileSync(run.receiptPath, 'utf8'))).toMatchObject({
+      status: 'pass',
+      platform: 'android',
+      device: 'emulator-5554',
+      appId: 'com.cherryai.cherrystudio_app.dev',
+      metroPort: 42000,
+    });
+    const otherDeviceArgs = args.map((arg) => (arg === 'emulator-5554' ? 'emulator-5556' : arg));
+    expect(() => runCli([...otherDeviceArgs, run.dir], env)).toThrow(/identity/);
+    expect(spawnSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses other workspaces and stops before deleting when close fails', () => {
+    const env = { CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
+    const args = ['cleanup', '--platform', 'ios', '--delete-temp-device'];
+    expect(() => runCli([...args, '--workspace', 'ws-beta'], env)).toThrow(/current workspace/);
+    expect(spawnSync).not.toHaveBeenCalled();
+
+    jest.mocked(spawnSync).mockReturnValue({
+      status: 1,
+      signal: null,
+      pid: 1,
+      output: [],
+      stdout: '',
+      stderr: 'Session close failed',
+    });
+    expect(runCli(args, env)).toBe(1);
+    expect(spawnSync).toHaveBeenCalledTimes(1);
+    expect(spawnSync).toHaveBeenCalledWith('agent-device', expect.any(Array), { encoding: 'utf8' });
   });
 
   it('validates feature map pages, testIDs, Maestro flow paths, and index links', () => {

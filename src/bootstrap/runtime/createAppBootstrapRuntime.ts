@@ -55,6 +55,7 @@ import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
+import { resolvePublicCatalogOrigin } from '@/bootstrap/profile/cloudLoginConfig';
 import { installationAccount } from '@/bootstrap/profile/installationAccount';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
@@ -177,6 +178,12 @@ export function createAppBootstrapRuntime(
   cloud.configure(
     {
       getIdentity: account.getCommunityIdentity,
+      getGuestCatalogOrigin: (signal) =>
+        resolvePublicCatalogOrigin(
+          Constants.expoConfig?.extra?.configServiceOrigin,
+          Platform.OS,
+          signal,
+        ),
       getTokens: account.getCommunityTokens,
       refreshServices: account.refreshCommunityServices,
       subscribe: account.subscribe,

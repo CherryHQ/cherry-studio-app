@@ -45,7 +45,7 @@ export function AccountSessionGate({ children }: PropsWithChildren) {
     const controller = new AbortController();
     void overlays.prepareForNavigation(controller.signal).then((ready) => {
       if (controller.signal.aborted) return;
-      if (ready) router.push(accountSignInHref(returnTo, 'expired'));
+      if (ready) router.push(accountSignInHref(returnTo, { purpose: 'expired' }));
       // A surface opened during dismissal; close it on the next pass.
       else setAttempt((count) => count + 1);
     });

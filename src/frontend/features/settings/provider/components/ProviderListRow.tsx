@@ -7,7 +7,6 @@ import { Text, View } from 'react-native';
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { withPolicy } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
-import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAccountBadge } from './ProviderAccountBadge';
@@ -69,20 +68,18 @@ const ProviderListRowView = memo(function ProviderListRow({
       testID={`provider-row-${provider.id}`}
       trailing={
         <View className="flex-row items-center gap-2">
-          {provider.id !== CLOUD_PROVIDER_ID ? (
-            <Switch
-              accessibilityLabel={t(
-                isEnabled
-                  ? 'settings.provider.disableProviderNamed'
-                  : 'settings.provider.enableProviderNamed',
-                { name: provider.name },
-              )}
-              disabled={isPending}
-              onValueChange={(value) => onToggle(provider, value)}
-              testID={`provider-enabled-switch-${provider.id}`}
-              value={isEnabled}
-            />
-          ) : null}
+          <Switch
+            accessibilityLabel={t(
+              isEnabled
+                ? 'settings.provider.disableProviderNamed'
+                : 'settings.provider.enableProviderNamed',
+              { name: provider.name },
+            )}
+            disabled={isPending}
+            onValueChange={(value) => onToggle(provider, value)}
+            testID={`provider-enabled-switch-${provider.id}`}
+            value={isEnabled}
+          />
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />

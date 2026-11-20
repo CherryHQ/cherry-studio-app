@@ -88,11 +88,28 @@ test('signs exact UTF-8 body bytes and the idempotency key using the published v
 
 test('signs the raw query and includes an empty idempotency field for GET', () => {
   jest.spyOn(Date, 'now').mockReturnValue(1710000060000);
-  const first = cloudSignatureHeaders(device, 'device-id', 'GET', '/v1/models?limit=1000');
-  const second = cloudSignatureHeaders(device, 'device-id', 'GET', '/v1/models?limit=01000');
+  const first = cloudSignatureHeaders(
+    device,
+    'device-id',
+    'GET',
+    '/v1/models?limit=1000&catalog=full',
+  );
+  const second = cloudSignatureHeaders(
+    device,
+    'device-id',
+    'GET',
+    '/v1/models?limit=01000&catalog=full',
+  );
   expect(first['Cherry-Body-SHA256']).toBe(
     'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
   );
   expect(first).not.toHaveProperty('Idempotency-Key');
   expect(second['Cherry-Signature']).not.toBe(first['Cherry-Signature']);
+  const reordered = cloudSignatureHeaders(
+    device,
+    'device-id',
+    'GET',
+    '/v1/models?catalog=full&limit=1000',
+  );
+  expect(reordered['Cherry-Signature']).not.toBe(first['Cherry-Signature']);
 });
