@@ -72,11 +72,11 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
 
-  // A permanent drawer has nothing to close, but an overlay left open before the window widened
-  // would otherwise reappear over the chat once the window narrows again.
+  // Clear any overlay left open by a window change or a link that navigated away from the chat.
+  const isOverlay = column.kind === 'overlay';
   useEffect(() => {
-    if (canDock) navigation.closeDrawer();
-  }, [canDock, navigation]);
+    if (!isOverlay) navigation.closeDrawer();
+  }, [isOverlay, navigation]);
 
   // A link or notification may already have navigated while the drawer was closing.
   useLayoutEffect(() => cancelPending, [cancelPending, page, params]);
@@ -93,8 +93,9 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   // From the chat a destination opens above it; from another destination it takes that one's place,
   // so moving between sidebar entries never builds a back history.
   const openDestination = useCallback(
-    async (href: Href, history: 'swap' | 'push' = 'swap') => {
-      if (!(await waitForClose())) return;
+    (href: Href, history: 'swap' | 'push' = 'swap') => {
+      cancelPending();
+      if (isOverlay) navigation.closeDrawer();
       const pathname = typeof href === 'string' ? href : href.pathname;
       if (
         page === pathname &&
@@ -106,7 +107,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       if (history === 'swap' && stack && stack.index > 0) router.replace(href);
       else router.push(href);
     },
-    [waitForClose, navigation, page, params, router],
+    [cancelPending, isOverlay, navigation, page, params, router],
   );
 
   const actions = useMemo<SidebarActions>(
@@ -187,7 +188,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
     [currentConversation.sessionId],
   );
   const foldGap = column.kind === 'permanent' ? column.foldGap : 0;
-  const isColumnHidden = column.kind === 'collapsed' || column.kind === 'yielded';
+  const isColumnHidden = !isOverlay && column.kind !== 'permanent';
   const isSearching = Boolean(
     SearchPanel && column.kind === 'permanent' && column.content === 'search',
   );
