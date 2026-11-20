@@ -111,15 +111,8 @@ export function createPaintingGenerateJobHandler(
     defaultQueue: () => PAINTING_JOB_QUEUE,
     defaultRetryPolicy: { backoff: 'none', baseDelayMs: 0, maxAttempts: 1, maxDelayMs: 0 },
     defaultTimeoutMs: GENERATE_TIMEOUT_MS,
-    // The class states the product promise ("keeps generating while you do
-    // something else"); the dispatch loop honors it with a keep-alive lease.
+    // JobRuntime protects execution. PaintingActivity owns the progress UI, including on iOS.
     executionClass: 'user-continued',
-    continuedProcessing: (input) => ({
-      title: input.modelName,
-      subtitle: (dependencies.translate ?? ((key: string) => key))(
-        'painting.backgroundActivity.generating',
-      ),
-    }),
     recovery: 'abandon',
     // Deleting the receipt this job writes through must cancel it first. The
     // input already carries the id, so no `paintingId -> jobId` index is needed:

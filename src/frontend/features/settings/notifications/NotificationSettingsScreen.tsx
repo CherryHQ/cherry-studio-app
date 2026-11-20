@@ -167,7 +167,7 @@ export default function NotificationSettingsScreen() {
               onValueChange={setLiveActivityPreference}
               value={isLiveActivityEnabled}
             />
-            {settings?.liveActivitiesEnabled === false ? (
+            {isLiveActivityEnabled && settings?.liveActivitiesEnabled === false ? (
               <Section.Item
                 label={t('settings.notifications.completion.systemSettings')}
                 onPress={openSystemSettings}

@@ -30,10 +30,13 @@ manager checks native identity before updates and retirement: a card removed by 
 system stays dismissed for that round. Removal does not cancel execution. ActivityKit remains a
 presentation mechanism, not an execution guarantee.
 
-The iOS **Live Activities** preference controls chat and painting cards only. Turning it off
-retires presentation without releasing execution. The persisted `chat.background_reply.enabled`
-key is retained for compatibility. Android's mandatory service notification remains independent of
-that preference. Completion preferences control completion alerts; they do not turn protection off.
+On iOS, **Settings → Notifications → Enable Dynamic Island** controls the chat and painting Live
+Activities on the Dynamic Island and Lock Screen. Compact and expanded layouts belong to one
+native activity. On iPhone, touching and holding expands it and tapping opens the linked task.
+Disabling the preference removes its visible activities.
+Enabling it during a running task uses the current phase and original start time. The execution
+owner holds the same lease throughout. The persisted key remains `chat.background_reply.enabled`.
+Completion alerts have their own preference. Android retains its foreground-service notification.
 
 ## Execution And Attention
 
@@ -190,27 +193,18 @@ Only explicit confirmation stores `app.background_audio.consent: true`; showing 
 leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
 target device's decision. No settings row or switch is added.
 
-Explicit foreground user work first requests iOS 26+ `BGContinuedProcessingTask`. The native
-launch callback, not submission success, confirms protection. iOS 27 uses asynchronous submission;
-iOS 26 retains its original API. Each request has a unique native identifier and real progress.
-The execution owner reports preparation/reply milestones on its stable Session lease. Official
-processing stays attached to that lease across questions and approvals until the Session settles
-or the system revokes the task. Answering does not release or reacquire protection. Observation,
-restoration, and foreground return alone never create official-task intent. Painting's immediate
-local enqueue carries process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
-do not inherit that intent. System-UI cancellation or expiration stops the owning conversation/job
-without silently restarting it through audio; ordinary finite-window loss still suspends the Agent
-Harness for later foreground recovery.
+Chat and painting acquire execution leases without native progress metadata. The iOS source uses
+a finite UIKit background assertion and, with existing device-local consent, shared background
+audio. These mechanisms are the same with the Dynamic Island on or off. Requesting an iOS 26+
+`BGContinuedProcessingTask` for this work would give the system a second progress surface that
+the app's presentation preference cannot retire. Generic jobs can opt into that API separately
+through their handler. Questions and approvals retain the conversation lease until settlement.
 
-If continued processing is unavailable, consenting unfinished work shares a task-owned silent audio
-loop alongside the finite window.
-Pending or running official tasks suppress silent playback. Admission failure or a five-second
-missing-launch deadline enables fallback; a stale launch cannot adopt a released request.
 Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
 expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
 finite allowance; when neither mechanism protects background work, each held consumer is interrupted
 once and audio cannot restart that work in the same background stay. The last consumer's release
-immediately stops finite/audio protection. Official requests complete when their owning work settles.
+immediately stops finite/audio protection.
 Foreground return allows a fresh finite window only while execution demand remains. Late native
 events cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
 unfinished work. This does not promise a fixed duration or automatic replay.

@@ -40,7 +40,6 @@ const permission = (status: 'granted' | 'denied' | 'undetermined') =>
 function useActions() {
   const progress = useOnboardingProgress();
   const [notifications, setNotifications] = usePreference('chat.completion_notifications.enabled');
-  const [, setLiveActivity] = usePreference('chat.background_reply.enabled');
   const [currentPermission, setPermission] = useState<NotificationPermissionStatusLike | null>(
     null,
   );
@@ -52,7 +51,7 @@ function useActions() {
       setPermission(value);
     },
   });
-  return { ...actions, progress, permission: currentPermission, setNotifications, setLiveActivity };
+  return { ...actions, progress, permission: currentPermission, setNotifications };
 }
 
 beforeEach(() => {
@@ -116,50 +115,44 @@ it('persists login and guidance when skipping an unfocused notification step', a
   await hook.unmount();
 });
 
-it.each(['setNotifications', 'setLiveActivity'] as const)(
-  'reports a pending %s save failure once after skip',
-  async (setter) => {
-    const client = createPreferenceClient();
-    const write = deferred<void>();
-    client.set.mockReturnValueOnce(write.promise);
-    const hook = await mountHook(useActions, client);
-    let saving!: Promise<void>;
-    await act(async () => {
-      saving = hook.current.act(() => hook.current[setter](true, { optimistic: false }));
-    });
-    expect(hook.current.isActing).toBe(true);
-    await act(async () => hook.current.skip());
-    expect(hook.current.progress.status).toBe('login');
-    await act(async () => {
-      write.reject(new Error('preference save failed'));
-      await saving;
-    });
-    expect(mockToast).toHaveBeenCalledTimes(1);
-    expect(mockToast).toHaveBeenCalledWith({ label: 'onboarding.saveFailed', variant: 'danger' });
-    expect(hook.current.isActing).toBe(false);
-    await hook.unmount();
-  },
-);
+it('reports a pending notification preference save failure once after skip', async () => {
+  const client = createPreferenceClient();
+  const write = deferred<void>();
+  client.set.mockReturnValueOnce(write.promise);
+  const hook = await mountHook(useActions, client);
+  let saving!: Promise<void>;
+  await act(async () => {
+    saving = hook.current.act(() => hook.current.setNotifications(true, { optimistic: false }));
+  });
+  expect(hook.current.isActing).toBe(true);
+  await act(async () => hook.current.skip());
+  expect(hook.current.progress.status).toBe('login');
+  await act(async () => {
+    write.reject(new Error('preference save failed'));
+    await saving;
+  });
+  expect(mockToast).toHaveBeenCalledTimes(1);
+  expect(mockToast).toHaveBeenCalledWith({ label: 'onboarding.saveFailed', variant: 'danger' });
+  expect(hook.current.isActing).toBe(false);
+  await hook.unmount();
+});
 
-it.each(['setNotifications', 'setLiveActivity'] as const)(
-  'does not report a pending %s save failure after unmount',
-  async (setter) => {
-    const client = createPreferenceClient();
-    const write = deferred<void>();
-    client.set.mockReturnValueOnce(write.promise);
-    const hook = await mountHook(useActions, client);
-    let saving!: Promise<void>;
-    await act(async () => {
-      saving = hook.current.act(() => hook.current[setter](true, { optimistic: false }));
-    });
-    await hook.unmount();
-    await act(async () => {
-      write.reject(new Error('late preference save failure'));
-      await saving;
-    });
-    expect(mockToast).not.toHaveBeenCalled();
-  },
-);
+it('does not report a pending notification preference save failure after unmount', async () => {
+  const client = createPreferenceClient();
+  const write = deferred<void>();
+  client.set.mockReturnValueOnce(write.promise);
+  const hook = await mountHook(useActions, client);
+  let saving!: Promise<void>;
+  await act(async () => {
+    saving = hook.current.act(() => hook.current.setNotifications(true, { optimistic: false }));
+  });
+  await hook.unmount();
+  await act(async () => {
+    write.reject(new Error('late preference save failure'));
+    await saving;
+  });
+  expect(mockToast).not.toHaveBeenCalled();
+});
 
 it('ignores repeated actions while work is pending and allows another after it settles', async () => {
   const pending = deferred<void>();

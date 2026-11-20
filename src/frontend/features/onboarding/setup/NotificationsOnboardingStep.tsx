@@ -19,7 +19,6 @@ export function NotificationsOnboardingStep({ progress }: { progress: Onboarding
   const execution = useBackendModule('backgroundExecution');
   const permissions = useBackendModule('permissions');
   const [notifications, setNotifications] = usePreference('chat.completion_notifications.enabled');
-  const [liveActivity, setLiveActivity] = usePreference('chat.background_reply.enabled');
   const [settings, setSettings] = useState<BackgroundRunSettings | null>(null);
   const [permission, setPermission] = useState<NotificationPermissionStatusLike | null>(null);
   const {
@@ -90,26 +89,14 @@ export function NotificationsOnboardingStep({ progress }: { progress: Onboarding
       testID="onboarding-notifications"
       title={t('onboarding.notifications.title')}
     >
-      <View>
-        <OnboardingChoice
-          checked={notifications}
-          description={t('settings.notifications.completion.description')}
-          disabled={busy}
-          onPress={() => void act(() => setNotifications(!notifications, { optimistic: false }))}
-          title={t('settings.notifications.completion.title')}
-          testID="onboarding-notifications-enabled"
-        />
-        {Platform.OS === 'ios' ? (
-          <OnboardingChoice
-            checked={liveActivity}
-            description={t('settings.notifications.liveActivity.description')}
-            disabled={busy}
-            onPress={() => void act(() => setLiveActivity(!liveActivity, { optimistic: false }))}
-            title={t('settings.notifications.liveActivity.title')}
-            testID="onboarding-live-activity"
-          />
-        ) : null}
-      </View>
+      <OnboardingChoice
+        checked={notifications}
+        description={t('settings.notifications.completion.description')}
+        disabled={busy}
+        onPress={() => void act(() => setNotifications(!notifications, { optimistic: false }))}
+        title={t('settings.notifications.completion.title')}
+        testID="onboarding-notifications-enabled"
+      />
       {progress.saveFailed ? (
         <Text className="text-sm text-destructive">{t('onboarding.saveFailed')}</Text>
       ) : null}
