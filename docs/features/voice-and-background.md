@@ -32,6 +32,9 @@ and Android background generation).
   progress card and can be cancelled there. Turning off Cherry progress cards hides only the
   app's fallback cards. On older iOS or after refused admission, the preference controls the
   [Cherry card shown on the Lock Screen and Dynamic Island](../../.github/images/background-activity/ios-dynamic-island.png).
+- With two chats and a painting running, open the Home Screen and another app. Cherry occupies one
+  compact Dynamic Island. Touch and hold to expand that same surface. Finish one chat while the
+  other tasks run: its completion is available in Notification Center without a second top banner.
 
 ## Known Pitfalls
 

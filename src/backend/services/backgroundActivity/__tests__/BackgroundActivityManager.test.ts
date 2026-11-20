@@ -456,9 +456,11 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     const chatUrl = 'cherry:///?sessionId=1';
     const paintingUrl = 'cherry://paintings?paintingId=1';
     const reserved = new Set([chatUrl]);
-    const changes = new Emitter<string>();
+    let admitted = false;
+    const changes = new Emitter<string | undefined>();
     const manager = await createManager([chat.presenter, painting.presenter], {
       has: (url) => reserved.has(url),
+      hasActive: () => admitted,
       onChange: changes.event,
     });
     const session = manager.startSession({
@@ -477,8 +479,10 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     expect(chat.presenter.start).not.toHaveBeenCalled();
     expect(painting.presenter.start).toHaveBeenCalledTimes(1);
 
-    reserved.add(paintingUrl);
-    changes.fire(paintingUrl);
+    expect(manager.hasProgressActivity()).toBe(true);
+    // System admission for chat retires the painting fallback too.
+    admitted = true;
+    changes.fire(chatUrl);
     await flushOperations();
     expect(painting.handles[0]!.end).toHaveBeenCalledWith(
       'immediate',
@@ -490,6 +494,10 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     presentationEnabledListener?.();
     reserved.delete(chatUrl);
     changes.fire(chatUrl);
+    expect(manager.hasProgressActivity()).toBe(true);
+    admitted = false;
+    changes.fire(chatUrl);
+    expect(manager.hasProgressActivity()).toBe(false);
     expect(chat.presenter.start).not.toHaveBeenCalled();
     appStateListener?.('background');
     isPresentationEnabled = true;
@@ -500,7 +508,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       expect.objectContaining({ detail: 'replying' }),
       chatUrl,
     );
-    expect(painting.presenter.start).toHaveBeenCalledTimes(1);
+    expect(painting.presenter.start).toHaveBeenCalledTimes(2);
     await manager._doStop();
     expect(changes.listenerCount).toBe(0);
   });

@@ -33,9 +33,11 @@ presentation mechanism, not an execution guarantee.
 On iOS, **Settings → Notifications → Cherry progress cards** controls Cherry's fallback Live
 Activities on the Dynamic Island and Lock Screen. A new system long-task request reserves the
 matching task destination before presentation starts. While admission is pending, Cherry waits.
-On admission, iOS supplies progress and cancellation. On refusal or older iOS, the next eligible
-foreground presentation uses the current content and original start time if the preference is on.
-Other tasks keep their own presentation. Turning the preference off retires Cherry cards while
+On admission, iOS supplies progress and cancellation and Cherry retires its fallback cards across
+tasks. While a request is pending, only its destination is reserved. After the final system card
+retires, eligible tasks can show their current content on the next foreground opportunity if the
+preference is on. With only Cherry fallback activities, iOS chooses which one occupies the Dynamic
+Island. Turning the preference off retires Cherry cards while
 iOS continues managing admitted tasks. The persisted key remains `chat.background_reply.enabled`.
 Completion alerts have their own preference. Android retains its foreground-service notification.
 
@@ -66,7 +68,11 @@ the same island.
 
 iOS completion delivery checks permission and current generation, retires its settled Live Activity,
 then posts a deterministic completion notice for that destination. Local execution awaits this
-replacement; remote sessions retain their existing delivery lease. A superseded round cannot retire
+replacement. At delivery time, a system task or a remaining Cherry progress activity makes
+completion and decision notices passive. They remain in Notification Center with their actions,
+keeping the Dynamic Island as the only Cherry surface over the Home Screen or another app.
+When the area is free, an eligible notification can show its usual banner.
+Remote sessions retain their existing delivery lease. A superseded round cannot retire
 or post over its successor.
 
 Local and observed desktop sessions distinguish waiting for approval from waiting for an answer.

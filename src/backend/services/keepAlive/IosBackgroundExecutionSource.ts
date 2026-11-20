@@ -50,7 +50,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   private readonly holders = new Set<Holder>();
   private readonly continuedTasks = new Map<string, ContinuedTask>();
   private readonly listeners = new Set<() => void>();
-  private readonly activityChanges = new Emitter<string>();
+  private readonly activityChanges = new Emitter<string | undefined>();
   private native: SystemIntegrationNativeModule | null = null;
   private taskId?: string;
   private audioId?: string;
@@ -106,7 +106,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
         )
           return;
         continued.state = event.state;
-        if (event.state === 'unavailable') this.notifyActivity(continued.deepLinkUrl);
+        this.activityChanges.fire(continued.deepLinkUrl);
         if (event.state === 'expired')
           this.interruptHolder(
             continued.holder,
@@ -148,12 +148,14 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
       }
       return false;
     },
+    hasActive: () => {
+      for (const task of this.continuedTasks.values()) {
+        if (task.state === 'active' || task.state === 'expired') return true;
+      }
+      return false;
+    },
     onChange: this.activityChanges.event,
   };
-
-  private notifyActivity(deepLinkUrl: string | undefined) {
-    if (deepLinkUrl) this.activityChanges.fire(deepLinkUrl);
-  }
 
   acquire(_tag: string, onInterrupt?: Holder['onInterrupt'], task?: KeepAliveTask): KeepAliveLease {
     if (this.disposed) return { release: () => {} };
@@ -252,7 +254,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
       submitted: false,
       success: false,
     });
-    this.notifyActivity(deepLinkUrl);
+    this.activityChanges.fire(deepLinkUrl);
   }
 
   private async reconcile(): Promise<void> {
@@ -263,7 +265,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
           await this.native?.endContinuedProcessingTask?.(id, continued.success);
         } finally {
           this.continuedTasks.delete(id);
-          this.notifyActivity(continued.deepLinkUrl);
+          this.activityChanges.fire(continued.deepLinkUrl);
         }
       } else if (continued.holder.isInterrupted) {
         if (continued.state !== 'expired' && continued.state !== 'unavailable') {
@@ -282,7 +284,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
         // A launch or expiry event may already describe a newer state.
         if (!submitted && continued.state === 'starting') {
           continued.state = 'unavailable';
-          this.notifyActivity(continued.deepLinkUrl);
+          this.activityChanges.fire(continued.deepLinkUrl);
         }
       } else if (task && continued.state === 'active' && continued.sent !== task) {
         continued.sent = task;

@@ -38,7 +38,8 @@ export type KeepAliveSource = {
   /** A pending native request reserves presentation until admission is decided. */
   readonly systemActivities?: {
     has(deepLinkUrl: string): boolean;
-    onChange: Event<string>;
+    hasActive(): boolean;
+    onChange: Event<string | undefined>;
   };
   getStatus?(): BackgroundExecutionStatus;
   subscribe?(listener: () => void): () => void;

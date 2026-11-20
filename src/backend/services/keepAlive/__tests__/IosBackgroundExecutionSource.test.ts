@@ -325,9 +325,9 @@ describe('IosBackgroundExecutionSource', () => {
     const chat = 'cherry:///?sessionId=a';
     const painting = 'cherry://paintings?paintingId=b';
     const changes: [string, boolean][] = [];
-    const subscription = source.systemActivities.onChange((url) =>
-      changes.push([url, source.systemActivities.has(url)]),
-    );
+    const subscription = source.systemActivities.onChange((url) => {
+      if (url) changes.push([url, source.systemActivities.has(url)]);
+    });
     const lease = source.acquire('chat', undefined, { ...task, deepLinkUrl: chat });
     source.acquire('painting', undefined, { ...task, deepLinkUrl: painting });
     expect(changes).toEqual([
@@ -338,12 +338,15 @@ describe('IosBackgroundExecutionSource', () => {
     expect(changes.at(-1)).toEqual([painting, false]);
     const [id, progress] = mockBeginContinued.mock.calls[0]!;
     expect(progress).toEqual(task);
+    expect(source.systemActivities.hasActive()).toBe(false);
     mockContinuedState({ id, state: 'active' });
+    expect(source.systemActivities.hasActive()).toBe(true);
     mockContinuedState({ id, state: 'expired' });
     expect(source.systemActivities.has(chat)).toBe(true);
     lease.release();
     await flushOperations();
     expect(changes.at(-1)).toEqual([chat, false]);
+    expect(source.systemActivities.hasActive()).toBe(false);
     mockContinuedState({ id, state: 'active' });
     expect(source.systemActivities.has(chat)).toBe(false);
     subscription.dispose();

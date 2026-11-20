@@ -61,7 +61,12 @@ export function noopBackgroundActivityPresenter<
     presentWhile: 'always',
     shouldHoldLeaseUntilDelivery: false,
     clearOrphans: async () => 0,
-    start: () => ({ dismiss: async () => {}, end: async () => {}, update: async () => {} }),
+    start: () => ({
+      isActive: () => false,
+      dismiss: async () => {},
+      end: async () => {},
+      update: async () => {},
+    }),
   };
 }
 
