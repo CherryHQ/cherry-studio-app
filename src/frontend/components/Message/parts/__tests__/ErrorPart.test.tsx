@@ -6,8 +6,15 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { ErrorPart } from '../ErrorPart';
 import { MessageFailureReportProvider } from '../MessageFailureReportContext';
 
+jest.mock('@/frontend/data', () => ({
+  useQuery: () => ({ data: [{ id: 'deepseek', name: 'DeepSeek' }] }),
+}));
+
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: { provider?: string }) =>
+      typeof params?.provider === 'string' ? `${key}:${params.provider}` : key,
+  }),
 }));
 
 jest.mock('@/frontend/components/MessageDetail', () => {
@@ -56,6 +63,45 @@ describe('ErrorPart', () => {
     const props = renderer.root.findByType('MessagePartError').props;
     expect(props.title).toBe('chat.errorPart.reason.auth');
     expect(props.message).toBe('chat.errorPart.message.auth');
+  });
+
+  test.each([
+    [
+      { reasonCode: 'quota', context: { providerId: 'deepseek' } },
+      'quota',
+      'providerQuota:DeepSeek',
+    ],
+    [{ reasonCode: 'quota', context: { providerId: 'removed' } }, 'quota', 'quota'],
+    [{ reasonCode: 'model_not_found' }, 'modelNotFound', 'modelNotFound'],
+    [{ reasonCode: 'payload_too_large' }, 'payloadTooLarge', 'payloadTooLarge'],
+    [
+      { reasonCode: 'network', source: { layer: 'provider', code: 'stream_disconnected' } },
+      'streamInterrupted',
+      'streamInterrupted',
+    ],
+    [
+      {
+        reasonCode: 'unknown',
+        source: { layer: 'provider', code: 'invalid_request_error' },
+        context: { statusCode: 400 },
+      },
+      'requestRejected',
+      'requestRejected',
+    ],
+  ] as const)('uses the confirmed failure facts for %j', (data, title, message) => {
+    const renderer = render(
+      <ErrorPart
+        part={errorPart({
+          code: 'EXECUTION_FAILED',
+          message: 'Private provider response',
+          retryable: true,
+          ...data,
+        })}
+      />,
+    );
+    const props = renderer.root.findByType('MessagePartError').props;
+    expect(props.title).toBe(`chat.errorPart.reason.${title}`);
+    expect(props.message).toBe(`chat.errorPart.message.${message}`);
   });
 
   test.each([true, false])(

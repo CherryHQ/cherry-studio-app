@@ -444,6 +444,14 @@ never serialized. Native task demand, including background compaction, holds the
 Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
 invented assistant turn.
 
+A guarded storage failure closes the shared Pi session, releases its work lease, and suspends the
+Host. In the Android foreground the Host tries one automatic reopen before notifying open chats of
+failure. On success it publishes `runtime.recovered` so open chats reread their Session snapshots,
+preserving unfinished receipts and reconciling existing work. When that automatic reopen fails or
+repeats before new input is admitted or `resumeSuspended()` succeeds, the Host publishes
+`runtime.failed` with `retryable: false`; retry observation and foreground resume still share the
+same reopen path.
+
 ## Backup And Compatibility
 
 Backup format v1 contains `cherry.db` and managed resources. Capture blocks new mutations, requires

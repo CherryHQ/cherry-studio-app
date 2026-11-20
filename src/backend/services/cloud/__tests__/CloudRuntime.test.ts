@@ -1222,3 +1222,73 @@ test('a recognized plan refusal refreshes account entitlements, without signing 
     await runtime._doStop();
   }
 });
+
+test('admits only covered models from the legacy subscription catalog', async () => {
+  const legacyEntitled = {
+    id: 'cloud-model',
+    display_name: 'Cloud model',
+    endpoint_type: 'anthropic-messages',
+    context_window: 128000,
+    max_output_tokens: 8192,
+    capabilities: null,
+    available_features: ['agent', 'chat', 'translate'],
+  };
+  const legacyOtherPlan = {
+    ...legacyEntitled,
+    id: 'other-plan-model',
+    display_name: 'Other plan model',
+    capabilities: ['function-call'],
+  };
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    path === '/v1/models?limit=1000&catalog=full'
+      ? { data: [legacyEntitled, legacyOtherPlan] }
+      : reply(account, path),
+  );
+  mockInference.mockResolvedValue(new Response(null, { status: 200 }));
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    expect(runtime.getState()).toMatchObject({
+      phase: 'ready',
+      account: { account: { id: 'account-a' } },
+      models: [{ id: legacyEntitled.id }, { id: legacyOtherPlan.id }],
+    });
+    expect(mockProject.mock.lastCall?.[2]).toEqual([
+      expect.objectContaining({ id: legacyEntitled.id }),
+    ]);
+    await expect(
+      runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      runtime.createModelFetch('other-plan-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'other-plan-model' }),
+      }),
+    ).rejects.toMatchObject({ code: 'cloud_subscription_required' });
+  } finally {
+    await runtime._doStop();
+  }
+});
+
+test('a signed-in Global account without a plan has an empty subscription catalog', async () => {
+  mockGet.mockImplementation(async (account: string, path: string) => {
+    if (path === '/api/v1/account')
+      return { ...cloudSnapshot(account).account, entitlements: [], quota_pools: [] };
+    if (path === '/v1/models?limit=1000&catalog=full') return { data: [] };
+    return reply(account, path);
+  });
+  const { runtime } = await setup();
+  try {
+    await runtime.refresh();
+    expect(runtime.getState()).toMatchObject({
+      phase: 'ready',
+      account: { entitlements: [] },
+      models: [],
+    });
+  } finally {
+    await runtime._doStop();
+  }
+});
