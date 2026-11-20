@@ -40,9 +40,10 @@ configuration, not in repository rules.
   contract determines whether and how an interaction moves; generic skill guidance does not make
   animation mandatory.
 - Before preparing or running agent-driven application acceptance, read
-  [Parallel Device Testing](docs/guides/parallel-device-testing.md) for the self-test preparation
-  standard and iOS/Android device workflow. Preparation marked as design is not implemented tooling
-  and does not expand the active task's authorization.
+  [Parallel Device Testing](docs/guides/parallel-device-testing.md) and the user-perspective
+  [Feature Map](docs/features/README.md) for the self-test preparation standard, verified `testID`
+  controls, and `pnpm verify:device` workflow. Preparation marked as design is not implemented
+  tooling and does not expand the active task's authorization.
 
 ## Trust Environment And Evidence
 

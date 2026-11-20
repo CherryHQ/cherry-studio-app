@@ -122,6 +122,9 @@ jobs:
       - name: Documentation Link Check
         run: pnpm docs:check-links
 
+      - name: Feature Map Check
+        run: pnpm verify:features
+
       - name: Skill Check
         run: pnpm skills:check
 

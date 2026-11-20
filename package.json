@@ -75,6 +75,7 @@
     "skills:check": "tsx scripts/skillsCheck.ts",
     "docs:check-links": "tsx scripts/checkDocLinks.ts",
     "verify:device": "tsx scripts/deviceVerify.ts",
+    "verify:features": "tsx scripts/deviceVerify.ts check-map",
     "i18n:check": "tsx scripts/i18n.ts check",
     "i18n:sync": "tsx scripts/i18n.ts sync",
     "test": "pnpm test:packages && pnpm test:app",
