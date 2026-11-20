@@ -63,11 +63,9 @@ plugin connection ownership and per-turn tool filtering.
 
 ## Sources And Package Format
 
-Discovery defaults to CherryIN's public catalog, routing via the shared `RegionService` to
-`https://skills.cherryin.com.cn` for `CN` (and unknown-region fallback) or `https://skills.cherryin.ai`
-for `GLOBAL`, with paginated search in popularity order; the app offers no sort choice. Both origins
-remain accepted when parsing CherryIN URLs and checking installed members. Catalog and detail reads
-never download packages or require credentials. CherryIN list requests do not filter by the upstream
+Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
+search in popularity order; the app offers no sort choice. Catalog and detail reads never download
+packages or require credentials. CherryIN list requests do not filter by the upstream
 `mobileSupport` classification (`supported` or `unsupported`), so both kinds of entries are available
 through browsing, search, pagination, pasted links and market detail pages. This classification
 does not gate discovery, detail resolution, installation or updates, and installed Skills remain

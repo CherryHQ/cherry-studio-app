@@ -1,19 +1,9 @@
 import * as z from 'zod';
 
-import { createHttpClient, type HttpClient } from '@/backend/services/http';
-import type { NetworkRegion } from '@/backend/services/region';
-import { raceAbort } from '@/backend/utils/raceAbort';
+import { createHttpClient } from '@/backend/services/http';
 import type { CherryinSkillDetail, CherryinSkillQuery } from '@/shared/contracts/skillMarketplace';
 import { SkillsError } from '@/shared/contracts/skills';
-import {
-  CHERRYIN_SKILLS_CN_URL,
-  CHERRYIN_SKILLS_GLOBAL_URL,
-  cherryinSkillsBaseUrl,
-  cherryinSkillUrl,
-  type CherryinSkillsOrigin,
-} from '@/shared/utils/cherryinSkills';
-
-import { SKILL_ARCHIVE_MAX_BYTES } from './skillArchive';
+import { CHERRYIN_SKILLS_URL } from '@/shared/utils/cherryinSkills';
 
 const localizedText = z.object({ en: z.string(), zh: z.string().nullable() });
 const skillSchema = z.object({
@@ -40,30 +30,15 @@ const pageSchema = z.object({
 
 export type CherryinSkillClient = ReturnType<typeof createCherryinSkillClient>;
 
-export function createCherryinSkillClient(getRegion: () => Promise<NetworkRegion | null>) {
-  const clients: Record<CherryinSkillsOrigin, HttpClient> = {
-    [CHERRYIN_SKILLS_GLOBAL_URL]: createHttpClient({
-      baseUrl: CHERRYIN_SKILLS_GLOBAL_URL,
-      timeoutMs: 15_000,
-    }),
-    [CHERRYIN_SKILLS_CN_URL]: createHttpClient({
-      baseUrl: CHERRYIN_SKILLS_CN_URL,
-      timeoutMs: 15_000,
-    }),
-  };
-
-  async function resolveOrigin(signal?: AbortSignal): Promise<CherryinSkillsOrigin> {
-    const region = signal ? await raceAbort(getRegion(), signal) : await getRegion();
-    return cherryinSkillsBaseUrl(region);
-  }
+export function createCherryinSkillClient() {
+  const client = createHttpClient({ baseUrl: CHERRYIN_SKILLS_URL, timeoutMs: 15_000 });
 
   async function list(input: CherryinSkillQuery, signal?: AbortSignal) {
     const offset = input.offset ?? 0;
     if (!Number.isSafeInteger(offset) || offset < 0 || (input.query?.length ?? 0) > 200)
       throw new SkillsError('source-invalid', 'Invalid marketplace query.');
     try {
-      const origin = await resolveOrigin(signal);
-      const { data } = await clients[origin].request<unknown>({
+      const { data } = await client.request<unknown>({
         method: 'GET',
         path: '/api/skills',
         query: {
@@ -82,7 +57,6 @@ export function createCherryinSkillClient(getRegion: () => Promise<NetworkRegion
       return {
         items: page.items,
         nextOffset: page.pagination.hasMore ? offset + page.pagination.limit : null,
-        origin,
       };
     } catch (error) {
       signal?.throwIfAborted();
@@ -94,8 +68,7 @@ export function createCherryinSkillClient(getRegion: () => Promise<NetworkRegion
 
   async function detail(id: string, signal?: AbortSignal): Promise<CherryinSkillDetail> {
     try {
-      const origin = await resolveOrigin(signal);
-      const { data } = await clients[origin].request<unknown>({
+      const { data } = await client.request<unknown>({
         method: 'GET',
         path: `/api/skills/${encodeURIComponent(id)}`,
         credentials: 'omit',
@@ -104,7 +77,7 @@ export function createCherryinSkillClient(getRegion: () => Promise<NetworkRegion
       });
       const skill = skillSchema.extend({ longDescription: localizedText }).parse(data);
       if (skill.id !== id) throw new Error('Unexpected CherryIN skill identity.');
-      return { ...skill, pageUrl: cherryinSkillUrl(skill.id, undefined, origin) };
+      return skill;
     } catch (error) {
       signal?.throwIfAborted();
       throw new SkillsError('source-unreachable', 'CherryIN could not load this Skill.', {
@@ -113,29 +86,5 @@ export function createCherryinSkillClient(getRegion: () => Promise<NetworkRegion
     }
   }
 
-  async function download(
-    id: string,
-    origin: CherryinSkillsOrigin,
-    signal?: AbortSignal,
-  ): Promise<Uint8Array> {
-    try {
-      const response = await clients[origin].request<ArrayBuffer>({
-        method: 'GET',
-        path: `/api/skills/${encodeURIComponent(id)}/download`,
-        credentials: 'omit',
-        responseType: 'arraybuffer',
-        signal,
-        timeoutMs: 60_000,
-        maxResponseBytes: SKILL_ARCHIVE_MAX_BYTES,
-      });
-      return new Uint8Array(response.data);
-    } catch (error) {
-      signal?.throwIfAborted();
-      throw new SkillsError('source-unreachable', 'The CherryIN package could not be downloaded.', {
-        cause: error,
-      });
-    }
-  }
-
-  return { list, detail, download };
+  return { list, detail, client };
 }

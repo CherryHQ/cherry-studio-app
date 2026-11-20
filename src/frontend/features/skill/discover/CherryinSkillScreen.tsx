@@ -78,7 +78,7 @@ function CherryinSkill({ id }: { id: string }) {
     installedByEntry.get(parseCherryinSkillUrl(item.candidate.source.url ?? '')?.entryPath ?? '');
 
   async function prepare(signal: AbortSignal): Promise<SkillInspection[]> {
-    const candidates = await skills.resolve(data?.pageUrl ?? cherryinSkillUrl(id), signal);
+    const candidates = await skills.resolve(cherryinSkillUrl(id), signal);
     const checked: SkillInspection[] = [];
     for (const candidate of candidates) {
       checked.push(await skills.inspect(candidate.candidateId, signal));
@@ -274,7 +274,7 @@ function CherryinSkill({ id }: { id: string }) {
             }
           />
         )}
-        <Section.Item label="CherryIN" onPress={() => void openExternalUrl(data.pageUrl)} />
+        <Section.Item label="CherryIN" onPress={() => void openExternalUrl(cherryinSkillUrl(id))} />
       </Section>
       {body && body !== description ? (
         <Text className="text-sm text-foreground" selectable>

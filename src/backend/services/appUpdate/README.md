@@ -57,12 +57,10 @@ claim that the app is current.
   `nativeUnavailable` rather than up-to-date.
 - **App Store:** `appStoreRelease` queries Apple's public lookup by the installed bundle identifier,
   validates the returned identity, compares the numeric store version and constructs an official
-  `apps.apple.com` URL. The query uses the shared network region (`CN` or unknown → `'CN'`;
-  `GLOBAL` → non-CN device `regionCode` with `'US'` fallback), with successful region detections
-  cached for ten minutes; this is not account-storefront detection, so an IP/account region
-  mismatch can suppress a reminder. A missing regional listing is `noRelease`. This checks App Store
-  publications, not new TestFlight builds. Store submission or TestFlight upload alone is never an
-  availability signal.
+  `apps.apple.com` URL. Both use the current StoreKit storefront's country, not the network or device
+  region. An unavailable storefront skips lookup; a missing listing in a known storefront is
+  `noRelease`. This checks App Store publications, not new TestFlight
+  builds. Store submission or TestFlight upload alone is never an availability signal.
 
 - **Domestic stores:** native code resolves a single store when the module is created. HONOR,
   Xiaomi and vivo use their client queries and compare native builds; OPPO reuses GitCode's

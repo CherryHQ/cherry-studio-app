@@ -369,7 +369,7 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
-  const cherryinClient = createCherryinSkillClient(() => infrastructure.region.getRegion());
+  const cherryinClient = createCherryinSkillClient();
   const cherryinSkills = createCherryinSkillSource(cherryinClient);
   const skillStorageWrites = new Set<Promise<unknown>>();
   let skillsStopped = false;

@@ -19,21 +19,20 @@ as a detected CN region or cached, so the next caller can retry. Mobile has no a
 proxy configuration; the ten-minute expiry bounds stale detection when a system VPN or network
 changes. Device settings never change the detected network region.
 
-A detected CN selects domestic provider discovery, `https://skills.cherryin.com.cn` Skill
-marketplace discovery, and GitCode distribution; a detected GLOBAL selects global discovery,
-`https://skills.cherryin.ai` Skill marketplace discovery, and GitHub distribution. This applies to
+A detected CN selects domestic provider discovery and GitCode distribution; a detected GLOBAL
+selects global provider discovery and GitHub distribution. This applies to
 every distribution, including domestic-store builds: a detected overseas VPN exit permits
 international discovery. `getProviderCatalogEdition` owns the common discovery/recommendation
 policy. When detection is unavailable, only discovery and fresh-install recommendations fall back to
 the device region from `getLocales()[0]?.regionCode`: CN selects domestic entries and other regions
 select global entries. If the device region is also missing, the domestic default remains. This
-fallback never changes the detection result or its cache. Download clients, CherryIN Skill
-discovery, Jina and App Store lookup retain their existing domestic-first / CN fallback when the
+fallback never changes the detection result or its cache. Download mirrors and Jina retain their
+domestic-first / CN fallback when the
 region is unknown (`null`). `repositorySourceOrder` shares that GitCode/GitHub preference and
 failure fallback order between provider-registry and Agent-template downloads. Offline voice
-downloads use byte-identical immutable ModelScope/Hugging Face mirrors. App Store lookup derives its
-2-letter storefront code from `'CN'` for CN/unknown or the non-CN device region (falling back to
-`'US'`) when `GLOBAL`. Installed store channels retain their platform-owned update mechanism. Region
+downloads use byte-identical immutable ModelScope/Hugging Face mirrors. CherryIN Skills always uses
+the global catalog, and App Store lookup uses the current StoreKit storefront. Neither uses the
+network region. Installed store channels retain their platform-owned update mechanism. Region
 policy never filters, mutates or disables saved provider/model/credential records. Application
 disposal aborts and joins any lookup.
 

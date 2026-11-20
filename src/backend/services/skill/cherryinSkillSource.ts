@@ -4,7 +4,6 @@ import {
   cherryinSkillLocator,
   cherryinSkillUrl,
   parseCherryinSkillUrl,
-  type CherryinSkillsOrigin,
 } from '@/shared/utils/cherryinSkills';
 import { sha256Hex } from '@/shared/utils/sha256';
 
@@ -23,9 +22,24 @@ export function createCherryinSkillSource(marketplace: CherryinSkillClient): Ski
     if (!detail.hasPackage) throw new SkillsError('not-found', 'This Skill has no package.');
     if ((detail.packageSize ?? 0) > SKILL_ARCHIVE_MAX_BYTES)
       throw new SkillsError('package-too-large', 'The Skill archive exceeds 32 MiB.');
-    // Keep detail and archive download on the exact same regional host without re-querying region.
-    const origin = new URL(detail.pageUrl).origin as CherryinSkillsOrigin;
-    const archive = await marketplace.download(location.id, origin, signal);
+    let archive: Uint8Array;
+    try {
+      const response = await marketplace.client.request<ArrayBuffer>({
+        method: 'GET',
+        path: `/api/skills/${encodeURIComponent(location.id)}/download`,
+        credentials: 'omit',
+        responseType: 'arraybuffer',
+        signal,
+        timeoutMs: 60_000,
+        maxResponseBytes: SKILL_ARCHIVE_MAX_BYTES,
+      });
+      archive = new Uint8Array(response.data);
+    } catch (error) {
+      signal?.throwIfAborted();
+      throw new SkillsError('source-unreachable', 'The CherryIN package could not be downloaded.', {
+        cause: error,
+      });
+    }
     const files = await readSkillArchive(archive, signal);
     const entries = [...files.keys()].filter((path) => path.split('/').pop() === 'SKILL.md').sort();
     if (!entries.length) throw new SkillsError('package-invalid', 'The package has no SKILL.md.');
@@ -69,7 +83,7 @@ export function createCherryinSkillSource(marketplace: CherryinSkillClient): Ski
         source: {
           registry: 'cherryin',
           locator: cherryinSkillLocator(location.id, entryPath),
-          url: cherryinSkillUrl(location.id, entryPath, origin),
+          url: cherryinSkillUrl(location.id, entryPath),
           revision,
         },
         acquisition: {

@@ -1,7 +1,6 @@
 import { loggerService } from '@logger';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
-import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 
 import type { NetworkRegion } from '@/backend/services/region';
@@ -12,7 +11,7 @@ import type {
   DomesticAppStore,
 } from '@/shared/contracts/appUpdate';
 
-import { getNativeAppUpdate } from '../../../../modules/app-update';
+import { getNativeAppStoreUpdate, getNativeAppUpdate } from '../../../../modules/app-update';
 import { assertApkRelease, checkApkRelease } from './apkRelease';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
@@ -21,14 +20,6 @@ import { checkNativeDomesticStoreRelease } from './nativeDomesticStoreRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
-
-function resolveAppStoreCountry(region: NetworkRegion | null): string {
-  if (region === 'CN' || region === null) return 'CN';
-  const deviceRegion = getLocales()[0]?.regionCode?.toUpperCase();
-  return deviceRegion && /^[A-Z]{2}$/.test(deviceRegion) && deviceRegion !== 'CN'
-    ? deviceRegion
-    : 'US';
-}
 
 export function createAppUpdateModule(dependencies: {
   getRegion(): Promise<NetworkRegion | null>;
@@ -150,15 +141,13 @@ export function createAppUpdateModule(dependencies: {
           storeUrl: `https://play.google.com/store/apps/details?id=${Application.applicationId}`,
         };
       }
-      const region = await dependencies.getRegion();
+      const storeUpdate = getNativeAppStoreUpdate();
+      if (!storeUpdate) return { status: 'unavailable', reason: 'nativeUnavailable' };
+      const country = await storeUpdate.getStorefrontCountry();
       signal?.throwIfAborted();
       if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
-      return checkAppStoreRelease(
-        Application.applicationId,
-        currentVersion,
-        resolveAppStoreCountry(region),
-        signal,
-      );
+      if (!country) return { status: 'unavailable', reason: 'storefrontUnavailable' };
+      return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
     },
     async openStore(release) {
       if (lifetime.signal.aborted || release.channel === 'apk' || release.channel !== channel) {

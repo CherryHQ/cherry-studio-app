@@ -220,7 +220,7 @@ entries, including through an overseas VPN exit; detected `CN` selects domestic 
 region uses the device region (`getLocales()[0]?.regionCode`) for these two catalog decisions:
 CN selects domestic entries, other regions select global entries, and a missing region retains the
 domestic default. The unknown result remains `null` in region detection. Existing saved providers
-are preserved; mirror selection, CherryIN Skills, Jina and voice retain their existing CN fallback.
+are preserved; mirror selection, Jina and voice retain their existing CN fallback.
 
 `ProviderRegistryUpdaterService` activates the newest complete compatible saved model catalog.
 When no saved snapshot is usable, model selection, editing and calls wait for a shared download of

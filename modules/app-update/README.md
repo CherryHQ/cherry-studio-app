@@ -1,6 +1,11 @@
 # Native App Updates
 
-Android-only Expo module used by `backend/services/appUpdate`:
+Native update capabilities used by `backend/services/appUpdate`.
+
+On iOS, `AppStoreUpdate.getStorefrontCountry` reads StoreKit's current storefront and returns
+its two-letter country code for Apple's version lookup, or null if unavailable.
+
+Android:
 
 - `getDomesticStore` resolves one store from the installation/update source, then device identity.
   It returns null outside the compiled domestic distribution. The application reads it once; a

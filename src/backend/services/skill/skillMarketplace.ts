@@ -120,13 +120,14 @@ export function createSkillMarketplace(
     async search(query: string, signal?: AbortSignal): Promise<SkillListing[]> {
       if (cherryin) {
         // Listings without a package cannot be installed, so they never hide skills.sh results.
-        const page = await cherryin.client.list({ query }, signal);
-        const installable = page.items.filter((skill) => skill.hasPackage);
+        const installable = (await cherryin.client.list({ query }, signal)).items.filter(
+          (skill) => skill.hasPackage,
+        );
         if (installable.length)
           return installable.map((skill) => ({
             name: skill.name.en || skill.name.zh || skill.id,
             source: `CherryIN · ${skill.author}`,
-            url: cherryinSkillUrl(skill.id, undefined, page.origin),
+            url: cherryinSkillUrl(skill.id),
             installs: skill.downloads,
           }));
       }
@@ -135,10 +136,9 @@ export function createSkillMarketplace(
         signal,
       );
     },
-    async listCherryin(input: CherryinSkillQuery, signal?: AbortSignal) {
+    listCherryin(input: CherryinSkillQuery, signal?: AbortSignal) {
       if (!cherryin) throw new SkillsError('source-unreachable', 'CherryIN is unavailable.');
-      const { items, nextOffset } = await cherryin.client.list(input, signal);
-      return { items, nextOffset };
+      return cherryin.client.list(input, signal);
     },
     getCherryin(id: string, signal?: AbortSignal) {
       if (!cherryin) throw new SkillsError('source-unreachable', 'CherryIN is unavailable.');

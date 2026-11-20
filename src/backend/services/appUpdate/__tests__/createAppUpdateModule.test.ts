@@ -8,11 +8,6 @@ import type { ApkUpdateRelease, DomesticAppStore } from '@/shared/contracts/appU
 import { createAppUpdateModule } from '../createAppUpdateModule';
 import { runningUpdate } from '../runningUpdate';
 
-let mockDeviceRegion: string | null = 'CN';
-jest.mock('expo-localization', () => ({
-  getLocales: () => [{ languageTag: 'zh-CN', regionCode: mockDeviceRegion }],
-}));
-
 jest.mock('expo-application', () => ({
   nativeApplicationVersion: '1.9.0',
   nativeBuildVersion: '19',
@@ -32,7 +27,9 @@ const mockNative = {
   openDomesticStore: jest.fn(async (_store: DomesticAppStore) => {}),
 };
 const mockGetNative = jest.fn(() => mockNative as typeof mockNative | null);
+const mockGetStorefrontCountry = jest.fn(async (): Promise<string | null> => null);
 jest.mock('../../../../../modules/app-update', () => ({
+  getNativeAppStoreUpdate: () => ({ getStorefrontCountry: mockGetStorefrontCountry }),
   getNativeAppUpdate: () => mockGetNative(),
 }));
 const mockDownload = {
@@ -62,7 +59,10 @@ jest.mock('../appStoreRelease', () => ({
 const mockPermission = jest.fn(async () => true);
 const mockGetRegion = jest.fn(async (): Promise<NetworkRegion | null> => 'CN');
 const create = () =>
-  createAppUpdateModule({ getRegion: mockGetRegion, requestInstallPermission: mockPermission });
+  createAppUpdateModule({
+    getRegion: mockGetRegion,
+    requestInstallPermission: mockPermission,
+  });
 const apk: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
@@ -77,7 +77,7 @@ const apk: ApkUpdateRelease = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockDeviceRegion = 'CN';
+  mockGetStorefrontCountry.mockResolvedValue(null);
   mockGetRegion.mockResolvedValue('CN');
   mockGetNative.mockReturnValue(mockNative);
   mockNative.isApkInstallationEnabled.mockReturnValue(true);
@@ -181,29 +181,26 @@ test.each([
   expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', source, undefined);
 });
 
-test.each([
-  ['CN', 'JP', 'CN'],
-  [null, 'JP', 'CN'],
-  ['GLOBAL', 'JP', 'JP'],
-  ['GLOBAL', 'CN', 'US'],
-  ['GLOBAL', null, 'US'],
-] as const)(
-  'App Store lookup resolves region %s and device region %s to storefront %s',
-  async (region, deviceRegion, expectedCountry) => {
-    jest.replaceProperty(Platform, 'OS', 'ios');
-    jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
-    mockGetRegion.mockResolvedValue(region);
-    mockDeviceRegion = deviceRegion;
-    mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
-    await create().check();
-    expect(mockCheckAppStore).toHaveBeenCalledWith(
-      'com.example.app',
-      '1.9.0',
-      expectedCountry,
-      undefined,
-    );
-  },
-);
+test('App Store lookup uses the current storefront even on a CN network', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
+  mockGetStorefrontCountry.mockResolvedValue('JP');
+  mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
+  await create().check();
+  expect(mockGetRegion).not.toHaveBeenCalled();
+  expect(mockCheckAppStore).toHaveBeenCalledWith('com.example.app', '1.9.0', 'JP', undefined);
+});
+
+test('a missing storefront does not guess a country or query Apple', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
+  await expect(create().check()).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'storefrontUnavailable',
+  });
+  expect(mockCheckAppStore).not.toHaveBeenCalled();
+  expect(mockGetRegion).not.toHaveBeenCalled();
+});
 
 test('cancelling while region is being resolved prevents update discovery', async () => {
   const controller = new AbortController();
