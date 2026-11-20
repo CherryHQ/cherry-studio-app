@@ -15,10 +15,9 @@ type UseTactilePressOptions = {
   scaleTo?: number;
 };
 
-const PRESS_IN_CONFIG = {
-  ...pressMotion.pressIn,
-  reduceMotion: ReduceMotion.System,
-} as const;
+// Skip press-in scaling via `useReducedMotion()` rather than passing `ReduceMotion.System`,
+// so a runtime toggle never snaps abruptly from 1 to `scaleTo`.
+const PRESS_IN_CONFIG = pressMotion.pressIn;
 
 const PRESS_OUT_CONFIG = {
   ...pressMotion.pressOut,
@@ -42,9 +41,9 @@ export function useTactilePress({
   useEffect(() => {
     if (!isInteractive && isPressedRef.current) {
       isPressedRef.current = false;
-      scale.set(1);
+      scale.set(reducedMotion ? 1 : withSpring(1, PRESS_OUT_CONFIG));
     }
-  }, [isInteractive, scale]);
+  }, [isInteractive, reducedMotion, scale]);
 
   const handlePressIn = () => {
     if (!isInteractive) {

@@ -7,6 +7,18 @@ jest.mock('react-native-reanimated', () => ({
 
 import { ambientMotion, duration, easing, pressMotion, shimmerTextMotion, spring } from '../motion';
 
+function dampingRatio({
+  damping,
+  mass,
+  stiffness,
+}: {
+  damping: number;
+  mass: number;
+  stiffness: number;
+}) {
+  return damping / (2 * Math.sqrt(stiffness * mass));
+}
+
 describe('motion vocabulary', () => {
   it('keeps the duration ladder monotonically increasing and preserves legacy steps', () => {
     expect(duration.instant).toBeLessThan(duration.fast);
@@ -17,7 +29,7 @@ describe('motion vocabulary', () => {
     expect(duration.base).toBeLessThan(duration.slow);
   });
 
-  it('defines positive spring physics across all four motion tiers', () => {
+  it('defines coherent spring physics and damping ratios across all four motion tiers', () => {
     expect(spring.settle).toEqual({ damping: 31.5, mass: 1, stiffness: 248 });
 
     for (const preset of Object.values(spring)) {
@@ -25,6 +37,19 @@ describe('motion vocabulary', () => {
       expect(preset.mass).toBeGreaterThan(0);
       expect(preset.stiffness).toBeGreaterThan(0);
     }
+
+    const tactileZeta = dampingRatio(spring.tactile);
+    const morphZeta = dampingRatio(spring.morph);
+    const settleZeta = dampingRatio(spring.settle);
+    const gentleZeta = dampingRatio(spring.gentle);
+
+    expect(tactileZeta).toBeGreaterThanOrEqual(0.85);
+    expect(tactileZeta).toBeLessThanOrEqual(1);
+    expect(morphZeta).toBeGreaterThanOrEqual(0.68);
+    expect(morphZeta).toBeLessThanOrEqual(0.85);
+    expect(morphZeta).toBeLessThan(tactileZeta);
+    expect(settleZeta).toBeCloseTo(1, 2);
+    expect(gentleZeta).toBeGreaterThanOrEqual(0.9);
 
     expect(spring.tactile.stiffness).toBeGreaterThan(spring.morph.stiffness);
     expect(spring.morph.stiffness).toBeGreaterThan(spring.settle.stiffness);

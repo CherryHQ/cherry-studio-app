@@ -429,13 +429,13 @@ and supports circular and rounded-square faces:
 Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallback`, and
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
-`Button` is backed by React Native's `Pressable` on both iOS and Android inside an `Animated.View`
-shell that drives UI-thread press-in scaling (`pressMotion.scale`, exempting inline `link`/`text`
-variants and Reduce Motion). It supports `default`,
+`Button` keeps React Native's `Pressable` outermost (preserving Android `hitSlop` and accessibility
+semantics) around an `Animated.View` visual surface that drives UI-thread press-in scaling
+(`pressMotion.scale`, exempting trigger-only buttons without press handlers, inline `link`/`text`
+variants, and Reduce Motion). It supports `default`,
 `destructive`, `outline`, `secondary`, `ghost`, `link`, `text`, and `tonal` variants, along with
-loading, disabled, and commit-time `haptic?: HapticIntent | false` behavior (defaulting to
-`'light'` for `default`, `'medium'` for `destructive`, and silent for quieter variants unless
-opted in). `text` uses the link color without an underline for standalone text actions; `link`
+loading, disabled, and opt-in commit-time `haptic?: HapticIntent | false` behavior (silent by
+default so menu triggers and navigation steps do not over-buzz). `text` uses the link color without an underline for standalone text actions; `link`
 retains its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
 `inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
@@ -1028,9 +1028,9 @@ translateX.set(withTiming(next, { duration: duration.base, easing: easing.settle
 
 - **Curves (`easing`)**: `linear`, `overshoot`, `settle`, `inOut` (smooth on-screen morphs), and
   `sheet` (soft deceleration for sheets, drawers, and capsules).
-- **Springs (`spring`)**: `tactile` (fast soft-landing press/icon recovery), `morph` (warm in-place
-  state transitions), `settle` (critically damped snap targets with zero overshoot), and `gentle`
-  (unhurried spatial entrance).
+- **Springs (`spring`)**: `tactile` (fast soft-landing press/icon recovery, zeta ~0.91), `morph`
+  (warm, gently lively in-place state transitions, zeta ~0.73), `settle` (critically damped snap
+  targets with zero overshoot), and `gentle` (unhurried spatial entrance).
 - **Durations (`duration`)**: `instant` (120ms tactile feedback), `fast` (200ms cross-fades),
   `base` (250ms size/position changes), and `slow` (350ms overshoot arrivals).
 - **Tier presets**: `pressMotion` (`scale`, `subtleScale`, `pressIn`, `pressOut`) and
