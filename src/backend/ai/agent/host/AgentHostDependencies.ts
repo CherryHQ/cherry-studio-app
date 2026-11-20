@@ -11,7 +11,7 @@
 
 import { fromByteArray } from 'base64-js';
 import { getLocales } from 'expo-localization';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
@@ -88,6 +88,10 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
+  shouldRecoverStorage() {
+    return Platform.OS === 'android' && AppState.currentState === 'active';
+  }
+
   scriptSandbox() {
     const native = createJsSandbox();
     return native?.startBridge

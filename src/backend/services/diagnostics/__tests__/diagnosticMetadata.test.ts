@@ -435,6 +435,36 @@ test('retains observed compaction lifecycle facts without its error or summary t
   expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
 });
 
+test('retains Agent cancellation source through info log projection without private fields', () => {
+  const raw = createLogRecord('info', 'Agent cancellation requested', 'DurableAgentHost', {}, [
+    {
+      operation: 'ai.cancel',
+      reasonCode: 'user',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'request-1',
+      prompt: 'private chat',
+    },
+  ]);
+  const persisted = projectDiagnosticLog(raw);
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toMatchObject({
+    level: 'info',
+    module: 'DurableAgentHost',
+    message: 'Agent cancellation requested',
+    facts: {
+      operation: 'ai.cancel',
+      reasonCode: 'user',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      requestId: 'request-1',
+    },
+  });
+  expect(JSON.stringify(exported)).not.toContain('private');
+  expect(projectDiagnosticLog({ ...raw, module: 'OtherModule' })).toBeUndefined();
+  expect(projectDiagnosticLog({ ...raw, message: 'arbitrary info' })).toBeUndefined();
+});
+
 test.each(['running', 'ok', 'error', 'cancelled'] as const)(
   'exports Pi tool execution records with status %s instead of reporting malformed lines',
   (status) => {

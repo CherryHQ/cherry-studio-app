@@ -23,6 +23,7 @@ const LOG_MESSAGES = new Set([
   'Trace storage operation failed',
   'Device tool failed',
   'Agent operation failed',
+  'Agent cancellation requested',
   'Agent listener failed',
   'Agent status listener failed',
   'Agent projection failed',
@@ -193,7 +194,8 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
   const isLifecycle =
     (record.module === 'Startup' && record.message === 'Startup stage') ||
     (record.module === 'Office' && record.message === 'Office stage') ||
-    (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction');
+    (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction') ||
+    (record.module === 'DurableAgentHost' && record.message === 'Agent cancellation requested');
   if (
     record.level !== 'warn' &&
     record.level !== 'error' &&

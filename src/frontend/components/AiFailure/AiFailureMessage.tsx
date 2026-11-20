@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MessageDetailText } from '@/frontend/components/MessageDetail';
+import { useQuery } from '@/frontend/data';
 import type { AiFailureReason } from '@/shared/contracts/aiFailure';
 
 import { readAiFailureDetail, type AiFailureData } from './aiFailureDetail';
@@ -33,6 +34,14 @@ const AI_FAILURE_TITLE_KEYS = {
   unknown: 'chat.errorPart.reason.unknown',
 } as const satisfies Record<AiFailureReason, string>;
 
+const AI_FAILURE_MESSAGE_KEYS: Readonly<Partial<Record<AiFailureReason, string>>> = {
+  auth: 'chat.errorPart.message.auth',
+  context_length: 'chat.errorPart.message.contextLength',
+  model_not_found: 'chat.errorPart.message.modelNotFound',
+  payload_too_large: 'chat.errorPart.message.payloadTooLarge',
+  quota: 'chat.errorPart.message.quota',
+};
+
 function isAiFailureReason(value: unknown): value is AiFailureReason {
   return (
     typeof value === 'string' && Object.prototype.hasOwnProperty.call(AI_FAILURE_TITLE_KEYS, value)
@@ -61,13 +70,43 @@ export function AiFailureMessage({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const { reasonCode, retryable } = data;
 
-  const titleKey = aiFailureReasonTitleKey(reasonCode);
-  const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
   const source = data.source;
   const code =
     source && typeof source === 'object' && 'code' in source && typeof source.code === 'string'
       ? source.code.toLowerCase()
       : data.code?.toLowerCase();
+  const context = data.context;
+  const providerId =
+    context && typeof context === 'object' && 'providerId' in context
+      ? context.providerId
+      : undefined;
+  const { data: providers } = useQuery('/providers', {
+    enabled: reasonCode === 'quota' && typeof providerId === 'string',
+  });
+  const providerName =
+    reasonCode === 'quota' && typeof providerId === 'string'
+      ? providers?.find((provider) => provider.id === providerId)?.name
+      : undefined;
+  const rejectedRequest =
+    reasonCode === 'unknown' &&
+    source &&
+    typeof source === 'object' &&
+    'layer' in source &&
+    source.layer === 'provider' &&
+    (code === 'upstream_bad_request' ||
+      (context &&
+        typeof context === 'object' &&
+        'statusCode' in context &&
+        context.statusCode === 400));
+  const streamDisconnected =
+    code === 'stream_disconnected' &&
+    (reasonCode === 'network' || reasonCode === 'stream_interrupted');
+  const titleKey = rejectedRequest
+    ? 'chat.errorPart.reason.requestRejected'
+    : streamDisconnected
+      ? AI_FAILURE_TITLE_KEYS.stream_interrupted
+      : aiFailureReasonTitleKey(reasonCode);
+  const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
   const cloudMessage =
     code === 'account_disabled' || code === 'cloud_account_disabled'
       ? 'cloud.accountDisabled'
@@ -84,13 +123,17 @@ export function AiFailureMessage({
           ? 'cloud.amd.activationRequired'
           : code === 'amd_credential_invalid'
             ? 'cloud.amd.checkStatus'
-            : reasonCode === 'auth'
-              ? 'chat.errorPart.message.auth'
-              : reasonCode === 'context_length'
-                ? 'chat.errorPart.message.contextLength'
-                : retryable === true
-                  ? 'chat.errorPart.retryable'
-                  : 'chat.errorPart.message',
+            : rejectedRequest
+              ? 'chat.errorPart.message.requestRejected'
+              : streamDisconnected
+                ? 'chat.errorPart.message.streamInterrupted'
+                : providerName
+                  ? 'chat.errorPart.message.providerQuota'
+                  : ((isAiFailureReason(reasonCode)
+                      ? AI_FAILURE_MESSAGE_KEYS[reasonCode]
+                      : undefined) ??
+                    (retryable === true ? 'chat.errorPart.retryable' : 'chat.errorPart.message')),
+        { provider: providerName },
       ));
 
   return (

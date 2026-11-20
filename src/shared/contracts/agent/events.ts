@@ -65,7 +65,8 @@ export const AgentEventSchema = z.union([
     type: z.literal('context.usage.updated'),
     usages: z.array(AgentContextUsageSchema),
   }),
-  z.strictObject({ type: z.literal('runtime.failed') }),
+  z.strictObject({ type: z.literal('runtime.failed'), retryable: z.literal(false).optional() }),
+  z.strictObject({ type: z.literal('runtime.recovered') }),
   z.strictObject({
     type: z.literal('question.updated'),
     question: AgentPendingQuestionSchema.nullable(),
