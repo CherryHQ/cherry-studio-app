@@ -582,7 +582,7 @@
   "chat.messageActions.editDiscardTitle": "Annuler les modifications ?",
   "chat.messageActions.editFailed": "Impossible d’enregistrer la réponse. Réessayez.",
   "chat.messageActions.editKeepsAttachments": "Vos pièces jointes restent sur le message. L'envoi répond au texte modifié et l'échange d'origine est conservé.",
-  "chat.messageActions.editQuestionAction": "Modifier la réponse",
+  "chat.messageActions.editQuestionAction": "Modifier la question",
   "chat.messageActions.editSaved": "Réponse enregistrée",
   "chat.messageActions.editTitle": "Modifier le message",
   "chat.messageActions.editUnavailable": "Cette réponse ne peut plus être modifiée.",

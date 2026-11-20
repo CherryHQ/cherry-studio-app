@@ -578,7 +578,7 @@
   "chat.messageActions.editDiscardTitle": "Değişiklikler silinsin mi?",
   "chat.messageActions.editFailed": "Yanıt kaydedilemedi. Tekrar deneyin.",
   "chat.messageActions.editKeepsAttachments": "Ekleriniz mesajda kalır. Göndermek düzenlenen metne yanıt verir ve özgün yazışma korunur.",
-  "chat.messageActions.editQuestionAction": "Yanıtı düzenle",
+  "chat.messageActions.editQuestionAction": "Soruyu düzenle",
   "chat.messageActions.editSaved": "Yanıt kaydedildi",
   "chat.messageActions.editTitle": "Mesajı düzenle",
   "chat.messageActions.editUnavailable": "Bu yanıt artık düzenlenemez.",

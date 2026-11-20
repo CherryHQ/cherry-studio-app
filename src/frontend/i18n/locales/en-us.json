@@ -578,7 +578,7 @@
   "chat.messageActions.editDiscardTitle": "Discard changes?",
   "chat.messageActions.editFailed": "Couldn't save the reply. Try again.",
   "chat.messageActions.editKeepsAttachments": "Your attachments stay on the message. Sending it answers the edited text, and the original exchange is kept.",
-  "chat.messageActions.editQuestionAction": "Edit reply",
+  "chat.messageActions.editQuestionAction": "Edit question",
   "chat.messageActions.editSaved": "Reply saved",
   "chat.messageActions.editTitle": "Edit message",
   "chat.messageActions.editUnavailable": "This reply can no longer be edited.",

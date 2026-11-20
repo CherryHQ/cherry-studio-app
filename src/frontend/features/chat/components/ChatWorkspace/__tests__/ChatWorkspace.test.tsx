@@ -86,10 +86,6 @@ jest.mock('../components/ExpandedAnswer', () => ({
   ExpandedAnswerProvider: ({ children }: { children: unknown }) => children,
 }));
 
-jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
-  useIsScreenReaderEnabled: () => false,
-}));
-
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
@@ -116,6 +112,8 @@ jest.mock('@/frontend/appShell/header', () => ({
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/pencil', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/share', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -127,7 +125,6 @@ jest.mock('@cherrystudio/ui/components', () => {
       Empty: (props: object) => createElement('ContentState.Empty', props),
       Error: (props: object) => createElement('ContentState.Error', props),
     },
-    ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
     useComposerExpansion: () => null,
     useAlert: () => ({ alert: { confirm: jest.fn() } }),
@@ -806,5 +803,15 @@ describe('ChatWorkspace message rendering integration', () => {
       'assistant-1',
     ]);
     expect(mockCoverVisible).toBe(false);
+  });
+
+  test('composes the user toolbar for settled user messages and hides it in preview', () => {
+    renderer = renderWorkspace(false, [createMessage('user-1', 'user')]);
+    expect(renderer.root.findAllByProps({ testID: 'user-message-toolbar' }).length).toBeGreaterThan(
+      0,
+    );
+
+    act(() => renderer?.update(createWorkspaceElement(true, [createMessage('user-1', 'user')])));
+    expect(renderer.root.findAllByProps({ testID: 'user-message-toolbar' })).toHaveLength(0);
   });
 });

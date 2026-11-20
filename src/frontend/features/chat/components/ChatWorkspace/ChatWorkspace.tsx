@@ -32,7 +32,6 @@ import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
 import { useConversationFeedback } from './hooks/useConversationFeedback';
 import { useConversationFeedbackHint } from './hooks/useConversationFeedbackHint';
-import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
 import { MessageTranslationProvider } from './translation/MessageTranslationProvider';
@@ -128,7 +127,6 @@ export function ChatWorkspace({
   const listKey = sessionId ?? pendingSend?.sessionId;
   useEndReadingWithConversation(sessionId);
   const { t } = useTranslation();
-  const isScreenReaderEnabled = useIsScreenReaderEnabled();
   useEffect(() => {
     if (
       pendingSend &&
@@ -225,22 +223,20 @@ export function ChatWorkspace({
         <ChatMessageRow
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
-          isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
           renderUsage={renderUsage}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [assistantPresentation, isAssistantToolbarEnabled, renderUsage],
   );
   const messageListExtraData = useMemo(
     () => ({
       assistantPresentation,
       isAssistantToolbarEnabled,
-      isScreenReaderEnabled,
       renderUsage,
     }),
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [assistantPresentation, isAssistantToolbarEnabled, renderUsage],
   );
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||

@@ -574,7 +574,7 @@
   "chat.messageActions.editDiscardTitle": "変更を破棄しますか?",
   "chat.messageActions.editFailed": "返信を保存できませんでした。もう一度お試しください。",
   "chat.messageActions.editKeepsAttachments": "添付ファイルはメッセージに保持されます。送信すると編集後のテキストに回答し、元のやり取りは残ります。",
-  "chat.messageActions.editQuestionAction": "返信を編集",
+  "chat.messageActions.editQuestionAction": "質問を編集",
   "chat.messageActions.editSaved": "返信を保存しました",
   "chat.messageActions.editTitle": "メッセージを編集",
   "chat.messageActions.editUnavailable": "この返信は編集できなくなりました。",

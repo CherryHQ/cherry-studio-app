@@ -578,7 +578,7 @@
   "chat.messageActions.editDiscardTitle": "Απόρριψη αλλαγών;",
   "chat.messageActions.editFailed": "Δεν ήταν δυνατή η αποθήκευση της απάντησης. Δοκιμάστε ξανά.",
   "chat.messageActions.editKeepsAttachments": "Τα συνημμένα σας παραμένουν στο μήνυμα. Η αποστολή απαντά στο επεξεργασμένο κείμενο και η αρχική ανταλλαγή διατηρείται.",
-  "chat.messageActions.editQuestionAction": "Επεξεργασία απάντησης",
+  "chat.messageActions.editQuestionAction": "Επεξεργασία ερώτησης",
   "chat.messageActions.editSaved": "Η απάντηση αποθηκεύτηκε",
   "chat.messageActions.editTitle": "Επεξεργασία μηνύματος",
   "chat.messageActions.editUnavailable": "Αυτή η απάντηση δεν μπορεί πλέον να επεξεργαστεί.",
