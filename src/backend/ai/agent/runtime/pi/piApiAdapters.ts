@@ -8,6 +8,7 @@ import type { PiStreamFn } from './piModelTypes';
 import {
   applyPiRequestCompatibility,
   applyPiRequestParameters,
+  assertPiDeepSeekResponsesTools,
   type PiRequestParameters,
 } from './piRequestParameters';
 import type { VertexAnthropicOptions } from './piVertexAnthropic';
@@ -257,6 +258,7 @@ export async function bindPiStream(
           adapter.api,
           requestModel.id,
         );
+        assertPiDeepSeekResponsesTools(requestPayload, requestModel);
         trace?.setAttributes(piModelPayloadAttributes(requestPayload, adapter.api));
         return requestPayload;
       },

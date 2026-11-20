@@ -469,6 +469,7 @@
   "chat.errorPart.message": "A resposta não pôde ser concluída.",
   "chat.errorPart.message.auth": "Verifique a chave API nas definições do fornecedor e tente novamente.",
   "chat.errorPart.message.contextLength": "Inicie uma nova conversa, remova anexos ou verifique o limite de contexto do fornecedor antes de tentar novamente.",
+  "chat.errorPart.message.deepseekThinkingTools": "Desative o modo de raciocínio e envie novamente a mensagem, ou use a pesquisa na web integrada do DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Verifique as definições do modelo no fornecedor ou escolha outro modelo e tente novamente.",
   "chat.errorPart.message.payloadTooLarge": "Remova anexos ou reduza o texto introduzido e tente novamente.",
   "chat.errorPart.message.providerQuota": "Verifique o saldo ou a quota de utilização da sua conta {{provider}}.",

@@ -463,6 +463,7 @@
   "chat.errorPart.message": "返信を完了できませんでした。",
   "chat.errorPart.message.auth": "プロバイダ設定の API キーを確認して、再試行してください。",
   "chat.errorPart.message.contextLength": "新しい会話を開始するか、添付ファイルを減らすか、プロバイダーのコンテキスト上限を確認してから再試行してください。",
+  "chat.errorPart.message.deepseekThinkingTools": "思考モードをオフにしてメッセージを送り直すか、DeepSeek の組み込みウェブ検索を使ってください。",
   "chat.errorPart.message.modelNotFound": "プロバイダーのモデル設定を確認するか、別のモデルを選択してから再試行してください。",
   "chat.errorPart.message.payloadTooLarge": "添付ファイルを減らすか入力を短くしてから、再試行してください。",
   "chat.errorPart.message.providerQuota": "{{provider}} アカウントの残高または利用枠を確認してください。",

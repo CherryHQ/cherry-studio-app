@@ -466,6 +466,7 @@
   "chat.errorPart.message": "The reply could not be completed.",
   "chat.errorPart.message.auth": "Check the API key in provider settings, then try again.",
   "chat.errorPart.message.contextLength": "Start a new conversation, remove attachments, or check the provider's context limit before retrying.",
+  "chat.errorPart.message.deepseekThinkingTools": "Turn off thinking and send the message again, or use DeepSeek’s built-in web search.",
   "chat.errorPart.message.modelNotFound": "Check the provider’s model settings or choose another model, then try again.",
   "chat.errorPart.message.payloadTooLarge": "Remove attachments or shorten your input, then try again.",
   "chat.errorPart.message.providerQuota": "Check the balance or usage quota for your {{provider}} account.",

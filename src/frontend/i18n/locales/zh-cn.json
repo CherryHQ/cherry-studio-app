@@ -463,6 +463,7 @@
   "chat.errorPart.message": "本次回复未能完成。",
   "chat.errorPart.message.auth": "请检查服务商设置中的 API 密钥，然后重试。",
   "chat.errorPart.message.contextLength": "请新建会话、减少附件，或核对服务商的上下文限制后再重试。",
+  "chat.errorPart.message.deepseekThinkingTools": "请关闭思考后重新发送消息，或改用 DeepSeek 自带的联网搜索。",
   "chat.errorPart.message.modelNotFound": "请检查服务商的模型配置，或切换其他模型后重试。",
   "chat.errorPart.message.payloadTooLarge": "请减少附件或缩短本次输入后再试。",
   "chat.errorPart.message.providerQuota": "请检查 {{provider}} 账户的余额或用量额度。",

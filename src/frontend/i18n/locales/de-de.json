@@ -466,6 +466,7 @@
   "chat.errorPart.message": "Die Antwort konnte nicht abgeschlossen werden.",
   "chat.errorPart.message.auth": "Prüfen Sie den API-Schlüssel in den Anbietereinstellungen und versuchen Sie es erneut.",
   "chat.errorPart.message.contextLength": "Starte eine neue Unterhaltung, entferne Anhänge oder prüfe das Kontextlimit des Anbieters, bevor du es erneut versuchst.",
+  "chat.errorPart.message.deepseekThinkingTools": "Schalte den Denkmodus aus und sende die Nachricht erneut, oder verwende die integrierte Websuche von DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Prüfe die Modelleinstellungen des Anbieters oder wähle ein anderes Modell und versuche es erneut.",
   "chat.errorPart.message.payloadTooLarge": "Entferne Anhänge oder kürze deine Eingabe und versuche es erneut.",
   "chat.errorPart.message.providerQuota": "Prüfe das Guthaben oder Nutzungskontingent deines Kontos bei {{provider}}.",

@@ -472,6 +472,7 @@
   "chat.errorPart.message": "Не удалось завершить ответ.",
   "chat.errorPart.message.auth": "Проверьте ключ API в настройках провайдера, затем повторите попытку.",
   "chat.errorPart.message.contextLength": "Начните новый разговор, удалите вложения или проверьте ограничение контекста у поставщика, прежде чем повторить попытку.",
+  "chat.errorPart.message.deepseekThinkingTools": "Отключите режим размышления и отправьте сообщение ещё раз или воспользуйтесь встроенным веб-поиском DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Проверьте настройки модели у поставщика или выберите другую модель и попробуйте снова.",
   "chat.errorPart.message.payloadTooLarge": "Удалите вложения или сократите текст, затем попробуйте снова.",
   "chat.errorPart.message.providerQuota": "Проверьте баланс или лимит использования аккаунта у поставщика {{provider}}.",

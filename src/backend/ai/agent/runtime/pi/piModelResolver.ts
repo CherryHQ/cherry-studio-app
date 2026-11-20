@@ -57,6 +57,7 @@ import {
   type ResolvedPiOAuth,
 } from './piOAuthModels';
 import { resolvePiOutputReservation } from './piOutputReservation';
+import { isProviderHost } from './piRequestParameters';
 import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 import type { PiNativeWebTools, PiWebDialect } from './piWebTools';
 
@@ -699,14 +700,6 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
 /** Desktop Agent token-field rules, allowing gateway namespace prefixes. */
 function isOpenAIReasoningModelId(modelId: string): boolean {
   return /^(?:[^:]+:)*(?:o1|o3|o4-mini|gpt-6|gpt-5(?!-chat))/.test(getLowerBaseModelName(modelId));
-}
-
-function isProviderHost(baseUrl: string, hostname: string): boolean {
-  try {
-    return new URL(baseUrl).hostname === hostname;
-  } catch {
-    return false;
-  }
 }
 
 function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {

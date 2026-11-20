@@ -469,6 +469,7 @@
   "chat.errorPart.message": "La réponse n'a pas pu être complétée.",
   "chat.errorPart.message.auth": "Vérifiez la clé API dans les paramètres du fournisseur, puis réessayez.",
   "chat.errorPart.message.contextLength": "Démarrez une nouvelle conversation, retirez des pièces jointes ou vérifiez la limite de contexte du fournisseur avant de réessayer.",
+  "chat.errorPart.message.deepseekThinkingTools": "Désactivez le mode de réflexion et renvoyez le message, ou utilisez la recherche web intégrée de DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Vérifiez les paramètres du modèle chez le fournisseur ou choisissez un autre modèle, puis réessayez.",
   "chat.errorPart.message.payloadTooLarge": "Retirez des pièces jointes ou raccourcissez votre saisie, puis réessayez.",
   "chat.errorPart.message.providerQuota": "Vérifiez le solde ou le quota d’utilisation de votre compte {{provider}}.",

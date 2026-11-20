@@ -4,7 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { MessageDetailText } from '@/frontend/components/MessageDetail';
 import { useQuery } from '@/frontend/data';
-import type { AiFailureReason } from '@/shared/contracts/aiFailure';
+import {
+  DEEPSEEK_THINKING_TOOLS_CONFLICT,
+  type AiFailureReason,
+} from '@/shared/contracts/aiFailure';
 
 import { readAiFailureDetail, type AiFailureData } from './aiFailureDetail';
 
@@ -107,16 +110,18 @@ export function AiFailureMessage({
       ? AI_FAILURE_TITLE_KEYS.stream_interrupted
       : aiFailureReasonTitleKey(reasonCode);
   const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
-  const cloudMessage =
-    code === 'account_disabled' || code === 'cloud_account_disabled'
-      ? 'cloud.accountDisabled'
-      : code === 'entitlement_inactive' || code === 'cloud_subscription_required'
-        ? 'cloud.planRequired'
-        : code === 'cloud_activation_required'
-          ? 'cloud.activationRequired'
-          : undefined;
-  const message = cloudMessage
-    ? t(cloudMessage)
+  const specificMessage =
+    code === DEEPSEEK_THINKING_TOOLS_CONFLICT
+      ? 'chat.errorPart.message.deepseekThinkingTools'
+      : code === 'account_disabled' || code === 'cloud_account_disabled'
+        ? 'cloud.accountDisabled'
+        : code === 'entitlement_inactive' || code === 'cloud_subscription_required'
+          ? 'cloud.planRequired'
+          : code === 'cloud_activation_required'
+            ? 'cloud.activationRequired'
+            : undefined;
+  const message = specificMessage
+    ? t(specificMessage)
     : (fallbackMessage ??
       t(
         code === 'amd_activation_required' || code === 'cloud_amd_activation_required'
