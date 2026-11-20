@@ -1,19 +1,13 @@
 const mockSelectionAsync = jest.fn(async () => undefined);
 const mockImpactAsync = jest.fn(async (_style?: unknown) => undefined);
 const mockNotificationAsync = jest.fn(async (_type?: unknown) => undefined);
+const mockAndroidHaptics = jest.fn(async (_effect: string) => undefined);
 
 jest.mock('expo-haptics', () => ({
-  ImpactFeedbackStyle: {
-    Light: 'light',
-    Medium: 'medium',
-  },
-  NotificationFeedbackType: {
-    Error: 'error',
-    Success: 'success',
-    Warning: 'warning',
-  },
+  ...jest.requireActual('expo-haptics'),
   impactAsync: (style: unknown) => mockImpactAsync(style),
   notificationAsync: (type: unknown) => mockNotificationAsync(type),
+  performAndroidHapticsAsync: (effect: string) => mockAndroidHaptics(effect),
   selectionAsync: () => mockSelectionAsync(),
 }));
 
@@ -29,15 +23,17 @@ describe('haptics', () => {
     mockSelectionAsync.mockReset().mockResolvedValue(undefined);
     mockImpactAsync.mockReset().mockResolvedValue(undefined);
     mockNotificationAsync.mockReset().mockResolvedValue(undefined);
+    mockAndroidHaptics.mockClear();
   });
 
   afterAll(() => {
     Platform.OS = originalOs;
   });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-  it.each(['ios', 'android'] as const)('maps every semantic intent on %s', (platform) => {
-    Platform.OS = platform;
-
+  it('maps every semantic intent on iOS', () => {
     haptics.selection();
     haptics.light();
     haptics.medium();
@@ -53,6 +49,25 @@ describe('haptics', () => {
     expect(mockNotificationAsync).toHaveBeenNthCalledWith(1, 'success');
     expect(mockNotificationAsync).toHaveBeenNthCalledWith(2, 'warning');
     expect(mockNotificationAsync).toHaveBeenNthCalledWith(3, 'error');
+  });
+
+  it.each([
+    [26, ['clock-tick', 'virtual-key', 'context-click']],
+    [30, ['clock-tick', 'virtual-key', 'context-click', 'confirm', 'reject', 'reject']],
+    [34, ['segment-tick', 'virtual-key', 'context-click', 'confirm', 'reject', 'reject']],
+  ] as const)('uses only supported system touch effects on Android API %i', (version, expected) => {
+    Platform.OS = 'android';
+    jest.spyOn(Platform, 'Version', 'get').mockReturnValue(version);
+    haptics.selection();
+    haptics.light();
+    haptics.medium();
+    haptics.success();
+    haptics.warning();
+    haptics.error();
+    expect(mockAndroidHaptics.mock.calls.map(([effect]) => effect)).toEqual(expected);
+    expect(mockSelectionAsync).not.toHaveBeenCalled();
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+    expect(mockNotificationAsync).not.toHaveBeenCalled();
   });
 
   it('no-ops cleanly on non-mobile platforms', () => {

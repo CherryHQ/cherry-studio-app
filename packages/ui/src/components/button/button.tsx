@@ -18,7 +18,7 @@ import {
 import Animated from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
-import { type HapticIntent, triggerHaptic } from '../../haptics';
+import { type PressHapticIntent, triggerHaptic } from '../../haptics';
 import { pressMotion } from '../../motion';
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
@@ -38,8 +38,8 @@ export type ButtonSize = 'default' | 'field' | 'footer' | 'inline' | 'lg' | 'sm'
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style'> & {
   children?: ReactNode;
-  /** Optional commit-time semantic haptic feedback (silent by default). */
-  haptic?: HapticIntent | false;
+  /** Acknowledges a committed press. The operation owner signals its outcome. */
+  haptic?: PressHapticIntent | false;
   icon?: ReactElement<{ className?: string }>;
   loading?: boolean;
   ref?: Ref<ViewInstance>;
@@ -155,10 +155,6 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 const ButtonVariantContext = createContext<ButtonVariant>('default');
 const ButtonSizeContext = createContext<ButtonSize>('default');
 
-function resolveButtonHaptic(haptic: HapticIntent | false | undefined): HapticIntent | null {
-  return haptic ? haptic : null;
-}
-
 function resolveButtonPressScale(variant: ButtonVariant): number {
   return variant === 'link' || variant === 'text' ? 1 : pressMotion.scale;
 }
@@ -203,7 +199,6 @@ function ButtonRoot({
   const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
   const hasPressInteraction = Boolean(onPress || onPressIn || onPressOut);
-  const resolvedHaptic = resolveButtonHaptic(haptic);
   const {
     animatedStyle,
     handlePressIn: handleTactilePressIn,
@@ -246,8 +241,8 @@ function ButtonRoot({
         if (isDisabled) {
           return;
         }
-        if (resolvedHaptic) {
-          triggerHaptic(resolvedHaptic);
+        if (haptic === 'selection' || haptic === 'light' || haptic === 'medium') {
+          triggerHaptic(haptic);
         }
         onPress(event);
       }

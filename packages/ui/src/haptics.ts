@@ -5,9 +5,32 @@ import { Platform } from 'react-native';
  * Semantic haptic intents shared by CherryUI controls and product workflows.
  * Callers describe the interaction meaning rather than picking platform styles.
  */
-export type HapticIntent = 'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error';
+export type PressHapticIntent = 'selection' | 'light' | 'medium';
+export type HapticIntent = PressHapticIntent | 'success' | 'warning' | 'error';
+
+function androidEffect(intent: HapticIntent, apiLevel: number) {
+  const effects = Haptics.AndroidHaptics;
+  switch (intent) {
+    case 'selection':
+      return apiLevel >= 34 ? effects.Segment_Tick : effects.Clock_Tick;
+    case 'light':
+      return effects.Virtual_Key;
+    case 'medium':
+      return effects.Context_Click;
+    case 'success':
+      return apiLevel >= 30 ? effects.Confirm : undefined;
+    case 'warning':
+    case 'error':
+      return apiLevel >= 30 ? effects.Reject : undefined;
+  }
+}
 
 function invokeHaptic(intent: HapticIntent): Promise<void> | undefined {
+  if (Platform.OS === 'android') {
+    const effect = androidEffect(intent, Platform.Version);
+    return effect === undefined ? undefined : Haptics.performAndroidHapticsAsync(effect);
+  }
+  if (Platform.OS !== 'ios') return;
   switch (intent) {
     case 'selection':
       return Haptics.selectionAsync();
@@ -30,10 +53,6 @@ function invokeHaptic(intent: HapticIntent): Promise<void> | undefined {
  * because visual and accessible cues always stand alone.
  */
 export function triggerHaptic(intent: HapticIntent): void {
-  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-    return;
-  }
-
   try {
     void invokeHaptic(intent)?.catch(() => undefined);
   } catch {
