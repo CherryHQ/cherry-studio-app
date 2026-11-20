@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 164
+ * Total icons: 165
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -554,6 +554,10 @@ export const PROVIDER_ICONS = {
   stability: {
     light: require('./light/stability.webp'),
     dark: require('./light/stability.webp'),
+  },
+  standardcompute: {
+    light: require('./light/standardcompute.webp'),
+    dark: require('./light/standardcompute.webp'),
   },
   step: {
     light: require('./light/step.webp'),

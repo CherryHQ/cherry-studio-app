@@ -86,6 +86,26 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
     },
     name: 'Requesty',
   },
+  standardcompute: {
+    defaultChatEndpoint: 'openai-chat-completions',
+    description: 'Standard Compute - AI model provider',
+    endpointConfigs: {
+      'openai-chat-completions': {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://api.stdcmpt.com/v1',
+      },
+    },
+    id: 'standardcompute',
+    metadata: {
+      website: {
+        apiKey: 'https://standardcompute.com/dashboard/api-keys',
+        docs: 'https://docs.standardcompute.com',
+        models: 'https://standardcompute.com/models',
+        official: 'https://standardcompute.com',
+      },
+    },
+    name: 'Standard Compute',
+  },
   'new-api': {
     endpointConfigs: {
       'anthropic-messages': {
