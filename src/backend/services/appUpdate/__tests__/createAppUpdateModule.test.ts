@@ -303,6 +303,7 @@ test('Play uses build numbers and does not infer a version name', async () => {
 });
 
 test('iOS reads published store metadata and cannot invoke APK operations', async () => {
+  mockGetStorefrontCountry.mockResolvedValue('CN');
   jest.replaceProperty(Platform, 'OS', 'ios');
   jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
   mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
