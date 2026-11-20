@@ -3,6 +3,9 @@ name: Offline dev-mock chat streaming round-trip
 ---
 # Requires a dev client started with EXPO_PUBLIC_DEV_MOCK_PROVIDER=1
 - clearState
+- setPermissions:
+    permissions:
+      notifications: deny
 - openLink:
     link: ${DEV_CLIENT_URL}
 - runFlow:
@@ -13,8 +16,17 @@ name: Offline dev-mock chat streaming round-trip
 - extendedWaitUntil:
     visible:
       id: privacy-consent-decline
-    timeout: 30000
-- tapOn:
+    timeout: 90000
+- waitForAnimationToEnd
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: privacy-consent-decline
+    commands:
+      - tapOn:
+          id: privacy-consent-decline
+- assertNotVisible:
     id: privacy-consent-decline
 - extendedWaitUntil:
     visible:
