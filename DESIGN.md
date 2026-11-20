@@ -206,10 +206,9 @@ lines.
 ### AI Activity Moments (Bounded Atmospheric Exception)
 
 Ordinary lists, forms, settings, and settled prose remain free of decorative gradients or glow.
-Soft, restrained shimmer, breathing motion, or subtle atmospheric depth are permitted strictly
-during active AI moments:
+The following AI surfaces may use subtle atmospheric effects:
 
-- empty-chat welcome anchors;
+- a single entrance for the empty-chat welcome anchor, which stays still while the chat is idle;
 - active thinking and web-search progress;
 - live voice listening and waveforms; and
 - image or artifact generation.
@@ -257,9 +256,11 @@ Cherry Studio Mobile aims for a warm, fluid, unhurried feel across four motion t
    activation, and anchored morph menus — using warm springs or smooth cross-fade and scale so
    changing controls read as one continuous object (see the composer `+` morph menu in
    [Composer README](src/frontend/components/Composer/README.md) and primary slot transitions).
-3. **Spatial.** Sheets, drawers, keyboard-tracking docks, composer expansion, and send-to-top
-   anchoring using critically damped, velocity-preserving springs on the UI thread with full
-   mid-flight interruption.
+3. **Spatial.** While a finger or system keyboard controls a surface, derive its position directly
+   from the gesture displacement or native keyboard progress on the UI thread. After release, a
+   sheet or drawer can settle to its snap point with a critically damped spring that inherits the
+   release velocity. Programmatic transitions such as composer expansion and send-to-top anchoring
+   also yield to a new gesture from the current position.
 4. **Ambient.** Calm, breathing loops for pending, thinking, voice, and generation states that yield
    immediately once content arrives, pause offscreen or in the background, and degrade to static
    indicators under Reduce Motion.

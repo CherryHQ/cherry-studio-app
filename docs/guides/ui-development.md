@@ -78,9 +78,10 @@ owns it.
 Choose feedback from this four-level hierarchy by whether the user can already see the result, must
 follow live progress, or needs to take action:
 
-1. **In-place visual morph + semantic haptic.** Default for visible or reversible actions — copying
-   a message, toggling a chip or switch, switching a model or mode, or checking a provider
-   connection inline. Confirm on the acted-on control or row and do not emit a redundant top toast.
+1. **In-place visual confirmation with optional haptics.** Confirm visible or reversible actions on
+   the affected control or row. Examples include copying a message, toggling a switch, switching
+   models, and checking a provider connection. The control can acknowledge a tap. The operation
+   owner signals success, warning, or error when it knows the outcome.
 2. **Live inline activity & progress.** For AI thinking, web search, tool execution, attachment
    import, and image generation, communicate real-time state inline with gentle motion so the user
    stays in reading flow without modal interruption.
