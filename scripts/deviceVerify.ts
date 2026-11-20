@@ -455,10 +455,14 @@ export function checkFeatureMap(
   };
 }
 
-function probeCommand(command: string, args: string[]): { ok: boolean; output: string } {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 5_000 });
+function probeCommand(command: string, args: string[], timeout = 5_000) {
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout });
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
-  return { ok: result.status === 0, output };
+  return {
+    ok: result.status === 0,
+    output,
+    errorCode: (result.error as NodeJS.ErrnoException | undefined)?.code,
+  };
 }
 
 function runDoctor(platform: MobilePlatform | null, env: NodeJS.ProcessEnv): DoctorCheck[] {
@@ -478,12 +482,25 @@ function runDoctor(platform: MobilePlatform | null, env: NodeJS.ProcessEnv): Doc
       : { nextStep: `Install or upgrade agent-device >= ${MIN_AGENT_DEVICE_VERSION}.` }),
   });
 
-  const maestro = probeCommand('maestro', ['--version']);
+  // Starting the JVM can take longer than probing the native host tools.
+  const maestro = probeCommand('maestro', ['--version'], 15_000);
+  const maestroMissing = maestro.errorCode === 'ENOENT';
+  const maestroFailure = maestroMissing
+    ? 'not found on PATH'
+    : maestro.errorCode === 'ETIMEDOUT'
+      ? 'version check timed out'
+      : 'version check failed';
   checks.push({
     name: 'maestro',
     ok: maestro.ok,
-    detail: maestro.ok ? `installed (${maestro.output.split('\n')[0]})` : 'not found on PATH',
-    ...(maestro.ok ? {} : { nextStep: 'Install Maestro CLI to run .maestro/flows.' }),
+    detail: maestro.ok ? `installed (${maestro.output.split('\n')[0]})` : maestroFailure,
+    ...(maestro.ok
+      ? {}
+      : {
+          nextStep: maestroMissing
+            ? 'Install Maestro CLI to run .maestro/flows.'
+            : 'Run maestro --version to diagnose the startup failure.',
+        }),
   });
 
   if (!platform || platform === 'ios') {
