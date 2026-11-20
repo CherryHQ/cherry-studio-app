@@ -4,6 +4,7 @@ import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import { createWorkletRuntime, runOnRuntimeAsync } from 'react-native-worklets';
 
 import { DocumentExportError, type CapturedHtmlPage } from '@/shared/contracts/documentExport';
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
 
 type CapturePages = (
   onPage: (
@@ -161,7 +162,7 @@ export async function stitchCapturedPngPages(
         for (let offset = 0; offset < bytes.length; offset += chunkSize) {
           operationSignal.throwIfAborted();
           handle.writeBytesSync(bytes.subarray(offset, offset + chunkSize));
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          await yieldToRuntime();
         }
       } finally {
         handle.close();

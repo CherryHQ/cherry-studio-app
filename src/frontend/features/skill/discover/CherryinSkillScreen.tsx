@@ -25,6 +25,7 @@ import {
   marketplaceText,
   parseCherryinSkillUrl,
 } from '@/shared/utils/cherryinSkills';
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
 
 import { SkillPage } from '../SkillPage';
 
@@ -81,7 +82,7 @@ function CherryinSkill({ id }: { id: string }) {
     const checked: SkillInspection[] = [];
     for (const candidate of candidates) {
       checked.push(await skills.inspect(candidate.candidateId, signal));
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      await yieldToRuntime();
     }
     setInspections(checked);
     return checked;

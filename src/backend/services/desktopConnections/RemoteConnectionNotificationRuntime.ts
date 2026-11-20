@@ -49,7 +49,7 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     this.notices = this.environment.connectionNotices;
     if (!this.notices) return;
     this.connections.enablePersistentConnections();
@@ -103,7 +103,7 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
     }
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.disposed = true;
     this.lease?.release();
     this.lease = undefined;

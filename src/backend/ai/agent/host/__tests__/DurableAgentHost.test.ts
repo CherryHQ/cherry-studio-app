@@ -3,7 +3,6 @@ import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentProtocolError,
   type AgentEvent,
@@ -65,7 +64,7 @@ afterEach(() => {
 });
 
 function executionProtection() {
-  const lease = { release: jest.fn(), update: jest.fn() };
+  const lease = { release: jest.fn() };
   const acquire = jest.fn<
     KeepAliveLease,
     Parameters<NonNullable<MobileAgentHostPorts['executionLease']>>
@@ -4441,7 +4440,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+  test('losing session execution time suspends parallel replies without cancelling them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
     await state.reserve('completed');
@@ -4449,18 +4448,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     try {
       await askTwoModels(state);
       await settle();
-      const running = runningTurns(state);
-      const before = [...state.steps];
-      await protection.acquire.mock.calls[0]![0](
-        new KeepAliveInterruptionError('continued-processing-expired'),
-      );
-      await settle();
-      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
-      expect(runningTurns(state)).toHaveLength(0);
-      await state.host.resumeSuspended();
-      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
-        before.filter((step) => step === 'close' || step === 'open'),
-      );
+      await protection.acquire.mock.calls[0]![0](new Error('Background execution expired'));
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.close).toHaveBeenCalled();
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
     } finally {
       await state.host.close();
     }

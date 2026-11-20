@@ -92,7 +92,7 @@ export class KeepAliveCoordinator extends BaseService implements BackgroundExecu
     else await Linking.openSettings();
   };
 
-  protected onStop(): void {
+  protected override onStop(): void {
     this.disposed = true;
   }
 }

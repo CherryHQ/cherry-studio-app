@@ -1,8 +1,9 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMutation, useQuery } from '@/frontend/data';
+import { useDebouncedValue } from '@/frontend/hooks/useDebouncedValue';
 import type { Provider } from '@/shared/data/types/provider';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
@@ -41,11 +42,7 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
   const isExisting =
     modelsQuery.data?.some((model) => model.id === `${provider.id}::${modelId}`) ?? false;
   const shouldResolve = !modelIdError && !isExisting;
-  const [resolvedModelId, setResolvedModelId] = useState(modelId);
-  useEffect(() => {
-    const timer = setTimeout(() => setResolvedModelId(modelId), 250);
-    return () => clearTimeout(timer);
-  }, [modelId]);
+  const resolvedModelId = useDebouncedValue(modelId, 250);
 
   // This local lookup accepts one requested ID; its result may use a canonical catalog ID.
   const resolvedQuery = useQuery('/providers/:providerId/models:resolve', {

@@ -134,7 +134,7 @@ describe('PpioTransport', () => {
       },
     });
 
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toMatchObject({
       prompt: 'a fox',
       use_pre_llm: true,
@@ -362,8 +362,8 @@ describe('PpioTransport', () => {
       },
     });
 
-    expect(fetchMock.mock.calls[0][0]).toBe('https://api.ppio.com/v3/seedream-5.0-lite');
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://api.ppio.com/v3/seedream-5.0-lite');
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toMatchObject({
       prompt: 'a fox',
       size: '2K',
@@ -403,7 +403,7 @@ describe('PpioTransport', () => {
       },
     });
 
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.images).toEqual(['data:image/png;base64,abc']);
     expect(body.image).toBeUndefined();
   });
@@ -430,8 +430,8 @@ describe('PpioTransport', () => {
       },
     });
 
-    expect(fetchMock.mock.calls[0][0]).toBe('https://api.ppio.com/v3/async/glm-image');
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://api.ppio.com/v3/async/glm-image');
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toEqual({
       prompt: 'a fox',
       size: '1568x1056',

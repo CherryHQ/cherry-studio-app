@@ -158,7 +158,7 @@ export class AndroidBackgroundActivityRuntime
     await this.native?.dismissCompletedBackgroundTaskNotification?.(deepLinkUrl);
   };
 
-  protected async onInit(signal?: AbortSignal): Promise<void> {
+  protected override async onInit(signal?: AbortSignal): Promise<void> {
     if (Platform.OS !== 'android') return;
     // Match the other native services' lazy loading so iOS never evaluates
     // these modules and CommonJS test environments can use the native mocks.
@@ -334,7 +334,7 @@ export class AndroidBackgroundActivityRuntime
     };
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     this.clearDeadline();

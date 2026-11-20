@@ -305,7 +305,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.stopped = true;
     for (const controller of this.controllers) controller.abort();
     await this.tail;

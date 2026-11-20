@@ -170,7 +170,7 @@ describe('listModels — malformed entry diagnostics', () => {
       diagnostics,
     });
     expect(models.map((model) => model.apiModelId)).toEqual(['valid-model']);
-    expect(diagnostics.mock.calls[0][0]).toMatchObject({
+    expect(diagnostics.mock.calls[0]![0]).toMatchObject({
       code: 'model-list-entries-skipped',
       providerId: 'custom',
       error: expect.objectContaining({ message: 'Skipped 1 malformed model-list entries' }),
@@ -213,10 +213,10 @@ describe('listModels — Ollama capabilities', () => {
       apiModelId: 'qwen3:32b-q4_K_M',
       capabilities: [MODEL_CAPABILITY.REASONING],
     });
-    expect(models[0].reasoning).toBeUndefined();
+    expect(models[0]!.reasoning).toBeUndefined();
     expect(models[1]).toMatchObject({ capabilities: [] });
-    expect(models[1].reasoning).toBeUndefined();
-    expect(aiSdkGetFromApiMock.mock.calls[0][0]).toMatchObject({
+    expect(models[1]!.reasoning).toBeUndefined();
+    expect(aiSdkGetFromApiMock.mock.calls[0]![0]).toMatchObject({
       url: 'http://ollama.test:11434/api/tags',
     });
   });
@@ -229,7 +229,7 @@ describe('listModels — geminiFetcher API key transport', () => {
     await listModels(provider);
 
     expect(aiSdkGetFromApiMock).toHaveBeenCalledTimes(1);
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as {
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as {
       url: string;
       headers: Record<string, string>;
     };
@@ -257,7 +257,7 @@ describe('listModels — geminiFetcher API key transport', () => {
 
     await listModels(provider);
 
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as { headers: Record<string, string> };
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as { headers: Record<string, string> };
     expect(call.headers['x-goog-api-key']).toBe('AIza-secret-key');
     expect(call.headers['X-Custom']).toBe('on');
   });
@@ -268,8 +268,8 @@ describe('listModels — geminiFetcher API key transport', () => {
     const models = await listModels(provider);
 
     expect(models).toHaveLength(1);
-    expect(models[0].apiModelId).toBe('gemini-2.0-flash');
-    expect(models[0].name).toBe('Gemini 2.0 Flash');
+    expect(models[0]!.apiModelId).toBe('gemini-2.0-flash');
+    expect(models[0]!.name).toBe('Gemini 2.0 Flash');
   });
 
   it('drops audio and video generation models, keeping chat, image, and embedding models', async () => {
@@ -411,7 +411,7 @@ describe('listModels — anthropicFetcher (x-api-key + anthropic-version transpo
     const models = await listModels(makeAnthropicProvider());
 
     expect(aiSdkGetFromApiMock).toHaveBeenCalledTimes(1);
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as {
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as {
       url: string;
       headers: Record<string, string>;
     };
@@ -421,9 +421,9 @@ describe('listModels — anthropicFetcher (x-api-key + anthropic-version transpo
     expect(call.headers.Authorization).toBeUndefined();
 
     expect(models).toHaveLength(1);
-    expect(models[0].apiModelId).toBe('claude-opus-4-8');
-    expect(models[0].name).toBe('Claude Opus 4.8');
-    expect(models[0].ownedBy).toBe('anthropic');
+    expect(models[0]!.apiModelId).toBe('claude-opus-4-8');
+    expect(models[0]!.name).toBe('Claude Opus 4.8');
+    expect(models[0]!.ownedBy).toBe('anthropic');
   });
 
   it('routes copied Anthropic providers (uuid id + presetProviderId) through the Anthropic fetcher (REGRESSION)', async () => {
@@ -441,7 +441,7 @@ describe('listModels — anthropicFetcher (x-api-key + anthropic-version transpo
 
     const models = await listModels(copied);
 
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as { headers: Record<string, string> };
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as { headers: Record<string, string> };
     expect(call.headers['anthropic-version']).toBe('2023-06-01');
     // dedup keeps a single entry for the repeated id
     expect(models.map((m) => m.apiModelId)).toEqual(['claude-opus-4-8']);
@@ -617,7 +617,7 @@ describe('listModels — copied preset provider routing', () => {
     const models = await listModels(provider);
 
     expect(aiSdkGetFromApiMock).toHaveBeenCalledTimes(1);
-    expect(aiSdkGetFromApiMock.mock.calls[0][0]).toMatchObject({
+    expect(aiSdkGetFromApiMock.mock.calls[0]![0]).toMatchObject({
       url: 'https://models.github.ai/catalog/models',
     });
     expect(models.map((model) => model.apiModelId)).toEqual(['openai/gpt-4o']);
@@ -647,11 +647,11 @@ describe('listModels — Radeon Cloud source header', () => {
     await listModels(radeonProvider);
     await listModels(otherProvider);
 
-    const radeonCall = aiSdkGetFromApiMock.mock.calls[0][0] as {
+    const radeonCall = aiSdkGetFromApiMock.mock.calls[0]![0] as {
       url: string;
       headers: Record<string, string>;
     };
-    const otherCall = aiSdkGetFromApiMock.mock.calls[1][0] as {
+    const otherCall = aiSdkGetFromApiMock.mock.calls[1]![0] as {
       url: string;
       headers: Record<string, string>;
     };
@@ -730,7 +730,7 @@ describe('listModels — newApiFetcher endpoint types', () => {
 
     const models = await listModels(provider);
 
-    expect(models[0].endpointTypes).toEqual([ENDPOINT_TYPE.ANTHROPIC_MESSAGES]);
+    expect(models[0]!.endpointTypes).toEqual([ENDPOINT_TYPE.ANTHROPIC_MESSAGES]);
   });
 });
 
@@ -762,7 +762,7 @@ describe('listModels — gatewayFetcher (Vercel AI Gateway /v3/ai/config)', () =
     const models = await listModels(makeGatewayProvider());
 
     expect(aiSdkGetFromApiMock).toHaveBeenCalledTimes(1);
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as {
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as {
       url: string;
       headers: Record<string, string>;
     };
@@ -770,9 +770,9 @@ describe('listModels — gatewayFetcher (Vercel AI Gateway /v3/ai/config)', () =
     expect(call.headers['ai-gateway-protocol-version']).toBe('0.0.1');
 
     expect(models).toHaveLength(1);
-    expect(models[0].apiModelId).toBe('openai/gpt-4o');
-    expect(models[0].name).toBe('GPT-4o');
-    expect(models[0].ownedBy).toBe('openai');
+    expect(models[0]!.apiModelId).toBe('openai/gpt-4o');
+    expect(models[0]!.name).toBe('GPT-4o');
+    expect(models[0]!.ownedBy).toBe('openai');
   });
 
   it('dedups models returned with duplicate ids', async () => {
@@ -823,7 +823,7 @@ describe('listModels — aiHubMixFetcher (configured base URL)', () => {
     const models = await listModels(provider);
 
     expect(aiSdkGetFromApiMock).toHaveBeenCalledTimes(1);
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as { url: string };
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as { url: string };
     expect(call.url).toBe('https://custom.example.com/api/v1/models');
     expect(models.map((m) => m.apiModelId)).toEqual(['qwen3.6-plus']);
   });
@@ -856,8 +856,8 @@ describe('listModels — newApiFetcher endpoint-implied capabilities', () => {
     const models = await listModels(makeNewApiProvider());
 
     expect(models).toHaveLength(1);
-    expect(models[0].capabilities).toContain(MODEL_CAPABILITY.RERANK);
-    expect(models[0].endpointTypes).toEqual([
+    expect(models[0]!.capabilities).toContain(MODEL_CAPABILITY.RERANK);
+    expect(models[0]!.endpointTypes).toEqual([
       ENDPOINT_TYPE.JINA_RERANK,
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     ]);
@@ -877,11 +877,11 @@ describe('listModels — newApiFetcher endpoint-implied capabilities', () => {
 
     const models = await listModels(makeNewApiProvider());
 
-    expect(models[0].endpointTypes).toEqual([
+    expect(models[0]!.endpointTypes).toEqual([
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
       ENDPOINT_TYPE.JINA_RERANK,
     ]);
-    expect(models[0].capabilities).not.toContain(MODEL_CAPABILITY.RERANK);
+    expect(models[0]!.capabilities).not.toContain(MODEL_CAPABILITY.RERANK);
   });
 
   it('derives the capability for other capability-exclusive primary endpoints (image)', async () => {
@@ -898,8 +898,8 @@ describe('listModels — newApiFetcher endpoint-implied capabilities', () => {
 
     const models = await listModels(makeNewApiProvider());
 
-    expect(models[0].capabilities).toContain(MODEL_CAPABILITY.IMAGE_GENERATION);
-    expect(models[0].endpointTypes).toEqual([
+    expect(models[0]!.capabilities).toContain(MODEL_CAPABILITY.IMAGE_GENERATION);
+    expect(models[0]!.endpointTypes).toEqual([
       ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION,
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
     ]);
@@ -988,14 +988,14 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
       ).toBe(true);
     }
     const firstHeaders = (
-      aiSdkGetFromApiMock.mock.calls[0][0] as { headers: Record<string, string> }
+      aiSdkGetFromApiMock.mock.calls[0]![0] as { headers: Record<string, string> }
     ).headers;
     expect(firstHeaders.Authorization).toBe('Bearer vertex-token');
 
     // Supported gemini model kept (deduped across publishers); the *-tts model filtered out.
     expect(models).toHaveLength(1);
-    expect(models[0].apiModelId).toBe('gemini-2.0-flash');
-    expect(models[0].ownedBy).toBe('google');
+    expect(models[0]!.apiModelId).toBe('gemini-2.0-flash');
+    expect(models[0]!.ownedBy).toBe('google');
   });
 
   it('rejects an invalid project URL before exchanging credentials', async () => {
@@ -1043,8 +1043,8 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
     // Same MaaS model deduped across the per-publisher fan-out → a single entry.
     expect(models).toHaveLength(1);
     // Publisher-prefixed id (survives the bare-name support filter) is what the request sends.
-    expect(models[0].apiModelId).toBe('meta/llama-4-scout-17b-16e-instruct-maas');
-    expect(models[0].ownedBy).toBe('meta');
+    expect(models[0]!.apiModelId).toBe('meta/llama-4-scout-17b-16e-instruct-maas');
+    expect(models[0]!.ownedBy).toBe('meta');
   });
 
   it('preserves the publisher prefix for MaaS models published by Google', async () => {
@@ -1059,8 +1059,8 @@ describe('listModels — vertexFetcher (per-publisher pagination)', () => {
     const models = await listModels(makeVertexProvider());
 
     expect(models).toHaveLength(1);
-    expect(models[0].apiModelId).toBe('google/gemma-4-26b-a4b-it-maas');
-    expect(models[0].ownedBy).toBe('google');
+    expect(models[0]!.apiModelId).toBe('google/gemma-4-26b-a4b-it-maas');
+    expect(models[0]!.ownedBy).toBe('google');
   });
 
   it('filters non-google publisher models that do not use the MaaS id format', async () => {
@@ -1136,7 +1136,7 @@ describe('listModels — jinaFetcher (strips jina-ai/ prefix)', () => {
 
     const models = await listModels(makeJinaProvider());
 
-    const call = aiSdkGetFromApiMock.mock.calls[0][0] as { url: string };
+    const call = aiSdkGetFromApiMock.mock.calls[0]![0] as { url: string };
     expect(call.url).toBe('https://api.jina.ai/v1/models');
     expect(models.map((m) => m.apiModelId)).toEqual([
       'jina-embeddings-v2-base-zh',

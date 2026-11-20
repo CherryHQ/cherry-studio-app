@@ -1,6 +1,6 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { BottomSheet, Button, useToast } from '@cherrystudio/ui/components';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -10,6 +10,7 @@ import type {
   UndeliveredMessage,
 } from '@/frontend/appShell/conversation/remote';
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
+import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 
 import { conversationFailureKey } from '../runtime/conversationFailure';
 
@@ -81,13 +82,9 @@ export function UndeliveredMessageRow({
   const { runInputReplacement } = useComposerPresentationActions();
   // A resend replaces the record as soon as it is admitted; keep showing it until the outcome.
   const [resending, setResending] = useState<UndeliveredMessage>();
-  const [delivered, setDelivered] = useState(false);
+  const deliveredFeedback = useTransientValue<boolean>(DELIVERED_MS);
+  const delivered = deliveredFeedback.value === true;
   const [details, setDetails] = useState(false);
-  useEffect(() => {
-    if (!delivered) return;
-    const timer = setTimeout(() => setDelivered(false), DELIVERED_MS);
-    return () => clearTimeout(timer);
-  }, [delivered]);
 
   const shown = resending ?? message;
   if (!shown) {
@@ -104,10 +101,10 @@ export function UndeliveredMessageRow({
   const summary = t('remoteAgent.undelivered.summary', { reason: t(REASON_KEYS[reason]) });
   const text = messageText(shown);
   const resend = async () => {
-    setDelivered(false);
+    deliveredFeedback.clear();
     setResending(shown);
     const result = await shown.resend.execute(undefined).finally(() => setResending(undefined));
-    if (result.state === 'applied') setDelivered(true);
+    if (result.state === 'applied') deliveredFeedback.show(true);
     // Not admitted, so the original stays; a recorded rejection replaces it instead.
     else if (result.state === 'rejected' && !result.operationId)
       toast.show({ label: t(conversationFailureKey(result.failure)), variant: 'danger' });

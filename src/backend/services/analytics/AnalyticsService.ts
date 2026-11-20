@@ -66,7 +66,7 @@ export class AnalyticsService extends BaseService implements Activatable {
   /** In-flight activity ping, so a second `active` cannot ship the day twice. */
   private activityReport: Promise<void> | null = null;
 
-  protected onInit(): void {
+  protected override onInit(): void {
     this.registerDisposable(
       aiUsageRecordService.onInvocationsCommitted((rows) => {
         for (const row of rows) {
@@ -93,7 +93,7 @@ export class AnalyticsService extends BaseService implements Activatable {
     this.registerAppStateListener(this.handleAppStateChange);
   }
 
-  protected async onReady(): Promise<void> {
+  protected override async onReady(): Promise<void> {
     await this.refreshDesiredEnabled();
   }
 

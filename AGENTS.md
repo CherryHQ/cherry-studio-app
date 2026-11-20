@@ -40,6 +40,23 @@ configuration, not in repository rules.
   contract determines whether and how an interaction moves; generic skill guidance does not make
   animation mandatory.
 - Before preparing or running agent-driven application acceptance, read
-  [Parallel Device Testing](docs/guides/parallel-device-testing.md) for the self-test preparation
-  standard and iOS/Android device workflow. Preparation marked as design is not implemented tooling
-  and does not expand the active task's authorization.
+  [Parallel Device Testing](docs/guides/parallel-device-testing.md) and the user-perspective
+  [Feature Map](docs/features/README.md) for the self-test preparation standard, verified `testID`
+  controls, and `pnpm verify:device` workflow. Preparation marked as design is not implemented
+  tooling and does not expand the active task's authorization.
+
+## Trust Environment And Evidence
+
+- **Encode lessons in structure first.** When fixing a repeated failure or workaround, prefer
+  eliminating the error class via API/types/boundaries, then adding a deterministic check (ESLint,
+  contract test, or script) and removing existing bad examples, and only add prose to `AGENTS.md`
+  or docs for judgment calls that cannot be encoded. Do not use comments or Markdown to excuse a
+  workaround; `TODO` / `FIXME` comments must reference a GitHub issue (`TODO(#123)`).
+- **Evidence defines completion.** Passing typecheck or lint does not prove runtime behavior.
+  Reproduce bugs before fixing, re-verify with the same steps after fixing, and report exact
+  commands, key outputs, and artifact paths. When a required check or device run cannot execute,
+  report `inconclusive` with the concrete blocker instead of claiming success.
+- **Independent verification for high-risk changes.** Do not treat the implementation turn alone as
+  the final judge for architecture boundaries, database migrations, navigation stacks, permissions,
+  or streaming/tool state machines; rely on CI gates, regression tests, or an independent
+  verification pass before merging.

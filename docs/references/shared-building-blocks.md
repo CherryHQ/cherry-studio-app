@@ -23,6 +23,7 @@ it already exists.
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
 | Cancelling a caller's wait without cancelling shared work | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
+| Cooperative event-loop yield in chunked loops | `yieldToRuntime` in `src/shared/utils/yieldToRuntime.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
 | Community service metadata for the current login | Backend-only `AccountRuntime.refreshCommunityServices`, backed by `bootstrap/profile/installationAccount`; refreshes only the saved region's product routing without replacing authentication |
@@ -44,6 +45,7 @@ it already exists.
 | Recorded AI invocation speed | `getAiUsageRecordTokensPerSecond` in `src/shared/utils/aiUsage.ts`, shared by usage pagination and record presentation |
 | Model purpose (text, image, embedding, rerank, audio) | `src/shared/utils/modelPurpose.ts` |
 | Provider connection facts for language and image serving, and credential-free service addresses | `resolveProviderConnection` and `resolveProviderServiceUrl` in `src/backend/ai/provider/providerConnection.ts`; service URLs reuse the serving path's Vertex project/location resolver without materializing credentials |
+| Development-only offline deterministic mock model provider (opt-in via `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1`) | `isDevMockProviderEnabled` in `src/shared/utils/devMockProvider.ts`, `createDevMockFetch` in `src/backend/ai/provider/devMockProviderFetch.ts`, and `DevMockProviderSeeder` in `src/backend/data/db/seeding/seeders/DevMockProviderSeeder.ts` |
 | Whether a Provider is ready to use, and why not | `getProviderConfigurationIssue` in `src/backend/services/providers/providerConfiguration.ts` |
 | Whether a Provider may send requests without a key | `resolveAuthOptional` in `src/shared/utils/providerAuth.ts` |
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
@@ -53,7 +55,7 @@ it already exists.
 | Remote Agent template catalogs and saved content | `useAgentTemplateCatalog` in `src/frontend/data/agentTemplates`; `Backend.agentTemplates` owns region routing, tolerant field reads and disk snapshots; [source policy](../../src/backend/services/agentTemplates/README.md) |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
-| Task-owned iOS continued processing, finite execution and audio fallback | `DurableAgentHost` and `JobRuntime` own execution leases; `KeepAliveCoordinator` carries real progress to `IosBackgroundExecutionSource`, which stops shared protection when the final lease releases; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
+| Task-owned iOS continued processing, finite execution and audio fallback | `DurableAgentHost` and `JobRuntime` own execution leases; chat and painting use shared UIKit time and consented audio independently of their Live Activities; the final lease release stops protection; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
 | Quoted answer snapshots and inline positions on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquotes in `runtimeUserText` and `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
@@ -138,3 +140,5 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |
 | Applying what the user may change (organization-owned resources, profile capabilities) to UI: locked groups, locked controls and the organization mark | `PolicyScope`, `PolicyGroup`, `withPolicy` and the gates in `src/frontend/components/Policy`, over CherryUI `LockedGroup` and the components' `locked` variants |
+| Frontend debounced actions, fixed-window flushes, and frame loops | `createDebouncedAction`, `createScheduledFlush`, and `createFrameLoop` in `src/frontend/utils/scheduling.ts` |
+| Page-level debounced values, transient UI feedback, elapsed clocks, and next-frame scheduling | `useDebouncedValue`, `useTransientValue`, `useElapsedTime`, and `useNextFrame` / `useAfterNextFrame` in `src/frontend/hooks/`; ESLint forbids raw `setTimeout`, `setInterval`, `requestAnimationFrame`, and new raw `useEffect` in `src/app` and `src/frontend/features` (existing page `useEffect` files are ratcheted in `eslint.config.js`) |

@@ -1,6 +1,8 @@
 import { File, FileMode } from 'expo-file-system';
 import { type DeflateOptions, Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
+
 export type ZipWriteEntry = {
   /** Relative `/`-separated path without empty, `.` or `..` segments. */
   name: string;
@@ -19,7 +21,6 @@ export type ZipWriteOptions = {
 const CHUNK_BYTES = 64 * 1024;
 // Keep native size preflight cooperative by yielding every 64 entries.
 const INVENTORY_YIELD_ENTRIES = 64;
-const yieldToRuntime = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function assertEntryName(name: string): void {
   if (

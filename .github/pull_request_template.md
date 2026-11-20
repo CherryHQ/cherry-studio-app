@@ -22,6 +22,29 @@ Required for user-facing changes: upload screenshots or a video that demonstrate
 For changes with no visible effect, write `N/A` and briefly explain why.
 -->
 
+### Verification evidence
+
+<!--
+List the exact commands, key outputs, and artifact paths (tests, screenshots, recordings, traces, or statecharts) proving the observable completion criteria.
+If a check or device acceptance could not be run, explicitly write `inconclusive` and the reason.
+-->
+
+- Completion criteria:
+- Commands & results:
+- Device / runtime artifacts (or `inconclusive` + reason):
+
+### Guardrail added
+
+<!--
+If this PR fixes a bug or recurring mistake, state which deterministic check (test, lint rule, boundary guard, or script) prevents recurrence and whether existing bad examples were cleaned up. Otherwise write `N/A`.
+-->
+
+### Decisions needed from reviewer
+
+<!--
+Call out any product, architecture, or tradeoff judgment that needs human input. Otherwise write `None`.
+-->
+
 ### Why we need it and why it was done in this way
 
 The following tradeoffs were made:
@@ -47,6 +70,8 @@ Approvers are expected to review this list.
 
 - [ ] Branch: This PR targets `main`
 - [ ] PR: The PR description is expressive enough and will help future contributors
+- [ ] Evidence: Observable completion criteria, verification commands/outputs, and artifacts (or explicit `inconclusive` reasons) are attached
+- [ ] Guardrails: Any bug fix or repeated lesson adds a deterministic check (test/lint) and cleans up or ratchets existing bad examples
 - [ ] Preview: For a user-facing change, I uploaded screenshots or a video so reviewers can quickly verify the effect; otherwise, I explained why it is not applicable
 - [ ] Code: [Write code that humans can understand](https://en.wikiquote.org/wiki/Martin_Fowler#code-for-humans) and [keep it simple](https://en.wikipedia.org/wiki/KISS_principle)
 - [ ] Refactor: I have [left the code cleaner than I found it (Boy Scout Rule)](https://learning.oreilly.com/library/view/97-things-every/9780596809515/ch08.html)

@@ -13,6 +13,7 @@ import { View, type ViewInstance } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import type { MessageListHandle } from '@/frontend/components/Message';
+import { createFrameLoop } from '@/frontend/utils/scheduling';
 
 import {
   ChatShareSelectionStoreContext,
@@ -156,14 +157,7 @@ function createDragSelectionController(
         time?: number;
       }
     | undefined;
-  let frame: number | undefined;
   let active = true;
-  const stop = () => {
-    const wasDragging = Boolean(drag);
-    drag = undefined;
-    if (frame !== undefined) cancelAnimationFrame(frame);
-    if (wasDragging) listRef.current?.endInteraction();
-  };
   const measureRows = () =>
     Promise.all(
       [...rows].map(
@@ -179,10 +173,10 @@ function createDragSelectionController(
           }),
       ),
     ).then((values) => values.filter((row): row is MeasuredRow => Boolean(row)));
-  const tick = (time: number) => {
+  const loop = createFrameLoop((time) => {
     const current = drag;
     if (!current) return;
-    void measureRows().then((measured) => {
+    return measureRows().then((measured) => {
       if (drag !== current) return;
       if (current.selected === undefined) {
         const start = measured.find(
@@ -221,8 +215,13 @@ function createDragSelectionController(
               : 0;
         if (direction) listRef.current?.scrollBy(direction * SCROLL_SPEED * elapsed);
       });
-      frame = requestAnimationFrame(tick);
     });
+  });
+  const stop = () => {
+    const wasDragging = Boolean(drag);
+    drag = undefined;
+    loop.stop();
+    if (wasDragging) listRef.current?.endInteraction();
   };
   return {
     configure(next: SelectionActions, top: number, bottom: number) {
@@ -240,7 +239,7 @@ function createDragSelectionController(
       if (Math.abs(event.absoluteX - startX) >= Math.abs(event.absoluteY - startY)) return;
       listRef.current?.beginInteraction();
       drag = { y: startY, previousY: startY, startY, visited: new Set() };
-      frame = requestAnimationFrame(tick);
+      loop.start();
     },
     move(event: { absoluteY: number }) {
       if (drag) drag.y = event.absoluteY;

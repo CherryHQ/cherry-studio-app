@@ -68,7 +68,7 @@ export class PreferenceService extends BaseService implements PreferenceClient {
    * because first paint reads theme, font size, and language straight out of
    * that cache — see `initializeAppRuntime`.
    */
-  protected async onInit() {
+  protected override async onInit() {
     this.cache = { ...PreferenceDefaults };
 
     const rows = await this.db

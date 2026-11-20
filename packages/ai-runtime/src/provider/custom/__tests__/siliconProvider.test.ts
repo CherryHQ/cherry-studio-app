@@ -58,7 +58,7 @@ describe('createSiliconProvider', () => {
       'https://api.siliconflow.cn/v1/images/generations',
       expect.objectContaining({ method: 'POST' }),
     );
-    const sent = JSON.parse((fetch.mock.calls[0][1] as RequestInit).body as string);
+    const sent = JSON.parse((fetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(sent).toMatchObject({
       model: 'Kwai-Kolors/Kolors',
       prompt: 'a fox',
@@ -98,7 +98,7 @@ describe('createSiliconProvider', () => {
       ],
     });
 
-    const sent = JSON.parse((fetch.mock.calls[0][1] as RequestInit).body as string);
+    const sent = JSON.parse((fetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(sent.cfg).toBe(7.5);
     expect(sent.image).toBe(`data:image/png;base64,${btoa(String.fromCharCode(1, 2, 3))}`);
     expect(sent.image2).toBe('https://x/in2.png');

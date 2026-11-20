@@ -141,6 +141,23 @@ describe('service registry', () => {
     expect(getPhase(services.MobileAgentHost)).toBe(Phase.PostReady);
   });
 
+  test('a local chat acquires execution protection without requesting a second progress surface', () => {
+    const lease = { release: jest.fn() };
+    const acquire = jest.fn(() => lease);
+    const hostPorts = services.AgentHostDependencies;
+    const container = new ServiceContainer({
+      ...Object.fromEntries(getDependencies(hostPorts).map((name) => [name, {}])),
+      KeepAliveCoordinator: { acquire },
+    });
+    container.register(hostPorts);
+
+    const onInterrupt = jest.fn();
+    container.get(hostPorts).executionLease(onInterrupt, 'session-1').release();
+    // Supplying a third argument opts into the iOS system task and its mandatory UI.
+    expect(acquire).toHaveBeenCalledWith('agent.session', onInterrupt);
+    expect(lease.release).toHaveBeenCalledTimes(1);
+  });
+
   test('declares the background policy of long-running and native-surface owners', () => {
     expect(getAppStatePolicy(services.ScreenAwakeRuntime)).toBe('foreground-only');
     expect(getAppStatePolicy(services.TraceStorageService)).toBe('continue');

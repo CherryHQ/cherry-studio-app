@@ -126,7 +126,7 @@ export class BackgroundActivityManager extends BaseService {
     super();
   }
 
-  protected async onInit(signal?: AbortSignal): Promise<void> {
+  protected override async onInit(signal?: AbortSignal): Promise<void> {
     this.appState = AppState.currentState;
     const appState = this.registerAppStateListener(this.handleAppStateChange);
     const presentationEnabled = this.registerDisposable(
@@ -214,7 +214,7 @@ export class BackgroundActivityManager extends BaseService {
     return Promise.all([...dismissals, this.operationTail]).then(() => undefined);
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
 

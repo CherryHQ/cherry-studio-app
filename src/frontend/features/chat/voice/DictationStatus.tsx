@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
+import { useElapsedTime } from '@/frontend/hooks/useElapsedTime';
 
 import type { DictationState } from './useDictation';
 
@@ -20,15 +21,8 @@ export function DictationStatus({
   state: Extract<DictationState, 'listening' | 'finishing'>;
 }) {
   const { t } = useTranslation();
-  const [startedAt] = useState(Date.now);
-  const [now, setNow] = useState(startedAt);
   const listening = state === 'listening';
-
-  useEffect(() => {
-    if (!listening) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [listening]);
+  const elapsedMs = useElapsedTime(listening);
 
   return (
     <View
@@ -43,7 +37,7 @@ export function DictationStatus({
       </Text>
       {listening ? (
         <Text className="text-base text-foreground-tertiary tabular-nums">
-          {formatElapsed(now - startedAt)}
+          {formatElapsed(elapsedMs)}
         </Text>
       ) : null}
     </View>

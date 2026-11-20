@@ -391,6 +391,8 @@ describe('createPaintingGenerateJobHandler', () => {
         const { dependencies, sessions, startSession } = createSessionDependencies();
         const handler = createPaintingGenerateJobHandler(dependencies);
 
+        expect(handler.executionClass).toBe('user-continued');
+        expect(handler.continuedProcessing).toBeUndefined();
         await handler.execute(createContext());
 
         expect(startSession).toHaveBeenCalledWith(

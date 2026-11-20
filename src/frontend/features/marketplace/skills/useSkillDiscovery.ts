@@ -1,9 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
+import { useDebouncedValue } from '@/frontend/hooks/useDebouncedValue';
 import type { CherryinSkill } from '@/shared/contracts/skillMarketplace';
 import type { SkillListing } from '@/shared/contracts/skills';
 import {
@@ -41,11 +41,7 @@ export const isSkillLink = (query: string) => /^https:\/\//i.test(query);
 /** Settles the typed query so remote search runs once per pause rather than per keystroke. */
 export function useSettledQuery(query: string) {
   const trimmed = query.trim();
-  const [settled, setSettled] = useState(trimmed);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(trimmed), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [trimmed]);
+  const settled = useDebouncedValue(trimmed, SEARCH_DEBOUNCE_MS);
   return trimmed ? settled : '';
 }
 
