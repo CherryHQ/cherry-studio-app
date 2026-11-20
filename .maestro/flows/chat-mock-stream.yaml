@@ -17,6 +17,7 @@ name: Offline dev-mock chat streaming round-trip
       visible: "Open|打开"
     commands:
       - tapOn: "Open|打开"
+- runFlow: _dismiss-ios-notification-prompt.yaml
 - extendedWaitUntil:
     visible:
       id: privacy-consent-decline
@@ -41,12 +42,7 @@ name: Offline dev-mock chat streaming round-trip
 - inputText: "hello offline maestro"
 - tapOn:
     id: chat-composer-send
-- runFlow:
-    when:
-      platform: iOS
-      visible: "Don't Allow|Don’t Allow|不允许"
-    commands:
-      - tapOn: "Don't Allow|Don’t Allow|不允许"
+- runFlow: _dismiss-ios-notification-prompt.yaml
 - extendedWaitUntil:
     visible: '\[dev-mock\] Echo: hello offline maestro'
     timeout: 15000
