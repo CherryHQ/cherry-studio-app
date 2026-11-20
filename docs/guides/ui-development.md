@@ -75,21 +75,30 @@ owns it.
 
 ## Report Outcomes
 
-Each situation has one feedback owner. Choose by what the user must do next, not by how severe the
-failure feels:
+Choose feedback from this four-level hierarchy by whether the user can already see the result, must
+follow live progress, or needs to take action:
 
-- A screen that cannot load, or has nothing to show, renders `ContentState` inline with a retry
-  action when the load can be repeated.
-- An action whose outcome leaves the user on the same surface reports through `toast`: `success`
-  for a completed change, `danger` for a failure the user can simply repeat. A failure title on its
-  own is never an alert.
-- `alert.show` is reserved for text the user has to read before continuing: validation that blocks
-  a submit, diagnostic detail the user explicitly asked for such as a connection or model check, and
-  permission guidance. Use `alert.confirm` or `alert.prompt` only when the user must decide.
-- A failure that belongs to a transcript renders inline as a message part; see
-  [Agent Protocol](../references/agent/agent-protocol.md#errors).
-- Backend `message` strings are diagnostic and are never displayed inline. Translate from the
-  closed code instead; a detail sheet the user opens on purpose may show them verbatim.
+1. **In-place visual morph + semantic haptic.** Default for visible or reversible actions — copying
+   a message, toggling a chip or switch, switching a model or mode, or checking a provider
+   connection inline. Confirm on the acted-on control or row and do not emit a redundant top toast.
+2. **Live inline activity & progress.** For AI thinking, web search, tool execution, attachment
+   import, and image generation, communicate real-time state inline with gentle motion so the user
+   stays in reading flow without modal interruption.
+3. **Transient floating toast.** Reserve `toast` for invisible outcomes that lack an in-place
+   confirmation, cross-surface updates, or immediate undoable actions (`success` for a completed
+   change, `danger` for a repeatable failure). Prefer concise copy and short duration (~2s for plain
+   confirmations; longer when actionable). A failure title on its own is never an alert.
+4. **Inline `ContentState`, transcript message parts, and blocking `alert` / `Dialog`.**
+   - A screen that cannot load, or has nothing to show, renders `ContentState` inline with a retry
+     action when the load can be repeated.
+   - A failure that belongs to a transcript renders inline as a message part; see
+     [Agent Protocol](../references/agent/agent-protocol.md#errors).
+   - `alert.show` is reserved for text the user has to read before continuing: validation that blocks
+     a submit, diagnostic detail the user explicitly asked for such as a connection or model check,
+     and permission guidance. Use `alert.confirm`, `alert.prompt`, or `Dialog` only when the user
+     must decide.
+   - Backend `message` strings are diagnostic and are never displayed inline. Translate from the
+     closed code instead; a detail sheet the user opens on purpose may show them verbatim.
 
 ## Acceptance
 
@@ -98,11 +107,21 @@ failure feels:
 - Feature components keep business state and translations outside CherryUI.
 - User-visible copy follows [Internationalization](./internationalization.md), including
   accessibility labels, supported locales, interpolation, and language-aware formatting.
-- Outcome feedback follows [Report Outcomes](#report-outcomes): toasts for in-place outcomes,
-  alerts only for text that must be read or a decision.
+- Outcome feedback follows [Report Outcomes](#report-outcomes): in-place morphs and live inline
+  progress avoid redundant toasts, toasts cover invisible or undoable outcomes, and alerts are
+  reserved for text that must be read or a decision.
 - Containers own external placement and reusable children do not carry screen-specific gutters.
-- Motion defines a clear purpose, remains responsive and interruptible, provides a complete reduced
-  or unavailable-motion result, and leaves target-specific adaptation with its interaction owner.
+- **Interaction feel acceptance:**
+  - **Immediate `0ms` press-in feedback** responds on pointer down and clears cleanly on
+    cancellation (scroll, drag, pointer-leave, or momentum stop).
+  - **Mid-flight interruption and continuity:** rapid open/close or keyboard transitions never jump,
+    freeze, or drop input focus.
+  - **Scroll and streaming coexistence:** user scroll immediately takes precedence over auto-scroll
+    and cancels pending taps.
+  - **Feedback accuracy:** outcomes bind to the exact item acted on, failures never flash success,
+    and in-place confirmations are not duplicated by toasts.
+  - **Graceful degradation:** reduced-motion and silent-haptic modes remain complete, operable, and
+    self-explanatory, with target-specific adaptation owned by the interaction component.
 - Visual changes are inspected in light and dark themes on a device.
 - iOS device work in parallel worktrees follows
   [Parallel Device Testing](./parallel-device-testing.md).

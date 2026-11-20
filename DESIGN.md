@@ -2,6 +2,8 @@
 
 Rules for visual decisions: where colour comes from, how hierarchy is built, when a surface or border is allowed, and where literal values are still permitted.
 
+Cherry Studio Mobile pairs **warm, calm monochrome reading surfaces** with **lightweight floating capsule chrome**, **gentle breathing AI activity moments**, and **physically responsive touch interactions**. Reading stays quiet and legible while interactive controls feel direct, fluid, and unmistakably alive.
+
 Interaction component ownership is in [UI Components](docs/references/ui-components.md). The target
 contract for competing tap, long-press, scroll, pan, and text-selection interactions is in
 [Interaction And Gesture Arbitration](docs/references/interaction-and-gesture-arbitration.md),
@@ -19,7 +21,7 @@ When requirements conflict, protect in this order:
 3. **Theme parity.** Whatever is readable in light must be readable in dark, and the reverse.
 4. **Hierarchy.** One primary object per screen; the eye knows where to start.
 5. **Consistency.** The same interaction looks the same everywhere.
-6. **Polish.** Motion, spacing refinements, platform differences.
+6. **Tactile craft and responsiveness.** Immediate press feedback, interruptible transitions, and semantic haptics are baseline mobile interaction quality rather than optional ornament, while still yielding to items 1–5 if they conflict.
 
 Earlier items do not yield to later ones.
 
@@ -193,6 +195,28 @@ that image as its backdrop: heavily blurred and covered by a `background` scrim 
 stays readable in both themes. The colour is the content's own, not decoration; do not put it behind
 lists, forms, or other screens.
 
+### Floating Chrome And Capsule Affordances
+
+High-frequency mobile controls — composers, primary action triggers, mode pills, and floating
+return-to-bottom buttons — prefer generous capsule radii (`rounded-full`, `rounded-3xl`,
+`rounded-4xl` from the token scale) floating over scrolling content with soft scroll fades and
+restrained elevation or supported iOS glass, rather than boxy web-form rectangles or heavy divider
+lines.
+
+### AI Activity Moments (Bounded Atmospheric Exception)
+
+Ordinary lists, forms, settings, and settled prose remain free of decorative gradients or glow.
+Soft, restrained shimmer, breathing motion, or subtle atmospheric depth are permitted strictly
+during active AI moments:
+
+- empty-chat welcome anchors;
+- active thinking and web-search progress;
+- live voice listening and waveforms; and
+- image or artifact generation.
+
+Foreground content over these surfaces must maintain at least **4.5:1** contrast in both light and
+dark themes, with a clean static presentation under Reduce Motion.
+
 When a screen feels cluttered, separate **volume** from **loudness**. Volume is fixed by removing, merging, or reordering content. Loudness is fixed by reducing competing colours, sizes, weights, borders, surfaces, and motion. Keep one deliberate anchor — restraint is not flattening everything into having no focus.
 
 ## Motion
@@ -222,21 +246,75 @@ When an interaction uses motion, that motion must be:
 - **Performant.** Motion stays within the target environment's frame budget on representative
   supported hardware. Dropped frames, delayed feedback, and discontinuities are defects.
 
+### Four-Tier Motion Vocabulary
+
+Cherry Studio Mobile aims for a warm, fluid, unhurried feel across four motion tiers:
+
+1. **Tactile (`~100–140ms` perceived).** Immediate `press-in` feedback (`scale ~0.97` and subtle
+   surface response) on pointer down, with soft spring recovery on release or cancellation; never
+   waits for `onPress` to react.
+2. **Morph.** In-place role and state transitions — such as voice ↔ send ↔ stop, copy ↔ check, chip
+   activation, and anchored morph menus — using warm springs or smooth cross-fade and scale so
+   changing controls read as one continuous object (see the composer `+` morph menu in
+   [Composer README](src/frontend/components/Composer/README.md) and primary slot transitions).
+3. **Spatial.** Sheets, drawers, keyboard-tracking docks, composer expansion, and send-to-top
+   anchoring using critically damped, velocity-preserving springs on the UI thread with full
+   mid-flight interruption.
+4. **Ambient.** Calm, breathing loops for pending, thinking, voice, and generation states that yield
+   immediately once content arrives, pause offscreen or in the background, and degrade to static
+   indicators under Reduce Motion.
+
 Repeated motion is reserved for communicating active progress or another changing state. It pauses
 when inactive and has a nonmoving presentation. Reject motion that competes with content, attracts
 attention without conveying new information, replays needlessly during frequent actions, obscures
 causality, or moves an interaction target unpredictably.
 
-Use the shared motion vocabulary for reusable behavior. A custom motion treatment documents its
-purpose, trigger, ownership, interruption behavior, and reduced-motion result beside the component
-or interaction that owns it. Exact implementation and target-specific adaptation remain with that
-owner.
+### Implementation Guardrails
+
+- Animate `transform` and `opacity` on the UI thread with Reanimated rather than driving frames from
+  React state.
+- Avoid animating layout dimensions (`width`, `height`, `margin`, `padding`, `gap`) unless clipped
+  or measured off the animation's critical path.
+- Never start entrances from `scale(0)`; enter from subtle scale (`~0.9–0.96`) with `opacity: 0`.
+- Never slide peer tabs; tab switches preserve spatial equality rather than implying depth.
+
+Use the shared motion vocabulary (`@cherrystudio/ui/motion`) for reusable behavior. A custom motion
+treatment documents its purpose, trigger, ownership, interruption behavior, and reduced-motion result
+beside the component or interaction that owns it. Exact implementation and target-specific
+adaptation remain with that owner.
+
+### Haptics
+
+Use semantic haptic intents from `@cherrystudio/ui/haptics` (`selection`, `light`, `medium`,
+`success`, `warning`, `error`) under three rules:
+
+1. **Fire on the exact causal frame.** Trigger on commit or detent — never on `onPressIn` (where
+   scroll cancellation could misfire) and never after an animation settles.
+2. **Sparse and user-caused.** Never fire per frame, on passive scroll, or on unprompted entrances;
+   any future streaming pulse must be opt-in and heavily throttled.
+3. **Never the sole cue.** Visual and accessible cues must stand alone when system haptics are
+   disabled or unavailable on hardware.
 
 ## Icons
 
 General-purpose UI icons are Lucide SVG components adapted by `@cherrystudio/app-icons`. Import each icon from its deep path, for example `@cherrystudio/app-icons/icons/check`; the package root exports types only so Metro never traverses the complete Lucide icon set. In `className`, `size-*` sets the dimensions and `text-*` sets the stroke color; explicit `size`, `width`, `height`, and `color` props win over `className`.
 
 To add an icon, add one small adapter under `packages/app-icons/src/icons/` that default-imports the matching `lucide-react-native/icons/*` module and exports `createIcon(...)`. Do not add icon barrels, native glyph registries, fonts, or general-purpose generated PNG/WebP variants. Native iOS header buttons and menus are the narrow image-only exception: `assets/header-toolbar` contains template derivatives of their existing glyphs, generated by `scripts/generateHeaderToolbarIcons.ts` at the same 18pt size. Keep the original geometry and let the toolbar apply theme tint; adopting native controls must not substitute SF Symbols for product icons. Provider and model brands, avatars, logos, charts, and content images remain image assets rather than Lucide icons.
+
+### Icon Usage, Hierarchy, And Action Bars
+
+- **Icon-only vs icon + label.** High-frequency toolbar and composer actions may be icon-only when
+  paired with a localized `accessibilityLabel` (and tooltip or menu context where supported).
+  Unfamiliar, destructive, or ambiguous actions pair with visible words; provider and model brands
+  keep their authentic brand artwork rather than generic operation icons.
+- **Two-tier icon hierarchy and dual-state clarity.** Core high-frequency product glyphs (chat
+  composer, drawer, new chat, thinking and search toggles, primary message actions) establish a
+  warm, rounded, optically balanced voice with generous touch targets (`>= 44pt` / `48dp` via
+  padding or `hitSlop`) and unmistakable active/selected differentiation — using a filled glyph or
+  contrasting capsule fill rather than a slightly darker gray outline. Long-tail utility screens
+  continue using deep-imported Lucide adapters.
+- **Concise action bars.** Keep inline message action bars light and breathable (3–4
+  highest-frequency actions) and place secondary or power actions in contextual menus.
 
 Icons are not decoration. Do not place them in coloured tiles and do not add them to fill space. Prefer words where words are clearer.
 
@@ -248,7 +326,8 @@ None of the following is accepted:
 - **Ternaries whose branches are identical** — `isActive ? 'text-foreground' : 'text-foreground'`. Either make it differ or delete it along with the prop that feeds it.
 - **Shipping a visual change verified in one theme only.**
 - **Patching weak hierarchy with a border.** Unclear hierarchy is a typography and spacing problem; a border only hides it.
-- **Decorative gradients, glows, textures, faux depth, skeuomorphic paper.** A gradient is valid only as a labelled continuous data scale.
+- **Unbounded decorative gradients, glows, textures, faux depth, or skeuomorphic paper.** Narrow documented exceptions are limited to labelled continuous data scales, full-screen blurred painting stage backdrops, and [AI Activity Moments](#ai-activity-moments-bounded-atmospheric-exception).
+- **Dead touch targets or redundant toasts for visible in-place outcomes.**
 - **The same role holding different values in different files.** On finding a divergence, converge on one token; do not copy one of them over the other.
 - **"Desktop has it" as a reason.** The test is whether the thing is serialized: serialized shapes (part JSON, DB schema, DTOs) must align; values, interaction, and visuals may diverge. State the real reason in the commit, and check whether the desktop code is dead before aligning to it. See [Universal Package](docs/references/universal-package.md).
 - **Working around `check.ts`.** What it blocks is a real problem, not noise.
