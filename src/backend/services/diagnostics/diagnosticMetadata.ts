@@ -23,6 +23,7 @@ const LOG_MESSAGES = new Set([
   'Trace storage operation failed',
   'Device tool failed',
   'Agent operation failed',
+  'Agent cancellation requested',
   'Agent listener failed',
   'Agent status listener failed',
   'Agent projection failed',

@@ -58,6 +58,8 @@ test('transient context and runtime events round-trip without diagnostic payload
     },
     { type: 'context.usage.updated', usages: [] },
     { type: 'runtime.failed' },
+    { type: 'runtime.failed', retryable: false },
+    { type: 'runtime.recovered' },
   ])
     expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
   expect(AgentEventSchema.safeParse({ type: 'runtime.failed', error: 'device path' }).success).toBe(

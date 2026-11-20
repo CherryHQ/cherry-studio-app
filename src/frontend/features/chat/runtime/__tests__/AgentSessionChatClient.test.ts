@@ -276,6 +276,35 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
+  test('reconciles the mounted transcript after storage recovers automatically', async () => {
+    let publish!: (event: AgentEvent) => void;
+    let current: AgentSessionSnapshot = { ...snapshot(), streamingMessage: assistantMessage() };
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: current, unsubscribe() {} };
+    });
+    const refreshed = deferred<void>();
+    const onTranscriptChanged = jest.fn().mockImplementationOnce(() => {});
+    onTranscriptChanged.mockImplementation(() => refreshed.resolve());
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    const unsubscribe = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      expect(client.getState('session-1').liveMessages).toEqual([assistantMessage()]);
+      current = snapshot();
+      publish({ type: 'runtime.recovered' });
+      await refreshed.promise;
+      expect(client.getState('session-1')).toMatchObject({
+        liveMessages: [],
+        status: 'ready',
+      });
+      expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    } finally {
+      unsubscribe();
+      client.dispose();
+    }
+  });
+
   test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
     const activeTurn = {
       id: 'turn-1',

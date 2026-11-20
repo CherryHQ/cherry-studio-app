@@ -654,10 +654,19 @@ export class AgentSessionChatClient {
           error: new AgentProtocolError({
             code: 'EXECUTION_UNAVAILABLE',
             message: 'Agent storage failed. Reopen the session to resume unfinished work.',
-            retryable: true,
+            retryable: event.retryable ?? true,
           }),
         });
         return;
+      case 'runtime.recovered': {
+        const generation = entry.generation;
+        void Promise.resolve(entry.observationPromise)
+          .then(() => {
+            if (entry.generation === generation) return this.refresh(entry.state.sessionId);
+          })
+          .catch(() => {});
+        return;
+      }
       case 'question.updated':
         this.updateState(entry, { ...entry.state, pendingQuestion: event.question });
         return;

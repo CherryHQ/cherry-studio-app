@@ -196,6 +196,8 @@ export class DurableAgentHost implements AgentProtocol {
   private suspension: Promise<void> | undefined;
   private resuming: Promise<void> | undefined;
   private suspended = false;
+  /** A failing stored turn can only trigger one automatic reopen until new input is admitted. */
+  private storageRecovery: 'idle' | 'scheduled' | 'attempted' = 'idle';
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: KeepAliveLease | undefined;
   /** One stable lease per user-started Session, independent of reply presentation. */
@@ -308,14 +310,7 @@ export class DurableAgentHost implements AgentProtocol {
             );
           }
         : undefined,
-      onFailure: (error) => {
-        logger.error('Durable Agent storage failed', new Error(error.message));
-        for (const sessionId of this.listeners.keys())
-          this.publish(sessionId, { type: 'runtime.failed' });
-        void this.suspend(new Error(error.message)).catch((failure) =>
-          logger.warn('Failed to suspend the Agent after storage failure', failure),
-        );
-      },
+      onFailure: (error) => void this.recoverStorageFailure(error),
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
@@ -450,10 +445,13 @@ export class DurableAgentHost implements AgentProtocol {
       this.controller.signal.throwIfAborted();
       await this.conversations.drainUsage();
       this.controller.signal.throwIfAborted();
-      const work = await this.conversations.watchWork((active) => this.protectWork(active));
-      if (this.controller.signal.aborted) {
+      const work = await this.conversations.watchWork((active) => {
+        if (!this.suspended) this.protectWork(active);
+      });
+      if (this.controller.signal.aborted || this.suspended) {
         await work.unsubscribe();
         this.controller.signal.throwIfAborted();
+        throw new Error('The Agent was suspended while opening storage.');
       }
       this.workWatch = work;
       this.protectWork(work.active);
@@ -466,7 +464,16 @@ export class DurableAgentHost implements AgentProtocol {
       recovery?.end('error', traceErrorAttributes(error));
       if (!this.controller.signal.aborted) {
         logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
-        await this.suspend(error instanceof Error ? error : new Error(String(error)));
+        if (this.suspension) {
+          // An interruption can finish tearing down the old copy while a reopen is still
+          // waiting for storage. Close any copy opened after that teardown as well.
+          await this.suspension.catch((cause: unknown) =>
+            logger.warn('Previous runtime cleanup failed', cause as Error),
+          );
+          await this.conversations.close();
+        } else {
+          await this.suspend(error instanceof Error ? error : new Error(String(error)));
+        }
       }
       throw error;
     }
@@ -574,6 +581,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
   suspend(reason = new Error('Background execution expired.')): Promise<void> {
+    if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
@@ -598,6 +606,52 @@ export class DurableAgentHost implements AgentProtocol {
         this.releaseSessionExecutions();
       }
     }));
+  }
+
+  private async recoverStorageFailure(error: { code: string; message: string }) {
+    if (this.controller.signal.aborted || this.storageRecovery === 'scheduled') return;
+    const canRecover =
+      error.code === 'runtime_storage_failed' &&
+      this.accepting &&
+      !this.resuming &&
+      this.storageRecovery === 'idle' &&
+      this.ports.shouldRecoverStorage?.() &&
+      !storageMutationGate.isFrozen;
+    const failure = new Error(error.message);
+    logger.error('Durable Agent storage failed', failure);
+    const suspension = this.suspend(failure).catch((cause: unknown) =>
+      logger.warn('Failed to suspend the Agent after storage failure', cause as Error),
+    );
+    if (canRecover) {
+      this.storageRecovery = 'scheduled';
+      await suspension;
+      try {
+        if (
+          this.storageRecovery === 'scheduled' &&
+          !this.controller.signal.aborted &&
+          this.ports.shouldRecoverStorage?.() &&
+          !storageMutationGate.isFrozen
+        ) {
+          this.storageRecovery = 'attempted';
+          await this.resumeSuspended();
+          if (this.accepting) {
+            for (const sessionId of this.listeners.keys())
+              this.publish(sessionId, { type: 'runtime.recovered' });
+            return;
+          }
+        }
+      } catch (cause) {
+        logger.error('Agent operation failed', { error: cause, operation: 'ai.storage_recovery' });
+      }
+      if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+    }
+    if (!this.controller.signal.aborted) {
+      const event: AgentEvent =
+        this.storageRecovery === 'attempted'
+          ? { type: 'runtime.failed', retryable: false }
+          : { type: 'runtime.failed' };
+      for (const sessionId of this.listeners.keys()) this.publish(sessionId, event);
+    }
   }
 
   async resumeSuspended() {
@@ -1583,6 +1637,13 @@ export class DurableAgentHost implements AgentProtocol {
       }
       // A multi-model answer can be stopped alone; without a message the whole question stops.
       if (parsed.messageId && state.active.assistantMessageId !== parsed.messageId) continue;
+      logger.info('Agent cancellation requested', {
+        operation: 'ai.cancel',
+        reasonCode: 'user',
+        sessionId: parsed.sessionId,
+        turnId: parsed.turnId,
+        requestId: state.active.identity.requestId,
+      });
       this.publish(parsed.sessionId, {
         type: 'turn.updated',
         turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
@@ -2856,6 +2917,10 @@ export class DurableAgentHost implements AgentProtocol {
           controller.signal,
         ),
       )
+      .then((result) => {
+        if (this.accepting) this.storageRecovery = 'idle';
+        return result;
+      })
       .catch((error: unknown) => {
         cancelPreparation();
         if (controller.signal.reason instanceof AgentProtocolError) throw controller.signal.reason;
@@ -2881,7 +2946,17 @@ export class DurableAgentHost implements AgentProtocol {
   private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
     this.admissions.get(sessionId)?.controller.abort(reason);
     await Promise.all(
-      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
+      this.liveStates(sessionId).map((state) => {
+        if (state.active)
+          logger.info('Agent cancellation requested', {
+            operation: 'ai.cancel',
+            reasonCode: 'continued-processing-expired',
+            sessionId,
+            turnId: state.active.identity.turnId,
+            requestId: state.active.identity.requestId,
+          });
+        return this.conversations.abort(state.lane);
+      }),
     );
   }
 

@@ -2626,6 +2626,77 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('reopens failed storage once without resubmitting the saved turn', async () => {
+    const state = fixture({ shouldRecoverStorage: () => true });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    let finishRecovery!: () => void;
+    const recovered = new Promise<void>((resolve) => {
+      finishRecovery = resolve;
+    });
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      events.push(event);
+      if (event.type === 'runtime.recovered') finishRecovery();
+    });
+    const failure = {
+      code: 'runtime_storage_failed',
+      message: 'Storage unavailable',
+      retryable: true,
+    };
+
+    try {
+      state.execution()!.onFailure!(failure);
+      await recovered;
+      expect(events).not.toContainEqual({ type: 'runtime.failed' });
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(
+        (await state.store.listMessages(state.sessionId)).find(
+          (message) => message.id === turn.assistantMessageId,
+        )?.status,
+      ).toBe('pending');
+
+      state.execution()!.onFailure!(failure);
+      expect(events).toContainEqual({ type: 'runtime.failed', retryable: false });
+      expect(state.host.isReady).toBe(false);
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('publishes a terminal error when the automatic storage reopen fails', async () => {
+    const state = fixture({ shouldRecoverStorage: () => true });
+    await state.reserve('running');
+    await state.host.initialize();
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    let reportFailure!: (event: AgentEvent) => void;
+    const failed = new Promise<AgentEvent>((resolve) => {
+      reportFailure = resolve;
+    });
+    const observation = await state.host.observeSession(state.sessionId, (event) => {
+      if (event.type === 'runtime.failed') reportFailure(event);
+    });
+    try {
+      state.execution()!.onFailure!({
+        code: 'runtime_storage_failed',
+        message: 'Storage unavailable',
+        retryable: true,
+      });
+      await expect(failed).resolves.toEqual({ type: 'runtime.failed', retryable: false });
+      expect(state.host.isReady).toBe(false);
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('records a failed recovery even when the durable database cannot open', async () => {
     const { traces, records } = createTraceRecorder();
     const state = fixture({
