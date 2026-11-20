@@ -3,6 +3,34 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ContentState } from '..';
 
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success', Warning: 'warning' },
+  impactAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View: NativeView } = jest.requireActual('react-native');
+
+  return {
+    __esModule: true,
+    default: {
+      View: ({ children, ...props }: { children?: React.ReactNode }) =>
+        React.createElement(NativeView, props, children),
+    },
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
+    ReduceMotion: { System: 'system' },
+    useAnimatedStyle: () => ({}),
+    useReducedMotion: () => false,
+    useSharedValue: (initial: number) => ({ get: () => initial, set: jest.fn() }),
+    withSpring: (value: number) => value,
+    withTiming: (value: number) => value,
+  };
+});
+
 jest.mock('../../loading/spinner', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
@@ -69,9 +97,14 @@ describe('ContentState', () => {
         title="No assistants"
       />,
     );
-    const buttonViews = tree.root.findAll(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const buttonViews = tree.root
+      .findAll((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .map((button) =>
+        button.find(
+          (node) =>
+            typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+        ),
+      );
     const pressables = tree.root.findAll(
       (node) =>
         node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function',
@@ -144,9 +177,12 @@ describe('ContentState', () => {
     const root = tree.root
       .findAllByProps({ testID: 'state' })
       .find((node) => typeof node.type === 'string');
-    const button = tree.root.find(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const button = tree.root
+      .find((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .find(
+        (node) =>
+          typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+      );
     const title = tree.root
       .findAllByProps({ children: 'No assistants' })
       .find((node) => typeof node.type === 'string');
@@ -170,9 +206,12 @@ describe('ContentState', () => {
         title="No assistants"
       />,
     );
-    const button = tree.root.find(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const button = tree.root
+      .find((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .find(
+        (node) =>
+          typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+      );
     const title = tree.root
       .findAllByProps({ children: 'No assistants' })
       .find((node) => typeof node.type === 'string');
