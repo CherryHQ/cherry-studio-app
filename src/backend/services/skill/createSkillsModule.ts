@@ -25,7 +25,7 @@ import {
 } from '@/shared/contracts/skills';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
-import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
+import { cherryinSkillSourcePrefixes, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { adaptSkillPackage } from './skillAdaptation';
 import { authorSkillPackage } from './skillAuthoring';
@@ -263,10 +263,13 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     searchSkillsSh: (query, signal) => deps.marketplace.searchSkillsSh(query, signal),
     listCherryin: (input, signal) => deps.marketplace.listCherryin(input, signal),
     async getCherryin(id, signal) {
-      const [detail, installed] = await Promise.all([
+      const [detail, ...installedGroups] = await Promise.all([
         deps.marketplace.getCherryin(id, signal),
-        deps.skills.listBySourcePrefix(`${cherryinSkillUrl(id)}#`),
+        ...cherryinSkillSourcePrefixes(id).map((prefix) => deps.skills.listBySourcePrefix(prefix)),
       ]);
+      const installed = [
+        ...new Map(installedGroups.flat().map((skill) => [skill.id, skill])).values(),
+      ];
       return {
         ...detail,
         installed: installed.flatMap((skill) => {

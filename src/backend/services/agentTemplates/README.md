@@ -13,10 +13,10 @@ on `main`, under its upstream GNU Affero General Public License v3.0:
 - `resources/data/marketplace-agents.json` supplies the newer localized names/descriptions and
   shared instructions. Both catalogs become ordinary Mobile Agent creation content.
 
-The shared `RegionService` detects the egress-IP country. `repositorySourceOrder`, also consumed by
-provider-registry downloads, selects GitCode first for CN and GitHub first for other countries.
-Unknown country retains the existing domestic-source default. A failed source falls back to the
-other source when it has no readable templates; the UI language never controls routing.
+The shared `RegionService` detects the egress-IP region (`CN` or `GLOBAL`). `repositorySourceOrder`,
+also consumed by provider-registry downloads, selects GitCode first for CN and GitHub first for
+GLOBAL. Unknown region retains the existing domestic-source default. A failed source falls back to
+the other source when it has no readable templates; the UI language never controls routing.
 
 GitCode uses `https://api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio`; GitHub uses
 `https://api.github.com/repos/CherryHQ/cherry-studio` for branch metadata and

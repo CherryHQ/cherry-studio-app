@@ -1,8 +1,10 @@
 import { loggerService } from '@logger';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import { getLocales } from 'expo-localization';
 import { Linking, Platform } from 'react-native';
 
+import type { NetworkRegion } from '@/backend/services/region';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   AppUpdateModule,
@@ -20,8 +22,16 @@ import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
 
+function resolveAppStoreCountry(region: NetworkRegion | null): string {
+  if (region === 'CN' || region === null) return 'CN';
+  const deviceRegion = getLocales()[0]?.regionCode?.toUpperCase();
+  return deviceRegion && /^[A-Z]{2}$/.test(deviceRegion) && deviceRegion !== 'CN'
+    ? deviceRegion
+    : 'US';
+}
+
 export function createAppUpdateModule(dependencies: {
-  getCountry(): Promise<string>;
+  getRegion(): Promise<NetworkRegion | null>;
   requestInstallPermission: () => Promise<boolean>;
 }): AppUpdateModule & { dispose(): Promise<void> } {
   const channel = resolveAppUpdateChannel(
@@ -66,12 +76,12 @@ export function createAppUpdateModule(dependencies: {
         if (!getNativeAppUpdate()?.isApkInstallationEnabled()) {
           return { status: 'unavailable', reason: 'nativeUnavailable' };
         }
-        const country = await dependencies.getCountry();
+        const region = await dependencies.getRegion();
         signal?.throwIfAborted();
         if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
         const result = await checkApkRelease(
           currentVersion,
-          country === 'CN' ? 'gitcode' : 'github',
+          region === 'GLOBAL' ? 'github' : 'gitcode',
           signal,
         );
         signal?.throwIfAborted();
@@ -140,10 +150,15 @@ export function createAppUpdateModule(dependencies: {
           storeUrl: `https://play.google.com/store/apps/details?id=${Application.applicationId}`,
         };
       }
-      const country = await dependencies.getCountry();
+      const region = await dependencies.getRegion();
       signal?.throwIfAborted();
       if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
-      return checkAppStoreRelease(Application.applicationId, currentVersion, country, signal);
+      return checkAppStoreRelease(
+        Application.applicationId,
+        currentVersion,
+        resolveAppStoreCountry(region),
+        signal,
+      );
     },
     async openStore(release) {
       if (lifetime.signal.aborted || release.channel === 'apk' || release.channel !== channel) {

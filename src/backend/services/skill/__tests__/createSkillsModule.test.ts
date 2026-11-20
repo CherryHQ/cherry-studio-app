@@ -3,7 +3,12 @@ import type {
   SkillInstallRecord,
 } from '@/backend/data/services/AgentGlobalSkillService';
 import type { Skill } from '@/shared/data/types/skill';
-import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
+import {
+  CHERRYIN_SKILLS_CN_URL,
+  CHERRYIN_SKILLS_GLOBAL_URL,
+  cherryinSkillLocator,
+  cherryinSkillUrl,
+} from '@/shared/utils/cherryinSkills';
 
 import { createSkillsModule } from '../createSkillsModule';
 import type { SkillPackageFiles } from '../skillPackage';
@@ -430,6 +435,74 @@ describe('createSkillsModule', () => {
     expect(fakes.published).toHaveLength(3); // Active turns retain immutable revisions.
     await module.reconcileStorage();
     expect(fakes.storage.reconcile).toHaveBeenCalledWith([]);
+  });
+
+  it('matches CherryIN installed members across both CN and Global source URLs', async () => {
+    const fakes = createFakes();
+    const listBySourcePrefix = jest.fn(async (prefix: string) => {
+      if (prefix.startsWith(CHERRYIN_SKILLS_CN_URL)) {
+        return [
+          {
+            id: 'skill-cn',
+            name: 'cn-member',
+            sourceUrl: cherryinSkillUrl('notes', 'cn/SKILL.md', CHERRYIN_SKILLS_CN_URL),
+          } as Skill,
+        ];
+      }
+      if (prefix.startsWith(CHERRYIN_SKILLS_GLOBAL_URL)) {
+        return [
+          {
+            id: 'skill-global',
+            name: 'global-member',
+            sourceUrl: cherryinSkillUrl('notes', 'global/SKILL.md', CHERRYIN_SKILLS_GLOBAL_URL),
+          } as Skill,
+        ];
+      }
+      return [];
+    });
+    fakes.skills.listBySourcePrefix = listBySourcePrefix;
+    const module = createSkillsModule({
+      ...fakes,
+      readAuthor: async () => 'Current user',
+      marketplace: {
+        ...marketplace,
+        getCherryin: async (id) => ({
+          id,
+          name: { en: 'Notes', zh: '笔记' },
+          description: { en: 'Desc', zh: null },
+          longDescription: { en: 'Long', zh: null },
+          author: 'CherryIN',
+          version: '1.0.0',
+          tags: ['collection'],
+          mobileSupport: 'supported',
+          downloads: 1,
+          hasPackage: true,
+          packageSize: null,
+          sourceUrl: null,
+          pageUrl: cherryinSkillUrl(id, undefined, CHERRYIN_SKILLS_CN_URL),
+        }),
+      },
+      sources: {
+        github: {
+          registry: 'github',
+          resolve: async () => {
+            throw new Error('unused');
+          },
+          resolveUrl: async () => {
+            throw new Error('unused');
+          },
+          acquire: async () => {
+            throw new Error('unused');
+          },
+        },
+      },
+      agentExists: async () => true,
+    });
+    const detail = await module.getCherryin('notes');
+    expect(detail.installed).toEqual([
+      { skillId: 'skill-global', name: 'global-member', entryPath: 'global/SKILL.md' },
+      { skillId: 'skill-cn', name: 'cn-member', entryPath: 'cn/SKILL.md' },
+    ]);
   });
 
   it('records what a package asks of the app at installation and again on update', async () => {

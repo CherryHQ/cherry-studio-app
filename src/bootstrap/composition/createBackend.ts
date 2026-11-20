@@ -73,6 +73,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
+import type { NetworkRegion } from '@/backend/services/region';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import type { ScreenAwakePort } from '@/backend/services/screenAwake';
 import {
@@ -144,7 +145,7 @@ export function createBackend(
     diagnostics: Pick<DiagnosticsModule, 'uploadBundle' | 'getReportStatus'>;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
-    region: { getCountry(): Promise<string | null> };
+    region: { getRegion(): Promise<NetworkRegion | null> };
     trash: Pick<TrashRuntime, 'trashFile'>;
     account: AccountModule;
     cloud: CloudModule;
@@ -314,7 +315,7 @@ export function createBackend(
     servers: services.mcpServer,
   });
   const providers = createProvidersModule({
-    getCountry: () => infrastructure.region.getCountry(),
+    getRegion: () => infrastructure.region.getRegion(),
     accounts: infrastructure.providerAccounts,
     hasAvailableModels: async (provider) =>
       (await services.model.list({ providerId: provider.id, enabled: true })).some((model) =>
@@ -368,7 +369,7 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
-  const cherryinClient = createCherryinSkillClient();
+  const cherryinClient = createCherryinSkillClient(() => infrastructure.region.getRegion());
   const cherryinSkills = createCherryinSkillSource(cherryinClient);
   const skillStorageWrites = new Set<Promise<unknown>>();
   let skillsStopped = false;
@@ -414,7 +415,7 @@ export function createBackend(
       getLocales().map((locale) => locale.languageTag),
     );
   const voice = createVoice({
-    getCountry: async () => (await infrastructure.region.getCountry()) ?? 'CN',
+    getRegion: async () => (await infrastructure.region.getRegion()) ?? 'CN',
     preference: services.preference,
     permissions: services.devicePermissions,
     language: () => appLanguage(services.preference.readCached('app.language')),
@@ -433,11 +434,11 @@ export function createBackend(
   infrastructure.agentHostDependencies.configureVoice(voice.module);
 
   const appUpdate = createAppUpdateModule({
-    getCountry: async () => (await infrastructure.region.getCountry()) ?? 'CN',
+    getRegion: () => infrastructure.region.getRegion(),
     requestInstallPermission: () => services.devicePermissions.requestPackageInstallAuthorization(),
   });
   const agentTemplates = createAgentTemplatesModule({
-    getCountry: () => infrastructure.region.getCountry(),
+    getRegion: () => infrastructure.region.getRegion(),
   });
   const uuRemote = createUuRemoteModule({
     connectionExists: async (id) => {

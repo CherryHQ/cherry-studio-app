@@ -5,6 +5,24 @@ import { LATEST_PRIVACY_POLICY_VERSION } from '@/shared/utils/privacyConsent';
 import { RegionService } from '../RegionService';
 
 const mockRequest = jest.fn();
+let mockConfigOrigin: unknown = 'https://config.test';
+let mockPlatform: string = 'ios';
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    get expoConfig() {
+      return { extra: { configServiceOrigin: mockConfigOrigin } };
+    },
+  },
+}));
+jest.mock('react-native', () => ({
+  Platform: {
+    get OS() {
+      return mockPlatform;
+    },
+  },
+}));
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({ request: (request: unknown) => mockRequest(request) }),
 }));
@@ -28,6 +46,8 @@ const preferences = {
 
 beforeEach(async () => {
   mockRequest.mockReset();
+  mockConfigOrigin = 'https://config.test';
+  mockPlatform = 'ios';
   enabled = true;
   version = LATEST_PRIVACY_POLICY_VERSION;
   consentListeners.clear();
@@ -45,87 +65,112 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-test('shares one Lite lookup across consumers and caches only the country in memory', async () => {
-  mockRequest.mockResolvedValue({ data: { country_code: 'CN', ip: '192.0.2.1' } });
-  await expect(Promise.all([region.getCountry(), region.getCountry()])).resolves.toEqual([
+test('shares one Config Service resolve lookup across consumers and caches only the region in memory', async () => {
+  mockRequest.mockResolvedValue({ status: 200, data: { region: 'CN' } });
+  await expect(Promise.all([region.getRegion(), region.getRegion()])).resolves.toEqual([
     'CN',
     'CN',
   ]);
-  await expect(region.getCountry()).resolves.toBe('CN');
+  await expect(region.getRegion()).resolves.toBe('CN');
   expect(mockRequest).toHaveBeenCalledTimes(1);
-  expect(cache.get('region.egress_country')).toBe('CN');
+  expect(cache.get('region.egress_region')).toBe('CN');
   expect(storage.getAllKeys()).toEqual([]);
   expect(mockRequest).toHaveBeenCalledWith(
     expect.objectContaining({
-      method: 'GET',
-      path: '/lite/me',
-      query: { token: expect.any(String) },
-      maxResponseBytes: 4_096,
+      method: 'POST',
+      path: '/v1/resolve',
+      body: { client: 'mobile', platform: 'ios' },
+      credentials: 'omit',
+      redirect: 'error',
+      maxResponseBytes: 32 * 1024,
     }),
   );
 });
 
-test('refreshes the country after the ten-minute success cache expires', async () => {
+test('refreshes the region after the ten-minute success cache expires', async () => {
   let now = 0;
   jest.spyOn(Date, 'now').mockImplementation(() => now);
   mockRequest
-    .mockResolvedValueOnce({ data: { country_code: 'CN' } })
-    .mockResolvedValueOnce({ data: { country_code: 'US' } });
-  await expect(region.getCountry()).resolves.toBe('CN');
+    .mockResolvedValueOnce({ status: 200, data: { region: 'CN' } })
+    .mockResolvedValueOnce({ status: 200, data: { region: 'GLOBAL' } });
+  await expect(region.getRegion()).resolves.toBe('CN');
   now = 10 * 60 * 1_000 - 1;
-  await expect(region.getCountry()).resolves.toBe('CN');
+  await expect(region.getRegion()).resolves.toBe('CN');
   now += 2;
-  await expect(region.getCountry()).resolves.toBe('US');
-  expect(cache.get('region.egress_country')).toBe('US');
+  await expect(region.getRegion()).resolves.toBe('GLOBAL');
+  expect(cache.get('region.egress_region')).toBe('GLOBAL');
   expect(mockRequest).toHaveBeenCalledTimes(2);
 });
 
-test('failed detection keeps the country unknown and remains retryable', async () => {
+test('failed detection keeps the region unknown and remains retryable', async () => {
   mockRequest
     .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValueOnce({ data: { country_code: 'JP' } });
-  await expect(region.getCountry()).resolves.toBeNull();
-  expect(cache.get('region.egress_country')).toBeUndefined();
-  await expect(region.getCountry()).resolves.toBe('JP');
+    .mockResolvedValueOnce({ status: 200, data: { region: 'GLOBAL' } });
+  await expect(region.getRegion()).resolves.toBeNull();
+  expect(cache.get('region.egress_region')).toBeUndefined();
+  await expect(region.getRegion()).resolves.toBe('GLOBAL');
 });
 
-test('an expired global country is not replaced by an asserted country on failure', async () => {
+test('non-200 Config Service responses keep the region unknown without caching it', async () => {
+  mockRequest.mockResolvedValueOnce({ status: 503, data: { region: 'CN' } });
+  await expect(region.getRegion()).resolves.toBeNull();
+  expect(cache.get('region.egress_region')).toBeUndefined();
+});
+
+test('an expired global region is not replaced by an asserted region on failure', async () => {
   let now = 0;
   jest.spyOn(Date, 'now').mockImplementation(() => now);
-  cache.set('region.egress_country', 'US', 1);
+  cache.set('region.egress_region', 'GLOBAL', 1);
   now = 2;
   mockRequest.mockRejectedValue(new Error('offline'));
-  await expect(region.getCountry()).resolves.toBeNull();
-  expect(cache.get('region.egress_country')).toBeUndefined();
+  await expect(region.getRegion()).resolves.toBeNull();
+  expect(cache.get('region.egress_region')).toBeUndefined();
 });
 
-test.each([{ country_code: 'China' }, { country: 'US' }])(
-  'malformed Lite response %j keeps the country unknown without caching it',
+test.each([{ region: 'EU' }, { country_code: 'US' }, null])(
+  'malformed Config Service response %j keeps the region unknown without caching it',
   async (data) => {
-    mockRequest.mockResolvedValue({ data });
-    await expect(region.getCountry()).resolves.toBeNull();
-    expect(cache.get('region.egress_country')).toBeUndefined();
+    mockRequest.mockResolvedValue({ status: 200, data });
+    await expect(region.getRegion()).resolves.toBeNull();
+    expect(cache.get('region.egress_region')).toBeUndefined();
   },
 );
+
+test.each([undefined, 'http://config.test', 'https://config.test/subpath'])(
+  'missing or invalid Config Service origin (%s) skips requests and returns null',
+  async (origin) => {
+    mockConfigOrigin = origin;
+    await expect(region.getRegion()).resolves.toBeNull();
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(cache.get('region.egress_region')).toBeUndefined();
+  },
+);
+
+test('unsupported platforms skip Config Service requests and return null', async () => {
+  mockPlatform = 'web';
+  await expect(region.getRegion()).resolves.toBeNull();
+  expect(mockRequest).not.toHaveBeenCalled();
+  expect(cache.get('region.egress_region')).toBeUndefined();
+});
 
 test.each([
   { decision: 'unanswered', consentEnabled: false, policyVersion: '' },
   { decision: 'declined', consentEnabled: false, policyVersion: LATEST_PRIVACY_POLICY_VERSION },
   { decision: 'accepted', consentEnabled: true, policyVersion: LATEST_PRIVACY_POLICY_VERSION },
 ])(
-  'detects and caches the country with an $decision privacy disclosure',
+  'detects and caches the region with an $decision privacy disclosure',
   async ({ consentEnabled, policyVersion }) => {
     enabled = consentEnabled;
     version = policyVersion;
-    mockRequest.mockResolvedValue({ data: { country_code: 'US' } });
-    await expect(region.getCountry()).resolves.toBe('US');
-    await expect(region.getCountry()).resolves.toBe('US');
+    mockRequest.mockResolvedValue({ status: 200, data: { region: 'GLOBAL' } });
+    await expect(region.getRegion()).resolves.toBe('GLOBAL');
+    await expect(region.getRegion()).resolves.toBe('GLOBAL');
     expect(mockRequest).toHaveBeenCalledTimes(1);
-    expect(cache.get('region.egress_country')).toBe('US');
+    expect(cache.get('region.egress_region')).toBe('GLOBAL');
   },
 );
 
-test('changing consent neither aborts a lookup nor clears its cached country', async () => {
+test('changing consent neither aborts a lookup nor clears its cached region', async () => {
   let finish!: (value: unknown) => void;
   mockRequest.mockImplementation(
     () =>
@@ -133,22 +178,22 @@ test('changing consent neither aborts a lookup nor clears its cached country', a
         finish = resolve;
       }),
   );
-  const country = region.getCountry();
+  const detected = region.getRegion();
   enabled = false;
   consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
   expect(mockRequest.mock.calls[0]![0].signal.aborted).toBe(false);
-  finish({ data: { country_code: 'CN' } });
-  await expect(country).resolves.toBe('CN');
+  finish({ status: 200, data: { region: 'CN' } });
+  await expect(detected).resolves.toBe('CN');
   enabled = true;
   consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
   enabled = false;
   consentListeners.get('app.privacy.data_collection.enabled')?.forEach((listener) => listener());
-  expect(cache.get('region.egress_country')).toBe('CN');
-  await expect(region.getCountry()).resolves.toBe('CN');
+  expect(cache.get('region.egress_region')).toBe('CN');
+  await expect(region.getRegion()).resolves.toBe('CN');
   expect(mockRequest).toHaveBeenCalledTimes(1);
 });
 
-test('disposal aborts a pending lookup and rejects its late country without caching it', async () => {
+test('disposal aborts a pending lookup and rejects its late region without caching it', async () => {
   let finish!: (value: unknown) => void;
   mockRequest.mockImplementation(
     () =>
@@ -156,11 +201,11 @@ test('disposal aborts a pending lookup and rejects its late country without cach
         finish = resolve;
       }),
   );
-  const country = region.getCountry();
-  const rejected = expect(country).rejects.toMatchObject({ name: 'AbortError' });
+  const detected = region.getRegion();
+  const rejected = expect(detected).rejects.toMatchObject({ name: 'AbortError' });
   const stopping = region._doStop();
-  finish({ data: { country_code: 'CN' } });
+  finish({ status: 200, data: { region: 'CN' } });
   await Promise.all([rejected, stopping]);
   expect(mockRequest.mock.calls[0]![0].signal.aborted).toBe(true);
-  expect(cache.get('region.egress_country')).toBeUndefined();
+  expect(cache.get('region.egress_region')).toBeUndefined();
 });

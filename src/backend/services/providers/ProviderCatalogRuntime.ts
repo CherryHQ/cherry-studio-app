@@ -48,13 +48,13 @@ export class ProviderCatalogRuntime extends BaseService {
   private async initializeCatalog(): Promise<void> {
     const db = application.get('DbService');
     await seedPresetProviders(db, async () => {
-      const country = await raceAbort(
-        application.get('RegionService').getCountry(),
+      const region = await raceAbort(
+        application.get('RegionService').getRegion(),
         this.controller.signal,
       );
       this.initializationSignal?.throwIfAborted();
       if (this.stopped) throw new Error('Provider catalog has stopped');
-      return getProviderCatalogEdition(country);
+      return getProviderCatalogEdition(region);
     });
   }
 

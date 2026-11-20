@@ -408,11 +408,11 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private async getSourceOrder(): Promise<readonly RegistryNetworkSource[]> {
-    const country = await raceAbort(
-      application.get('RegionService').getCountry(),
+    const region = await raceAbort(
+      application.get('RegionService').getRegion(),
       this.controller.signal,
     );
-    return repositorySourceOrder(country);
+    return repositorySourceOrder(region);
   }
 }
 

@@ -1,6 +1,7 @@
 import { AppState, Platform } from 'react-native';
 
 import { fileContent } from '@/backend/services/file/fileContent';
+import type { NetworkRegion } from '@/backend/services/region';
 import type {
   VOICE_ENGINE_PREFERENCE,
   VoiceCapability,
@@ -40,16 +41,16 @@ export function createVoice({
   language,
   dictationLanguage,
   transcriptionLanguage,
-  getCountry,
+  getRegion,
 }: {
   preference: VoicePreferences;
   permissions: SystemPromptQueue;
   language(): AppLanguage;
   dictationLanguage(): AppLanguage;
   transcriptionLanguage(): AppLanguage;
-  getCountry(): Promise<string>;
+  getRegion(): Promise<NetworkRegion>;
 }) {
-  const model = createVoiceModel(getCountry);
+  const model = createVoiceModel(getRegion);
   const bindTranscription = (engine: {
     status(signal: AbortSignal): Promise<VoiceEngineStatus>;
     transcribe(

@@ -3,6 +3,7 @@ import {
   createPresetProviderInput,
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
+import type { NetworkRegion } from '@/backend/services/region';
 import {
   ProviderSetupError,
   type ProviderAccountsModule,
@@ -23,7 +24,7 @@ type ProviderAvatarStorage = {
 };
 
 export type ProvidersModuleDependencies = {
-  getCountry(): Promise<string | null>;
+  getRegion(): Promise<NetworkRegion | null>;
   accounts: ProviderAccountsModule;
   avatars: ProviderAvatarStorage;
   catalog: {
@@ -48,7 +49,7 @@ export type ProvidersModuleDependencies = {
 };
 
 export function createProvidersModule({
-  getCountry,
+  getRegion,
   accounts,
   avatars,
   catalog,
@@ -57,7 +58,7 @@ export function createProvidersModule({
   hasAvailableModels,
 }: ProvidersModuleDependencies): ProvidersModule {
   const listRegionalCatalog = async () => {
-    const edition = getProviderCatalogEdition(await getCountry());
+    const edition = getProviderCatalogEdition(await getRegion());
     return catalog
       .list()
       .filter(

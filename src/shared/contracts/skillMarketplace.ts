@@ -14,7 +14,10 @@ export type CherryinSkill = {
   sourceUrl: string | null;
 };
 
-export type CherryinSkillDetail = CherryinSkill & { longDescription: MarketplaceText };
+export type CherryinSkillDetail = CherryinSkill & {
+  longDescription: MarketplaceText;
+  pageUrl: string;
+};
 export type CherryinSkillLibraryDetail = CherryinSkillDetail & {
   installed: { skillId: string; name: string; entryPath: string }[];
 };
