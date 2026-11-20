@@ -2,6 +2,7 @@ const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
+const [todoConfig] = require('./eslint.todo.config');
 
 const projectRoot = path.dirname(require.resolve('./package.json'));
 
@@ -398,39 +399,6 @@ const toSortedRestriction = {
   message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
 };
 
-const cherryLocalPlugin = {
-  rules: {
-    // Prevent untracked TODO/FIXME comments from turning into stale excuses for workarounds.
-    'require-todo-issue-ref': {
-      meta: {
-        type: 'problem',
-        schema: [],
-        messages: {
-          missingIssue:
-            '{{tag}} comments must reference a tracked GitHub issue, e.g. `{{tag}}(#123): ...`. Remove stale reminders or fix the root cause.',
-        },
-      },
-      create(context) {
-        return {
-          Program() {
-            for (const comment of context.sourceCode.getAllComments()) {
-              const matches = comment.value.matchAll(/\b(TODO|FIXME)\b(?!\(#\d+\))/g);
-              for (const match of matches) {
-                context.report({
-                  loc: comment.loc,
-                  messageId: 'missingIssue',
-                  data: { tag: match[1] },
-                });
-                break;
-              }
-            }
-          },
-        };
-      },
-    },
-  },
-};
-
 const pageRawSchedulingMessage = {
   setTimeout:
     'Do not call raw setTimeout in page code. Use useDebouncedValue, useTransientValue, createDebouncedAction, createScheduledFlush, or yieldToRuntime from shared building blocks.',
@@ -592,11 +560,9 @@ const pageSchedulingPlugin = {
 module.exports = defineConfig([
   expoConfig,
   {
-    plugins: {
-      cherry: cherryLocalPlugin,
-    },
+    plugins: todoConfig.plugins,
     rules: {
-      'cherry/require-todo-issue-ref': 'error',
+      ...todoConfig.rules,
       // Reanimated SharedValue.value mutation is idiomatic inside worklets and
       // gesture callbacks, but the React Compiler rule cannot distinguish it.
       'react-hooks/immutability': 'off',

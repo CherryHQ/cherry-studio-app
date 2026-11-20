@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ESLint } from 'eslint';
 
 import eslintConfig from '../../eslint.config';
+import todoConfig from '../../eslint.todo.config';
 
 const root = path.resolve(__dirname, '../..');
 // ESLint's config discovery uses dynamic import(), which Jest's CommonJS VM cannot execute.
@@ -324,8 +325,15 @@ describe('resolved architecture boundaries', () => {
   });
 
   describe('tracked TODO/FIXME guardrail', () => {
+    const toolingLint = new ESLint({
+      cwd: root,
+      overrideConfig: todoConfig,
+      overrideConfigFile: true,
+    });
+
     async function todoErrors(filePath: string, source: string) {
-      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      const linter = filePath.startsWith('src/') ? eslint : toolingLint;
+      const [result] = await linter.lintText(source, { filePath: path.join(root, filePath) });
       expect(result.fatalErrorCount).toBe(0);
       return result.messages.filter(
         (message) => message.ruleId === 'cherry/require-todo-issue-ref',
@@ -334,8 +342,8 @@ describe('resolved architecture boundaries', () => {
 
     it.each([
       ['src/frontend/utils/probe.ts', '// TODO: clean this up later\nexport const x = 1;'],
-      ['src/frontend/utils/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
-      ['src/frontend/utils/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
+      ['packages/ai-runtime/src/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
+      ['scripts/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
     ])('rejects untracked TODO/FIXME comments in %s', async (filePath, source) => {
       expect(await todoErrors(filePath, source)).not.toHaveLength(0);
     });
