@@ -1030,7 +1030,6 @@ export class JobRuntime extends BaseService {
         this.onProgress(row.id, { detail, progress });
         if (continuedTask && !controller.signal.aborted && Number.isFinite(progress))
           keepAliveLease?.update?.({
-            ...continuedTask,
             completedUnitCount: Math.max(0, Math.min(99, progress)),
           });
       },

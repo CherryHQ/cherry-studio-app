@@ -106,13 +106,20 @@ const GENERATE_TIMEOUT_MS = 10 * 60_000;
 export function createPaintingGenerateJobHandler(
   dependencies: PaintingGenerateJobDependencies,
 ): JobHandlerFor<'painting.generate'> {
+  const translate = dependencies.translate ?? ((key: string) => key);
   return {
     defaultConcurrency: 1,
     defaultQueue: () => PAINTING_JOB_QUEUE,
     defaultRetryPolicy: { backoff: 'none', baseDelayMs: 0, maxAttempts: 1, maxDelayMs: 0 },
     defaultTimeoutMs: GENERATE_TIMEOUT_MS,
-    // JobRuntime protects execution. PaintingActivity owns the progress UI, including on iOS.
+    // The class states the product promise ("keeps generating while you do
+    // something else"); the dispatch loop honors it with a keep-alive lease.
     executionClass: 'user-continued',
+    continuedProcessing: (input) => ({
+      deepLinkUrl: paintingTaskUrl(input.paintingId),
+      title: input.modelName,
+      subtitle: translate('painting.backgroundActivity.generating'),
+    }),
     recovery: 'abandon',
     // Deleting the receipt this job writes through must cancel it first. The
     // input already carries the id, so no `paintingId -> jobId` index is needed:
@@ -124,7 +131,6 @@ export function createPaintingGenerateJobHandler(
     async execute(ctx): Promise<PaintingGenerationResult> {
       const { images, mode, modelId, modelName, paintingId, paramValues, prompt } = ctx.input;
       const { ai, paintings, storage } = dependencies;
-      const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
       let screenAwakeLease: ScreenAwakeLease | undefined;
       const release = () => {
@@ -133,7 +139,7 @@ export function createPaintingGenerateJobHandler(
         lease?.release();
       };
       const session = dependencies.activities?.startSession({
-        deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'painting', paintingId }),
+        deepLinkUrl: paintingTaskUrl(paintingId),
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
         props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),
@@ -264,6 +270,10 @@ export function createPaintingGenerateJobHandler(
       }
     },
   };
+}
+
+function paintingTaskUrl(paintingId: string): string {
+  return createBackgroundTaskUrl(resolveScheme({}), { kind: 'painting', paintingId });
 }
 
 function paintingActivityProps(

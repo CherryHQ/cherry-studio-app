@@ -4,6 +4,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  type Event,
   Injectable,
   Phase,
   ServicePhase,
@@ -18,6 +19,8 @@ import { getSystemIntegration } from '../../../../modules/system-integration';
 
 /** A foreground user action with measurable work, never a restored or automatic workload. */
 export type KeepAliveTask = {
+  /** Destination shared with the optional app card for this task. */
+  readonly deepLinkUrl?: string;
   title: string;
   subtitle: string;
   completedUnitCount: number;
@@ -28,10 +31,15 @@ export type KeepAliveLease = {
   /** Idempotent; the last release stops shared execution protection. */
   release(outcome?: 'completed'): void;
   /** Actual work milestones; platforms without task progress may omit this capability. */
-  update?(task: Partial<KeepAliveTask>): void;
+  update?(progress: Partial<Omit<KeepAliveTask, 'deepLinkUrl'>>): void;
 };
 
 export type KeepAliveSource = {
+  /** A pending native request reserves presentation until admission is decided. */
+  readonly systemActivities?: {
+    has(deepLinkUrl: string): boolean;
+    onChange: Event<string>;
+  };
   getStatus?(): BackgroundExecutionStatus;
   subscribe?(listener: () => void): () => void;
   /**
@@ -79,6 +87,10 @@ export class KeepAliveCoordinator extends BaseService implements BackgroundExecu
   }
 
   getStatus = (): BackgroundExecutionStatus => this.source.getStatus?.() ?? 'idle';
+
+  get systemActivities() {
+    return this.source.systemActivities;
+  }
 
   subscribe = (listener: () => void): (() => void) =>
     this.source.subscribe?.(listener) ?? (() => {});

@@ -24,18 +24,19 @@ an ongoing task does not dismiss its execution notification or cancel its work.
 | `requiresPredecessorRetirement` | `true`: await deletion of the ended native identity before a new card | Not required: numeric identity is reused |
 | `shouldHoldLeaseUntilDelivery` | `true` | `true` |
 
-A Live Activity is created when foreground preparation starts and retained across app visibility
+A Cherry Live Activity can be created during foreground preparation and retained across app visibility
 changes. If work is first observed while hidden, its card waits for foreground admission. The
 manager checks native identity before updates and retirement: a card removed by the person or the
 system stays dismissed for that round. Removal does not cancel execution. ActivityKit remains a
 presentation mechanism, not an execution guarantee.
 
-On iOS, **Settings → Notifications → Enable Dynamic Island** controls the chat and painting Live
-Activities on the Dynamic Island and Lock Screen. Compact and expanded layouts belong to one
-native activity. On iPhone, touching and holding expands it and tapping opens the linked task.
-Disabling the preference removes its visible activities.
-Enabling it during a running task uses the current phase and original start time. The execution
-owner holds the same lease throughout. The persisted key remains `chat.background_reply.enabled`.
+On iOS, **Settings → Notifications → Cherry progress cards** controls Cherry's fallback Live
+Activities on the Dynamic Island and Lock Screen. A new system long-task request reserves the
+matching task destination before presentation starts. While admission is pending, Cherry waits.
+On admission, iOS supplies progress and cancellation. On refusal or older iOS, the next eligible
+foreground presentation uses the current content and original start time if the preference is on.
+Other tasks keep their own presentation. Turning the preference off retires Cherry cards while
+iOS continues managing admitted tasks. The persisted key remains `chat.background_reply.enabled`.
 Completion alerts have their own preference. Android retains its foreground-service notification.
 
 ## Execution And Attention
@@ -193,12 +194,12 @@ Only explicit confirmation stores `app.background_audio.consent: true`; showing 
 leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
 target device's decision. No settings row or switch is added.
 
-Chat and painting acquire execution leases without native progress metadata. The iOS source uses
-a finite UIKit background assertion and, with existing device-local consent, shared background
-audio. These mechanisms are the same with the Dynamic Island on or off. Requesting an iOS 26+
-`BGContinuedProcessingTask` for this work would give the system a second progress surface that
-the app's presentation preference cannot retire. Generic jobs can opt into that API separately
-through their handler. Questions and approvals retain the conversation lease until settlement.
+Explicitly started local conversations and immediate painting jobs request iOS 26+
+`BGContinuedProcessingTask` with progress milestones. The native launch callback confirms
+admission. System cancellation or revocation stops the owning session or job. Questions and
+approvals retain the conversation lease until settlement. Restored or automatically retried work
+uses the existing finite UIKit allowance and consented audio fallback. The app preference governs
+fallback presentation independently of execution.
 
 Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
 expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining

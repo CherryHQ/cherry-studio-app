@@ -1,6 +1,6 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 import { IosBackgroundExecutionSource } from '../IosBackgroundExecutionSource';
 import type { KeepAliveTask } from '../KeepAliveCoordinator';
@@ -56,6 +56,7 @@ describe('IosBackgroundExecutionSource', () => {
   };
 
   beforeEach(() => {
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: '26.0' });
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockBegin.mockResolvedValue(true);
@@ -304,6 +305,51 @@ describe('IosBackgroundExecutionSource', () => {
     totalUnitCount: 3,
   };
 
+  test('older iOS leaves presentation available immediately', async () => {
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: '18.4' });
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const deepLinkUrl = 'cherry:///?sessionId=a';
+    source.acquire('chat', undefined, { ...task, deepLinkUrl });
+    expect(source.systemActivities.has(deepLinkUrl)).toBe(false);
+    await flushOperations();
+    expect(mockBeginContinued).not.toHaveBeenCalled();
+    expect(mockBegin).toHaveBeenCalledTimes(1);
+    await source._doStop();
+  });
+
+  test('reserves only the requesting destination through admission and cancellation', async () => {
+    mockBeginContinued.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const source = new IosBackgroundExecutionSource(preference);
+    await source._doInit();
+    const chat = 'cherry:///?sessionId=a';
+    const painting = 'cherry://paintings?paintingId=b';
+    const changes: [string, boolean][] = [];
+    const subscription = source.systemActivities.onChange((url) =>
+      changes.push([url, source.systemActivities.has(url)]),
+    );
+    const lease = source.acquire('chat', undefined, { ...task, deepLinkUrl: chat });
+    source.acquire('painting', undefined, { ...task, deepLinkUrl: painting });
+    expect(changes).toEqual([
+      [chat, true],
+      [painting, true],
+    ]);
+    await flushOperations();
+    expect(changes.at(-1)).toEqual([painting, false]);
+    const [id, progress] = mockBeginContinued.mock.calls[0]!;
+    expect(progress).toEqual(task);
+    mockContinuedState({ id, state: 'active' });
+    mockContinuedState({ id, state: 'expired' });
+    expect(source.systemActivities.has(chat)).toBe(true);
+    lease.release();
+    await flushOperations();
+    expect(changes.at(-1)).toEqual([chat, false]);
+    mockContinuedState({ id, state: 'active' });
+    expect(source.systemActivities.has(chat)).toBe(false);
+    subscription.dispose();
+    await source._doStop();
+  });
+
   test('prefers native continued processing and never starts silence while it is pending or active', async () => {
     consent = true;
     mockBeginContinued.mockResolvedValue(true);
@@ -341,16 +387,20 @@ describe('IosBackgroundExecutionSource', () => {
       mockBeginContinued.mockResolvedValue(failure !== 'denied');
       const source = new IosBackgroundExecutionSource(preference);
       await source._doInit();
-      source.acquire('chat', jest.fn(), task);
+      const deepLinkUrl = 'cherry:///?sessionId=a';
+      source.acquire('chat', jest.fn(), { ...task, deepLinkUrl });
       await flushOperations();
       const id = mockBeginContinued.mock.calls[0][0];
       if (failure === 'unavailable') {
+        expect(source.systemActivities.has(deepLinkUrl)).toBe(true);
         expect(mockBeginAudio).not.toHaveBeenCalled();
         mockContinuedState({ id, state: 'unavailable' });
         await flushOperations();
       }
       expect(mockBeginAudio).toHaveBeenCalledTimes(1);
+      expect(source.systemActivities.has(deepLinkUrl)).toBe(false);
       mockContinuedState({ id, state: 'active' });
+      expect(source.systemActivities.has(deepLinkUrl)).toBe(false);
       changeState('background');
       changeState('active');
       await flushOperations();

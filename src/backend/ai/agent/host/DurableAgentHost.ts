@@ -8,6 +8,7 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
@@ -524,7 +525,14 @@ export class DurableAgentHost implements AgentProtocol {
 
   private startSessionExecution(sessionId: string): void {
     if (this.sessionExecutions.has(sessionId)) return;
-    const lease = this.ports.executionLease?.((reason) => this.suspend(reason), sessionId);
+    const lease = this.ports.executionLease?.(
+      (reason) =>
+        reason instanceof KeepAliveInterruptionError &&
+        reason.reason === 'continued-processing-expired'
+          ? this.cancelBackgroundSession(sessionId, reason)
+          : this.suspend(reason),
+      sessionId,
+    );
     if (lease) this.sessionExecutions.set(sessionId, { lease, completed: false });
   }
 
@@ -1051,6 +1059,10 @@ export class DurableAgentHost implements AgentProtocol {
         signal.throwIfAborted();
         plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
         this.prepared.set(executionKey(target.lane, requestId), { sessionId, turnId, plan });
+        this.sessionExecutions.get(sessionId)?.lease.update?.({
+          title: selected?.name || plan.agent.name,
+          completedUnitCount: 1,
+        });
         await this.conversations.submit(target.lane, {
           requestId,
           turnId,
@@ -2500,6 +2512,8 @@ export class DurableAgentHost implements AgentProtocol {
       this.screenSuppressedRequests.delete(previousRequestId);
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
+    if (state.active?.parts.some((part) => part.type === 'text' && part.text.length > 0))
+      this.sessionExecutions.get(sessionId)?.lease.update?.({ completedUnitCount: 2 });
     this.updateSessionExecution(sessionId);
     this.reconcileScreenAwake();
   }
@@ -2860,6 +2874,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (session) {
           this.publish(session.id, { type: 'session.updated', session });
           this.background.updateSessionTitle(session.id, session.name);
+          this.sessionExecutions.get(session.id)?.lease.update?.({ title: session.name });
         }
       }),
     );
@@ -2935,6 +2950,14 @@ export class DurableAgentHost implements AgentProtocol {
         'SESSION_RECOVERY_FAILED',
         'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
       );
+  }
+
+  /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
+  private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
+    this.admissions.get(sessionId)?.controller.abort(reason);
+    await Promise.all(
+      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
+    );
   }
 
   private recordQueue(

@@ -4,7 +4,9 @@ The current Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
 Ordinary disposal or loss of the finite UIKit background window preserves work; foreground reopening
-reconstructs current capabilities before resuming. User stop aborts the
+reconstructs current capabilities before resuming. Revocation of an iOS continued-processing task
+stops its owning work instead of suspending it for restart, as specified in
+[Background Activity Presentation](./background-activity-presentation.md). User stop aborts the
 selected Session. Route disposal only releases observation.
 
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
@@ -126,8 +128,9 @@ or TanStack Query.
 User cancellation affects only the selected Session. Pi executes one input at a time within that
 Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
 Ordinary disposal suspends the Harness without a user-abort mark. Finite UIKit window expiry does
-the same when background protection runs out. The next Host reopens committed tasks and
-reconstructs current capabilities. An unsafe tool interrupted after
+the same only when no continued-processing or audio protection remains. The next Host reopens
+committed tasks and reconstructs current capabilities. Continued-processing revocation
+stops the owning work and does not follow this recovery path. An unsafe tool interrupted after
 execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
 Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
 None of this guarantees continuous execution or a preserved network stream after process death.
@@ -275,10 +278,13 @@ user-owned verification policy.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, shared first downloads and request cancellation; the host stops it.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.
-- `IosBackgroundExecutionSource` protects chat and painting with finite UIKit time and consented
-  background audio. `DurableAgentHost` owns a stable Session lease across questions and approvals.
-  The last release stops shared protection. Toggling Live Activity presentation leaves the lease
-  alone. SystemIntegration's `BackgroundAudio` yields the audio profile to token-owned voice
+- `IosBackgroundExecutionSource` prefers task-scoped native continued processing for explicit
+  foreground user work, retains a finite UIKit window, and uses consented audio only as fallback.
+  `DurableAgentHost` owns stable Session leases; reply presentation never transfers them. Questions
+  and approvals retain protection on the same lease. The final release stops finite/audio protection
+  immediately. Official requests follow the owning work through final settlement.
+  New local painting enqueues carry process-local intent and real handler progress. Native continued-task
+  revocation stops its owning work and never restarts it through audio. SystemIntegration's `BackgroundAudio` yields the profile to token-owned voice
   uses, stops its loop for capture, and reports native protection loss. `AndroidBackgroundActivityRuntime`
   owns Android execution demand, reused task notifications, protection status, and background budget.
   SystemIntegration shares notification IDs with the patched background-actions service. The host stops

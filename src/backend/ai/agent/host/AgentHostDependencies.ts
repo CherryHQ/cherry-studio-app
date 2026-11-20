@@ -10,6 +10,7 @@
  */
 
 import { fromByteArray } from 'base64-js';
+import { resolveScheme } from 'expo-linking';
 import { getLocales } from 'expo-localization';
 import { AppState, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
@@ -36,6 +37,7 @@ import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
@@ -45,6 +47,7 @@ import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
 import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -84,6 +87,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'AgentRuntime',
   'TrashRuntime',
   'KeepAliveCoordinator',
+  'BackgroundActivityEnvironment',
   'SshRuntime',
   'ScreenAwakeRuntime',
 ])
@@ -133,12 +137,36 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly skills;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
-  // A progress-bearing iOS lease creates a second, system-owned Live Activity.
-  // The session owns execution here and publishes progress through BackgroundReplyRuntime.
   readonly executionLease: NonNullable<MobileAgentHostPorts['executionLease']> = (
     onInterrupt,
     sessionId,
-  ) => this.keepAlive.acquire(sessionId ? 'agent.session' : 'agent.durable', onInterrupt);
+  ) => {
+    if (!sessionId) return this.keepAlive.acquire('agent.durable', onInterrupt);
+    const lease = this.keepAlive.acquire('agent.session', onInterrupt, {
+      deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'chat', sessionId }),
+      title: this.backgroundEnvironment.translate('chat.backgroundReply.assistant'),
+      subtitle: this.backgroundEnvironment.translate('chat.backgroundReply.preparing'),
+      completedUnitCount: 0,
+      totalUnitCount: 3,
+    });
+    if (!lease.update) return lease;
+    return {
+      ...lease,
+      update: (progress) =>
+        lease.update?.({
+          ...progress,
+          ...(progress.completedUnitCount !== undefined
+            ? {
+                subtitle: this.backgroundEnvironment.translate(
+                  progress.completedUnitCount >= 2
+                    ? 'chat.backgroundReply.responding'
+                    : 'chat.backgroundReply.thinking',
+                ),
+              }
+            : {}),
+        }),
+    };
+  };
   readonly generationLease = (tag: string) => this.screenAwake.acquire(tag);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
@@ -181,6 +209,9 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly textGenerator: RuntimeTextGenerator,
     private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
+    private readonly backgroundEnvironment: Pick<BackgroundActivityEnvironment, 'translate'> = {
+      translate: (key) => key,
+    },
     private readonly ssh?: SshRuntime,
     private readonly screenAwake: Pick<ScreenAwakeRuntime, 'acquire'> = {
       acquire: () => ({ release() {} }),

@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentProtocolError,
   type AgentEvent,
@@ -4436,6 +4437,31 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       controller.abort();
       await reading;
       await question?.catch(() => {});
+      await state.host.close();
+    }
+  });
+
+  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const before = [...state.steps];
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      expect(runningTurns(state)).toHaveLength(0);
+      await state.host.resumeSuspended();
+      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
+        before.filter((step) => step === 'close' || step === 'open'),
+      );
+    } finally {
       await state.host.close();
     }
   });

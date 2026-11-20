@@ -132,6 +132,21 @@ export class BackgroundActivityManager extends BaseService {
     const presentationEnabled = this.registerDisposable(
       this.environment.subscribePresentationEnabled(this.handlePresentationEnabledChange),
     );
+    const systemActivities = this.keepAlive.systemActivities;
+    const systemPresentation =
+      systemActivities &&
+      this.registerDisposable(
+        systemActivities.onChange((url) => {
+          if (this.disposed) return;
+          const reserved = systemActivities.has(url);
+          if (reserved) void this.dismissTask(url);
+          for (const record of this.sessions) {
+            if (record.deepLinkUrl !== url) continue;
+            if (reserved) this.retireSurface(record);
+            else this.startNative(record);
+          }
+        }),
+      );
     const visibleTask = this.registerDisposable(
       this.environment.subscribeVisibleTask((deepLinkUrl) => {
         if (this.disposed) return;
@@ -145,6 +160,7 @@ export class BackgroundActivityManager extends BaseService {
       this.disposed = true;
       appState.dispose();
       presentationEnabled.dispose();
+      systemPresentation?.dispose();
       visibleTask.dispose();
     };
     signal?.addEventListener('abort', cancel, { once: true });
@@ -363,6 +379,7 @@ export class BackgroundActivityManager extends BaseService {
   private startNative(record: SessionRecord): void {
     if (this.disposed || record.ended || record.surface.status !== 'pending') return;
     if (!this.environment.isPresentationEnabled()) return;
+    if (record.deepLinkUrl && this.keepAlive.systemActivities?.has(record.deepLinkUrl)) return;
     if (record.presenter.requiresForegroundStart && this.appState !== 'active') return;
     if (record.presenter.presentWhile === 'app-hidden' && this.appState === 'active') return;
     const retirement = record.deepLinkUrl && this.retiring.get(record.deepLinkUrl);
