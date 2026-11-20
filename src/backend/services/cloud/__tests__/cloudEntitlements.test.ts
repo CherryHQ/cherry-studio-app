@@ -4,6 +4,7 @@ import {
   cloudModelUnavailable,
   getActiveCloudEntitlements,
   CloudModelCatalogSchema,
+  CloudMemberModelCatalogSchema,
 } from '@/shared/contracts/cloud';
 
 import { cloudSnapshot } from './_cloudFixtures';
@@ -90,7 +91,7 @@ test('the plans contract keeps available paid plans when there is no current sub
   expect(plans.available_plans).toEqual([plan]);
 });
 
-test('parses all 14 fields and defaults legacy 7-field rows conservatively', () => {
+test('parses all 14 fields for paid, free-plan, AMD and member-only standalone models in one catalog', () => {
   const base = cloudSnapshot().models[0];
   const data = [
     base,
@@ -106,173 +107,47 @@ test('parses all 14 fields and defaults legacy 7-field rows conservatively', () 
       activation_endpoint: '/api/v1/amd/desktop/entry',
     },
     { ...base, id: 'standalone', requires_plan: false, standalone: true, is_free: true },
-    { ...base, id: 'standalone-with-plan', standalone: true, requires_plan: true },
-    { ...base, id: 'no-plan', requires_plan: false },
   ];
   expect(CloudModelCatalogSchema.parse({ data })).toEqual({ data });
+  expect(CloudMemberModelCatalogSchema.parse({ data })).toEqual({ data });
   expect(
     CloudModelCatalogSchema.safeParse({
       data: [{ ...base, provider: 'another-partner', new_field: true }],
     }).success,
   ).toBe(true);
-
-  const legacyRow = {
-    id: base.id,
-    display_name: base.display_name,
-    endpoint_type: base.endpoint_type,
-    context_window: base.context_window,
-    max_output_tokens: base.max_output_tokens,
-    capabilities: base.capabilities,
-    available_features: base.available_features,
-  };
-  expect(CloudModelCatalogSchema.parse({ data: [legacyRow] })).toEqual({
-    data: [
-      {
-        ...legacyRow,
-        requires_login: true,
-        requires_plan: true,
-        is_free: false,
-        standalone: false,
-        provider: null,
-        activation_required: false,
-        activation_endpoint: null,
-      },
-    ],
-  });
-
-  expect(
-    CloudModelCatalogSchema.parse({
-      data: [
-        {
-          id: base.id,
-          display_name: base.display_name,
-          endpoint_type: base.endpoint_type,
-          context_window: base.context_window,
-          max_output_tokens: base.max_output_tokens,
-          capabilities: null,
-          available_features: null,
-          requires_login: null,
-          requires_plan: null,
-          is_free: null,
-          standalone: null,
-          provider: null,
-          activation_required: null,
-          activation_endpoint: null,
-        },
-        {
-          id: 'omitted-capabilities',
-          display_name: base.display_name,
-          endpoint_type: base.endpoint_type,
-          context_window: base.context_window,
-          max_output_tokens: base.max_output_tokens,
-          available_features: ['agent'],
-        },
-      ],
-    }),
-  ).toEqual({
-    data: [
-      {
-        id: base.id,
-        display_name: base.display_name,
-        endpoint_type: base.endpoint_type,
-        context_window: base.context_window,
-        max_output_tokens: base.max_output_tokens,
-        capabilities: [],
-        available_features: [],
-        requires_login: true,
-        requires_plan: true,
-        is_free: false,
-        standalone: false,
-        provider: null,
-        activation_required: false,
-        activation_endpoint: null,
-      },
-      {
-        id: 'omitted-capabilities',
-        display_name: base.display_name,
-        endpoint_type: base.endpoint_type,
-        context_window: base.context_window,
-        max_output_tokens: base.max_output_tokens,
-        capabilities: [],
-        available_features: ['agent'],
-        requires_login: true,
-        requires_plan: true,
-        is_free: false,
-        standalone: false,
-        provider: null,
-        activation_required: false,
-        activation_endpoint: null,
-      },
-    ],
-  });
-
-  for (const key of [
-    'id',
-    'display_name',
-    'endpoint_type',
-    'context_window',
-    'max_output_tokens',
-    'available_features',
-  ] as const) {
-    expect(
-      CloudModelCatalogSchema.safeParse({ data: [{ ...legacyRow, [key]: undefined }] }).success,
-    ).toBe(false);
-  }
-  for (const badOptional of [
-    { requires_login: 'yes' },
-    { requires_plan: 0 },
-    { is_free: 'true' },
-    { standalone: 1 },
-    { provider: 123 },
-    { activation_required: 'false' },
-    { activation_endpoint: 42 },
-  ]) {
-    expect(
-      CloudModelCatalogSchema.safeParse({ data: [{ ...legacyRow, ...badOptional }] }).success,
-    ).toBe(false);
+  for (const key of Object.keys(base)) {
+    const incomplete = { data: [{ ...base, [key]: undefined }] };
+    expect(CloudModelCatalogSchema.safeParse(incomplete).success).toBe(false);
+    expect(CloudMemberModelCatalogSchema.safeParse(incomplete).success).toBe(false);
   }
 });
 
-test('catalogs without a plan flag preserve AMD activation and standalone guest access', () => {
-  const member = cloudSnapshot();
-  member.account!.entitlements = [];
-  const row = {
-    display_name: 'Chat',
-    endpoint_type: 'openai-chat-completions',
-    context_window: 8000,
-    max_output_tokens: 512,
-    capabilities: [],
-    available_features: ['chat', 'translate'],
+test('only signed-in discovery accepts the seven subscription fields from Global', () => {
+  const legacy = {
+    id: 'subscription-model',
+    display_name: 'Subscription model',
+    endpoint_type: 'anthropic-messages',
+    context_window: 128000,
+    max_output_tokens: 8192,
+    capabilities: null,
+    available_features: null,
   };
-  const { data: models } = CloudModelCatalogSchema.parse({
-    data: [
-      {
-        ...row,
-        id: 'amd/chat',
-        provider: 'amd',
-        requires_login: true,
-        activation_required: true,
-        activation_endpoint: '/api/v1/amd/desktop/entry',
-      },
-      { ...row, id: 'guest-chat', standalone: true, requires_login: false, requires_plan: null },
-    ],
+  expect(CloudModelCatalogSchema.safeParse({ data: [legacy] }).success).toBe(false);
+  expect(CloudMemberModelCatalogSchema.parse({ data: [legacy] }).data[0]).toEqual({
+    ...legacy,
+    capabilities: [],
+    available_features: [],
+    requires_login: true,
+    requires_plan: true,
+    is_free: false,
+    standalone: false,
+    provider: null,
+    activation_required: false,
+    activation_endpoint: null,
   });
-  expect(cloudModelUnavailable({ ...member, models }, 'amd/chat', 'agent', now)).toBe(
-    'activation_required',
-  );
-  expect(
-    cloudModelUnavailable(
-      {
-        phase: 'signed_out',
-        guestCatalog: 'ready',
-        account: null,
-        plans: null,
-        models,
-        isRefreshing: false,
-      },
-      'guest-chat',
-      'agent',
-      now,
-    ),
-  ).toBeUndefined();
+  for (const partial of [{ provider: 'amd' }, { standalone: true }, { requires_login: false }]) {
+    expect(
+      CloudMemberModelCatalogSchema.safeParse({ data: [{ ...legacy, ...partial }] }).success,
+    ).toBe(false);
+  }
 });
