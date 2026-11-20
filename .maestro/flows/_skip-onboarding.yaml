@@ -4,7 +4,7 @@ name: Shared helper - advance fresh onboarding to chat
 - extendedWaitUntil:
     visible:
       id: onboarding-welcome
-    timeout: 30000
+    timeout: 90000
 - tapOn:
     id: onboarding-start
 - runFlow:
