@@ -582,7 +582,7 @@
   "chat.messageActions.editDiscardTitle": "¿Descartar cambios?",
   "chat.messageActions.editFailed": "No se pudo guardar la respuesta. Inténtalo de nuevo.",
   "chat.messageActions.editKeepsAttachments": "Tus adjuntos se mantienen en el mensaje. Enviarlo responde al texto editado y el intercambio original se conserva.",
-  "chat.messageActions.editQuestionAction": "Editar respuesta",
+  "chat.messageActions.editQuestionAction": "Editar pregunta",
   "chat.messageActions.editSaved": "Respuesta guardada",
   "chat.messageActions.editTitle": "Editar mensaje",
   "chat.messageActions.editUnavailable": "Esta respuesta ya no se puede editar.",

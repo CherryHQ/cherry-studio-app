@@ -586,7 +586,7 @@
   "chat.messageActions.editDiscardTitle": "Отменить изменения?",
   "chat.messageActions.editFailed": "Не удалось сохранить ответ. Попробуйте ещё раз.",
   "chat.messageActions.editKeepsAttachments": "Вложения остаются в сообщении. Отправка отвечает измененному тексту, а исходный обмен сохраняется.",
-  "chat.messageActions.editQuestionAction": "Редактировать ответ",
+  "chat.messageActions.editQuestionAction": "Редактировать вопрос",
   "chat.messageActions.editSaved": "Ответ сохранён",
   "chat.messageActions.editTitle": "Изменить сообщение",
   "chat.messageActions.editUnavailable": "Этот ответ больше нельзя изменить.",

@@ -435,7 +435,6 @@ const legacyPageUseEffectLimits = {
   'src/frontend/features/chat/components/ChatWorkspace/components/ExpandedAnswer.tsx': 4,
   'src/frontend/features/chat/components/ChatWorkspace/context/AssistantMessageActionsProvider.tsx': 2,
   'src/frontend/features/chat/components/ChatWorkspace/hooks/useConversationFeedbackHint.ts': 2,
-  'src/frontend/features/chat/components/ChatWorkspace/hooks/useIsScreenReaderEnabled.ts': 1,
   'src/frontend/features/chat/components/ChatWorkspace/hooks/useMessageUsageRecords.ts': 1,
   'src/frontend/features/chat/components/ConversationMessageContent.tsx': 1,
   'src/frontend/features/chat/components/UserQuestionSheet/UserQuestionSheet.tsx': 1,

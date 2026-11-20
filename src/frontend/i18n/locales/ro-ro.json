@@ -582,7 +582,7 @@
   "chat.messageActions.editDiscardTitle": "Renunțați la modificări?",
   "chat.messageActions.editFailed": "Răspunsul nu a putut fi salvat. Încearcă din nou.",
   "chat.messageActions.editKeepsAttachments": "Atașamentele rămân la mesaj. Trimiterea răspunde textului editat, iar schimbul original este păstrat.",
-  "chat.messageActions.editQuestionAction": "Editează răspunsul",
+  "chat.messageActions.editQuestionAction": "Editează întrebarea",
   "chat.messageActions.editSaved": "Răspuns salvat",
   "chat.messageActions.editTitle": "Editează mesajul",
   "chat.messageActions.editUnavailable": "Acest răspuns nu mai poate fi editat.",

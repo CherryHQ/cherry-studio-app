@@ -578,7 +578,7 @@
   "chat.messageActions.editDiscardTitle": "Änderungen verwerfen?",
   "chat.messageActions.editFailed": "Die Antwort konnte nicht gespeichert werden. Versuche es erneut.",
   "chat.messageActions.editKeepsAttachments": "Ihre Anhänge bleiben an der Nachricht. Das Senden beantwortet den bearbeiteten Text, und der ursprüngliche Austausch bleibt erhalten.",
-  "chat.messageActions.editQuestionAction": "Antwort bearbeiten",
+  "chat.messageActions.editQuestionAction": "Frage bearbeiten",
   "chat.messageActions.editSaved": "Antwort gespeichert",
   "chat.messageActions.editTitle": "Nachricht bearbeiten",
   "chat.messageActions.editUnavailable": "Diese Antwort kann nicht mehr bearbeitet werden.",
