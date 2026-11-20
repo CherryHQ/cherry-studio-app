@@ -15,10 +15,14 @@ import {
   type TextInstance,
   type ViewInstance,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
+import { type HapticIntent, triggerHaptic } from '../../haptics';
+import { pressMotion } from '../../motion';
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
+import { useTactilePress } from './use-tactile-press';
 
 export type ButtonVariant =
   | 'default'
@@ -34,6 +38,8 @@ export type ButtonSize = 'default' | 'field' | 'footer' | 'inline' | 'lg' | 'sm'
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style'> & {
   children?: ReactNode;
+  /** Commit-time semantic haptic feedback; defaults to `light` for `default` and `medium` for `destructive`. */
+  haptic?: HapticIntent | false;
   icon?: ReactElement<{ className?: string }>;
   loading?: boolean;
   shape?: ButtonShape;
@@ -147,6 +153,29 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 const ButtonVariantContext = createContext<ButtonVariant>('default');
 const ButtonSizeContext = createContext<ButtonSize>('default');
 
+function resolveButtonHaptic(
+  variant: ButtonVariant,
+  haptic: HapticIntent | false | undefined,
+): HapticIntent | null {
+  if (haptic === false) {
+    return null;
+  }
+  if (haptic !== undefined) {
+    return haptic;
+  }
+  if (variant === 'default') {
+    return 'light';
+  }
+  if (variant === 'destructive') {
+    return 'medium';
+  }
+  return null;
+}
+
+function resolveButtonPressScale(variant: ButtonVariant): number {
+  return variant === 'link' || variant === 'text' ? 1 : pressMotion.scale;
+}
+
 const ButtonLabel = forwardRef<TextInstance, ButtonLabelProps>(function ButtonLabel(props, ref) {
   const variant = useContext(ButtonVariantContext);
   const size = useContext(ButtonSizeContext);
@@ -172,9 +201,13 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
     accessibilityState,
     children,
     disabled = false,
+    haptic,
     hitSlop,
     icon,
     loading = false,
+    onPress,
+    onPressIn,
+    onPressOut,
     shape = 'rounded',
     size = 'default',
     variant = 'default',
@@ -184,6 +217,15 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
 ) {
   const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
+  const resolvedHaptic = resolveButtonHaptic(variant, haptic);
+  const {
+    animatedStyle,
+    handlePressIn: handleTactilePressIn,
+    handlePressOut: handleTactilePressOut,
+  } = useTactilePress({
+    disabled: isDisabled,
+    scaleTo: resolveButtonPressScale(variant),
+  });
   const isIconOnly = icon !== undefined && children == null;
   const labelStyle = useResolveClassNames(variantStyles[variant].label);
   const spinnerColor = typeof labelStyle.color === 'string' ? labelStyle.color : undefined;
@@ -203,39 +245,66 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
     busy: loading || accessibilityState?.busy || false,
   };
 
+  const handlePressIn: PressableProps['onPressIn'] = (event) => {
+    handleTactilePressIn();
+    onPressIn?.(event);
+  };
+
+  const handlePressOut: PressableProps['onPressOut'] = (event) => {
+    handleTactilePressOut();
+    onPressOut?.(event);
+  };
+
+  const handlePress: PressableProps['onPress'] | undefined = onPress
+    ? (event) => {
+        if (isDisabled) {
+          return;
+        }
+        if (resolvedHaptic) {
+          triggerHaptic(resolvedHaptic);
+        }
+        onPress(event);
+      }
+    : undefined;
+
   return (
     <ButtonVariantContext.Provider value={variant}>
       <ButtonSizeContext.Provider value={resolvedSize}>
-        <Pressable
-          {...props}
-          accessibilityRole={accessibilityRole}
-          accessibilityState={mergedAccessibilityState}
-          className={cn(
-            rootBaseStyles,
-            variantStyles[variant].root,
-            shapeStyles[shape],
-            sizeStyles[resolvedSize].root,
-            isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
-          )}
-          disabled={isDisabled}
-          hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
-          ref={ref}
-        >
-          {loading ? (
-            <Spinner
-              accessibilityElementsHidden
-              color={spinnerColor}
-              importantForAccessibility="no"
-              size={sizeStyles[resolvedSize].spinner}
-            />
-          ) : null}
-          {!loading ? iconElement : null}
-          {typeof children === 'string' || typeof children === 'number' ? (
-            <ButtonLabel>{children}</ButtonLabel>
-          ) : (
-            children
-          )}
-        </Pressable>
+        <Animated.View style={animatedStyle}>
+          <Pressable
+            {...props}
+            accessibilityRole={accessibilityRole}
+            accessibilityState={mergedAccessibilityState}
+            className={cn(
+              rootBaseStyles,
+              variantStyles[variant].root,
+              shapeStyles[shape],
+              sizeStyles[resolvedSize].root,
+              isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
+            )}
+            disabled={isDisabled}
+            hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
+            onPress={handlePress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            ref={ref}
+          >
+            {loading ? (
+              <Spinner
+                accessibilityElementsHidden
+                color={spinnerColor}
+                importantForAccessibility="no"
+                size={sizeStyles[resolvedSize].spinner}
+              />
+            ) : null}
+            {!loading ? iconElement : null}
+            {typeof children === 'string' || typeof children === 'number' ? (
+              <ButtonLabel>{children}</ButtonLabel>
+            ) : (
+              children
+            )}
+          </Pressable>
+        </Animated.View>
       </ButtonSizeContext.Provider>
     </ButtonVariantContext.Provider>
   );

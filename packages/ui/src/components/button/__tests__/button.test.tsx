@@ -1,8 +1,78 @@
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
+import { pressMotion } from '../../../motion';
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
+
+let mockReducedMotion = false;
+const mockWithTiming = jest.fn((value: number, _config?: unknown) => value);
+const mockWithSpring = jest.fn((value: number, _config?: unknown) => value);
+const mockSharedValueSet = jest.fn();
+let latestSharedValue: { get: () => number; set: (nextValue: number) => void } | undefined;
+const mockSelectionAsync = jest.fn(async () => undefined);
+const mockImpactAsync = jest.fn(async (_style?: unknown) => undefined);
+const mockNotificationAsync = jest.fn(async (_type?: unknown) => undefined);
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: {
+    Light: 'light',
+    Medium: 'medium',
+  },
+  NotificationFeedbackType: {
+    Error: 'error',
+    Success: 'success',
+    Warning: 'warning',
+  },
+  impactAsync: (style: unknown) => mockImpactAsync(style),
+  notificationAsync: (type: unknown) => mockNotificationAsync(type),
+  selectionAsync: () => mockSelectionAsync(),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View: NativeView } = jest.requireActual('react-native');
+
+  const useSharedValue = (initialValue: number) => {
+    const ref = React.useRef(null) as {
+      current: {
+        get: () => number;
+        set: (nextValue: number) => void;
+        value: number;
+      } | null;
+    };
+    ref.current ??= {
+      get() {
+        return this.value;
+      },
+      set(nextValue: number) {
+        mockSharedValueSet(nextValue);
+        this.value = nextValue;
+      },
+      value: initialValue,
+    };
+    latestSharedValue = ref.current;
+    return ref.current;
+  };
+
+  return {
+    __esModule: true,
+    default: {
+      View: ({ children, ...props }: { children?: React.ReactNode }) =>
+        React.createElement(NativeView, props, children),
+    },
+    Easing: {
+      bezier: () => 'bezier',
+      linear: 'linear',
+    },
+    ReduceMotion: { System: 'system' },
+    useAnimatedStyle: (factory: () => object) => factory(),
+    useReducedMotion: () => mockReducedMotion,
+    useSharedValue,
+    withSpring: (value: number, config?: unknown) => mockWithSpring(value, config),
+    withTiming: (value: number, config?: unknown) => mockWithTiming(value, config),
+  };
+});
 
 jest.mock('../../loading/spinner', () => {
   const React = jest.requireActual('react');
@@ -28,11 +98,28 @@ jest.mock('uniwind', () => ({
 }));
 
 describe('Button', () => {
+  const originalOs = Platform.OS;
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    Platform.OS = 'ios';
+    mockReducedMotion = false;
+    latestSharedValue = undefined;
+    mockSharedValueSet.mockClear();
+    mockWithTiming.mockClear();
+    mockWithSpring.mockClear();
+    mockSelectionAsync.mockClear();
+    mockImpactAsync.mockClear();
+    mockNotificationAsync.mockClear();
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  afterAll(() => {
+    Platform.OS = originalOs;
   });
 
   function render(
@@ -320,5 +407,128 @@ describe('Button', () => {
       checked: true,
       disabled: true,
     });
+  });
+
+  test('scales down on press-in, springs back on release, and forwards caller callbacks', () => {
+    const onPressIn = jest.fn();
+    const onPressOut = jest.fn();
+    const pressable = findPressable(
+      render('Continue', {
+        onPressIn,
+        onPressOut,
+      }),
+    );
+
+    act(() => pressable.props.onPressIn({}));
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      pressMotion.scale,
+      expect.objectContaining({ duration: pressMotion.pressIn.duration }),
+    );
+    expect(onPressIn).toHaveBeenCalledTimes(1);
+
+    act(() => pressable.props.onPressOut({}));
+    expect(mockWithSpring).toHaveBeenCalledWith(1, expect.objectContaining(pressMotion.pressOut));
+    expect(onPressOut).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['link', 'text'] as const)(
+    'does not animate press scale for inline %s variant',
+    (variant) => {
+      const pressable = findPressable(render('Learn more', { variant }));
+
+      act(() => pressable.props.onPressIn({}));
+      act(() => pressable.props.onPressOut({}));
+
+      expect(mockWithTiming).not.toHaveBeenCalled();
+      expect(mockWithSpring).not.toHaveBeenCalled();
+    },
+  );
+
+  test('skips press scaling when Reduce Motion is enabled', () => {
+    mockReducedMotion = true;
+    const pressable = findPressable(render('Continue'));
+
+    act(() => pressable.props.onPressIn({}));
+    act(() => pressable.props.onPressOut({}));
+
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    expect(mockWithSpring).not.toHaveBeenCalled();
+  });
+
+  test('skips press scaling and resets mid-press when disabled or loading activates', () => {
+    const tree = render('Save');
+    const pressable = findPressable(tree);
+
+    act(() => pressable.props.onPressIn({}));
+    expect(mockWithTiming).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      tree.update(<Button loading>Save</Button>);
+    });
+
+    // Updating loading mid-press clears active press state and resets the shared scale to 1.
+    expect(mockSharedValueSet).toHaveBeenLastCalledWith(1);
+    expect(latestSharedValue?.get()).toBe(1);
+    act(() => findPressable(tree).props.onPressOut({}));
+    expect(mockWithSpring).not.toHaveBeenCalled();
+
+    act(() => {
+      tree.update(<Button loading>Save</Button>);
+    });
+    const animatedContainer = tree.root.findByType(View);
+    expect(animatedContainer.props.style).toEqual({ transform: [{ scale: 1 }] });
+
+    act(() => findPressable(tree).props.onPressIn({}));
+    expect(mockWithTiming).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires semantic haptics on commit for default and destructive variants only', () => {
+    const onDefaultPress = jest.fn();
+    const defaultPressable = findPressable(render('Send', { onPress: onDefaultPress }));
+
+    act(() => defaultPressable.props.onPressIn({}));
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+
+    act(() => defaultPressable.props.onPress({}));
+    expect(mockImpactAsync).toHaveBeenCalledWith('light');
+    expect(onDefaultPress).toHaveBeenCalledTimes(1);
+
+    mockImpactAsync.mockClear();
+    const onDestructivePress = jest.fn();
+    const destructivePressable = findPressable(
+      render('Delete', { onPress: onDestructivePress, variant: 'destructive' }),
+    );
+    act(() => destructivePressable.props.onPress({}));
+    expect(mockImpactAsync).toHaveBeenCalledWith('medium');
+    expect(onDestructivePress).toHaveBeenCalledTimes(1);
+
+    mockImpactAsync.mockClear();
+    for (const variant of ['outline', 'secondary', 'ghost', 'tonal', 'link', 'text'] as const) {
+      const onQuietPress = jest.fn();
+      const quietPressable = findPressable(render('Action', { onPress: onQuietPress, variant }));
+      act(() => quietPressable.props.onPress({}));
+      expect(onQuietPress).toHaveBeenCalledTimes(1);
+    }
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+    expect(mockSelectionAsync).not.toHaveBeenCalled();
+    expect(mockNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  test('allows callers to override or suppress button haptics and keeps omitted onPress undefined', () => {
+    const onSelect = jest.fn();
+    const customHaptic = findPressable(
+      render('Select', { haptic: 'selection', onPress: onSelect, variant: 'secondary' }),
+    );
+    act(() => customHaptic.props.onPress({}));
+    expect(mockSelectionAsync).toHaveBeenCalledTimes(1);
+
+    const onMuted = jest.fn();
+    const muted = findPressable(render('Muted', { haptic: false, onPress: onMuted }));
+    act(() => muted.props.onPress({}));
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+    expect(onMuted).toHaveBeenCalledTimes(1);
+
+    const triggerOnly = findPressable(render('Menu Trigger'));
+    expect(triggerOnly.props.onPress).toBeUndefined();
   });
 });
