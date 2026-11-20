@@ -3,9 +3,13 @@ name: Offline dev-mock chat streaming round-trip
 ---
 # Requires a dev client started with EXPO_PUBLIC_DEV_MOCK_PROVIDER=1
 - clearState
-- setPermissions:
-    permissions:
-      notifications: deny
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setPermissions:
+          permissions:
+            notifications: deny
 - openLink:
     link: ${DEV_CLIENT_URL}
 - runFlow:
@@ -37,6 +41,12 @@ name: Offline dev-mock chat streaming round-trip
 - inputText: "hello offline maestro"
 - tapOn:
     id: chat-composer-send
+- runFlow:
+    when:
+      platform: iOS
+      visible: "Don't Allow|Don’t Allow|不允许"
+    commands:
+      - tapOn: "Don't Allow|Don’t Allow|不允许"
 - extendedWaitUntil:
     visible: '\[dev-mock\] Echo: hello offline maestro'
     timeout: 15000
