@@ -97,9 +97,14 @@ describe('ContentState', () => {
         title="No assistants"
       />,
     );
-    const buttonViews = tree.root.findAll(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const buttonViews = tree.root
+      .findAll((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .map((button) =>
+        button.find(
+          (node) =>
+            typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+        ),
+      );
     const pressables = tree.root.findAll(
       (node) =>
         node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function',
@@ -172,9 +177,12 @@ describe('ContentState', () => {
     const root = tree.root
       .findAllByProps({ testID: 'state' })
       .find((node) => typeof node.type === 'string');
-    const button = tree.root.find(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const button = tree.root
+      .find((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .find(
+        (node) =>
+          typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+      );
     const title = tree.root
       .findAllByProps({ children: 'No assistants' })
       .find((node) => typeof node.type === 'string');
@@ -198,9 +206,12 @@ describe('ContentState', () => {
         title="No assistants"
       />,
     );
-    const button = tree.root.find(
-      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
-    );
+    const button = tree.root
+      .find((node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button')
+      .find(
+        (node) =>
+          typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+      );
     const title = tree.root
       .findAllByProps({ children: 'No assistants' })
       .find((node) => typeof node.type === 'string');

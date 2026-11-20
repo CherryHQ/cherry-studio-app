@@ -33,15 +33,15 @@ export const easing = {
 // gesture amplitudes.
 export const spring = {
   /**
-   * Responsive, soft-landing spring for tactile press recovery and crisp icon
-   * swaps without wobble.
+   * Responsive, soft-landing spring (zeta ~0.91) for tactile press recovery
+   * and crisp icon swaps without wobble.
    */
-  tactile: { damping: 24, mass: 0.8, stiffness: 420 },
+  tactile: { damping: 32, mass: 0.6, stiffness: 520 },
   /**
-   * Warm, gently lively spring for in-place state morphs (send/stop swaps,
-   * copy confirmation, anchored chips).
+   * Warm, gently lively spring (zeta ~0.73) for in-place state morphs
+   * (send/stop swaps, copy confirmation, anchored chips).
    */
-  morph: { damping: 22, mass: 0.9, stiffness: 300 },
+  morph: { damping: 24, mass: 0.85, stiffness: 320 },
   /**
    * Critically damped: the fastest arrival that never overshoots. For something
    * travelling to a position that has to be exact — a pinned row, a snap target

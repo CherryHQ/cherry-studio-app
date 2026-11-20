@@ -1,10 +1,10 @@
 import {
   cloneElement,
   createContext,
-  forwardRef,
   type ReactElement,
   type ReactNode,
-  useContext,
+  type Ref,
+  use,
 } from 'react';
 import {
   Platform,
@@ -38,21 +38,23 @@ export type ButtonSize = 'default' | 'field' | 'footer' | 'inline' | 'lg' | 'sm'
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style'> & {
   children?: ReactNode;
-  /** Commit-time semantic haptic feedback; defaults to `light` for `default` and `medium` for `destructive`. */
+  /** Optional commit-time semantic haptic feedback (silent by default). */
   haptic?: HapticIntent | false;
   icon?: ReactElement<{ className?: string }>;
   loading?: boolean;
+  ref?: Ref<ViewInstance>;
   shape?: ButtonShape;
   size?: ButtonSize;
   variant?: ButtonVariant;
 };
 
-export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'>;
+export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'> & {
+  ref?: Ref<TextInstance>;
+};
 
 // Clearing borderWidth passes NaN into Android's rounded overflow clipping and hides children.
 // Keep an explicit zero when switching away from a bordered variant (react-native#54217).
-const rootBaseStyles =
-  'flex-row items-center justify-center overflow-hidden border-0 active:opacity-80 disabled:opacity-40';
+const surfaceBaseStyles = 'flex-row items-center justify-center overflow-hidden border-0';
 
 const shapeStyles: Record<ButtonShape, string> = {
   pill: 'rounded-full',
@@ -125,11 +127,11 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   },
   ghost: {
     label: 'text-foreground',
-    root: 'bg-transparent shadow-none active:bg-secondary',
+    root: 'bg-transparent shadow-none',
   },
   link: {
     label: 'text-link underline',
-    root: 'bg-transparent shadow-none active:opacity-70',
+    root: 'bg-transparent shadow-none',
   },
   outline: {
     label: 'text-foreground',
@@ -141,7 +143,7 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   },
   text: {
     label: 'text-link',
-    root: 'bg-transparent shadow-none active:opacity-70',
+    root: 'bg-transparent shadow-none',
   },
   // A quiet filled action that still holds its shape beside a default button.
   tonal: {
@@ -153,32 +155,17 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 const ButtonVariantContext = createContext<ButtonVariant>('default');
 const ButtonSizeContext = createContext<ButtonSize>('default');
 
-function resolveButtonHaptic(
-  variant: ButtonVariant,
-  haptic: HapticIntent | false | undefined,
-): HapticIntent | null {
-  if (haptic === false) {
-    return null;
-  }
-  if (haptic !== undefined) {
-    return haptic;
-  }
-  if (variant === 'default') {
-    return 'light';
-  }
-  if (variant === 'destructive') {
-    return 'medium';
-  }
-  return null;
+function resolveButtonHaptic(haptic: HapticIntent | false | undefined): HapticIntent | null {
+  return haptic ? haptic : null;
 }
 
 function resolveButtonPressScale(variant: ButtonVariant): number {
   return variant === 'link' || variant === 'text' ? 1 : pressMotion.scale;
 }
 
-const ButtonLabel = forwardRef<TextInstance, ButtonLabelProps>(function ButtonLabel(props, ref) {
-  const variant = useContext(ButtonVariantContext);
-  const size = useContext(ButtonSizeContext);
+function ButtonLabel({ ref, ...props }: ButtonLabelProps) {
+  const variant = use(ButtonVariantContext);
+  const size = use(ButtonSizeContext);
 
   return (
     <Text
@@ -191,39 +178,38 @@ const ButtonLabel = forwardRef<TextInstance, ButtonLabelProps>(function ButtonLa
       ref={ref}
     />
   );
-});
+}
 
 ButtonLabel.displayName = 'Button.Label';
 
-const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
-  {
-    accessibilityRole = 'button',
-    accessibilityState,
-    children,
-    disabled = false,
-    haptic,
-    hitSlop,
-    icon,
-    loading = false,
-    onPress,
-    onPressIn,
-    onPressOut,
-    shape = 'rounded',
-    size = 'default',
-    variant = 'default',
-    ...props
-  },
+function ButtonRoot({
+  accessibilityRole = 'button',
+  accessibilityState,
+  children,
+  disabled = false,
+  haptic,
+  hitSlop,
+  icon,
+  loading = false,
+  onPress,
+  onPressIn,
+  onPressOut,
   ref,
-) {
+  shape = 'rounded',
+  size = 'default',
+  variant = 'default',
+  ...props
+}: ButtonProps) {
   const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
-  const resolvedHaptic = resolveButtonHaptic(variant, haptic);
+  const hasPressInteraction = Boolean(onPress || onPressIn || onPressOut);
+  const resolvedHaptic = resolveButtonHaptic(haptic);
   const {
     animatedStyle,
     handlePressIn: handleTactilePressIn,
     handlePressOut: handleTactilePressOut,
   } = useTactilePress({
-    disabled: isDisabled,
+    disabled: isDisabled || !hasPressInteraction,
     scaleTo: resolveButtonPressScale(variant),
   });
   const isIconOnly = icon !== undefined && children == null;
@@ -268,47 +254,57 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
     : undefined;
 
   return (
-    <ButtonVariantContext.Provider value={variant}>
-      <ButtonSizeContext.Provider value={resolvedSize}>
-        <Animated.View style={animatedStyle}>
-          <Pressable
-            {...props}
-            accessibilityRole={accessibilityRole}
-            accessibilityState={mergedAccessibilityState}
-            className={cn(
-              rootBaseStyles,
-              variantStyles[variant].root,
-              shapeStyles[shape],
-              sizeStyles[resolvedSize].root,
-              isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
-            )}
-            disabled={isDisabled}
-            hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
-            onPress={handlePress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            ref={ref}
-          >
-            {loading ? (
-              <Spinner
-                accessibilityElementsHidden
-                color={spinnerColor}
-                importantForAccessibility="no"
-                size={sizeStyles[resolvedSize].spinner}
-              />
-            ) : null}
-            {!loading ? iconElement : null}
-            {typeof children === 'string' || typeof children === 'number' ? (
-              <ButtonLabel>{children}</ButtonLabel>
-            ) : (
-              children
-            )}
-          </Pressable>
-        </Animated.View>
-      </ButtonSizeContext.Provider>
-    </ButtonVariantContext.Provider>
+    <ButtonVariantContext value={variant}>
+      <ButtonSizeContext value={resolvedSize}>
+        {/* Keep Pressable outermost so hitSlop extends freely on Android without parent clipping. */}
+        <Pressable
+          {...props}
+          accessibilityRole={accessibilityRole}
+          accessibilityState={mergedAccessibilityState}
+          className={cn(
+            'active:opacity-80 disabled:opacity-40',
+            (variant === 'link' || variant === 'text') && 'active:opacity-70',
+          )}
+          disabled={isDisabled}
+          hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
+          onPress={handlePress}
+          onPressIn={hasPressInteraction ? handlePressIn : undefined}
+          onPressOut={hasPressInteraction ? handlePressOut : undefined}
+          ref={ref}
+        >
+          {({ pressed }) => (
+            <Animated.View
+              className={cn(
+                surfaceBaseStyles,
+                variantStyles[variant].root,
+                shapeStyles[shape],
+                sizeStyles[resolvedSize].root,
+                isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
+                pressed && variant === 'ghost' && 'bg-secondary',
+              )}
+              style={animatedStyle}
+            >
+              {loading ? (
+                <Spinner
+                  accessibilityElementsHidden
+                  color={spinnerColor}
+                  importantForAccessibility="no"
+                  size={sizeStyles[resolvedSize].spinner}
+                />
+              ) : null}
+              {!loading ? iconElement : null}
+              {typeof children === 'string' || typeof children === 'number' ? (
+                <ButtonLabel>{children}</ButtonLabel>
+              ) : (
+                children
+              )}
+            </Animated.View>
+          )}
+        </Pressable>
+      </ButtonSizeContext>
+    </ButtonVariantContext>
   );
-});
+}
 
 ButtonRoot.displayName = 'Button';
 

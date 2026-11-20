@@ -1,4 +1,5 @@
-import { Platform, Text, View } from 'react-native';
+import { createRef } from 'react';
+import { Platform, Text, View, type ViewInstance } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
@@ -147,23 +148,46 @@ describe('Button', () => {
     return pressable;
   }
 
-  test('renders the default button and wraps primitive children in a label', () => {
+  function findSurface(tree: ReactTestRenderer) {
+    const pressable = findPressable(tree);
+    const surface = pressable.findAll(
+      (node) =>
+        typeof node.props.className === 'string' && node.props.className.includes('flex-row'),
+    )[0];
+
+    if (!surface) {
+      throw new Error('Button surface was not rendered.');
+    }
+
+    return surface;
+  }
+
+  test('renders the default button with outer Pressable, inner surface, and label', () => {
     const tree = render('Continue');
     const pressable = findPressable(tree);
+    const surface = findSurface(tree);
     const label = tree.root.findByType(Text);
 
     expect(pressable.props.accessibilityRole).toBe('button');
-    expect(pressable.props.className).toEqual(expect.stringContaining('bg-foreground shadow-xs'));
-    const rootClassNames = pressable.props.className.split(' ');
-    expect(rootClassNames).toEqual(
+    expect(pressable.props.className).toBe('active:opacity-80 disabled:opacity-40');
+    expect(surface.props.className).toEqual(expect.stringContaining('bg-foreground shadow-xs'));
+    const surfaceClassNames = surface.props.className.split(' ');
+    expect(surfaceClassNames).toEqual(
       expect.arrayContaining(['gap-2', 'px-4', 'py-2.5', 'rounded-xl']),
     );
-    expect(rootClassNames).not.toContain('h-10');
+    expect(surfaceClassNames).not.toContain('h-10');
     expect(label.props.children).toBe('Continue');
     expect(label.props.className).toEqual(expect.stringContaining('text-background'));
     expect(label.props.className.split(' ')).toEqual(
       expect.arrayContaining(['min-w-0', 'shrink', 'text-base']),
     );
+  });
+
+  test('supports React 19 ref prop on the outermost Pressable', () => {
+    const ref = createRef<ViewInstance>();
+    render('Continue', { ref });
+
+    expect(ref.current).not.toBeNull();
   });
 
   test('supports composed content through Button.Label', () => {
@@ -225,11 +249,11 @@ describe('Button', () => {
     },
   ])('renders the $size size', ({ iconClassName, labelClassName, rootClassNames, size }) => {
     const tree = render('Add', { icon: <View testID="icon" />, size });
-    const rootClassName = findPressable(tree).props.className as string;
+    const surfaceClassName = findSurface(tree).props.className as string;
     const labelClassNameValue = tree.root.findByType(Text).props.className as string;
     const iconClassNameValue = tree.root.findByProps({ testID: 'icon' }).props.className as string;
 
-    expect(rootClassName.split(' ')).toEqual(expect.arrayContaining(rootClassNames));
+    expect(surfaceClassName.split(' ')).toEqual(expect.arrayContaining(rootClassNames));
     expect(labelClassNameValue.split(' ')).toContain(labelClassName);
     expect(iconClassNameValue.split(' ')).toContain(iconClassName);
   });
@@ -250,14 +274,16 @@ describe('Button', () => {
     expect(icon.props.className).not.toContain('text-foreground');
   });
 
-  test('keeps the xs visual density inside a usable touch target', () => {
+  test('keeps the xs hitSlop directly on the outermost host view so parents cannot clip it', () => {
     const tree = render(null, {
       accessibilityLabel: 'More',
       icon: <View testID="icon" />,
       size: 'xs',
     });
+    const pressable = findPressable(tree);
 
-    expect(findPressable(tree).props.hitSlop).toBe(8);
+    expect(pressable.parent).toBe(tree.root.findByType(Button));
+    expect(pressable.props.hitSlop).toBe(8);
   });
 
   test('uses content-driven square padding for an icon-only button', () => {
@@ -266,15 +292,15 @@ describe('Button', () => {
       icon: <View testID="icon" />,
     });
     const pressable = findPressable(tree);
-    const rootClassNames = pressable.props.className.split(' ');
+    const surfaceClassNames = findSurface(tree).props.className.split(' ');
     const iconClassNames = tree.root.findByProps({ testID: 'icon' }).props.className.split(' ');
 
     expect(pressable.props.accessibilityLabel).toBe('Add');
-    expect(rootClassNames).toContain('p-2.5');
-    expect(rootClassNames).not.toContain('px-4');
-    expect(rootClassNames).not.toContain('py-2.5');
-    expect(rootClassNames).not.toContain('h-10');
-    expect(rootClassNames).not.toContain('w-10');
+    expect(surfaceClassNames).toContain('p-2.5');
+    expect(surfaceClassNames).not.toContain('px-4');
+    expect(surfaceClassNames).not.toContain('py-2.5');
+    expect(surfaceClassNames).not.toContain('h-10');
+    expect(surfaceClassNames).not.toContain('w-10');
     expect(iconClassNames).toEqual(expect.arrayContaining(['size-5', 'text-background']));
   });
 
@@ -284,54 +310,65 @@ describe('Button', () => {
       icon: <View testID="icon" />,
       size: 'lg',
     });
-    const rootClassNames = findPressable(tree).props.className.split(' ');
+    const surfaceClassNames = findSurface(tree).props.className.split(' ');
 
-    expect(rootClassNames).toContain('p-3');
-    expect(rootClassNames).not.toContain('px-5');
-    expect(rootClassNames).not.toContain('py-3');
-    expect(rootClassNames).not.toContain('h-12');
-    expect(rootClassNames).not.toContain('w-12');
+    expect(surfaceClassNames).toContain('p-3');
+    expect(surfaceClassNames).not.toContain('px-5');
+    expect(surfaceClassNames).not.toContain('py-3');
+    expect(surfaceClassNames).not.toContain('h-12');
+    expect(surfaceClassNames).not.toContain('w-12');
   });
 
   test.each<{
     labelClassName: string;
-    rootClassNames: string[];
+    pressableClassNames?: string[];
+    surfaceClassNames: string[];
     variant: ButtonVariant;
   }>([
     {
       labelClassName: 'text-destructive-foreground',
-      rootClassNames: ['bg-destructive', 'shadow-xs'],
+      surfaceClassNames: ['bg-destructive', 'shadow-xs'],
       variant: 'destructive',
     },
     {
       labelClassName: 'text-foreground',
-      rootClassNames: ['bg-transparent', 'shadow-none'],
+      surfaceClassNames: ['bg-transparent', 'shadow-none'],
       variant: 'ghost',
     },
     {
       labelClassName: 'text-link',
-      rootClassNames: ['bg-transparent', 'shadow-none', 'active:opacity-70'],
+      pressableClassNames: ['active:opacity-70'],
+      surfaceClassNames: ['bg-transparent', 'shadow-none'],
       variant: 'link',
     },
     {
       labelClassName: 'text-foreground',
-      rootClassNames: ['border', 'border-border', 'bg-transparent', 'shadow-none'],
+      surfaceClassNames: ['border', 'border-border', 'bg-transparent', 'shadow-none'],
       variant: 'outline',
     },
     {
       labelClassName: 'text-secondary-foreground',
-      rootClassNames: ['border', 'border-border', 'bg-field', 'shadow-none'],
+      surfaceClassNames: ['border', 'border-border', 'bg-field', 'shadow-none'],
       variant: 'secondary',
     },
-  ])('renders the $variant variant', ({ labelClassName, rootClassNames, variant }) => {
-    const tree = render('Continue', { variant });
-    const rootClassName = findPressable(tree).props.className as string;
-    const labelClassNameValue = tree.root.findByType(Text).props.className as string;
+  ])(
+    'renders the $variant variant',
+    ({ labelClassName, pressableClassNames, surfaceClassNames, variant }) => {
+      const tree = render('Continue', { variant });
+      const pressableClassName = findPressable(tree).props.className as string;
+      const surfaceClassName = findSurface(tree).props.className as string;
+      const labelClassNameValue = tree.root.findByType(Text).props.className as string;
 
-    expect(rootClassName.split(' ')).toEqual(expect.arrayContaining(rootClassNames));
-    expect(labelClassNameValue.split(' ')).toContain(labelClassName);
-    expect(useResolveClassNames).toHaveBeenLastCalledWith(expect.stringContaining(labelClassName));
-  });
+      if (pressableClassNames) {
+        expect(pressableClassName.split(' ')).toEqual(expect.arrayContaining(pressableClassNames));
+      }
+      expect(surfaceClassName.split(' ')).toEqual(expect.arrayContaining(surfaceClassNames));
+      expect(labelClassNameValue.split(' ')).toContain(labelClassName);
+      expect(useResolveClassNames).toHaveBeenLastCalledWith(
+        expect.stringContaining(labelClassName),
+      );
+    },
+  );
 
   test('combines semantic shape, size, and variant axes', () => {
     const tree = render(<Button.Label>Details</Button.Label>, {
@@ -339,15 +376,15 @@ describe('Button', () => {
       size: 'inline',
       variant: 'link',
     });
-    const rootClassName = findPressable(tree).props.className as string;
+    const surfaceClassName = findSurface(tree).props.className as string;
     const labelClassName = tree.root.findByType(Text).props.className as string;
 
-    expect(rootClassName.split(' ')).toEqual(
+    expect(surfaceClassName.split(' ')).toEqual(
       expect.arrayContaining(['rounded-full', 'bg-transparent', 'gap-1', 'px-0', 'py-1']),
     );
-    expect(rootClassName).not.toContain('px-4');
-    expect(rootClassName).not.toContain('py-2.5');
-    expect(rootClassName).not.toContain('rounded-xl');
+    expect(surfaceClassName).not.toContain('px-4');
+    expect(surfaceClassName).not.toContain('py-2.5');
+    expect(surfaceClassName).not.toContain('rounded-xl');
     expect(labelClassName).toContain('text-link');
     expect(labelClassName).toContain('underline');
   });
@@ -410,20 +447,19 @@ describe('Button', () => {
   });
 
   test('scales down on press-in, springs back on release, and forwards caller callbacks', () => {
+    const onPress = jest.fn();
     const onPressIn = jest.fn();
     const onPressOut = jest.fn();
     const pressable = findPressable(
       render('Continue', {
+        onPress,
         onPressIn,
         onPressOut,
       }),
     );
 
     act(() => pressable.props.onPressIn({}));
-    expect(mockWithTiming).toHaveBeenCalledWith(
-      pressMotion.scale,
-      expect.objectContaining({ duration: pressMotion.pressIn.duration }),
-    );
+    expect(mockWithTiming).toHaveBeenCalledWith(pressMotion.scale, pressMotion.pressIn);
     expect(onPressIn).toHaveBeenCalledTimes(1);
 
     act(() => pressable.props.onPressOut({}));
@@ -431,10 +467,20 @@ describe('Button', () => {
     expect(onPressOut).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps trigger-only buttons free of press handlers and scaling for menu hosts', () => {
+    const pressable = findPressable(render('More'));
+
+    expect(pressable.props.onPress).toBeUndefined();
+    expect(pressable.props.onPressIn).toBeUndefined();
+    expect(pressable.props.onPressOut).toBeUndefined();
+    expect(mockWithTiming).not.toHaveBeenCalled();
+    expect(mockWithSpring).not.toHaveBeenCalled();
+  });
+
   test.each(['link', 'text'] as const)(
     'does not animate press scale for inline %s variant',
     (variant) => {
-      const pressable = findPressable(render('Learn more', { variant }));
+      const pressable = findPressable(render('Learn more', { onPress: jest.fn(), variant }));
 
       act(() => pressable.props.onPressIn({}));
       act(() => pressable.props.onPressOut({}));
@@ -446,7 +492,7 @@ describe('Button', () => {
 
   test('skips press scaling when Reduce Motion is enabled', () => {
     mockReducedMotion = true;
-    const pressable = findPressable(render('Continue'));
+    const pressable = findPressable(render('Continue', { onPress: jest.fn() }));
 
     act(() => pressable.props.onPressIn({}));
     act(() => pressable.props.onPressOut({}));
@@ -455,55 +501,45 @@ describe('Button', () => {
     expect(mockWithSpring).not.toHaveBeenCalled();
   });
 
-  test('skips press scaling and resets mid-press when disabled or loading activates', () => {
-    const tree = render('Save');
+  test('springs smoothly back to 1 when loading activates mid-press', () => {
+    const onPress = jest.fn();
+    const tree = render('Save', { onPress });
     const pressable = findPressable(tree);
 
     act(() => pressable.props.onPressIn({}));
     expect(mockWithTiming).toHaveBeenCalledTimes(1);
 
     act(() => {
-      tree.update(<Button loading>Save</Button>);
+      tree.update(
+        <Button loading onPress={onPress}>
+          Save
+        </Button>,
+      );
     });
 
-    // Updating loading mid-press clears active press state and resets the shared scale to 1.
-    expect(mockSharedValueSet).toHaveBeenLastCalledWith(1);
+    // Mid-press transition to loading springs softly back to 1 and disarms subsequent press-out.
+    expect(mockWithSpring).toHaveBeenCalledTimes(1);
+    expect(mockWithSpring).toHaveBeenCalledWith(1, expect.objectContaining(pressMotion.pressOut));
     expect(latestSharedValue?.get()).toBe(1);
-    act(() => findPressable(tree).props.onPressOut({}));
-    expect(mockWithSpring).not.toHaveBeenCalled();
 
-    act(() => {
-      tree.update(<Button loading>Save</Button>);
-    });
-    const animatedContainer = tree.root.findByType(View);
-    expect(animatedContainer.props.style).toEqual({ transform: [{ scale: 1 }] });
+    act(() => findPressable(tree).props.onPressOut({}));
+    expect(mockWithSpring).toHaveBeenCalledTimes(1);
 
     act(() => findPressable(tree).props.onPressIn({}));
     expect(mockWithTiming).toHaveBeenCalledTimes(1);
   });
 
-  test('fires semantic haptics on commit for default and destructive variants only', () => {
-    const onDefaultPress = jest.fn();
-    const defaultPressable = findPressable(render('Send', { onPress: onDefaultPress }));
-
-    act(() => defaultPressable.props.onPressIn({}));
-    expect(mockImpactAsync).not.toHaveBeenCalled();
-
-    act(() => defaultPressable.props.onPress({}));
-    expect(mockImpactAsync).toHaveBeenCalledWith('light');
-    expect(onDefaultPress).toHaveBeenCalledTimes(1);
-
-    mockImpactAsync.mockClear();
-    const onDestructivePress = jest.fn();
-    const destructivePressable = findPressable(
-      render('Delete', { onPress: onDestructivePress, variant: 'destructive' }),
-    );
-    act(() => destructivePressable.props.onPress({}));
-    expect(mockImpactAsync).toHaveBeenCalledWith('medium');
-    expect(onDestructivePress).toHaveBeenCalledTimes(1);
-
-    mockImpactAsync.mockClear();
-    for (const variant of ['outline', 'secondary', 'ghost', 'tonal', 'link', 'text'] as const) {
+  test('keeps haptics silent by default across all variants and fires only when opted in on commit', () => {
+    for (const variant of [
+      'default',
+      'destructive',
+      'outline',
+      'secondary',
+      'ghost',
+      'tonal',
+      'link',
+      'text',
+    ] as const) {
       const onQuietPress = jest.fn();
       const quietPressable = findPressable(render('Action', { onPress: onQuietPress, variant }));
       act(() => quietPressable.props.onPress({}));
@@ -512,23 +548,41 @@ describe('Button', () => {
     expect(mockImpactAsync).not.toHaveBeenCalled();
     expect(mockSelectionAsync).not.toHaveBeenCalled();
     expect(mockNotificationAsync).not.toHaveBeenCalled();
+
+    const onOptInPress = jest.fn();
+    const optInPressable = findPressable(
+      render('Send', { haptic: 'light', onPress: onOptInPress }),
+    );
+    act(() => optInPressable.props.onPressIn({}));
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+
+    act(() => optInPressable.props.onPress({}));
+    expect(mockImpactAsync).toHaveBeenCalledWith('light');
+    expect(onOptInPress).toHaveBeenCalledTimes(1);
+
+    mockImpactAsync.mockClear();
+    const onDestructive = jest.fn();
+    const destructivePressable = findPressable(
+      render('Delete', { haptic: 'medium', onPress: onDestructive, variant: 'destructive' }),
+    );
+    act(() => destructivePressable.props.onPress({}));
+    expect(mockImpactAsync).toHaveBeenCalledWith('medium');
+    expect(onDestructive).toHaveBeenCalledTimes(1);
   });
 
-  test('allows callers to override or suppress button haptics and keeps omitted onPress undefined', () => {
-    const onSelect = jest.fn();
-    const customHaptic = findPressable(
-      render('Select', { haptic: 'selection', onPress: onSelect, variant: 'secondary' }),
+  test('does not fire haptics when disabled, loading, or suppressed via haptic={false}', () => {
+    const onDisabledPress = jest.fn();
+    const disabledPressable = findPressable(
+      render('Send', { disabled: true, haptic: 'light', onPress: onDisabledPress }),
     );
-    act(() => customHaptic.props.onPress({}));
-    expect(mockSelectionAsync).toHaveBeenCalledTimes(1);
+    act(() => disabledPressable.props.onPress({}));
+    expect(mockImpactAsync).not.toHaveBeenCalled();
+    expect(onDisabledPress).not.toHaveBeenCalled();
 
     const onMuted = jest.fn();
     const muted = findPressable(render('Muted', { haptic: false, onPress: onMuted }));
     act(() => muted.props.onPress({}));
     expect(mockImpactAsync).not.toHaveBeenCalled();
     expect(onMuted).toHaveBeenCalledTimes(1);
-
-    const triggerOnly = findPressable(render('Menu Trigger'));
-    expect(triggerOnly.props.onPress).toBeUndefined();
   });
 });
