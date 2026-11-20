@@ -257,6 +257,12 @@ production build. Either one skips the Android R8 mapping, JVM source bundle, an
 uploads; the first also skips JavaScript source maps. Missing or invalid upload credentials fail
 the upload tasks.
 
+Cloud-production iOS builds also run the after-archive symbol gate described in
+[Cloud Releases](./cloud-releases.md#ios). It matches the exported IPA to original dSYMs, stages a
+recovery artifact, and requires full-debug records on Sentry before success. This gate applies only
+to cloud production iOS builds; local production builds retain their existing upload behavior and
+need their own verification. Keep automatic uploads enabled as required above.
+
 EAS deletes a build's working directory when the build ends, so artifacts that were not uploaded
 cannot be recovered later. Large uploads can be interrupted by the network. For a local production
 build, keep the working directory and let failed uploads warn instead of failing the build, so a

@@ -63,7 +63,9 @@
         "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m --max-workers=2 --no-parallel"
       },
       "ios": {
-        "channel": "production-ios"
+        "channel": "production-ios",
+        "env": { "GYM_ARCHIVE_PATH": "./build/CherryStudio.xcarchive" },
+        "buildArtifactPaths": ["ios/build/ios-symbols"]
       }
     },
     "production-domestic-stores": {
