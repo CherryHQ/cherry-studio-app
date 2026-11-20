@@ -37,10 +37,6 @@ export function SidebarPlanBadge() {
   }, []);
 
   useEffect(() => {
-    if (presence === 'open') void cloud.refresh('background').catch(() => {});
-  }, [cloud, presence]);
-
-  useEffect(() => {
     if (presence === 'persistent' && isForeground) void cloud.refresh('if-stale').catch(() => {});
   }, [cloud, isForeground, presence]);
 

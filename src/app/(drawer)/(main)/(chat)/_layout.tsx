@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { mainHeaderScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { getTransparentHeaderStyle } from '@/frontend/appShell/navigation';
 import { type FilePaneFile, FilePaneHost } from '@/frontend/appShell/pane';
+import { useSidebarColumn } from '@/frontend/appShell/sidebar';
 import { FileViewerPane } from '@/frontend/features/files';
 import { FileLibraryScreen } from '@/frontend/features/library';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -15,12 +16,17 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
  * has the right one. Wider windows show files beside it.
  */
 export default function ChatStackLayout() {
+  const { column } = useSidebarColumn();
   const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'chat-background']);
 
   return (
     // The chat always leads with the sidebar; other pages do only at a wide window's first level.
     <RouteHeaderProvider rootAction="drawer">
-      <FilePaneHost library={<FileLibraryScreen />} renderFile={renderPaneFile}>
+      <FilePaneHost
+        layoutScope={column.kind === 'yielded' ? 'window' : 'host'}
+        library={<FileLibraryScreen />}
+        renderFile={renderPaneFile}
+      >
         <Stack
           screenOptions={{
             ...mainHeaderScreenOptions,

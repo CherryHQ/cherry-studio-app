@@ -62,12 +62,17 @@ export function useModelPickerData({
           if (group.provider.id !== CLOUD_PROVIDER_ID) return group;
           return {
             ...group,
-            items: group.items
-              .filter((item) => cloud.models.some((model) => model.id === item.model.modelId))
-              .map((item) => ({
-                ...item,
-                cloudUnavailable: cloudModelUnavailable(cloud, item.model.modelId, cloudUse),
-              })),
+            items: group.items.flatMap((item) => {
+              const model = cloud.models.find((entry) => entry.id === item.model.modelId);
+              if (!model) return [];
+              return [
+                {
+                  ...item,
+                  cloudUnavailable: cloudModelUnavailable(cloud, model.id, cloudUse),
+                  isCloudFree: model.is_free,
+                },
+              ];
+            }),
           };
         })
         .filter((group) => group.items.length > 0),
@@ -94,6 +99,7 @@ export function useModelPickerData({
   // defeated this memo.
   return useMemo(
     () => ({
+      cloudState: cloud,
       error,
       groups,
       hasLoadedCatalog,
@@ -105,6 +111,7 @@ export function useModelPickerData({
       refresh,
     }),
     [
+      cloud,
       error,
       getModelItem,
       groups,

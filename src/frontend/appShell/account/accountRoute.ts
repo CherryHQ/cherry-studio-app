@@ -16,12 +16,17 @@ export function readAccountReturnTo(
   return !isAccountRoute(pathname) && !/\/(?:oauth-)?callback$/.test(pathname) ? href : undefined;
 }
 
-export function accountSignInHref(returnTo: string, purpose?: 'expired') {
+export function accountSignInHref(
+  returnTo: string,
+  options?: { purpose?: 'expired' | 'sign-in'; cancelTo?: string },
+) {
+  const cancelTo = readAccountReturnTo(options?.cancelTo);
   return {
     pathname: '/login' as const,
     params: {
       returnTo: readAccountReturnTo(returnTo) ?? '/settings/profile',
-      ...(purpose ? { purpose } : {}),
+      ...(options?.purpose ? { purpose: options.purpose } : {}),
+      ...(cancelTo ? { cancelTo } : {}),
     },
   };
 }

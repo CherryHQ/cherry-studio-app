@@ -4,9 +4,9 @@
 catalog, and request admission. Bootstrap supplies its account identity source; this module does
 not import the enterprise implementation or read Accounts Portal's private storage keys.
 `Backend.cloud` exposes only status, subscription data, model metadata and refresh methods.
-Tokens and device secrets never reach the frontend or database. Confirmed community subscribers
-see their plan and remaining quota in the sidebar badge and use their models through a managed
-`CherryAI` provider.
+Tokens and device secrets never reach the frontend or database. Community accounts use their
+eligible models through the managed `CherryAI` provider. Confirmed paid subscribers see their plan
+and remaining quota in the sidebar badge.
 
 ## Configuration
 
@@ -51,8 +51,9 @@ the identity source atomically, including when the subject and product profile s
 `CloudSession` exchanges the IdP pair at `/accounts-portal/v1/enter`, then uses the returned
 Product Session and device ID for signed control-plane reads and inference. Product credentials
 stay in memory. Access-token expiry rotates the refresh token once; a lost rotation response
-clears the cached session so the next attempt enters afresh. HTTP 401 invalidates the cached
-product token. Requests are not automatically replayed.
+clears the cached session so the next attempt enters afresh. On a signed read or inference request,
+`AUTH_REQUIRED` and `SESSION_EXPIRED` trigger token refresh, and `REAUTH_REQUIRED` re-enters with
+the device. Those errors and `REQUEST_REPLAYED` allow one retry with a fresh signature.
 
 `cloudDevice` stores an Ed25519 seed separately from the device identifier in device-only secure
 storage. Android uses `ANDROID_ID`; iOS uses a Keychain UUID. Machine-code HMAC follows the mobile
@@ -64,17 +65,8 @@ nonce. Each inference request generates a separate 32-byte random idempotency ke
 43 unpadded base64url characters; the same value is signed and sent in `Idempotency-Key`.
 `Cherry-Request-ID` remains a UUID. Redirects and cookies are disabled.
 
-When `CHERRY_CLOUD_CLIENT_SECRET` is provisioned, inference also sends application HMAC headers
-`X-Client-ID`, `X-Timestamp` and `X-Signature`. The canonical text follows the Cloud client helper:
-uppercase method, path, empty query, `cherry-studio`, Unix timestamp and the exact request body,
-joined with newlines. The native signer uses the unmodified UTF-8 Cloud credential, independently
-of the CherryAI diagnostics credential and suffix. `MAIN_VITE_CHERRY_CLOUD_CLIENT_SECRET` is an
-accepted build-name fallback. The credential stays out of Expo's public config and JavaScript;
-`modules/cloud-signing` owns native signing. This applies only to the validated inference routes,
-with existing Product Session and device-signature headers retained. Login and account reads are
-unchanged. Provisioning requires a new native build; older clients or builds without the optional
-credential retain device-only authentication. Live gateway acceptance of the additional application
-headers has not been verified.
+Guest discovery and inference require the native HMAC credential. Member requests use the Product
+Session and device signature. The bytes used for signing are the bytes sent to the gateway.
 
 Control-plane calls use the shared HTTP client. `createModelFetch` is the streaming exception: it
 accepts only the configured HTTPS origin and the selected model's exact POST route, checks the
@@ -94,10 +86,10 @@ responses. They use the same boundary without buffering the response or construc
 ## Entitlements and model ownership
 
 - `/api/v1/account` is the admission and quota snapshot; `/v1/models` supplies the catalog and
-  features. Both are required for model admission. The separate `/api/v1/account/plans` read
-  supplies optional badge metadata after account/model readiness; a slow request, failed response
+  features. Signed-in requests use both. The separate `/api/v1/account/plans` read
+  supplies plan membership descriptions and badge metadata after account/model readiness; a slow request, failed response
   or invalid display payload cannot delay or reject inference. Admission revalidation does not
-  request this display metadata. Subscription display refreshes load it only for paid subscribers.
+  request this display metadata. Cold start and explicit refresh load it for active accounts, including accounts without a subscription.
 - The sidebar badge requires a confirmed, currently effective paid entitlement, independently of
   quota exhaustion or model catalog availability. It hides for free, expired, signed-out and
   enterprise accounts, and keeps a still-effective subscription visible after a temporary read
@@ -106,11 +98,10 @@ responses. They use the same boundary without buffering the response or construc
   badge uses its generic Cloud label and omits unconfirmed quota associations. The profile exposes
   no purchase or management action. The managed provider opens a read-only model list, without connection
   settings or model mutation actions.
-  Accounts without any currently entitled Plan models do not see the provider in settings or
-  the picker.
-- An active, currently effective paid entitlement and an available model feature are required. Free
-  entitlements alone do not expose Plan models. The gateway checks quota and returns its refusal
-  to the caller. The sidebar displays remaining units, including the effect of server reservations.
+  Community settings and the chat picker show the published catalog, including locked models.
+- Ordinary plan models require an effective free or paid entitlement and support for the selected
+  use. The gateway enforces quotas on each request. The sidebar displays the most recently
+  confirmed remaining units, including the effect of server reservations.
 - Agent conversations use `agent`. One-shot text generation (including translation) uses
   `general`, requiring both `chat` and `translate`. Picker callers can select the same purpose;
   its default is `agent`, and translation model settings request `general`.
@@ -118,15 +109,16 @@ responses. They use the same boundary without buffering the response or construc
   Money quotas use 1,000,000 units per currency unit. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
 - `cherryai-subscription` is the reserved, managed `CherryAI` provider. Provider queries
-  pin it first, including cursor pagination, so settings and model pickers share the same priority
-  without changing other providers' saved order keys. Ordinary provider/model mutation services
-  reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
+  pin it first, including cursor pagination, without changing other providers' saved order keys.
+  Settings render their own fixed entry above the saved providers. Ordinary provider/model mutation
+  services reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
   keeping their IDs/names for history; user-configured providers and conversations remain.
 - Cold start checks subscription display once after account restoration. A newly signed-in or
-  replaced account loads its own state, while signed-out installations make no subscription
-  requests. Opening the sidebar triggers a silent refresh. A permanent sidebar checks when it
-  becomes visible in the foreground if the snapshot is stale. Concurrent reads share the
-  account/model request. A transient background failure preserves the previous confirmed state.
+  replaced account loads its own state, while signed-out installations fetch the HMAC model directory
+  without querying personal account endpoints. The sidebar overlay reads the current snapshot on
+  open. A permanent sidebar checks when it becomes visible in the foreground if the snapshot is
+  stale. Concurrent reads share the account/model request. A transient background failure preserves
+  the previous confirmed state.
 - Sending revalidates stale model access. Inference completion or cancellation marks the sidebar
   quota stale, including if an earlier read is still in progress. The gateway decides whether
   quota permits the request.
@@ -137,7 +129,53 @@ responses. They use the same boundary without buffering the response or construc
   write transaction. Only catalog writes count as storage work. They wait for a backup or restore
   to release the write gate.
 
-The source protocol reviewed for this implementation is Cloud API
-`5fbef215e3fc1309745fd754d963e5400923dc78`. Unit and database regressions cover quotas, signature
-bytes, token pairing/rotation, stale responses, sign-out and catalog retention. They were authored
-but not executed in this implementation session; no live Cloud or device acceptance was run.
+## Signed model discovery and guest inference
+
+Guests and members request the full model directory with `GET /v1/models?limit=1000&catalog=full`.
+On a CN guest install, Config Service resolves the Cloud origin without creating a login registration.
+The client signs the exact raw query `limit=1000&catalog=full` and a zero-byte body with the native
+HMAC credential. Guest inference signs the final POST body with the same application credential.
+Guest transport omits cookies, Product Bearer and device headers. The gateway rate-limits requests
+by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
+
+The directory supplies all published models and requires all 14 fields on each row. A guest may
+call an eligible model with `requires_login=false`. Login replaces the guest snapshot and transport.
+Member requests sign the same directory path and query using a Product Session and v2 device
+signature with a fresh nonce. The catalog owns the free badge (`is_free`) and the plan gate
+(`requires_plan`). A free plan model still needs an active account entitlement containing its ID.
+The picker checks login, plan coverage and activation in order. If activation is required and
+the endpoint is empty, the row is unavailable. Locked offers stay visible in the directory.
+Only admitted models enter the locally managed provider.
+
+## AMD free models
+
+The community provider accepts AMD rows from the account's `/v1/models` catalog when the supplier
+is `amd` and the model uses the OpenAI chat-completions endpoint. The catalog's
+`activation_required` flag decides model admission without a paid entitlement or Cherry quota.
+Only admitted models are projected for selection. The detail page and conversation picker also
+display offered models that still require activation. The gateway applies AMD limits and owns the
+AMD key.
+
+The AMD status read at `/api/v1/amd/desktop/status` determines the action offered when the user
+presses a model row. A 404 hides the AMD entry. A 503 leaves the row retryable. The registration flag comes from
+the current server status. Changes saved in the Cloud admin take effect on the next read.
+On confirmation, the same Product Session signs a zero-byte POST to that model’s same-origin `activation_endpoint`. The app
+opens the service-provided HTTPS URL in the system browser with its fragment intact. Linked users
+can access the same page to view usage. The app takes its full model list from `/v1/models`, and
+AMD usage stays on the web. The one-use URL is valid for 60 seconds. Each attempt requests a new URL.
+
+The AMD web page can return to mobile with `cherrystudio://navigate/settings/provider`. The native
+intent handler opens chat using the installed app scheme. Development and preview use their existing
+`cherrystudio-dev` and `cherrystudio-preview` schemes. A warm return keeps a visible chat mounted.
+The app shell refreshes status and models after browser return, so the picker can show newly
+available AMD models in the CherryAI group.
+
+All member inference uses the existing streaming path and keeps the idempotency key when re-signing
+a retry. It respects `Retry-After` and refreshes account or catalog on entitlement and availability
+errors. AMD activation and credential errors also refresh AMD status.
+AMD failures leave the Cherry login in place. A credential rejection prompts the user to check AMD
+status. The detail page offers re-verification when the server confirms it is needed.
+Test and production gateways advertise their own model catalogs.
+Live usage and both response modes require a deployed environment and an activated account.
+
+Mobile follows the [Cloud model and AMD client protocol](https://github.com/CherryInternal/cherry-studio-cloud-api/blob/4f5e6946af0015da475f63a94fe59b9b8f83dd56/docs/amd-mobile-integration.md).

@@ -37,8 +37,9 @@ maestro --device "$DEVICE_ID" test \
   .maestro/flows
 ```
 
-Run one flow by passing its file path instead of the directory. Both current flows clear application
-state, then reconnect the development client through `DEV_CLIENT_URL`. They delete data in the
+The directory runs the two flows listed in `flows/config.yaml`. Run one flow by passing its file
+path instead of the directory. Both suite flows clear application state, then reconnect the
+development client through `DEV_CLIENT_URL`. They delete data in the
 selected test installation and must never target a primary user installation. On the resident
 device they also discard configuration other tasks reuse; prefer a temporary device for them.
 
