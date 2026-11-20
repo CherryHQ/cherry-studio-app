@@ -7,6 +7,7 @@ and Android background generation).
 ## User Entry
 
 - Voice settings: Sidebar (`testID:sidebar-settings`) -> `testID:settings-voice`.
+- iOS progress display: Settings → Notifications → Enable Dynamic Island.
 - In-composer dictation status indicator: `testID:chat-composer-dictation-status` (appears while
   listening or transcribing inside `testID:chat-composer`).
 - Desktop pairing paste entry (related background/remote workflow): `testID:desktop-pairing-paste`.
@@ -27,6 +28,9 @@ and Android background generation).
 - Cancelling read-aloud playback stops audio immediately across both local and DeepSeek engines.
 - Sending the app to background and foregrounding mid-task preserves active generation state and
   flushes pending drafts cleanly.
+- A running chat has one Live Activity. Touch and hold its timer for details. Turning off
+  Enable Dynamic Island hides the activity while the task keeps its execution lease.
+  [Simulator screenshots of the compact, expanded, and hidden states](../../.github/images/background-activity/ios-dynamic-island.png).
 
 ## Known Pitfalls
 
