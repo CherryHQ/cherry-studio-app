@@ -15,14 +15,14 @@ import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-contro
 import Animated, {
   Extrapolation,
   interpolate,
-  runOnJS,
-  runOnUI,
   useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -39,7 +39,7 @@ import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
 const openMountSettleMs = 34;
-const closeDurationMs = duration.base;
+const maxCloseDurationMs = duration.fast;
 const EFFORT_BACKDROP_FADE_INSET = 96;
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
@@ -112,25 +112,27 @@ export function ChatInputEffortOverlay({
       return;
     }
 
-    // Capture the shell fade's start on the UI thread to keep interrupted opens continuous.
-    // Repeated closes keep the same fade and deadline; reduced motion completes above.
-    runOnUI(() => {
+    // Use the on-screen progress so interrupted opens reverse from their current frame.
+    scheduleOnUI(() => {
       'worklet';
-      if (closeStartProgress.value !== null) {
+      if (closeStartProgress.get() !== null) {
         return;
       }
 
-      closeStartProgress.value = progress.value;
-      progress.value = withTiming(
-        0,
-        { duration: closeDurationMs, easing: easing.settle },
-        (finished) => {
-          if (finished) {
-            runOnJS(setLayout)(null);
-          }
-        },
+      const start = progress.get();
+      closeStartProgress.set(start);
+      progress.set(
+        withTiming(
+          0,
+          { duration: maxCloseDurationMs * start, easing: easing.settle },
+          (finished) => {
+            if (finished) {
+              scheduleOnRN(setLayout, null);
+            }
+          },
+        ),
       );
-    })();
+    });
   }, [closeStartProgress, layout, progress, reducedMotion]);
 
   const open = useCallback(
@@ -221,6 +223,13 @@ export function ChatInputEffortOverlay({
   );
   const gaugeFrame = layout?.gaugeFrame ?? emptyFrame;
   const sliderFrame = layout?.sliderFrame ?? emptyFrame;
+  // Fade over the remaining trip to the gauge. The backdrop uses the same clock, and
+  // the animation completion removes the tap catcher when the exit finishes.
+  const closeOpacity = useDerivedValue(() => {
+    const start = closeStartProgress.get();
+    if (start === null) return 1;
+    return start === 0 ? 0 : progress.get() / start;
+  });
   const sliderStyle = useAnimatedStyle(() => ({
     height: interpolate(
       progress.value,
@@ -234,15 +243,7 @@ export function ChatInputEffortOverlay({
       [gaugeFrame.left, sliderFrame.left],
       Extrapolation.CLAMP,
     ),
-    // Fade the shell to zero with the content, starting continuously at opacity 1.
-    // Before content has appeared, preserve the original opaque reverse morph.
-    // Fully-open closes leave a same-popover fade tail for 0.5 < p < 0.58:
-    // shell < 0.16, effective content < 0.0256 (at p=0.57: 0.14 and 0.0196).
-    // Both reach zero at p=0.5, versus HEAD's shell=1, so no extra motion is needed.
-    opacity:
-      closeStartProgress.value === null || closeStartProgress.value <= 0.5
-        ? 1
-        : interpolate(progress.value, [0.5, closeStartProgress.value], [0, 1], Extrapolation.CLAMP),
+    opacity: closeOpacity.get(),
     top: interpolate(
       progress.value,
       [0, 1],
@@ -257,12 +258,24 @@ export function ChatInputEffortOverlay({
     ),
   }));
   const sliderContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.5, 1], [0, 1], Extrapolation.CLAMP),
+    // Keep the content at its current reveal level and fade it with the parent surface.
+    opacity: interpolate(
+      closeStartProgress.get() ?? progress.get(),
+      [0.5, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
   }));
   const labelStyle = useAnimatedStyle(() => {
-    const reveal = interpolate(progress.value, [0.58, 1], [0, 1], Extrapolation.CLAMP);
+    const reveal = interpolate(
+      closeStartProgress.get() ?? progress.get(),
+      [0.58, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
+    const opacity = reveal * closeOpacity.get();
 
-    return { opacity: reveal, transform: [{ translateY: 5 * (1 - reveal) }] };
+    return { opacity, transform: [{ translateY: 5 * (1 - opacity) }] };
   });
   const gauge =
     options.length > 0 ? (

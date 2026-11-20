@@ -1,7 +1,6 @@
-import { easing } from '@cherrystudio/ui/motion';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import type { ReactElement, ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Extrapolation, interpolate } from 'react-native-reanimated';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 import { EffortSliderTrack } from '../../effortSlider/components/EffortSliderTrack';
@@ -51,8 +50,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View },
     ...interpolation,
     Easing,
-    runOnJS: (callback: unknown) => callback,
-    runOnUI: (callback: unknown) => callback,
+    useDerivedValue: (updater: () => unknown) => ({ get: updater }),
     useReducedMotion: () => mockReducedMotion,
     useSharedValue: (initial: unknown) => {
       const ref = useRef({
@@ -79,6 +77,11 @@ jest.mock('react-native-reanimated', () => {
       },
       done?: (finished: boolean) => void,
     ) => {
+      if (to === mockProgress.value) {
+        mockAnimation = undefined;
+        done?.(true);
+        return to;
+      }
       mockAnimation = {
         ...config,
         delay: 0,
@@ -96,6 +99,11 @@ jest.mock('react-native-reanimated', () => {
     },
   };
 });
+
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: (layout: null) => void, layout: null) => callback(layout),
+  scheduleOnUI: (callback: () => void) => callback(),
+}));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   Portal: ({ children }: { children: ReactNode }) => children,
@@ -331,104 +339,42 @@ describe('ChatInputEffortOverlay motion', () => {
   });
 
   test.each(
-    [1, 0.95, 0.8, 0.6, 0.50001].flatMap((start) =>
+    [1, 0.8, 0.51, 0.5, 0.49].flatMap((start) =>
       [false, true].map((keyboard) => ({ start, keyboard })),
     ),
   )(
-    'closing at $start is continuous and has no zero-content opaque-shell frame (keyboard=$keyboard)',
+    'closing at $start fades continuously from the current frame (keyboard=$keyboard)',
     ({ start, keyboard }) => {
       mockKeyboardVisible = keyboard;
       mount();
       mockProgress.value = start;
       const before = visualState();
-      close();
-      expect(visualState()).toEqual(before);
-      expect(shell().opacity).toBe(1);
+      const beforeContent = contentOpacity();
+      const backdropID = keyboard
+        ? 'chat-input-effort-keyboard-backdrop'
+        : 'chat-input-effort-backdrop';
 
-      const frames = Array.from({ length: mockAnimation!.duration }, (_, milliseconds) => {
-        seek(milliseconds);
-        return {
-          content: contentOpacity(),
-          localContent: contentStyle().opacity,
-          progress: mockProgress.value,
-          shell: shell().opacity,
-        };
-      });
-      expect(frames.some((frame) => frame.content === 0 && frame.shell > 0)).toBe(false);
-      expect(frames.some((frame) => frame.shell === 0)).toBe(true);
-      for (const frame of frames) {
-        const localContent = Math.max(0, 2 * frame.progress - 1);
-        expect(frame.localContent).toBeCloseTo(localContent, 12);
-        expect(frame.content).toBeCloseTo(localContent * frame.shell, 12);
-        expect(frame.shell).toBeCloseTo(Math.max(0, (frame.progress - 0.5) / (start - 0.5)), 12);
-      }
+      close();
+
+      expect(visualState()).toEqual(before);
+      expect(mockAnimation!.duration).toBeCloseTo(duration.fast * start);
+      mockProgress.value = start / 2;
+      expect(shell().opacity).toBeCloseTo(0.5);
+      expect(contentOpacity()).toBeCloseTo(beforeContent * 0.5);
+      expect(labelStyle().opacity).toBeCloseTo(Number(before.label.opacity) * 0.5);
+
+      seek(mockAnimation!.duration - 16);
+      expect(shell().opacity).toBeGreaterThan(0);
+      expect(node(backdropID)).toBeDefined();
+      expect(node('chat-input-effort-morph').props.accessibilityElementsHidden).toBe(true);
+
       seek(mockAnimation!.duration);
+      expect(mockProgress.value).toBe(0);
+      expect(renderer.root.findAllByProps({ testID: backdropID })).toHaveLength(0);
       expect(renderer.root.findAllByProps({ testID: 'chat-input-effort-slider' })).toHaveLength(0);
+      expect(node('chat-input-effort-morph').props.accessibilityElementsHidden).toBe(false);
     },
   );
-
-  test('fully open close bounds the residual fade window', () => {
-    mount('low');
-    seek(184);
-    expect(mockProgress.value).toBe(1);
-    close();
-    let checkedContentFrames = 0;
-    let checkedTailFrames = 0;
-    for (let milliseconds = 0; milliseconds < mockAnimation!.duration; milliseconds += 1) {
-      seek(milliseconds);
-      const shellOpacity = shell().opacity;
-      if (contentOpacity() > 0) {
-        expect(shellOpacity).toBeLessThanOrEqual(
-          interpolate(mockProgress.value, [0.5, 1], [0, 1], Extrapolation.CLAMP),
-        );
-        checkedContentFrames += 1;
-        if (mockProgress.value > 0.5 && mockProgress.value < 0.58) {
-          // Fully-open close: shellEffective = 2p - 1, contentEffective = (2p - 1)².
-          // At p=0.58 these are 0.16 and 0.0256; the open interval stays strictly below both.
-          // contentOpacity() already includes the shell; multiply only the local opacity.
-          const contentEffective = shellOpacity * Number(contentStyle().opacity);
-          expect(contentEffective).toBeCloseTo(contentOpacity(), 12);
-          expect(contentEffective).toBeLessThanOrEqual(0.0256);
-          checkedTailFrames += 1;
-        }
-      }
-    }
-    expect(checkedContentFrames).toBeGreaterThan(0);
-    expect(checkedTailFrames).toBeGreaterThan(0);
-    // HEAD kept shell=1 at the same p: at p=0.57, its effective content was 0.14;
-    // the current shell=0.14 makes effective content 0.0196. The bound above rejects HEAD.
-  });
-
-  test('near-half interruption keeps the unfrozen reveal without claiming perceptible pixels', () => {
-    mount('low');
-    mockProgress.value = 0.50001;
-    const before = visualState();
-    close();
-    expect(visualState()).toEqual(before);
-    for (const fraction of [1, 0.75, 0.5, 0.25, 0.0001, 0]) {
-      // Millisecond sampling can skip this narrow interval; probe its interior as well.
-      mockProgress.value = 0.5 + (0.50001 - 0.5) * fraction;
-      expect(shell().opacity).toBeCloseTo(fraction, 9);
-      expect(contentStyle().opacity).toBeCloseTo(2 * (mockProgress.value - 0.5), 12);
-      expect(contentStyle().transform).toBeUndefined();
-      expect(labelStyle()).toMatchObject({ opacity: 0, transform: [{ translateY: 5 }] });
-      expect(contentOpacity() === 0 && shell().opacity > 0).toBe(false);
-    }
-  });
-
-  test('closing restores the original moving label reveal and translation', () => {
-    mount();
-    mockProgress.value = 0.8;
-    close();
-    for (const progress of [0.8, 0.7, 0.6, 0.58, 0.5, 0]) {
-      mockProgress.value = progress;
-      const reveal = Math.max(0, (progress - 0.58) / 0.42);
-      expect(labelStyle().opacity).toBeCloseTo(reveal, 12);
-      expect(labelStyle().transform).toEqual([
-        { translateY: expect.closeTo(5 * (1 - reveal), 12) },
-      ]);
-    }
-  });
 
   test.each(
     (['low', 'high'] as const).flatMap((value) =>
@@ -467,67 +413,38 @@ describe('ChatInputEffortOverlay motion', () => {
     },
   );
 
-  test.each([1, 0.8, 0.6, 0.50001])(
-    'interrupted opening at %s and repeated closes never increase opacity or reveal the shell again',
-    (start) => {
-      mount('low');
-      mockProgress.value = start;
-      close();
-      const original = mockAnimation!;
-      let previousShell = 1;
-      let previousContent = contentOpacity();
-      let previousLabel = Number(labelStyle().opacity);
-      for (let elapsed = 0; elapsed < original.duration; elapsed += 1) {
-        advanceTo(original.startedAt + elapsed);
-        const expectedProgress = original.from * (1 - original.easing(elapsed / original.duration));
-        expect(mockProgress.value).toBeCloseTo(expectedProgress, 12);
-        const currentShell = shell().opacity;
-        const currentContent = contentOpacity();
-        const currentLabel = Number(labelStyle().opacity);
-        expect(currentShell).toBeLessThanOrEqual(previousShell);
-        expect(currentContent).toBeLessThanOrEqual(previousContent);
-        expect(currentLabel).toBeLessThanOrEqual(previousLabel);
-        close();
-        expect(mockAnimation).toBe(original);
-        expect(shell().opacity).toBe(currentShell);
-        expect(contentOpacity()).toBe(currentContent);
-        previousShell = currentShell;
-        previousContent = currentContent;
-        previousLabel = currentLabel;
-      }
-      expect(previousShell).toBe(0);
-      advanceTo(original.startedAt + original.duration);
-      expect(renderer.root.findAllByProps({ testID: 'chat-input-effort-slider' })).toHaveLength(0);
-    },
-  );
+  test('repeated closes keep the first exit and its completion', () => {
+    mount();
+    mockProgress.value = 0.8;
+    close();
+    const exit = mockAnimation!;
+    seek(exit.duration / 2);
+    const current = visualState();
 
-  // Exclude p0=0: Reanimated completes equal-target withTiming immediately; this mock does not.
-  test.each([0.25, 0.4, 0.5])(
-    'closing before reveal at %s preserves the opaque reverse morph without new foreground',
-    (start) => {
-      mount();
-      mockProgress.value = start;
-      const before = visualState();
-      close();
-      expect(visualState()).toEqual(before);
-      for (let elapsed = 0; elapsed < mockAnimation!.duration; elapsed += 1) {
-        seek(elapsed);
-        expect(shell().opacity).toBe(1);
-        expect(contentStyle().opacity).toBe(0);
-        expect(contentOpacity()).toBe(0);
-        expect(labelStyle().opacity).toBe(0);
-        expect(contentStyle().transform).toBeUndefined();
-      }
-      seek(mockAnimation!.duration);
-      expect(renderer.root.findAllByProps({ testID: 'chat-input-effort-slider' })).toHaveLength(0);
-    },
-  );
+    close();
+
+    expect(mockAnimation).toBe(exit);
+    expect(visualState()).toEqual(current);
+    seek(exit.duration);
+    expect(renderer.root.findAllByProps({ testID: 'chat-input-effort-slider' })).toHaveLength(0);
+  });
+
+  test('closing during the reveal delay dismisses immediately', () => {
+    mount();
+    expect(mockProgress.value).toBe(0);
+
+    close();
+
+    expect(mockAnimation).toBeUndefined();
+    expect(renderer.root.findAllByProps({ testID: 'chat-input-effort-backdrop' })).toHaveLength(0);
+    expect(node('chat-input-effort-morph').props.accessibilityElementsHidden).toBe(false);
+  });
 
   test('a new open resets the close origin and restores the opaque shell and reveal', () => {
     mount();
     seek(184);
     close();
-    seek(250);
+    seek(mockAnimation!.duration);
     open();
     expect(shell().opacity).toBe(1);
     expect(contentOpacity()).toBe(0);
@@ -537,7 +454,7 @@ describe('ChatInputEffortOverlay motion', () => {
     close();
     expect(mockAnimation!.from).toBe(0.8);
     expect(shell().opacity).toBe(1);
-    mockProgress.value = 0.65;
+    mockProgress.value = 0.4;
     expect(shell().opacity).toBeCloseTo(0.5);
   });
 
