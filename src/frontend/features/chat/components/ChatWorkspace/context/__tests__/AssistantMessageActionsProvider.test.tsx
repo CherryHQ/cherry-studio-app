@@ -35,6 +35,7 @@ jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslationStore: () => null,
 }));
 jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({}),
   router: { push: jest.fn(), replace: jest.fn() },
 }));
 const mockLoggerError = jest.fn();

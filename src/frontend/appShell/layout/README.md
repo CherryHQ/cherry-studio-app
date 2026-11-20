@@ -43,8 +43,9 @@ Each observer is an invisible regions provider filling its host. `useFoldRegionL
 snapshot: the host size, the window dimensions it was taken in, and the fold in host points.
 `FilePaneHost` starts at the window's top edge, so its offsets are also window coordinates. It
 supplies `resolvePaneSplit` with that host and fold, and calculates the regular pane width from the
-host width minus the window's horizontal safe areas. The host is already beside the persistent
-sidebar, so its width is not subtracted again. Nothing uses `measureInWindow`.
+host width minus the window's horizontal safe areas. When the sidebar yields its column, the chat
+layout selects the full-window observer immediately, even while the chat host still reports its
+previous width. When the sidebar occupies space, the chat host supplies the split geometry.
 
 The observer remounts for every window size, so a resized window reports afresh instead of through
 the previous screen's regions. `useIsFoldRegionLayoutCurrent` compares the snapshot's window

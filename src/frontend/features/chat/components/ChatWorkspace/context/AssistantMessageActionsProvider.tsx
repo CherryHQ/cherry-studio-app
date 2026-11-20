@@ -1,6 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -123,7 +123,9 @@ export function AssistantMessageActionsProvider({
   const inFlight = useRef(new Set<string>());
   const isSelecting = useIsChatShareSelecting();
   // The answer whose question the model picker adds an answer to.
-  const [answeringMessageId, setAnsweringMessageId] = useState<string>();
+  const [pickedMessageId, setAnsweringMessageId] = useState<string>();
+  const { cloudAnswerMessage } = useLocalSearchParams<{ cloudAnswerMessage?: string }>();
+  const answeringMessageId = cloudAnswerMessage || pickedMessageId;
   const { allowedModelIds, isLocked: isModelLocked } = useModelChoice();
   useEffect(() => {
     mounted.current = true;
@@ -334,18 +336,22 @@ export function AssistantMessageActionsProvider({
   const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
     if (!latest.current.isBusy) setAnsweringMessageId(messageId);
   }, []);
-  const closeAnswerModelPicker = useCallback(() => setAnsweringMessageId(undefined), []);
+  const closeAnswerModelPicker = useCallback(() => {
+    setAnsweringMessageId(undefined);
+    if (cloudAnswerMessage)
+      router.setParams({ cloudAnswerMessage: undefined, cloudModel: undefined });
+  }, [cloudAnswerMessage]);
   const answerWith = useCallback(
     (item: ModelPickerModelItem) => {
       const messageId = answeringMessageId;
-      setAnsweringMessageId(undefined);
+      closeAnswerModelPicker();
       const current = latest.current;
       if (!messageId || current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions
         .answerWith;
       void run(`answer:${messageId}`, action, { modelId: item.modelId }, 'retryFailed');
     },
-    [answeringMessageId, run],
+    [answeringMessageId, closeAnswerModelPicker, run],
   );
   const answeringMessage = answeringMessageId
     ? messages.find((message) => message.key === answeringMessageId)
@@ -409,6 +415,15 @@ export function AssistantMessageActionsProvider({
           onSelect={answerWith}
           open
           selectedModelId={answeringMessage.display.model?.id ?? null}
+          loginReturnTo={
+            sessionId
+              ? '/?' +
+                new URLSearchParams({
+                  sessionId,
+                  cloudAnswerMessage: answeringMessage.key,
+                }).toString()
+              : undefined
+          }
           title={t('chat.messageActions.answerWith')}
           variant="chat"
         />
