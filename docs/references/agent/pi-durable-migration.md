@@ -435,11 +435,12 @@ after a restart never rebuilds it. Reconstruct dependencies for unfinished sessi
 and only then resume scheduling.
 
 Ordinary shutdown closes invocations without abort marks. Finite UIKit window expiry does the same
-when available background protection runs out. Foreground startup reopens retained tasks.
-[Background Activity Presentation](../background-activity-presentation.md) describes the
-independent Live Activity preference. Explicit user stop invokes Pi abort. Unsafe tools do not
-automatically re-execute after interruption. Current accounts, tool implementations and approval
-policy are reconstructed; credentials are resolved at request time and
+only when no continued-processing or audio protection remains. Foreground startup reopens retained
+tasks. Revocation of an iOS continued-processing task stops its owning work rather than suspending
+it for restart; see
+[Background Activity Presentation](../background-activity-presentation.md). Explicit user stop invokes
+Pi abort. Unsafe tools do not automatically re-execute after interruption. Current accounts, tool
+implementations and approval policy are reconstructed; credentials are resolved at request time and
 never serialized. Native task demand, including background compaction, holds the KeepAlive lease.
 Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
 invented assistant turn.

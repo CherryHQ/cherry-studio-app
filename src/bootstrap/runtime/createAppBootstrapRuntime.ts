@@ -27,6 +27,7 @@ import {
 import { subscribeBackgroundActivityActions } from '@/backend/services/backgroundActivity/actionTransport';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import type { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
@@ -108,6 +109,10 @@ export function createAppBootstrapRuntime(
   const replyCompletionNotifications =
     Platform.OS === 'ios'
       ? createReplyCompletionNotifier({
+          hasProgressActivity: () =>
+            host.container
+              .get<BackgroundActivityManager>('BackgroundActivityManager')
+              .hasProgressActivity(),
           isReplyCompletionNotificationEnabled,
           onForegroundAttention: publishForegroundActivityAttention,
         })

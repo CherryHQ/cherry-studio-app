@@ -130,8 +130,7 @@ contract.
 - managed input version IDs recorded by the painting receipt and resolved for current availability at execution;
 - image generation through `AiService`, managed output import, receipt finalization, and failed
   output cleanup; and
-- one optional `PaintingActivity` for progress, with a separate execution lease. The painting handler
-  omits `continuedProcessing` so iOS cannot create a second progress card.
+- an optional `PaintingActivity` presentation while work is active.
 
 `PaintingsModule.startGeneration()` validates managed attachments, then creates or resets the painting
 receipt and enqueues the job in one write transaction. Its admission scope remains registered through
@@ -163,7 +162,7 @@ and may be retried explicitly.
   [Android Background Generation](./android-background-generation.md). Neither guarantees continuous
   execution, an exact scheduler, or continuation after force quit.
 - Continued-processing revocation also represents system-UI cancellation. It stops the owning
-  opted-in job without automatic replay or audio fallback for that task.
+  conversation/job without automatic replay or audio fallback for that task.
 - No Expo background task, system-transfer adapter, schedule runtime, or
   server executor is installed.
 - Progress callbacks update an admitted native continued task; app UI still observes ledger state and domain output.

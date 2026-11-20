@@ -50,13 +50,13 @@ protection immediately. Expiration ends the native assertion
 even if JavaScript cannot run, emits its owner ID, and prevents renewal until foreground return.
 
 `beginContinuedProcessingTask` prefers iOS 26+ `BGContinuedProcessingTask` for explicit foreground
-user work that requests a system progress surface. Chat and painting use their own Live Activities
-and omit this request. A unique concrete registration under the app variant's permitted wildcard
-identifies each attempt. iOS 27 uses the asynchronous submission API off the main thread; iOS 26 uses its
+user work. A unique concrete registration under the app variant's permitted wildcard identifies
+each attempt. iOS 27 uses the asynchronous submission API off the main thread; iOS 26 uses its
 original submission API. Submission is not execution proof: native state events confirm launch,
 failure, or expiration. A five-second admission deadline cancels a missing launch and enables
 fallback; late handlers complete unsuccessfully without taking over a replacement. Updates carry
-localized titles and real progress. Completion, cancellation,
+localized titles and real progress. The same execution lease and native request remain held across
+questions and approvals; responding does not release or reacquire protection. Completion, cancellation,
 and module disposal release requests. The system can revoke a native task before the lease releases.
 Expiration includes system-UI cancellation and must stop the owning task, even in foreground.
 Revocation first emits `expired` and retains the native task for cancellation cleanup. The owner's

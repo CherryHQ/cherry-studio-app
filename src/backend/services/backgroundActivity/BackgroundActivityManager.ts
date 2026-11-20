@@ -132,6 +132,19 @@ export class BackgroundActivityManager extends BaseService {
     const presentationEnabled = this.registerDisposable(
       this.environment.subscribePresentationEnabled(this.handlePresentationEnabledChange),
     );
+    const systemActivities = this.keepAlive.systemActivities;
+    const systemPresentation =
+      systemActivities &&
+      this.registerDisposable(
+        systemActivities.onChange((url) => {
+          if (this.disposed) return;
+          if (url && systemActivities.has(url)) void this.dismissTask(url);
+          for (const record of this.sessions) {
+            if (this.systemOwnsProgress(record)) this.retireSurface(record);
+            else this.startNative(record);
+          }
+        }),
+      );
     const visibleTask = this.registerDisposable(
       this.environment.subscribeVisibleTask((deepLinkUrl) => {
         if (this.disposed) return;
@@ -145,6 +158,7 @@ export class BackgroundActivityManager extends BaseService {
       this.disposed = true;
       appState.dispose();
       presentationEnabled.dispose();
+      systemPresentation?.dispose();
       visibleTask.dispose();
     };
     signal?.addEventListener('abort', cancel, { once: true });
@@ -212,6 +226,25 @@ export class BackgroundActivityManager extends BaseService {
     // A previous caller may already have removed the entry while its native
     // dismissal is queued. Replacement must await that retirement as well.
     return Promise.all([...dismissals, this.operationTail]).then(() => undefined);
+  }
+
+  /** Read at notification delivery time, after the finishing task's card has retired. */
+  hasProgressActivity(): boolean {
+    const system = this.keepAlive.systemActivities;
+    if (system?.hasActive()) return true;
+    for (const record of this.sessions) {
+      if ((record.deepLinkUrl && system?.has(record.deepLinkUrl)) || this.getActiveSurface(record))
+        return true;
+    }
+    return false;
+  }
+
+  private systemOwnsProgress(record: SessionRecord): boolean {
+    const system = this.keepAlive.systemActivities;
+    if (!system) return false;
+    return (
+      system.hasActive() || (record.deepLinkUrl !== undefined && system.has(record.deepLinkUrl))
+    );
   }
 
   protected override async onStop(): Promise<void> {
@@ -363,6 +396,7 @@ export class BackgroundActivityManager extends BaseService {
   private startNative(record: SessionRecord): void {
     if (this.disposed || record.ended || record.surface.status !== 'pending') return;
     if (!this.environment.isPresentationEnabled()) return;
+    if (this.systemOwnsProgress(record)) return;
     if (record.presenter.requiresForegroundStart && this.appState !== 'active') return;
     if (record.presenter.presentWhile === 'app-hidden' && this.appState === 'active') return;
     const retirement = record.deepLinkUrl && this.retiring.get(record.deepLinkUrl);
