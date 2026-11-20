@@ -722,7 +722,8 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
     let evidence: ReturnType<typeof openRunEvidence> | undefined;
     if (evidenceDir) {
       const launchUrl = new URL(devClientUrl);
-      const bundleUrl = launchUrl.searchParams.get('url');
+      const bundleUrl =
+        launchUrl.searchParams.get('__expo_url') ?? launchUrl.searchParams.get('url');
       const { port } = bundleUrl ? new URL(bundleUrl) : launchUrl;
       evidence = openRunEvidence(evidenceDir, {
         workspace: currentWorkspace,
