@@ -434,9 +434,10 @@ semantics) around an `Animated.View` visual surface that drives UI-thread press-
 (`pressMotion.scale`, exempting trigger-only buttons without press handlers, inline `link`/`text`
 variants, and Reduce Motion). It supports `default`,
 `destructive`, `outline`, `secondary`, `ghost`, `link`, `text`, and `tonal` variants, along with
-loading, disabled, and opt-in commit-time `haptic?: HapticIntent | false` behavior (silent by
-default so menu triggers and navigation steps do not over-buzz). `text` uses the link color without an underline for standalone text actions; `link`
-retains its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+loading and disabled states. The optional `haptic` prop accepts `selection`, `light`, or `medium`
+to acknowledge a committed press. Buttons are silent by default. The operation owner triggers
+outcome feedback after it confirms the result. Standalone `text` actions use the link color.
+The `link` variant also adds an underline. `shape="pill"` selects a capsule. The `xs`, `sm`,
 `inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
@@ -1047,8 +1048,9 @@ tokens. This workspace does so in `src/frontend/styles/global.css`.
 
 `@cherrystudio/ui/haptics` exposes semantic haptic triggers (`triggerHaptic`, `haptics`, and the
 `HapticIntent` type covering `'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error'`)
-backed by `expo-haptics`. Calls no-op outside iOS and Android, swallow unavailable hardware errors,
-and are invoked only on committed causal frames alongside standalone visual cues.
+backed by `expo-haptics`. Android uses the system's touch-feedback settings and available effects.
+On Android versions below API 30, outcome cues are visual and accessible only. Pair every haptic
+with an independent visual and accessible cue.
 
 ## Background Activities
 

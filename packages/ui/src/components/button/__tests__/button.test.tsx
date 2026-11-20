@@ -1,12 +1,11 @@
 import { createRef } from 'react';
-import { Platform, Text, View, type ViewInstance } from 'react-native';
+import { AccessibilityInfo, Platform, Text, View, type ViewInstance } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
 import { pressMotion } from '../../../motion';
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
 
-let mockReducedMotion = false;
 const mockWithTiming = jest.fn((value: number, _config?: unknown) => value);
 const mockWithSpring = jest.fn((value: number, _config?: unknown) => value);
 const mockSharedValueSet = jest.fn();
@@ -66,9 +65,8 @@ jest.mock('react-native-reanimated', () => {
       bezier: () => 'bezier',
       linear: 'linear',
     },
-    ReduceMotion: { System: 'system' },
+    ReduceMotion: { Never: 'never' },
     useAnimatedStyle: (factory: () => object) => factory(),
-    useReducedMotion: () => mockReducedMotion,
     useSharedValue,
     withSpring: (value: number, config?: unknown) => mockWithSpring(value, config),
     withTiming: (value: number, config?: unknown) => mockWithTiming(value, config),
@@ -104,7 +102,7 @@ describe('Button', () => {
 
   beforeEach(() => {
     Platform.OS = 'ios';
-    mockReducedMotion = false;
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
     latestSharedValue = undefined;
     mockSharedValueSet.mockClear();
     mockWithTiming.mockClear();
@@ -117,6 +115,7 @@ describe('Button', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   afterAll(() => {
@@ -128,7 +127,9 @@ describe('Button', () => {
     props: Partial<ButtonProps> = {},
   ) {
     act(() => {
-      renderer = create(<Button {...props}>{children}</Button>);
+      const element = <Button {...props}>{children}</Button>;
+      if (renderer) renderer.update(element);
+      else renderer = create(element);
     });
 
     if (!renderer) {
@@ -446,7 +447,8 @@ describe('Button', () => {
     });
   });
 
-  test('scales down on press-in, springs back on release, and forwards caller callbacks', () => {
+  test('scales down on press-in, springs back on release, and forwards caller callbacks', async () => {
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
     const onPress = jest.fn();
     const onPressIn = jest.fn();
     const onPressOut = jest.fn();
@@ -458,8 +460,12 @@ describe('Button', () => {
       }),
     );
 
+    await act(async () => {});
     act(() => pressable.props.onPressIn({}));
-    expect(mockWithTiming).toHaveBeenCalledWith(pressMotion.scale, pressMotion.pressIn);
+    expect(mockWithTiming).toHaveBeenCalledWith(pressMotion.scale, {
+      ...pressMotion.pressIn,
+      reduceMotion: 'never',
+    });
     expect(onPressIn).toHaveBeenCalledTimes(1);
 
     act(() => pressable.props.onPressOut({}));
@@ -479,8 +485,10 @@ describe('Button', () => {
 
   test.each(['link', 'text'] as const)(
     'does not animate press scale for inline %s variant',
-    (variant) => {
+    async (variant) => {
+      jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
       const pressable = findPressable(render('Learn more', { onPress: jest.fn(), variant }));
+      await act(async () => {});
 
       act(() => pressable.props.onPressIn({}));
       act(() => pressable.props.onPressOut({}));
@@ -490,9 +498,9 @@ describe('Button', () => {
     },
   );
 
-  test('skips press scaling when Reduce Motion is enabled', () => {
-    mockReducedMotion = true;
+  test('skips press scaling when Reduce Motion is enabled', async () => {
     const pressable = findPressable(render('Continue', { onPress: jest.fn() }));
+    await act(async () => {});
 
     act(() => pressable.props.onPressIn({}));
     act(() => pressable.props.onPressOut({}));
@@ -501,11 +509,43 @@ describe('Button', () => {
     expect(mockWithSpring).not.toHaveBeenCalled();
   });
 
-  test('springs smoothly back to 1 when loading activates mid-press', () => {
+  test('rests immediately on a live motion preference change and ignores an older native read', async () => {
+    let resolveRead!: (enabled: boolean) => void;
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveRead = resolve;
+      }),
+    );
+    const motionEvents: {
+      addEventListener(name: 'reduceMotionChanged', change: (enabled: boolean) => void): unknown;
+    } = AccessibilityInfo;
+    const subscribe = jest.spyOn(motionEvents, 'addEventListener').mockClear();
+    const tree = render('Continue', { onPress: jest.fn() });
+    const change = subscribe.mock.calls.find(([event]) => event === 'reduceMotionChanged')?.[1];
+    if (!change) throw new Error('Missing system motion subscription');
+
+    act(() => change(false));
+    act(() => findPressable(tree).props.onPressIn({}));
+    expect(latestSharedValue?.get()).toBe(pressMotion.scale);
+    act(() => change(true));
+    expect(latestSharedValue?.get()).toBe(1);
+    await act(async () => resolveRead(false));
+    act(() => findPressable(tree).props.onPressOut({}));
+    act(() => findPressable(tree).props.onPressIn({}));
+    expect(mockWithSpring).not.toHaveBeenCalled();
+    expect(mockWithTiming).toHaveBeenCalledTimes(1);
+
+    act(() => change(false));
+    act(() => findPressable(tree).props.onPressIn({}));
+    expect(mockWithTiming).toHaveBeenCalledTimes(2);
+  });
+
+  test('springs smoothly back to 1 when loading activates mid-press', async () => {
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
     const onPress = jest.fn();
     const tree = render('Save', { onPress });
     const pressable = findPressable(tree);
-
+    await act(async () => {});
     act(() => pressable.props.onPressIn({}));
     expect(mockWithTiming).toHaveBeenCalledTimes(1);
 
@@ -584,5 +624,17 @@ describe('Button', () => {
     act(() => muted.props.onPress({}));
     expect(mockImpactAsync).not.toHaveBeenCalled();
     expect(onMuted).toHaveBeenCalledTimes(1);
+  });
+
+  test('leaves outcome haptics to the operation even for an untyped caller', () => {
+    const onPress = jest.fn();
+    const tree = render('Copy', {
+      // @ts-expect-error Outcome intents are outside the press contract.
+      haptic: 'success',
+      onPress,
+    });
+    act(() => findPressable(tree).props.onPress({}));
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(mockNotificationAsync).not.toHaveBeenCalled();
   });
 });

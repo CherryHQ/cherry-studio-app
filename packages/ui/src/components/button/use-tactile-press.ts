@@ -1,28 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import {
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 import { pressMotion } from '../../motion';
+import { useButtonReducedMotion } from './use-button-reduced-motion';
 
 type UseTactilePressOptions = {
   disabled?: boolean;
   scaleTo?: number;
 };
 
-// Skip press-in scaling via `useReducedMotion()` rather than passing `ReduceMotion.System`,
-// so a runtime toggle never snaps abruptly from 1 to `scaleTo`.
-const PRESS_IN_CONFIG = pressMotion.pressIn;
-
-const PRESS_OUT_CONFIG = {
-  ...pressMotion.pressOut,
-  reduceMotion: ReduceMotion.System,
-} as const;
+// The live system preference below gates both animations, including after a runtime toggle.
+const PRESS_IN_CONFIG = { ...pressMotion.pressIn, reduceMotion: ReduceMotion.Never } as const;
+const PRESS_OUT_CONFIG = { ...pressMotion.pressOut, reduceMotion: ReduceMotion.Never } as const;
 
 /**
  * Drives immediate UI-thread press-in scale and soft spring recovery without
@@ -33,15 +28,18 @@ export function useTactilePress({
   disabled = false,
   scaleTo = pressMotion.scale,
 }: UseTactilePressOptions = {}) {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useButtonReducedMotion();
   const scale = useSharedValue(1);
   const isPressedRef = useRef(false);
   const isInteractive = !disabled && !reducedMotion && scaleTo !== 1;
 
-  useEffect(() => {
-    if (!isInteractive && isPressedRef.current) {
+  useLayoutEffect(() => {
+    if (reducedMotion) {
       isPressedRef.current = false;
-      scale.set(reducedMotion ? 1 : withSpring(1, PRESS_OUT_CONFIG));
+      scale.set(1);
+    } else if (!isInteractive && isPressedRef.current) {
+      isPressedRef.current = false;
+      scale.set(withSpring(1, PRESS_OUT_CONFIG));
     }
   }, [isInteractive, reducedMotion, scale]);
 
@@ -58,7 +56,7 @@ export function useTactilePress({
       return;
     }
     isPressedRef.current = false;
-    scale.set(reducedMotion ? 1 : withSpring(1, PRESS_OUT_CONFIG));
+    scale.set(withSpring(1, PRESS_OUT_CONFIG));
   };
 
   const animatedStyle = useAnimatedStyle(() => ({
