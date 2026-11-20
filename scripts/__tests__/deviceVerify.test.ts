@@ -41,6 +41,27 @@ describe('deviceVerify CLI helpers', () => {
     expect(isVersionAtLeast('unknown', '0.21.27')).toBe(false);
   });
 
+  it('reports a slow Maestro version probe as a timeout', () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      status: null,
+      signal: 'SIGTERM',
+      pid: 1,
+      output: [],
+      stdout: '',
+      stderr: '',
+      error: Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' }),
+    });
+    const output = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      expect(runCli(['doctor', '--platform', 'ios', '--json'])).toBe(0);
+      expect(JSON.parse(output.mock.calls[0][0]).checks).toContainEqual(
+        expect.objectContaining({ name: 'maestro', ok: false, detail: 'version check timed out' }),
+      );
+    } finally {
+      output.mockRestore();
+    }
+  });
+
   it('redacts API keys, bearer tokens, and secret assignments before recording evidence', () => {
     const raw =
       'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload key=sk-1234567890abcdef apiKey=supersecretvalue';
