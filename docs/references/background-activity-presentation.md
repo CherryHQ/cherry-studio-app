@@ -231,6 +231,13 @@ multilingual payloads. Native acceptance must also confirm retirement of an ende
 including completion-notice handoff. Native delivery and OS behavior require a rebuilt client; lint
 and source guards are insufficient.
 
+On an iPhone 17 Pro simulator running iOS 26.5, one chat completed over Settings while a second
+chat and a painting continued. The left capture shows the previous completion banner below the
+island. The right capture shows the same event after passive delivery. The simulator exercised
+Cherry fallback activities; system long-task admission requires a physical device.
+
+![Settings during a chat completion, before and after keeping the Dynamic Island as the only top surface](../../.github/images/background-activity/ios-completion-dynamic-island.png)
+
 The following examples show an Android connection notice and a notice list (expanded from
 Android's own app bundle) from an Android 16 emulator, and an iOS single-question Live Activity on
 the simulator Lock Screen, all from a local presentation fixture. The fixtures validate native layout
