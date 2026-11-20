@@ -56,7 +56,7 @@ export class ScreenAwakeRuntime extends BaseService implements ScreenAwakePort {
     };
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     if (this.disposed) return;
     this.appState = AppState.currentState;
     this.enabled = this.preferences.readCached('app.keep_screen_on.enabled');
@@ -78,7 +78,7 @@ export class ScreenAwakeRuntime extends BaseService implements ScreenAwakePort {
     this.enqueueReconcile();
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.disposed = true;
     this.holders.clear();
     this.preferenceSubscription?.dispose();

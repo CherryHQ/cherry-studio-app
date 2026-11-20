@@ -358,7 +358,7 @@ export class ProviderAccountRuntime extends BaseService implements ProviderAccou
     }
   }
 
-  protected async onStop() {
+  protected override async onStop() {
     this.stopped = true;
     this.active?.abort();
     await this.adapter?.stop();

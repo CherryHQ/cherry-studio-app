@@ -391,7 +391,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
     if (candidate?.directory.exists) candidate.directory.delete();
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.stopped = true;
     this.operation?.abort();
     await this.pendingWork?.catch(() => {});

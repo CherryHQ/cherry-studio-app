@@ -321,9 +321,9 @@ export const RuntimeModelPricingSchema = z
   })
   .superRefine((pricing, ctx) => {
     for (let index = 1; index < (pricing.inputTokenTiers?.length ?? 0); index++) {
-      const previous = pricing.inputTokenTiers![index - 1];
-      const current = pricing.inputTokenTiers![index];
-      if (current.minInputTokens <= previous.minInputTokens) {
+      const previous = pricing.inputTokenTiers?.[index - 1];
+      const current = pricing.inputTokenTiers?.[index];
+      if (current && previous && current.minInputTokens <= previous.minInputTokens) {
         ctx.addIssue({
           code: 'custom',
           path: ['inputTokenTiers', index, 'minInputTokens'],

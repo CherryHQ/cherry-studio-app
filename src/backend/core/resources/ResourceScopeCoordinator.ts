@@ -139,7 +139,7 @@ export class ResourceScopeCoordinator extends BaseService {
    * that is left, so a release arriving from an aborted operation afterwards
    * finds nothing rather than resurrecting a map entry.
    */
-  protected onStop(): void {
+  protected override onStop(): void {
     this.operationsByScope.clear();
     this.fenceDepth.clear();
     this.sealed.clear();

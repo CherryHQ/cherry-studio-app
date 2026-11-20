@@ -52,7 +52,7 @@ describe('createDmxapiProvider', () => {
       'dmxapi.chat',
     );
 
-    const [, config] = ChatCtor.mock.calls[0];
+    const [, config] = ChatCtor.mock.calls[0]!;
     expect(config.url({ path: '/chat/completions', modelId: 'qwen-max' })).toBe(
       'https://www.dmxapi.cn/chat/completions',
     );

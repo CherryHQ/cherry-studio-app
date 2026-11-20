@@ -425,7 +425,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     this.elicitations.respond(id, response);
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     this.registerAppStateListener((status) => {
       this.foreground = status === 'active';
       if (!this.foreground) void this.apps.stop();
@@ -741,7 +741,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * Drop every server's runtime. Without it the pooled clients stay open
    * against a service nothing will read again.
    */
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.lifetime.abort();
     this.promptCatalogListeners.clear();
     await this.apps.stop();

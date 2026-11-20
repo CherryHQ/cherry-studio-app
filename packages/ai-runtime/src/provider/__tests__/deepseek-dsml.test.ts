@@ -44,7 +44,7 @@ describe('DeepSeek DSML protocol', () => {
     const calls = parts.filter((part) => part.type === 'tool-call');
     expect(text(parts)).toBe('a  b  c <');
     expect(calls).toHaveLength(2);
-    expect(calls[0].toolCallId).not.toBe(calls[1].toolCallId);
+    expect(calls[0]!.toolCallId).not.toBe(calls[1]!.toolCallId);
     expect(parse(['Compare < 5; DSML is a protocol.'])).toEqual([
       { type: 'text', text: 'Compare < 5; DSML is a protocol.' },
     ]);

@@ -53,7 +53,7 @@ describe('AihubmixFluxTransport', () => {
 
     expect(result).toEqual({ taskId: 'task-1' });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('https://aihubmix.test/v1/models/bfl/flux-2-pro/predictions');
     const init = call[1] as RequestInit;
     expect(init.method).toBe('POST');
@@ -128,7 +128,7 @@ describe('AihubmixFluxTransport', () => {
     const result = await promise;
 
     expect(result).toEqual(['https://img/a.png']);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://aihubmix.test/v1/tasks/task-1');
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://aihubmix.test/v1/tasks/task-1');
   });
 
   it('returns the result.samples array when sample is absent', async () => {

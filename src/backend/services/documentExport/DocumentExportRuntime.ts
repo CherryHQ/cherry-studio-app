@@ -89,7 +89,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
     return promise;
   }
 
-  protected onInit() {
+  protected override onInit() {
     this.foreground = AppState.currentState === 'active';
     this.registerAppStateListener((state) => {
       this.foreground = state === 'active';
@@ -98,7 +98,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
     });
   }
 
-  protected async onStop() {
+  protected override async onStop() {
     this.stopped = true;
     this.conversion?.controller.abort();
     await Promise.allSettled([
@@ -108,7 +108,7 @@ export class DocumentExportRuntime extends BaseService implements DocumentExport
     await Promise.allSettled([...this.htmlArtifacts].map((artifact) => artifact.dispose()));
   }
 
-  protected onDestroy() {
+  protected override onDestroy() {
     return this.onStop();
   }
 

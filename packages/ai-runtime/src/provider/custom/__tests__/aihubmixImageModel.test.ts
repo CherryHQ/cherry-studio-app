@@ -89,7 +89,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe(
         'https://aihubmix.com/gemini/v1beta/models/gemini-3-pro-image-preview:generateContent',
       );
@@ -116,7 +116,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe(
         'https://aihubmix.com/gemini/v1beta/models/imagen-4.0-generate-preview-06-06:predict',
       );
@@ -152,7 +152,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://aihubmix.com/ideogram/v1/ideogram-v3/generate');
       expect((init.headers as Record<string, string>)['Api-Key']).toBe('sk-test');
       const form = init.body as FormData;
@@ -186,7 +186,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://aihubmix.com/ideogram/v1/ideogram-v3/remix');
       const form = init.body as FormData;
       expect(form.get('image_weight')).toBe('55');
@@ -213,7 +213,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://aihubmix.com/ideogram/aihubmix_image_upscale');
       const form = init.body as FormData;
       const imageRequest = JSON.parse(form.get('image_request') as string);
@@ -250,7 +250,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://aihubmix.com/ideogram/aihubmix_image_generate');
       expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
       expect((init.headers as Record<string, string>)['Api-Key']).toBe('sk-test');
@@ -284,7 +284,7 @@ describe('AihubmixImageModel', () => {
         }),
       );
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://aihubmix.com/ideogram/aihubmix_image_remix');
       const form = init.body as FormData;
       const imageRequest = JSON.parse(form.get('image_request') as string);
@@ -356,7 +356,7 @@ describe('AihubmixImageModel', () => {
     controller.abort();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
-    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBe(controller.signal);
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).signal).toBe(controller.signal);
   });
 
   describe('default branch delegates byte-identically to the inner OpenAICompatibleImageModel', () => {
@@ -378,7 +378,7 @@ describe('AihubmixImageModel', () => {
           id,
           expect.objectContaining({ provider: 'aihubmix.image', headers }),
         );
-        const ctorConfig = InnerCtor.mock.calls[0][1] as { url: (a: { path: string }) => string };
+        const ctorConfig = InnerCtor.mock.calls[0]![1] as { url: (a: { path: string }) => string };
         expect(ctorConfig.url({ path: '/images/generations' })).toBe(
           'https://aihubmix.com/v1/images/generations',
         );
