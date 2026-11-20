@@ -1,0 +1,3 @@
+flows:
+  - onboarding-skip.yaml
+  - appearance-persistence.yaml
