@@ -574,7 +574,7 @@
   "chat.messageActions.editDiscardTitle": "放棄修改？",
   "chat.messageActions.editFailed": "回覆儲存失敗，請重試。",
   "chat.messageActions.editKeepsAttachments": "附件會保留在訊息中。傳送後將根據編輯後的文字重新回答，原有的一輪對話會保留。",
-  "chat.messageActions.editQuestionAction": "編輯回覆",
+  "chat.messageActions.editQuestionAction": "編輯問題",
   "chat.messageActions.editSaved": "回覆已儲存",
   "chat.messageActions.editTitle": "編輯訊息",
   "chat.messageActions.editUnavailable": "這則回覆已無法編輯。",
