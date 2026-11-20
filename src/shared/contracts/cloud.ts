@@ -73,7 +73,8 @@ export const CloudAccountSchema = z.object({
   ),
   quota_pools: z.array(CloudQuotaPoolSchema),
 });
-export const CloudModelSchema = z.object({
+
+const CloudModelFields = {
   id: z.string().min(1),
   display_name: z.string(),
   endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
@@ -81,6 +82,9 @@ export const CloudModelSchema = z.object({
   max_output_tokens: z.number().int().positive(),
   capabilities: z.array(z.string()),
   available_features: z.array(z.string()),
+};
+export const CloudModelSchema = z.object({
+  ...CloudModelFields,
   requires_login: z.boolean(),
   requires_plan: z.boolean(),
   is_free: z.boolean(),
@@ -90,6 +94,29 @@ export const CloudModelSchema = z.object({
   activation_endpoint: z.string().nullable(),
 });
 export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
+
+const LegacySubscriptionModelSchema = z
+  .strictObject({
+    ...CloudModelFields,
+    capabilities: CloudModelFields.capabilities.nullable(),
+    available_features: CloudModelFields.available_features.nullable(),
+  })
+  .transform((model) => ({
+    ...model,
+    capabilities: model.capabilities ?? [],
+    available_features: model.available_features ?? [],
+    requires_login: true,
+    requires_plan: true,
+    is_free: false,
+    standalone: false,
+    provider: null,
+    activation_required: false,
+    activation_endpoint: null,
+  }));
+export const CloudMemberModelCatalogSchema = z.union([
+  CloudModelCatalogSchema,
+  z.object({ data: z.array(LegacySubscriptionModelSchema) }),
+]);
 export const CloudAmdStatusSchema = z.object({
   status: z.enum([
     'unregistered',
