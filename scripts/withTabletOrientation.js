@@ -16,6 +16,16 @@ module.exports = (config) => {
     const activity = AndroidConfig.Manifest.getMainActivityOrThrow(mod.modResults);
     activity.$['android:screenOrientation'] = 'unspecified';
     activity.$['android:resizeableActivity'] = 'true';
+
+    // A portrait-only library activity must not restrict where Play offers the app.
+    const name = 'android.hardware.screen.portrait';
+    const features = (mod.modResults.manifest['uses-feature'] ??= []);
+    const portraitFeature = features.find((feature) => feature.$['android:name'] === name);
+    if (portraitFeature) {
+      portraitFeature.$['android:required'] = 'false';
+    } else {
+      features.push({ $: { 'android:name': name, 'android:required': 'false' } });
+    }
     return mod;
   });
 
