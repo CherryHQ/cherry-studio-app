@@ -3,7 +3,7 @@ import { Dimensions, type LayoutChangeEvent } from 'react-native';
 import type { ReservedRegion } from 'react-native-reserved-regions';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { FoldRegionProvider, FoldRegionReporter } from '../../layout/FoldRegion';
+import { FoldRegionProvider, FoldRegionReporter, WindowFoldRegion } from '../../layout/FoldRegion';
 import { usePaneSplit } from '../usePaneSplit';
 
 type Size = { width: number; height: number };
@@ -51,8 +51,8 @@ const division = (frame: ReservedRegion['frame']): ReservedRegion => ({
 
 let result: ReturnType<typeof usePaneSplit>;
 const commits: ReturnType<typeof usePaneSplit>[] = [];
-function Probe() {
-  const current = usePaneSplit();
+function Probe({ scope = 'host' }: { scope?: 'host' | 'window' }) {
+  const current = usePaneSplit(scope);
   useEffect(() => {
     result = current;
     commits.push(current);
@@ -117,6 +117,34 @@ it.each([
   act(() => mockLayoutHost({ width, height: 900 }));
   act(() => mockReportRegions([]));
   expect(result.split.paneSize).toBe(expected);
+});
+
+it('uses the full window as soon as the file pane takes the sidebar column', () => {
+  act(() => mockLayoutHost({ width: 671, height: 669 }));
+  act(() => mockReportRegions([]));
+  const shell = (scope: 'host' | 'window') => (
+    <FoldRegionProvider>
+      <FoldRegionReporter />
+      <WindowFoldRegion>
+        <Probe scope={scope} />
+      </WindowFoldRegion>
+    </FoldRegionProvider>
+  );
+  act(() => renderer.update(shell('host')));
+  const layoutWindow = mockLayoutHost;
+  const reportWindow = mockReportRegions;
+  act(() => layoutWindow({ width: 951, height: 669 }));
+  act(() => reportWindow([]));
+  expect(result.split.paneSize).toBe(360);
+
+  // No new host measurement between opening and closing.
+  act(() => renderer.update(shell('window')));
+  expect(result).toMatchObject({
+    isLayoutCurrent: true,
+    split: { paneSize: 409, chatOffset: 409 },
+  });
+  act(() => renderer.update(shell('host')));
+  expect(result.split.paneSize).toBe(360);
 });
 
 it('reserves no space until the first snapshot', () => {

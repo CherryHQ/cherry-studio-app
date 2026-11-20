@@ -27,6 +27,7 @@ import { AccountSessionGate, OrganizationLockAppearance } from '@/frontend/appSh
 import { AppUpdateObserver, AppUpdateProvider } from '@/frontend/appShell/appUpdate';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
+import { CloudAmdReturnBridge } from '@/frontend/appShell/cloud';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { FeedbackCaptureProvider, FeedbackHintProvider } from '@/frontend/appShell/feedback';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
@@ -81,6 +82,7 @@ function RootLayout() {
                                       <AppUpdateProvider>
                                         <AppUpdateObserver />
                                         <BackgroundActivityBridge />
+                                        <CloudAmdReturnBridge />
                                         <LanguagePreferenceObserver />
                                         <UuRemoteCallbackBridge />
                                         {/* Before the navigator, so opaque screens cover the renderer page. */}

@@ -6,10 +6,20 @@ it('keeps the originating chat identity when opening reauthentication', () => {
     '(main)',
     '(chat)',
   ]);
-  expect(accountSignInHref(returnTo, 'expired')).toEqual({
+  expect(accountSignInHref(returnTo, { purpose: 'expired' })).toEqual({
     pathname: '/login',
     params: { purpose: 'expired', returnTo: '/?sessionId=session-1&messageId=message-2' },
   });
+});
+
+it('keeps cancellation separate from the post-login destination', () => {
+  const returnTo = '/settings/provider/cherryai-subscription';
+  const cancelTo = '/settings/provider';
+  expect(accountSignInHref(returnTo, { cancelTo })).toEqual({
+    pathname: '/login',
+    params: { returnTo, cancelTo },
+  });
+  expect(accountSignInHref(returnTo, { cancelTo: '/login' }).params).toEqual({ returnTo });
 });
 
 it('does not duplicate entity parameters already encoded in the route path', () => {

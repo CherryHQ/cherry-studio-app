@@ -1,4 +1,21 @@
+import type { CloudModelOffer, toCloudModelPreview } from '@/frontend/appShell/cloud';
+import type { UniqueModelId } from '@/shared/data/types/model';
+
 import type { ModelPickerGroup, ModelPickerModelItem } from './modelPickerData';
+
+export type ModelPickerOfferItem = {
+  offer: CloudModelOffer;
+  isCloudFree: boolean;
+  key: string;
+  model: ReturnType<typeof toCloudModelPreview>;
+  modelId: UniqueModelId;
+  provider: ModelPickerGroup['provider'];
+};
+
+export type ModelPickerRowItem = ModelPickerModelItem | ModelPickerOfferItem;
+export type ModelPickerDisplayGroup = Omit<ModelPickerGroup, 'items'> & {
+  items: ModelPickerRowItem[];
+};
 
 export type ModelPickerListItem =
   | {
@@ -9,13 +26,13 @@ export type ModelPickerListItem =
       type: 'groupHeader';
     }
   | {
-      item: ModelPickerModelItem;
+      item: ModelPickerRowItem;
       key: string;
       type: 'model';
     };
 
 export function buildModelPickerListItems(
-  groups: readonly ModelPickerGroup[],
+  groups: readonly ModelPickerDisplayGroup[],
   limit = Number.POSITIVE_INFINITY,
 ): ModelPickerListItem[] {
   const listItems: ModelPickerListItem[] = [];

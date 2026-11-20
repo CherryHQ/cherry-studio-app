@@ -2,7 +2,7 @@ import type { AccountsPortalOptions } from '@cherryinternal/accounts-portal/clie
 
 import type { AccountRuntimeOptions } from '@/backend/services/enterprise';
 
-import { resolveCloudLogin } from '../cloudLoginConfig';
+import { resolveCloudLogin, resolvePublicCatalogOrigin } from '../cloudLoginConfig';
 
 const mockCreatePortal = jest.fn();
 const mockCreateRuntime = jest.fn();
@@ -356,3 +356,27 @@ test.each(['issuer', 'portal_url', 'oidc_client_id'])(
     ).toBeUndefined();
   },
 );
+
+test('guest browsing discovers the CN catalog without creating a login registration', async () => {
+  mockRequest.mockResolvedValue({
+    status: 200,
+    data: {
+      schema_version: 1,
+      requires_region_selection: false,
+      region: 'CN',
+      endpoints: { cloud_api_origin: 'https://cloud.test' },
+    },
+  });
+  const signal = new AbortController().signal;
+  await expect(resolvePublicCatalogOrigin('https://config.test', 'ios', signal)).resolves.toBe(
+    'https://cloud.test',
+  );
+  expect(mockRequest).toHaveBeenCalledWith(
+    expect.objectContaining({
+      body: { client: 'mobile', platform: 'ios', selected_region: 'CN' },
+      signal,
+      credentials: 'omit',
+    }),
+  );
+  expect(mockCreatePortal).not.toHaveBeenCalled();
+});

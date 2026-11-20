@@ -1,5 +1,7 @@
 import { type AgentErrorView, AgentProtocolError } from '@/shared/contracts/agent';
 
+export class ParallelSshSendError extends Error {}
+
 /**
  * Submission rejections the composer can explain. The protocol `message` is
  * diagnostic text for logs; the label always comes from the closed `code`.
@@ -23,6 +25,7 @@ const SEND_ERROR_LABEL_KEYS: Partial<Record<AgentErrorView['code'], string>> = {
 };
 
 export function getSendErrorLabelKey(error: unknown): string | undefined {
+  if (error instanceof ParallelSshSendError) return 'chat.input.sendError.sshParallelUnsupported';
   if (!(error instanceof AgentProtocolError)) {
     return undefined;
   }
