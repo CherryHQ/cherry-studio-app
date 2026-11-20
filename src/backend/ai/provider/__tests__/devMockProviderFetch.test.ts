@@ -26,27 +26,38 @@ describe('dev-mock provider', () => {
   });
 
   it('streams deterministic multi-chunk SSE echo replies', async () => {
-    const mockFetch = createDevMockFetch();
-    const response = await mockFetch('https://dev-mock.local/v1/chat/completions', {
-      method: 'POST',
-      body: JSON.stringify({
-        model: 'dev-mock-chat',
-        stream: true,
-        messages: [{ role: 'user', content: 'Hello Cherry' }],
-      }),
-    });
+    const originalResponse = globalThis.Response;
+    globalThis.Response = jest.requireActual<{ Response: typeof Response }>(
+      'whatwg-fetch',
+    ).Response;
+    try {
+      const mockFetch = createDevMockFetch();
+      const response = await mockFetch('https://dev-mock.local/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'dev-mock-chat',
+          stream: true,
+          messages: [{ role: 'user', content: 'Hello Cherry' }],
+        }),
+      });
 
-    expect(response.status).toBe(200);
-    const sse = await readSseChunks(response);
-    expect(sse).toContain('data: [DONE]');
+      expect(response.status).toBe(200);
+      expect(Object.getOwnPropertyDescriptor(response, 'body')?.configurable).toBe(true);
+      const sse = await readSseChunks(response);
+      expect(sse).toContain('data: [DONE]');
 
-    const content = sse
-      .split('\n\n')
-      .filter((line) => line.startsWith('data: {'))
-      .map((line) => JSON.parse(line.slice(6)) as { choices?: { delta?: { content?: string } }[] })
-      .map((chunk) => chunk.choices?.[0]?.delta?.content ?? '')
-      .join('');
-    expect(content).toBe('[dev-mock] Echo: Hello Cherry');
+      const content = sse
+        .split('\n\n')
+        .filter((line) => line.startsWith('data: {'))
+        .map(
+          (line) => JSON.parse(line.slice(6)) as { choices?: { delta?: { content?: string } }[] },
+        )
+        .map((chunk) => chunk.choices?.[0]?.delta?.content ?? '')
+        .join('');
+      expect(content).toBe('[dev-mock] Echo: Hello Cherry');
+    } finally {
+      globalThis.Response = originalResponse;
+    }
   });
 
   it('streams reasoning_content before text when prompted with [mock:reasoning]', async () => {

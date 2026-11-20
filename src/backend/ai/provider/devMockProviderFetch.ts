@@ -71,10 +71,13 @@ function buildStreamingResponse(events: unknown[], signal?: AbortSignal | null):
     },
   });
 
-  return new Response(stream, {
+  const response = new Response(null, {
     status: 200,
     headers: { 'content-type': 'text/event-stream; charset=utf-8' },
   });
+  // React Native's Response constructor only accepts finite bodies. Pi wraps this stream again.
+  Object.defineProperty(response, 'body', { value: stream, configurable: true });
+  return response;
 }
 
 function splitWordsIntoChunks(text: string, chunkSize = 18): string[] {

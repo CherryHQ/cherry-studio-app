@@ -2,7 +2,7 @@ import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { useCloseDrawerForExternalNavigation } from '../useCloseDrawerForExternalNavigation';
+import { useCloseDrawerForNavigation } from '../useCloseDrawerForNavigation';
 
 let mockStatus: 'open' | 'closed' = 'open';
 let mockProgress = 1;
@@ -49,13 +49,15 @@ const navigation = {
   addListener,
 } as unknown as DrawerContentComponentProps['navigation'];
 
-let prepare: ReturnType<typeof useCloseDrawerForExternalNavigation>;
+let prepare: ReturnType<typeof useCloseDrawerForNavigation>['waitForClose'];
+let cancelPending: () => void;
 let renderer: ReactTestRenderer;
 function Probe({ permanent = false }) {
-  const closeDrawer = useCloseDrawerForExternalNavigation(navigation, permanent);
+  const close = useCloseDrawerForNavigation(navigation, permanent);
   useEffect(() => {
-    prepare = closeDrawer;
-  }, [closeDrawer]);
+    prepare = close.waitForClose;
+    cancelPending = close.cancelPending;
+  }, [close]);
   return null;
 }
 function render(permanent = false) {
@@ -126,6 +128,25 @@ test('an earlier queued completion cannot finish the next request', async () => 
   progress(0);
   flushCompletions();
   await expect(next).resolves.toBe(true);
+});
+
+test('a tap after the drawer settles supersedes a queued navigation', async () => {
+  render();
+  const first = prepare();
+  progress(0);
+  const second = prepare();
+  flushCompletions();
+  await expect(first).resolves.toBe(false);
+  await expect(second).resolves.toBe(true);
+});
+
+test('an immediate sidebar action cancels navigation with a close completion already queued', async () => {
+  render();
+  const ready = prepare();
+  progress(0);
+  cancelPending();
+  flushCompletions();
+  await expect(ready).resolves.toBe(false);
 });
 
 test.each([false, true])(

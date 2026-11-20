@@ -10,12 +10,13 @@ export type ModelPickerModelItem = {
   modelId: UniqueModelId;
   provider: Provider;
   cloudUnavailable?: CloudUnavailableReason;
+  isCloudFree?: boolean;
 };
 
 export type ModelPickerGroup = {
   items: ModelPickerModelItem[];
   key: string;
-  provider: Provider;
+  provider: Pick<Provider, 'id' | 'name' | 'presetProviderId'>;
   title: string;
 };
 

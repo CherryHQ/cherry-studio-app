@@ -4,14 +4,16 @@ import { editionCapabilities } from '@/shared/data/managedPolicy';
 import { isDevMockProviderEnabled } from '@/shared/utils/devMockProvider';
 
 import type { DbService } from '../DbService';
-import { DevMockProviderSeeder } from './seeders/DevMockProviderSeeder';
+import { syncDevMockProvider } from './seeders/devMockProviderSeed';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
 import { SeedRunner } from './SeedRunner';
-import type { DatabaseSeeder } from './types';
 
 export async function seedDatabase(dbService: DbService) {
-  await new SeedRunner(dbService).runAll(createSeeders());
+  await new SeedRunner(dbService).runAll([new PreferenceSeeder()]);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    await syncDevMockProvider(dbService, isDevMockProviderEnabled());
+  }
 }
 
 /** Provider discovery waits for IP policy only when installing the first recommended set. */
@@ -22,11 +24,4 @@ export async function seedPresetProviders(
   // Enterprise providers are delivered by the organization, never seeded locally.
   if (!editionCapabilities().providerSettings) return;
   await new SeedRunner(dbService).runAll([new PresetProviderSeeder(getEdition)]);
-}
-
-function createSeeders(): DatabaseSeeder[] {
-  return [
-    new PreferenceSeeder(),
-    ...(isDevMockProviderEnabled() ? [new DevMockProviderSeeder()] : []),
-  ];
 }

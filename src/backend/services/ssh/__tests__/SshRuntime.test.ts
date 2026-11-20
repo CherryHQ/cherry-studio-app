@@ -164,6 +164,62 @@ test('invalidates a frozen AI target when its profile changes', async () => {
   expect(native.run).not.toHaveBeenCalled();
 });
 
+test('recovers the first-send target after restart only on confirmation and with no grant', async () => {
+  const profile = await trusted();
+  const draftId = mockRandomUUID();
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(`draft:${draftId}`, profile);
+  await runtime.attachDraftTarget(draftId, sessionId);
+  const previous = await runtime.setCommandGrant(sessionId, runtime.getTarget(sessionId)!, true);
+  await runtime._doStop();
+  runtime = new SshRuntime(
+    {} as DbService,
+    { acquire: () => ({ release() {} }) },
+    new SshProfileService(profileStorage),
+  );
+  native.run.mockClear();
+
+  expect(await runtime.getRememberedTarget(`draft:${draftId}`)).toBeNull();
+  expect(await runtime.getRememberedTarget(sessionId)).toEqual(profile);
+  expect(await runtime.resolveAgentTarget(sessionId)).toBeNull();
+  await runtime.decideRememberedTarget(sessionId, profile, 'restore');
+  const target = await runtime.resolveAgentTarget(sessionId);
+  expect(target).toMatchObject({ profile, grant: null });
+  expect(target?.selectionId).not.toBe(previous.selectionId);
+  expect(native.run).not.toHaveBeenCalled();
+});
+
+test('rejects a restore decision after the connection changes while the prompt is open', async () => {
+  const profile = await trusted();
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(sessionId, profile);
+  await runtime._doStop();
+  runtime = new SshRuntime({} as DbService, { acquire: () => ({ release() {} }) }, profiles);
+  expect(await runtime.getRememberedTarget(sessionId)).toEqual(profile);
+
+  await runtime.save({ previous: profile, profile: { ...input.profile, host: 'other.local' } });
+  await expect(runtime.decideRememberedTarget(sessionId, profile, 'restore')).rejects.toMatchObject(
+    {
+      code: 'changed',
+    },
+  );
+  expect(await runtime.getRememberedTarget(sessionId)).toBeNull();
+  expect(await runtime.resolveAgentTarget(sessionId)).toBeNull();
+});
+
+test('forgetting a remembered target leaves SSH unavailable and removes the stored reference', async () => {
+  const profile = await trusted();
+  const sessionId = mockRandomUUID();
+  await runtime.selectTarget(sessionId, profile);
+  await runtime._doStop();
+  runtime = new SshRuntime({} as DbService, { acquire: () => ({ release() {} }) }, profiles);
+  await runtime.decideRememberedTarget(sessionId, profile, 'forget');
+
+  expect(await runtime.getRememberedTarget(sessionId)).toBeNull();
+  expect(await runtime.resolveAgentTarget(sessionId)).toBeNull();
+  expect(new SshProfileService(profileStorage).getRememberedTarget(sessionId)).toBeUndefined();
+});
+
 test('rechecks grant expiry after an asynchronous credential read', async () => {
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);

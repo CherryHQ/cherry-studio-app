@@ -43,7 +43,7 @@ export function useAccountCallback() {
         const state = account.getState();
         router.dismissTo(
           state.isEnterprise && state.needsSignIn
-            ? accountSignInHref(returnTo, 'expired')
+            ? accountSignInHref(returnTo, { purpose: 'expired' })
             : (returnTo as Href),
         );
       },

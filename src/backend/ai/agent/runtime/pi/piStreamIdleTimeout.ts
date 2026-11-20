@@ -2,7 +2,12 @@ import type { AssistantMessageEvent } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import type { PiStreamFn as StreamFn } from './piModelTypes';
-import { emptyAssistantMessage, isEmptyContentEvent, providerErrorEvent } from './piStreamEvents';
+import {
+  emptyAssistantMessage,
+  errorRecord,
+  isEmptyContentEvent,
+  providerErrorEvent,
+} from './piStreamEvents';
 import { isPiNativeWebActivity } from './piWebTools';
 
 /** Shared by all credential attempts within one model request. */
@@ -24,6 +29,7 @@ export function withPiStreamIdleTimeout(
     const callerSignal = options?.signal;
     const output = new AssistantMessageEventStream();
     let partial = emptyAssistantMessage(model);
+    let terminalFetchError: Error | undefined;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const settle = (event: Extract<AssistantMessageEvent, { type: 'done' | 'error' }>) => {
@@ -63,6 +69,16 @@ export function withPiStreamIdleTimeout(
         const source = await streamFn(model, context, {
           ...options,
           signal: controller.signal,
+          reportFetchFailure(error) {
+            const facts = errorRecord(error);
+            terminalFetchError =
+              error instanceof Error &&
+              facts?.retryable === false &&
+              (typeof (facts.statusCode ?? facts.status) === 'number' ||
+                typeof facts.code === 'string')
+                ? error
+                : undefined;
+          },
           onProviderStreamEvent: async (event, model) => {
             if (settled) return;
             if (isPiNativeWebActivity(event)) arm();
@@ -72,6 +88,14 @@ export function withPiStreamIdleTimeout(
         if (settled) return;
         for await (const event of source) {
           if (settled) return;
+          if (event.type === 'error' && event.reason === 'error' && terminalFetchError) {
+            // The SDK can wrap a fetch rejection as a generic connection error.
+            const diagnostics = event.error.diagnostics?.filter(
+              (diagnostic) => diagnostic.type !== 'provider_response_failure',
+            );
+            settle(providerErrorEvent({ ...event.error, diagnostics }, terminalFetchError));
+            return;
+          }
           if (event.type === 'done' || event.type === 'error') {
             settle(event);
             return;
@@ -82,7 +106,7 @@ export function withPiStreamIdleTimeout(
         }
         if (!settled) throw new Error('The model response ended without a terminal event.');
       } catch (error) {
-        settle(providerErrorEvent(partial, error, callerSignal?.aborted));
+        settle(providerErrorEvent(partial, terminalFetchError ?? error, callerSignal?.aborted));
       }
     })();
     return output;

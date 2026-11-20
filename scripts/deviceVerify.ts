@@ -605,10 +605,34 @@ function printUsage(): void {
   );
 }
 
+function openRunEvidence(
+  dir: string,
+  target: Pick<EvidenceReceipt, 'workspace' | 'device' | 'platform' | 'appId' | 'metroPort'>,
+) {
+  const receiptPath = path.join(dir, 'receipt.json');
+  if (!fs.existsSync(receiptPath)) {
+    throw new Error('Expected --evidence-dir to contain a receipt.json created by evidence init.');
+  }
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8')) as EvidenceReceipt;
+  if (
+    receipt.workspace !== target.workspace ||
+    (receipt.platform !== 'unknown' && receipt.platform !== target.platform) ||
+    (receipt.device !== null && receipt.device !== target.device) ||
+    (receipt.appId !== null && receipt.appId !== target.appId) ||
+    (receipt.metroPort !== null && receipt.metroPort !== target.metroPort)
+  ) {
+    throw new Error(
+      'Evidence receipt identity does not match the requested workspace and device run.',
+    );
+  }
+  return { receiptPath, receipt: { ...receipt, ...target } };
+}
+
 export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): number {
   const { positional, flags } = parseFlags(argv);
   const [subcommand, subAction] = positional;
   const json = flags.json === true;
+  const currentWorkspace = env.CONDUCTOR_WORKSPACE_NAME?.trim() || path.basename(ROOT);
 
   if (!subcommand || flags.help === true) {
     printUsage();
@@ -661,9 +685,7 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
         flags.platform === 'ios' || flags.platform === 'android' ? flags.platform : 'unknown';
       const baseline = flags.baseline === 'configured' ? 'configured' : 'first-run';
       const workspace =
-        typeof flags.workspace === 'string'
-          ? flags.workspace
-          : (env.CONDUCTOR_WORKSPACE_NAME ?? path.basename(ROOT));
+        typeof flags.workspace === 'string' ? flags.workspace.trim() : currentWorkspace;
       const device = typeof flags.device === 'string' ? flags.device : null;
       const metroPort = env.CONDUCTOR_PORT ? Number(env.CONDUCTOR_PORT) : null;
       const created = initEvidenceRun({
@@ -705,8 +727,9 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
     const flowPath = typeof flags.flow === 'string' ? flags.flow : '';
     const platform =
       flags.platform === 'ios' || flags.platform === 'android' ? flags.platform : null;
-    const deviceId = typeof flags.device === 'string' ? flags.device : '';
-    const devClientUrl = typeof flags['dev-client-url'] === 'string' ? flags['dev-client-url'] : '';
+    const deviceId = typeof flags.device === 'string' ? flags.device.trim() : '';
+    const devClientUrl =
+      typeof flags['dev-client-url'] === 'string' ? flags['dev-client-url'].trim() : '';
     const dryRun = flags['dry-run'] === true;
 
     if (!flowPath || !platform) {
@@ -727,6 +750,25 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
       deviceId,
       devClientUrl,
     });
+
+    if (flags['evidence-dir'] === true) {
+      throw new Error('Expected a directory after --evidence-dir.');
+    }
+    const evidenceDir =
+      typeof flags['evidence-dir'] === 'string' ? path.resolve(ROOT, flags['evidence-dir']) : null;
+    let evidence: ReturnType<typeof openRunEvidence> | undefined;
+    if (evidenceDir) {
+      const launchUrl = new URL(devClientUrl);
+      const bundleUrl = launchUrl.searchParams.get('url');
+      const { port } = bundleUrl ? new URL(bundleUrl) : launchUrl;
+      evidence = openRunEvidence(evidenceDir, {
+        workspace: currentWorkspace,
+        device: deviceId,
+        platform,
+        appId: built.appId,
+        metroPort: port ? Number(port) : null,
+      });
+    }
 
     if (dryRun) {
       printOutput(json, { dryRun: true, ...built }, [
@@ -755,28 +797,24 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
       stderr: redactSecrets(execution.stderr ?? ''),
     };
 
-    if (typeof flags['evidence-dir'] === 'string') {
-      const evidenceDir = path.resolve(ROOT, flags['evidence-dir']);
-      const receiptPath = path.join(evidenceDir, 'receipt.json');
-      if (fs.existsSync(receiptPath)) {
-        const logPath = path.join(evidenceDir, `${path.basename(flowPath, '.yaml')}.log`);
-        fs.writeFileSync(
-          logPath,
-          `${payload.stdout}\n${payload.stderr ? `--- STDERR ---\n${payload.stderr}\n` : ''}`,
-          'utf8',
-        );
-        const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8')) as EvidenceReceipt;
-        receipt.status = status;
-        receipt.durationsMs[path.basename(flowPath)] = durationMs;
-        receipt.artifacts.push(path.relative(ROOT, logPath));
-        if (payload.blocker) receipt.blockers.push(payload.blocker);
-        fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
-        fs.writeFileSync(
-          path.join(evidenceDir, 'evidence.md'),
-          renderEvidenceMarkdown(receipt),
-          'utf8',
-        );
-      }
+    if (evidence && evidenceDir) {
+      const { receipt, receiptPath } = evidence;
+      const logPath = path.join(evidenceDir, `${path.basename(flowPath, '.yaml')}.log`);
+      fs.writeFileSync(
+        logPath,
+        `${payload.stdout}\n${payload.stderr ? `--- STDERR ---\n${payload.stderr}\n` : ''}`,
+        'utf8',
+      );
+      receipt.status = status;
+      receipt.durationsMs[path.basename(flowPath)] = durationMs;
+      receipt.artifacts.push(path.relative(ROOT, logPath));
+      if (payload.blocker) receipt.blockers.push(payload.blocker);
+      fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+      fs.writeFileSync(
+        path.join(evidenceDir, 'evidence.md'),
+        renderEvidenceMarkdown(receipt),
+        'utf8',
+      );
     }
 
     printOutput(json, payload, [
@@ -793,13 +831,19 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
       console.error('Required: --platform ios|android.');
       return 1;
     }
-    const workspace =
-      typeof flags.workspace === 'string' ? flags.workspace : (env.CONDUCTOR_WORKSPACE_NAME ?? '');
+    if (flags.workspace !== undefined && flags.workspace !== currentWorkspace) {
+      throw new Error(`Cleanup can only target the current workspace (${currentWorkspace}).`);
+    }
     const stateDir = env.AGENT_DEVICE_STATE_DIR ?? path.join(ROOT, '.context', 'agent-device');
     const deleteTempDevice = flags['delete-temp-device'] === true;
     const dryRun = flags['dry-run'] === true;
 
-    const steps = buildCleanupPlan({ platform, workspace, stateDir, deleteTempDevice });
+    const steps = buildCleanupPlan({
+      platform,
+      workspace: currentWorkspace,
+      stateDir,
+      deleteTempDevice,
+    });
     if (dryRun) {
       printOutput(json, { dryRun: true, steps }, [
         ...steps.map((step) => `[dry-run] ${step.label}: ${step.command} ${step.args.join(' ')}`),
@@ -807,14 +851,17 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
       return 0;
     }
 
-    const results = steps.map((step) => {
+    const results: { label: string; ok: boolean; output: string }[] = [];
+    for (const step of steps) {
       const res = spawnSync(step.command, step.args, { encoding: 'utf8' });
-      return {
+      const ok = res.status === 0;
+      results.push({
         label: step.label,
-        ok: res.status === 0,
+        ok,
         output: redactSecrets(`${res.stdout ?? ''}\n${res.stderr ?? ''}`.trim()),
-      };
-    });
+      });
+      if (!ok) break;
+    }
     const allOk = results.every((r) => r.ok);
     printOutput(
       json,

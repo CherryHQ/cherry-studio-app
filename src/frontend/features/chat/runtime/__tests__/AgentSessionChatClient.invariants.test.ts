@@ -136,7 +136,7 @@ describe('AgentSessionChatClient state-machine invariants', () => {
     jest.useRealTimers();
   });
 
-  it('preserves invariants I1-I6 across 60 seeded randomized event sequences', async () => {
+  it('preserves invariants I1-I5 across 60 seeded randomized event sequences', async () => {
     for (let seed = 1; seed <= 60; seed += 1) {
       const rng = createPrng(seed * 9973);
       let listener!: (event: AgentEvent) => void;
@@ -144,10 +144,7 @@ describe('AgentSessionChatClient state-machine invariants', () => {
         listener = nextListener;
       });
       const client = new AgentSessionChatClient(protocol);
-      let notificationCount = 0;
-      const unsubscribe = client.subscribe('session-1', () => {
-        notificationCount += 1;
-      });
+      client.subscribe('session-1', () => {});
 
       await client.observe('session-1');
 
@@ -269,12 +266,35 @@ describe('AgentSessionChatClient state-machine invariants', () => {
         expect(textPart && textPart.type === 'text' ? textPart.text : undefined).toBe(expectedText);
       }
 
-      // I6: after dispose(), advancing clocks never emits phantom updates.
-      unsubscribe();
       client.dispose();
-      const countAfterDispose = notificationCount;
-      jest.advanceTimersByTime(10_000);
-      expect(notificationCount).toBe(countAfterDispose);
     }
+  });
+
+  it('cancels a pending message flush when disposing an observed session (I6)', async () => {
+    let listener!: (event: AgentEvent) => void;
+    const client = new AgentSessionChatClient(
+      createMockProtocol((_sessionId, nextListener) => {
+        listener = nextListener;
+      }),
+    );
+    const onChange = jest.fn();
+    client.subscribe('session-1', onChange);
+    await client.observe('session-1');
+    const message = createAssistantMessage('assistant', 'turn', 'streaming', '');
+    listener({ type: 'message.created', message });
+    const timersBeforeDelta = jest.getTimerCount();
+    listener({
+      type: 'message.delta',
+      messageId: message.id,
+      delta: { op: 'text.append', partId: 'assistant-text', text: 'pending' },
+    });
+    expect(jest.getTimerCount()).toBe(timersBeforeDelta + 1);
+    onChange.mockClear();
+
+    client.dispose();
+
+    expect(jest.getTimerCount()).toBe(timersBeforeDelta);
+    jest.advanceTimersByTime(10_000);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

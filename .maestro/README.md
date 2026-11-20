@@ -37,8 +37,9 @@ maestro --device "$DEVICE_ID" test \
   .maestro/flows
 ```
 
-Run one flow by passing its file path instead of the directory. Both current flows clear application
-state, then reconnect the development client through `DEV_CLIENT_URL`. They delete data in the
+The directory runs the two flows listed in `flows/config.yaml`. Run one flow by passing its file
+path instead of the directory. Both suite flows clear application state, then reconnect the
+development client through `DEV_CLIENT_URL`. They delete data in the
 selected test installation and must never target a primary user installation. On the resident
 device they also discard configuration other tasks reuse; prefer a temporary device for them.
 
@@ -49,7 +50,7 @@ device they also discard configuration other tasks reuse; prefer a temporary dev
 - `onboarding-skip.yaml` verifies the fresh-install path from onboarding to the chat composer.
 - `appearance-persistence.yaml` verifies selecting the dark theme and retaining that preference
   after a full app restart.
-- `chat-mock-stream.yaml` verifies sending a prompt and receiving a deterministic offline streamed
-  reply when Metro is started with `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1` (strictly `__DEV__`-only).
-  It exercises the local UI/streaming/persistence pipeline without external credentials; it does
-  not prove live third-party provider credentials work.
+- Run `chat-mock-stream.yaml` by its explicit file path with Metro started using
+  `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1`. This development-only flow uses a fresh temporary installation,
+  declines the privacy dialog shown for its seeded model, then sends a prompt and verifies the
+  deterministic offline reply.

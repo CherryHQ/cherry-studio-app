@@ -107,6 +107,7 @@ export function createPiModelResolver(
       const {
         adapter: configuredAdapter,
         connection,
+        isDevMock,
         model,
         preflight,
         provider,
@@ -339,7 +340,7 @@ export function createPiModelResolver(
         sessionId,
         fetch: (provider.id === CLOUD_PROVIDER_ID
           ? application.get('CloudRuntime').createModelFetch(modelId, cloudUse)
-          : isDevMockProviderEnabled() && provider.id === DEV_MOCK_PROVIDER_ID
+          : isDevMock
             ? createDevMockFetch()
             : expoFetch) as unknown as FetchFunction,
         headers,
@@ -642,7 +643,10 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
     providerService.getByProviderId(runtimeModel.providerId),
     modelService.getById(uniqueModelId),
   ]);
-  if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
+  const isDevMock = provider.id === DEV_MOCK_PROVIDER_ID;
+  if (!model || (isDevMock && !isDevMockProviderEnabled())) {
+    throw new Error(`Model is not configured: ${uniqueModelId}`);
+  }
 
   const connection = resolveProviderConnection(provider, model);
   const piBinding = requirePiLanguageBinding(resolvePiLanguageBinding(provider, connection));
@@ -656,6 +660,7 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   return {
     adapter,
     connection,
+    isDevMock,
     model,
     preflight: toPiModelPreflight(model),
     provider,
