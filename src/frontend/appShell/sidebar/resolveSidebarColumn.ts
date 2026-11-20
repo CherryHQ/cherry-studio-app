@@ -11,10 +11,11 @@ export type SidebarColumnContent = 'sidebar' | 'search';
 /**
  * How the sidebar meets the content region. A wide window keeps a permanent column unless the user
  * collapsed it; when the file pane takes that column beside the chat, the sidebar steps aside. Both
- * leave the sidebar mounted without reserving space for it.
+ * leave the sidebar mounted without reserving space for it, as do pages over a compact chat.
  */
 export type SidebarColumn =
   | { kind: 'overlay' }
+  | { kind: 'inactive' }
   | { kind: 'collapsed' }
   | { kind: 'yielded' }
   | {
@@ -28,6 +29,7 @@ export type SidebarColumn =
 
 type SidebarColumnInput = {
   isWide: boolean;
+  isChatFocused: boolean;
   /** The user hid the column; only a wide window has one to hide. */
   isCollapsed: boolean;
   /** The file pane is open beside a focused chat and holds the left column. */
@@ -50,12 +52,13 @@ export function resolveSidebarColumn({
   fold,
   insetLeft,
   insetRight,
+  isChatFocused,
   isCollapsed,
   isPaneInColumn,
   isWide,
   windowWidth,
 }: SidebarColumnInput): SidebarColumn {
-  if (!isWide) return { kind: 'overlay' };
+  if (!isWide) return { kind: isChatFocused ? 'overlay' : 'inactive' };
   if (isPaneInColumn) return { kind: 'yielded' };
 
   if (fold && !isAcross(fold)) {
@@ -74,10 +77,13 @@ export function resolveSidebarColumn({
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
 }
 
-/** A wide column can disappear without mounting the overlay or playing its close transition. */
+/** Keep an inactive sidebar mounted outside the content row without showing a scrim. */
 export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number) {
   if (column.kind === 'overlay') {
-    return { drawerType: 'front', drawerStyle: { width: overlayWidth } } as const;
+    return {
+      drawerType: 'front',
+      drawerStyle: { pointerEvents: 'auto', width: overlayWidth },
+    } as const;
   }
   if (column.kind === 'permanent') {
     return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
@@ -103,6 +109,7 @@ export function resolveSidebarToggleAction(column: SidebarColumn): SidebarToggle
       return 'show';
     case 'permanent':
       return column.foldGap > 0 ? undefined : 'hide';
+    case 'inactive':
     case 'yielded':
       return undefined;
   }

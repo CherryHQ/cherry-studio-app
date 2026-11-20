@@ -71,6 +71,7 @@ export function useSidebarColumn() {
     fold,
     insetLeft: insets.left,
     insetRight: insets.right,
+    isChatFocused,
     isCollapsed: state.isCollapsed,
     isPaneInColumn,
     isWide: canDock,
