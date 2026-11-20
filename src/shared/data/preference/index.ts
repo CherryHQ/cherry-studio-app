@@ -7,6 +7,7 @@ export type {
 export type {
   EnterpriseDefaultModels,
   FontSizeStep,
+  ModelWebToolsPreference,
   PreferenceKeyType,
   PreferenceSchema,
 } from './preferenceSchema';
@@ -18,4 +19,9 @@ export {
 } from './preferenceSchema';
 export type { LanguageVarious, PreferenceUpdateOptions } from './preferenceTypes';
 export { ThemeMode } from './preferenceTypes';
-export { getDefaultValue, getPreferenceKeys, isPreferenceKey } from './preferenceUtils';
+export {
+  getDefaultValue,
+  getPreferenceKeys,
+  isPreferenceKey,
+  resolveModelWebToolsPreference,
+} from './preferenceUtils';

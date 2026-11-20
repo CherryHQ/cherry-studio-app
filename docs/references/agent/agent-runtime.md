@@ -122,7 +122,8 @@ reads the schema header and checks the current initialization or storage-session
 that every historic task is recoverable. Normal task and approval waits are not storage failures.
 
 `RuntimeConversationConfiguration.webTools` carries the Host's `RuntimeWebTools` selection policy:
-`modelToolsPreferred`, `clientSearchAvailable`, and `clientFetchAvailable`. It is absent when the
+`modelTools` (`preferred`, `fallback`, or `disabled`), `clientSearchAvailable`, and
+`clientFetchAvailable`. It is absent when the
 Agent may not use the web. The Runtime selects and persists one route per web capability with the
 configuration. `RuntimeExecutionRequest` serves isolated probes and carries no web policy. See
 [Web Search](../web-search.md#native-tools-and-selection) for the selection contract.

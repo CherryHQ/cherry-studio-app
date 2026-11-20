@@ -59,15 +59,21 @@ export function resolvePiWebToolRoutes(
       !isPiWebTool(tool, 'fetch'),
   );
   const server = {
-    search: !!native?.search && (!external.search || external.search.approval === 'auto'),
-    fetch: !!native?.fetch && (!external.fetch || external.fetch.approval === 'auto'),
+    search:
+      policy.modelTools !== 'disabled' &&
+      !!native?.search &&
+      (!external.search || external.search.approval === 'auto'),
+    fetch:
+      policy.modelTools !== 'disabled' &&
+      !!native?.fetch &&
+      (!external.fetch || external.fetch.approval === 'auto'),
   };
   if (!native?.functionToolMixing && otherFunctionTools) {
     server.search = false;
     server.fetch = false;
   }
   const select = (capability: keyof PiWebToolRoutes): WebToolRoute =>
-    policy.modelToolsPreferred
+    policy.modelTools === 'preferred'
       ? server[capability]
         ? 'server'
         : client[capability]
@@ -93,7 +99,7 @@ export function resolvePiWebToolRoutes(
     const serverCoverage = Number(server.search) + Number(server.fetch);
     const useServer =
       serverCoverage > clientCoverage ||
-      (serverCoverage === clientCoverage && policy.modelToolsPreferred);
+      (serverCoverage === clientCoverage && policy.modelTools === 'preferred');
     search = useServer ? (server.search ? 'server' : 'none') : client.search ? 'client' : 'none';
     fetch = useServer ? (server.fetch ? 'server' : 'none') : client.fetch ? 'client' : 'none';
   }
