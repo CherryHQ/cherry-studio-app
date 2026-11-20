@@ -8,7 +8,7 @@ import {
   FoldRegionProvider,
   WindowFoldRegion,
 } from '@/frontend/appShell/layout';
-import { ChatSourceProvider, useChatSource } from '@/frontend/appShell/navigation/chat';
+import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
 import { FilePaneProvider } from '@/frontend/appShell/pane';
 import {
   resolveSidebarDrawer,
@@ -62,7 +62,6 @@ function SidebarDrawer() {
   const { width } = useWindowDimensions();
   const { theme } = useUniwind();
   const { column } = useSidebarColumn();
-  const { isChatFocused } = useChatSource();
   const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
     'background',
     'sidebar',
@@ -106,7 +105,7 @@ function SidebarDrawer() {
         swipeEdgeWidth: width,
         // Pages pushed over the chat lead with back, so the full-width gesture only exposes the
         // overlay from the chat itself.
-        swipeEnabled: column.kind === 'overlay' && isChatFocused,
+        swipeEnabled: column.kind === 'overlay',
       }}
     >
       <Drawer.Screen name="(main)" />

@@ -314,7 +314,8 @@ describe('resolved architecture boundaries', () => {
 
     it('keeps every legacy limit on an existing page', () => {
       const guardrail = eslintConfig.find((entry) => entry.name === 'page-use-effect-guardrail');
-      const limits = guardrail?.rules?.['cherry-page/use-effect-limit']?.[1];
+      const rule = guardrail?.rules?.['cherry-page/use-effect-limit'];
+      const limits = Array.isArray(rule) ? rule[1] : undefined;
       expect(limits).toBeDefined();
       expect(
         Object.keys(limits ?? {}).filter((file) => !fs.existsSync(path.join(root, file))),
