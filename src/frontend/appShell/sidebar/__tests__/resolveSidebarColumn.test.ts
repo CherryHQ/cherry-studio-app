@@ -9,6 +9,7 @@ const wide = {
   fold: null,
   insetLeft: 0,
   insetRight: 0,
+  isChatFocused: true,
   isCollapsed: false,
   isPaneInColumn: false,
   isWide: true,
@@ -20,8 +21,20 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn({ ...wide, isWide: false })).toEqual({ kind: 'overlay' });
   });
 
+  test('hides the compact sidebar when a page covers the chat', () => {
+    const input = { ...wide, isWide: false };
+    const inactive = resolveSidebarColumn({ ...input, isChatFocused: false });
+    expect(inactive).toEqual({ kind: 'inactive' });
+    expect(resolveSidebarToggleAction(inactive)).toBeUndefined();
+    expect(resolveSidebarDrawer(inactive, 320)).toMatchObject({
+      drawerType: 'permanent',
+      drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none' },
+    });
+    expect(resolveSidebarColumn(input)).toEqual({ kind: 'overlay' });
+  });
+
   test('keeps a 280-point column beside the content in a wide window', () => {
-    expect(resolveSidebarColumn(wide)).toEqual({
+    expect(resolveSidebarColumn({ ...wide, isChatFocused: false })).toEqual({
       content: 'sidebar',
       foldGap: 0,
       kind: 'permanent',
@@ -100,7 +113,7 @@ describe('resolveSidebarDrawer', () => {
   test('a compact window still slides the sidebar over the chat', () => {
     expect(resolveSidebarDrawer({ kind: 'overlay' }, 320)).toEqual({
       drawerType: 'front',
-      drawerStyle: { width: 320 },
+      drawerStyle: { pointerEvents: 'auto', width: 320 },
     });
   });
 });
