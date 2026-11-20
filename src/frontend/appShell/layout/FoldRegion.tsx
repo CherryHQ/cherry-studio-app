@@ -50,13 +50,13 @@ export function useFoldRegion() {
 }
 
 /** Host size and fold from the same observation. */
-export function useFoldRegionLayout() {
-  return use(FoldRegionContext);
+export function useFoldRegionLayout(scope: 'host' | 'window' = 'host') {
+  return use(scope === 'window' ? WindowFoldRegionContext : FoldRegionContext);
 }
 
 /** A resized window must not expose a pane or change routes using the previous screen's fold. */
-export function useIsFoldRegionLayoutCurrent() {
-  return isCurrent(useFoldRegionLayout(), useWindowDimensions());
+export function useIsFoldRegionLayoutCurrent(scope: 'host' | 'window' = 'host') {
+  return isCurrent(useFoldRegionLayout(scope), useWindowDimensions());
 }
 
 /**
@@ -88,7 +88,7 @@ export function WindowFoldRegion({ children }: PropsWithChildren) {
 
 /** The fold across the window from a current snapshot, or null. */
 export function useWindowFoldRegion() {
-  const layout = use(WindowFoldRegionContext);
+  const layout = useFoldRegionLayout('window');
   return isCurrent(layout, useWindowDimensions()) ? (layout?.fold ?? null) : null;
 }
 

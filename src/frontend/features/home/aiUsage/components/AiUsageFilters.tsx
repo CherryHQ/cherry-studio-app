@@ -115,7 +115,7 @@ export function AiUsageFilters({
               ? `${selectedModel.providerId}::${selectedModel.modelId}`
               : null
           }
-          variant="chat"
+          variant="usage"
         />
       ) : field === 'provider' ? (
         <AiUsageProviderOptions

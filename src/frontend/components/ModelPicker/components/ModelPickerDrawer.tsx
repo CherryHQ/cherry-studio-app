@@ -1,5 +1,4 @@
 import EyeIcon from '@cherrystudio/app-icons/icons/eye';
-import GiftIcon from '@cherrystudio/app-icons/icons/gift';
 import {
   ActionMenu,
   BottomSheet,
@@ -9,14 +8,27 @@ import {
   ContentState,
   SearchField,
 } from '@cherrystudio/ui/components';
+import { useGlobalSearchParams } from 'expo-router';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
+import { useCloudModelBrowser, useReturnedCloudModel } from '@/frontend/appShell/cloud';
+import {
+  chatReturnToHref,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useModelChoice } from '@/frontend/components/Policy';
-import type { CloudModelUse } from '@/shared/contracts/cloud';
+import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
+import {
+  CLOUD_PROVIDER_ID,
+  CLOUD_PROVIDER_NAME,
+  type CloudModelUse,
+} from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
@@ -25,18 +37,23 @@ import {
   matchesModelPickerBadges,
   type ModelPickerBadge,
 } from '../utils/modelPickerBadges';
+import { addCloudOffers, EMPTY_CHERRY_AI_GROUP } from '../utils/modelPickerCloudOffers';
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
+import { ModelPickerBadge as ModelBadge } from './ModelPickerBadge';
+import { ModelPickerCherryAiEntry } from './ModelPickerCherryAiEntry';
 import { ModelPickerFilterIcon } from './ModelPickerFilterIcon';
 import { ModelPickerList } from './ModelPickerList';
 
-export type ModelPickerDrawerVariant = 'default' | 'chat';
+export type ModelPickerDrawerVariant = 'default' | 'chat' | 'usage';
 
 const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
 
 type ModelPickerDrawerProps = {
   cloudUse?: CloudModelUse;
+  /** Destination for resuming this model selection after community sign-in. */
+  loginReturnTo?: string;
   emptyText?: string;
   isModelVisible?: (item: ModelPickerModelItem) => boolean;
   modelType: ModelTypeFilter;
@@ -68,6 +85,7 @@ export type ModelPickerMultiSelect = {
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
   cloudUse = 'agent',
+  loginReturnTo,
   emptyText,
   isModelVisible,
   modelType,
@@ -136,12 +154,14 @@ export function ModelPickerDrawer({
       <ModelRegistryGate>
         <ModelPickerDrawerContent
           cloudUse={cloudUse}
+          loginReturnTo={loginReturnTo}
           allowedModelIds={allowedModelIds}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
           modelType={modelType}
           onAddProvider={onAddProvider}
+          onClose={handleClose}
           onSelect={onSelect}
           onSearchFocus={handleSearchFocus}
           onSearchTextChange={setSearchText}
@@ -161,12 +181,14 @@ export function ModelPickerDrawer({
 
 function ModelPickerDrawerContent({
   cloudUse,
+  loginReturnTo,
   allowedModelIds,
   deferredSearchText,
   emptyText,
   isModelVisible,
   modelType,
   onAddProvider,
+  onClose,
   onSelect,
   onSearchFocus,
   onSearchTextChange,
@@ -180,11 +202,13 @@ function ModelPickerDrawerContent({
   variant,
 }: Pick<
   ModelPickerDrawerProps,
+  | 'loginReturnTo'
   | 'cloudUse'
   | 'isModelVisible'
   | 'emptyText'
   | 'modelType'
   | 'onAddProvider'
+  | 'onClose'
   | 'onSelect'
   | 'open'
   | 'providerId'
@@ -213,7 +237,7 @@ function ModelPickerDrawerContent({
         ? groups
         : groups.flatMap((group) => {
             const items = group.items.filter((item) =>
-              matchesModelPickerBadges(item.model, [selectedBadge]),
+              matchesModelPickerBadges(item.model, [selectedBadge], item.isCloudFree),
             );
             return items.length > 0 ? [{ ...group, items }] : [];
           }),
@@ -232,9 +256,104 @@ function ModelPickerDrawerContent({
         : filteredGroups,
     [allowedModelIds, filteredGroups, isModelVisible],
   );
-  const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasActiveFilters = selectedBadge !== null;
   const hasConditions = deferredSearchText.trim().length > 0 || hasActiveFilters;
+  const showBadges = variant !== 'default';
+  const canOfferCherryAi =
+    variant === 'chat' &&
+    !isEnterpriseProfile() &&
+    allowedModelIds === null &&
+    !isModelVisible &&
+    modelType !== 'image' &&
+    (!providerId || providerId === CLOUD_PROVIDER_ID);
+  const {
+    state: cloudState,
+    accountState,
+    offers,
+    press,
+    refresh: refreshCloud,
+    signInAgain,
+  } = useCloudModelBrowser(canOfferCherryAi && open, cloudUse);
+  const { sessionId, agentId, workspaceDraftId, sshDraftId } =
+    useGlobalSearchParams<ChatRouteParamsInput>();
+  const chat = parseChatRoute({ sessionId, agentId, workspaceDraftId, sshDraftId });
+  const returnTo = loginReturnTo ?? (chat.status === 'ready' ? chatReturnToHref(chat.target) : '/');
+  const pressCloudOffer = useCallback(
+    (id: string) => {
+      press(id, returnTo, onClose, Boolean(loginReturnTo));
+    },
+    [loginReturnTo, onClose, press, returnTo],
+  );
+  const amdName = t('cloud.amd.title');
+  const keywords = useMemo(() => toSearchKeywords(deferredSearchText), [deferredSearchText]);
+  const displayGroups = useMemo(
+    () =>
+      canOfferCherryAi
+        ? addCloudOffers(visibleGroups, offers, keywords, selectedBadge, amdName)
+        : visibleGroups,
+    [amdName, canOfferCherryAi, keywords, offers, selectedBadge, visibleGroups],
+  );
+  useReturnedCloudModel({
+    pathname: '/',
+    destination: returnTo,
+    enabled: Boolean(loginReturnTo) && open && hasLoadedCatalog,
+    state: cloudState,
+    account: accountState,
+    resume: (id) => {
+      const item = visibleGroups
+        .flatMap((group) => group.items)
+        .find((item) => item.model.providerId === CLOUD_PROVIDER_ID && item.model.modelId === id);
+      const offer = offers.get(id);
+      if (offer && !offer.reason && !item && canOfferCherryAi) return undefined;
+      return () => {
+        if (item && !item.cloudUnavailable && canOfferCherryAi && offer && !offer.reason)
+          onSelect(item);
+        else if (canOfferCherryAi) pressCloudOffer(id);
+      };
+    },
+  });
+  const showCherryAiEntry =
+    canOfferCherryAi &&
+    hasLoadedCatalog &&
+    !hasActiveFilters &&
+    !displayGroups.some((group) => group.provider.id === CLOUD_PROVIDER_ID) &&
+    matchesSearchKeywords(keywords, [CLOUD_PROVIDER_NAME, amdName]);
+  const listItems = useMemo(
+    () =>
+      buildModelPickerListItems(
+        showCherryAiEntry ? [EMPTY_CHERRY_AI_GROUP, ...displayGroups] : displayGroups,
+      ),
+    [displayGroups, showCherryAiEntry],
+  );
+  const showCloudEntry =
+    showCherryAiEntry ||
+    (canOfferCherryAi && (cloudState.phase === 'error' || cloudState.guestCatalog === 'error'));
+  const cherryAiEntry = useMemo(
+    () =>
+      showCloudEntry ? (
+        <ModelPickerCherryAiEntry
+          state={cloudState}
+          restoring={accountState.isRestoringSession}
+          onRetry={
+            cloudState.accountIssue === 'reauth_required'
+              ? () => {
+                  onClose();
+                  signInAgain(returnTo);
+                }
+              : refreshCloud
+          }
+        />
+      ) : undefined,
+    [
+      accountState.isRestoringSession,
+      cloudState,
+      refreshCloud,
+      showCloudEntry,
+      onClose,
+      returnTo,
+      signInAgain,
+    ],
+  );
   const waitingForCatalog = isLoading || (!hasLoadedCatalog && !error);
   const emptyAction =
     // Enterprise providers come from the organization and cannot be added here.
@@ -260,7 +379,7 @@ function ModelPickerDrawerContent({
     selectedBadge === 'vision' ? (
       <EyeIcon className="text-tag-blue-foreground" />
     ) : selectedBadge === 'free' ? (
-      <GiftIcon className="text-tag-green-foreground" />
+      <ModelBadge badge="free" testIDPrefix="model-picker-filter-badge" />
     ) : (
       <ModelPickerFilterIcon />
     );
@@ -282,7 +401,7 @@ function ModelPickerDrawerContent({
             variant="subtle"
           />
         </View>
-        {variant === 'chat' ? (
+        {showBadges ? (
           <ActionMenu
             items={[
               {
@@ -322,6 +441,7 @@ function ModelPickerDrawerContent({
           </View>
         ) : (
           <ModelPickerList
+            cherryAiEntry={cherryAiEntry}
             emptyAction={emptyAction}
             emptyIcon={
               hasLoadedCatalog ? (
@@ -340,11 +460,12 @@ function ModelPickerDrawerContent({
             isOpen={open}
             listItems={listItems}
             loadingText={t('settings.provider.models.loading')}
+            onCloudOffer={canOfferCherryAi ? pressCloudOffer : undefined}
             onSelect={onSelect}
             maxSelectedCount={multiSelect?.maxCount}
             selectedModelIds={multiSelect?.selectedModelIds}
             selectedModelId={selectedModelId}
-            showBadges={variant === 'chat'}
+            showBadges={showBadges}
           />
         )}
       </View>

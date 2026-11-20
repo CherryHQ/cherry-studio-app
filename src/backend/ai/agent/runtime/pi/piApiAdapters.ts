@@ -157,16 +157,20 @@ function withTransportCode(error: unknown, init: RequestInit | undefined, code: 
 /**
  * A body that fails after its headers arrived is a dropped connection. The native message is
  * OS-localized and carries no status, so Pi's retry policy cannot classify it by text; mark it
- * here. An aborted request stays terminal through its stop reason. A request rejected before
- * headers keeps its existing retry classification and only gains a code, which Pi reads from the
- * cause of the SDK's connection error. The rejection does not say why no response arrived.
+ * here. An aborted request stays terminal through its stop reason. Report fetch rejections before
+ * the SDK wraps them, and tag errors without a code so Pi can identify a missing response.
  */
-function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
+function withRetryableBodyFailure(
+  fetch: FetchFunction,
+  reportFetchFailure: ((error: unknown) => void) | undefined,
+): FetchFunction {
   return async (input, init) => {
+    reportFetchFailure?.(undefined);
     let response: Response;
     try {
       response = await fetch(input, init);
     } catch (error) {
+      reportFetchFailure?.(error);
       throw withTransportCode(error, init, 'no_response');
     }
     const source = response.ok ? response.body : null;
@@ -202,10 +206,12 @@ export async function bindPiStream(
   binding: PiStreamBinding,
 ): Promise<PiStreamFn> {
   const streamSimple = await adapter.loadStreamSimple();
-  const fetch = adapter.supportsCustomFetch ? withRetryableBodyFailure(binding.fetch) : undefined;
 
   return (model, context, options) => {
-    const { trace, ...providerOptions } = options ?? {};
+    const { reportFetchFailure, trace, ...providerOptions } = options ?? {};
+    const fetch = adapter.supportsCustomFetch
+      ? withRetryableBodyFailure(binding.fetch, reportFetchFailure)
+      : undefined;
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
     const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };

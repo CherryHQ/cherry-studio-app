@@ -4,14 +4,17 @@ import { TextDecoder, TextEncoder } from 'node:util';
 import type { Model as PiModel } from '@earendil-works/pi-ai';
 import { streamSimple as streamSimpleAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { streamSimple as streamSimpleCompletions } from '@earendil-works/pi-ai/api/openai-completions';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { cloudSnapshot } from '@/backend/services/cloud/__tests__/_cloudFixtures';
 import { CloudRuntime } from '@/backend/services/cloud/CloudRuntime';
+import { CLOUD_PROVIDER_ID, type CloudModel } from '@/shared/contracts/cloud';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
 import type { PiStreamFn } from '../piModelTypes';
+import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
 const service = { apiOrigin: 'https://cloud.example' };
 const mockGet = jest.fn();
@@ -40,6 +43,9 @@ jest.mock('@/backend/services/cloud/CloudSession', () => ({
     async headers() {
       return {};
     }
+    recoverRequest() {
+      return false;
+    }
     async revoke() {}
   },
 }));
@@ -50,7 +56,7 @@ function reply(account: string, path: string) {
   const state = cloudSnapshot(account);
   if (path === '/api/v1/account') return state.account;
   if (path === '/api/v1/account/plans') return state.plans;
-  if (path === '/v1/models') return { data: state.models };
+  if (path === '/v1/models?limit=1000&catalog=full') return { data: state.models };
   throw new Error(`Unexpected Cloud endpoint: ${path}`);
 }
 
@@ -165,7 +171,7 @@ test.each([
   'streams $endpoint through the existing Pi binding before EOF',
   async ({ endpoint, streamSimple, first, last }) => {
     mockGet.mockImplementation(async (account: string, path: string) =>
-      path === '/v1/models'
+      path === '/v1/models?limit=1000&catalog=full'
         ? {
             data: cloudSnapshot(account).models.map((model) => ({
               ...model,
@@ -245,6 +251,76 @@ test.each([
       upstream.push(last);
       upstream.close();
       expect((await finished).stopReason).toBe('stop');
+    } finally {
+      await runtime._doStop();
+    }
+  },
+);
+
+test.each([
+  { activationRequired: false, status: 403, code: 'AMD_ACCESS_DENIED' },
+  { activationRequired: false, status: 429, code: 'RATE_LIMITED' },
+  { activationRequired: true, status: undefined, code: 'cloud_activation_required' },
+])(
+  'preserves a terminal AMD $code through the OpenAI stream',
+  async ({ activationRequired, status, code }) => {
+    const amd: CloudModel = {
+      ...cloudSnapshot().models[0],
+      activation_endpoint: '/api/v1/amd/desktop/entry',
+      id: 'amd/free-model',
+      provider: 'amd',
+      requires_plan: false,
+      is_free: true,
+      endpoint_type: 'openai-chat-completions',
+      activation_required: activationRequired,
+    };
+    mockGet.mockImplementation(async (account: string, path: string) =>
+      path === '/v1/models?limit=1000&catalog=full' ? { data: [amd] } : reply(account, path),
+    );
+    if (status !== undefined)
+      mockInference.mockResolvedValue(
+        new Response(JSON.stringify({ error: { code } }), { status }),
+      );
+    const runtime = await setup();
+    try {
+      await runtime.refresh();
+      const adapter = resolvePiApiAdapter(amd.endpoint_type);
+      jest
+        .spyOn(adapter, 'loadStreamSimple')
+        .mockResolvedValue(streamSimpleCompletions as unknown as PiStreamFn);
+      const stream = withPiStreamIdleTimeout(
+        await bindPiStream(adapter, {
+          apiKey: '',
+          fetch: runtime.createModelFetch(amd.id, 'agent'),
+          headers: {},
+          maxRetries: 0,
+          maxTokens: 64,
+        }),
+      );
+      const model: PiModel<SupportedPiApi> = {
+        api: adapter.api,
+        provider: CLOUD_PROVIDER_ID,
+        id: amd.id,
+        name: amd.display_name,
+        baseUrl: adapter.formatBaseUrl(service.apiOrigin),
+        contextWindow: amd.context_window,
+        maxTokens: 64,
+        input: ['text'],
+        reasoning: false,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      };
+      const source = await stream(
+        model,
+        normalizeContext({ messages: [{ role: 'user', content: '你好', timestamp: Date.now() }] }),
+      );
+      const result = await source.result();
+      if (activationRequired) expect(mockInference).not.toHaveBeenCalled();
+      expect(result.stopReason).toBe('error');
+      expect(result.diagnostics?.at(-1)).toMatchObject({
+        error: { code },
+        details: { ...(status === undefined ? {} : { status }), retryable: false },
+      });
+      expect(isRetryableAssistantError(result)).toBe(false);
     } finally {
       await runtime._doStop();
     }

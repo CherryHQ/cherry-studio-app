@@ -1,7 +1,11 @@
 export { AccountSessionGate } from './AccountSessionGate';
 export { AccountCallbackRoute } from './AccountCallbackRoute';
 export { accountSignInHref, isAccountRoute } from './accountRoute';
-export { rememberAccountReturnTo } from './accountNavigation';
+export {
+  rememberAccountReturnTo,
+  rememberCloudModelTap,
+  consumeCloudModelTap,
+} from './accountNavigation';
 export { LoginRoute } from './LoginRoute';
 export { OrganizationLockAppearance } from './OrganizationLockAppearance';
 export { organizationLabel } from './organizationLabel';

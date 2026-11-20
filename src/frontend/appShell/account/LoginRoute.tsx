@@ -8,6 +8,7 @@ import {
 } from 'expo-router';
 import { useState } from 'react';
 
+import { clearCloudModelTap } from './accountNavigation';
 import { readAccountReturnTo } from './accountRoute';
 import { type LoginPurpose, LoginScreen } from './LoginScreen';
 import { useAccount } from './useAccount';
@@ -19,15 +20,20 @@ import { useAccountErrorReporter } from './useAccountErrorReporter';
 export function LoginRoute() {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    purpose?: string;
+    cancelTo?: string | string[];
+    returnTo?: string | string[];
+  }>();
   const returnTo = readAccountReturnTo(params.returnTo) ?? '/settings/profile';
+  const cancelTo = readAccountReturnTo(params.cancelTo) ?? returnTo;
   const { account, state } = useAccount();
   const reportError = useAccountErrorReporter('LoginRoute');
   // Fixed at entry: signing in changes the account state before this page leaves.
   const [entryPurpose] = useState<LoginPurpose>(
     state.isEnterprise && state.needsSignIn
       ? 'expired'
-      : state.isSignedIn || state.isEnterprise
+      : (state.isSignedIn && params.purpose !== 'sign-in') || state.isEnterprise
         ? 'switch'
         : 'sign-in',
   );
@@ -43,11 +49,11 @@ export function LoginRoute() {
       }
     },
   );
-  const leave = () => {
+  const leave = (destination: string) => {
     if (!navigation.isFocused()) return;
     setLeaving(true);
     allowLeave();
-    router.dismissTo(returnTo as Href);
+    router.dismissTo(destination as Href);
   };
   const signOut = () =>
     void account.signOut().catch((error: unknown) => reportError(error, 'account.signOut'));
@@ -56,8 +62,15 @@ export function LoginRoute() {
       <Stack.Screen options={{ gestureEnabled: purpose !== 'expired' }} />
       <LoginScreen
         key={purpose}
-        onLeave={purpose === 'expired' ? signOut : leave}
-        onSignedIn={leave}
+        onLeave={
+          purpose === 'expired'
+            ? signOut
+            : () => {
+                clearCloudModelTap(returnTo);
+                leave(cancelTo);
+              }
+        }
+        onSignedIn={() => leave(returnTo)}
         purpose={purpose}
         returnTo={returnTo}
       />
