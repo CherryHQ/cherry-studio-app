@@ -68,7 +68,7 @@ const mockPreference = {
 const mockDesktopConnectionManager = { kind: 'desktop-connection-manager' };
 const mockProviderAccounts = { kind: 'provider-accounts' };
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
-const mockRegion = { getCountry: jest.fn(async () => 'US') };
+const mockRegion = { getRegion: jest.fn(async () => 'GLOBAL') };
 const mockProviderCatalog = {
   hasPendingStorageWork: jest.fn(() => false),
   ensureReady: jest.fn(async () => {}),

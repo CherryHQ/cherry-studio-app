@@ -214,10 +214,10 @@ Enterprise profiles seed preferences only; their providers and models come from 
 synchronization. Keep this exception when adding seeders or import paths. See
 [Enterprise Edition](../enterprise.md) for profile scope and managed-resource write rules.
 
-Fresh-install recommendations and new-provider discovery share the same egress-country policy in
-all distributions, including domestic-store builds. A detected non-CN country permits global
-entries, including through an overseas VPN exit; detected CN selects domestic entries. An unknown
-country uses the device region (`getLocales()[0]?.regionCode`) for these two catalog decisions:
+Fresh-install recommendations and new-provider discovery share the same egress-region policy in
+all distributions, including domestic-store builds. A detected `GLOBAL` region permits global
+entries, including through an overseas VPN exit; detected `CN` selects domestic entries. An unknown
+region uses the device region (`getLocales()[0]?.regionCode`) for these two catalog decisions:
 CN selects domestic entries, other regions select global entries, and a missing region retains the
 domestic default. The unknown result remains `null` in region detection. Existing saved providers
 are preserved; mirror selection, Jina and voice retain their existing CN fallback.
@@ -227,8 +227,8 @@ When no saved snapshot is usable, model selection, editing and calls wait for a 
 `models.json` and `provider-models.json`; failed first downloads expose the existing retry action.
 These model files are not bundled. Welcome, provider configuration and history remain accessible.
 Downloaded metadata passes Mobile capability admission before activation. Startup refreshes an
-absent or older-schema saved snapshot from v4 in the background. The detected IP country selects
-GitCode in CN or when unknown, and GitHub elsewhere, with fallback to the other source. GitCode
+absent or older-schema saved snapshot from v4 in the background. The detected network region selects
+GitCode in CN or when unknown, and GitHub when `GLOBAL`, with fallback to the other source. GitCode
 uses `api.gitcode.com/api/v5/repos/CherryHQ/cherry-studio/raw/{encoded-file-path}` with
 `ref=x-files/provider-registry`; its preview raw host is not used for model metadata. A failed,
 partial or incompatible update retains any compatible local catalog. Once a v4 snapshot is saved, opening a

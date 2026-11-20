@@ -4,6 +4,7 @@ import {
   REGISTRY_SCHEMA_VERSION,
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import type { NetworkRegion } from '@/backend/services/region';
 
 import {
   readProviderRegistrySnapshots,
@@ -13,9 +14,9 @@ import { ProviderRegistryUpdaterService } from '../ProviderRegistryUpdaterServic
 import { providerRegistryUpdates } from '../providerRegistryUpdates';
 
 const mockRequest = jest.fn();
-const mockGetCountry = jest.fn<Promise<string | null>, []>(async () => 'US');
+const mockGetRegion = jest.fn<Promise<NetworkRegion | null>, []>(async () => 'GLOBAL');
 jest.mock('@/backend/core/application/Application', () => ({
-  application: { get: () => ({ getCountry: mockGetCountry }) },
+  application: { get: () => ({ getRegion: mockGetRegion }) },
 }));
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: ({ baseUrl }: { baseUrl: string }) => ({
@@ -72,7 +73,7 @@ function serve(snapshotToServe: ReturnType<typeof snapshot>) {
 let updater: Updater;
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetCountry.mockResolvedValue('US');
+  mockGetRegion.mockResolvedValue('GLOBAL');
   providerRegistryService.clearRemoteSnapshot();
   providerRegistryUpdates.clear();
   jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([]);
@@ -85,10 +86,10 @@ afterEach(async () => {
 
 it.each([
   ['CN', 'api.gitcode.com'],
-  ['US', 'raw.githubusercontent.com'],
+  ['GLOBAL', 'raw.githubusercontent.com'],
   [null, 'api.gitcode.com'],
-])('selects the registry mirror from the shared IP country %s', async (country, host) => {
-  mockGetCountry.mockResolvedValue(country);
+] as const)('selects the registry mirror from the shared IP region %s', async (region, host) => {
+  mockGetRegion.mockResolvedValue(region);
   serve(snapshot(1));
   await updater.ensureReady();
   expect(providerRegistryService.isReady()).toBe(true);
@@ -96,7 +97,7 @@ it.each([
 });
 
 it('downloads every GitCode v4 file through the raw API with the registry branch', async () => {
-  mockGetCountry.mockResolvedValue('CN');
+  mockGetRegion.mockResolvedValue('CN');
   serve(snapshot(1));
   await updater.ensureReady();
   for (const path of ['/v4%2Fmanifest.json', '/v4%2Fmodels.json', '/v4%2Fprovider-models.json']) {
@@ -317,7 +318,7 @@ it('stops while region detection is still pending', async () => {
   const started = new Promise<void>((resolve) => {
     requested = resolve;
   });
-  mockGetCountry.mockImplementationOnce(
+  mockGetRegion.mockImplementationOnce(
     () =>
       new Promise(() => {
         requested();

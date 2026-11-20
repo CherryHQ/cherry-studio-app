@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { downloadFile, FileDownloadError } from '@/backend/services/download';
 import { hashLocalFile } from '@/backend/services/file/fileHash';
+import type { NetworkRegion } from '@/backend/services/region';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import { VoiceError, type VoiceModelModule, type VoiceModelState } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -17,7 +18,7 @@ import {
 const logger = loggerService.withContext('VoiceModel');
 
 /** One app generation owns download, verification and deletion. No startup work until requested. */
-export function createVoiceModel(getCountry: () => Promise<string>) {
+export function createVoiceModel(getRegion: () => Promise<NetworkRegion>) {
   let state: VoiceModelState = {
     status: 'not-downloaded',
     receivedBytes: 0,
@@ -136,7 +137,7 @@ export function createVoiceModel(getCountry: () => Promise<string>) {
       return run('downloading', async (signal) => {
         const root = await directory();
         signal.throwIfAborted();
-        const assets = getSenseVoiceAssets(await raceAbort(getCountry(), signal));
+        const assets = getSenseVoiceAssets(await raceAbort(getRegion(), signal));
         let completed = 0;
         for (const asset of assets) {
           signal.throwIfAborted();

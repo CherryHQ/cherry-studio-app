@@ -187,15 +187,14 @@ development and preview builds cannot complete provider sign-in.
 
 ## Regional Discovery
 
-The shared IP country selects the new-provider catalog and recommendations from the
-bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
-All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
-international discovery once detected. Discovery and first-install recommendations share
-`getProviderCatalogEdition`; when detection is unavailable, they use the device region
-from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
-global entries; only a missing device region retains the domestic default. The detection result
-remains unknown. Mobile capability exclusions and the
-recommended-provider subset remain locally owned; model metadata is shared across editions. Saved providers keep their
-settings, visibility and runtime availability across region changes. Chat setup also lists saved
-presets absent from the current regional catalog beside custom connections, so travelling does not
-remove their setup path.
+The shared network region (`CN` or `GLOBAL`) selects the new-provider catalog and recommendations
+from the bundled registry's upstream edition labels. Successful detections are cached for ten
+minutes. All distributions, including domestic-store builds, use this policy: an overseas VPN exit
+allows international discovery once detected. Discovery and first-install recommendations share
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region from
+`getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select global
+entries; only a missing device region retains the domestic default. The detection result remains
+unknown. Mobile capability exclusions and the recommended-provider subset remain locally owned;
+model metadata is shared across editions. Saved providers keep their settings, visibility and
+runtime availability across region changes. Chat setup also lists saved presets absent from the
+current regional catalog beside custom connections, so travelling does not remove their setup path.

@@ -404,10 +404,7 @@ export function createAppBootstrapRuntime(
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
       void account.verify();
-      const results = await Promise.allSettled([
-        region.getCountry(),
-        providerCatalog.ensureReady(),
-      ]);
+      const results = await Promise.allSettled([region.getRegion(), providerCatalog.ensureReady()]);
       if (host.state === 'ready') {
         for (const result of results) {
           if (result.status === 'rejected') {

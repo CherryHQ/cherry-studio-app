@@ -25,7 +25,7 @@ export function appUpdateReleaseNotesQueryOptions(
   language: string,
 ) {
   return queryOptions({
-    queryKey: queryKeys.appUpdate.notes(release.id, language),
+    queryKey: queryKeys.appUpdate.notes(release, language),
     queryFn: () => appUpdate.releaseNotes(release, language),
     staleTime: 6 * 60 * 60 * 1000,
     gcTime: 6 * 60 * 60 * 1000,

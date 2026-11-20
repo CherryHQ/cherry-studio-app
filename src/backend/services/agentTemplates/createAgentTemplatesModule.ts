@@ -1,7 +1,11 @@
 import { loggerService } from '@logger';
 
 import { createHttpClient } from '@/backend/services/http';
-import { repositorySourceOrder, type RepositorySource } from '@/backend/services/region';
+import {
+  repositorySourceOrder,
+  type NetworkRegion,
+  type RepositorySource,
+} from '@/backend/services/region';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import type { AgentTemplatesModule } from '@/shared/contracts/agentTemplates';
 import type {
@@ -71,7 +75,7 @@ async function readCatalogFile(
 }
 
 export function createAgentTemplatesModule(dependencies: {
-  getCountry(): Promise<string | null>;
+  getRegion(): Promise<NetworkRegion | null>;
 }): AgentTemplatesModule & { dispose(): Promise<void> } {
   const lifetime = new AbortController();
   const snapshots = new Map<AgentTemplateLanguage, Promise<AgentTemplateSnapshot | null>>();
@@ -87,9 +91,9 @@ export function createAgentTemplatesModule(dependencies: {
   async function refresh(language: AgentTemplateLanguage): Promise<AgentTemplateCatalog> {
     const { signal } = lifetime;
     const previous = await readSnapshot(language);
-    const country = await raceAbort(dependencies.getCountry(), signal);
+    const region = await raceAbort(dependencies.getRegion(), signal);
     let lastError: unknown;
-    for (const source of repositorySourceOrder(country)) {
+    for (const source of repositorySourceOrder(region)) {
       try {
         const revision = await readRevision(source, signal);
         signal.throwIfAborted();

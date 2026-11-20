@@ -159,10 +159,10 @@ row. The row groups the model name, size or current status, and download/cancel/
 [pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue](https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue);
 the overseas mirror is
 [csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17).
-The shared IP country selects ModelScope in CN and Hugging Face elsewhere. When detection is
-unavailable, the download client retains its ModelScope preference without asserting
-a country. Existing verified files remain usable in either region. The upstream model and its
-licensing information are
+The shared network region (`CN` or `GLOBAL`) selects ModelScope in CN and Hugging Face elsewhere.
+When detection is unavailable, the download client retains its ModelScope preference without
+asserting a region. Existing verified files remain usable in either region. The upstream model and
+its licensing information are
 [FunAudioLLM/SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall).
 Model weights are not bundled in the app or copied from DSH Go source.
 
@@ -172,7 +172,7 @@ observes the backend-owned operation; leaving settings does not cancel it. Retry
 verified assets and restarts an interrupted file. Model storage survives cache eviction and is
 excluded from OS backup. A new app generation verifies cached bytes before use. Deletion is blocked
 while recognition holds a model lease; disposal cancels downloads and joins active native work.
-Cancellation also releases a pending country lookup wait without cancelling the shared lookup.
+Cancellation also releases a pending region lookup wait without cancelling the shared lookup.
 
 [`modules/voice-input`](../../modules/voice-input/README.md) records 16 kHz mono PCM16 WAV, with a
 native 30-second limit. Stop or the limit transitions the composer to transcription. SenseVoice
