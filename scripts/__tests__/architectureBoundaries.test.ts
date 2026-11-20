@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ESLint } from 'eslint';
 
 import eslintConfig from '../../eslint.config';
+import todoConfig from '../../eslint.todo.config';
 
 const root = path.resolve(__dirname, '../..');
 // ESLint's config discovery uses dynamic import(), which Jest's CommonJS VM cannot execute.
@@ -321,5 +322,44 @@ describe('resolved architecture boundaries', () => {
         Object.keys(limits ?? {}).filter((file) => !fs.existsSync(path.join(root, file))),
       ).toEqual([]);
     });
+  });
+
+  describe('tracked TODO/FIXME guardrail', () => {
+    const toolingLint = new ESLint({
+      cwd: root,
+      overrideConfig: todoConfig,
+      overrideConfigFile: true,
+    });
+
+    async function todoErrors(filePath: string, source: string) {
+      const linter = filePath.startsWith('src/') ? eslint : toolingLint;
+      const [result] = await linter.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter(
+        (message) => message.ruleId === 'cherry/require-todo-issue-ref',
+      );
+    }
+
+    it.each([
+      ['src/frontend/utils/probe.ts', '// TODO: clean this up later\nexport const x = 1;'],
+      ['packages/ai-runtime/src/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
+      ['scripts/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
+    ])('rejects untracked TODO/FIXME comments in %s', async (filePath, source) => {
+      expect(await todoErrors(filePath, source)).not.toHaveLength(0);
+    });
+
+    it.each([
+      [
+        'src/frontend/utils/probe.ts',
+        '// TODO(#1234): remove after migration\nexport const x = 1;',
+      ],
+      ['src/frontend/utils/probe.ts', '/* FIXME(#42): upstream bug */\nexport const x = 1;'],
+      ['src/frontend/utils/probe.ts', "export const text = 'TODO inside string literal';"],
+    ])(
+      'allows tracked issue references and non-comment literals in %s',
+      async (filePath, source) => {
+        expect(await todoErrors(filePath, source)).toEqual([]);
+      },
+    );
   });
 });

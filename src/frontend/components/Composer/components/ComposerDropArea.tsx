@@ -38,7 +38,7 @@ type ComposerDropAreaProps = PropsWithChildren<{
 export function ComposerDropArea({ children, enabled = true }: ComposerDropAreaProps) {
   // Android has no system-wide equivalent of inter-app drag sessions; mount a
   // layout-equivalent container so both platforms render the same tree shape.
-  // TODO(ios-only): adopt an Android drop surface if one emerges.
+  // Revisit if Android exposes a system-wide inter-app drag drop surface.
   const containerStyle = useResolveClassNames('flex-1');
   const { addAttachments } = useComposerActions();
   const { toast } = useToast();

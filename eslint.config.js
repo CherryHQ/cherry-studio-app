@@ -2,6 +2,7 @@ const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
+const [todoConfig] = require('./eslint.todo.config');
 
 const projectRoot = path.dirname(require.resolve('./package.json'));
 
@@ -559,7 +560,9 @@ const pageSchedulingPlugin = {
 module.exports = defineConfig([
   expoConfig,
   {
+    plugins: todoConfig.plugins,
     rules: {
+      ...todoConfig.rules,
       // Reanimated SharedValue.value mutation is idiomatic inside worklets and
       // gesture callbacks, but the React Compiler rule cannot distinguish it.
       'react-hooks/immutability': 'off',
