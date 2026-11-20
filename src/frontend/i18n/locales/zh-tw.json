@@ -463,6 +463,7 @@
   "chat.errorPart.message": "本次回復未能完成。",
   "chat.errorPart.message.auth": "請檢查供應商設定中的 API 密鑰，然後重試。",
   "chat.errorPart.message.contextLength": "請建立新會話、減少附件，或確認供應商的上下文限制後再重試。",
+  "chat.errorPart.message.deepseekThinkingTools": "請關閉思考後重新傳送訊息，或改用 DeepSeek 內建的網路搜尋。",
   "chat.errorPart.message.modelNotFound": "請檢查供應商的模型設定，或切換其他模型後再試。",
   "chat.errorPart.message.payloadTooLarge": "請減少附件或縮短本次輸入後再試。",
   "chat.errorPart.message.providerQuota": "請檢查 {{provider}} 帳戶的餘額或用量額度。",

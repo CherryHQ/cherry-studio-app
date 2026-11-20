@@ -469,6 +469,7 @@
   "chat.errorPart.message": "No se pudo completar la respuesta.",
   "chat.errorPart.message.auth": "Verifique la clave API en la configuración del proveedor y vuelva a intentarlo.",
   "chat.errorPart.message.contextLength": "Inicia una nueva conversación, elimina archivos adjuntos o comprueba el límite de contexto del proveedor antes de volver a intentarlo.",
+  "chat.errorPart.message.deepseekThinkingTools": "Desactiva el modo de razonamiento y vuelve a enviar el mensaje, o usa la búsqueda web integrada de DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Comprueba la configuración del modelo en el proveedor o elige otro modelo y vuelve a intentarlo.",
   "chat.errorPart.message.payloadTooLarge": "Quita archivos adjuntos o acorta el texto y vuelve a intentarlo.",
   "chat.errorPart.message.providerQuota": "Comprueba el saldo o la cuota de uso de tu cuenta de {{provider}}.",

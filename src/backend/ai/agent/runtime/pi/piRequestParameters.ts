@@ -10,7 +10,9 @@ import {
   isGemini3Model,
   isMaxTemperatureOneModel,
 } from '@cherrystudio/universal/utils/model';
+import type { Model as PiModel } from '@earendil-works/pi-ai';
 
+import { DEEPSEEK_THINKING_TOOLS_CONFLICT } from '@/shared/contracts/aiFailure';
 import type { Model } from '@/shared/data/types/model';
 
 import type { RuntimeOptions } from '../types';
@@ -117,6 +119,46 @@ export function applyPiRequestParameters(
     setPath(result, temperaturePath, resolvedTemperature);
   }
   return result;
+}
+
+/** Check the final DeepSeek tool list without changing the user's reasoning or web policy. */
+export function assertPiDeepSeekResponsesTools(
+  payload: unknown,
+  model: PiModel<SupportedPiApi>,
+): void {
+  if (
+    model.api !== 'openai-responses' ||
+    model.provider !== 'deepseek' ||
+    model.id !== 'deepseek-flash' ||
+    !isProviderHost(model.baseUrl, 'api.deepseek.com') ||
+    !isRecord(payload) ||
+    !Array.isArray(payload.tools) ||
+    payload.tool_choice === 'none' ||
+    (isRecord(payload.reasoning) && payload.reasoning.effort === 'none')
+  ) {
+    return;
+  }
+
+  const tools = payload.tools.filter(isRecord);
+  if (
+    tools.some((tool) => tool.type === 'function') &&
+    !tools.some((tool) => tool.type === 'deepseek_web_search')
+  ) {
+    throw Object.assign(
+      new Error(
+        'DeepSeek Flash thinking with client tools requires DeepSeek web search on the Responses API.',
+      ),
+      { code: DEEPSEEK_THINKING_TOOLS_CONFLICT, retryable: false },
+    );
+  }
+}
+
+export function isProviderHost(baseUrl: string, hostname: string): boolean {
+  try {
+    return new URL(baseUrl).hostname === hostname;
+  } catch {
+    return false;
+  }
 }
 
 /** Gemini's OpenAI-compatible route validates signatures even for replayed or imported calls. */

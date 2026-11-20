@@ -1,4 +1,7 @@
-import type { AiFailureReason } from '@/shared/contracts/aiFailure';
+import {
+  DEEPSEEK_THINKING_TOOLS_CONFLICT,
+  type AiFailureReason,
+} from '@/shared/contracts/aiFailure';
 
 export type AiFailureFacts = {
   code?: string;
@@ -85,6 +88,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   content_policy_violation: 'content_filter',
   contentfilter: 'content_filter',
   context_length_exceeded: 'context_length',
+  [DEEPSEEK_THINKING_TOOLS_CONFLICT]: 'invalid_input',
   duplicate_tool_call_id: 'tool_failed',
   econnrefused: 'network',
   econnreset: 'stream_interrupted',

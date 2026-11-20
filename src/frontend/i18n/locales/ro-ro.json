@@ -469,6 +469,7 @@
   "chat.errorPart.message": "Răspunsul nu a putut fi completat.",
   "chat.errorPart.message.auth": "Verificați cheia API în setările furnizorului, apoi încercați din nou.",
   "chat.errorPart.message.contextLength": "Începeți o conversație nouă, eliminați atașamente sau verificați limita de context a furnizorului înainte de a reîncerca.",
+  "chat.errorPart.message.deepseekThinkingTools": "Dezactivează modul de raționament și trimite din nou mesajul sau folosește căutarea web integrată în DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Verificați setările modelului la furnizor sau alegeți alt model, apoi încercați din nou.",
   "chat.errorPart.message.payloadTooLarge": "Eliminați atașamente sau scurtați mesajul, apoi încercați din nou.",
   "chat.errorPart.message.providerQuota": "Verificați soldul sau cota de utilizare a contului dvs. {{provider}}.",

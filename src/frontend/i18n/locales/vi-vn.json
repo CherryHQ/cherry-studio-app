@@ -463,6 +463,7 @@
   "chat.errorPart.message": "Không thể hoàn thành câu trả lời.",
   "chat.errorPart.message.auth": "Hãy kiểm tra khóa API trong cài đặt của nhà cung cấp rồi thử lại.",
   "chat.errorPart.message.contextLength": "Hãy bắt đầu cuộc trò chuyện mới, bớt tệp đính kèm hoặc kiểm tra giới hạn ngữ cảnh của nhà cung cấp trước khi thử lại.",
+  "chat.errorPart.message.deepseekThinkingTools": "Tắt chế độ suy nghĩ rồi gửi lại tin nhắn, hoặc dùng tính năng tìm kiếm web tích hợp của DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Hãy kiểm tra cài đặt mô hình của nhà cung cấp hoặc chọn mô hình khác rồi thử lại.",
   "chat.errorPart.message.payloadTooLarge": "Hãy bớt tệp đính kèm hoặc rút ngắn nội dung nhập rồi thử lại.",
   "chat.errorPart.message.providerQuota": "Hãy kiểm tra số dư hoặc hạn mức sử dụng của tài khoản {{provider}}.",

@@ -466,6 +466,7 @@
   "chat.errorPart.message": "Yanıt tamamlanamadı.",
   "chat.errorPart.message.auth": "Sağlayıcı ayarlarında API anahtarını kontrol edip tekrar deneyin.",
   "chat.errorPart.message.contextLength": "Yeniden denemeden önce yeni bir sohbet başlatın, ekleri kaldırın veya sağlayıcının bağlam sınırını kontrol edin.",
+  "chat.errorPart.message.deepseekThinkingTools": "Düşünme modunu kapatıp mesajı yeniden gönderin veya DeepSeek’in yerleşik web aramasını kullanın.",
   "chat.errorPart.message.modelNotFound": "Sağlayıcıdaki model ayarlarını kontrol edin veya başka bir model seçip tekrar deneyin.",
   "chat.errorPart.message.payloadTooLarge": "Ekleri kaldırın veya girdinizi kısaltıp tekrar deneyin.",
   "chat.errorPart.message.providerQuota": "{{provider}} hesabınızın bakiyesini veya kullanım kotasını kontrol edin.",

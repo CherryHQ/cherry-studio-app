@@ -466,6 +466,7 @@
   "chat.errorPart.message": "Η απάντηση δεν μπόρεσε να ολοκληρωθεί.",
   "chat.errorPart.message.auth": "Ελέγξτε το κλειδί API στις ρυθμίσεις παρόχου και δοκιμάστε ξανά.",
   "chat.errorPart.message.contextLength": "Ξεκινήστε μια νέα συνομιλία, αφαιρέστε συνημμένα ή ελέγξτε το όριο συμφραζομένων του παρόχου πριν δοκιμάσετε ξανά.",
+  "chat.errorPart.message.deepseekThinkingTools": "Απενεργοποίησε τη λειτουργία σκέψης και στείλε ξανά το μήνυμα ή χρησιμοποίησε την ενσωματωμένη αναζήτηση ιστού του DeepSeek.",
   "chat.errorPart.message.modelNotFound": "Ελέγξτε τις ρυθμίσεις του μοντέλου στον πάροχο ή επιλέξτε άλλο μοντέλο και δοκιμάστε ξανά.",
   "chat.errorPart.message.payloadTooLarge": "Αφαιρέστε συνημμένα ή συντομεύστε το μήνυμά σας και δοκιμάστε ξανά.",
   "chat.errorPart.message.providerQuota": "Ελέγξτε το υπόλοιπο ή το όριο χρήσης του λογαριασμού σας στο {{provider}}.",

@@ -7,6 +7,7 @@ import type { AssistantMessage, FetchFunction, Model as PiModel } from '@earendi
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { DEEPSEEK_THINKING_TOOLS_CONFLICT } from '@/shared/contracts/aiFailure';
 import type { Model } from '@/shared/data/types/model';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
@@ -472,6 +473,82 @@ describe('Pi API adapters', () => {
       ],
     });
   });
+
+  test.each([
+    { effort: 'high', nativeSearch: false, blocked: true },
+    { effort: undefined, nativeSearch: false, blocked: true },
+    { effort: 'none', nativeSearch: false, blocked: false },
+    { effort: 'high', nativeSearch: true, blocked: false },
+    { effort: 'high', nativeSearch: false, toolChoice: 'none', blocked: false },
+    { effort: 'high', baseUrl: 'https://gateway.test/v1', nativeSearch: false, blocked: false },
+  ])(
+    'checks the final DeepSeek Flash tool combination (%j)',
+    async ({ effort, baseUrl, nativeSearch, toolChoice, blocked }) => {
+      const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES);
+      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+        '@earendil-works/pi-ai/api/openai-responses',
+      );
+      jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+      jest.mocked(mockFetch).mockImplementation(async () => {
+        return new Response(JSON.stringify({ error: { message: 'captured' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+      const stream = await bindPiStream(adapter, {
+        apiKey: 'test',
+        fetch: mockFetch,
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 256,
+      });
+      const model = {
+        api: 'openai-responses',
+        provider: 'deepseek',
+        id: 'deepseek-flash',
+        name: 'DeepSeek Flash',
+        baseUrl: baseUrl ?? 'https://api.deepseek.com/v1',
+        input: ['text'],
+        reasoning: true,
+        contextWindow: 1_000_000,
+        maxTokens: 256,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      } as PiModel<SupportedPiApi>;
+      const response = await stream(model, context, {
+        onPayload: async (payload) => ({
+          ...(payload as Record<string, unknown>),
+          reasoning: effort === undefined ? undefined : { effort },
+          ...(toolChoice ? { tool_choice: toolChoice } : {}),
+          tools: [
+            { type: 'function', name: 'lookup', parameters: { type: 'object' } },
+            ...(nativeSearch ? [{ type: 'deepseek_web_search' }] : []),
+          ],
+        }),
+      });
+      const result = await response.result();
+      if (blocked) {
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(result.diagnostics).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              error: expect.objectContaining({ code: DEEPSEEK_THINKING_TOOLS_CONFLICT }),
+              details: expect.objectContaining({ retryable: false }),
+            }),
+          ]),
+        );
+      } else {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [, request] = jest.mocked(mockFetch).mock.calls[0]!;
+        expect(JSON.parse(String(request?.body))).toMatchObject({
+          reasoning: { effort },
+          tools: [
+            { type: 'function', name: 'lookup' },
+            ...(nativeSearch ? [{ type: 'deepseek_web_search' }] : []),
+          ],
+        });
+      }
+    },
+  );
 
   test('round-trips streamed Gemini tool signatures through saved context and isolates foreign histories', async () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);

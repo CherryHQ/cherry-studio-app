@@ -1,5 +1,7 @@
 import type { AiFailureSnapshot } from '@cherrystudio/remote-protocol/failure';
 
+export const DEEPSEEK_THINKING_TOOLS_CONFLICT = 'deepseek_thinking_tools_conflict';
+
 export {
   aiFailureReasonSchema as AiFailureReasonSchema,
   aiFailureSnapshotSchema as AiFailureSnapshotSchema,
