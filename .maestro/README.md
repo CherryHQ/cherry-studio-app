@@ -46,10 +46,12 @@ device they also discard configuration other tasks reuse; prefer a temporary dev
 
 ## Scope
 
+- `_skip-onboarding.yaml` is the shared helper subflow advancing fresh multi-step onboarding to the
+  chat composer.
 - `onboarding-skip.yaml` verifies the fresh-install path from onboarding to the chat composer.
 - `appearance-persistence.yaml` verifies selecting the dark theme and retaining that preference
   after a full app restart.
-
-A provider-backed chat flow is intentionally absent. It requires deterministic development-only
-fixture preparation; the current seed data does not provide a mock provider, and a successful app
-launch must not be treated as proof that credentials or external model calls work.
+- Run `chat-mock-stream.yaml` by its explicit file path with Metro started using
+  `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1`. This development-only flow uses a fresh temporary installation,
+  declines the privacy dialog shown for its seeded model, then sends a prompt and verifies the
+  deterministic offline reply.

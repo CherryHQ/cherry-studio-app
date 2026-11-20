@@ -24,8 +24,13 @@ translates messages, and responds to agent tool/user-question sheets.
 - Code-level streaming/state-machine regression suites:
   - `pnpm test:app -- src/frontend/features/chat/runtime/__tests__/AgentSessionChatClient.test.ts --runInBand`
   - `pnpm test:app -- src/frontend/features/chat/quotes/__tests__/useChatQuoteNavigation.test.tsx --runInBand`
-- Device acceptance: `agent-device` session targeting a configured workspace device with a valid
-  provider (or explicit `inconclusive` report if no live credentials/mock provider are configured).
+- Run the offline Maestro streaming flow by its explicit path `.maestro/flows/chat-mock-stream.yaml`
+  with dev Metro started using `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1`. The preconfigured test model opens
+  the existing-installation privacy dialog, which the flow declines before sending the prompt.
+  - Supports `[mock:reasoning]`, `[mock:tool]`, and `[mock:error]` directives for repeatable E2E
+    coverage without real API keys or network access.
+- Live provider check: `agent-device` session targeting a configured workspace device with a valid
+  provider (never claim a live third-party provider works based on the offline mock flow).
 
 ## Observable Acceptance
 
