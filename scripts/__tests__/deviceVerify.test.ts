@@ -154,7 +154,7 @@ describe('deviceVerify CLI helpers', () => {
       '--device',
       'emulator-5554',
       '--dev-client-url',
-      'cherrystudio-dev://expo-development-client/?url=http://127.0.0.1:42000',
+      'exp+cherry-studio://?__expo_url=http%3A%2F%2F127.0.0.1%3A42000',
       '--evidence-dir',
     ];
     expect(() => runCli([...args, root], env)).toThrow(/receipt.json/);
