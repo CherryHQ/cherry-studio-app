@@ -10,10 +10,7 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockCloseDrawer = jest.fn();
 const mockCancelPending = jest.fn();
-const mockWaitForClose = jest.fn(async () => {
-  if (!mockCanDock) mockCloseDrawer();
-  return true;
-});
+const mockWaitForClose = jest.fn(async () => true);
 const mockDispatch = jest.fn();
 const mockPaneOpen = jest.fn();
 let mockLocalChat: ChatTarget | undefined;
@@ -183,22 +180,18 @@ describe('Sidebar', () => {
     });
   });
 
-  test.each([true, false])(
-    'only navigates after a completed close (completed=%s)',
-    async (ready) => {
-      const closed = Promise.withResolvers<boolean>();
-      mockWaitForClose.mockReturnValueOnce(closed.promise);
-      render();
+  test('opens Settings immediately when dismissing a compact drawer', () => {
+    render();
 
-      act(() => {
-        mockActions.openPaintings();
-      });
-      expect(mockWaitForClose).toHaveBeenCalledTimes(1);
-      expect(mockPush).not.toHaveBeenCalled();
-      await act(async () => closed.resolve(ready));
-      expect(mockPush).toHaveBeenCalledTimes(ready ? 1 : 0);
-    },
-  );
+    act(() => {
+      mockActions.openSettings();
+    });
+
+    expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
+    expect(mockCancelPending).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+    expect(mockWaitForClose).not.toHaveBeenCalled();
+  });
 
   test('brings the chat back in front of a destination before opening a conversation', () => {
     mockContentStack = { index: 2, key: 'main' };
@@ -210,16 +203,14 @@ describe('Sidebar', () => {
   });
 
   test.each(['recent conversation', 'search', 'incoming link'])(
-    'a newer %s supersedes Drawings while the drawer is closing',
+    'a newer %s supersedes an external launch while the drawer is closing',
     async (next) => {
       render();
       const closed = Promise.withResolvers<boolean>();
       mockWaitForClose.mockReturnValueOnce(closed.promise);
       mockCancelPending.mockImplementationOnce(() => closed.resolve(false));
 
-      act(() => {
-        mockActions.openPaintings();
-      });
+      const ready = mockActions.prepareExternalNavigation(new AbortController().signal);
       act(() => {
         if (next === 'recent conversation') mockActions.closeDrawer();
         else if (next === 'search') mockActions.openSearch?.();
@@ -228,9 +219,8 @@ describe('Sidebar', () => {
           renderer.update(<Sidebar navigation={navigation} />);
         }
       });
-      await act(async () => closed.resolve(true));
-      expect(mockPush).not.toHaveBeenCalled();
-      expect(mockReplace).not.toHaveBeenCalled();
+      closed.resolve(true);
+      await expect(ready).resolves.toBe(false);
     },
   );
 
