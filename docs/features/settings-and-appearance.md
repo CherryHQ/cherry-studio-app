@@ -5,7 +5,8 @@ AI usage, voice, data management, privacy, and diagnostics.
 
 ## User Entry
 
-- Open sidebar (`testID:main-header-open-sidebar`) -> tap `testID:sidebar-settings`.
+- Open the sidebar using `testID:main-header-open-sidebar` or the native iOS menu button’s
+  accessibility label. Tap `testID:sidebar-settings`.
 - Settings sections:
   - General & Appearance (`testID:settings-general`): theme selector (`testID:theme-preview-section-item`,
     `testID:theme-preview-dark`), language picker (`testID:language-picker`), watermark
@@ -33,5 +34,5 @@ AI usage, voice, data management, privacy, and diagnostics.
 
 - `.maestro/flows/appearance-persistence.yaml` runs `clearState`; run it on a temporary workspace
   device rather than the shared resident device.
-- Always verify preference persistence after a full app relaunch (`--relaunch` or `stopApp` +
-  `launchApp`), never only after Fast Refresh, to avoid stale SQLite WAL handle false positives.
+- Always verify preference persistence after a full app relaunch (`--relaunch` or `stopApp` followed by reopening
+  `DEV_CLIENT_URL`), never only after Fast Refresh, to avoid stale SQLite WAL handle false positives.

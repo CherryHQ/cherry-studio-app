@@ -10,20 +10,7 @@ name: Appearance selection persists after restart
     commands:
       - tapOn: "Open|打开"
 - runFlow: _skip-onboarding.yaml
-- tapOn:
-    id: main-header-open-sidebar
-- extendedWaitUntil:
-    visible:
-      id: sidebar-settings
-    timeout: 10000
-- tapOn:
-    id: sidebar-settings
-- extendedWaitUntil:
-    visible:
-      id: settings-general
-    timeout: 10000
-- tapOn:
-    id: settings-general
+- runFlow: _open-appearance-settings.yaml
 - extendedWaitUntil:
     visible:
       id: theme-preview-dark
@@ -34,25 +21,13 @@ name: Appearance selection persists after restart
     id: theme-preview-dark
     checked: true
 - stopApp
-- launchApp
+- openLink:
+    link: ${DEV_CLIENT_URL}
 - extendedWaitUntil:
     visible:
       id: chat-composer
     timeout: 30000
-- tapOn:
-    id: main-header-open-sidebar
-- extendedWaitUntil:
-    visible:
-      id: sidebar-settings
-    timeout: 10000
-- tapOn:
-    id: sidebar-settings
-- extendedWaitUntil:
-    visible:
-      id: settings-general
-    timeout: 10000
-- tapOn:
-    id: settings-general
+- runFlow: _open-appearance-settings.yaml
 - extendedWaitUntil:
     visible:
       id: theme-preview-dark
