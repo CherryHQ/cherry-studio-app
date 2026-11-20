@@ -32,6 +32,7 @@ describe('RemoteSessionReadCache generation-fencing invariants', () => {
       const sessions = ['s-1', 's-2', 's-3', 's-4', 's-5'];
       const releases = new Map<string, (() => void)[]>();
       const staleHandles: { entry: ReadCacheEntry; generation: number; key: string }[] = [];
+      const entriesWithEpoch = new WeakSet<ReadCacheEntry>();
 
       for (let step = 0; step < 45; step += 1) {
         const sid = sessions[rng.int(sessions.length)]!;
@@ -67,9 +68,14 @@ describe('RemoteSessionReadCache generation-fencing invariants', () => {
           // Change epoch on an entry -> bumps generation and drops window/parts.
           const entry = cache.entry('conn-1', 'bind-1', 'grant-1', sid);
           const oldGen = entry.generation;
+          const changesEpoch = entriesWithEpoch.has(entry);
           cache.setEpoch(entry, `epoch-${step}`);
-          if (entry.generation !== oldGen) {
-            staleHandles.push({ entry, generation: oldGen, key: `epoch-stale-${step}` });
+          entriesWithEpoch.add(entry);
+          expect(entry.generation).toBe(oldGen + (changesEpoch ? 1 : 0));
+          if (changesEpoch) {
+            const key = `epoch-stale-${step}`;
+            cache.put(entry, oldGen, key, 'should-never-land');
+            expect(cache.get(entry, key)).toBeUndefined();
           }
         } else if (action === 4) {
           // Retain active reference; double-release must be idempotent.
@@ -91,9 +97,7 @@ describe('RemoteSessionReadCache generation-fencing invariants', () => {
           for (const [retainedSid, list] of releases) {
             if (list.length > 0) {
               const found = cache.find('bind-1', retainedSid);
-              if (found) {
-                expect(found.active).toBe(list.length);
-              }
+              expect(found?.active).toBe(list.length);
             }
           }
         } else if (action === 7) {
