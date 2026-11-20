@@ -357,26 +357,52 @@ test.each(['issuer', 'portal_url', 'oidc_client_id'])(
   },
 );
 
-test('guest browsing discovers the CN catalog without creating a login registration', async () => {
-  mockRequest.mockResolvedValue({
-    status: 200,
-    data: {
-      schema_version: 1,
-      requires_region_selection: false,
-      region: 'CN',
-      endpoints: { cloud_api_origin: 'https://cloud.test' },
-    },
-  });
-  const signal = new AbortController().signal;
-  await expect(resolvePublicCatalogOrigin('https://config.test', 'ios', signal)).resolves.toBe(
-    'https://cloud.test',
-  );
-  expect(mockRequest).toHaveBeenCalledWith(
-    expect.objectContaining({
-      body: { client: 'mobile', platform: 'ios', selected_region: 'CN' },
-      signal,
-      credentials: 'omit',
-    }),
-  );
-  expect(mockCreatePortal).not.toHaveBeenCalled();
-});
+test.each(['CN', 'GLOBAL'] as const)(
+  'guest browsing discovers the %s catalog without creating a login registration',
+  async (region) => {
+    const cloudApiOrigin = `https://cloud.${region.toLowerCase()}.test`;
+    mockRequest.mockResolvedValue({
+      status: 200,
+      data: {
+        schema_version: 1,
+        requires_region_selection: false,
+        region,
+        endpoints: { cloud_api_origin: cloudApiOrigin },
+      },
+    });
+    const signal = new AbortController().signal;
+    await expect(resolvePublicCatalogOrigin('https://config.test', 'ios', signal)).resolves.toBe(
+      cloudApiOrigin,
+    );
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { client: 'mobile', platform: 'ios' },
+        signal,
+        credentials: 'omit',
+      }),
+    );
+    expect(mockCreatePortal).not.toHaveBeenCalled();
+  },
+);
+
+test.each([
+  { region: 'UNKNOWN', endpoints: { cloud_api_origin: 'https://cloud.test' } },
+  { region: 'CN', endpoints: {} },
+])(
+  'guest browsing rejects invalid catalog discovery responses (%o)',
+  async ({ region, endpoints }) => {
+    mockRequest.mockResolvedValue({
+      status: 200,
+      data: {
+        schema_version: 1,
+        requires_region_selection: false,
+        region,
+        endpoints,
+      },
+    });
+    const signal = new AbortController().signal;
+    await expect(
+      resolvePublicCatalogOrigin('https://config.test', 'ios', signal),
+    ).rejects.toThrow();
+  },
+);
