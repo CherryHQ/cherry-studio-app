@@ -3,6 +3,34 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ContentState } from '..';
 
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success', Warning: 'warning' },
+  impactAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View: NativeView } = jest.requireActual('react-native');
+
+  return {
+    __esModule: true,
+    default: {
+      View: ({ children, ...props }: { children?: React.ReactNode }) =>
+        React.createElement(NativeView, props, children),
+    },
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
+    ReduceMotion: { System: 'system' },
+    useAnimatedStyle: () => ({}),
+    useReducedMotion: () => false,
+    useSharedValue: (initial: number) => ({ get: () => initial, set: jest.fn() }),
+    withSpring: (value: number) => value,
+    withTiming: (value: number) => value,
+  };
+});
+
 jest.mock('../../loading/spinner', () => {
   const { View: MockView } = jest.requireActual('react-native');
 

@@ -429,10 +429,14 @@ and supports circular and rounded-square faces:
 Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallback`, and
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
-`Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
-behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
-its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`Button` is backed by React Native's `Pressable` on both iOS and Android inside an `Animated.View`
+shell that drives UI-thread press-in scaling (`pressMotion.scale`, exempting inline `link`/`text`
+variants and Reduce Motion). It supports `default`,
+`destructive`, `outline`, `secondary`, `ghost`, `link`, `text`, and `tonal` variants, along with
+loading, disabled, and commit-time `haptic?: HapticIntent | false` behavior (defaulting to
+`'light'` for `default`, `'medium'` for `destructive`, and silent for quieter variants unless
+opted in). `text` uses the link color without an underline for standalone text actions; `link`
+retains its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
 `inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
@@ -1014,25 +1018,37 @@ content scrolls. `useComposerMenu().close(afterClose)` can defer a composed acti
 
 ## Motion
 
-Curves and durations are two axes, exported separately from `@cherrystudio/ui/motion`:
+Curves, springs, durations, and tier presets are exported from `@cherrystudio/ui/motion`:
 
 ```tsx
-import { duration, easing } from '@cherrystudio/ui/motion';
+import { duration, easing, pressMotion, spring } from '@cherrystudio/ui/motion';
 
 translateX.set(withTiming(next, { duration: duration.base, easing: easing.settle }));
 ```
 
-A curve is a design token — it means the same thing however far the thing travels — so components
-share it. A duration is tuned to the distance, so components pick one. `easing.settle` is pure
-deceleration and the right default for anything that moves or resizes something already on screen;
-`easing.overshoot` is for something arriving out of nothing, where the overshoot *is* the arrival.
+- **Curves (`easing`)**: `linear`, `overshoot`, `settle`, `inOut` (smooth on-screen morphs), and
+  `sheet` (soft deceleration for sheets, drawers, and capsules).
+- **Springs (`spring`)**: `tactile` (fast soft-landing press/icon recovery), `morph` (warm in-place
+  state transitions), `settle` (critically damped snap targets with zero overshoot), and `gentle`
+  (unhurried spatial entrance).
+- **Durations (`duration`)**: `instant` (120ms tactile feedback), `fast` (200ms cross-fades),
+  `base` (250ms size/position changes), and `slow` (350ms overshoot arrivals).
+- **Tier presets**: `pressMotion` (`scale`, `subtleScale`, `pressIn`, `pressOut`) and
+  `ambientMotion` (`pulseDuration`, `shimmerDuration`).
 
-Components pair the two and name the pairing after the gesture rather than exporting a curve of their
-own, which is what `composer.motion.ts` does. This vocabulary covers package components; app-local
-easings remain outside it.
+Components pair curves and durations and name the pairing after the gesture rather than exporting
+a private curve, which is what `composer-motion.ts` does. This vocabulary covers package
+components; app-local easings remain outside it.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
+
+## Haptics
+
+`@cherrystudio/ui/haptics` exposes semantic haptic triggers (`triggerHaptic`, `haptics`, and the
+`HapticIntent` type covering `'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error'`)
+backed by `expo-haptics`. Calls no-op outside iOS and Android, swallow unavailable hardware errors,
+and are invoked only on committed causal frames alongside standalone visual cues.
 
 ## Background Activities
 

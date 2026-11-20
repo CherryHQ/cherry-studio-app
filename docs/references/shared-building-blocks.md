@@ -99,6 +99,8 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Shared motion vocabulary | `@cherrystudio/ui/motion` in `packages/ui/src/motion.ts` (4-tier curves, springs, durations, `pressMotion`, `ambientMotion`) |
+| Semantic haptic feedback | `@cherrystudio/ui/haptics` in `packages/ui/src/haptics.ts` (`triggerHaptic`, `haptics`, `HapticIntent`) |
 | File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
