@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { cacheService } from '@/frontend/data/CacheService';
+import { createDebouncedAction } from '@/frontend/utils/scheduling';
 
 const DRAFT_PERSIST_DELAY_MS = 500;
 
@@ -18,19 +19,15 @@ function writeRemoteDraft(key: string, text: string) {
 
 function createDraftWriter() {
   let pending: { key: string; text: string } | undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const flush = () => {
-    clearTimeout(timer);
-    timer = undefined;
+  const action = createDebouncedAction(() => {
     if (pending) writeRemoteDraft(pending.key, pending.text);
     pending = undefined;
-  };
+  }, DRAFT_PERSIST_DELAY_MS);
   return {
-    flush,
+    flush: action.flush,
     schedule(key: string, text: string) {
       pending = { key, text };
-      clearTimeout(timer);
-      timer = setTimeout(flush, DRAFT_PERSIST_DELAY_MS);
+      action.schedule();
     },
   };
 }

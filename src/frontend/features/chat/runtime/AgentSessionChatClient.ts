@@ -1,3 +1,4 @@
+import { createScheduledFlush, type ScheduledFlush } from '@/frontend/utils/scheduling';
 import type {
   AgentApprovalView,
   AgentEditUserMessageInput,
@@ -50,7 +51,7 @@ type SessionEntry = {
   generation: number;
   listeners: Set<() => void>;
   liveMessages: Map<string, AgentMessageView>;
-  liveMessagesFlush?: ReturnType<typeof setTimeout>;
+  liveMessagesFlush: ScheduledFlush;
   observation?: AgentSessionObservation;
   observationPromise?: Promise<void>;
   pendingTextDeltas: Map<string, { chunks: string[]; messageId: string; partId: string }>;
@@ -233,7 +234,7 @@ export class AgentSessionChatClient {
         for (const event of queuedEvents) {
           this.applyEvent(entry, event);
         }
-        if (entry.liveMessagesFlush !== undefined) {
+        if (entry.liveMessagesFlush.isScheduled()) {
           this.commitLiveMessages(entry);
         }
       })
@@ -574,6 +575,7 @@ export class AgentSessionChatClient {
       generation: 0,
       listeners: new Set(),
       liveMessages: new Map(),
+      liveMessagesFlush: createScheduledFlush(() => this.commitLiveMessages(entry)),
       pendingTextDeltas: new Map(),
       state: createSessionState(sessionId),
     };
@@ -823,11 +825,7 @@ export class AgentSessionChatClient {
   }
 
   private cancelLiveMessagesFlush(entry: SessionEntry): void {
-    if (entry.liveMessagesFlush === undefined) {
-      return;
-    }
-    clearTimeout(entry.liveMessagesFlush);
-    entry.liveMessagesFlush = undefined;
+    entry.liveMessagesFlush.cancel();
   }
 
   private installToolInputPreviews(message: AgentMessageView): void {
@@ -852,7 +850,7 @@ export class AgentSessionChatClient {
   }
 
   private scheduleLiveMessagesFlush(entry: SessionEntry): void {
-    if (entry.liveMessagesFlush !== undefined) {
+    if (entry.liveMessagesFlush.isScheduled()) {
       return;
     }
     let chars = 0;
@@ -871,10 +869,7 @@ export class AgentSessionChatClient {
     );
     // Do not move an already scheduled deadline when more deltas arrive: a busy
     // stream must keep becoming visible instead of indefinitely debouncing.
-    entry.liveMessagesFlush = setTimeout(() => {
-      entry.liveMessagesFlush = undefined;
-      this.commitLiveMessages(entry);
-    }, interval);
+    entry.liveMessagesFlush.schedule(interval);
   }
 
   private queueTextDelta(

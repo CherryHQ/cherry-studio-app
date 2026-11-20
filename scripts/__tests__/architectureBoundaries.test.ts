@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { ESLint } from 'eslint';
@@ -200,6 +201,125 @@ describe('resolved architecture boundaries', () => {
       ['src/backend/services/enterprise/sync/probe.ts', '../enterpriseApi'],
     ])('allows enterprise assembly or internal use from %s', async (filePath, moduleId) => {
       expect(await boundaryErrors(filePath, `import '${moduleId}';`)).toEqual([]);
+    });
+  });
+
+  describe('page raw timer and animation-frame guardrails', () => {
+    async function schedulingErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter((message) =>
+        ['no-restricted-globals', 'no-restricted-properties'].includes(message.ruleId ?? ''),
+      );
+    }
+
+    it.each([
+      ['src/frontend/features/chat/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      ['src/frontend/features/chat/probe.ts', 'export const id = setInterval(() => {}, 10);'],
+      ['src/frontend/features/chat/probe.ts', 'export const id = requestAnimationFrame(() => {});'],
+      ['src/app/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      [
+        'src/frontend/features/chat/probe.ts',
+        'export const id = globalThis.setTimeout(() => {}, 10);',
+      ],
+      [
+        'src/frontend/features/chat/probe.ts',
+        'export const id = window.requestAnimationFrame(() => {});',
+      ],
+      ['src/frontend/features/chat/probe.ts', 'export const sorted = [1, 2].toSorted();'],
+    ])('rejects restricted timer/frame or toSorted usage in %s: %s', async (filePath, source) => {
+      expect(await schedulingErrors(filePath, source)).not.toHaveLength(0);
+    });
+
+    it.each([
+      ['src/frontend/hooks/probe.ts', 'export const id = setTimeout(() => {}, 10);'],
+      ['src/frontend/utils/probe.ts', 'export const id = requestAnimationFrame(() => {});'],
+      ['src/shared/utils/probe.ts', 'export const id = setTimeout(() => {}, 0);'],
+      [
+        'src/frontend/features/chat/__tests__/probe.test.ts',
+        'export const id = setTimeout(() => {}, 10);',
+      ],
+    ])(
+      'allows raw scheduling primitives in shared owners and tests (%s)',
+      async (filePath, source) => {
+        expect(await schedulingErrors(filePath, source)).toEqual([]);
+      },
+    );
+  });
+
+  describe('page useEffect guardrail', () => {
+    async function pageEffectErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter((message) =>
+        [
+          'cherry-page/use-effect-limit',
+          'no-restricted-imports',
+          'no-restricted-properties',
+        ].includes(message.ruleId ?? ''),
+      );
+    }
+
+    it.each([
+      [
+        'src/frontend/features/chat/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      ['src/app/probe.ts', "import { useEffect } from 'react'; export const ref = useEffect;"],
+      [
+        'src/frontend/features/chat/probe.ts',
+        "import React from 'react'; export const ref = React.useEffect;",
+      ],
+      // Verify flat-config rule composition keeps retiredImports, tombstones, toSorted, and timers active.
+      ['src/frontend/features/chat/probe.ts', "import 'heroui-native/toast';"],
+      ['src/frontend/features/chat/probe.ts', "import '@/features/chat';"],
+    ])(
+      'rejects new page useEffect and preserves existing restrictions in %s',
+      async (filePath, source) => {
+        expect(await pageEffectErrors(filePath, source)).not.toHaveLength(0);
+      },
+    );
+
+    it.each([
+      [
+        'src/frontend/hooks/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/appShell/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/components/probe.ts',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+      [
+        'src/frontend/features/chat/__tests__/probe.test.tsx',
+        "import { useEffect } from 'react'; export const ref = useEffect;",
+      ],
+    ])('allows useEffect in shared frontend owners and tests (%s)', async (filePath, source) => {
+      expect(await pageEffectErrors(filePath, source)).toEqual([]);
+    });
+
+    it('rejects an extra effect in a page with an existing allowance', async () => {
+      const filePath = 'src/frontend/features/chat/components/ChatInput/ChatInput.tsx';
+      const source = fs.readFileSync(path.join(root, filePath), 'utf8');
+      const extraEffect =
+        "\nimport { useEffect as syncEffect } from 'react';\nsyncEffect(() => {});";
+      const messages = await pageEffectErrors(filePath, source + extraEffect);
+      expect(
+        messages.filter((message) => message.ruleId === 'cherry-page/use-effect-limit'),
+      ).toHaveLength(1);
+    });
+
+    it('keeps every legacy limit on an existing page', () => {
+      const guardrail = eslintConfig.find((entry) => entry.name === 'page-use-effect-guardrail');
+      const rule = guardrail?.rules?.['cherry-page/use-effect-limit'];
+      const limits = Array.isArray(rule) ? rule[1] : undefined;
+      expect(limits).toBeDefined();
+      expect(
+        Object.keys(limits ?? {}).filter((file) => !fs.existsSync(path.join(root, file))),
+      ).toEqual([]);
     });
   });
 });

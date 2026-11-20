@@ -51,6 +51,7 @@ import {
   MessageSelectionActionProvider,
   useMessageSelectionAction,
 } from '@/frontend/components/Message';
+import { useAfterNextFrame } from '@/frontend/hooks/useNextFrame';
 
 import { useAgentAnswers } from '../../../runtime';
 import { ConversationMessageContent } from '../../ConversationMessageContent';
@@ -285,11 +286,7 @@ function ExpandedAnswer({
   }, [measureCard, origin, progress, reduceMotion, shownId]);
   // The screen is released before the layer goes, so its region shrinks back under a layer that has
   // already finished; together they would show the transcript out of place for a frame.
-  useEffect(() => {
-    if (!isClosed) return;
-    const frame = requestAnimationFrame(onClosed);
-    return () => cancelAnimationFrame(frame);
-  }, [isClosed, onClosed]);
+  useAfterNextFrame(isClosed, onClosed);
 
   // The screen's chrome follows the progress; a layer removed mid-motion must not leave it hidden.
   useEffect(() => () => progress.set(0), [progress]);

@@ -393,6 +393,169 @@ const sharedFrontendDirectories = [
   'src/frontend/utils/**/*.{ts,tsx}',
 ];
 
+const toSortedRestriction = {
+  property: 'toSorted',
+  message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
+};
+
+const pageRawSchedulingMessage = {
+  setTimeout:
+    'Do not call raw setTimeout in page code. Use useDebouncedValue, useTransientValue, createDebouncedAction, createScheduledFlush, or yieldToRuntime from shared building blocks.',
+  setInterval:
+    'Do not call raw setInterval in page code. Use useElapsedTime or a shared hook in src/frontend/hooks.',
+  requestAnimationFrame:
+    'Do not call raw requestAnimationFrame in page code. Prefer declarative layout/state, or use useNextFrame / createFrameLoop.',
+};
+
+const pageRawSchedulingPropertyRestrictions = ['globalThis', 'window', 'global'].flatMap((object) =>
+  Object.entries(pageRawSchedulingMessage).map(([property, message]) => ({
+    object,
+    property,
+    message,
+  })),
+);
+
+const pageUseEffectMessage =
+  'Do not add raw useEffect in page code. Derive state during render, handle actions in event callbacks, read latest values in effects with useEffectEvent, subscribe with useSyncExternalStore, or extract a reusable hook under src/frontend/hooks.';
+
+// Existing direct React effect references are capped per file. Reduce the cap with removals.
+const legacyPageUseEffectLimits = {
+  'src/app/onboarding/device-connections/pair.tsx': 1,
+  'src/frontend/features/chat/ChatScreen.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/ChatInput.tsx': 2,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputPluginSheet.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputPromptSheet.tsx': 2,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputSkillSheet.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputSsh.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/effortSlider/components/EffortSlider.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/hooks/useChatInputReasoningEffortSelection.ts': 1,
+  'src/frontend/features/chat/components/ChatRouteResolver/ChatRouteResolver.tsx': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/ChatWorkspace.tsx': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/components/ExpandedAnswer.tsx': 4,
+  'src/frontend/features/chat/components/ChatWorkspace/context/AssistantMessageActionsProvider.tsx': 2,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useConversationFeedbackHint.ts': 2,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useIsScreenReaderEnabled.ts': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useMessageUsageRecords.ts': 1,
+  'src/frontend/features/chat/components/ConversationMessageContent.tsx': 1,
+  'src/frontend/features/chat/components/UserQuestionSheet/UserQuestionSheet.tsx': 1,
+  'src/frontend/features/chat/components/UserQuestionSheet/useUserQuestionForm.ts': 1,
+  'src/frontend/features/chat/composer/useComposerHandoffAppend.ts': 1,
+  'src/frontend/features/chat/hooks/useConversationResourceValue.ts': 1,
+  'src/frontend/features/chat/quotes/ChatQuoteProvider.tsx': 2,
+  'src/frontend/features/chat/remote/ReadOnlyTaskSessionScreen.tsx': 1,
+  'src/frontend/features/chat/remote/RemoteChatScreen.tsx': 1,
+  'src/frontend/features/chat/remote/RemoteComposer.tsx': 4,
+  'src/frontend/features/chat/remote/useRemoteDraftPersistence.ts': 2,
+  'src/frontend/features/chat/runtime/ChatProvider.tsx': 5,
+  'src/frontend/features/chat/runtime/useLocalConversation.ts': 2,
+  'src/frontend/features/chat/share/ChatShareDragSelection.tsx': 4,
+  'src/frontend/features/chat/share/ChatShareSelectionProvider.tsx': 2,
+  'src/frontend/features/chat/share/useShareChat.ts': 1,
+  'src/frontend/features/chat/voice/ChatInputPrimaryAction.tsx': 2,
+  'src/frontend/features/drawings/templates/components/TemplateStage.tsx': 2,
+  'src/frontend/features/files/FileViewerScreen.tsx': 1,
+  'src/frontend/features/files/components/FileDocumentPreview.tsx': 2,
+  'src/frontend/features/files/hooks/useFileImageEdit.ts': 1,
+  'src/frontend/features/home/aiUsage/components/AiUsageCalendar.tsx': 1,
+  'src/frontend/features/home/aiUsage/hooks/useAiUsageOverview.ts': 1,
+  'src/frontend/features/library/hooks/useAudioTranscription.ts': 1,
+  'src/frontend/features/library/hooks/useFileEntries.ts': 1,
+  'src/frontend/features/onboarding/components/LogoDraw/hooks/useLogoDrawProgress.ts': 3,
+  'src/frontend/features/onboarding/components/OnboardingPage/OnboardingPage.tsx': 2,
+  'src/frontend/features/onboarding/setup/AccountOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/ModelSourceOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/NotificationsOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/useNotificationOnboardingActions.ts': 1,
+  'src/frontend/features/onboarding/setup/useOnboardingProgress.ts': 1,
+  'src/frontend/features/paintings/components/PaintingBoardWorkspace.tsx': 1,
+  'src/frontend/features/paintings/hooks/usePaintingFocusReference.ts': 1,
+  'src/frontend/features/plugin/builtinTool/apiService/components/WebSearchApiServiceCommitInput.tsx': 3,
+  'src/frontend/features/plugin/builtinTool/apiService/hooks/useWebSearchProviderCheck.ts': 1,
+  'src/frontend/features/plugin/detail/connect/CredentialConnect.tsx': 1,
+  'src/frontend/features/plugin/detail/connect/PluginCallbackScreen.tsx': 1,
+  'src/frontend/features/plugin/detail/connect/useInteractiveConnect.ts': 1,
+  'src/frontend/features/plugin/mcpServer/McpOAuthCallbackScreen.tsx': 1,
+  'src/frontend/features/remoteTask/RemoteTaskListScreen.tsx': 1,
+  'src/frontend/features/search/SearchScreen.tsx': 1,
+  'src/frontend/features/search/useAppSearchResults.ts': 2,
+  'src/frontend/features/settings/DeviceConnectionsScreen/DeviceConnectionPairingScreen.tsx': 1,
+  'src/frontend/features/settings/about/diagnostics/useDiagnosticBundle.ts': 1,
+  'src/frontend/features/settings/data/DataScreen.tsx': 1,
+  'src/frontend/features/settings/data/deepseek/DeepseekImportScreen.tsx': 1,
+  'src/frontend/features/settings/notifications/NotificationSettingsScreen.tsx': 1,
+  'src/frontend/features/settings/profile/ProfileSettingsScreen.tsx': 1,
+  'src/frontend/features/settings/provider/account/ProviderAccountCallbackScreen.tsx': 1,
+  'src/frontend/features/settings/provider/components/ProviderAccount/useProviderAccount.ts': 1,
+  'src/frontend/features/settings/provider/components/ProviderConfiguration/hooks/useSavedProviderConfiguration.ts': 1,
+  'src/frontend/features/settings/provider/detail/ProviderDetailScreen.tsx': 1,
+  'src/frontend/features/settings/provider/detail/modelAdd/components/ProviderModelSyncTask.tsx': 1,
+  'src/frontend/features/settings/provider/detail/modelAdd/hooks/useProviderModelTask.ts': 1,
+  'src/frontend/features/settings/provider/hooks/useProviderSetup.ts': 1,
+  'src/frontend/features/settings/provider/models/hooks/useProviderModelCheck.ts': 1,
+  'src/frontend/features/settings/provider/models/hooks/useProviderModelPull.ts': 1,
+  'src/frontend/features/shareDestination/ShareDestinationScreen.tsx': 1,
+  'src/frontend/features/sharing/ShareScreen.tsx': 1,
+  'src/frontend/features/sharing/components/DocumentPagePreview.tsx': 1,
+  'src/frontend/features/sharing/components/DocumentShareSheet.tsx': 1,
+  'src/frontend/features/sharing/components/FileShareSheet.tsx': 2,
+  'src/frontend/features/sharing/hooks/useDocumentExportHtmlCapture.ts': 1,
+  'src/frontend/features/sharing/hooks/useDocumentExportPreview.ts': 1,
+  'src/frontend/features/sharing/hooks/useHtmlConversion.tsx': 1,
+};
+
+const pageSchedulingPlugin = {
+  rules: {
+    'use-effect-limit': {
+      meta: { schema: [{ type: 'object', additionalProperties: { type: 'integer' } }] },
+      create(context) {
+        const { sourceCode } = context;
+        const filename = path.relative(projectRoot, context.filename).split(path.sep).join('/');
+        const limit = context.options[0][filename] ?? 0;
+        const imports = [];
+        return {
+          ImportDeclaration(node) {
+            if (node.source.value === 'react') imports.push(...node.specifiers);
+          },
+          'Program:exit'(program) {
+            const effects = [];
+            for (const specifier of imports) {
+              const [binding] = sourceCode.getDeclaredVariables(specifier);
+              if (!binding) continue;
+              const references = binding.references.map((reference) => reference.identifier);
+              if (specifier.type === 'ImportSpecifier') {
+                if ((specifier.imported.name ?? specifier.imported.value) === 'useEffect') {
+                  effects.push(...(references.length === 0 ? [specifier] : references));
+                }
+              } else {
+                for (const reference of references) {
+                  const access = reference.parent;
+                  if (
+                    access.type === 'MemberExpression' &&
+                    access.object === reference &&
+                    (access.computed ? access.property.value : access.property.name) === 'useEffect'
+                  ) {
+                    effects.push(access);
+                  }
+                }
+              }
+            }
+            effects.sort((left, right) => left.range[0] - right.range[0]);
+            for (const node of effects.slice(limit)) {
+              context.report({ node, message: pageUseEffectMessage });
+            }
+            if (effects.length < limit) {
+              context.report({
+                node: program,
+                message: `Reduce the legacy useEffect limit for ${filename} from ${limit} to ${effects.length}.`,
+              });
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 module.exports = defineConfig([
   expoConfig,
   {
@@ -402,13 +565,7 @@ module.exports = defineConfig([
       'react-hooks/immutability': 'off',
       // Jest runs on Node, which has toSorted, but the app's Hermes engine does not,
       // so a call passes tests and then throws on device.
-      'no-restricted-properties': [
-        'error',
-        {
-          property: 'toSorted',
-          message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
-        },
-      ],
+      'no-restricted-properties': ['error', toSortedRestriction],
     },
   },
   {
@@ -565,6 +722,34 @@ module.exports = defineConfig([
     [frontendLayer, frontendImplementationPackages],
     frontendPageZones,
   ),
+  {
+    files: ['src/app/**/*.{ts,tsx}', 'src/frontend/features/**/*.{ts,tsx}'],
+    ignores: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...Object.entries(pageRawSchedulingMessage).map(([name, message]) => ({
+          name,
+          message,
+        })),
+      ],
+      // Flat-config blocks replace matching rules, so retain the global toSorted guard here.
+      'no-restricted-properties': [
+        'error',
+        toSortedRestriction,
+        ...pageRawSchedulingPropertyRestrictions,
+      ],
+    },
+  },
+  {
+    name: 'page-use-effect-guardrail',
+    files: ['src/app/**/*.{ts,tsx}', 'src/frontend/features/**/*.{ts,tsx}'],
+    ignores: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    plugins: { 'cherry-page': pageSchedulingPlugin },
+    rules: {
+      'cherry-page/use-effect-limit': ['error', legacyPageUseEffectLimits],
+    },
+  },
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
     ['src/shared/{contracts,data,utils}/**/*.{ts,tsx}'],

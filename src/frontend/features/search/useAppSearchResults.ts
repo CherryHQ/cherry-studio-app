@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { AppSearchGroup, AppSearchPage, AppSearchRequest } from '@/frontend/appShell/search';
+import { createDebouncedAction } from '@/frontend/utils/scheduling';
 
 type SearchPhase = 'idle' | 'loading' | 'ready' | 'error';
 type StoredSearchRequest = AppSearchRequest<unknown, unknown, unknown>;
@@ -49,10 +50,10 @@ export function useAppSearchResults(request: StoredSearchRequest) {
         );
     };
     const delay = searchQuery ? (request.debounceMs ?? 0) : 0;
-    const timeout = delay > 0 ? setTimeout(load, delay) : undefined;
-    if (delay <= 0) load();
+    const action = createDebouncedAction(load, delay);
+    action.schedule();
     return () => {
-      clearTimeout(timeout);
+      action.cancel();
       controller.abort();
     };
   }, [filters, query, reloadVersion, request]);

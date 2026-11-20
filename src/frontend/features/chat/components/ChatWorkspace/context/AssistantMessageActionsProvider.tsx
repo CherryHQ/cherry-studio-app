@@ -23,6 +23,7 @@ import type {
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { useModelChoice } from '@/frontend/components/Policy';
+import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatEditing } from '../../../context/ChatEditingProvider';
@@ -472,8 +473,9 @@ export function ChatMessageActionsProvider({
 }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [copiedMessageId, setCopiedMessageId] = useState<string>();
-  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { value: copiedMessageId, show: showCopiedMessageId } = useTransientValue<string>(
+    COPIED_FEEDBACK_DURATION_MS,
+  );
   const copyOperationIdRef = useRef(0);
   const isMountedRef = useRef(true);
 
@@ -486,19 +488,7 @@ export function ChatMessageActionsProvider({
             return;
           }
 
-          if (copiedFeedbackTimerRef.current !== null) {
-            clearTimeout(copiedFeedbackTimerRef.current);
-          }
-
-          setCopiedMessageId(messageId);
-          copiedFeedbackTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            copiedFeedbackTimerRef.current = null;
-            setCopiedMessageId(undefined);
-          }, COPIED_FEEDBACK_DURATION_MS);
+          showCopiedMessageId(messageId);
         })
         .catch((error) => {
           logger.error('Copy assistant message failed', error as Error);
@@ -510,7 +500,7 @@ export function ChatMessageActionsProvider({
           toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
         });
     },
-    [t, toast],
+    [showCopiedMessageId, t, toast],
   );
 
   const stateValue = useMemo(
@@ -570,10 +560,6 @@ export function ChatMessageActionsProvider({
     return () => {
       isMountedRef.current = false;
       copyOperationIdRef.current += 1;
-      if (copiedFeedbackTimerRef.current !== null) {
-        clearTimeout(copiedFeedbackTimerRef.current);
-        copiedFeedbackTimerRef.current = null;
-      }
     };
   }, []);
 

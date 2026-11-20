@@ -5,6 +5,7 @@ import { v7 as uuidv7 } from 'uuid';
 
 import { useComposerActions, useComposerMeta } from '@/frontend/components/Composer';
 import { MessageSelectionActionProvider } from '@/frontend/components/Message';
+import { useNextFrame } from '@/frontend/hooks/useNextFrame';
 import type { MessageQuote, QuoteFields } from '@/shared/contracts/agent';
 
 import {
@@ -43,14 +44,13 @@ export function ChatQuoteProvider({
   }>();
   const current = useRef(state);
   const mounted = useRef(true);
-  const focusFrame = useRef<number | undefined>(undefined);
+  const { schedule: scheduleFocusFrame } = useNextFrame();
   const locked = useRef(false);
   useEffect(() => subscribeDraftEdits(() => setPreview(undefined)), [subscribeDraftEdits]);
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      if (focusFrame.current !== undefined) cancelAnimationFrame(focusFrame.current);
     };
   }, []);
   const update = useCallback((value: QuoteState) => {
@@ -82,9 +82,7 @@ export function ChatQuoteProvider({
         isBusy: false,
       });
       // The native selection menu dismisses after this callback; focus once it has gone.
-      if (focusFrame.current !== undefined) cancelAnimationFrame(focusFrame.current);
-      focusFrame.current = requestAnimationFrame(() => {
-        focusFrame.current = undefined;
+      scheduleFocusFrame(() => {
         if (mounted.current && !locked.current) {
           inputRef.current?.focus();
           inputRef.current?.insertLink(createQuoteMentionLabel(text), `quote://${quote.id}`);
@@ -92,7 +90,7 @@ export function ChatQuoteProvider({
         }
       });
     },
-    [authorName, inputRef, update],
+    [authorName, inputRef, scheduleFocusFrame, update],
   );
   const capture = useCallback(
     (draft: string): QuoteAttempt => {

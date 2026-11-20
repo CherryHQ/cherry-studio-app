@@ -23,6 +23,7 @@ it already exists.
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
 | Cancelling a caller's wait without cancelling shared work | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
+| Cooperative event-loop yield in chunked loops | `yieldToRuntime` in `src/shared/utils/yieldToRuntime.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
 | Community service metadata for the current login | Backend-only `AccountRuntime.refreshCommunityServices`, backed by `bootstrap/profile/installationAccount`; refreshes only the saved region's product routing without replacing authentication |
@@ -138,3 +139,5 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |
 | Applying what the user may change (organization-owned resources, profile capabilities) to UI: locked groups, locked controls and the organization mark | `PolicyScope`, `PolicyGroup`, `withPolicy` and the gates in `src/frontend/components/Policy`, over CherryUI `LockedGroup` and the components' `locked` variants |
+| Frontend debounced actions, fixed-window flushes, and frame loops | `createDebouncedAction`, `createScheduledFlush`, and `createFrameLoop` in `src/frontend/utils/scheduling.ts` |
+| Page-level debounced values, transient UI feedback, elapsed clocks, and next-frame scheduling | `useDebouncedValue`, `useTransientValue`, `useElapsedTime`, and `useNextFrame` / `useAfterNextFrame` in `src/frontend/hooks/`; ESLint forbids raw `setTimeout`, `setInterval`, `requestAnimationFrame`, and new raw `useEffect` in `src/app` and `src/frontend/features` (existing page `useEffect` files are ratcheted in `eslint.config.js`) |

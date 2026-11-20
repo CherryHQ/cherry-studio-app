@@ -1,5 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { useNextFrame } from '@/frontend/hooks/useNextFrame';
+
 export type MessageListInitialRenderGateOptions = {
   /** Identity of the rendered list; undefined while no list is shown. */
   renderGateKey: string | undefined;
@@ -9,11 +11,6 @@ export type MessageListInitialRenderGateOptions = {
 type RenderToken = Readonly<{
   renderGateKey: string | undefined;
 }>;
-
-type PendingReadyFrame = {
-  id: number;
-  token: RenderToken;
-};
 
 type InitialHistoryLayoutOptions = {
   hasHistoryBeforeActiveTurn: boolean | undefined;
@@ -35,7 +32,7 @@ export function useMessageListInitialRenderGate({
 }: MessageListInitialRenderGateOptions) {
   const renderToken = useMemo<RenderToken>(() => ({ renderGateKey }), [renderGateKey]);
   const activeRenderTokenRef = useRef(renderToken);
-  const pendingReadyFrameRef = useRef<PendingReadyFrame | null>(null);
+  const { schedule: scheduleReadyFrame, cancel: cancelReadyFrame } = useNextFrame();
   const [resolvedRenderToken, setResolvedRenderToken] = useState<RenderToken | null>(() =>
     requiresInitialHistoryLayout ? null : renderToken,
   );
@@ -47,50 +44,24 @@ export function useMessageListInitialRenderGate({
       return;
     }
 
-    const readyFrameId = requestAnimationFrame(() => {
-      if (pendingReadyFrameRef.current?.id === readyFrameId) {
-        pendingReadyFrameRef.current = null;
-      }
+    scheduleReadyFrame(() => {
       if (activeRenderTokenRef.current === renderToken) {
         setResolvedRenderToken(renderToken);
       }
     });
-    pendingReadyFrameRef.current = { id: readyFrameId, token: renderToken };
 
-    return () => {
-      if (pendingReadyFrameRef.current?.id === readyFrameId) {
-        cancelAnimationFrame(readyFrameId);
-        pendingReadyFrameRef.current = null;
-      }
-    };
-  }, [renderToken, requiresInitialHistoryLayout]);
+    return cancelReadyFrame;
+  }, [cancelReadyFrame, renderToken, requiresInitialHistoryLayout, scheduleReadyFrame]);
 
-  useLayoutEffect(() => {
-    return () => {
-      const pendingReadyFrame = pendingReadyFrameRef.current;
-      if (pendingReadyFrame?.token === renderToken) {
-        cancelAnimationFrame(pendingReadyFrame.id);
-        pendingReadyFrameRef.current = null;
-      }
-    };
-  }, [renderToken]);
+  useLayoutEffect(() => cancelReadyFrame, [cancelReadyFrame, renderToken]);
 
   const markListLoaded = useCallback(() => {
-    const pendingReadyFrame = pendingReadyFrameRef.current;
-    if (pendingReadyFrame) {
-      cancelAnimationFrame(pendingReadyFrame.id);
-    }
-
-    const readyFrameId = requestAnimationFrame(() => {
-      if (pendingReadyFrameRef.current?.id === readyFrameId) {
-        pendingReadyFrameRef.current = null;
-      }
+    scheduleReadyFrame(() => {
       if (activeRenderTokenRef.current === renderToken) {
         setResolvedRenderToken(renderToken);
       }
     });
-    pendingReadyFrameRef.current = { id: readyFrameId, token: renderToken };
-  }, [renderToken]);
+  }, [renderToken, scheduleReadyFrame]);
 
   return { isCoverVisible, markListLoaded };
 }

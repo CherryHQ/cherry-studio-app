@@ -1,6 +1,6 @@
 import { Portal, TextAnimation, type TextAnimationDirection } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pressable,
@@ -23,6 +23,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useAfterNextFrame } from '@/frontend/hooks/useNextFrame';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { EffortSlider } from '../effortSlider';
@@ -165,23 +166,14 @@ export function ChatInputEffortOverlay({
     ],
   );
 
-  useEffect(() => {
-    if (!layout) {
-      return;
-    }
-
-    const viewportChanged =
-      layout.viewportHeight !== viewportHeight || layout.viewportWidth !== viewportWidth;
-    const keyboardChanged =
+  const shouldCloseOnEnvironmentChange = Boolean(
+    layout &&
+    (layout.viewportHeight !== viewportHeight ||
+      layout.viewportWidth !== viewportWidth ||
       layout.keyboardVisible !== keyboard.isVisible ||
-      (layout.keyboardVisible && Math.abs(layout.keyboardHeight - keyboard.height) > 1);
-    if (viewportChanged || keyboardChanged) {
-      const closeFrame = requestAnimationFrame(close);
-      return () => cancelAnimationFrame(closeFrame);
-    }
-
-    return undefined;
-  }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
+      (layout.keyboardVisible && Math.abs(layout.keyboardHeight - keyboard.height) > 1)),
+  );
+  useAfterNextFrame(shouldCloseOnEnvironmentChange, close);
 
   // Start after the active overlay host has laid out and its native blur has mounted, so mount
   // work lands before the morph instead of skipping its eased start.
