@@ -1,4 +1,8 @@
-import { resolveSidebarColumn, resolveSidebarToggleAction } from '../resolveSidebarColumn';
+import {
+  resolveSidebarColumn,
+  resolveSidebarDrawer,
+  resolveSidebarToggleAction,
+} from '../resolveSidebarColumn';
 
 const wide = {
   content: 'sidebar' as const,
@@ -78,6 +82,26 @@ describe('resolveSidebarColumn', () => {
     ]) {
       expect(resolveSidebarColumn({ ...wide, fold: ignored })).toMatchObject({ width: 280 });
     }
+  });
+});
+
+describe('resolveSidebarDrawer', () => {
+  test('opening and closing Files stays in permanent drawer mode', () => {
+    const drawer = (isPaneInColumn: boolean) =>
+      resolveSidebarDrawer(resolveSidebarColumn({ ...wide, isPaneInColumn }), 400);
+    expect(drawer(false)).toMatchObject({ drawerType: 'permanent', drawerStyle: { width: 280 } });
+    expect(drawer(true)).toMatchObject({
+      drawerType: 'permanent',
+      drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none' },
+    });
+    expect(drawer(false).drawerStyle).toEqual({ width: 280 });
+  });
+
+  test('a compact window still slides the sidebar over the chat', () => {
+    expect(resolveSidebarDrawer({ kind: 'overlay' }, 320)).toEqual({
+      drawerType: 'front',
+      drawerStyle: { width: 320 },
+    });
   });
 });
 

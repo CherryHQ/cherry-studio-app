@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "engines": {
     "node": "24.x"
   },
@@ -86,8 +86,8 @@
     "typecheck": "pnpm typecheck:packages && pnpm typecheck:app",
     "typecheck:app": "tsc --noEmit",
     "typecheck:packages": "pnpm --filter @cherrystudio/ai-runtime typecheck && pnpm --filter @cherrystudio/file-preview-webview typecheck && pnpm --filter @cherrystudio/mermaid-webview typecheck",
-    "lint": "oxlint && expo lint",
-    "lint:fix": "oxlint --fix && expo lint --fix",
+    "lint": "oxlint && expo lint && eslint --no-inline-config --quiet --config eslint.todo.config.js packages scripts",
+    "lint:fix": "oxlint --fix && expo lint --fix && eslint --no-inline-config --quiet --config eslint.todo.config.js packages scripts",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "prepare": "prek install"

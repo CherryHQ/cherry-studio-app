@@ -5,6 +5,11 @@ import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { CloudAccessError, CloudAccountSchema } from '@/shared/contracts/cloud';
 
 import { cloudSignatureHeaders, type CloudDevice } from './cloudDevice';
+import {
+  CloudGatewayRequestError,
+  cloudRetryDeadline,
+  readCloudGatewayCode,
+} from './cloudGatewayError';
 
 const TokenSetSchema = z.object({
   access_token: z.string().min(1),
@@ -21,6 +26,7 @@ export interface CloudIdentity {
 export interface CloudIdentitySource {
   getIdentity(): CloudIdentity | null;
   getTokens(key: string): Promise<{ accessToken: string; idToken: string }>;
+  getGuestCatalogOrigin?(signal: AbortSignal): Promise<string>;
   refreshServices?(key: string, signal: AbortSignal): Promise<void>;
   subscribe(listener: () => void): () => void;
 }
@@ -30,6 +36,7 @@ export class CloudSession {
   private tokens: Tokens | undefined;
   private entering: Promise<Tokens> | undefined;
   private readonly http: HttpClient;
+  private readonly retryUntil = new Map<string, number>();
 
   constructor(
     readonly origin: string,
@@ -43,6 +50,10 @@ export class CloudSession {
       baseUrl: origin,
       headers: defaultAppHeaders(),
       timeoutMs: 20_000,
+      errorDecoder: ({ data, status }) => {
+        const code = readCloudGatewayCode(data);
+        return code ? { code, message: `Cloud request failed (${status}) ${code}` } : undefined;
+      },
     });
   }
 
@@ -54,23 +65,59 @@ export class CloudSession {
   }
 
   async get(path: string): Promise<unknown> {
-    const headers = await this.headers('GET', path);
-    try {
-      const response = await this.http.request({
-        method: 'GET',
-        path,
-        headers,
-        signal: this.signal,
-        redirect: 'error',
-        credentials: 'omit',
-        maxResponseBytes: 2 * 1024 * 1024,
-      });
-      this.assertCurrent();
-      return response.data;
-    } catch (error) {
-      if (isHttpError(error) && error.status === 401) this.tokens = undefined;
-      throw error;
+    return this.requestWithoutBody('GET', path);
+  }
+
+  async postEmpty(path: string): Promise<unknown> {
+    return this.requestWithoutBody('POST', path);
+  }
+
+  private async requestWithoutBody(method: 'GET' | 'POST', path: string): Promise<unknown> {
+    if ((this.retryUntil.get(path) ?? 0) > Date.now())
+      throw new CloudGatewayRequestError(429, 'RATE_LIMITED');
+    for (let attempt = 0; ; attempt++) {
+      const headers = await this.headers(method, path);
+      try {
+        const response = await this.http.request({
+          method,
+          path,
+          headers,
+          signal: this.signal,
+          redirect: 'error',
+          credentials: 'omit',
+          maxResponseBytes: 2 * 1024 * 1024,
+        });
+        this.assertCurrent();
+        return response.data;
+      } catch (error) {
+        this.assertCurrent();
+        if (!isHttpError(error)) throw error;
+        if (attempt === 0 && this.recoverRequest(error.status, error.code, headers.authorization))
+          continue;
+        if (error.status === 429 && error.retryAfter)
+          this.retryUntil.set(path, cloudRetryDeadline(error.retryAfter, Date.now()));
+        throw error;
+      }
     }
+  }
+
+  /** A late rejection for an old access token must not invalidate an already rotated session. */
+  recoverRequest(
+    status: number | undefined,
+    code: string | undefined,
+    authorization?: string,
+  ): boolean {
+    if (status === 409 && code === 'REQUEST_REPLAYED') return true;
+    if (
+      status !== 401 ||
+      (code !== 'AUTH_REQUIRED' && code !== 'SESSION_EXPIRED' && code !== 'REAUTH_REQUIRED')
+    )
+      return false;
+    if (this.tokens && authorization === `Bearer ${this.tokens.access_token}`) {
+      if (code === 'REAUTH_REQUIRED') this.tokens = undefined;
+      else this.tokens.expiresAt = 0;
+    }
+    return true;
   }
 
   async headers(
@@ -86,10 +133,6 @@ export class CloudSession {
       authorization: `Bearer ${tokens.access_token}`,
       ...cloudSignatureHeaders(this.device, tokens.deviceId, method, path, body, idempotencyKey),
     };
-  }
-
-  invalidate(): void {
-    this.tokens = undefined;
   }
 
   /** Best effort on account replacement; never refresh or reopen a closed identity. */
@@ -151,9 +194,10 @@ export class CloudSession {
         });
       } catch (error) {
         this.assertCurrent();
-        // A lost refresh response may have rotated its token; the next attempt enters afresh.
+        // A lost refresh response may have rotated its token; fall back to device entry on 401.
         this.tokens = undefined;
-        throw error;
+        if (!isHttpError(error) || error.status !== 401 || error.code === 'ACCOUNT_DISABLED')
+          throw error;
       }
     }
     const pair = await this.source.getTokens(this.identity.key);

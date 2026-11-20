@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ESLint } from 'eslint';
 
 import eslintConfig from '../../eslint.config';
+import todoConfig from '../../eslint.todo.config';
 
 const root = path.resolve(__dirname, '../..');
 // ESLint's config discovery uses dynamic import(), which Jest's CommonJS VM cannot execute.
@@ -252,7 +253,11 @@ describe('resolved architecture boundaries', () => {
       const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
       expect(result.fatalErrorCount).toBe(0);
       return result.messages.filter((message) =>
-        ['no-restricted-imports', 'no-restricted-properties'].includes(message.ruleId ?? ''),
+        [
+          'cherry-page/use-effect-limit',
+          'no-restricted-imports',
+          'no-restricted-properties',
+        ].includes(message.ruleId ?? ''),
       );
     }
 
@@ -297,32 +302,37 @@ describe('resolved architecture boundaries', () => {
       expect(await pageEffectErrors(filePath, source)).toEqual([]);
     });
 
-    it('keeps legacyPageUseEffectFiles strictly ratcheted to existing files that still use useEffect', () => {
-      const guardrail = (eslintConfig as { name?: string; ignores?: string[] }[]).find(
-        (entry) => entry.name === 'page-use-effect-guardrail',
-      );
-      expect(guardrail).toBeDefined();
+    it('rejects an extra effect in a page with an existing allowance', async () => {
+      const filePath = 'src/frontend/features/chat/components/ChatInput/ChatInput.tsx';
+      const source = fs.readFileSync(path.join(root, filePath), 'utf8');
+      const extraEffect =
+        "\nimport { useEffect as syncEffect } from 'react';\nsyncEffect(() => {});";
+      const messages = await pageEffectErrors(filePath, source + extraEffect);
+      expect(
+        messages.filter((message) => message.ruleId === 'cherry-page/use-effect-limit'),
+      ).toHaveLength(1);
+    });
 
-      const legacyFiles = (guardrail?.ignores ?? []).filter((entry) => entry.startsWith('src/'));
-      expect(legacyFiles.length).toBeGreaterThan(0);
-
-      const staleEntries = legacyFiles.filter((relPath) => {
-        const fullPath = path.join(root, relPath);
-        if (!fs.existsSync(fullPath)) return true;
-        const stripped = fs
-          .readFileSync(fullPath, 'utf8')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .replace(/\/\/.*$/gm, '');
-        return !/\buseEffect\b/.test(stripped);
-      });
-
-      expect(staleEntries).toEqual([]);
+    it('keeps every legacy limit on an existing page', () => {
+      const guardrail = eslintConfig.find((entry) => entry.name === 'page-use-effect-guardrail');
+      const limits = guardrail?.rules?.['cherry-page/use-effect-limit']?.[1];
+      expect(limits).toBeDefined();
+      expect(
+        Object.keys(limits ?? {}).filter((file) => !fs.existsSync(path.join(root, file))),
+      ).toEqual([]);
     });
   });
 
   describe('tracked TODO/FIXME guardrail', () => {
+    const toolingLint = new ESLint({
+      cwd: root,
+      overrideConfig: todoConfig,
+      overrideConfigFile: true,
+    });
+
     async function todoErrors(filePath: string, source: string) {
-      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      const linter = filePath.startsWith('src/') ? eslint : toolingLint;
+      const [result] = await linter.lintText(source, { filePath: path.join(root, filePath) });
       expect(result.fatalErrorCount).toBe(0);
       return result.messages.filter(
         (message) => message.ruleId === 'cherry/require-todo-issue-ref',
@@ -331,8 +341,8 @@ describe('resolved architecture boundaries', () => {
 
     it.each([
       ['src/frontend/utils/probe.ts', '// TODO: clean this up later\nexport const x = 1;'],
-      ['src/frontend/utils/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
-      ['src/frontend/utils/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
+      ['packages/ai-runtime/src/probe.ts', '// FIXME: workaround for timing\nexport const x = 1;'],
+      ['scripts/probe.ts', '/* TODO(ios-only): later */\nexport const x = 1;'],
     ])('rejects untracked TODO/FIXME comments in %s', async (filePath, source) => {
       expect(await todoErrors(filePath, source)).not.toHaveLength(0);
     });
