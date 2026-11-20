@@ -26,7 +26,12 @@ export interface EvidenceReceipt {
 
 export interface FeatureMapIssue {
   file: string;
-  kind: 'missing-section' | 'missing-testid' | 'missing-flow' | 'unindexed-page';
+  kind:
+    | 'missing-section'
+    | 'missing-testid'
+    | 'missing-flow'
+    | 'missing-maestro-testid'
+    | 'unindexed-page';
   detail: string;
 }
 
@@ -34,6 +39,7 @@ export interface FeatureMapCheckResult {
   checkedPages: number;
   checkedTestIds: number;
   checkedFlows: number;
+  checkedMaestroIds: number;
   issues: FeatureMapIssue[];
 }
 
@@ -325,6 +331,7 @@ export function checkFeatureMap(
       checkedPages: 0,
       checkedTestIds: 0,
       checkedFlows: 0,
+      checkedMaestroIds: 0,
       issues: [
         {
           file: featureDirRelative,
@@ -338,6 +345,9 @@ export function checkFeatureMap(
   const indexPath = path.join(featureDir, 'README.md');
   const indexContent = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8') : '';
   const sourceTestIds = collectSourceTestIds(rootDir);
+  const hasSourceTestId = (testId: string) =>
+    sourceTestIds.has(testId) ||
+    [...sourceTestIds].some((prefix) => prefix.endsWith('-') && testId.startsWith(prefix));
   const entries = fs
     .readdirSync(featureDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md')
@@ -347,6 +357,7 @@ export function checkFeatureMap(
   const issues: FeatureMapIssue[] = [];
   let checkedTestIds = 0;
   let checkedFlows = 0;
+  let checkedMaestroIds = 0;
 
   if (!fs.existsSync(indexPath)) {
     issues.push({
@@ -385,10 +396,7 @@ export function checkFeatureMap(
     for (const match of content.matchAll(/`testID:([A-Za-z0-9_.:-]+)`/gu)) {
       const testId = match[1];
       checkedTestIds += 1;
-      const found =
-        sourceTestIds.has(testId) ||
-        [...sourceTestIds].some((prefix) => prefix.endsWith('-') && testId.startsWith(prefix));
-      if (!found) {
+      if (!hasSourceTestId(testId)) {
         issues.push({
           file: relFile,
           kind: 'missing-testid',
@@ -410,10 +418,39 @@ export function checkFeatureMap(
     }
   }
 
+  // Also guard every selector id inside .maestro/flows/*.yaml against source testIDs so Maestro
+  // regression scripts cannot silently drift from UI changes.
+  const maestroFlowsDir = path.join(rootDir, '.maestro', 'flows');
+  if (fs.existsSync(maestroFlowsDir)) {
+    const flowFiles = fs
+      .readdirSync(maestroFlowsDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml'))
+      .map((entry) => entry.name)
+      .sort();
+    for (const flowFile of flowFiles) {
+      const relFlow = path.join('.maestro', 'flows', flowFile);
+      const flowContent = fs.readFileSync(path.join(maestroFlowsDir, flowFile), 'utf8');
+      for (const match of flowContent.matchAll(
+        /^\s*-?\s*id:\s*['"]?([A-Za-z0-9_.:-]+)['"]?\s*$/gmu,
+      )) {
+        const selectorId = match[1];
+        checkedMaestroIds += 1;
+        if (!hasSourceTestId(selectorId)) {
+          issues.push({
+            file: relFlow,
+            kind: 'missing-maestro-testid',
+            detail: `Maestro selector id "${selectorId}" was not found in src/frontend/ or packages/ui/src/.`,
+          });
+        }
+      }
+    }
+  }
+
   return {
     checkedPages: entries.length,
     checkedTestIds,
     checkedFlows,
+    checkedMaestroIds,
     issues,
   };
 }
@@ -644,7 +681,7 @@ export function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): nu
       { ok, ...result },
       ok
         ? [
-            `Feature map check passed (${result.checkedPages} pages, ${result.checkedTestIds} testIDs, ${result.checkedFlows} Maestro flows).`,
+            `Feature map check passed (${result.checkedPages} pages, ${result.checkedTestIds} testIDs, ${result.checkedFlows} Maestro flows, ${result.checkedMaestroIds} Maestro selectors).`,
           ]
         : [
             `Feature map check failed with ${result.issues.length} issue(s):`,
