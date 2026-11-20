@@ -706,7 +706,7 @@
   "chat.runtime.paused": "Die Ausführung wurde nach wiederholten Unterbrechungen pausiert. Stoppe diese Antwort und versuche es erneut.",
   "chat.runtime.retrying": "Anfrage fehlgeschlagen. Neuer Versuch wird automatisch gestartet…",
   "chat.runtime.sessionRecoveryFailed": "Die Ausführungsdaten dieser Unterhaltung konnten nicht gelesen werden. Die Einträge bleiben erhalten. Starten Sie eine neue Unterhaltung oder senden Sie einen Diagnosebericht.",
-  "chat.runtime.sessionUnavailable": "Diese Unterhaltung ist vorübergehend nicht verfügbar.",
+  "chat.runtime.sessionUnavailable": "Der lokale Unterhaltungsspeicher ist vorübergehend nicht verfügbar. Die Einträge bleiben erhalten. Öffnen Sie die App erneut, um es noch einmal zu versuchen, oder senden Sie einen Diagnosebericht.",
   "chat.share.assistant": "Assistent",
   "chat.share.cancelled": "Abgebrochen",
   "chat.share.completed": "Abgeschlossen",

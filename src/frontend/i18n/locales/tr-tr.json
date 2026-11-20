@@ -706,7 +706,7 @@
   "chat.runtime.paused": "Tekrarlanan kesintiler nedeniyle yürütme duraklatıldı. Bu yanıtı durdurup yeniden deneyin.",
   "chat.runtime.retrying": "İstek başarısız oldu. Otomatik olarak yeniden deneniyor…",
   "chat.runtime.sessionRecoveryFailed": "Bu sohbetin yürütme verileri okunamadı. Kayıtları korundu. Devam etmek için yeni bir sohbet başlatın veya tanılama raporu gönderin.",
-  "chat.runtime.sessionUnavailable": "Bu sohbet geçici olarak kullanılamıyor.",
+  "chat.runtime.sessionUnavailable": "Yerel sohbet depolaması geçici olarak kullanılamıyor. Kayıtlarınız korundu. Tekrar denemek için uygulamayı yeniden açın veya tanılama raporu gönderin.",
   "chat.share.assistant": "Asistan",
   "chat.share.cancelled": "İptal edildi",
   "chat.share.completed": "Tamamlandı",

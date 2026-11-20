@@ -183,11 +183,10 @@ Mobile compatibility changes and boundaries:
   is added to the mobile runtime graph.
 - Compaction progress and failure are transient conversation events, shown in chat and restored
   from upstream snapshots. Failure clears when a successful summary is committed.
-- A guarded storage failure closes the shared Pi session, releases its work lease, and suspends
-  the Host. In the Android foreground the Host tries one automatic reopen before notifying open
-  chats of failure. After a successful reopen, open chats reread the Session snapshot. Recovery
-  preserves unfinished receipts and reconciles existing work. Retry observation and foreground
-  resume still use the same reopen path. Subscriber errors are reported through `onReport`.
+- A guarded storage failure closes the shared Pi session, releases its work lease, notifies open
+  chats and suspends the Host. Retry observation or foreground resume reopens its working copies;
+  it does not manufacture terminal Cherry messages or erase unfinished receipts. No automatic
+  retry loop runs against failed storage. Subscriber errors are reported through `onReport`.
 
 Acceptance for this upgrade covers queued-input recovery, tool approval, a Code Mode script that
 calls tools, long-context compaction and restored baselines, rejection of malformed final tool
@@ -445,6 +444,14 @@ implementations and approval policy are reconstructed; credentials are resolved 
 never serialized. Native task demand, including background compaction, holds the KeepAlive lease.
 Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
 invented assistant turn.
+
+A guarded storage failure closes the shared Pi session, releases its work lease, and suspends the
+Host. In the Android foreground the Host tries one automatic reopen before notifying open chats of
+failure. On success it publishes `runtime.recovered` so open chats reread their Session snapshots,
+preserving unfinished receipts and reconciling existing work. When that automatic reopen fails or
+repeats before new input is admitted or `resumeSuspended()` succeeds, the Host publishes
+`runtime.failed` with `retryable: false`; retry observation and foreground resume still share the
+same reopen path.
 
 ## Backup And Compatibility
 

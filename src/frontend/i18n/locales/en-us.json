@@ -706,7 +706,7 @@
   "chat.runtime.paused": "Execution paused after repeated interruptions. Stop this reply, then retry.",
   "chat.runtime.retrying": "Request failed. Retrying automatically…",
   "chat.runtime.sessionRecoveryFailed": "This conversation’s execution data could not be read. Its records have been kept. Start a new conversation to continue, or submit a diagnostic report.",
-  "chat.runtime.sessionUnavailable": "This conversation is temporarily unavailable.",
+  "chat.runtime.sessionUnavailable": "Local conversation storage is temporarily unavailable. Your saved records have been kept. Reopen the app to try again, or submit a diagnostic report.",
   "chat.share.assistant": "Assistant",
   "chat.share.cancelled": "Cancelled",
   "chat.share.completed": "Completed",

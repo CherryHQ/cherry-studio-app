@@ -610,18 +610,21 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async recoverStorageFailure(error: { code: string; message: string }) {
     if (this.controller.signal.aborted || this.storageRecovery === 'scheduled') return;
-    const canRecover =
+    const isForegroundStorageFailure =
       error.code === 'runtime_storage_failed' &&
+      Boolean(this.ports.shouldRecoverStorage?.()) &&
+      !storageMutationGate.isFrozen;
+    const canRecover =
+      isForegroundStorageFailure &&
       this.accepting &&
       !this.resuming &&
-      this.storageRecovery === 'idle' &&
-      this.ports.shouldRecoverStorage?.() &&
-      !storageMutationGate.isFrozen;
+      this.storageRecovery === 'idle';
     const failure = new Error(error.message);
     logger.error('Durable Agent storage failed', failure);
     const suspension = this.suspend(failure).catch((cause: unknown) =>
       logger.warn('Failed to suspend the Agent after storage failure', cause as Error),
     );
+    let attemptedRecovery = false;
     if (canRecover) {
       this.storageRecovery = 'scheduled';
       await suspension;
@@ -633,7 +636,8 @@ export class DurableAgentHost implements AgentProtocol {
           !storageMutationGate.isFrozen
         ) {
           this.storageRecovery = 'attempted';
-          await this.resumeSuspended();
+          attemptedRecovery = true;
+          await this.reopenSuspended(false);
           if (this.accepting) {
             for (const sessionId of this.listeners.keys())
               this.publish(sessionId, { type: 'runtime.recovered' });
@@ -646,15 +650,20 @@ export class DurableAgentHost implements AgentProtocol {
       if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
     }
     if (!this.controller.signal.aborted) {
-      const event: AgentEvent =
-        this.storageRecovery === 'attempted'
-          ? { type: 'runtime.failed', retryable: false }
-          : { type: 'runtime.failed' };
+      const recoveryExhausted =
+        attemptedRecovery || (isForegroundStorageFailure && this.storageRecovery === 'attempted');
+      const event: AgentEvent = recoveryExhausted
+        ? { type: 'runtime.failed', retryable: false }
+        : { type: 'runtime.failed' };
       for (const sessionId of this.listeners.keys()) this.publish(sessionId, event);
     }
   }
 
   async resumeSuspended() {
+    return this.reopenSuspended(true);
+  }
+
+  private async reopenSuspended(resetStorageRecovery: boolean) {
     if (this.resuming) return this.resuming;
     if (!this.suspended || this.controller.signal.aborted) return;
     this.resuming = (async () => {
@@ -666,6 +675,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.suspension = undefined;
       try {
         await this.initialize();
+        if (resetStorageRecovery && this.accepting) this.storageRecovery = 'idle';
       } catch (error) {
         this.suspended = true;
         throw error;

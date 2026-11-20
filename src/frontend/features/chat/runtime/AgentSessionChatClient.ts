@@ -644,6 +644,8 @@ export class AgentSessionChatClient {
         this.updateState(entry, { ...entry.state, contextUsages: event.usages });
         return;
       case 'runtime.failed':
+        entry.observation?.unsubscribe();
+        entry.observation = undefined;
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,

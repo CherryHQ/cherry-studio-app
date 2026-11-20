@@ -701,7 +701,7 @@
   "chat.runtime.paused": "多次中断后，执行已暂停。请停止本次回复后重试。",
   "chat.runtime.retrying": "请求失败，正在自动重试…",
   "chat.runtime.sessionRecoveryFailed": "此会话的执行数据无法读取，已保留原记录。请新建会话继续，或提交诊断报告。",
-  "chat.runtime.sessionUnavailable": "此会话暂时无法继续。",
+  "chat.runtime.sessionUnavailable": "本地会话存储暂时不可用，已保留原记录。请重新打开应用后再试，或提交诊断报告。",
   "chat.share.assistant": "助手",
   "chat.share.cancelled": "已取消",
   "chat.share.completed": "已完成",

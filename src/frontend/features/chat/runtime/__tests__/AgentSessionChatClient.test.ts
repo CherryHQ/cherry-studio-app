@@ -305,6 +305,41 @@ describe('AgentSessionChatClient', () => {
     }
   });
 
+  test('clears stale observation on runtime.failed so submitting a message reobserves and recovers state', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe() {} };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      publish({ type: 'runtime.failed', retryable: false });
+      expect(client.getState('session-1')).toMatchObject({
+        status: 'error',
+        error: { view: { code: 'EXECUTION_UNAVAILABLE', retryable: false } },
+      });
+
+      await client.submitMessage({
+        sessionId: 'session-1',
+        userMessageId: 'user-2',
+        assistantMessageId: 'assistant-2',
+        parts: [{ type: 'text', text: 'Retry after failure' }],
+      });
+
+      expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+      expect(protocol.submitMessage).toHaveBeenCalledTimes(1);
+      expect(client.getState('session-1')).toMatchObject({
+        status: 'ready',
+      });
+      expect(client.getState('session-1').error).toBeUndefined();
+    } finally {
+      unsubscribe();
+      client.dispose();
+    }
+  });
+
   test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
     const activeTurn = {
       id: 'turn-1',

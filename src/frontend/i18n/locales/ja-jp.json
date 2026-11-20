@@ -701,7 +701,7 @@
   "chat.runtime.paused": "中断が繰り返されたため、実行を一時停止しました。この応答を停止してから再試行してください。",
   "chat.runtime.retrying": "リクエストに失敗しました。自動で再試行しています…",
   "chat.runtime.sessionRecoveryFailed": "この会話の実行データを読み取れませんでした。元の記録は保持されています。新しい会話で続けるか、診断レポートを送信してください。",
-  "chat.runtime.sessionUnavailable": "この会話は一時的に利用できません。",
+  "chat.runtime.sessionUnavailable": "ローカルの会話ストレージが一時的に利用できません。元の記録は保持されています。アプリを開き直して再試行するか、診断レポートを送信してください。",
   "chat.share.assistant": "アシスタント",
   "chat.share.cancelled": "キャンセル",
   "chat.share.completed": "完了",

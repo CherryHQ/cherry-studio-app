@@ -11,7 +11,10 @@ jest.mock('@/frontend/data', () => ({
 }));
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, params?: { provider?: string }) =>
+      typeof params?.provider === 'string' ? `${key}:${params.provider}` : key,
+  }),
 }));
 
 jest.mock('@/frontend/components/MessageDetail', () => {
@@ -63,7 +66,11 @@ describe('ErrorPart', () => {
   });
 
   test.each([
-    [{ reasonCode: 'quota', context: { providerId: 'deepseek' } }, 'quota', 'providerQuota'],
+    [
+      { reasonCode: 'quota', context: { providerId: 'deepseek' } },
+      'quota',
+      'providerQuota:DeepSeek',
+    ],
     [{ reasonCode: 'quota', context: { providerId: 'removed' } }, 'quota', 'quota'],
     [{ reasonCode: 'model_not_found' }, 'modelNotFound', 'modelNotFound'],
     [{ reasonCode: 'payload_too_large' }, 'payloadTooLarge', 'payloadTooLarge'],

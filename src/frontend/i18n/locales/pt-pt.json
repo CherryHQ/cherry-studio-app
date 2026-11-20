@@ -711,7 +711,7 @@
   "chat.runtime.paused": "A execução foi pausada após várias interrupções. Pare esta resposta e tente novamente.",
   "chat.runtime.retrying": "O pedido falhou. A tentar novamente automaticamente…",
   "chat.runtime.sessionRecoveryFailed": "Não foi possível ler os dados de execução desta conversa. Os registos foram preservados. Inicie uma nova conversa para continuar ou envie um relatório de diagnóstico.",
-  "chat.runtime.sessionUnavailable": "Esta conversa está temporariamente indisponível.",
+  "chat.runtime.sessionUnavailable": "O armazenamento local de conversas está temporariamente indisponível. Os registos foram preservados. Reabra a aplicação para tentar novamente ou envie um relatório de diagnóstico.",
   "chat.share.assistant": "Assistente",
   "chat.share.cancelled": "Cancelado",
   "chat.share.completed": "Concluído",
