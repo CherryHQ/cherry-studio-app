@@ -73,21 +73,37 @@ export const CloudAccountSchema = z.object({
   ),
   quota_pools: z.array(CloudQuotaPoolSchema),
 });
+const optionalFlag = (fallback: boolean) =>
+  z
+    .boolean()
+    .nullish()
+    .transform((value) => value ?? fallback);
+const optionalNullableString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? null);
+
 export const CloudModelSchema = z.object({
   id: z.string().min(1),
   display_name: z.string(),
   endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
   context_window: z.number().int().positive(),
   max_output_tokens: z.number().int().positive(),
-  capabilities: z.array(z.string()),
-  available_features: z.array(z.string()),
-  requires_login: z.boolean(),
-  requires_plan: z.boolean(),
-  is_free: z.boolean(),
-  standalone: z.boolean(),
-  provider: z.string().nullable(),
-  activation_required: z.boolean(),
-  activation_endpoint: z.string().nullable(),
+  capabilities: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
+  available_features: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
+  requires_login: optionalFlag(true),
+  requires_plan: optionalFlag(true),
+  is_free: optionalFlag(false),
+  standalone: optionalFlag(false),
+  provider: optionalNullableString,
+  activation_required: optionalFlag(false),
+  activation_endpoint: optionalNullableString,
 });
 export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
 export const CloudAmdStatusSchema = z.object({

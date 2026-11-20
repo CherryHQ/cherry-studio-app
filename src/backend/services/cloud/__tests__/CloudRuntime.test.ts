@@ -1222,3 +1222,104 @@ test('a recognized plan refusal refreshes account entitlements, without signing 
     await runtime._doStop();
   }
 });
+
+test('accepts legacy 7-field catalog rows for subscribers and keeps guests signed-out by default', async () => {
+  const legacyEntitled = {
+    id: 'cloud-model',
+    display_name: 'Cloud model',
+    endpoint_type: 'anthropic-messages',
+    context_window: 128000,
+    max_output_tokens: 8192,
+    capabilities: null,
+    available_features: ['agent', 'chat', 'translate'],
+  };
+  const legacyOtherPlan = {
+    ...legacyEntitled,
+    id: 'other-plan-model',
+    display_name: 'Other plan model',
+    capabilities: ['function-call'],
+  };
+  const normalizedEntitled: CloudModel = {
+    id: 'cloud-model',
+    display_name: 'Cloud model',
+    endpoint_type: 'anthropic-messages',
+    context_window: 128000,
+    max_output_tokens: 8192,
+    capabilities: [],
+    available_features: ['agent', 'chat', 'translate'],
+    requires_login: true,
+    requires_plan: true,
+    is_free: false,
+    standalone: false,
+    provider: null,
+    activation_required: false,
+    activation_endpoint: null,
+  };
+
+  mockGet.mockImplementation(async (account: string, path: string) =>
+    path === '/v1/models?limit=1000&catalog=full'
+      ? { data: [legacyEntitled, legacyOtherPlan] }
+      : reply(account, path),
+  );
+  mockInference.mockResolvedValue(new Response(null, { status: 200 }));
+  const signedIn = await setup();
+  try {
+    await signedIn.runtime.refresh();
+    expect(signedIn.runtime.getState()).toMatchObject({
+      phase: 'ready',
+      account: { account: { id: 'account-a' } },
+      models: [
+        normalizedEntitled,
+        {
+          ...normalizedEntitled,
+          id: 'other-plan-model',
+          display_name: 'Other plan model',
+          capabilities: ['function-call'],
+        },
+      ],
+    });
+    expect(mockProject.mock.lastCall?.[2]).toEqual([normalizedEntitled]);
+    await expect(
+      signedIn.runtime.createModelFetch('cloud-model', 'agent')(
+        'https://cloud.example/v1/messages',
+        {
+          method: 'POST',
+          body: JSON.stringify({ model: 'cloud-model' }),
+        },
+      ),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      signedIn.runtime.createModelFetch('other-plan-model', 'agent')(
+        'https://cloud.example/v1/messages',
+        {
+          method: 'POST',
+          body: JSON.stringify({ model: 'other-plan-model' }),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'cloud_subscription_required' });
+  } finally {
+    await signedIn.runtime._doStop();
+  }
+
+  mockProject.mockClear();
+  mockClientSignatureHeaders.mockResolvedValue({ 'X-Signature': 'signed' });
+  mockPublicRequest.mockResolvedValue({ data: { data: [legacyEntitled] } });
+  const guest = await setup(null);
+  try {
+    await guest.runtime.refresh();
+    expect(guest.runtime.getState()).toMatchObject({
+      phase: 'signed_out',
+      guestCatalog: 'ready',
+      models: [normalizedEntitled],
+    });
+    expect(mockProject.mock.lastCall?.[2]).toEqual([]);
+    await expect(
+      guest.runtime.createModelFetch('cloud-model', 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: 'cloud-model' }),
+      }),
+    ).rejects.toMatchObject({ code: 'cloud_signed_out' });
+  } finally {
+    await guest.runtime._doStop();
+  }
+});
