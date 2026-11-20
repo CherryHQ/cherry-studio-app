@@ -1,8 +1,8 @@
 # Maestro End-to-End Flows
 
 These flows are the first deterministic end-to-end checks for Cherry Studio Mobile. They use
-accessibility identifiers rather than translated labels and run independently from a fresh app
-state.
+stable accessibility identifiers where available and run independently from a fresh app state.
+The native iOS toolbar action is selected by its English or Simplified Chinese accessibility label.
 
 ## Prerequisites
 
