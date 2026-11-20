@@ -9,13 +9,12 @@ import {
 
 const UNMEASURED_HOST = { height: 0, width: 0 };
 
-/** The host's fold snapshot sizes the split; until it arrives the pane reserves no space. */
-export function usePaneSplit() {
-  const layout = useFoldRegionLayout();
-  const isLayoutCurrent = useIsFoldRegionLayoutCurrent();
+/** A pane taking the sidebar's column immediately occupies the whole window. */
+export function usePaneSplit(scope: 'host' | 'window') {
+  const layout = useFoldRegionLayout(scope);
+  const isLayoutCurrent = useIsFoldRegionLayoutCurrent(scope);
   const insets = useSafeAreaInsets();
   const host = layout?.host ?? UNMEASURED_HOST;
-  // The host is already beside any persistent sidebar; never subtract the sidebar twice.
   const paneWidth = resolveFilePaneWidth(host.width - insets.left - insets.right);
   const split = resolvePaneSplit({ fold: layout?.fold ?? null, host, paneWidth });
   // The host starts at the window's top edge, so its offsets are window coordinates.

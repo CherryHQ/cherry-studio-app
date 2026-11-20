@@ -499,6 +499,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCloud.configure).toHaveBeenCalledWith(
       {
         getIdentity: mockEnterpriseAccount.getCommunityIdentity,
+        getGuestCatalogOrigin: expect.any(Function),
         getTokens: mockEnterpriseAccount.getCommunityTokens,
         refreshServices: mockEnterpriseAccount.refreshCommunityServices,
         subscribe: mockEnterpriseAccount.subscribe,

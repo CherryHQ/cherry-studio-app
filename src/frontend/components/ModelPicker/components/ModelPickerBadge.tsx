@@ -1,24 +1,8 @@
 import EyeIcon from '@cherrystudio/app-icons/icons/eye';
-import GiftIcon from '@cherrystudio/app-icons/icons/gift';
-import { StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { ModelPickerBadge as ModelPickerBadgeValue } from '../utils/modelPickerBadges';
-
-const badgeMeta = {
-  free: {
-    chipClassName: 'bg-tag-green',
-    Icon: GiftIcon,
-    iconClassName: 'text-tag-green-foreground',
-  },
-  vision: {
-    chipClassName: 'bg-tag-blue',
-    Icon: EyeIcon,
-    iconClassName: 'text-tag-blue-foreground',
-  },
-} satisfies Record<
-  ModelPickerBadgeValue,
-  { chipClassName: string; Icon: typeof EyeIcon; iconClassName: string }
->;
 
 /** A compact, inert visual mark; the containing row owns its spoken label. */
 export function ModelPickerBadge({
@@ -30,21 +14,30 @@ export function ModelPickerBadge({
   testIDPrefix?: string;
   variant?: 'chip' | 'icon';
 }) {
-  const { chipClassName, Icon, iconClassName } = badgeMeta[badge];
+  const { t } = useTranslation();
+  const isFree = badge === 'free';
 
   return (
     <View
       accessibilityElementsHidden
       className={
-        variant === 'icon'
-          ? 'size-4 items-center justify-center'
-          : `h-5 flex-row items-center justify-center rounded-lg px-1.5 ${chipClassName}`
+        isFree
+          ? 'justify-center rounded-sm bg-tag-green px-1.25'
+          : variant === 'icon'
+            ? 'size-4 items-center justify-center'
+            : 'h-5 flex-row items-center justify-center rounded-lg bg-tag-blue px-1.5'
       }
       importantForAccessibility="no-hide-descendants"
       style={styles.badge}
       testID={`${testIDPrefix}-${badge}`}
     >
-      <Icon className={`size-3 ${iconClassName}`} />
+      {isFree ? (
+        <Text className="font-medium text-xs text-tag-green-foreground" numberOfLines={1}>
+          {t('models.badge.free')}
+        </Text>
+      ) : (
+        <EyeIcon className="size-3 text-tag-blue-foreground" />
+      )}
     </View>
   );
 }

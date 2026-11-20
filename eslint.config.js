@@ -2,6 +2,7 @@ const { readdirSync } = require('node:fs');
 const path = require('node:path');
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
+const [todoConfig] = require('./eslint.todo.config');
 
 const projectRoot = path.dirname(require.resolve('./package.json'));
 
@@ -398,39 +399,6 @@ const toSortedRestriction = {
   message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
 };
 
-const cherryLocalPlugin = {
-  rules: {
-    // Prevent untracked TODO/FIXME comments from turning into stale excuses for workarounds.
-    'require-todo-issue-ref': {
-      meta: {
-        type: 'problem',
-        schema: [],
-        messages: {
-          missingIssue:
-            '{{tag}} comments must reference a tracked GitHub issue, e.g. `{{tag}}(#123): ...`. Remove stale reminders or fix the root cause.',
-        },
-      },
-      create(context) {
-        return {
-          Program() {
-            for (const comment of context.sourceCode.getAllComments()) {
-              const matches = comment.value.matchAll(/\b(TODO|FIXME)\b(?!\(#\d+\))/g);
-              for (const match of matches) {
-                context.report({
-                  loc: comment.loc,
-                  messageId: 'missingIssue',
-                  data: { tag: match[1] },
-                });
-                break;
-              }
-            }
-          },
-        };
-      },
-    },
-  },
-};
-
 const pageRawSchedulingMessage = {
   setTimeout:
     'Do not call raw setTimeout in page code. Use useDebouncedValue, useTransientValue, createDebouncedAction, createScheduledFlush, or yieldToRuntime from shared building blocks.',
@@ -451,102 +419,150 @@ const pageRawSchedulingPropertyRestrictions = ['globalThis', 'window', 'global']
 const pageUseEffectMessage =
   'Do not add raw useEffect in page code. Derive state during render, handle actions in event callbacks, read latest values in effects with useEffectEvent, subscribe with useSyncExternalStore, or extract a reusable hook under src/frontend/hooks.';
 
-// Ratchet-only allowlist of existing page files that still call useEffect.
-// Do not add new entries; remove a file here as soon as its last useEffect is removed.
-// scripts/__tests__/architectureBoundaries.test.ts fails if any entry becomes stale.
-const legacyPageUseEffectFiles = [
-  'src/app/onboarding/device-connections/pair.tsx',
-  'src/frontend/features/chat/ChatScreen.tsx',
-  'src/frontend/features/chat/components/ChatInput/ChatInput.tsx',
-  'src/frontend/features/chat/components/ChatInput/components/ChatInputPluginSheet.tsx',
-  'src/frontend/features/chat/components/ChatInput/components/ChatInputPromptSheet.tsx',
-  'src/frontend/features/chat/components/ChatInput/components/ChatInputSkillSheet.tsx',
-  'src/frontend/features/chat/components/ChatInput/components/ChatInputSsh.tsx',
-  'src/frontend/features/chat/components/ChatInput/effortSlider/components/EffortSlider.tsx',
-  'src/frontend/features/chat/components/ChatInput/hooks/useChatInputReasoningEffortSelection.ts',
-  'src/frontend/features/chat/components/ChatRouteResolver/ChatRouteResolver.tsx',
-  'src/frontend/features/chat/components/ChatWorkspace/ChatWorkspace.tsx',
-  'src/frontend/features/chat/components/ChatWorkspace/components/ExpandedAnswer.tsx',
-  'src/frontend/features/chat/components/ChatWorkspace/context/AssistantMessageActionsProvider.tsx',
-  'src/frontend/features/chat/components/ChatWorkspace/hooks/useConversationFeedbackHint.ts',
-  'src/frontend/features/chat/components/ChatWorkspace/hooks/useIsScreenReaderEnabled.ts',
-  'src/frontend/features/chat/components/ChatWorkspace/hooks/useMessageUsageRecords.ts',
-  'src/frontend/features/chat/components/ConversationMessageContent.tsx',
-  'src/frontend/features/chat/components/UserQuestionSheet/UserQuestionSheet.tsx',
-  'src/frontend/features/chat/components/UserQuestionSheet/useUserQuestionForm.ts',
-  'src/frontend/features/chat/composer/useComposerHandoffAppend.ts',
-  'src/frontend/features/chat/hooks/useConversationResourceValue.ts',
-  'src/frontend/features/chat/quotes/ChatQuoteProvider.tsx',
-  'src/frontend/features/chat/remote/ReadOnlyTaskSessionScreen.tsx',
-  'src/frontend/features/chat/remote/RemoteChatScreen.tsx',
-  'src/frontend/features/chat/remote/RemoteComposer.tsx',
-  'src/frontend/features/chat/remote/useRemoteDraftPersistence.ts',
-  'src/frontend/features/chat/runtime/ChatProvider.tsx',
-  'src/frontend/features/chat/runtime/useLocalConversation.ts',
-  'src/frontend/features/chat/share/ChatShareDragSelection.tsx',
-  'src/frontend/features/chat/share/ChatShareSelectionProvider.tsx',
-  'src/frontend/features/chat/share/useShareChat.ts',
-  'src/frontend/features/chat/voice/ChatInputPrimaryAction.tsx',
-  'src/frontend/features/drawings/templates/components/TemplateStage.tsx',
-  'src/frontend/features/files/FileViewerScreen.tsx',
-  'src/frontend/features/files/components/FileDocumentPreview.tsx',
-  'src/frontend/features/files/hooks/useFileImageEdit.ts',
-  'src/frontend/features/home/aiUsage/components/AiUsageCalendar.tsx',
-  'src/frontend/features/home/aiUsage/hooks/useAiUsageOverview.ts',
-  'src/frontend/features/library/hooks/useAudioTranscription.ts',
-  'src/frontend/features/library/hooks/useFileEntries.ts',
-  'src/frontend/features/onboarding/components/LogoDraw/hooks/useLogoDrawProgress.ts',
-  'src/frontend/features/onboarding/components/OnboardingPage/OnboardingPage.tsx',
-  'src/frontend/features/onboarding/setup/AccountOnboardingStep.tsx',
-  'src/frontend/features/onboarding/setup/ModelSourceOnboardingStep.tsx',
-  'src/frontend/features/onboarding/setup/NotificationsOnboardingStep.tsx',
-  'src/frontend/features/onboarding/setup/useNotificationOnboardingActions.ts',
-  'src/frontend/features/onboarding/setup/useOnboardingProgress.ts',
-  'src/frontend/features/paintings/components/PaintingBoardWorkspace.tsx',
-  'src/frontend/features/paintings/hooks/usePaintingFocusReference.ts',
-  'src/frontend/features/plugin/builtinTool/apiService/components/WebSearchApiServiceCommitInput.tsx',
-  'src/frontend/features/plugin/builtinTool/apiService/hooks/useWebSearchProviderCheck.ts',
-  'src/frontend/features/plugin/detail/connect/CredentialConnect.tsx',
-  'src/frontend/features/plugin/detail/connect/PluginCallbackScreen.tsx',
-  'src/frontend/features/plugin/detail/connect/useInteractiveConnect.ts',
-  'src/frontend/features/plugin/mcpServer/McpOAuthCallbackScreen.tsx',
-  'src/frontend/features/remoteTask/RemoteTaskListScreen.tsx',
-  'src/frontend/features/search/SearchScreen.tsx',
-  'src/frontend/features/search/useAppSearchResults.ts',
-  'src/frontend/features/settings/DeviceConnectionsScreen/DeviceConnectionPairingScreen.tsx',
-  'src/frontend/features/settings/about/diagnostics/useDiagnosticBundle.ts',
-  'src/frontend/features/settings/data/DataScreen.tsx',
-  'src/frontend/features/settings/data/deepseek/DeepseekImportScreen.tsx',
-  'src/frontend/features/settings/notifications/NotificationSettingsScreen.tsx',
-  'src/frontend/features/settings/profile/ProfileSettingsScreen.tsx',
-  'src/frontend/features/settings/provider/account/ProviderAccountCallbackScreen.tsx',
-  'src/frontend/features/settings/provider/components/ProviderAccount/useProviderAccount.ts',
-  'src/frontend/features/settings/provider/components/ProviderConfiguration/hooks/useSavedProviderConfiguration.ts',
-  'src/frontend/features/settings/provider/detail/ProviderDetailScreen.tsx',
-  'src/frontend/features/settings/provider/detail/components/CloudProviderDetail.tsx',
-  'src/frontend/features/settings/provider/detail/modelAdd/components/ProviderModelSyncTask.tsx',
-  'src/frontend/features/settings/provider/detail/modelAdd/hooks/useProviderModelTask.ts',
-  'src/frontend/features/settings/provider/hooks/useProviderSetup.ts',
-  'src/frontend/features/settings/provider/models/hooks/useProviderModelCheck.ts',
-  'src/frontend/features/settings/provider/models/hooks/useProviderModelPull.ts',
-  'src/frontend/features/shareDestination/ShareDestinationScreen.tsx',
-  'src/frontend/features/sharing/ShareScreen.tsx',
-  'src/frontend/features/sharing/components/DocumentPagePreview.tsx',
-  'src/frontend/features/sharing/components/DocumentShareSheet.tsx',
-  'src/frontend/features/sharing/components/FileShareSheet.tsx',
-  'src/frontend/features/sharing/hooks/useDocumentExportHtmlCapture.ts',
-  'src/frontend/features/sharing/hooks/useDocumentExportPreview.ts',
-  'src/frontend/features/sharing/hooks/useHtmlConversion.tsx',
-];
+// Existing direct React effect references are capped per file. Reduce the cap with removals.
+const legacyPageUseEffectLimits = {
+  'src/app/onboarding/device-connections/pair.tsx': 1,
+  'src/frontend/features/chat/ChatScreen.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/ChatInput.tsx': 2,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputPluginSheet.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputPromptSheet.tsx': 2,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputSkillSheet.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/components/ChatInputSsh.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/effortSlider/components/EffortSlider.tsx': 1,
+  'src/frontend/features/chat/components/ChatInput/hooks/useChatInputReasoningEffortSelection.ts': 1,
+  'src/frontend/features/chat/components/ChatRouteResolver/ChatRouteResolver.tsx': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/ChatWorkspace.tsx': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/components/ExpandedAnswer.tsx': 4,
+  'src/frontend/features/chat/components/ChatWorkspace/context/AssistantMessageActionsProvider.tsx': 2,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useConversationFeedbackHint.ts': 2,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useIsScreenReaderEnabled.ts': 1,
+  'src/frontend/features/chat/components/ChatWorkspace/hooks/useMessageUsageRecords.ts': 1,
+  'src/frontend/features/chat/components/ConversationMessageContent.tsx': 1,
+  'src/frontend/features/chat/components/UserQuestionSheet/UserQuestionSheet.tsx': 1,
+  'src/frontend/features/chat/components/UserQuestionSheet/useUserQuestionForm.ts': 1,
+  'src/frontend/features/chat/composer/useComposerHandoffAppend.ts': 1,
+  'src/frontend/features/chat/hooks/useConversationResourceValue.ts': 1,
+  'src/frontend/features/chat/quotes/ChatQuoteProvider.tsx': 2,
+  'src/frontend/features/chat/remote/ReadOnlyTaskSessionScreen.tsx': 1,
+  'src/frontend/features/chat/remote/RemoteChatScreen.tsx': 1,
+  'src/frontend/features/chat/remote/RemoteComposer.tsx': 4,
+  'src/frontend/features/chat/remote/useRemoteDraftPersistence.ts': 2,
+  'src/frontend/features/chat/runtime/ChatProvider.tsx': 5,
+  'src/frontend/features/chat/runtime/useLocalConversation.ts': 2,
+  'src/frontend/features/chat/share/ChatShareDragSelection.tsx': 4,
+  'src/frontend/features/chat/share/ChatShareSelectionProvider.tsx': 2,
+  'src/frontend/features/chat/share/useShareChat.ts': 1,
+  'src/frontend/features/chat/voice/ChatInputPrimaryAction.tsx': 2,
+  'src/frontend/features/drawings/templates/components/TemplateStage.tsx': 2,
+  'src/frontend/features/files/FileViewerScreen.tsx': 1,
+  'src/frontend/features/files/components/FileDocumentPreview.tsx': 2,
+  'src/frontend/features/files/hooks/useFileImageEdit.ts': 1,
+  'src/frontend/features/home/aiUsage/components/AiUsageCalendar.tsx': 1,
+  'src/frontend/features/home/aiUsage/hooks/useAiUsageOverview.ts': 1,
+  'src/frontend/features/library/hooks/useAudioTranscription.ts': 1,
+  'src/frontend/features/library/hooks/useFileEntries.ts': 1,
+  'src/frontend/features/onboarding/components/LogoDraw/hooks/useLogoDrawProgress.ts': 3,
+  'src/frontend/features/onboarding/components/OnboardingPage/OnboardingPage.tsx': 2,
+  'src/frontend/features/onboarding/setup/AccountOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/ModelSourceOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/NotificationsOnboardingStep.tsx': 1,
+  'src/frontend/features/onboarding/setup/useNotificationOnboardingActions.ts': 1,
+  'src/frontend/features/onboarding/setup/useOnboardingProgress.ts': 1,
+  'src/frontend/features/paintings/components/PaintingBoardWorkspace.tsx': 1,
+  'src/frontend/features/paintings/hooks/usePaintingFocusReference.ts': 1,
+  'src/frontend/features/plugin/builtinTool/apiService/components/WebSearchApiServiceCommitInput.tsx': 3,
+  'src/frontend/features/plugin/builtinTool/apiService/hooks/useWebSearchProviderCheck.ts': 1,
+  'src/frontend/features/plugin/detail/connect/CredentialConnect.tsx': 1,
+  'src/frontend/features/plugin/detail/connect/PluginCallbackScreen.tsx': 1,
+  'src/frontend/features/plugin/detail/connect/useInteractiveConnect.ts': 1,
+  'src/frontend/features/plugin/mcpServer/McpOAuthCallbackScreen.tsx': 1,
+  'src/frontend/features/remoteTask/RemoteTaskListScreen.tsx': 1,
+  'src/frontend/features/search/SearchScreen.tsx': 1,
+  'src/frontend/features/search/useAppSearchResults.ts': 2,
+  'src/frontend/features/settings/DeviceConnectionsScreen/DeviceConnectionPairingScreen.tsx': 1,
+  'src/frontend/features/settings/about/diagnostics/useDiagnosticBundle.ts': 1,
+  'src/frontend/features/settings/data/DataScreen.tsx': 1,
+  'src/frontend/features/settings/data/deepseek/DeepseekImportScreen.tsx': 1,
+  'src/frontend/features/settings/notifications/NotificationSettingsScreen.tsx': 1,
+  'src/frontend/features/settings/profile/ProfileSettingsScreen.tsx': 1,
+  'src/frontend/features/settings/provider/account/ProviderAccountCallbackScreen.tsx': 1,
+  'src/frontend/features/settings/provider/components/ProviderAccount/useProviderAccount.ts': 1,
+  'src/frontend/features/settings/provider/components/ProviderConfiguration/hooks/useSavedProviderConfiguration.ts': 1,
+  'src/frontend/features/settings/provider/detail/ProviderDetailScreen.tsx': 1,
+  'src/frontend/features/settings/provider/detail/modelAdd/components/ProviderModelSyncTask.tsx': 1,
+  'src/frontend/features/settings/provider/detail/modelAdd/hooks/useProviderModelTask.ts': 1,
+  'src/frontend/features/settings/provider/hooks/useProviderSetup.ts': 1,
+  'src/frontend/features/settings/provider/models/hooks/useProviderModelCheck.ts': 1,
+  'src/frontend/features/settings/provider/models/hooks/useProviderModelPull.ts': 1,
+  'src/frontend/features/shareDestination/ShareDestinationScreen.tsx': 1,
+  'src/frontend/features/sharing/ShareScreen.tsx': 1,
+  'src/frontend/features/sharing/components/DocumentPagePreview.tsx': 1,
+  'src/frontend/features/sharing/components/DocumentShareSheet.tsx': 1,
+  'src/frontend/features/sharing/components/FileShareSheet.tsx': 2,
+  'src/frontend/features/sharing/hooks/useDocumentExportHtmlCapture.ts': 1,
+  'src/frontend/features/sharing/hooks/useDocumentExportPreview.ts': 1,
+  'src/frontend/features/sharing/hooks/useHtmlConversion.tsx': 1,
+};
+
+const pageSchedulingPlugin = {
+  rules: {
+    'use-effect-limit': {
+      meta: { schema: [{ type: 'object', additionalProperties: { type: 'integer' } }] },
+      create(context) {
+        const { sourceCode } = context;
+        const filename = path.relative(projectRoot, context.filename).split(path.sep).join('/');
+        const limit = context.options[0][filename] ?? 0;
+        const imports = [];
+        return {
+          ImportDeclaration(node) {
+            if (node.source.value === 'react') imports.push(...node.specifiers);
+          },
+          'Program:exit'(program) {
+            const effects = [];
+            for (const specifier of imports) {
+              const [binding] = sourceCode.getDeclaredVariables(specifier);
+              if (!binding) continue;
+              const references = binding.references.map((reference) => reference.identifier);
+              if (specifier.type === 'ImportSpecifier') {
+                if ((specifier.imported.name ?? specifier.imported.value) === 'useEffect') {
+                  effects.push(...(references.length === 0 ? [specifier] : references));
+                }
+              } else {
+                for (const reference of references) {
+                  const access = reference.parent;
+                  if (
+                    access.type === 'MemberExpression' &&
+                    access.object === reference &&
+                    (access.computed ? access.property.value : access.property.name) === 'useEffect'
+                  ) {
+                    effects.push(access);
+                  }
+                }
+              }
+            }
+            effects.sort((left, right) => left.range[0] - right.range[0]);
+            for (const node of effects.slice(limit)) {
+              context.report({ node, message: pageUseEffectMessage });
+            }
+            if (effects.length < limit) {
+              context.report({
+                node: program,
+                message: `Reduce the legacy useEffect limit for ${filename} from ${limit} to ${effects.length}.`,
+              });
+            }
+          },
+        };
+      },
+    },
+  },
+};
 
 module.exports = defineConfig([
   expoConfig,
   {
-    plugins: {
-      cherry: cherryLocalPlugin,
-    },
+    plugins: todoConfig.plugins,
     rules: {
-      'cherry/require-todo-issue-ref': 'error',
+      ...todoConfig.rules,
       // Reanimated SharedValue.value mutation is idiomatic inside worklets and
       // gesture callbacks, but the React Compiler rule cannot distinguish it.
       'react-hooks/immutability': 'off',
@@ -731,34 +747,10 @@ module.exports = defineConfig([
   {
     name: 'page-use-effect-guardrail',
     files: ['src/app/**/*.{ts,tsx}', 'src/frontend/features/**/*.{ts,tsx}'],
-    ignores: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}', ...legacyPageUseEffectFiles],
+    ignores: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    plugins: { 'cherry-page': pageSchedulingPlugin },
     rules: {
-      // Retain retiredImports + tombstonePatterns alongside the page useEffect ban.
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            ...retiredImports,
-            {
-              name: 'react',
-              importNames: ['useEffect'],
-              message: pageUseEffectMessage,
-            },
-          ],
-          patterns: tombstonePatterns,
-        },
-      ],
-      // Retain toSorted + raw scheduling property bans alongside React.useEffect.
-      'no-restricted-properties': [
-        'error',
-        toSortedRestriction,
-        ...pageRawSchedulingPropertyRestrictions,
-        {
-          object: 'React',
-          property: 'useEffect',
-          message: pageUseEffectMessage,
-        },
-      ],
+      'cherry-page/use-effect-limit': ['error', legacyPageUseEffectLimits],
     },
   },
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),

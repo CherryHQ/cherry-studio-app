@@ -11,7 +11,7 @@ export type SidebarColumnContent = 'sidebar' | 'search';
 /**
  * How the sidebar meets the content region. A wide window keeps a permanent column unless the user
  * collapsed it; when the file pane takes that column beside the chat, the sidebar steps aside. Both
- * hide it like a closed overlay.
+ * leave the sidebar mounted without reserving space for it.
  */
 export type SidebarColumn =
   | { kind: 'overlay' }
@@ -72,6 +72,21 @@ export function resolveSidebarColumn({
       ? resolveFilePaneWidth(windowWidth - insetLeft - insetRight)
       : windowRegionWidths.sidebar;
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
+}
+
+/** A wide column can disappear without mounting the overlay or playing its close transition. */
+export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number) {
+  if (column.kind === 'overlay') {
+    return { drawerType: 'front', drawerStyle: { width: overlayWidth } } as const;
+  }
+  if (column.kind === 'permanent') {
+    return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
+  }
+  // Keep the list laid out off the flex row, and the closed position ready for a narrower window.
+  return {
+    drawerType: 'permanent',
+    drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none', width: overlayWidth },
+  } as const;
 }
 
 /**

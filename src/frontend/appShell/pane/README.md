@@ -11,7 +11,8 @@ pane closes or a page covers the chat.
   the chat in the content region share the provider but keep opening their own viewer pages;
   `useOpenFileEntry` uses the pane only while the chat is focused.
 - `FilePaneHost` lays the pane out beside the chat stack in the `(chat)` layout, which composes the
-  library and viewer pages. It reads the host's fold snapshot and splits with `resolvePaneSplit`,
+  library and viewer pages. It reads the window's fold snapshot when the sidebar yields its
+  column, and the chat host's snapshot otherwise. It splits with `resolvePaneSplit`,
   so on a foldable the pane and chat meet at the fold, side by side or stacked. Stacked, the
   keyboard fills the half below the fold, so while the chat is typed into, the pane fades aside and
   the chat takes the window. A preview replaces the list in place and returns to it. The pane stays
