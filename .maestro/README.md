@@ -18,8 +18,9 @@ otherwise use this workspace's temporary device.
 
 Set `DEVICE_ID` to the selected simulator UDID or emulator serial. Set `DEV_CLIENT_URL` to the
 exact URL printed by this workspace's Metro process; keep it quoted because it contains URL query
-characters. For a newly installed development client, include Expo's `disableOnboarding=1` query
-parameter so its own launcher onboarding does not hide the product onboarding under test.
+characters. On a fresh Expo SDK 58 development client, append
+`&__expo_disable_onboarding=1&__expo_disable_fab=1&__expo_disable_auto_launch=1` to the printed URL
+so the development client opens the app without its own onboarding or dev menu.
 
 Use the platform's application identifier:
 
