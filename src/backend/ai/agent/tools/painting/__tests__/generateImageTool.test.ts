@@ -29,6 +29,20 @@ const ENTRY = FileEntrySchema.parse({
 
 const MODEL = configuredModel();
 const EDIT_MODEL = configuredModel({ imageGeneration: { modes: { edit: { supports: {} } } } });
+const REFERENCE_MODELS = [
+  {
+    name: 'generation and editing',
+    model: configuredModel({
+      imageGeneration: { modes: { generate: { supports: {} }, edit: { supports: {} } } },
+    }),
+  },
+  {
+    name: 'reference-capable generation only',
+    model: configuredModel({
+      imageGeneration: { modes: { generate: { supports: {}, maxInputImages: 2 } } },
+    }),
+  },
+];
 
 const TURN_FILES: TurnFileScope = { fileEntryIds: new Set([ENTRY.id]) };
 
@@ -77,6 +91,116 @@ describe('createGenerateImageTool', () => {
     ]);
   });
 
+  test.each(REFERENCE_MODELS)(
+    'generates equivalently with omitted or empty image_ids: $name',
+    async ({ model }) => {
+      const omittedDeps = createDependencies();
+      const emptyDeps = createDependencies();
+      const omitted = await execute(createGenerateImageTool(omittedDeps, model, TURN_FILES), {
+        prompt: 'A cherry orchard at dawn',
+      });
+      const empty = await execute(createGenerateImageTool(emptyDeps, model, TURN_FILES), {
+        prompt: 'A cherry orchard at dawn',
+        image_ids: [],
+      });
+
+      expect(empty.failure).toBeUndefined();
+      expect(omitted.failure).toBeUndefined();
+      expect(empty.value).toEqual([{ id: ENTRY.id, name: ENTRY.filename }]);
+      expect(empty.value).toEqual(omitted.value);
+      expect(empty.artifacts).toEqual(omitted.artifacts);
+      expect(empty.artifacts).toHaveLength(1);
+      for (const deps of [omittedDeps, emptyDeps]) {
+        expect(deps.ai.generateImage).toHaveBeenCalledTimes(1);
+        expect(deps.ai.generateImage).toHaveBeenCalledWith(
+          expect.objectContaining({ mode: 'generate', prompt: 'A cherry orchard at dawn' }),
+        );
+        expect(deps.ai.generateImage.mock.calls[0][0]).not.toHaveProperty('inputImages');
+        expect(deps.files.resolve).not.toHaveBeenCalled();
+        expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+      }
+      const omittedRequest = omittedDeps.ai.generateImage.mock.calls[0][0];
+      const emptyRequest = emptyDeps.ai.generateImage.mock.calls[0][0];
+      // Each execution owns its cancellation signal; all other request fields must match.
+      expect(omittedRequest.requestOptions.signal).toBeInstanceOf(AbortSignal);
+      expect(emptyRequest.requestOptions.signal).toBeInstanceOf(AbortSignal);
+      expect(emptyRequest).toStrictEqual({
+        ...omittedRequest,
+        requestOptions: {
+          ...omittedRequest.requestOptions,
+          signal: emptyRequest.requestOptions.signal,
+        },
+      });
+    },
+  );
+
+  test.each<Record<string, RuntimeJsonValue>>([{}, { image_ids: [] }, { image_ids: null }])(
+    'requires a reference for edit-only execution: %j',
+    async (references) => {
+      const deps = createDependencies();
+      const result = await execute(createGenerateImageTool(deps, EDIT_MODEL, TURN_FILES), {
+        prompt: 'Make it blue.',
+        ...references,
+      });
+      expect(result.failure?.error.code).toBe('invalid_image_request');
+      expect(result.artifacts).toEqual([]);
+      expect(deps.ai.generateImage).not.toHaveBeenCalled();
+      expect(deps.files.resolve).not.toHaveBeenCalled();
+      expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+      expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
+    },
+  );
+
+  describe.each(REFERENCE_MODELS)('reference-capable generation: $name', ({ model }) => {
+    test('still requires a prompt when image_ids is empty', async () => {
+      const deps = createDependencies();
+      const result = await execute(createGenerateImageTool(deps, model, TURN_FILES), {
+        prompt: '',
+        image_ids: [],
+      });
+      expect(result.failure?.error.code).toBe('invalid_image_request');
+      expect(result.artifacts).toEqual([]);
+      expect(deps.ai.generateImage).not.toHaveBeenCalled();
+      expect(deps.files.resolve).not.toHaveBeenCalled();
+      expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+    });
+
+    test.each(
+      [null, [''], ['   '], [ENTRY.id, ENTRY.id], [ENTRY.id, 'other-id']].map((imageIds) => ({
+        imageIds,
+      })),
+    )(
+      'rejects malformed or excessive references without side effects: %j',
+      async ({ imageIds }) => {
+        const deps = createDependencies();
+        const result = await execute(createGenerateImageTool(deps, model, TURN_FILES), {
+          prompt: 'A cherry.',
+          image_ids: imageIds,
+        });
+        expect(result.failure?.error.code).toBe('invalid_image_request');
+        expect(result.artifacts).toEqual([]);
+        expect(deps.ai.generateImage).not.toHaveBeenCalled();
+        expect(deps.files.resolve).not.toHaveBeenCalled();
+        expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+        expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  test.each(
+    [[], null, [''], ['   '], [ENTRY.id], [ENTRY.id, ENTRY.id]].map((imageIds) => ({ imageIds })),
+  )('rejects image_ids on a model without reference support: %j', async ({ imageIds }) => {
+    const deps = createDependencies();
+    const result = await execute(createGenerateImageTool(deps, MODEL, TURN_FILES), {
+      prompt: 'A cherry.',
+      image_ids: imageIds,
+    });
+    expect(result.failure?.error.code).toBe('invalid_image_request');
+    expect(result.artifacts).toEqual([]);
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+    expect(deps.files.resolve).not.toHaveBeenCalled();
+  });
+
   test('edits an uploaded image by its attachment id', async () => {
     const uploaded = FileEntrySchema.parse({
       ...ENTRY,
@@ -110,6 +234,11 @@ describe('createGenerateImageTool', () => {
   });
 
   test.each<{ name: string; model: Partial<Model>; mode: 'generate' | 'edit' }>([
+    {
+      name: 'generation and editing',
+      model: { imageGeneration: { modes: { generate: { supports: {} }, edit: { supports: {} } } } },
+      mode: 'edit',
+    },
     {
       name: 'reference-capable generation endpoint',
       model: {
@@ -191,6 +320,9 @@ describe('createGenerateImageTool', () => {
     );
     deps.ai.generateImage.mockClear();
     expect((await execute(tool, { prompt: '' })).failure?.error.code).toBe('invalid_image_request');
+    expect((await execute(tool, { prompt: '', image_ids: [] })).failure?.error.code).toBe(
+      'invalid_image_request',
+    );
     expect(deps.ai.generateImage).not.toHaveBeenCalled();
   });
 
@@ -287,6 +419,12 @@ describe('createGenerateImageTool', () => {
       reference: 'optional',
     },
     {
+      name: 'reference-capable generation only',
+      support: { modes: { generate: { supports: {}, maxInputImages: 2 } } },
+      operations: 'generate',
+      reference: 'optional',
+    },
+    {
       name: 'editing only',
       support: EDIT_MODEL.model.imageGeneration,
       operations: 'edit',
@@ -319,17 +457,41 @@ describe('createGenerateImageTool', () => {
         TURN_FILES,
       );
 
+      expect(tool.inputSchema).toHaveProperty('additionalProperties', false);
       expect(tool.description).toContain(`Available operations: ${operations}.`);
       if (reference === 'unavailable') {
         expect(tool.inputSchema).not.toHaveProperty('properties.image_ids');
         expect(tool.description).toContain('Reference-image editing is unavailable');
+        expect(tool.description).not.toContain('an empty array is also treated as no reference');
       } else {
         expect(tool.inputSchema).toMatchObject({
-          properties: { image_ids: { type: 'array', minItems: 1, maxItems: 1 } },
+          properties: {
+            image_ids: {
+              type: 'array',
+              maxItems: 1,
+              items: { type: 'string', minLength: 1 },
+            },
+          },
         });
+        expect(tool.inputSchema).not.toHaveProperty('properties.image_ids.anyOf');
+        expect(tool.inputSchema).not.toHaveProperty('properties.image_ids.oneOf');
         expect(tool.description).toContain('user-uploaded image or an earlier generated image');
+        expect(tool.inputSchema).toHaveProperty(
+          'properties.image_ids.description',
+          'Reference image file entry id, not a message id, tool call id, or URL. ' +
+            (reference === 'optional'
+              ? 'Omit image_ids or pass [] to generate a new image without a reference. Do not pass null.'
+              : 'Required for every call. Provide one non-empty reference image file entry id; empty arrays and null are invalid.'),
+        );
+      }
+      if (reference === 'optional') {
+        expect(tool.inputSchema).not.toHaveProperty('properties.image_ids.minItems');
+        expect(tool.description).toContain(
+          'For new-image generation, omit image_ids when no reference is needed; an empty array is also treated as no reference. Do not pass null.',
+        );
       }
       if (reference === 'required') {
+        expect(tool.inputSchema).toHaveProperty('properties.image_ids.minItems', 1);
         expect(tool.inputSchema).toMatchObject({ required: expect.arrayContaining(['image_ids']) });
         expect(tool.description).toContain('image_ids is required for every call');
         expect(tool.inputSchema).toHaveProperty(
@@ -537,41 +699,66 @@ describe('createGenerateImageTool', () => {
     });
   });
 
-  test('rejects an image id outside the turn before reading the file', async () => {
-    const deps = createDependencies();
-    const tool = createGenerateImageTool(deps, EDIT_MODEL, { fileEntryIds: new Set() });
+  describe.each([{ name: 'editing only', model: EDIT_MODEL }, ...REFERENCE_MODELS])(
+    'reference authorization and availability: $name',
+    ({ model }) => {
+      test('rejects an image id outside the turn before reading the file', async () => {
+        const deps = createDependencies();
+        const tool = createGenerateImageTool(deps, model, { fileEntryIds: new Set() });
 
-    const result = await execute(tool, {
-      image_ids: [ENTRY.id],
-      prompt: 'Turn this into a watercolor.',
-    });
+        const result = await execute(tool, {
+          image_ids: [ENTRY.id],
+          prompt: 'Turn this into a watercolor.',
+        });
 
-    expect(result.failure?.error).toMatchObject({
-      code: 'image_reference_not_authorized',
-      message: expect.stringContaining('not part of this conversation'),
-    });
-    expect(deps.files.resolve).not.toHaveBeenCalled();
-    expect(deps.ai.generateImage).not.toHaveBeenCalled();
-  });
+        expect(result.failure?.error).toMatchObject({
+          code: 'image_reference_not_authorized',
+          message: expect.stringContaining('not part of this conversation'),
+        });
+        expect(result.artifacts).toEqual([]);
+        expect(deps.files.resolve).not.toHaveBeenCalled();
+        expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+        expect(deps.ai.generateImage).not.toHaveBeenCalled();
+        expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
+      });
 
-  test('reports an unavailable reference without falling back to text-only generation', async () => {
-    const deps = createDependencies();
-    const tool = createGenerateImageTool(deps, EDIT_MODEL, TURN_FILES);
+      test.each(['deleted', 'non-image', 'invalid-id'] as const)(
+        'reports an unavailable %s reference without falling back to generation',
+        async (reference) => {
+          const deps = createDependencies();
+          const imageId = reference === 'invalid-id' ? 'not-a-file-entry-id' : ENTRY.id;
+          if (reference === 'non-image') {
+            jest.mocked(deps.files.resolve).mockResolvedValue({
+              entry: { ...ENTRY, mediaType: 'text/plain' },
+              uri: 'file:///document.txt',
+            });
+          }
+          const tool = createGenerateImageTool(deps, model, {
+            fileEntryIds: new Set([imageId]),
+          });
 
-    const result = await execute(tool, {
-      image_ids: [ENTRY.id],
-      prompt: 'Make the background blue.',
-    });
+          const result = await execute(tool, {
+            image_ids: [imageId],
+            prompt: 'Make the background blue.',
+          });
 
-    expect(result.failure?.error).toMatchObject({
-      code: 'image_reference_unavailable',
-      message: expect.stringContaining('attach it again'),
-    });
-    expect(result.artifacts).toEqual([]);
-    expect(deps.files.readDataUrl).not.toHaveBeenCalled();
-    expect(deps.ai.generateImage).not.toHaveBeenCalled();
-    expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
-  });
+          expect(result.failure?.error).toMatchObject({
+            code: 'image_reference_unavailable',
+            message: expect.stringContaining('attach it again'),
+          });
+          expect(result.artifacts).toEqual([]);
+          if (reference === 'invalid-id') {
+            expect(deps.files.resolve).not.toHaveBeenCalled();
+          } else {
+            expect(deps.files.resolve).toHaveBeenCalledWith(imageId);
+          }
+          expect(deps.files.readDataUrl).not.toHaveBeenCalled();
+          expect(deps.ai.generateImage).not.toHaveBeenCalled();
+          expect(deps.files.createInternalEntry).not.toHaveBeenCalled();
+        },
+      );
+    },
+  );
 
   test('reports shared attachment rejection before reading bytes or generating', async () => {
     const deps = createDependencies();
