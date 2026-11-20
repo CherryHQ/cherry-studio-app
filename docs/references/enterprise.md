@@ -176,6 +176,10 @@ profile, only a community session counts as signed in.
   client replays the request once. Concurrent rejections share one rotation. Refresh cannot change
   the user or server identity. Sign-out waits for pending rotation and deletes that profile's
   credentials; cloud sessions remain independent.
+- **Team execution:** `Backend.teamAgent` consumes the current enterprise context through an injected
+  adapter. Team Agents execute on the server; their personal conversations and memory-only mobile
+  views are separate from organization-delivered local Agents. Reauthentication retires old Team
+  requests and caches even when the profile stays open. See [Team Agent](./team-agent.md).
 - **Expiry:** a refused session, an Accounts Portal `signed_out`, or a session that no longer
   matches hides the restricted content and opens `/login` for reauthentication (`AccountSessionGate`).
   The root navigator and its pages remain mounted, preserving unsent drafts and staged attachment

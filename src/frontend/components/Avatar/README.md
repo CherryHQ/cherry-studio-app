@@ -23,7 +23,8 @@ Cherry product data and presentation rules before composing that primitive.
   maker mark exists.
 - `AgentAvatar` renders an Agent's image, then explicit desktop emoji or a persisted emoji avatar,
   then the name's initial on the neutral fallback fill, which stays empty for an unnamed draft. It
-  stays round across these presentations.
+  stays round across these presentations. Data-URL images, including Team portraits, use memory
+  caching only; ordinary persisted avatar URIs retain their existing cache policy.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
 - `ProfileAvatarImage` resolves the persisted user avatar for display-only surfaces.

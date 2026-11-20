@@ -24,3 +24,9 @@ export {
 } from './remoteChatRoute';
 
 export { conversationHref, useConversationTarget } from './conversationRoute';
+export {
+  teamChatHref,
+  parseTeamChatRoute,
+  type TeamChatTarget,
+  type TeamChatRouteParams,
+} from './teamChatRoute';

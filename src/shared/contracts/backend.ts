@@ -21,6 +21,7 @@ import type { RemoteAgentModule } from './remoteAgent';
 import type { SkillsModule } from './skills';
 import type { SshModule } from './ssh';
 import type { SystemEntryModule } from './systemEntry';
+import type { TeamAgentModule } from './teamAgent';
 import type { TranslationModule } from './translation';
 import type { UuRemoteModule } from './uuRemote';
 import type { VoiceModule } from './voice';
@@ -28,6 +29,7 @@ import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
   readonly account: AccountModule;
+  readonly teamAgent: TeamAgentModule;
   readonly cloud: CloudModule;
   readonly ssh: SshModule;
   readonly backgroundExecution: BackgroundExecutionModule;

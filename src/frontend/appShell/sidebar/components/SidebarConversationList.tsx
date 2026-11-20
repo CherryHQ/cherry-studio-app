@@ -103,19 +103,21 @@ export function SidebarConversationList({
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   return (
     <>
-      <ConversationStatus
-        availability={availability}
-        onRepair={() => router.push('/settings/device-connections')}
-        onOpenDeviceSettings={
-          connectionId
-            ? () =>
-                router.push({
-                  pathname: '/settings/device-connections/[connectionId]',
-                  params: { connectionId },
-                })
-            : undefined
-        }
-      />
+      {source.ref.kind !== 'team' ? (
+        <ConversationStatus
+          availability={availability}
+          onRepair={() => router.push('/settings/device-connections')}
+          onOpenDeviceSettings={
+            connectionId
+              ? () =>
+                  router.push({
+                    pathname: '/settings/device-connections/[connectionId]',
+                    params: { connectionId },
+                  })
+              : undefined
+          }
+        />
+      ) : null}
       <SidebarCatalog
         key={source.scope}
         mode={mode}
@@ -833,12 +835,13 @@ function SidebarSessionRow({
       onPress: () => void exportConversation(),
     });
   if (remove) {
-    menu.push({
-      id: 'select-multiple',
-      label: t('session.selection.start'),
-      disabled: isDeleting || remove.availability.state !== 'enabled',
-      onPress: () => selection.enter(selectionKey),
-    });
+    if (session.ref.source.kind === 'local')
+      menu.push({
+        id: 'select-multiple',
+        label: t('session.selection.start'),
+        disabled: isDeleting || remove.availability.state !== 'enabled',
+        onPress: () => selection.enter(selectionKey),
+      });
     menu.push({
       id: 'delete',
       destructive: true,
