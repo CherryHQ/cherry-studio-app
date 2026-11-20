@@ -138,10 +138,11 @@ HMAC credential. Guest inference signs the final POST body with the same applica
 Guest transport omits cookies, Product Bearer and device headers. The gateway rate-limits requests
 by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
 
-The directory supplies published models. Older gateways that still return the legacy 7-field row
-default missing catalog metadata conservatively (`requires_login=true`, `requires_plan=true`,
-`is_free=false`, `standalone=false`, `activation_required=false`, `provider=null`,
-`activation_endpoint=null`), while unknown fields or provider values remain tolerated. A guest may
+The directory supplies published models. Mobile honors an explicit `requires_plan`. When that field
+is missing or null, standalone models and recognized AMD models need no Cherry plan. All other
+models, including legacy 7-field rows, require a plan. Other missing catalog fields default to
+`requires_login=true`, `is_free=false`, `standalone=false`, `activation_required=false`,
+`provider=null` and `activation_endpoint=null`. Unknown fields and provider values are tolerated. A guest may
 call an eligible model with `requires_login=false`. Login replaces the guest snapshot and transport.
 Member requests sign the same directory path and query using a Product Session and v2 device
 signature with a fresh nonce. The catalog owns the free badge (`is_free`) and the plan gate

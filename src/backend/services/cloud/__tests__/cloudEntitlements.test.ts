@@ -106,6 +106,8 @@ test('parses all 14 fields and defaults legacy 7-field rows conservatively', () 
       activation_endpoint: '/api/v1/amd/desktop/entry',
     },
     { ...base, id: 'standalone', requires_plan: false, standalone: true, is_free: true },
+    { ...base, id: 'standalone-with-plan', standalone: true, requires_plan: true },
+    { ...base, id: 'no-plan', requires_plan: false },
   ];
   expect(CloudModelCatalogSchema.parse({ data })).toEqual({ data });
   expect(
@@ -229,4 +231,48 @@ test('parses all 14 fields and defaults legacy 7-field rows conservatively', () 
       CloudModelCatalogSchema.safeParse({ data: [{ ...legacyRow, ...badOptional }] }).success,
     ).toBe(false);
   }
+});
+
+test('catalogs without a plan flag preserve AMD activation and standalone guest access', () => {
+  const member = cloudSnapshot();
+  member.account!.entitlements = [];
+  const row = {
+    display_name: 'Chat',
+    endpoint_type: 'openai-chat-completions',
+    context_window: 8000,
+    max_output_tokens: 512,
+    capabilities: [],
+    available_features: ['chat', 'translate'],
+  };
+  const { data: models } = CloudModelCatalogSchema.parse({
+    data: [
+      {
+        ...row,
+        id: 'amd/chat',
+        provider: 'amd',
+        requires_login: true,
+        activation_required: true,
+        activation_endpoint: '/api/v1/amd/desktop/entry',
+      },
+      { ...row, id: 'guest-chat', standalone: true, requires_login: false, requires_plan: null },
+    ],
+  });
+  expect(cloudModelUnavailable({ ...member, models }, 'amd/chat', 'agent', now)).toBe(
+    'activation_required',
+  );
+  expect(
+    cloudModelUnavailable(
+      {
+        phase: 'signed_out',
+        guestCatalog: 'ready',
+        account: null,
+        plans: null,
+        models,
+        isRefreshing: false,
+      },
+      'guest-chat',
+      'agent',
+      now,
+    ),
+  ).toBeUndefined();
 });

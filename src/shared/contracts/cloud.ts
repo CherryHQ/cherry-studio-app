@@ -83,7 +83,7 @@ const optionalNullableString = z
   .nullish()
   .transform((value) => value ?? null);
 
-export const CloudModelSchema = z.object({
+const CloudModelRowSchema = z.object({
   id: z.string().min(1),
   display_name: z.string(),
   endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
@@ -98,13 +98,17 @@ export const CloudModelSchema = z.object({
     .nullable()
     .transform((value) => value ?? []),
   requires_login: optionalFlag(true),
-  requires_plan: optionalFlag(true),
+  requires_plan: z.boolean().nullish(),
   is_free: optionalFlag(false),
   standalone: optionalFlag(false),
   provider: optionalNullableString,
   activation_required: optionalFlag(false),
   activation_endpoint: optionalNullableString,
 });
+export const CloudModelSchema = CloudModelRowSchema.transform((model) => ({
+  ...model,
+  requires_plan: model.requires_plan ?? !(model.standalone || isCloudAmdModel(model)),
+}));
 export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
 export const CloudAmdStatusSchema = z.object({
   status: z.enum([
@@ -159,7 +163,9 @@ export interface CloudModule {
   createActivationEntry(modelId: string): Promise<string>;
 }
 
-export function isCloudAmdModel(model: CloudModel): boolean {
+export function isCloudAmdModel(
+  model: Pick<z.infer<typeof CloudModelRowSchema>, 'provider' | 'endpoint_type'>,
+): boolean {
   return model.provider === 'amd' && model.endpoint_type === 'openai-chat-completions';
 }
 
