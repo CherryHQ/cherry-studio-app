@@ -144,7 +144,7 @@ describe('deviceVerify CLI helpers', () => {
       device: null,
       metroPort: null,
     });
-    const env = { CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
     const args = [
       'run',
       '--flow',
@@ -182,7 +182,7 @@ describe('deviceVerify CLI helpers', () => {
   });
 
   it('refuses other workspaces and stops before deleting when close fails', () => {
-    const env = { CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', CONDUCTOR_WORKSPACE_NAME: 'ws-alpha' };
     const args = ['cleanup', '--platform', 'ios', '--delete-temp-device'];
     expect(() => runCli([...args, '--workspace', 'ws-beta'], env)).toThrow(/current workspace/);
     expect(spawnSync).not.toHaveBeenCalled();
