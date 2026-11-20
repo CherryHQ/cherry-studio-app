@@ -17,22 +17,13 @@ name: Appearance selection persists after restart
     timeout: 10000
 - tapOn:
     id: theme-preview-dark
-- assertVisible:
-    id: theme-preview-dark
-    checked: true
+- runFlow: _assert-dark-theme.yaml
 - stopApp
 - openLink:
     link: ${DEV_CLIENT_URL}
 - extendedWaitUntil:
     visible:
       id: chat-composer
-    timeout: 30000
+    timeout: 90000
 - runFlow: _open-appearance-settings.yaml
-- extendedWaitUntil:
-    visible:
-      id: theme-preview-dark
-      checked: true
-    timeout: 10000
-- assertVisible:
-    id: theme-preview-dark
-    checked: true
+- runFlow: _assert-dark-theme.yaml

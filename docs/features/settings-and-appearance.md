@@ -25,8 +25,8 @@ AI usage, voice, data management, privacy, and diagnostics.
 
 ## Observable Acceptance
 
-- Selecting `testID:theme-preview-dark` marks it checked immediately and retains `checked: true`
-  after stopping and fully relaunching the app.
+- Selecting `testID:theme-preview-dark` marks it checked before and after a full app relaunch.
+  Maestro reads the native accessibility value on iOS and the checked attribute on Android.
 - Switching language in `testID:language-picker` updates UI copy consistently across screens using
   the shared `resolveAppLanguage` resolver.
 
