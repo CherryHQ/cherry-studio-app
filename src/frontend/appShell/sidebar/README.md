@@ -27,9 +27,10 @@ In a wide window the sidebar stays beside every page in the content region, so i
 content stack when they run. Agents, Paintings, Plugins, Marketplace, and the avatar's Settings push above
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
 shows selected through `resolveSidebarDestination`. Selecting the same page and chat context keeps
-the existing page mounted. In compact windows, page navigation waits for the overlay to finish
-closing. Selecting a conversation, starting a search, or navigating through another link during
-the close cancels the pending page change. Conversation rows, New chat, device switching,
+the existing page mounted. In compact windows, a page entry closes the drawer and starts navigation
+in the same tap. With the chat covered, the sidebar remains mounted outside the content row and
+the page transition is the only visible motion. An external launch still waits for the overlay to
+close, and a newer action can cancel it. Conversation rows, New chat, device switching,
 and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills
