@@ -4,18 +4,22 @@ import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View, type ViewInstance } from 'react-native';
 
+import { isAcross, useFoldRegion, useWindowClass } from '@/frontend/appShell/layout';
+
 import { usePaintingTemplates } from '../hooks/usePaintingTemplates';
 import { setPaintingTemplateOrigin } from '../utils/paintingTemplateOrigin';
 import type { PaintingTemplate } from '../utils/paintingTemplates';
 import { GallerySectionHeader } from './GallerySectionHeader';
 
-const cardWidth = 100;
-const cardHeight = 134;
-
 /** One compact row of templates; a card or "All" opens the template stage. */
 export function PaintingTemplateStrip() {
   const { t } = useTranslation();
   const router = useRouter();
+  const windowClass = useWindowClass();
+  const fold = useFoldRegion();
+  const isWideUnfolded = windowClass === 'wide' && !(fold && !isAcross(fold));
+  const cardWidth = isWideUnfolded ? 132 : 100;
+  const cardHeight = isWideUnfolded ? 176 : 134;
   const templates = usePaintingTemplates();
   const openStage = useCallback(
     (templateId?: string) =>
@@ -41,7 +45,13 @@ export function PaintingTemplateStrip() {
           testID="painting-template-strip"
         >
           {templates.data.map((template) => (
-            <TemplateCard key={template.id} onOpen={openStage} template={template} />
+            <TemplateCard
+              cardHeight={cardHeight}
+              cardWidth={cardWidth}
+              key={template.id}
+              onOpen={openStage}
+              template={template}
+            />
           ))}
         </ScrollView>
       ) : templates.isPending ? (
@@ -64,9 +74,13 @@ export function PaintingTemplateStrip() {
 }
 
 function TemplateCard({
+  cardHeight,
+  cardWidth,
   onOpen,
   template,
 }: {
+  cardHeight: number;
+  cardWidth: number;
   onOpen: (templateId: string) => void;
   template: PaintingTemplate;
 }) {
