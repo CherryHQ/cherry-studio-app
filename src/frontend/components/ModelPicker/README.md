@@ -77,9 +77,9 @@ but requires activation to use. These rows support search and the capability fil
 opens the shared activation prompt and never changes the current selection. They are read directly
 from the catalog alongside the selectable models projected to local storage.
 
-When there are no matching model rows, browsing or searching for CherryAI can still reveal its
-built-in group and the guest sign-in action. The `usage` filter keeps the trait badges and uses
-selectable models only.
+When CherryAI is enabled, browsing or searching can reveal its built-in group and guest sign-in
+action even with no matching model rows. Disabling the provider also hides its locked offers.
+The `usage` filter keeps the trait badges and uses selectable models only.
 
 The picker observes `Backend.cloud` through `useCloud`. Models receive unavailability reasons when
 the current account cannot use them. Exhausted or unauthorized rows cannot be selected.

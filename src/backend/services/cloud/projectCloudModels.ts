@@ -7,7 +7,6 @@ import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
 import {
   CLOUD_DEFAULT_CHAT_ENDPOINT,
   CLOUD_PROVIDER_ID,
-  CLOUD_PROVIDER_NAME,
   type CloudModel,
 } from '@/shared/contracts/cloud';
 import {
@@ -25,7 +24,6 @@ export async function projectCloudModels(
 ): Promise<string[]> {
   assertCurrent();
   const where = eq(userProviderTable.providerId, CLOUD_PROVIDER_ID);
-  const [existing] = await tx.select().from(userProviderTable).where(where);
   const previous = await tx
     .select({ id: userModelTable.id })
     .from(userModelTable)
@@ -33,26 +31,19 @@ export async function projectCloudModels(
   const modelIds = new Set(previous.map((model) => model.id));
   if (origin === null) {
     if (models.length) throw new Error('Cloud models require a configured API origin');
-    if (existing) await tx.update(userProviderTable).set({ isEnabled: false }).where(where);
-  } else if (existing || models.length) {
-    const provider = {
-      providerId: CLOUD_PROVIDER_ID,
-      name: CLOUD_PROVIDER_NAME,
-      presetProviderId: null,
-      isEnabled: models.length > 0,
-      endpointConfigs: {
-        'anthropic-messages': { baseUrl: origin, adapterFamily: 'anthropic' },
-        'openai-chat-completions': { baseUrl: origin, adapterFamily: 'openai-compatible' },
-      },
-      defaultChatEndpoint: CLOUD_DEFAULT_CHAT_ENDPOINT,
-      apiKeys: [],
-      authConfig: { type: 'api-key' as const },
-    };
-    if (existing) await tx.update(userProviderTable).set(provider).where(where);
-    else
-      await insertWithOrderKey(tx, userProviderTable, provider, {
-        pkColumn: userProviderTable.providerId,
-      });
+  } else {
+    await tx
+      .update(userProviderTable)
+      .set({
+        endpointConfigs: {
+          'anthropic-messages': { baseUrl: origin, adapterFamily: 'anthropic' },
+          'openai-chat-completions': { baseUrl: origin, adapterFamily: 'openai-compatible' },
+        },
+        defaultChatEndpoint: CLOUD_DEFAULT_CHAT_ENDPOINT,
+        apiKeys: [],
+        authConfig: { type: 'api-key' },
+      })
+      .where(where);
   }
   await tx
     .update(userModelTable)

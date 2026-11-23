@@ -16,30 +16,27 @@ import { StyleSheet, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
-import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { SettingsGroupedSeparator, SettingsServiceRow } from '../components/SettingsServiceRow';
+import { SettingsGroupedSeparator } from '../components/SettingsServiceRow';
 import { ProviderListRow } from './components/ProviderListRow';
 import { useProviderSetup } from './hooks/useProviderSetup';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 56;
-const CLOUD_PROVIDER_HREF = `/settings/provider/${CLOUD_PROVIDER_ID}` as const;
 const providerListTransition = LinearTransition.duration(duration.base)
   .easing(easing.settle)
   .reduceMotion(ReduceMotion.System);
 
 type ProviderListItem =
   | { id: string; kind: 'header'; isFirst: boolean; title: string }
-  | { id: typeof CLOUD_PROVIDER_ID; kind: 'cloud'; isFirst: true; isLast: boolean }
   | {
       id: string;
       kind: 'provider';
@@ -118,8 +115,6 @@ function ProviderListView() {
   );
   const keywords = useMemo(() => toSearchKeywords(query), [query]);
   const isFiltering = keywords.length > 0;
-  const showCloudProvider =
-    !isEnterpriseProfile() && matchesSearchKeywords(keywords, [CLOUD_PROVIDER_NAME]);
   const hasPendingProviderUpdate = pendingProviderStates.size > 0;
 
   useFocusEffect(() => {
@@ -139,10 +134,11 @@ function ProviderListView() {
   const updateProviderEnabled = updateProviderEnabledMutation.trigger;
   const toggleProviderEnabled = useCallback(
     (provider: Provider, isEnabled: boolean) => {
+      const needsSetup = isEnabled && provider.id !== CLOUD_PROVIDER_ID;
       if (
         provider.isEnabled === isEnabled ||
         pendingProviderIdsRef.current.has(provider.id) ||
-        (isEnabled && isPreparing)
+        (needsSetup && isPreparing)
       ) {
         return;
       }
@@ -150,7 +146,7 @@ function ProviderListView() {
       pendingProviderIdsRef.current.add(provider.id);
       setPendingProviderStates((current) => new Map(current).set(provider.id, isEnabled));
 
-      const update = isEnabled
+      const update = needsSetup
         ? openSetup(provider.id, '/settings/provider')
         : updateProviderEnabled({
             body: { isEnabled },
@@ -158,7 +154,12 @@ function ProviderListView() {
           })
             .then(() => {
               toast.show({
-                label: t('settings.provider.toast.disabled', { name: provider.name }),
+                label: t(
+                  isEnabled
+                    ? 'settings.provider.toast.enabled'
+                    : 'settings.provider.toast.disabled',
+                  { name: provider.name },
+                ),
                 variant: 'success',
               });
             })
@@ -195,7 +196,7 @@ function ProviderListView() {
     const providers = isFiltering ? (allProvidersQuery.data ?? pagedProviders) : pagedProviders;
     return providers.filter(
       (provider) =>
-        provider.id !== CLOUD_PROVIDER_ID &&
+        (provider.id !== CLOUD_PROVIDER_ID || !isEnterpriseProfile()) &&
         (!isFiltering || matchesSearchKeywords(keywords, [provider.name])),
     );
   }, [allProvidersQuery.data, isFiltering, keywords, pagedProviders]);
@@ -213,18 +214,12 @@ function ProviderListView() {
     },
     [router],
   );
-  const openCloudProvider = useCallback(() => {
-    if (isNavigatingRef.current) return;
-    isNavigatingRef.current = true;
-    router.push(CLOUD_PROVIDER_HREF);
-  }, [router]);
   const providerItems = useMemo<ProviderListItem[]>(() => {
     const items: ProviderListItem[] = [];
     for (const isEnabled of [true, false]) {
       // Move once, using the persisted order after refresh. The switch responds immediately.
       const providers = listedProviders.filter((provider) => provider.isEnabled === isEnabled);
-      const includesCloud = isEnabled && showCloudProvider;
-      const count = providers.length + Number(includesCloud);
+      const count = providers.length;
       if (count === 0) continue;
 
       items.push({
@@ -236,21 +231,13 @@ function ProviderListView() {
           { count },
         ),
       });
-      if (includesCloud) {
-        items.push({
-          id: CLOUD_PROVIDER_ID,
-          kind: 'cloud',
-          isFirst: true,
-          isLast: providers.length === 0,
-        });
-      }
       providers.forEach((provider, index) => {
         items.push({
           id: provider.id,
           kind: 'provider',
           provider,
           isEnabled: pendingProviderStates.get(provider.id) ?? provider.isEnabled,
-          isFirst: !includesCloud && index === 0,
+          isFirst: index === 0,
           isLast: index === providers.length - 1,
           isPending: pendingProviderStates.has(provider.id),
         });
@@ -259,28 +246,13 @@ function ProviderListView() {
     const last = items.at(-1);
     if (last?.kind === 'provider') last.endsList = true;
     return items;
-  }, [listedProviders, pendingProviderStates, showCloudProvider, t]);
+  }, [listedProviders, pendingProviderStates, t]);
   const renderProviderItem = useCallback(
     ({ item }: { item: ProviderListItem }) => {
       if (item.kind === 'header') {
         return (
           <ProviderListSlice item={item}>
             <Section.Header accessibilityRole="header" title={item.title} />
-          </ProviderListSlice>
-        );
-      }
-      if (item.kind === 'cloud') {
-        return (
-          <ProviderListSlice item={item}>
-            <SettingsServiceRow
-              avatar={
-                <ProviderAvatar providerId={CLOUD_PROVIDER_ID} providerName={CLOUD_PROVIDER_NAME} />
-              }
-              id={CLOUD_PROVIDER_ID}
-              name={CLOUD_PROVIDER_NAME}
-              onPress={openCloudProvider}
-              testID={`provider-row-${CLOUD_PROVIDER_ID}`}
-            />
           </ProviderListSlice>
         );
       }
@@ -297,7 +269,7 @@ function ProviderListView() {
         </ProviderListSlice>
       );
     },
-    [openCloudProvider, openProvider, toggleProviderEnabled],
+    [openProvider, toggleProviderEnabled],
   );
   const loadMoreProviders = useCallback(() => {
     if (!isFiltering && !hasPendingProviderUpdate) {

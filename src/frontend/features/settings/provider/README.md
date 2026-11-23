@@ -36,7 +36,8 @@ addresses in a locked group, the connection check still available, and the model
 group without sync, add or endpoint actions. A model opens the same details page with its settings
 locked and without its delete action.
 
-Community profiles count CherryAI as a built-in service at the top of the enabled group.
+Community profiles install CherryAI enabled by default. Its list switch moves it between the
+enabled and disabled groups. The choice persists across account and catalog refreshes.
 Opening it opens the CherryAI model page directly, showing the signed guest or account catalog
 with the standard free and vision badges. Tapping a login-required row while signed out pushes
 the app login route; success returns to the CherryAI model page and resumes that row, while cancel
