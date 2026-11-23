@@ -12,9 +12,14 @@ const mockToast = jest.fn();
 const mockPrepareSharedFile = jest.fn();
 let mockPathname = '/files';
 let mockParams: Record<string, string> = {};
-let mockPane: { isAvailable: boolean; openFile: jest.Mock } | null = null;
+let mockMasterDetail: {
+  isMasterDetail: boolean;
+  selectFile: jest.Mock;
+} | null = null;
 
-jest.mock('@/frontend/appShell/pane/state', () => ({ useFilePane: () => mockPane }));
+jest.mock('@/frontend/appShell/pane/state', () => ({
+  useLibraryMasterDetail: () => mockMasterDetail,
+}));
 
 jest.mock('@/frontend/appShell/fileExport', () => ({
   prepareSharedFile: (...args: unknown[]) => mockPrepareSharedFile(...args),
@@ -60,7 +65,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPathname = '/files';
   mockParams = {};
-  mockPane = null;
+  mockMasterDetail = null;
   mockOpen.mockResolvedValue(undefined);
   mockPrepareSharedFile.mockImplementation(async ({ entry, uri }) => ({
     uri,
@@ -91,36 +96,36 @@ it.each([
   expect(mockOpen).not.toHaveBeenCalled();
 });
 
-it('opens a preview beside chat when the window has a file pane', () => {
-  mockPathname = '/';
-  mockPane = { isAvailable: true, openFile: jest.fn() };
+it('selects the entry in-place when inside wide Files Master-Detail', () => {
+  mockPathname = '/library';
+  mockMasterDetail = { isMasterDetail: true, selectFile: jest.fn() };
   act(() => renderer.update(<Probe />));
   let target: string | undefined;
   act(() => {
     target = actions.openFileEntry(file);
   });
   expect(target).toBe('pane');
-  expect(mockPane.openFile).toHaveBeenCalledWith({ entryId: entry.id });
+  expect(mockMasterDetail.selectFile).toHaveBeenCalledWith(entry.id);
   expect(mockPush).not.toHaveBeenCalled();
 });
 
-it('keeps opening the viewer page from a page above the chat', () => {
-  mockPathname = '/skills';
-  mockPane = { isAvailable: true, openFile: jest.fn() };
+it('pushes standalone file viewer when tapping chat attachments even on wide screens', () => {
+  mockPathname = '/';
+  mockMasterDetail = null;
   act(() => renderer.update(<Probe />));
   act(() => actions.openFileEntry(file));
-  expect(mockPane.openFile).not.toHaveBeenCalled();
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/files/[fileEntryId]',
     params: { fileEntryId: entry.id },
   });
 });
 
-it('keeps opening the viewer page when the pane has no room beside chat', () => {
-  mockPane = { isAvailable: false, openFile: jest.fn() };
+it('keeps opening the viewer page when Master-Detail is inactive on compact screens', () => {
+  mockPathname = '/library';
+  mockMasterDetail = { isMasterDetail: false, selectFile: jest.fn() };
   act(() => renderer.update(<Probe />));
   act(() => actions.openFileEntry(file));
-  expect(mockPane.openFile).not.toHaveBeenCalled();
+  expect(mockMasterDetail.selectFile).not.toHaveBeenCalled();
   expect(mockPush).toHaveBeenCalledTimes(1);
 });
 
