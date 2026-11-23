@@ -58,9 +58,33 @@ export interface PublishGitcodeReleaseResult {
   releaseStatus: 'pre' | 'latest';
   created: boolean;
   patched: boolean;
+  promotedToLatest: boolean;
   uploaded: string[];
   skipped: string[];
   hashes: Record<string, string>;
+}
+
+const STABLE_VERSION_RE = /^v?(\d+\.\d+\.\d+)$/;
+
+function compareStableVersions(left: string, right: string): number {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return Math.sign(difference);
+  }
+  return 0;
+}
+
+function extractCommitSha(payload: {
+  sha?: string;
+  id?: string;
+  commit?: { sha?: string; id?: string };
+}): string | null {
+  const raw = payload.sha ?? payload.id ?? payload.commit?.sha ?? payload.commit?.id;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim().toLowerCase();
+  return SHA_RE.test(trimmed) ? trimmed : null;
 }
 
 const defaultSleep = (ms: number) =>
@@ -225,15 +249,52 @@ export async function publishGitcodeRelease(
     artifactSha256: verified.hashes[options.artifactName]!,
   });
 
-  const releasesBaseUrl = `${apiUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`;
+  const repoBaseUrl = `${apiUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const releasesBaseUrl = `${repoBaseUrl}/releases`;
   const tagReleaseUrl = `${releasesBaseUrl}/tags/${encodeURIComponent(parsedTag.tag)}`;
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
   };
 
+  // Verify any existing remote tag points to the expected source commit before mutating a release.
+  let remoteTagVerified = false;
+  const tagCommitResponse = await fetchImpl(
+    `${repoBaseUrl}/commits/${encodeURIComponent(parsedTag.tag)}`,
+    {
+      method: 'GET',
+      headers: authHeaders,
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
+  if (tagCommitResponse.status === 200) {
+    const commitPayload = (await tagCommitResponse.json()) as {
+      sha?: string;
+      id?: string;
+      commit?: { sha?: string; id?: string };
+    };
+    const remoteTagSha = extractCommitSha(commitPayload);
+    if (!remoteTagSha) {
+      throw new Error(
+        `GitCode tag ${parsedTag.tag} commit lookup did not return a valid SHA; refusing to publish.`,
+      );
+    }
+    if (remoteTagSha !== commitSha) {
+      throw new Error(
+        `GitCode tag ${parsedTag.tag} points to commit ${remoteTagSha}, expected ${commitSha}. Sync the GitCode mirror before re-running publish-gitcode.`,
+      );
+    }
+    remoteTagVerified = true;
+  } else if (tagCommitResponse.status !== 404) {
+    const detail = sanitize(await readErrorBody(tagCommitResponse));
+    throw new Error(
+      `Failed to verify GitCode tag ${parsedTag.tag} commit (${tagCommitResponse.status})${detail ? `: ${detail}` : ''}`,
+    );
+  }
+
   let created = false;
   let patched = false;
+  let promotedToLatest = false;
   let existingAssets: GitcodeAsset[] = [];
   let currentRemoteStatus: string | undefined;
   let effectiveBody = options.notesText?.trim() ? options.notesText : defaultBody;
@@ -245,6 +306,11 @@ export async function publishGitcodeRelease(
   });
 
   if (getResponse.status === 200) {
+    if (!remoteTagVerified) {
+      throw new Error(
+        `Existing GitCode release ${parsedTag.tag} could not be verified against commit ${commitSha}. Sync the GitCode mirror before re-running publish-gitcode.`,
+      );
+    }
     const existing = (await getResponse.json()) as GitcodeRelease;
     existingAssets = Array.isArray(existing.assets) ? existing.assets : [];
     currentRemoteStatus = existing.release_status;
@@ -448,30 +514,53 @@ export async function publishGitcodeRelease(
     }
   }
 
-  if (currentRemoteStatus !== finalReleaseStatus) {
-    const promoteResponse = await fetchImpl(
-      `${releasesBaseUrl}/${encodeURIComponent(parsedTag.tag)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: JSON.stringify({
-          name: releaseName,
-          body: effectiveBody,
-          release_status: finalReleaseStatus,
-        }),
-        signal: AbortSignal.timeout(60_000),
-      },
-    );
-    if (!promoteResponse.ok) {
-      const detail = sanitize(await readErrorBody(promoteResponse));
+  if (finalReleaseStatus === 'latest' && currentRemoteStatus !== 'latest') {
+    let shouldPromote = true;
+    const latestResponse = await fetchImpl(`${releasesBaseUrl}/latest?type=latest`, {
+      method: 'GET',
+      headers: authHeaders,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (latestResponse.status === 200) {
+      const latestRelease = (await latestResponse.json()) as GitcodeRelease;
+      const latestMatch = STABLE_VERSION_RE.exec(latestRelease.tag_name?.trim() ?? '');
+      if (latestMatch?.[1] && compareStableVersions(latestMatch[1], parsedTag.baseVersion) > 0) {
+        shouldPromote = false;
+      }
+    } else if (latestResponse.status !== 404) {
+      const detail = sanitize(await readErrorBody(latestResponse));
       throw new Error(
-        `Failed to promote GitCode release ${parsedTag.tag} to ${finalReleaseStatus} (${promoteResponse.status})${detail ? `: ${detail}` : ''}`,
+        `Failed to check current latest GitCode release (${latestResponse.status})${detail ? `: ${detail}` : ''}`,
       );
     }
-    patched = true;
+
+    if (shouldPromote) {
+      const promoteResponse = await fetchImpl(
+        `${releasesBaseUrl}/${encodeURIComponent(parsedTag.tag)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: JSON.stringify({
+            name: releaseName,
+            body: effectiveBody,
+            release_status: 'latest',
+          }),
+          signal: AbortSignal.timeout(60_000),
+        },
+      );
+      if (!promoteResponse.ok) {
+        const detail = sanitize(await readErrorBody(promoteResponse));
+        throw new Error(
+          `Failed to promote GitCode release ${parsedTag.tag} to latest (${promoteResponse.status})${detail ? `: ${detail}` : ''}`,
+        );
+      }
+      currentRemoteStatus = 'latest';
+      patched = true;
+      promotedToLatest = true;
+    }
   }
 
   const webBaseUrl = new URL(apiUrl).origin.replace(/^https?:\/\/api\./, 'https://');
@@ -480,9 +569,10 @@ export async function publishGitcodeRelease(
   return {
     releaseUrl: releaseWebUrl,
     tag: parsedTag.tag,
-    releaseStatus: finalReleaseStatus,
+    releaseStatus: currentRemoteStatus === 'latest' ? 'latest' : 'pre',
     created,
     patched,
+    promotedToLatest,
     uploaded,
     skipped,
     hashes: verified.hashes,

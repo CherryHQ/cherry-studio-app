@@ -28,6 +28,7 @@ import {
   pruneReleases,
   readSubmitReceipt,
   recordSubmitReceipt,
+  recoverPendingIosBuild,
   REQUIRED_RELEASE_ENV_VARS,
   resolveReleaseRoot,
   runLocalReleaseBatch,
@@ -1069,6 +1070,22 @@ describe('release hardening & integrity guards', () => {
         mkdirSync(join(symbolsDir, 'attempt-abc'), { recursive: true });
         writeFileSync(join(symbolsDir, 'upload.pending'), '{"directory":"attempt-abc"}');
         writeFileSync(join(symbolsDir, 'attempt-abc/dsyms.zip'), 'orig-dsyms');
+        writeFileSync(join(symbolsDir, 'attempt-abc/archive-info.plist'), '<plist/>');
+        const symbolManifestText = JSON.stringify({ schemaVersion: 1, buildId: localBuildId });
+        writeFileSync(join(symbolsDir, 'attempt-abc/manifest.json'), symbolManifestText);
+        writeFileSync(
+          join(symbolsDir, 'attempt-abc/verification.json'),
+          JSON.stringify({
+            schemaVersion: 1,
+            buildId: localBuildId,
+            manifestSha256: createHash('sha256').update(symbolManifestText).digest('hex'),
+            preflight: { status: 'passed' },
+            upload: { status: 'failed' },
+            remoteVerification: { status: 'pending' },
+            records: [],
+            failure: { code: 'SENTRY_TIMEOUT' },
+          }),
+        );
         return { stdout: '', stderr: '', exitCode: 0 };
       }
       if (cmd === 'unzip' && args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
@@ -1131,18 +1148,82 @@ describe('release hardening & integrity guards', () => {
     await expect(
       findCompleteBuild({ target: 'ios-production', tag: 'v0.6.2', commitSha, releaseRoot }),
     ).resolves.toEqual({ found: false });
+
+    const repairedRecords = [
+      { id: '901', uuid: 'uuid-1', arch: 'arm64', symbolType: 'macho', features: ['debug'] },
+    ];
+    const verifySymbolsRecovery = jest.fn(async ({ archivePath, buildId }) => ({
+      status: 'download-verified' as const,
+      buildId,
+      manifestSha256: 'abc',
+      symbolPackage: { size: 5, sha256: 'def' },
+      slices: 3,
+      thirdPartySymbols: [],
+      repairedRecords,
+      verifiedAt: '2026-11-23T06:10:00.000Z',
+      expiry: 'unknown' as const,
+      archivePath,
+    }));
+
+    const recovered = await recoverPendingIosBuild({
+      pendingDir,
+      verifySymbols: verifySymbolsRecovery,
+      now: () => new Date('2026-11-23T06:10:00.000Z'),
+    });
+    expect(verifySymbolsRecovery).toHaveBeenCalledWith({
+      archivePath: join(pendingDir, 'ios-symbols'),
+      buildId: localBuildId,
+      retryUpload: true,
+    });
+    expect(existsSync(pendingDir)).toBe(false);
+    expect(recovered.archiveDir).toBe(
+      join(channelDir, `build-65-${commitSha.slice(0, 7)}-run9401`),
+    );
+    expect(existsSync(join(recovered.archiveDir, '.complete'))).toBe(true);
+    expect(existsSync(join(recovered.archiveDir, 'ios-symbol-verification.json'))).toBe(true);
+    expect(existsSync(join(recovered.symbolsDir, 'upload.pending'))).toBe(false);
+    expect(existsSync(join(recovered.symbolsDir, 'package.complete'))).toBe(true);
+    const completePtr = JSON.parse(
+      readFileSync(join(recovered.symbolsDir, 'package.complete'), 'utf8'),
+    ) as { directory: string };
+    expect(completePtr.directory).toMatch(/^package-[A-Za-z0-9]+$/);
+    const promotedReceipt = JSON.parse(
+      readFileSync(join(recovered.symbolsDir, completePtr.directory, 'verification.json'), 'utf8'),
+    );
+    expect(promotedReceipt).toMatchObject({
+      upload: { status: 'passed' },
+      remoteVerification: { status: 'passed' },
+      failure: null,
+      records: repairedRecords,
+    });
+    expect(
+      JSON.parse(readFileSync(join(recovered.archiveDir, 'build-manifest.json'), 'utf8')).sentry,
+    ).toMatchObject({
+      pendingUpload: false,
+      verified: true,
+      symbolPackageComplete: true,
+    });
+    await expect(
+      findCompleteBuild({ target: 'ios-production', tag: 'v0.6.2', commitSha, releaseRoot }),
+    ).resolves.toMatchObject({
+      found: true,
+      buildId: localBuildId,
+      archiveDir: recovered.archiveDir,
+      artifactPath: recovered.artifactPath,
+    });
   });
 
-  it('enforces git HEAD / clean tree and isolates git clones when isolateGitRepo is enabled', async () => {
+  it('enforces git HEAD / clean tree and installs local deps inside isolated clone without node_modules symlinks', async () => {
     const root = makeTempDir();
     const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
     const releaseRoot = join(root, 'releases');
 
     writeFileSync(join(projectDir, '.gitignore'), 'node_modules/\n');
+    writeFileSync(join(projectDir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
     execFileSync('git', ['init', '-q'], { cwd: projectDir });
     execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: projectDir });
     execFileSync('git', ['config', 'user.name', 'Test'], { cwd: projectDir });
-    execFileSync('git', ['add', 'app.json', '.gitignore'], { cwd: projectDir });
+    execFileSync('git', ['add', 'app.json', '.gitignore', 'pnpm-lock.yaml'], { cwd: projectDir });
     execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: projectDir });
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: projectDir,
@@ -1185,22 +1266,67 @@ describe('release hardening & integrity guards', () => {
     ).rejects.toThrow('dirty git working tree');
     rmSync(join(projectDir, 'untracked-dirty.txt'));
 
-    let easCwd = '';
+    const pnpmInstalls: { cwd?: string; args: string[] }[] = [];
+    const easCwdsByPlatform = new Map<string, string>();
     let hadIsolatedGit = false;
-    let hadLinkedNodeModules = false;
+    let hadAnyNodeModulesSymlink = false;
+
     const run: RunLocalCommand = async (cmd, args, opts) => {
+      if (cmd === 'pnpm' && args[0] === 'install') {
+        pnpmInstalls.push({ cwd: opts?.cwd, args });
+        mkdirSync(join(opts!.cwd!, 'node_modules'), { recursive: true });
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
       if (args[0] === easCliPath) {
-        easCwd = opts?.cwd ?? '';
-        hadIsolatedGit = existsSync(join(easCwd, '.git')) && easCwd !== projectDir;
-        hadLinkedNodeModules = lstatSync(join(easCwd, 'node_modules')).isSymbolicLink();
-        writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'app.apk'), 'apk');
+        const platform = args[args.indexOf('--platform') + 1]!;
+        const cwd = opts?.cwd ?? '';
+        easCwdsByPlatform.set(platform, cwd);
+        if (platform === 'ios') {
+          hadIsolatedGit = existsSync(join(cwd, '.git')) && cwd !== projectDir;
+          hadAnyNodeModulesSymlink =
+            existsSync(join(cwd, 'node_modules')) &&
+            lstatSync(join(cwd, 'node_modules')).isSymbolicLink();
+          writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'app.ipa'), 'ipa');
+          const symbolsDir = join(
+            opts!.env!.EAS_LOCAL_BUILD_WORKINGDIR!,
+            'build/ios/build/ios-symbols',
+          );
+          mkdirSync(join(symbolsDir, 'package-abc'), { recursive: true });
+          writeFileSync(join(symbolsDir, 'package.complete'), '{"directory":"package-abc"}');
+          writeFileSync(join(symbolsDir, 'package-abc/dsyms.zip'), 'dsyms');
+        } else {
+          writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'app.apk'), 'apk');
+        }
         return { stdout: '', stderr: '', exitCode: 0 };
       }
       if (cmd === 'git') {
         return defaultRunLocalCommand(cmd, args, opts);
       }
       if (args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
-      if (args[0] === '-Z1') return { stdout: 'AndroidManifest.xml\n', stderr: '', exitCode: 0 };
+      if (args[0] === '-Z1') {
+        return {
+          stdout: args[1]!.endsWith('.ipa')
+            ? 'Payload/CherryStudio.app/Info.plist\n'
+            : 'AndroidManifest.xml\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (cmd === 'unzip' && args.includes('-j')) {
+        const destDir = args[args.indexOf('-d') + 1]!;
+        writeFileSync(join(destDir, 'Info.plist'), 'bplist00');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'plutil') {
+        return {
+          stdout: JSON.stringify({
+            CFBundleIdentifier: 'com.cherryai.cherrystudio-app',
+            CFBundleVersion: '70',
+          }),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
       if (args[0] === 'verify') {
         return {
           stdout: 'Signer #1 certificate SHA-256 digest: abcdef\n',
@@ -1221,8 +1347,7 @@ describe('release hardening & integrity guards', () => {
       throw new Error(`Unexpected ${cmd} ${args.join(' ')}`);
     };
 
-    const isolatedResult = await runLocalReleaseBuild({
-      target: 'android-public',
+    const batchResult = await runLocalReleaseBatch({
       tag: 'v0.6.2',
       commitSha: headSha,
       runId: '9503',
@@ -1231,18 +1356,37 @@ describe('release hardening & integrity guards', () => {
       releaseRoot,
       easCliPath,
       localPluginPath,
-      isolateGitRepo: true,
+      includeGooglePlay: false,
       env: makeReleaseEnv(),
       statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
       run,
+      verifySymbols: jest.fn(async ({ archivePath, buildId }) => ({
+        status: 'download-verified' as const,
+        buildId,
+        manifestSha256: 'abc',
+        symbolPackage: { size: 5, sha256: 'def' },
+        slices: 3,
+        thirdPartySymbols: [],
+        verifiedAt: '2026-11-23T06:00:00.000Z',
+        expiry: 'unknown' as const,
+        archivePath,
+      })),
     });
 
-    expect(isolatedResult.nativeBuildVersion).toBe('128');
-    expect(easCwd).toMatch(
-      /\/_workdirs\/cherry-studio-app-9503-android-public-attempt1-[^/]+\/src$/,
+    expect(batchResult.overallOk).toBe(true);
+    // Android uses projectDir directly; only iOS clones and installs inside _workdirs/.../src.
+    expect(easCwdsByPlatform.get('android')).toBe(projectDir);
+    expect(easCwdsByPlatform.get('ios')).toMatch(
+      /\/_workdirs\/cherry-studio-app-9503-ios-production-attempt1-[^/]+\/src$/,
     );
+    expect(pnpmInstalls).toEqual([
+      {
+        cwd: easCwdsByPlatform.get('ios'),
+        args: ['install', '--frozen-lockfile', '--prefer-offline'],
+      },
+    ]);
     expect(hadIsolatedGit).toBe(true);
-    expect(hadLinkedNodeModules).toBe(true);
+    expect(hadAnyNodeModulesSymlink).toBe(false);
   });
 
   it('verifyArchivedIpa validates IPA SHA-256 against output and symbol manifest', async () => {

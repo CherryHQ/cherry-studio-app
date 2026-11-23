@@ -984,22 +984,17 @@ async function cloneIsolatedProjectDir({
     ['clone', '-q', '--no-hardlinks', '--depth', '1', `file://${projectDir}`, isolatedDir],
     { env, secrets },
   );
-  const rootNodeModules = join(projectDir, 'node_modules');
-  const destRootNodeModules = join(isolatedDir, 'node_modules');
-  if (existsSync(rootNodeModules) && !existsSync(destRootNodeModules)) {
-    symlinkSync(rootNodeModules, destRootNodeModules);
-  }
-  const packagesDir = join(projectDir, 'packages');
-  if (existsSync(packagesDir) && statSync(packagesDir).isDirectory()) {
-    for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const srcPkgModules = join(packagesDir, entry.name, 'node_modules');
-      const destPkgDir = join(isolatedDir, 'packages', entry.name);
-      const destPkgModules = join(destPkgDir, 'node_modules');
-      if (existsSync(srcPkgModules) && existsSync(destPkgDir) && !existsSync(destPkgModules)) {
-        symlinkSync(srcPkgModules, destPkgModules);
-      }
-    }
+  // Install project-local dependencies so @expo/fingerprint resolves paths inside isolatedDir rather than symlink targets.
+  if (existsSync(join(isolatedDir, 'pnpm-lock.yaml'))) {
+    await runChecked(run, 'pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], {
+      cwd: isolatedDir,
+      env: {
+        ...env,
+        PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH:
+          env.PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH ?? DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
+      },
+      secrets,
+    });
   }
 }
 
@@ -1109,10 +1104,13 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
       buildProjectDir = isolatedDir;
     }
 
+    const binsProjectDir = existsSync(join(buildProjectDir, 'node_modules'))
+      ? buildProjectDir
+      : projectDir;
     const resolvedBins =
       options.easCliPath && options.localPluginPath
         ? { easCliPath: options.easCliPath, localPluginPath: options.localPluginPath }
-        : resolveProjectBinaries(projectDir);
+        : resolveProjectBinaries(binsProjectDir);
 
     const buildEnv: NodeJS.ProcessEnv = {
       ...baseEnv,
@@ -1281,7 +1279,7 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
       );
       renameSync(stagingDir, pendingDir);
       throw new Error(
-        `iOS symbol upload to Sentry is pending verification. Retained signed IPA and original symbols at ${pendingDir} (symbols: ${join(pendingDir, 'ios-symbols')}, buildId: ${localBuildId}). Retry with verifyIosSymbolPackage.ts --retry-upload once Sentry is available.`,
+        `iOS symbol upload to Sentry is pending verification. Retained signed IPA and original symbols at ${pendingDir} (symbols: ${join(pendingDir, 'ios-symbols')}, buildId: ${localBuildId}). Retry with \`node --import tsx scripts/releaseLocalBuild.ts recover-ios --pending-dir ${pendingDir}\` once Sentry is available, then re-run failed jobs.`,
       );
     }
 
@@ -1525,6 +1523,169 @@ export async function verifyArchivedIpa({
   };
 }
 
+export async function recoverPendingIosBuild({
+  pendingDir,
+  verifySymbols = verifyIosSymbolPackage,
+  now = () => new Date(),
+}: {
+  pendingDir: string;
+  verifySymbols?: typeof verifyIosSymbolPackage;
+  now?: () => Date;
+}) {
+  const resolvedPendingDir = resolve(pendingDir);
+  if (!existsSync(resolvedPendingDir) || !statSync(resolvedPendingDir).isDirectory()) {
+    throw new Error(`Pending iOS build directory does not exist: ${resolvedPendingDir}`);
+  }
+  if (!basename(resolvedPendingDir).startsWith('pending-symbols-')) {
+    throw new Error(`Expected pending-symbols-* directory, got ${basename(resolvedPendingDir)}.`);
+  }
+  const manifestPath = join(resolvedPendingDir, 'build-manifest.json');
+  const checksumPath = join(resolvedPendingDir, 'SHA256SUMS');
+  const symbolsDir = join(resolvedPendingDir, 'ios-symbols');
+  if (!existsSync(manifestPath) || !existsSync(checksumPath) || !existsSync(symbolsDir)) {
+    throw new Error(
+      `Pending iOS build directory ${resolvedPendingDir} is missing build-manifest.json, SHA256SUMS, or ios-symbols.`,
+    );
+  }
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    target?: string;
+    commitSha?: string;
+    localBuildId?: string;
+    nativeBuildVersion?: string;
+    artifact?: { filename?: string; sha256?: string };
+    sentry?: Record<string, unknown>;
+    githubRun?: { runId?: string; attempt?: string };
+  };
+  if (
+    manifest.target !== 'ios-production' ||
+    !manifest.localBuildId ||
+    !manifest.nativeBuildVersion ||
+    !manifest.commitSha ||
+    !manifest.artifact?.filename ||
+    !manifest.artifact?.sha256
+  ) {
+    throw new Error(`Invalid build-manifest.json in ${resolvedPendingDir}.`);
+  }
+
+  const pendingArtifactPath = join(resolvedPendingDir, manifest.artifact.filename);
+  if (!existsSync(pendingArtifactPath) || !statSync(pendingArtifactPath).isFile()) {
+    throw new Error(`Missing pending IPA at ${pendingArtifactPath}.`);
+  }
+  const liveEvidence = await fileEvidence(pendingArtifactPath);
+  if (liveEvidence.sha256 !== manifest.artifact.sha256) {
+    throw new Error(
+      `Pending IPA SHA-256 mismatch: expected ${manifest.artifact.sha256}, got ${liveEvidence.sha256}.`,
+    );
+  }
+
+  const symbolVerification = await verifySymbols({
+    archivePath: symbolsDir,
+    buildId: manifest.localBuildId,
+    retryUpload: true,
+  });
+
+  // Promote ios-symbols from upload.pending (attempt-*) to package.complete (package-*) so submit-ios passes normal verification.
+  const packageCompletePath = join(symbolsDir, 'package.complete');
+  if (!existsSync(packageCompletePath)) {
+    const pendingPointerPath = join(symbolsDir, 'upload.pending');
+    if (!existsSync(pendingPointerPath)) {
+      throw new Error(`Missing upload.pending and package.complete in ${symbolsDir}.`);
+    }
+    const pendingPointer = JSON.parse(readFileSync(pendingPointerPath, 'utf8')) as {
+      directory?: string;
+    };
+    if (!pendingPointer.directory || !/^attempt-[A-Za-z0-9]+$/.test(pendingPointer.directory)) {
+      throw new Error(`Invalid upload.pending directory pointer in ${pendingPointerPath}.`);
+    }
+    const attemptDir = join(symbolsDir, pendingPointer.directory);
+    for (const requiredFile of [
+      'dsyms.zip',
+      'archive-info.plist',
+      'manifest.json',
+      'verification.json',
+    ]) {
+      if (!existsSync(join(attemptDir, requiredFile))) {
+        throw new Error(`Missing ${requiredFile} in pending symbol attempt ${attemptDir}.`);
+      }
+    }
+
+    const packageDirName = `package-${randomBytes(4).toString('hex')}`;
+    const packageDir = join(symbolsDir, packageDirName);
+    mkdirSync(packageDir, { recursive: true });
+    for (const name of ['dsyms.zip', 'archive-info.plist', 'manifest.json']) {
+      copyFileSync(join(attemptDir, name), join(packageDir, name));
+    }
+
+    const symbolManifestSha256 = (await fileEvidence(join(packageDir, 'manifest.json'))).sha256;
+    const existingReceipt = JSON.parse(
+      readFileSync(join(attemptDir, 'verification.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const repairedRecords = (symbolVerification as { repairedRecords?: unknown }).repairedRecords;
+    const updatedReceipt = {
+      ...existingReceipt,
+      manifestSha256: symbolManifestSha256,
+      preflight: { status: 'passed' },
+      upload: { status: 'passed' },
+      remoteVerification: { status: 'passed' },
+      failure: null,
+      records: Array.isArray(repairedRecords) ? repairedRecords : existingReceipt.records,
+    };
+    writeFileSync(
+      join(packageDir, 'verification.json'),
+      `${JSON.stringify(updatedReceipt, null, 2)}\n`,
+    );
+    writeFileSync(
+      packageCompletePath,
+      `${JSON.stringify({ directory: packageDirName }, null, 2)}\n`,
+    );
+    rmSync(pendingPointerPath, { force: true });
+    rmSync(attemptDir, { recursive: true, force: true });
+  }
+
+  writeFileSync(
+    join(resolvedPendingDir, 'ios-symbol-verification.json'),
+    `${JSON.stringify(symbolVerification, null, 2)}\n`,
+  );
+  const updatedManifest = {
+    ...manifest,
+    sentry: {
+      ...(manifest.sentry ?? {}),
+      autoUpload: true,
+      verified: true,
+      symbolPackageComplete: true,
+      pendingUpload: false,
+    },
+  };
+  writeFileSync(manifestPath, `${JSON.stringify(updatedManifest, null, 2)}\n`);
+
+  const channelDir = dirname(resolvedPendingDir);
+  const finalDir = allocateFinalBuildDir(
+    channelDir,
+    manifest.nativeBuildVersion,
+    manifest.commitSha.slice(0, 7),
+    manifest.githubRun?.runId ?? 'recovery',
+    manifest.githubRun?.attempt ?? '1',
+  );
+  renameSync(resolvedPendingDir, finalDir);
+  writeFileSync(
+    join(finalDir, '.complete'),
+    `${JSON.stringify({ buildId: manifest.localBuildId, completedAt: now().toISOString() }, null, 2)}\n`,
+  );
+  updateLatestSymlink(channelDir, basename(finalDir));
+
+  return {
+    buildId: manifest.localBuildId,
+    archiveDir: finalDir,
+    artifactName: manifest.artifact.filename,
+    artifactPath: join(finalDir, manifest.artifact.filename),
+    symbolsDir: join(finalDir, 'ios-symbols'),
+    nativeBuildVersion: manifest.nativeBuildVersion,
+    sha256: liveEvidence.sha256,
+    symbolVerification,
+  };
+}
+
 export type BatchTargetOutcome =
   | {
       target: ReleaseTargetId;
@@ -1698,7 +1859,7 @@ export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions)
         localPluginPath: options.localPluginPath,
         skipPrune: true,
         logPrefix: targetId,
-        isolateGitRepo,
+        isolateGitRepo: isolateGitRepo && targetId === 'ios-production',
         verifyGitHead: false,
         skipStaleWorkdirCleanup: true,
       });
@@ -2052,6 +2213,24 @@ async function main() {
     return;
   }
 
+  if (command === 'recover-ios') {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        'pending-dir': { type: 'string' },
+      },
+      strict: true,
+    });
+    if (!values['pending-dir']) {
+      throw new Error('Usage: recover-ios --pending-dir <dir>');
+    }
+    const recovered = await recoverPendingIosBuild({
+      pendingDir: values['pending-dir'],
+    });
+    console.log(JSON.stringify(recovered, null, 2));
+    return;
+  }
+
   if (command === 'prune') {
     const { values } = parseArgs({
       args: rest,
@@ -2084,7 +2263,7 @@ async function main() {
   }
 
   throw new Error(
-    'Usage: releaseLocalBuild.ts <build|build-all|find-complete|check-submit|record-submit|verify-ipa|prune> [options]',
+    'Usage: releaseLocalBuild.ts <build|build-all|find-complete|check-submit|record-submit|verify-ipa|recover-ios|prune> [options]',
   );
 }
 

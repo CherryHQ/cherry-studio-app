@@ -332,17 +332,26 @@ retains the signed IPA, `build-manifest.json`, and `ios-symbols` (with `upload.p
 non-`.complete` recovery directory (`<release-root>/cherry-studio-app/<tag>/ios-production/pending-symbols-.../`).
 It does not publish `.complete` or allow `submit-ios` until recovery passes. Once Sentry service or
 credentials are restored, export the release's `EXPO_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, and
-configured `SENTRY_URL` on the Mac release runner and retry verification against the retained
-`ios-symbols` directory and recorded `localBuildId` without recompiling:
+configured `SENTRY_URL` on the Mac release runner and promote the retained build into a reusable
+`.complete` archive without recompiling:
 
 ```bash
-node --import tsx scripts/verifyIosSymbolPackage.ts <pending-dir>/ios-symbols <local-build-id> --retry-upload > ios-symbol-recovery.json &&
-  pnpm exec eas submit --platform ios --profile production --path <pending-dir>/<ipa-filename> --non-interactive --wait --no-auto-testflight-setup
+node --import tsx scripts/releaseLocalBuild.ts recover-ios --pending-dir <pending-dir>
 ```
 
-Retry mode verifies the retained original dSYMs and their build-bound target fingerprint before
-uploading the required dSYMs. It checks Sentry again and returns the matching records in the
-JSON receipt. Preserve that receipt with the release evidence. If the original app dSYMs are
+Then choose **Re-run failed jobs** in GitHub Actions so `build-native` reuses the recovered
+`build-*` archive via `findCompleteBuild` (without incrementing the build number) and `submit-ios`
+verifies the IPA and uploads it to TestFlight with `submit-receipt.json`. If submitting manually
+outside Actions after recovery, record the receipt on the promoted `<archive-dir>` as well:
+
+```bash
+pnpm exec eas submit --platform ios --profile production --path <archive-dir>/<ipa-filename> --non-interactive --wait --no-auto-testflight-setup &&
+  node --import tsx scripts/releaseLocalBuild.ts record-submit --build-dir <archive-dir> --build-id <local-build-id> --status succeeded
+```
+
+Recovery verifies the retained original dSYMs and their build-bound target fingerprint before
+uploading the required dSYMs. It checks Sentry again and writes `ios-symbol-verification.json`.
+Preserve that receipt with the release evidence. If the original app dSYMs are
 actually missing, recover matching originals first. Rebuilding cannot repair an already shipped
 binary's identity.
 

@@ -61,6 +61,10 @@ describe('publishGitcodeRelease', () => {
         auth: headers.get('Authorization'),
       });
 
+      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
+        return new Response('{}', { status: 404 });
+      }
+
       if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
         if (!verifiedOnce) {
           verifiedOnce = true;
@@ -76,6 +80,10 @@ describe('publishGitcodeRelease', () => {
           }),
           { status: 200 },
         );
+      }
+
+      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.6.1' }), { status: 200 });
       }
 
       if (method === 'POST' && url.endsWith('/releases')) {
@@ -133,6 +141,7 @@ describe('publishGitcodeRelease', () => {
       releaseStatus: 'latest',
       created: true,
       patched: true,
+      promotedToLatest: true,
       uploaded: [fixture.artifactName, 'SHA256SUMS'],
       skipped: [],
       hashes: {
@@ -174,6 +183,9 @@ describe('publishGitcodeRelease', () => {
       const url = String(input);
       const method = init?.method ?? 'GET';
       methods.push(method);
+      if (method === 'GET' && url.includes('/commits/')) {
+        return new Response('{}', { status: 404 });
+      }
       if (method === 'GET' && url.includes('/releases/tags/')) {
         return new Response('{}', { status: 404 });
       }
@@ -211,6 +223,9 @@ describe('publishGitcodeRelease', () => {
     const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.includes('/commits/')) {
+        return new Response('{}', { status: 404 });
+      }
       if (method === 'GET' && url.includes('/releases/tags/')) {
         calls++;
         if (calls === 1) return new Response('{}', { status: 404 });
@@ -259,6 +274,9 @@ describe('publishGitcodeRelease', () => {
     const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
       const url = String(input);
       const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
+        return new Response(JSON.stringify({ sha: commitSha }), { status: 200 });
+      }
       if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
         return new Response(
           JSON.stringify({
@@ -301,6 +319,7 @@ describe('publishGitcodeRelease', () => {
     });
     expect(reused.created).toBe(false);
     expect(reused.patched).toBe(false);
+    expect(reused.promotedToLatest).toBe(false);
     expect(reused.uploaded).toEqual([]);
     expect(reused.skipped).toEqual([fixture.artifactName, 'SHA256SUMS']);
 
@@ -316,6 +335,101 @@ describe('publishGitcodeRelease', () => {
         sleep: async () => {},
       }),
     ).rejects.toThrow('checksum mismatch');
+  });
+
+  it('rejects publishing when GitCode tag points to a different commit SHA', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    const seenMethods: string[] = [];
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      seenMethods.push(`${method} ${url}`);
+      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
+        return new Response(JSON.stringify({ sha: 'f'.repeat(40) }), { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        commitSha,
+        archiveDir: fixture.archiveDir,
+        artifactName: fixture.artifactName,
+        token,
+        fetchImpl,
+      }),
+    ).rejects.toThrow('points to commit');
+    expect(seenMethods).toHaveLength(1);
+  });
+
+  it('does not promote an older stable retry to latest when a newer stable release exists', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    const methods: string[] = [];
+    let verified = false;
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      methods.push(`${method} ${url}`);
+      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
+        return new Response(JSON.stringify({ sha: commitSha }), { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
+        if (!verified) {
+          verified = true;
+          return new Response(
+            JSON.stringify({
+              tag_name: 'v0.6.2',
+              body: '# Cherry Studio 0.6.2\n\n## 下载安装\n',
+              release_status: 'pre',
+              assets: [],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            assets: [
+              { name: fixture.artifactName, type: 'attach' },
+              { name: 'SHA256SUMS', type: 'attach' },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (method === 'GET' && url.includes('/upload_url')) {
+        return new Response(JSON.stringify({ url: 'https://upload.example.test/obj' }), {
+          status: 200,
+        });
+      }
+      if (method === 'PUT') {
+        return new Response('', { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.7.0' }), { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await publishGitcodeRelease({
+      tag: 'v0.6.2',
+      commitSha,
+      archiveDir: fixture.archiveDir,
+      artifactName: fixture.artifactName,
+      token,
+      fetchImpl,
+      sleep: async () => {},
+      createFileBody: async () => Buffer.from('body'),
+    });
+
+    expect(result.releaseStatus).toBe('pre');
+    expect(result.promotedToLatest).toBe(false);
+    expect(result.patched).toBe(false);
+    expect(result.uploaded).toEqual([fixture.artifactName, 'SHA256SUMS']);
+    expect(methods.some((entry) => entry.startsWith('PATCH '))).toBe(false);
   });
 
   it('fails locally on invalid SHA256SUMS without calling fetch, and redacts GITCODE_TOKEN from remote errors', async () => {
