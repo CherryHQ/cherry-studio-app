@@ -52,44 +52,6 @@ export function readPiWebResult(message: AssistantMessage): PiWebResult | undefi
   return result.success ? result.data : undefined;
 }
 
-/** Remove prefix-bound raw thinking only when rebuilding historical context. */
-export function projectPiWebReplayForImport(message: AssistantMessage): AssistantMessage {
-  const web = readPiWebResult(message);
-  if (!web || !Array.isArray(message.content)) return message;
-  const removed = message.content.flatMap((block, index) =>
-    block.type === 'thinking' ? [index] : [],
-  );
-  const anthropicContent = web.anthropicContent?.filter(
-    (block) => block.type !== 'thinking' && block.type !== 'redacted_thinking',
-  );
-  if (!removed.length && anthropicContent?.length === web.anthropicContent?.length) return message;
-  const moved = (index: number) => index - removed.filter((before) => before < index).length;
-  return {
-    ...message,
-    diagnostics: message.diagnostics?.map((diagnostic) => {
-      if (diagnostic.type !== PI_WEB_DIAGNOSTIC) return diagnostic;
-      return {
-        ...diagnostic,
-        details: {
-          ...diagnostic.details,
-          ...(anthropicContent === undefined ? {} : { anthropicContent }),
-          texts: web.texts.flatMap((text, index) =>
-            removed.includes(text.contentIndex)
-              ? []
-              : [
-                  {
-                    ...(diagnostic.details!.texts as JsonObject[])[index],
-                    contentIndex: moved(text.contentIndex),
-                  },
-                ],
-          ),
-          ...(web.replayIndex === undefined ? {} : { replayIndex: moved(web.replayIndex) }),
-        },
-      };
-    }),
-  };
-}
-
 /** Return provider state Pi's history does not model to the place it held in the response. */
 export function applyPiWebReplay(
   payload: unknown,
@@ -141,7 +103,33 @@ function replayAnthropicContent(
   }
   for (const index of restored)
     replayed[index] = withoutStrandedAnthropicCalls(replayed, index, body.tools);
-  return { ...body, messages: replayed };
+  // Other Messages-compatible providers can require their original thinking for tool replay.
+  if (!/^https:\/\/api\.anthropic\.com(?::443)?(?:\/|$)/i.test(model.baseUrl)) {
+    return { ...body, messages: replayed };
+  }
+  // A user message carrying tool results still belongs to the active tool loop.
+  const lastQuestion = replayed.findLastIndex((value) => {
+    const message = record(value);
+    return (
+      message?.role === 'user' &&
+      !array(message.content).some((part) => record(part)?.type === 'tool_result')
+    );
+  });
+  if (lastQuestion <= 0) return { ...body, messages: replayed };
+  return {
+    ...body,
+    messages: replayed.flatMap((value, index) => {
+      const message = record(value);
+      if (index >= lastQuestion || message?.role !== 'assistant' || !Array.isArray(message.content))
+        return [value];
+      const content = message.content.filter((part) => {
+        const type = record(part)?.type;
+        return type !== 'thinking' && type !== 'redacted_thinking';
+      });
+      if (content.length === message.content.length) return [value];
+      return content.length ? [{ ...message, content }] : [];
+    }),
+  };
 }
 
 /**

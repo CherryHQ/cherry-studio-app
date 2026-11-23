@@ -19,6 +19,7 @@ import {
   type SupportedPiApi,
 } from '../piApiAdapters';
 import type { PiStreamFn } from '../piModelTypes';
+import { applyPiWebReplay } from '../PiWebResponse';
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();
@@ -482,7 +483,7 @@ describe('Pi API adapters', () => {
       provider: 'custom',
       id: 'opus-5.5',
       name: 'Claude',
-      baseUrl: 'https://provider.test',
+      baseUrl: 'https://api.anthropic.com',
       input: ['text'],
       reasoning: true,
       contextWindow: 4096,
@@ -538,7 +539,12 @@ describe('Pi API adapters', () => {
       );
     };
     const user = { role: 'user' as const, content: 'Find deploy', timestamp: 0 };
-    const options = { apiKey: 'test', fetch, maxRetries: 0 };
+    const options = {
+      apiKey: 'test',
+      fetch,
+      maxRetries: 0,
+      onPayload: (payload: unknown) => applyPiWebReplay(payload, model, []),
+    };
     const first = await (
       await streamSimple(model, normalizeContext({ messages: [user] }), options)
     ).result();
@@ -573,6 +579,28 @@ describe('Pi API adapters', () => {
         cache_control: { type: 'ephemeral' },
       },
     ]);
+    const history = [
+      user,
+      first,
+      {
+        role: 'toolResult' as const,
+        toolCallId: 'toolu_lookup',
+        toolName: 'lookup',
+        content: [{ type: 'text' as const, text: 'Found' }],
+        isError: false,
+        timestamp: 1,
+      },
+      {
+        ...first,
+        stopReason: 'stop' as const,
+        content: [{ type: 'text' as const, text: 'Found it.' }],
+      },
+      { ...user, content: 'What changed?' },
+    ];
+    await (await streamSimple(model, normalizeContext({ messages: history }), options)).result();
+    expect(JSON.stringify(payloads[2])).not.toContain('opaque-live-signature');
+    expect(payloads[2]!.messages[1]!.content).toContainEqual(expected[1]);
+    expect(JSON.stringify(payloads[2])).toContain('Found it.');
   });
 
   test('round-trips streamed Gemini tool signatures through saved context and isolates foreign histories', async () => {

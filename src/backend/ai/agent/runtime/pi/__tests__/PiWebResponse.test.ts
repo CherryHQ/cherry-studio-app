@@ -396,6 +396,56 @@ test('restores streamed Anthropic tool input and signed thinking only for its or
   expect(applyPiWebReplay(payload, { ...wire, id: 'other-model' }, [settled])).toEqual(payload);
 });
 
+test('official Claude omits completed-turn thinking after native web replay and preserves active tool calls', () => {
+  const { settled, wire, payload } = deferredAnthropicFetch();
+  const oldThought = { type: 'redacted_thinking', data: 'old-ciphertext' };
+  const question = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
+  const activeCall = {
+    role: 'assistant',
+    content: [
+      { type: 'thinking', thinking: 'active', signature: 'keep' },
+      { type: 'tool_use', id: 'toolu_active', name: 'lookup', input: {} },
+    ],
+  };
+  const activeResult = {
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: 'toolu_active', content: 'ok' }],
+  };
+  const messages = [
+    ...payload.messages,
+    { role: 'assistant', content: [oldThought] },
+    question,
+    activeCall,
+    activeResult,
+  ];
+  const original = structuredClone(messages);
+  const official = applyPiWebReplay(
+    { messages },
+    { ...wire, baseUrl: 'https://api.anthropic.com' },
+    [settled],
+  );
+  expect(official).toEqual({
+    messages: [
+      {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} }],
+      },
+      payload.messages[1],
+      question,
+      activeCall,
+      activeResult,
+    ],
+  });
+  const compatible = applyPiWebReplay(
+    { messages },
+    { ...wire, baseUrl: 'https://api.deepseek.com/anthropic' },
+    [settled],
+  );
+  expect(JSON.stringify(compatible)).toContain('signed-thinking');
+  expect(JSON.stringify(compatible)).toContain('old-ciphertext');
+  expect(messages).toEqual(original);
+});
+
 test('omits a deferred Anthropic call that can no longer run and keeps one answered later', () => {
   const { settled, wire, payload } = deferredAnthropicFetch();
   const next = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
