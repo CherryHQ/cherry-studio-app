@@ -56,6 +56,7 @@ let runtime: SshRuntime;
 let secrets: Map<string, string>;
 const native: jest.Mocked<SshNative> = {
   resultVersion: 2,
+  supportsPinnedReadPaths: true,
   prepare: jest.fn(),
   cancel: jest.fn(),
   run: jest.fn(),
@@ -148,7 +149,7 @@ test('rolls back a replacement secret if the MMKV write fails', async () => {
 test('invalidates a frozen AI target when its profile changes', async () => {
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);
-  await runtime.setCommandGrant('conversation', runtime.getTarget('conversation')!, true);
+  await runtime.setGrant('conversation', runtime.getTarget('conversation')!, 'diagnostics');
   const target = (await runtime.resolveAgentTarget('conversation'))!;
   await runtime.save({ profile: input.profile, previous: profile });
   expect(runtime.getTarget('conversation')).toBeNull();
@@ -170,7 +171,7 @@ test('recovers the first-send target after restart only on confirmation and with
   const sessionId = mockRandomUUID();
   await runtime.selectTarget(`draft:${draftId}`, profile);
   await runtime.attachDraftTarget(draftId, sessionId);
-  const previous = await runtime.setCommandGrant(sessionId, runtime.getTarget(sessionId)!, true);
+  const previous = await runtime.setGrant(sessionId, runtime.getTarget(sessionId)!, 'diagnostics');
   await runtime._doStop();
   runtime = new SshRuntime(
     {} as DbService,
@@ -223,7 +224,7 @@ test('forgetting a remembered target leaves SSH unavailable and removes the stor
 test('rechecks grant expiry after an asynchronous credential read', async () => {
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);
-  await runtime.setCommandGrant('conversation', runtime.getTarget('conversation')!, true);
+  await runtime.setGrant('conversation', runtime.getTarget('conversation')!, 'diagnostics');
   const target = (await runtime.resolveAgentTarget('conversation'))!;
   let read!: () => void;
   const reading = new Promise<void>((resolve) => {
@@ -299,7 +300,7 @@ test('reselecting the same host does not revive an old command or grant confirma
       new AbortController().signal,
     ),
   ).rejects.toMatchObject({ code: 'changed' });
-  await expect(runtime.setCommandGrant('conversation', previous, true)).rejects.toMatchObject({
+  await expect(runtime.setGrant('conversation', previous, 'diagnostics')).rejects.toMatchObject({
     code: 'changed',
   });
   expect(runtime.getTarget('conversation')?.grant).toBeNull();
@@ -310,7 +311,7 @@ test('enabling diagnostics preserves the pending explicit approval, while revoki
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);
   const pendingTarget = runtime.getTarget('conversation')!;
-  await runtime.setCommandGrant('conversation', pendingTarget, true);
+  await runtime.setGrant('conversation', pendingTarget, 'diagnostics');
   const granted = runtime.getTarget('conversation')!;
   expect(granted.selectionId).toBe(pendingTarget.selectionId);
   expect(pendingTarget.grant).toBeNull();
@@ -322,7 +323,7 @@ test('enabling diagnostics preserves the pending explicit approval, while revoki
     new AbortController().signal,
   );
   expect(native.run).toHaveBeenCalledTimes(1);
-  await runtime.setCommandGrant('conversation', granted, false);
+  await runtime.setGrant('conversation', granted, null);
   expect(runtime.getTarget('conversation')!.selectionId).not.toBe(pendingTarget.selectionId);
   await expect(
     runtime.executeForAgent(
@@ -358,7 +359,7 @@ test('grant expiry also retires a command captured before diagnostics were enabl
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);
   const pendingTarget = runtime.getTarget('conversation')!;
-  await runtime.setCommandGrant('conversation', pendingTarget, true);
+  await runtime.setGrant('conversation', pendingTarget, 'diagnostics');
   const granted = runtime.getTarget('conversation')!;
   jest.spyOn(Date, 'now').mockReturnValue(granted.grant!.expiresAt + 1);
   expect((await runtime.resolveAgentTarget('conversation'))?.grant).toBeNull();
@@ -681,16 +682,93 @@ test('a failed download publication cannot claim the transfer never started', as
   ).rejects.toMatchObject({ code: 'local-file', state: 'unknown' });
 });
 
+test('pins selected reads to the canonical entry and rejects results after a path change or revocation', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const target = await runtime.setGrant('conversation', runtime.getTarget('conversation')!, {
+    directory: '/srv/logs',
+    files: ['app.log'],
+  });
+  const read = () =>
+    runtime.filesForAgent(
+      'conversation',
+      target,
+      { operation: 'read', path: 'app.log' },
+      new AbortController().signal,
+    );
+  native.run.mockResolvedValue(
+    JSON.stringify({
+      ...JSON.parse(outcome('completed')),
+      path: btoa('/srv/logs/different'),
+      content: btoa('private'),
+    }),
+  );
+  await expect(read()).rejects.toMatchObject({ code: 'path' });
+  expect(native.run.mock.calls.at(-1)?.[1]).toMatchObject({ expectedPath: '/srv/logs/app.log' });
+  await runtime.setGrant('conversation', target, null);
+  native.run.mockClear();
+  await expect(read()).rejects.toMatchObject({ code: 'changed' });
+  expect(native.run).not.toHaveBeenCalled();
+});
+
 test('rolling back an older grant cannot revoke a newer authorization', async () => {
   const profile = await trusted();
   await runtime.selectTarget('conversation', profile);
   const pendingTarget = runtime.getTarget('conversation')!;
-  const granted = await runtime.setCommandGrant('conversation', pendingTarget, true);
-  const replacement = await runtime.setCommandGrant('conversation', granted, true);
-  await expect(runtime.setCommandGrant('conversation', granted, false)).rejects.toMatchObject({
+  const granted = await runtime.setGrant('conversation', pendingTarget, 'diagnostics');
+  const replacement = await runtime.setGrant('conversation', granted, 'diagnostics');
+  await expect(runtime.setGrant('conversation', granted, null)).rejects.toMatchObject({
     code: 'changed',
   });
   expect(runtime.getTarget('conversation')).toEqual(replacement);
+});
+
+test('can replace and revoke an expired grant before its expiry timer fires', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const granted = await runtime.setGrant('conversation', runtime.getTarget('conversation')!, {
+    directory: '/srv/logs',
+    files: ['app.log'],
+  });
+  const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(granted.grant!.expiresAt + 1);
+  const renewed = await runtime.setGrant('conversation', granted, 'diagnostics');
+  expect(renewed.selectionId).not.toBe(granted.selectionId);
+  expect(renewed.grant?.scope).toBe('diagnostics');
+  await expect(runtime.setGrant('conversation', granted, null)).rejects.toMatchObject({
+    code: 'changed',
+  });
+  nowSpy.mockReturnValue(renewed.grant!.expiresAt + 1);
+  const revoked = await runtime.setGrant('conversation', renewed, null);
+  expect(revoked.grant).toBeNull();
+  expect(revoked.selectionId).not.toBe(renewed.selectionId);
+  expect(runtime.getTarget('conversation')?.grant).toBeNull();
+  await expect(runtime.setGrant('conversation', renewed, null)).rejects.toMatchObject({
+    code: 'changed',
+  });
+});
+
+test('retains a draft file grant across a failed send before clearing on send success', async () => {
+  const profile = await trusted();
+  const draftId = mockRandomUUID();
+  const firstSessionId = mockRandomUUID();
+  const secondSessionId = mockRandomUUID();
+  await runtime.selectTarget(`draft:${draftId}`, profile);
+  const draftTarget = await runtime.setGrant(
+    `draft:${draftId}`,
+    runtime.getTarget(`draft:${draftId}`)!,
+    { directory: '/srv/logs', files: ['app.log'] },
+  );
+  await runtime.attachDraftTarget(draftId, firstSessionId);
+  expect(runtime.getTarget(`draft:${draftId}`)).toEqual(draftTarget);
+  await runtime.selectTarget(firstSessionId, null);
+  expect(runtime.getTarget(`draft:${draftId}`)).toEqual(draftTarget);
+  await runtime.attachDraftTarget(draftId, secondSessionId);
+  await runtime.selectTarget(`draft:${draftId}`, null);
+  expect(runtime.getTarget(`draft:${draftId}`)).toBeNull();
+  expect((await runtime.resolveAgentTarget(secondSessionId))?.grant?.scope).toEqual({
+    directory: '/srv/logs',
+    files: ['app.log'],
+  });
 });
 
 const reusedFailure = (state = 'not-started') =>

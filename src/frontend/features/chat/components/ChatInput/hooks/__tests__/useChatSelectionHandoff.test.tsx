@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -6,6 +6,7 @@ import {
   createChatSelectionHandoff,
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
+import { ComposerDraft } from '@/frontend/components/Composer/ComposerDraft';
 import {
   ComposerProvider,
   useComposerState,
@@ -95,16 +96,13 @@ type ProbeProps = {
 let props: ProbeProps;
 
 function Probe({ token, initialAttachments, workspaceSessionId, workspaceFolderId }: ProbeProps) {
-  const store = useManagedComposerAttachments(
-    initialAttachments,
-    workspaceSessionId,
-    workspaceFolderId,
-  );
+  const [buffer] = useState(() => new ComposerDraft(mockInitialDraft, initialAttachments));
+  const store = useManagedComposerAttachments(buffer, workspaceSessionId, workspaceFolderId);
   useEffect(() => {
     mockAttachmentStore = store;
   }, [store]);
   return (
-    <ComposerProvider attachmentStore={store} initialDraft={mockInitialDraft}>
+    <ComposerProvider attachmentStore={store} draftStore={buffer}>
       <SelectionProbe token={token} />
     </ComposerProvider>
   );

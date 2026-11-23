@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentProtocolError,
   type AgentEvent,
@@ -23,12 +24,14 @@ import {
   type DurableAgentRuntime,
   type RuntimeArtifact,
   type RuntimeConversationEvent,
+  type RuntimeConversationSeed,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
   type RuntimeError,
   type RuntimeSqlDatabase,
   type RuntimeTool,
   type RuntimeToolResult,
+  type RuntimeWebTools,
 } from '../../runtime';
 import {
   createSqliteStoreHarness,
@@ -146,6 +149,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     hasUnfinishedWork: async () => (await conversations.unfinishedLanes()).length > 0,
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
+    compactContext: jest.fn(async () => 'unchanged' as const),
     configure: async () => {},
     editReply: jest.fn(async () => undefined),
     resourceFileEntryIds: async () => [],
@@ -1119,6 +1123,53 @@ describe('durable tool diagnostics', () => {
       await f.host.close();
     }
   });
+
+  test.each([
+    [true, 'preferred'],
+    [false, 'fallback'],
+    [undefined, 'disabled'],
+  ] as const)(
+    'equal normalized web policies keep a queued turn admissible (%s/%s)',
+    async (legacy, policy) => {
+      // Pi projection tests cover legacy row parsing; the host receives normalized configuration.
+      const modelTools = legacy === undefined ? policy : legacy ? 'preferred' : 'fallback';
+      const readiness = { clientSearchAvailable: true, clientFetchAvailable: false };
+      let currentPolicy: RuntimeWebTools = { ...readiness, modelTools };
+      const f = fixture({ webTools: async () => currentPolicy });
+      await f.reserve('running');
+      const stored: RuntimeConversationSeed['configuration'] & { version: 2 } = {
+        ...configuration,
+        version: 2,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: '',
+          appLanguage: 'zh-CN',
+          tools: [],
+        }),
+        webTools: { ...readiness, modelTools },
+      };
+      jest.spyOn(f.conversations, 'configuration').mockResolvedValue(stored);
+      await f.host.initialize();
+      const submit = () =>
+        f.host.submitMessage({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Next.' }],
+        });
+      try {
+        await expect(submit()).resolves.toMatchObject({ turnId: expect.any(String) });
+        expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+        currentPolicy = {
+          ...readiness,
+          modelTools: modelTools === 'disabled' ? 'preferred' : 'disabled',
+        };
+        await expect(submit()).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        expect(f.conversations.submit).toHaveBeenCalledTimes(1);
+      } finally {
+        await f.host.close();
+      }
+    },
+  );
 
   test('publishes the recovered queue to observations installed before initialization', async () => {
     const f = fixture();
@@ -3056,29 +3107,32 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('hands the frozen web policy to the Runtime with the conversation configuration', async () => {
-    const webTools = {
-      modelToolsPreferred: true,
-      clientSearchAvailable: true,
-      clientFetchAvailable: true,
-    };
-    const state = fixture({ webTools: async () => webTools });
-    const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
-    await state.host.initialize();
-    try {
-      await state.host.startSession({
-        sessionId: state.sessionId,
-        agentId: state.agentId,
+  test.each(['preferred', 'fallback', 'disabled'] as const)(
+    'hands the frozen web policy to the Runtime with the conversation configuration (%s)',
+    async (modelTools) => {
+      const webTools = {
+        modelTools,
+        clientSearchAvailable: true,
+        clientFetchAvailable: true,
+      };
+      const state = fixture({ webTools: async () => webTools });
+      const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
+      await state.host.initialize();
+      try {
+        await state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
 
-        userMessageId: uuid(),
-        assistantMessageId: uuid(),
-        parts: [{ type: 'text', text: 'Hello' }],
-      });
-      expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
-    } finally {
-      await state.host.close();
-    }
-  });
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Hello' }],
+        });
+        expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
 
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();
@@ -4436,6 +4490,31 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       controller.abort();
       await reading;
       await question?.catch(() => {});
+      await state.host.close();
+    }
+  });
+
+  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const before = [...state.steps];
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      expect(runningTurns(state)).toHaveLength(0);
+      await state.host.resumeSuspended();
+      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
+        before.filter((step) => step === 'close' || step === 'open'),
+      );
+    } finally {
       await state.host.close();
     }
   });

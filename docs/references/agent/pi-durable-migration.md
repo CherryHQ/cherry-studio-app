@@ -289,6 +289,18 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
+Mobile starts background compaction at 80% of the default input budget, following ordinary Desktop
+chat. The budget takes the lower of the model's independent input limit and its context window after
+the default reply reservation and safety margin. Pi runs blocking compaction above that budget
+when it finds older context to summarize.
+The compaction hook uses AI Core's bounded summarizer with the conversation's Pi model and
+credentials. Pi still owns range selection, scheduling, and the committed context head. An
+unsuccessful summary leaves the original head and settles the native task as failed.
+
+The context-usage panel can request a native manual compaction of the selected answer's working
+copy. It waits for both the task and the summary write. For a completed answer, the Host also saves
+the resulting checkpoint when it fits the existing checkpoint size limit.
+
 The composer reads current context usage separately from persisted request and billing statistics.
 At each committed transcript boundary, the observer reads Pi's public `Conversation.context()` and
 passes its effective messages to pi-ai's `estimateContextTokens`. This includes measured input,
@@ -435,11 +447,12 @@ after a restart never rebuilds it. Reconstruct dependencies for unfinished sessi
 and only then resume scheduling.
 
 Ordinary shutdown closes invocations without abort marks. Finite UIKit window expiry does the same
-when available background protection runs out. Foreground startup reopens retained tasks.
-[Background Activity Presentation](../background-activity-presentation.md) describes the
-independent Live Activity preference. Explicit user stop invokes Pi abort. Unsafe tools do not
-automatically re-execute after interruption. Current accounts, tool implementations and approval
-policy are reconstructed; credentials are resolved at request time and
+only when no continued-processing or audio protection remains. Foreground startup reopens retained
+tasks. Revocation of an iOS continued-processing task stops its owning work rather than suspending
+it for restart; see
+[Background Activity Presentation](../background-activity-presentation.md). Explicit user stop invokes
+Pi abort. Unsafe tools do not automatically re-execute after interruption. Current accounts, tool
+implementations and approval policy are reconstructed; credentials are resolved at request time and
 never serialized. Native task demand, including background compaction, holds the KeepAlive lease.
 Usage has a durable idempotent outbox; compaction usage belongs to the session rather than an
 invented assistant turn.
@@ -489,7 +502,8 @@ The generation and startup-repair hunks were removed in the 1.4.0 upgrade:
 
 The remaining [Pi Durable patch](../../../patches/@earendil-works__pi-durable@1.5.0.patch) contains
 Segmenter fallback and Han search terms, exact-name tool search, and the host Code Mode output
-hook with its final store-commit budget guard.
+hook with its final store-commit budget guard. The compaction hook can also fail the native task
+when the bounded summarizer fails, preventing a fallback to one unbounded request.
 The `declarations` import is upstream in 1.5.0. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a separate
 storage-lifetime concern. Mobile's manual whole-file clearing

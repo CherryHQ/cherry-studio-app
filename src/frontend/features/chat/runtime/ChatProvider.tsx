@@ -6,6 +6,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -38,6 +39,7 @@ import {
   isAgentSessionExecuting,
   type AgentSessionChatState,
 } from './AgentSessionChatClient';
+import { ChatComposers, type ComposerSeed, type PendingChatSend } from './ChatComposers';
 import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
@@ -48,14 +50,11 @@ type AgentChatSendInput = AgentSubmitMessageInput & {
   isCurrent: () => boolean;
 };
 
-export type PendingChatSend = Readonly<{
-  sessionId: string;
-  isNewSession: boolean;
-  messages: ReturnType<typeof createPendingChatMessages>;
-}>;
+export type { PendingChatSend } from './ChatComposers';
 
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
+  composers: ChatComposers;
   completeDraftHandoff: (sessionId: string) => void;
   getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
   /** Session metadata changed outside an observed event, such as a fork creating a new Session. */
@@ -82,6 +81,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
+  const [composers] = useState(() => new ChatComposers());
   const [draftHandoff] = useState(createAgentChatDraftHandoffState);
   const onSessionChanged = useCallback(
     (sessionId: string) => {
@@ -153,12 +153,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const value = useMemo(
     () => ({
       client,
+      composers,
       completeDraftHandoff: draftHandoff.complete,
       getDraftHandoff: draftHandoff.get,
       onSessionChanged,
       sendMessage,
     }),
-    [client, draftHandoff, onSessionChanged, sendMessage],
+    [client, composers, draftHandoff, onSessionChanged, sendMessage],
   );
 
   return (
@@ -271,29 +272,48 @@ export function useAgentChatDraftHandoff(
   return handoff;
 }
 
-export function useAgentChatControls(input: {
-  agentId?: string;
-  sshDraftId?: string;
-  workspaceFolderId?: string | null;
-  sessionId?: string;
-  composerKey: number;
-}) {
-  const { client, sendMessage } = useAgentChatContext();
+export function useAgentChatControls(
+  input: {
+    agentId?: string;
+    sshDraftId?: string;
+    workspaceFolderId?: string | null;
+    sessionId?: string;
+    composerKey: number;
+    isFocused?: boolean;
+  } & ComposerSeed,
+) {
+  const { client, composers, sendMessage } = useAgentChatContext();
   const { agentId, composerKey, sessionId, workspaceFolderId, sshDraftId } = input;
+  const isFocused = input.isFocused ?? true;
   const ssh = useBackendModule('ssh');
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
   const isSessionExecuting = useAgentSessionSelection(client, sessionId, isAgentSessionExecuting);
   const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
-  const [submission, setSubmission] = useState<{
-    composerKey: number;
-    userMessageId: string;
-    isSubmitting: boolean;
-    selectedMessageId?: string | null;
-    send?: PendingChatSend;
-  }>();
-  const currentSubmission = submission?.composerKey === composerKey ? submission : undefined;
+  const resolveComposer = () => ({
+    composerKey,
+    sessionId,
+    composer: composers.open(sessionId, input),
+  });
+  const [owner, setOwner] = useState(resolveComposer);
+  const currentOwner =
+    owner.composerKey === composerKey && owner.sessionId === sessionId ? owner : resolveComposer();
+  if (currentOwner !== owner) setOwner(currentOwner);
+  const { composer } = currentOwner;
+  const mountedComposer = useRef<typeof composer | null>(composer);
+  useLayoutEffect(() => composer.mount(), [composer]);
+  useLayoutEffect(() => {
+    mountedComposer.current = isFocused ? composer : null;
+    return () => {
+      mountedComposer.current = null;
+    };
+  }, [composer, isFocused]);
+  const currentSubmission = useSyncExternalStore(
+    composer.submission.subscribe,
+    composer.submission.get,
+    composer.submission.get,
+  );
   const pending = currentSubmission?.send;
   const isSubmitting = Boolean(currentSubmission?.isSubmitting);
   const selectedMessageId = currentSubmission?.selectedMessageId;
@@ -319,19 +339,9 @@ export function useAgentChatControls(input: {
   // Observe the source rows before branch filtering, including queue updates after admission.
   const isSendReconciled = useAgentSessionSelection(client, sessionId, selectSendReconciled);
   const pendingSend = isSendReconciled ? undefined : pending;
-  if (isSendReconciled && currentSubmission?.send) {
-    setSubmission({ ...currentSubmission, send: undefined });
-  }
-  // A send captures its composer key; a late completion compares it with the
-  // mounted key so a composer the user has left cannot navigate or update state.
-  const mountedComposerKeyRef = useRef<number | null>(composerKey);
-  useEffect(() => {
-    mountedComposerKeyRef.current = composerKey;
-    return () => {
-      mountedComposerKeyRef.current = null;
-    };
-  }, [composerKey]);
-
+  useLayoutEffect(() => {
+    if (isSendReconciled && pending) composer.acknowledge(pending.messages[0].id);
+  }, [composer, isSendReconciled, pending]);
   const cancellationSessionId = sessionId ?? pendingSend?.sessionId;
   const cancel = useCallback(() => {
     if (!cancellationSessionId) return Promise.resolve();
@@ -357,7 +367,7 @@ export function useAgentChatControls(input: {
       /** The draft's persisted choice, separate from the first reply model. */
       sessionModelId?: UniqueModelId;
     }) => {
-      const isCurrent = () => mountedComposerKeyRef.current === composerKey;
+      const isCurrent = () => mountedComposer.current === composer;
       const request = {
         ...message,
         sessionId: sessionId ?? uuidv7(),
@@ -378,8 +388,8 @@ export function useAgentChatControls(input: {
         messages: createPendingChatMessages(request),
       };
       const state = sessionId ? client.getState(sessionId) : undefined;
-      setSubmission({
-        composerKey,
+      if (!sessionId) composers.set(request.sessionId, composer);
+      composer.submission.set({
         userMessageId: request.userMessageId,
         isSubmitting: true,
         selectedMessageId: state?.snapshot?.session.activeNodeId,
@@ -398,29 +408,30 @@ export function useAgentChatControls(input: {
         });
         if (!sessionId && sshDraftId)
           void ssh.selectTarget(`draft:${sshDraftId}`, null).catch(() => {});
-        if (isCurrent()) {
-          setSubmission((current) =>
-            current?.composerKey === composerKey && current.userMessageId === request.userMessageId
-              ? { ...current, isSubmitting: false }
-              : current,
-          );
-        }
+        composer.finish(request.userMessageId, true);
       } catch (error) {
         if (!sessionId && sshDraftId)
           void ssh.selectTarget(request.sessionId, null).catch(() => {});
-        if (isCurrent())
-          setSubmission((current) =>
-            current?.composerKey === composerKey && current.userMessageId === request.userMessageId
-              ? { ...current, isSubmitting: false, send: undefined }
-              : current,
-          );
+        composer.finish(request.userMessageId, false);
+        if (!sessionId && composers.get(request.sessionId) === composer)
+          composers.delete(request.sessionId);
         // Stop during admission: the composer takes the draft back without a failure.
         throw error instanceof AgentProtocolError && error.view.code === 'CANCELLED'
           ? Object.assign(new Error(error.message), { name: 'AbortError' })
           : error;
       }
     },
-    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId, sshDraftId, ssh],
+    [
+      agentId,
+      client,
+      composer,
+      composers,
+      sendMessage,
+      sessionId,
+      workspaceFolderId,
+      sshDraftId,
+      ssh,
+    ],
   );
   const editMessage = useCallback(
     async ({
@@ -444,21 +455,18 @@ export function useAgentChatControls(input: {
     },
     [client],
   );
-  const completePendingSend = useCallback(
-    (userMessageId: string) => {
-      setSubmission((current) =>
-        current?.composerKey === composerKey &&
-        current.userMessageId === userMessageId &&
-        current.send
-          ? { ...current, send: undefined }
-          : current,
-      );
-    },
-    [composerKey],
+  const compactContext = useCallback(
+    (messageId: string) =>
+      sessionId
+        ? client.compactContext({ sessionId, messageId })
+        : Promise.resolve('unavailable' as const),
+    [client, sessionId],
   );
   return {
+    composer,
     cancel,
-    completePendingSend,
+    compactContext,
+    completePendingSend: composer.acknowledge,
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:

@@ -1,9 +1,18 @@
 import { AnchoredInfoPopover, type InfoPopoverAnchor } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type PropsWithChildren,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { v7 as uuidv7 } from 'uuid';
 
 import { useComposerActions, useComposerMeta } from '@/frontend/components/Composer';
+import { createComposerValue } from '@/frontend/components/Composer/ComposerDraft';
 import { MessageSelectionActionProvider } from '@/frontend/components/Message';
 import { useNextFrame } from '@/frontend/hooks/useNextFrame';
 import type { MessageQuote, QuoteFields } from '@/shared/contracts/agent';
@@ -22,12 +31,14 @@ import { createQuoteMentionLabel, readQuoteMentions } from './quoteMentions';
 export function ChatQuoteProvider({
   children,
   sessionId,
+  store,
   enabled,
   authorName,
   openQuote,
   highlight,
 }: PropsWithChildren<{
   sessionId?: string;
+  store?: ReturnType<typeof createComposerValue<QuoteState>>;
   enabled: boolean;
   authorName?: string;
   openQuote: ChatQuoteActions['openQuote'];
@@ -36,16 +47,18 @@ export function ChatQuoteProvider({
   const { t } = useTranslation();
   const { inputRef } = useComposerMeta();
   const { subscribeDraftEdits } = useComposerActions();
-  const [state, setState] = useState<QuoteState>({ fields: {}, isBusy: false });
+  const [quoteState] = useState(
+    () => store ?? createComposerValue<QuoteState>({ fields: {}, isBusy: false }),
+  );
+  const state = useSyncExternalStore(quoteState.subscribe, quoteState.get, quoteState.get);
+  const update = quoteState.set;
   const [preview, setPreview] = useState<{
     anchor: InfoPopoverAnchor;
     text: string;
     caption: string;
   }>();
-  const current = useRef(state);
   const mounted = useRef(true);
   const { schedule: scheduleFocusFrame } = useNextFrame();
-  const locked = useRef(false);
   useEffect(() => subscribeDraftEdits(() => setPreview(undefined)), [subscribeDraftEdits]);
   useEffect(() => {
     mounted.current = true;
@@ -53,85 +66,77 @@ export function ChatQuoteProvider({
       mounted.current = false;
     };
   }, []);
-  const update = useCallback((value: QuoteState) => {
-    current.current = value;
-    if (mounted.current) setState(value);
-  }, []);
   const clearQuote = useCallback(() => {
-    if (!locked.current) {
+    if (!quoteState.get().isBusy) {
       setPreview(undefined);
       update({ fields: {}, isBusy: false });
     }
-  }, [update]);
+  }, [quoteState, update]);
   const restoreQuote = useCallback(
-    ({ quotes, quoteAuthor }: QuoteFields) => {
-      if (!locked.current)
-        update({ fields: quotes && quoteAuthor ? { quotes, quoteAuthor } : {}, isBusy: false });
+    (fields: QuoteFields) => {
+      if (!quoteState.get().isBusy)
+        update({ fields: fields.quotes && fields.quoteAuthor ? fields : {}, isBusy: false });
     },
-    [update],
+    [quoteState, update],
   );
   const quoteSelection = useCallback(
     ({ messageId, text }: { messageId: string; text: string }) => {
-      if (locked.current || !text.trim()) return;
+      if (quoteState.get().isBusy || !text.trim()) return;
       const quote: MessageQuote = { id: uuidv7(), sourceMessageId: messageId, text };
       update({
         fields: {
-          quotes: [...(current.current.fields.quotes ?? []), quote],
+          quotes: [...(quoteState.get().fields.quotes ?? []), quote],
           quoteAuthor: { role: 'assistant', ...(authorName ? { name: authorName } : {}) },
         },
         isBusy: false,
       });
       // The native selection menu dismisses after this callback; focus once it has gone.
       scheduleFocusFrame(() => {
-        if (mounted.current && !locked.current) {
+        if (mounted.current && !quoteState.get().isBusy) {
           inputRef.current?.focus();
           inputRef.current?.insertLink(createQuoteMentionLabel(text), `quote://${quote.id}`);
           inputRef.current?.insertText(' ');
         }
       });
     },
-    [authorName, inputRef, scheduleFocusFrame, update],
+    [authorName, inputRef, quoteState, scheduleFocusFrame, update],
   );
   const capture = useCallback(
     (draft: string): QuoteAttempt => {
-      if (locked.current || current.current.isBusy)
-        throw new Error('Quote admission is already pending.');
-      locked.current = true;
-      const previousFields = current.current.fields;
+      if (quoteState.get().isBusy) throw new Error('Quote admission is already pending.');
+      const previousFields = quoteState.get().fields;
       const { quotes } = readQuoteMentions(draft, previousFields.quotes);
       const fields: QuoteFields = quotes.length
         ? { quotes, quoteAuthor: previousFields.quoteAuthor }
         : {};
       setPreview(undefined);
-      update({ ...current.current, isBusy: Boolean(fields.quotes) });
+      update({ ...quoteState.get(), isBusy: true });
       let finished = false;
       return {
         fields,
         finish(accepted) {
           if (finished) return;
           finished = true;
-          locked.current = false;
-          if (!mounted.current) return;
           update({ fields: accepted ? {} : previousFields, isBusy: false });
         },
       };
     },
-    [update],
+    [quoteState, update],
   );
   const previewQuote = useCallback<ChatQuoteActions['previewQuote']>(
     ({ url, ...anchor }) => {
-      if (!mounted.current || locked.current || !url.startsWith('quote://')) return;
-      const quote = current.current.fields.quotes?.find(
-        (item) => item.id === url.slice('quote://'.length),
-      );
+      if (!mounted.current || quoteState.get().isBusy || !url.startsWith('quote://')) return;
+      const quote = quoteState
+        .get()
+        .fields.quotes?.find((item) => item.id === url.slice('quote://'.length));
       if (quote)
         setPreview({
           anchor,
           text: quote.text,
-          caption: current.current.fields.quoteAuthor?.name ?? t('chat.quote.assistant'),
+          caption: quoteState.get().fields.quoteAuthor?.name ?? t('chat.quote.assistant'),
         });
     },
-    [t],
+    [quoteState, t],
   );
   const actions = useMemo(
     () => ({ clearQuote, restoreQuote, capture, openQuote, previewQuote }),

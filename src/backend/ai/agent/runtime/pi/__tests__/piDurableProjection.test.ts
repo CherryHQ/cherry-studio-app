@@ -8,7 +8,12 @@ import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
 import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
-import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
+import {
+  PiConfigurationSchema,
+  piToolBlueprint,
+  projectPiTurn,
+  serializePiConfiguration,
+} from '../piDurableProjection';
 import { piDurableSetupError } from '../piDurableStream';
 import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
 
@@ -1274,4 +1279,114 @@ test('live reasoning carries no text while live and settled tool inputs remain c
   expect(settled.parts[1]).toHaveProperty('input.code', code);
   expect(message.content[0]).toHaveProperty('thinking', text);
   expect(message.content[1]).toHaveProperty('arguments.code', code);
+});
+
+describe('web policy persistence', () => {
+  const configuration = {
+    version: 2,
+    model: { providerId: 'p', modelId: 'm' },
+    instructions: '',
+    options: {},
+    tools: [],
+  };
+  const readiness = { clientSearchAvailable: true, clientFetchAvailable: false };
+  const webRoutes = { search: 'none', fetch: 'server' };
+
+  test.each([
+    [1, true],
+    [1, false],
+    [2, true],
+    [2, false],
+  ] as const)('normalizes legacy web policy in version %s (legacy %s)', (version, legacy) => {
+    const parsed = PiConfigurationSchema.parse({
+      ...configuration,
+      version,
+      webTools: { ...readiness, modelToolsPreferred: legacy },
+      webRoutes,
+    });
+    expect(parsed.version).toBe(2);
+    expect(parsed.webTools).toEqual({
+      ...readiness,
+      modelTools: legacy ? 'preferred' : 'fallback',
+    });
+    expect(parsed.webRoutes).toEqual(webRoutes);
+    const equivalent = PiConfigurationSchema.parse({
+      ...configuration,
+      webTools: { ...readiness, modelTools: legacy ? 'preferred' : 'fallback' },
+      webRoutes,
+    });
+    expect(parsed).toEqual(equivalent);
+  });
+
+  test.each(['preferred', 'fallback', 'disabled'])(
+    'round-trips each three-state policy and removes the legacy selector (%s)',
+    (modelTools) => {
+      const parsed = PiConfigurationSchema.parse({
+        ...configuration,
+        webTools: { ...readiness, modelTools, modelToolsPreferred: false },
+        webRoutes,
+      });
+      expect(parsed.webTools).toEqual({ ...readiness, modelTools });
+      expect(parsed.webRoutes).toEqual(webRoutes);
+      expect(PiConfigurationSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+    },
+  );
+
+  test.each(['preferred', 'fallback', 'disabled'] as const)(
+    'persists the v2 fields required by the embedded runtime for %s',
+    (modelTools) => {
+      const routes = modelTools === 'disabled' ? { search: 'none', fetch: 'client' } : webRoutes;
+      const parsed = PiConfigurationSchema.parse({
+        ...configuration,
+        webTools: { ...readiness, modelTools },
+        webRoutes: routes,
+      });
+      const saved = serializePiConfiguration(parsed);
+      expect(saved.webTools).toEqual({
+        ...readiness,
+        modelTools,
+        modelToolsPreferred: modelTools === 'preferred',
+      });
+      expect(saved.webRoutes).toEqual(routes);
+      expect(PiConfigurationSchema.parse(saved)).toEqual(parsed);
+    },
+  );
+
+  test('defaults a missing selector only inside a present policy', () => {
+    const absent = PiConfigurationSchema.parse(configuration);
+    expect(absent).not.toHaveProperty('webTools');
+    expect(PiConfigurationSchema.parse({ ...configuration, webRoutes })).toMatchObject({
+      webRoutes,
+    });
+    expect(PiConfigurationSchema.parse({ ...configuration, webRoutes })).not.toHaveProperty(
+      'webTools',
+    );
+    expect(absent.webRoutes).toBeUndefined();
+    const present = PiConfigurationSchema.parse({ ...configuration, webTools: readiness });
+    expect(present.webTools).toEqual({ ...readiness, modelTools: 'preferred' });
+    expect(present.webRoutes).toBeUndefined();
+  });
+
+  test('prefers a valid enum and rejects malformed enums despite legacy fallback', () => {
+    expect(
+      PiConfigurationSchema.parse({
+        ...configuration,
+        webTools: { ...readiness, modelTools: 'disabled', modelToolsPreferred: true },
+      }).webTools?.modelTools,
+    ).toBe('disabled');
+    for (const modelTools of [null, '', 'preferred ', ' fallback', true, false, 0, 1, [], {}]) {
+      expect(() =>
+        PiConfigurationSchema.parse({
+          ...configuration,
+          webTools: { ...readiness, modelTools, modelToolsPreferred: true },
+        }),
+      ).toThrow();
+    }
+    for (const webTools of [
+      { ...readiness, modelTools: 'disabled', modelToolsPreferred: null },
+      { modelTools: 'disabled', clientSearchAvailable: true },
+      { ...readiness, clientFetchAvailable: 1 },
+    ])
+      expect(() => PiConfigurationSchema.parse({ ...configuration, webTools })).toThrow();
+  });
 });

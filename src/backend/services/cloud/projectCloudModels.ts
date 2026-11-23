@@ -4,7 +4,12 @@ import type { Database } from '@/backend/data/db/DbService';
 import { userModelTable, userProviderTable } from '@/backend/data/db/schemas';
 import { inferCustomModelReasoning } from '@/backend/data/services/ProviderRegistryService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME, type CloudModel } from '@/shared/contracts/cloud';
+import {
+  CLOUD_DEFAULT_CHAT_ENDPOINT,
+  CLOUD_PROVIDER_ID,
+  CLOUD_PROVIDER_NAME,
+  type CloudModel,
+} from '@/shared/contracts/cloud';
 import {
   createUniqueModelId,
   MODEL_CAPABILITY,
@@ -39,7 +44,7 @@ export async function projectCloudModels(
         'anthropic-messages': { baseUrl: origin, adapterFamily: 'anthropic' },
         'openai-chat-completions': { baseUrl: origin, adapterFamily: 'openai-compatible' },
       },
-      defaultChatEndpoint: 'anthropic-messages' as const,
+      defaultChatEndpoint: CLOUD_DEFAULT_CHAT_ENDPOINT,
       apiKeys: [],
       authConfig: { type: 'api-key' as const },
     };

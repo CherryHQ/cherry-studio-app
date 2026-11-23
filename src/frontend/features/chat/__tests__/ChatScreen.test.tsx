@@ -102,6 +102,7 @@ jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
   useIsPreview: () => false,
+  useIsFocused: () => true,
   useLocalSearchParams: () => mockRouteParams,
   useRouter: () => ({ push: jest.fn() }),
 }));
@@ -122,6 +123,7 @@ jest.mock('@/frontend/hooks/agent', () => ({
 }));
 
 const mockChatControls = {
+  composer: { draft: {}, quote: {} },
   cancel: jest.fn(),
   canSend: undefined,
   completePendingSend: jest.fn(),
@@ -270,7 +272,7 @@ describe('ChatScreen composer dock wiring', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
-    expect(chatControlsInput).toEqual({
+    expect(chatControlsInput).toMatchObject({
       agentId: 'agent-1',
       composerKey: 0,
       sessionId: 'session-1',
@@ -282,7 +284,7 @@ describe('ChatScreen composer dock wiring', () => {
       renderer?.update(<ChatScreen />);
     });
 
-    expect(chatControlsInput).toEqual({
+    expect(chatControlsInput).toMatchObject({
       agentId: 'agent-1',
       composerKey: 1,
       sessionId: 'session-2',

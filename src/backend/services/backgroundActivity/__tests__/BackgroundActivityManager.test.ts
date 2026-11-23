@@ -1,5 +1,7 @@
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import { Emitter } from '@/backend/core/lifecycle';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import {
   BACKGROUND_ACTIVITY_LINGER_MS,
   type BackgroundActivityBaseProps,
@@ -446,6 +448,69 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       );
     }
     await manager._doStop();
+  });
+
+  test('uses one progress card per destination while system admission and the preference change', async () => {
+    const chat = createMockPresenter({ requiresForegroundStart: true });
+    const painting = createMockPresenter({ requiresForegroundStart: true });
+    const chatUrl = 'cherry:///?sessionId=1';
+    const paintingUrl = 'cherry://paintings?paintingId=1';
+    const reserved = new Set([chatUrl]);
+    let admitted = false;
+    const changes = new Emitter<string | undefined>();
+    const manager = await createManager([chat.presenter, painting.presenter], {
+      has: (url) => reserved.has(url),
+      hasActive: () => admitted,
+      onChange: changes.event,
+    });
+    const session = manager.startSession({
+      deepLinkUrl: chatUrl,
+      presenter: chat.presenter,
+      props: makeProps('preparing'),
+      tag: 'chat',
+    });
+    session.update(makeProps('replying'));
+    manager.startSession({
+      deepLinkUrl: paintingUrl,
+      presenter: painting.presenter,
+      props: makeProps('image'),
+      tag: 'painting',
+    });
+    expect(chat.presenter.start).not.toHaveBeenCalled();
+    expect(painting.presenter.start).toHaveBeenCalledTimes(1);
+
+    expect(manager.hasProgressActivity()).toBe(true);
+    // System admission for chat retires the painting fallback too.
+    admitted = true;
+    changes.fire(chatUrl);
+    await flushOperations();
+    expect(painting.handles[0]!.end).toHaveBeenCalledWith(
+      'immediate',
+      expect.any(Object),
+      expect.any(Object),
+    );
+
+    isPresentationEnabled = false;
+    presentationEnabledListener?.();
+    reserved.delete(chatUrl);
+    changes.fire(chatUrl);
+    expect(manager.hasProgressActivity()).toBe(true);
+    admitted = false;
+    changes.fire(chatUrl);
+    expect(manager.hasProgressActivity()).toBe(false);
+    expect(chat.presenter.start).not.toHaveBeenCalled();
+    appStateListener?.('background');
+    isPresentationEnabled = true;
+    presentationEnabledListener?.();
+    expect(chat.presenter.start).not.toHaveBeenCalled();
+    appStateListener?.('active');
+    expect(chat.presenter.start).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: 'replying' }),
+      chatUrl,
+    );
+    expect(painting.presenter.start).toHaveBeenCalledTimes(2);
+    await manager._doStop();
+    expect(changes.listenerCount).toBe(0);
   });
 
   test('turning presentation off removes running and settled cards across presenters', async () => {
@@ -1042,9 +1107,12 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     await manager._doStop();
   });
 
-  async function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {
+  async function createManager(
+    presenters: readonly { clearOrphans(): Promise<number> }[],
+    systemActivities?: KeepAliveSource['systemActivities'],
+  ) {
     const manager = new BackgroundActivityManager(
-      { acquire: mockAcquire },
+      { acquire: mockAcquire, systemActivities },
       {
         getColorScheme: () => 'dark',
         isPresentationEnabled: () => isPresentationEnabled,

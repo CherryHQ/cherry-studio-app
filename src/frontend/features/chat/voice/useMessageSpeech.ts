@@ -22,9 +22,14 @@ export function useMessageSpeech(messageId: string, text: string | undefined) {
       return;
     }
     if (!text) return;
-    voice.speak(text, { key: messageId }).catch((error: unknown) => {
-      toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
-    });
+    voice
+      .speak(text, {
+        key: messageId,
+        playbackLabels: { title: t('settings.voice.speech.title'), stop: t('voice.speech.stop') },
+      })
+      .catch((error: unknown) => {
+        toast.show({ label: t(voiceErrorLabelKey(error)), variant: 'danger' });
+      });
   }, [isSpeaking, messageId, t, text, toast, voice]);
   return { isSpeaking, toggle };
 }

@@ -55,7 +55,7 @@ it already exists.
 | Remote Agent template catalogs and saved content | `useAgentTemplateCatalog` in `src/frontend/data/agentTemplates`; `Backend.agentTemplates` owns region routing, tolerant field reads and disk snapshots; [source policy](../../src/backend/services/agentTemplates/README.md) |
 | Text translation | The translation module in `src/backend/services/translation` |
 | Dictation, reading aloud, offline audio-file transcription, and voice engine choice | `Backend.voice`, implemented in `src/backend/services/voice`; see [Voice Input And Speech](./voice.md) |
-| Task-owned iOS continued processing, finite execution and audio fallback | `DurableAgentHost` and `JobRuntime` own execution leases; chat and painting use shared UIKit time and consented audio independently of their Live Activities; the final lease release stops protection; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
+| Task-owned iOS continued processing, finite execution and audio fallback | `DurableAgentHost` and `JobRuntime` own execution leases; `KeepAliveCoordinator` carries real progress to `IosBackgroundExecutionSource`, which stops shared protection when the final lease releases; SystemIntegration owns `ContinuedProcessing` and consented `BackgroundAudio`; voice declares speech/capture uses through its existing `audioSession` adapter |
 | Joining dictated utterances without spaces in Chinese or Japanese | `appendUtterance` in `src/shared/utils/dictationText.ts` |
 | Quoted answer snapshots and inline positions on a user message | `src/shared/contracts/agent/messageQuote.ts`; the model's blockquotes in `runtimeUserText` and `formatMessageQuote`, `src/backend/ai/agent/host/turnRuntimeInput.ts` |
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
@@ -99,6 +99,8 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Shared motion vocabulary | `@cherrystudio/ui/motion` in `packages/ui/src/motion.ts` (4-tier curves, springs, durations, `pressMotion`, `ambientMotion`) |
+| Semantic haptic feedback | `@cherrystudio/ui/haptics` in `packages/ui/src/haptics.ts` (`triggerHaptic`, `haptics`, `HapticIntent`) |
 | File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |

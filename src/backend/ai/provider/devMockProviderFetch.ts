@@ -232,11 +232,16 @@ export function createDevMockFetch(): (
       );
     }
 
+    const isCompactionSummary =
+      messages[0]?.role === 'system' &&
+      extractText(messages[0]?.content).includes('Write a conversation summary');
     const toolResultText =
       lastMessage?.role === 'tool' ? extractText(lastMessage.content).trim() : '';
     const replyText = toolResultText
       ? `[dev-mock] Tool result: ${toolResultText}`
-      : `[dev-mock] Echo: ${lastUserText || 'ready'}`;
+      : isCompactionSummary
+        ? '<analysis>Summarizing conversation in dev-mock mode.</analysis>\n<summary>[dev-mock] Compacted summary</summary>'
+        : `[dev-mock] Echo: ${lastUserText || 'ready'}`;
     const reasoningText = lastUserText.includes('[mock:reasoning]')
       ? 'Analyzing request deterministically in dev-mock mode.'
       : '';

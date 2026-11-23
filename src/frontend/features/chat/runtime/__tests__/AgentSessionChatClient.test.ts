@@ -162,6 +162,7 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelSubmission: jest.fn(),
+    compactContext: jest.fn(),
     steerQueuedInput: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<
@@ -959,7 +960,7 @@ describe('AgentSessionChatClient', () => {
     },
   );
 
-  test('stops a submission the Host is still admitting and releases the composer', async () => {
+  test('stops a submission after leaving and reopening the session during admission', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -986,6 +987,9 @@ describe('AgentSessionChatClient', () => {
     });
     const rejected = expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
     await waitForCall(protocol.submitMessage);
+    unsubscribe();
+    const release = client.subscribe('session-1', jest.fn());
+    expect(client.getState('session-1').isSubmitting).toBe(true);
 
     await client.cancelTurn('session-1');
     await client.cancelTurn('session-1');
@@ -997,7 +1001,7 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').isSubmitting).toBe(false);
     await client.cancelTurn('session-1');
     expect(protocol.cancelSubmission).toHaveBeenCalledTimes(1);
-    unsubscribe();
+    release();
   });
 
   test('never submits when stopped before the Host receives the submission', async () => {

@@ -456,6 +456,7 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  compactContext(input: { sessionId: string; messageId: string }): Promise<'compacted' | 'unchanged' | 'unavailable'>
   editUserMessage(input: {
     sessionId: string
     messageId: string

@@ -4,8 +4,11 @@ import {
   cloudModelUnavailable,
   getActiveCloudEntitlements,
   CloudModelCatalogSchema,
-  CloudMemberModelCatalogSchema,
 } from '@/shared/contracts/cloud';
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
 
 import { cloudSnapshot } from './_cloudFixtures';
 
@@ -91,7 +94,7 @@ test('the plans contract keeps available paid plans when there is no current sub
   expect(plans.available_plans).toEqual([plan]);
 });
 
-test('parses all 14 fields for paid, free-plan, AMD and member-only standalone models in one catalog', () => {
+test('preserves advertised rules for paid, free-plan, AMD and standalone models', () => {
   const base = cloudSnapshot().models[0];
   const data = [
     base,
@@ -109,45 +112,74 @@ test('parses all 14 fields for paid, free-plan, AMD and member-only standalone m
     { ...base, id: 'standalone', requires_plan: false, standalone: true, is_free: true },
   ];
   expect(CloudModelCatalogSchema.parse({ data })).toEqual({ data });
-  expect(CloudMemberModelCatalogSchema.parse({ data })).toEqual({ data });
-  expect(
-    CloudModelCatalogSchema.safeParse({
-      data: [{ ...base, provider: 'another-partner', new_field: true }],
-    }).success,
-  ).toBe(true);
-  for (const key of Object.keys(base)) {
-    const incomplete = { data: [{ ...base, [key]: undefined }] };
-    expect(CloudModelCatalogSchema.safeParse(incomplete).success).toBe(false);
-    expect(CloudMemberModelCatalogSchema.safeParse(incomplete).success).toBe(false);
-  }
+  expect(CloudModelCatalogSchema.parse({ data: [] }).data).toEqual([]);
 });
 
-test('only signed-in discovery accepts the seven subscription fields from Global', () => {
-  const legacy = {
-    id: 'subscription-model',
-    display_name: 'Subscription model',
-    endpoint_type: 'anthropic-messages',
-    context_window: 128000,
-    max_output_tokens: 8192,
-    capabilities: null,
-    available_features: null,
-  };
-  expect(CloudModelCatalogSchema.safeParse({ data: [legacy] }).success).toBe(false);
-  expect(CloudMemberModelCatalogSchema.parse({ data: [legacy] }).data[0]).toEqual({
-    ...legacy,
-    capabilities: [],
-    available_features: [],
-    requires_login: true,
-    requires_plan: true,
-    is_free: false,
-    standalone: false,
-    provider: null,
-    activation_required: false,
-    activation_endpoint: null,
+test('reads usable rows and fields independently, applying defaults to missing or invalid metadata', () => {
+  const routing = { id: 'cloud-model', endpoint_type: 'anthropic-messages' };
+  const { data } = CloudModelCatalogSchema.parse({
+    data: [
+      null,
+      { endpoint_type: routing.endpoint_type },
+      { ...routing, id: ' ' },
+      {
+        ...routing,
+        display_name: null,
+        context_window: -1,
+        capabilities: ['function-call', {}],
+        available_features: ['chat', 3, 'translate'],
+        requires_login: 'false',
+        extra_field: true,
+      },
+    ],
   });
-  for (const partial of [{ provider: 'amd' }, { standalone: true }, { requires_login: false }]) {
-    expect(
-      CloudMemberModelCatalogSchema.safeParse({ data: [{ ...legacy, ...partial }] }).success,
-    ).toBe(false);
-  }
+  expect(data).toEqual([
+    {
+      ...routing,
+      display_name: routing.id,
+      context_window: DEFAULT_MODEL_CONTEXT_WINDOW,
+      max_output_tokens: DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+      capabilities: ['function-call'],
+      available_features: ['chat', 'translate'],
+      requires_login: true,
+      requires_plan: true,
+      is_free: false,
+      standalone: false,
+      provider: null,
+      activation_required: false,
+      activation_endpoint: null,
+    },
+  ]);
+  expect(CloudModelCatalogSchema.parse({}).data).toEqual([]);
+  expect(CloudModelCatalogSchema.parse({ data: null }).data).toEqual([]);
+});
+
+test('defaults each field independently for models with only an ID or additional provider metadata', () => {
+  const { data } = CloudModelCatalogSchema.parse({
+    data: [
+      { id: 'bare-model' },
+      {
+        id: 'partner-model',
+        endpoint_type: 'future-protocol',
+        provider: 'partner',
+        requires_plan: false,
+        activation_endpoint: '/activate',
+      },
+    ],
+  });
+  expect(data).toMatchObject([
+    {
+      id: 'bare-model',
+      display_name: 'bare-model',
+      endpoint_type: 'anthropic-messages',
+      requires_plan: true,
+      activation_required: false,
+    },
+    {
+      id: 'partner-model',
+      endpoint_type: 'anthropic-messages',
+      requires_plan: false,
+      activation_required: false,
+    },
+  ]);
 });

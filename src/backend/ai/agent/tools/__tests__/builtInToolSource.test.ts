@@ -143,7 +143,10 @@ describe('createSystemCapabilitySource', () => {
       approval: 'ask',
       autoApprovalEligible: false,
     });
-    target = { ...target, grant: { id: 'grant', expiresAt: Date.now() + 3600000 } };
+    target = {
+      ...target,
+      grant: { scope: 'diagnostics' as const, id: 'grant', expiresAt: Date.now() + 3600000 },
+    };
     expect(command(await resolve({}, options))).toMatchObject({
       approval: 'auto',
       autoApprovalEligible: false,
@@ -154,6 +157,20 @@ describe('createSystemCapabilitySource', () => {
     expect(fileTools).toHaveLength(5);
     for (const tool of fileTools)
       expect(tool).toMatchObject({ approval: 'ask', autoApprovalEligible: false });
+    target = {
+      ...target,
+      grant: {
+        id: 'files',
+        expiresAt: Date.now() + 60000,
+        scope: { directory: '/srv/project', files: ['app.log'] },
+      },
+    };
+    const scoped = await resolve({}, options);
+    expect(command(scoped)?.approval).toBe('ask');
+    const read = scoped.find((item) => item.providerName === 'ssh_read_file')!;
+    expect(read.approval).toBe('auto');
+    expect(read.requiresApproval!({ path: 'other' })).toBe(true);
+    expect(read.requiresApproval!({ path: 'app.log' })).toBe(false);
     expect(capabilityIds(await resolve({}, { ssh }))).not.toContain('ssh_execute');
   });
 

@@ -8,6 +8,7 @@ import type {
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
@@ -524,7 +525,14 @@ export class DurableAgentHost implements AgentProtocol {
 
   private startSessionExecution(sessionId: string): void {
     if (this.sessionExecutions.has(sessionId)) return;
-    const lease = this.ports.executionLease?.((reason) => this.suspend(reason), sessionId);
+    const lease = this.ports.executionLease?.(
+      (reason) =>
+        reason instanceof KeepAliveInterruptionError &&
+        reason.reason === 'continued-processing-expired'
+          ? this.cancelBackgroundSession(sessionId, reason)
+          : this.suspend(reason),
+      sessionId,
+    );
     if (lease) this.sessionExecutions.set(sessionId, { lease, completed: false });
   }
 
@@ -1051,6 +1059,10 @@ export class DurableAgentHost implements AgentProtocol {
         signal.throwIfAborted();
         plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
         this.prepared.set(executionKey(target.lane, requestId), { sessionId, turnId, plan });
+        this.sessionExecutions.get(sessionId)?.lease.update?.({
+          title: selected?.name || plan.agent.name,
+          completedUnitCount: 1,
+        });
         await this.conversations.submit(target.lane, {
           requestId,
           turnId,
@@ -1243,6 +1255,34 @@ export class DurableAgentHost implements AgentProtocol {
       fail('SESSION_BUSY', 'The fork point is still running.');
     this.forksToName.set(result.session.id, null);
     return result.session;
+  }
+
+  async compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    const { sessionId, messageId } = AgentSelectMessageInputSchema.parse(input);
+    this.assertIdle(sessionId);
+    return this.admit(sessionId, async (signal) => {
+      const lanes = await this.syncSession(sessionId, true);
+      const session = await this.requireSession(sessionId);
+      if (session.activeNodeId !== messageId) return 'unavailable' as const;
+      for (const lane of lanes) {
+        signal.throwIfAborted();
+        const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
+        if (!latest || latest.assistantMessageId !== messageId) continue;
+        if ((await this.conversations.configuration(lane)).kind !== 'language')
+          return 'unavailable' as const;
+        const outcome = await this.conversations.compactContext(lane, signal);
+        if (outcome === 'busy') fail('SESSION_BUSY', 'The conversation is already compacting.');
+        if (outcome === 'compacted' && latest.status === 'completed') {
+          await this.captureCheckpoint(lane, latest).catch((error: unknown) => {
+            logger.warn('Could not save the compacted Agent checkpoint', error as Error, {
+              sessionId,
+            });
+          });
+        }
+        return outcome;
+      }
+      return 'unavailable' as const;
+    });
   }
 
   async retryMessage(
@@ -2269,20 +2309,24 @@ export class DurableAgentHost implements AgentProtocol {
       if (!(await this.isCurrentConversation(lane))) continue;
       const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
-      await this.traceOperation('ai.checkpoint', latest.identity, async () => {
-        const { contextCheckpoint } = await this.conversations.exportTurn(
-          lane,
-          latest.identity.requestId,
-          { currentContext: true },
-        );
-        if (contextCheckpoint)
-          await this.store.saveContextCheckpoint(
-            latest.assistantMessageId,
-            latest.identity.turnId,
-            contextCheckpoint,
-          );
-      });
+      await this.captureCheckpoint(lane, latest);
     }
+  }
+
+  private captureCheckpoint(lane: RuntimeLane, turn: RuntimeDurableTurn) {
+    return this.traceOperation('ai.checkpoint', turn.identity, async () => {
+      const { contextCheckpoint } = await this.conversations.exportTurn(
+        lane,
+        turn.identity.requestId,
+        { currentContext: true },
+      );
+      if (contextCheckpoint)
+        await this.store.saveContextCheckpoint(
+          turn.assistantMessageId,
+          turn.identity.turnId,
+          contextCheckpoint,
+        );
+    });
   }
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
@@ -2500,6 +2544,8 @@ export class DurableAgentHost implements AgentProtocol {
       this.screenSuppressedRequests.delete(previousRequestId);
     for (const waiter of state.waiters)
       if (state.active?.identity.requestId === waiter.requestId) waiter.resolve();
+    if (state.active?.parts.some((part) => part.type === 'text' && part.text.length > 0))
+      this.sessionExecutions.get(sessionId)?.lease.update?.({ completedUnitCount: 2 });
     this.updateSessionExecution(sessionId);
     this.reconcileScreenAwake();
   }
@@ -2860,6 +2906,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (session) {
           this.publish(session.id, { type: 'session.updated', session });
           this.background.updateSessionTitle(session.id, session.name);
+          this.sessionExecutions.get(session.id)?.lease.update?.({ title: session.name });
         }
       }),
     );
@@ -2935,6 +2982,14 @@ export class DurableAgentHost implements AgentProtocol {
         'SESSION_RECOVERY_FAILED',
         'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
       );
+  }
+
+  /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
+  private async cancelBackgroundSession(sessionId: string, reason: Error): Promise<void> {
+    this.admissions.get(sessionId)?.controller.abort(reason);
+    await Promise.all(
+      this.liveStates(sessionId).map((state) => this.conversations.abort(state.lane)),
+    );
   }
 
   private recordQueue(

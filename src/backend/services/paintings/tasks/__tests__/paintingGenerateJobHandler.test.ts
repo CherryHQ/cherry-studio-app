@@ -392,7 +392,11 @@ describe('createPaintingGenerateJobHandler', () => {
         const handler = createPaintingGenerateJobHandler(dependencies);
 
         expect(handler.executionClass).toBe('user-continued');
-        expect(handler.continuedProcessing).toBeUndefined();
+        expect(handler.continuedProcessing?.(jobInput)).toEqual({
+          deepLinkUrl: `${scheme}://paintings?paintingId=painting-1`,
+          title: jobInput.modelName,
+          subtitle: expect.any(String),
+        });
         await handler.execute(createContext());
 
         expect(startSession).toHaveBeenCalledWith(

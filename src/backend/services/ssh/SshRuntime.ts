@@ -28,6 +28,9 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import type { SshHostProbe, SshModule } from '@/shared/contracts/ssh';
 import {
   SaveSshProfileSchema,
+  grantedSshReadPath,
+  SshReadScopeSchema,
+  type SshGrantScope,
   SshCommandInputSchema,
   SshFileRequestSchema,
   SshFilePathSchema,
@@ -155,6 +158,7 @@ export class SshRuntime extends BaseService implements SshModule {
   }
 
   isAvailable = () => !!getSshNative();
+  supportsFileReadGrants = () => getSshNative()?.supportsPinnedReadPaths === true;
   hasPendingStorageWork = () => this.queued > 0 || this.active.size > 0 || this.transfers.size > 0;
   getAuthenticationRequests = () => this.authenticationRequests;
   subscribeAuthentication = (listener: () => void) => {
@@ -463,22 +467,27 @@ export class SshRuntime extends BaseService implements SshModule {
     return { selectionId: randomUUID(), profile, grant: null };
   }
 
-  setCommandGrant = (sessionId: string, expected: SshTarget, allowCommands: boolean) =>
+  setGrant = (sessionId: string, expected: SshTarget, scope: SshGrantScope | null) =>
     this.serialize(async () => {
-      this.assertAgentTarget(sessionId, expected);
+      this.assertGrantTarget(sessionId, expected);
+      if (scope && scope !== 'diagnostics') {
+        if (!this.supportsFileReadGrants()) throw new SshError('unavailable');
+        scope = SshReadScopeSchema.parse(scope);
+      }
       // Revocation must remain possible even if profile storage is unavailable.
-      if (allowCommands) await this.profiles.getRow(expected.profile);
+      if (scope) await this.profiles.getRow(expected.profile);
       this.assertActive();
-      this.assertAgentTarget(sessionId, expected);
-      if (!allowCommands)
+      this.assertGrantTarget(sessionId, expected);
+      if (!scope || expected.grant)
         for (const run of [...this.active, ...this.transfers])
           if (run.sessionId === sessionId) run.cancel();
       const target: SshTarget = {
         ...expected,
         // Enabling future diagnostics must not invalidate the command being approved.
         // Revocation still retires every captured authorization, including in-flight work.
-        selectionId: allowCommands ? expected.selectionId : randomUUID(),
-        grant: allowCommands ? { id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
+        selectionId:
+          scope === 'diagnostics' && !expected.grant ? expected.selectionId : randomUUID(),
+        grant: scope ? { scope, id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
       };
       this.targets.set(sessionId, target);
       this.scheduleGrantExpiry(sessionId, target);
@@ -555,9 +564,23 @@ export class SshRuntime extends BaseService implements SshModule {
   ): Promise<SshFileResult> {
     const parsed = SshFileRequestSchema.safeParse(input);
     if (!parsed.success) throw new SshError('invalid-input');
-    return this.fileResult(
-      await this.runOperation(reference, parsed.data, signal, undefined, agent),
+    const expectedPath =
+      agent && grantedSshReadPath(agent.target, parsed.data.operation, parsed.data.path);
+    const result = this.fileResult(
+      await this.runOperation(
+        reference,
+        expectedPath ? { ...parsed.data, expectedPath } : parsed.data,
+        signal,
+        undefined,
+        agent,
+      ),
     );
+    if (agent && expectedPath) {
+      this.assertAgentTarget(agent.sessionId, agent.target);
+      if (result.state !== 'completed') throw new SshError(result.error ?? 'sftp');
+      if (result.path !== expectedPath) throw new SshError('path');
+    }
+    return result;
   }
 
   private fileResult(result: NativeResult): SshFileResult {
@@ -777,6 +800,17 @@ export class SshRuntime extends BaseService implements SshModule {
       throw new SshError('changed');
   }
 
+  private assertGrantTarget(sessionId: string, expected: SshTarget) {
+    const current = this.targets.get(sessionId);
+    if (
+      !current ||
+      current.selectionId !== expected.selectionId ||
+      !sameReference(current.profile, expected.profile) ||
+      current.grant?.id !== expected.grant?.id
+    )
+      throw new SshError('changed');
+  }
+
   private async runCommand(
     reference: SshReference,
     input: SshCommandInput,
@@ -822,6 +856,7 @@ export class SshRuntime extends BaseService implements SshModule {
         | 'cwd'
         | 'stdin'
         | 'path'
+        | 'expectedPath'
         | 'localPath'
         | 'content'
         | 'overwrite'

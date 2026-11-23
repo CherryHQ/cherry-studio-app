@@ -61,7 +61,7 @@ or model catalogs.
   dictation stops reading, reading replaces
   reading, and reading cannot start during dictation or file transcription. Replacement waits for
   the previous native operation to settle before configuring another audio use. Backgrounding aborts
-  capture; iOS reading can continue after background-audio consent, while other reading still stops.
+  capture. iOS reading can continue after background-audio consent; Android users can opt in under Settings → Voice → Read aloud.
   File transcription follows its caller’s cancellation signal so Agent work can
   use the existing turn execution lease. Host disposal aborts every activity. A permission dialog opened through the system prompt queue does not count as leaving
   the app, even when Android reports `background` behind it. Disposal waits for pending work.
@@ -74,8 +74,10 @@ or model catalogs.
   cleanup; speech owns its audio profile while the loop covers utterance gaps. Only the backend iOS execution source can
   start that loop after consent, only as fallback when official continued processing is unavailable.
   Actual background reading does not require a silent loop while official processing protects tasks.
-  The native app includes iOS background audio without enabling
-  Android's media-playback service or background microphone capture.
+  On Android, a user-started reading requests a dedicated media-playback foreground service before audio
+  starts. The service holds audio focus and a wake lock between utterances, publishes a media session
+  with a stop action, and releases its resources when speech ends, is interrupted or is replaced.
+  The notification uses localized controls and does not include the message text.
 - `recordedDictation.ts` owns WAV recording and cleanup for SenseVoice and DeepSeek.
   `senseVoiceRecognition.ts` shares lazy
   native inference and model-use leases with `senseVoiceTranscription.ts`, which decodes and
@@ -246,8 +248,7 @@ boundary. A new native client is required; older clients report transcription as
 ## Native Configuration And Acceptance
 
 `expo-speech-recognition` adds the speech recognition purpose string, `RECORD_AUDIO`, and package
-visibility for recognition services. `expo-audio` remains for audio-session control, with background
-recording and playback disabled. Camera and image-picker share the microphone purpose string,
+visibility for recognition services. `expo-audio` remains for audio-session control, with its own background-service plugin disabled. The Android voice module declares its dedicated playback service. Camera and image-picker share the microphone purpose string,
   because Expo composes these plugins into one native configuration. These native modules require
 iOS and Android development clients that contain them; a JavaScript update cannot add the modules.
 

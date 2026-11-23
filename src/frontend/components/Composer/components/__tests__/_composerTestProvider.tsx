@@ -2,6 +2,7 @@ import { type PropsWithChildren, useMemo, useRef, useState } from 'react';
 
 import type { FileEntryId } from '@/shared/data/types/file';
 
+import { ComposerDraft } from '../../ComposerDraft';
 import { ComposerProvider, type ComposerAttachmentStore } from '../../context/ComposerProvider';
 import {
   appendComposerAttachments,
@@ -28,10 +29,11 @@ export function ComposerTestProvider({
   initialAttachments = noAttachments,
   initialDraft,
 }: ComposerTestProviderProps) {
+  const [buffer] = useState(() => new ComposerDraft(initialDraft));
   const attachmentStore = useInMemoryAttachmentStore(initialAttachments);
 
   return (
-    <ComposerProvider attachmentStore={attachmentStore} initialDraft={initialDraft}>
+    <ComposerProvider attachmentStore={attachmentStore} draftStore={buffer}>
       {children}
     </ComposerProvider>
   );
@@ -50,6 +52,8 @@ function useInMemoryAttachmentStore(
 
     return {
       addAttachments: (next: ComposerAttachmentDraft[]) =>
+        commit(appendComposerAttachments(attachmentsRef.current, next)),
+      restoreAttachments: (next: ComposerAttachmentReady[]) =>
         commit(appendComposerAttachments(attachmentsRef.current, next)),
       clearAttachments: () => commit([]),
       removeAttachment: (attachmentId: string) =>

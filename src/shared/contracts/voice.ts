@@ -85,6 +85,8 @@ export interface DictationSession {
 export type SpeakOptions = VoiceRequestOptions & {
   /** Caller identity of the text being read, for example a message id. */
   key?: string;
+  /** Localized system media controls for a user-initiated reading. */
+  playbackLabels?: { title: string; stop: string };
 };
 
 export type VoiceActivity =

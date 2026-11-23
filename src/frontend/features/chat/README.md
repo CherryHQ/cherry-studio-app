@@ -67,14 +67,16 @@ message list keeps its geometry and selection does not subscribe into the chat r
   composer changes the route only after admission and carries the originating Agent across that
   handoff while Session detail loads.
 
-`useAgentChatControls` runs once in the content leaf, keyed by the existing composer identity.
-Its send action allocates Session/message IDs and synchronously displays the text, files, and
-assistant waiting row before awaiting preparation. The same IDs pass through the normal send
-function into persistence and events. `ChatWorkspace` merges the pending rows with formal messages
-by ID and releases the pending send once both rows are available. The list uses the preallocated
-Session ID throughout the first-send navigation, including turns that finish before observation.
-A rejected send removes the pending rows and the shared composer restores the draft. Leaving the
-composer isolates its pending work and prevents a late completion from navigating the new view.
+Each local Session retains its composer text, attachment references and pending send in memory
+across route changes. File imports continue against their originating draft. A new chat starts
+with its own composer and hands it to the allocated Session on first send. Keyboard, focus and
+edit presentation still follow the mounted screen.
+
+Sending allocates the message IDs and immediately shows the question and waiting answer.
+`ChatWorkspace` reconciles them by ID with admitted rows or the queue. A send that fails during
+preparation restores its original text and managed files alongside any newer input. The originating
+Session displays the failure when its composer is available again. Returning to a Session never
+resubmits its draft. A late first-send completion only navigates if its original composer is current.
 
 The visible, focused chat acknowledges the current completed turn through `useSessionReadReceipt`.
 Previews, an open drawer, and background routes do not clear the list's unread completion indicator.

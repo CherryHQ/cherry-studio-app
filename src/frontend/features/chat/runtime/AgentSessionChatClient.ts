@@ -177,7 +177,9 @@ export class AgentSessionChatClient {
 
     return () => {
       entry.listeners.delete(listener);
-      if (entry.listeners.size === 0) {
+      // The pending operation still owns this entry and its cancellation token.
+      // Its finally block releases it if no screen has returned by then.
+      if (entry.listeners.size === 0 && !entry.submission) {
         this.stopObservation(entry);
         if (this.sessions.get(sessionId) === entry) {
           this.sessions.delete(sessionId);
@@ -350,6 +352,10 @@ export class AgentSessionChatClient {
         this.sessions.delete(sessionId);
       }
     }
+  }
+
+  compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.compactContext(input));
   }
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {

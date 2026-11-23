@@ -11,6 +11,7 @@ import {
   useNavigationShell,
   useRegisterMainNavigator,
 } from '@/frontend/appShell/navigationShell';
+import { ChatProvider } from '@/frontend/features/chat/runtime';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
@@ -55,59 +56,61 @@ export default function MainStackLayout() {
   };
 
   return (
-    <RouteHeaderProvider rootAction={rootAction}>
-      <View className="flex-1">
-        <Stack
-          screenOptions={{
-            ...headerScreenOptions,
-            headerStyle: getRootHeaderStyle(backgroundColor),
-            headerTransparent: isLiquidGlassAvailable,
-            headerTintColor: foregroundColor,
-          }}
-        >
-          <Stack.Screen name="(chat)" options={{ headerShown: false }} />
-          <Stack.Screen name="agents" options={moduleDestination('agents')} />
-          <Stack.Screen name="drawings" options={moduleDestination('drawings')} />
-          <Stack.Screen name="plugins" options={moduleDestination('plugins')} />
-          <Stack.Screen name="skills" options={moduleDestination('marketplace')} />
-          <Stack.Screen name="library" options={moduleDestination('files')} />
-          <Stack.Screen name="devices" options={moduleDestination('devices')} />
-          <Stack.Screen name="more" options={railOrPinnedDestination} />
-          <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
-          {/* Settings owns a nested stack and draws its headers there. */}
-          <Stack.Screen
-            name="settings"
-            options={
-              isWideRail ? railOrPinnedDestination : { gestureEnabled: true, headerShown: false }
-            }
-          />
-          <Stack.Screen name="trash" />
-          <Stack.Screen
-            // Task notifications reuse their task; each new draft owns its own page.
-            getId={({ params }) => paintingRouteId(params)}
-            name="paintings/index"
-            options={{
-              // Keep the full-bleed board's native canvas in sync with the app theme.
-              contentStyle: { backgroundColor },
-              headerStyle: { backgroundColor: 'transparent' },
-              headerTransparent: true,
-              title: '',
+    <ChatProvider>
+      <RouteHeaderProvider rootAction={rootAction}>
+        <View className="flex-1">
+          <Stack
+            screenOptions={{
+              ...headerScreenOptions,
+              headerStyle: getRootHeaderStyle(backgroundColor),
+              headerTransparent: isLiquidGlassAvailable,
+              headerTintColor: foregroundColor,
             }}
-          />
-          {/* Released task links and viewer routes redirect into the board. */}
-          <Stack.Screen
-            name="paintings/[paintingId]"
-            options={{ contentStyle: { backgroundColor }, headerShown: false }}
-          />
-          <Stack.Screen
-            name="paintings/[paintingId]/conversation"
-            options={{ contentStyle: { backgroundColor }, headerShown: false }}
-          />
-        </Stack>
-        <FloatingNavDock />
-        <NavPinPopover />
-        <FloatingDragOverlay />
-      </View>
-    </RouteHeaderProvider>
+          >
+            <Stack.Screen name="(chat)" options={{ headerShown: false }} />
+            <Stack.Screen name="agents" options={moduleDestination('agents')} />
+            <Stack.Screen name="drawings" options={moduleDestination('drawings')} />
+            <Stack.Screen name="plugins" options={moduleDestination('plugins')} />
+            <Stack.Screen name="skills" options={moduleDestination('marketplace')} />
+            <Stack.Screen name="library" options={moduleDestination('files')} />
+            <Stack.Screen name="devices" options={moduleDestination('devices')} />
+            <Stack.Screen name="more" options={railOrPinnedDestination} />
+            <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
+            {/* Settings owns a nested stack and draws its headers there. */}
+            <Stack.Screen
+              name="settings"
+              options={
+                isWideRail ? railOrPinnedDestination : { gestureEnabled: true, headerShown: false }
+              }
+            />
+            <Stack.Screen name="trash" />
+            <Stack.Screen
+              // Task notifications reuse their task; each new draft owns its own page.
+              getId={({ params }) => paintingRouteId(params)}
+              name="paintings/index"
+              options={{
+                // Keep the full-bleed board's native canvas in sync with the app theme.
+                contentStyle: { backgroundColor },
+                headerStyle: { backgroundColor: 'transparent' },
+                headerTransparent: true,
+                title: '',
+              }}
+            />
+            {/* Released task links and viewer routes redirect into the board. */}
+            <Stack.Screen
+              name="paintings/[paintingId]"
+              options={{ contentStyle: { backgroundColor }, headerShown: false }}
+            />
+            <Stack.Screen
+              name="paintings/[paintingId]/conversation"
+              options={{ contentStyle: { backgroundColor }, headerShown: false }}
+            />
+          </Stack>
+          <FloatingNavDock />
+          <NavPinPopover />
+          <FloatingDragOverlay />
+        </View>
+      </RouteHeaderProvider>
+    </ChatProvider>
   );
 }

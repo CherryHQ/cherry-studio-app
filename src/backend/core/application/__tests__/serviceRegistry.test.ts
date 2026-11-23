@@ -25,6 +25,11 @@ jest.mock('expo-keep-awake', () => ({
   deactivateKeepAwake: jest.fn(),
 }));
 
+jest.mock('expo-linking', () => ({
+  ...jest.requireActual('expo-linking'),
+  resolveScheme: () => 'cherrystudio-dev',
+}));
+
 /**
  * Guards the registry itself rather than any one service.
  *
@@ -141,20 +146,32 @@ describe('service registry', () => {
     expect(getPhase(services.MobileAgentHost)).toBe(Phase.PostReady);
   });
 
-  test('a local chat acquires execution protection without requesting a second progress surface', () => {
-    const lease = { release: jest.fn() };
+  test('a foreground chat requests system progress for its own conversation', () => {
+    const lease = { release: jest.fn(), update: jest.fn() };
     const acquire = jest.fn(() => lease);
     const hostPorts = services.AgentHostDependencies;
     const container = new ServiceContainer({
       ...Object.fromEntries(getDependencies(hostPorts).map((name) => [name, {}])),
+      BackgroundActivityEnvironment: { translate: (key: string) => key },
       KeepAliveCoordinator: { acquire },
     });
     container.register(hostPorts);
 
     const onInterrupt = jest.fn();
-    container.get(hostPorts).executionLease(onInterrupt, 'session-1').release();
-    // Supplying a third argument opts into the iOS system task and its mandatory UI.
-    expect(acquire).toHaveBeenCalledWith('agent.session', onInterrupt);
+    const execution = container.get(hostPorts).executionLease(onInterrupt, 'session-1');
+    expect(acquire).toHaveBeenCalledWith('agent.session', onInterrupt, {
+      deepLinkUrl: 'cherrystudio-dev:///?sessionId=session-1',
+      title: 'chat.backgroundReply.assistant',
+      subtitle: 'chat.backgroundReply.preparing',
+      completedUnitCount: 0,
+      totalUnitCount: 3,
+    });
+    execution.update?.({ completedUnitCount: 2 });
+    expect(lease.update).toHaveBeenCalledWith({
+      completedUnitCount: 2,
+      subtitle: 'chat.backgroundReply.responding',
+    });
+    execution.release();
     expect(lease.release).toHaveBeenCalledTimes(1);
   });
 

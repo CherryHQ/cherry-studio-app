@@ -1,8 +1,9 @@
-import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Message, Model, Models } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
+import { summarizePiCompaction } from '../piCompaction';
 import { createPiDurableModels } from '../piDurableModels';
 import type { PiModelResolution } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -135,7 +136,7 @@ describe('Pi durable model bridge', () => {
     [1_048_576, 131_072, 262_144, 131_072],
     [1_048_576, 1_024, 512, 512],
     [1_048_576, 13_107, undefined, 13_107],
-    [128_000, undefined, undefined, 128_000],
+    [128_000, undefined, undefined, 65_536],
   ])(
     'reserves output for ceiling %i, options %s, selected %s',
     async (ceiling, options, selected, expected) => {
@@ -164,7 +165,7 @@ describe('Pi durable model bridge', () => {
     },
   );
 
-  test('fits compaction into small input windows without changing large-window defaults', async () => {
+  test('fits compaction into small input windows and keeps image requests exempt', async () => {
     for (const contextWindow of [512, 8_192, 131_072]) {
       const bridge = setup(undefined, {
         ...preflight,
@@ -177,12 +178,6 @@ describe('Pi durable model bridge', () => {
       expect(
         policy.reserveTokens! + policy.keepRecentTokens! + policy.backgroundTokens!,
       ).toBeLessThan(contextWindow);
-      if (contextWindow === 131_072)
-        expect(policy).toEqual({
-          reserveTokens: 16_384,
-          keepRecentTokens: 20_000,
-          backgroundTokens: 32_768,
-        });
       await bridge.registerModel(reference, 'image');
       const image = bridge.getModel(reference, 'image')!;
       expect(bridge.compactionOverrides[`${image.provider}/${image.id}`]).toEqual({
@@ -191,6 +186,215 @@ describe('Pi durable model bridge', () => {
       expect(bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]).toEqual(
         policy,
       );
+    }
+  });
+
+  test('starts background compaction at 80 percent of the input budget of a million-token model', async () => {
+    const bridge = setup(undefined, {
+      ...preflight,
+      contextWindow: 1_000_000,
+      maxInputTokens: 1_000_000,
+      maxOutputTokens: 393_216,
+    });
+    await bridge.registerModel(reference);
+    const policy = bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]!;
+    const blocking = 1_000_000 - policy.reserveTokens!;
+    expect(blocking).toBe(930_368);
+    expect(blocking - policy.backgroundTokens!).toBe(744_294);
+  });
+
+  test('summarizes oversized history in order and carries successful summaries forward', async () => {
+    const model = { ...wire, contextWindow: 8_192, maxTokens: 512 };
+    const signal = new AbortController().signal;
+    let calls = 0;
+    const completeSimple = jest.fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>(
+      async (_model, _context, _options): Promise<AssistantMessage> => {
+        const number = ++calls;
+        return {
+          ...emptyAssistantMessage(model),
+          stopReason: 'stop',
+          content: [{ type: 'text', text: `<summary>chunk ${number}</summary>` }],
+        };
+      },
+    );
+    const history = Array.from({ length: 8 }, (_, index) => ({
+      role: 'user' as const,
+      content: `entry ${index} ${'distinct words '.repeat(800)}`,
+      timestamp: index,
+    }));
+    const summary = await summarizePiCompaction(history, { completeSimple }, model, {
+      limits: { contextWindow: 8_192, maxInputTokens: 8_192, maxOutputTokens: 512 },
+      sessionId: 'session',
+      signal,
+    });
+    const requests = completeSimple.mock.calls.map(([, context]) => {
+      expect(context.messages.map((message) => message.role)).toEqual(['system', 'user']);
+      return context.messages.map((message) => message.content).join('\n');
+    });
+    expect(requests.length).toBeGreaterThan(1);
+    expect(requests[0]).toContain('entry 0');
+    expect(requests[0]).not.toContain('entry 7');
+    expect(requests[1]).toContain('chunk 1');
+    expect(requests.at(-1)).toContain('entry 7');
+    expect(summary).toBe(`chunk ${requests.length}`);
+  });
+
+  test('sends one non-empty user message when summarizing image-only prompts and empty assistant turns', async () => {
+    const completeSimple = jest
+      .fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>()
+      .mockResolvedValue({
+        ...emptyAssistantMessage(wire),
+        content: [{ type: 'text', text: '<summary>kept</summary>' }],
+      });
+    const history: Message[] = [
+      {
+        role: 'user',
+        content: [{ type: 'image', data: 'ZmFrZQ==', mimeType: 'image/png' }],
+        timestamp: 1,
+      },
+      {
+        ...emptyAssistantMessage(wire),
+        content: [],
+        timestamp: 2,
+      },
+      {
+        role: 'user',
+        content: 'Remember this detail',
+        timestamp: 3,
+      },
+    ];
+    await expect(
+      summarizePiCompaction(history, { completeSimple }, wire, {
+        limits: preflight,
+        sessionId: 'session',
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toBe('kept');
+    expect(completeSimple).toHaveBeenCalledTimes(1);
+    const sent = completeSimple.mock.calls[0]![1].messages;
+    expect(sent.map((message) => message.role)).toEqual(['system', 'user']);
+    const userContent = sent[1]!.content as string;
+    expect(userContent).toContain('Remember this detail');
+    expect(userContent).not.toContain('[Assistant]');
+  });
+
+  test.each([
+    'The input token count (1196265) exceeds the maximum number of tokens allowed (1048575)',
+    'Range of input length should be [1, 8192]',
+  ])('shrinks summary chunks on provider overflow wording: %s', async (errorMessage) => {
+    const model = { ...wire, contextWindow: 8_192, maxTokens: 512 };
+    const completeSimple = jest
+      .fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>()
+      .mockImplementationOnce(async () => ({
+        ...emptyAssistantMessage(model),
+        stopReason: 'error',
+        errorMessage,
+      }))
+      .mockImplementation(async (_model, context) => ({
+        ...emptyAssistantMessage(model),
+        content: [
+          {
+            type: 'text',
+            text: `<summary>ok:${String(context.messages[1]!.content).length}</summary>`,
+          },
+        ],
+      }));
+    const history = Array.from({ length: 6 }, (_, index) => ({
+      role: 'user' as const,
+      content: `item ${index} ${'word '.repeat(500)}`,
+      timestamp: index,
+    }));
+    const summary = await summarizePiCompaction(history, { completeSimple }, model, {
+      limits: { contextWindow: 8_192, maxInputTokens: 8_192, maxOutputTokens: 512 },
+      sessionId: 'session',
+      signal: new AbortController().signal,
+    });
+    expect(summary).toMatch(/^ok:/);
+    expect(completeSimple.mock.calls.length).toBeGreaterThan(1);
+    const firstUserLength = String(completeSimple.mock.calls[0]![1].messages[1]!.content).length;
+    const retriedUserLength = String(completeSimple.mock.calls[1]![1].messages[1]!.content).length;
+    expect(retriedUserLength).toBeLessThan(firstUserLength);
+  });
+
+  test.each([4_096, 16_384])(
+    'fits large tool arguments into a 4096-input-token model with a %i-token total window',
+    async (contextWindow) => {
+      const model = { ...wire, contextWindow: 4_096, maxTokens: 4_096 };
+      const completeSimple = jest
+        .fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>()
+        .mockResolvedValue({
+          ...emptyAssistantMessage(model),
+          content: [{ type: 'text', text: 'progress' }],
+        });
+      const history: Message[] = [
+        {
+          ...emptyAssistantMessage(model),
+          content: [
+            {
+              type: 'toolCall',
+              id: 'file-1',
+              name: 'write_file',
+              arguments: {
+                content: `start-of-file ${'body '.repeat(6_000)} end-of-file`,
+              },
+            },
+          ],
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'file-1',
+          toolName: 'write_file',
+          content: [{ type: 'text', text: 'Saved' }],
+          isError: false,
+          timestamp: 1,
+        },
+      ];
+      await expect(
+        summarizePiCompaction(history, { completeSimple }, model, {
+          limits: { contextWindow, maxInputTokens: 4_096, maxOutputTokens: model.maxTokens },
+          sessionId: 'session',
+          signal: new AbortController().signal,
+        }),
+      ).resolves.toBe('progress');
+      const requests = completeSimple.mock.calls.map(([, context, options]) => {
+        expect(options?.maxTokens).toBe(1_024);
+        return context.messages.map((message) => message.content).join('\n');
+      });
+      const start = requests.findIndex((request) => request.includes('start-of-file'));
+      const end = requests.findIndex((request) => request.includes('end-of-file'));
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      expect(requests.at(-1)).toContain('[Tool result file-1]');
+    },
+  );
+
+  test('retries a transient summary failure on the same chunk', async () => {
+    jest.useFakeTimers();
+    try {
+      const completeSimple = jest
+        .fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>()
+        .mockResolvedValueOnce({
+          ...emptyAssistantMessage(wire),
+          stopReason: 'error',
+          errorMessage: '503 Service Unavailable',
+        })
+        .mockResolvedValueOnce({
+          ...emptyAssistantMessage(wire),
+          content: [{ type: 'text', text: 'summary' }],
+        });
+      const result = summarizePiCompaction(
+        [{ role: 'user', content: 'Remember this', timestamp: 1 }],
+        { completeSimple },
+        wire,
+        { limits: preflight, sessionId: 'session', signal: new AbortController().signal },
+      );
+      const settled = expect(result).resolves.toBe('summary');
+      await jest.runAllTimersAsync();
+      await settled;
+      expect(completeSimple).toHaveBeenCalledTimes(2);
+      expect(completeSimple.mock.calls[1]).toEqual(completeSimple.mock.calls[0]);
+    } finally {
+      jest.useRealTimers();
     }
   });
 

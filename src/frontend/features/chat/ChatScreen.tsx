@@ -3,7 +3,7 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { useFocusEffect, useIsPreview, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useIsFocused, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -109,6 +109,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { t } = useTranslation();
   const ssh = useBackendModule('ssh');
   const isPreview = useIsPreview();
+  const isFocused = useIsFocused() && !isPreview;
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
   const workspace = useFileWorkspace({
@@ -119,13 +120,38 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { composerSession, completeAppend } = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
   const resolvedAgentId = session.data?.agentId ?? composerSession.draftAgentId ?? agentId;
+  // Entry actions seed the rich draft; only the user's send creates a message.
+  const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
+  const sshProfile =
+    target.kind === 'draft' && target.sshDraftId
+      ? ssh.getTarget(`draft:${target.sshDraftId}`)?.profile
+      : undefined;
+  const handoffDraft = getHandoffDraft(composerHandoff, t);
+  const initialDraft =
+    sshProfile && !composerHandoff?.skillAction && !composerHandoff?.selection
+      ? `${createSshMention(`SSH · ${sshProfile.name.replace(/\s+/g, ' ')}`, sshProfile)} ${handoffDraft ?? ''}`
+      : handoffDraft;
   const controls = useAgentChatControls({
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    isFocused,
+    initialDraft,
+    initialAttachments: composerHandoff?.attachments,
+    seedHandoff: composerSession.seedHandoff,
     sshDraftId: target.kind === 'draft' ? target.sshDraftId : undefined,
     workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
+  const handoffToken =
+    composerSession.pendingAppend ??
+    (!composerSession.appendHandoff ? composerSession.seedHandoff : undefined);
+  const onHandoffApplied = useCallback(
+    (token: string) => {
+      controls.composer.handoffToken = token;
+      completeAppend(token);
+    },
+    [completeAppend, controls.composer],
+  );
   const agent = useAgentApiById(resolvedAgentId);
   const quoteNavigation = useChatQuoteNavigation(
     sessionId,
@@ -235,17 +261,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       if (activeAgentId) cacheService.setPersist('chat.last_agent_id', activeAgentId);
     }, [activeAgentId]),
   );
-  // Entry actions seed the rich draft; only the user's send creates a message.
-  const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
-  const sshProfile =
-    target.kind === 'draft' && target.sshDraftId
-      ? ssh.getTarget(`draft:${target.sshDraftId}`)?.profile
-      : undefined;
-  const handoffDraft = getHandoffDraft(composerHandoff, t);
-  const initialDraft =
-    sshProfile && !composerHandoff?.skillAction && !composerHandoff?.selection
-      ? `${createSshMention(`SSH · ${sshProfile.name.replace(/\s+/g, ' ')}`, sshProfile)} ${handoffDraft ?? ''}`
-      : handoffDraft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const composerHeight = useSharedValue(0);
   const setComposerHeight = useCallback(
@@ -265,17 +280,15 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         workspaceSessionId={sessionId}
         workspaceFolderId={!sessionId ? workspace.folderId : undefined}
         key={composerSession.key}
-        initialAttachments={composerHandoff?.attachments}
-        initialDraft={initialDraft}
+        draftStore={controls.composer.draft}
+        isFocused={isFocused}
       >
         <ChatEditingProvider>
-          {composerSession.pendingAppend ? (
-            <ComposerHandoffAppend
-              token={composerSession.pendingAppend}
-              onApplied={completeAppend}
-            />
+          {handoffToken && handoffToken !== controls.composer.handoffToken ? (
+            <ComposerHandoffAppend token={handoffToken} onApplied={onHandoffApplied} />
           ) : null}
           <ChatQuoteProvider
+            store={controls.composer.quote}
             sessionId={sessionId}
             enabled={hasComposer}
             authorName={agent.agent?.name}
