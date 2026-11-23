@@ -5,8 +5,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { gzipSync, strToU8, zipSync } from 'fflate';
+import { parse } from 'yaml';
 
-import { runCommand, resolveSentryCli, type CommandResult } from '../uploadIosSymbols';
+import {
+  REQUIRED_IDENTIFIERS,
+  runCommand,
+  resolveSentryCli,
+  type CommandResult,
+} from '../uploadIosSymbols';
 import { readMachOSlices, verifyIosSymbolPackage } from '../verifyIosSymbolPackage';
 
 jest.mock('../uploadIosSymbols', () =>
@@ -19,6 +25,14 @@ jest.mock('../uploadIosSymbols', () =>
 beforeEach(() => {
   jest.mocked(resolveSentryCli).mockReturnValue('/native/sentry-cli');
   jest.mocked(runCommand).mockImplementation(async (_command, args) => {
+    if (args[1] === '--statistics')
+      return {
+        stdout: JSON.stringify({
+          '#bytes with line information': 128,
+          '#bytes with line-0 locations': 8,
+        }),
+        exitCode: 0,
+      };
     if (args[0] === 'lipo') {
       const pair = readMachOSlices(readFileSync(args[1])).find((pair) => pair.arch === args[3])!;
       writeFileSync(
@@ -167,10 +181,23 @@ function fixture(dwarf = thinMachO(), identities = [{ uuid, arch: 'arm64' }]) {
     schemaVersion: 1,
     buildId,
     inventoryStatus: 'inspected',
-    bundles: [{ identifier: 'com.example.Tiny', uuids: identities.map((pair) => ({ ...pair })) }],
+    bundles: [
+      { identifier: REQUIRED_IDENTIFIERS[0], uuids: identities.map((pair) => ({ ...pair })) },
+    ],
     dsyms: [{ dwarfPath, uuids: identities.map((pair) => ({ ...pair })), ...evidence(dwarf) }],
     symbolPackage: { filename: 'dsyms.zip', ...evidence(artifacts[`${dir}/dsyms.zip`]) },
   };
+  for (const [index, id] of [
+    'bbbbbbbb-1111-2222-3333-444444444444',
+    'cccccccc-1111-2222-3333-444444444444',
+  ].entries()) {
+    const dwarfPath = `dSYMs/Extension${index}.dSYM/Contents/Resources/DWARF/Extension${index}`;
+    const bytes = thinMachO({ id: id.replaceAll('-', '') });
+    symbols[dwarfPath] = bytes;
+    const uuids = [{ uuid: id, arch: 'arm64' }];
+    manifest.bundles.push({ identifier: REQUIRED_IDENTIFIERS[index + 1], uuids });
+    manifest.dsyms.push({ dwarfPath, uuids, ...evidence(bytes) });
+  }
   const receipt = {
     schemaVersion: 1,
     buildId,
@@ -178,6 +205,14 @@ function fixture(dwarf = thinMachO(), identities = [{ uuid, arch: 'arm64' }]) {
     preflight: { status: 'passed' },
     upload: { status: 'passed' },
     remoteVerification: { status: 'passed' },
+    records: manifest.bundles.flatMap((bundle) =>
+      bundle.uuids.map((pair) => ({
+        ...pair,
+        id: '123',
+        symbolType: 'macho',
+        features: ['debug'],
+      })),
+    ),
     failure: null,
   };
   const pack = () => writeFileSync(archivePath, zipSync(artifacts));
@@ -192,7 +227,7 @@ function fixture(dwarf = thinMachO(), identities = [{ uuid, arch: 'arm64' }]) {
     Object.assign(manifest.symbolPackage, evidence(artifacts[`${dir}/dsyms.zip`]));
     save();
   }
-  save();
+  saveSymbols();
   return {
     root,
     archivePath,
@@ -213,128 +248,84 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-it.each([1, 0])(
-  'executes the documented manual check with download exit %s and gates the verifier',
-  (downloadExit) => {
-    const repo = resolve(__dirname, '../..');
-    const markdown = readFileSync(join(repo, 'docs/guides/cloud-releases.md'), 'utf8');
-    const blocks = [...markdown.matchAll(/```bash\n([\s\S]*?)\n```/g)]
-      .map((match) => match[1])
-      .filter(
-        (block) =>
-          block.includes('build:download') || block.includes('scripts/verifyIosSymbolPackage.ts'),
-      );
-    expect(blocks).toHaveLength(2);
-    const [download, verifier] = blocks;
-    for (const block of blocks) {
-      const syntax = spawnSync('bash', ['-n'], { input: block, encoding: 'utf8' });
-      expect(syntax.error).toBeUndefined();
-      expect(syntax.stderr).toBe('');
-      expect(syntax.status).toBe(0);
-    }
-    // The heredoc is intentional; an unquoted single '<' would redirect an argument.
-    expect(
-      blocks
-        .join('\n')
-        .split('\n')
-        .filter((line) => !line.startsWith('#'))
-        .join('\n'),
-    ).not.toMatch(/(?:^|\s)<(?!<)/m);
-
-    const root = mkdtempSync(join(tmpdir(), 'cherry-symbol-doc-test-'));
+it.each(['success', 'wrong-build', 'missing-artifact', 'download-failed', 'missing-symbols'])(
+  'submission checks the downloaded artifact for the same build (%s)',
+  (scenario) => {
+    const root = mkdtempSync(join(tmpdir(), 'cherry-workflow-test-'));
     roots.push(root);
-    const downloadArgs = join(root, 'download-args.json');
-    const verifierArgs = join(root, 'verifier-args.txt');
-    const artifact = join(root, 'downloaded artifacts', 'buildArtifacts');
-    writeFileSync(
-      join(root, 'pnpm'),
-      `#!/bin/bash
-if [ "$1" != exec ] || [ "$2" != eas ]; then exit 97; fi
-shift 2
-exec eas "$@"
-`,
-      { mode: 0o700 },
-    );
-    writeFileSync(
-      join(root, 'eas'),
-      `#!/bin/bash
-exec "$CHERRY_TEST_NODE" --input-type=module - "$@" <<'STUB'
-import { writeFileSync } from 'node:fs';
-writeFileSync(process.env.CHERRY_TEST_DOWNLOAD_ARGS, JSON.stringify(process.argv.slice(2)));
-if (process.env.CHERRY_TEST_DOWNLOAD_EXIT === '1') {
-  console.log('Download failed: https://example.test/?token=synthetic-stdout-secret');
-  console.error('Download failed: https://example.test/?token=synthetic-stderr-secret');
-  process.exit(1);
-}
-console.log(JSON.stringify({ buildArtifacts: process.env.CHERRY_TEST_ARTIFACT }));
-STUB
-`,
-      { mode: 0o700 },
-    );
-    // Execute the real Node heredoc, but stop at the macOS-only verifier boundary.
-    writeFileSync(
-      join(root, 'node'),
-      `#!/bin/bash
-if [ "$3" = scripts/verifyIosSymbolPackage.ts ]; then
-  printf '%s\\n' "$@" > "$CHERRY_TEST_VERIFIER_ARGS"
-  exit 0
-fi
-exec "$CHERRY_TEST_NODE" "$@"
-`,
-      { mode: 0o700 },
-    );
-    const options = {
-      cwd: repo,
-      encoding: 'utf8' as const,
-      timeout: 15_000,
-      env: {
-        ...process.env,
-        PATH: `${root}:${process.env.PATH}`,
-        CHERRY_TEST_NODE: process.execPath,
-        CHERRY_TEST_DOWNLOAD_ARGS: downloadArgs,
-        CHERRY_TEST_VERIFIER_ARGS: verifierArgs,
-        CHERRY_TEST_ARTIFACT: artifact,
-        CHERRY_TEST_DOWNLOAD_EXIT: String(downloadExit),
+    const log = join(root, 'calls');
+    const stub = (name: string, script: string) =>
+      writeFileSync(join(root, name), '#!/bin/bash\nset -eu\n' + script, { mode: 0o700 });
+    const build = {
+      id: scenario === 'wrong-build' ? otherUuid : buildId,
+      platform: 'IOS',
+      status: 'FINISHED',
+      artifacts: {
+        buildArtifactsUrl:
+          scenario === 'missing-artifact' ? null : 'https://example.test/symbols?token=synthetic',
       },
     };
-    const result = spawnSync('bash', [], {
-      ...options,
-      input: download.replaceAll('<build-id>', buildId),
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.signal).toBeNull();
-    expect(JSON.parse(readFileSync(downloadArgs, 'utf8'))).toEqual([
-      'build:download',
-      '--build-id',
-      buildId,
-      '--all-artifacts',
-      '--json',
+    stub(
+      'pnpm',
+      `[[ "$*" == "exec eas build:view ${buildId} --json" ]] || exit 2
+printf '%s' '${JSON.stringify(build)}'`,
+    );
+    stub(
+      'curl',
+      `echo download >> "$CALLS"
+if [[ "$SCENARIO" == download-failed ]]; then exit 22; fi
+while [[ "$1" != --output ]]; do shift; done
+printf 'package' > "$2"`,
+    );
+    stub(
+      'node',
+      `[[ "$1 $2 $3" == "--import tsx scripts/verifyIosSymbolPackage.ts" && "$(cat "$4")" == package && "$5" == "$BUILD_ID" ]] || exit 2
+echo verify >> "$CALLS"
+if [[ "$SCENARIO" == missing-symbols ]]; then exit 1; fi
+echo '{"slices":3,"thirdPartySymbols":[]}'`,
+    );
+    stub('eas', '[[ "$1" == submit && "$*" == *"--id $BUILD_ID "* ]]; echo submit >> "$CALLS"');
+    const repo = resolve(__dirname, '../..');
+    const workflow = parse(readFileSync(join(repo, '.github/workflows/ios-release.yml'), 'utf8'));
+    const steps = workflow.jobs['submit-ios'].steps.filter(
+      (step: { run?: string }) =>
+        step.run?.includes('verifyEasIosSymbols.sh') ||
+        step.run?.includes('eas submit --platform ios'),
+    );
+    expect(steps.map((step: { name: string }) => step.name)).toEqual([
+      'Verify downloaded iOS symbols',
+      'Submit this build and wait for upload',
     ]);
-    expect(result.status).toBe(downloadExit);
-    if (downloadExit === 1) {
-      expect(existsSync(verifierArgs)).toBe(false);
-      expect(result.stderr).toContain('Download failed:');
-      expect(result.stderr).toContain('[url redacted]');
-      expect(result.stdout + result.stderr).not.toMatch(/synthetic-(stdout|stderr)-secret/);
-    } else {
-      expect(result.stderr).toBe('');
-      const downloaded = JSON.parse(result.stdout);
-      expect(downloaded).toEqual({ buildArtifacts: artifact });
-      const verification = spawnSync('bash', [], {
-        ...options,
-        input: verifier
-          .replaceAll('<build-id>', buildId)
-          .replaceAll('<artifact>', downloaded.buildArtifacts),
-      });
-      expect(verification.status).toBe(0);
-      expect(readFileSync(verifierArgs, 'utf8').trim().split('\n')).toEqual([
-        '--import',
-        'tsx',
-        'scripts/verifyIosSymbolPackage.ts',
-        artifact,
-        buildId,
-      ]);
-    }
+    const result = spawnSync(
+      'bash',
+      ['-eo', 'pipefail', '-c', steps.map((step: { run: string }) => step.run).join('\n')],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: root + ':' + process.env.PATH,
+          RUNNER_TEMP: root,
+          IOS_BUILD_ID: buildId,
+          BUILD_ID: buildId,
+          GITHUB_STEP_SUMMARY: join(root, 'summary'),
+          CALLS: log,
+          SCENARIO: scenario,
+        },
+      },
+    );
+    expect(result.status === 0).toBe(scenario === 'success');
+    const calls = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
+    expect(calls).toEqual(
+      scenario === 'success'
+        ? ['download', 'verify', 'submit']
+        : scenario === 'missing-symbols'
+          ? ['download', 'verify']
+          : scenario === 'download-failed'
+            ? ['download']
+            : [],
+    );
+    expect(result.stdout + result.stderr).not.toContain('token=synthetic');
   },
 );
 
@@ -439,7 +430,8 @@ it('verifies the build, checksums and identities using pinned native CLI debug e
     archivePath: resolve(f.archivePath),
     manifestSha256: f.receipt.manifestSha256,
     symbolPackage: evidence(f.artifacts[`${f.dir}/dsyms.zip`]),
-    slices: 1,
+    slices: 3,
+    thirdPartySymbols: [],
     verifiedAt: '1970-01-01T00:00:00.000Z',
     expiry: 'unknown',
   });
@@ -456,7 +448,7 @@ it('verifies every UUID and architecture in a nested ZIP containing a fat dSYM',
     { uuid, arch: 'arm64' },
     { uuid: otherUuid, arch: 'x86_64' },
   ]);
-  await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 2 });
+  await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 4 });
 });
 it('does not let a full-debug fat slice cover a stripped sibling', async () => {
   const f = fixture(fatMachO(), [
@@ -483,7 +475,7 @@ it.each(['tar', 'gzip', 'pax'])(
     const f = fixture();
     const tar = tarArchive(f.artifacts, format === 'pax' ? `${f.dir}/manifest.json` : undefined);
     writeFileSync(f.archivePath, format === 'gzip' ? gzipSync(tar) : tar);
-    await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 1 });
+    await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 3 });
   },
 );
 it.each(['manifest', 'receipt'])('rejects a different %s build ID', async (file) => {
@@ -529,11 +521,7 @@ it.each(['image', 'dsym', 'architecture'])(
   'rejects an absent manifest UUID/architecture pair (%s)',
   async (mode) => {
     const f = fixture();
-    if (mode === 'image')
-      f.manifest.bundles.push({
-        identifier: 'com.example.Framework',
-        uuids: [{ uuid: otherUuid, arch: 'arm64e' }],
-      });
+    if (mode === 'image') f.manifest.bundles[0].uuids.push({ uuid: otherUuid, arch: 'arm64e' });
     if (mode === 'dsym') f.manifest.dsyms[0].uuids.push({ uuid: otherUuid, arch: 'arm64e' });
     if (mode === 'architecture') f.manifest.bundles[0].uuids[0].arch = 'x86_64';
     f.save();
@@ -597,7 +585,7 @@ it('ignores AppleDouble copies in the outer archive', async () => {
   const f = fixture();
   f.artifacts['__MACOSX/ios-symbols/manifest.json'] = strToU8('invalid');
   f.pack();
-  await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 1 });
+  await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({ slices: 3 });
 });
 it('rejects a missing archive and invalid outer/nested ZIPs with specific codes', async () => {
   const f = fixture();
@@ -658,7 +646,7 @@ it.each(['missing', 'unsafe', 'unfinished'])(
     });
   },
 );
-it('checks undistributed symtab-only dSYM identity and bytes without requiring full debug', async () => {
+it('retains and checksums unrelated dSYM bytes without gating on their architecture or debug info', async () => {
   const f = fixture();
   const dwarfPath = 'dSYMs/Unrelated.dSYM/Contents/Resources/DWARF/Unrelated';
   const dwarf = thinMachO({ id: otherUuid.replaceAll('-', '') });
@@ -671,15 +659,14 @@ it('checks undistributed symtab-only dSYM identity and bytes without requiring f
   f.saveSymbols();
   await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({
     status: 'download-verified',
-    slices: 1,
+    slices: 3,
   });
-  f.manifest.dsyms[1].uuids[0].arch = 'x86_64';
+  f.manifest.dsyms[3].uuids[0].arch = 'unreviewed-vendor-arch';
   f.save();
-  await expect(verifyIosSymbolPackage(f.deps)).rejects.toMatchObject({
-    code: 'PACKAGE_UUID_COVERAGE',
+  await expect(verifyIosSymbolPackage(f.deps)).resolves.toMatchObject({
+    status: 'download-verified',
   });
-  f.manifest.dsyms[1].uuids[0].arch = 'arm64';
-  f.manifest.dsyms[1].sha256 = '0'.repeat(64);
+  f.manifest.dsyms[3].sha256 = '0'.repeat(64);
   f.save();
   await expect(verifyIosSymbolPackage(f.deps)).rejects.toMatchObject({
     code: 'PACKAGE_DWARF_SHA256',
@@ -782,4 +769,16 @@ it.each(['success', 'error'])('redacts actual verifier CLI %s output', async (mo
     process.env = previousEnv;
     process.exitCode = previousExitCode;
   }
+});
+
+it('rejects missing required target and remote evidence after download', async () => {
+  const f = fixture();
+  f.receipt.records.pop();
+  f.save();
+  await expect(verifyIosSymbolPackage(f.deps)).rejects.toMatchObject({
+    code: 'PACKAGE_REMOTE_COVERAGE',
+  });
+  f.manifest.bundles.pop();
+  f.save();
+  await expect(verifyIosSymbolPackage(f.deps)).rejects.toThrow(REQUIRED_IDENTIFIERS[2]);
 });

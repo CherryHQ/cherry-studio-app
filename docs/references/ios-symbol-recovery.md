@@ -16,8 +16,8 @@ Record the following for each release and update it after artifact retrieval:
 
 - Build ID and source SHA; version and build number.
 - IPA SHA-256 and, for every distributed bundle, identifier, executable, UUID and architecture.
-- Original dSYM paths and checksums; qualifying remote record IDs and features.
-- Artifact download reference and checksum verification, plus evidenced expiry (or `unknown`); if retrieval fails, record `unavailable` and the attempt and error.
+- Original dSYM paths, checksums and source-line coverage for the three Cherry targets. Record their qualifying remote IDs and features, and list third-party coverage and upload outcomes separately.
+- Artifact download reference, checksum verification and one known source-line lookup per Cherry target during production acceptance, plus evidenced expiry (or `unknown`); if retrieval fails, record `unavailable` and the attempt and error.
 - Actor and date, including any later recovery or verification attempt.
 
 Use this template for the hook artifact's separate post-build acceptance record. Do not put tokens
@@ -35,7 +35,7 @@ Original dSYM and DWARF paths / checksums / UUID / architecture / inspection res
 Published package.complete directory / manifest SHA-256 / dsyms.zip size / SHA-256:
 archive-info.plist size / SHA-256:
 Preflight / upload / remote verification statuses and timestamps / CLI exit:
-Each qualifying remote record: UUID / architecture / record ID / symbol type / features / observedAt:
+Each required Cherry remote record: UUID / architecture / record ID / symbol type / features / observedAt:
 Sanitized failure stage/code, if any:
 Recovery artifact status: pending-post-build-check | download-verified | unavailable
 Download attempt / stable retrieval reference / actor / date / error, if any:

@@ -9,6 +9,14 @@ import { gunzipSync, unzipSync } from 'fflate';
 
 import {
   checked,
+  requiredIosBundles,
+  sentryTargetFromEnv,
+  sentryTargetFingerprint,
+  queryDebugFiles,
+  uploadSymbolFiles,
+  waitForRemoteDebug,
+  VERIFICATION_TIMEOUT_MS,
+  UPLOAD_TIMEOUT_MS,
   inspectDsymSlice,
   GateError,
   resolveSentryCli,
@@ -250,14 +258,16 @@ function pairs(value: unknown): UuidArch[] {
 }
 const pairKey = (pair: UuidArch) => `${pair.uuid.toLowerCase()}/${pair.arch.toLowerCase()}`;
 
-/** Verify a downloaded EAS archive using the pinned native CLI, without contacting Sentry. */
+/** Verify the local recovery archive. An explicit retry can repair a pending Sentry upload. */
 export async function verifyIosSymbolPackage({
   archivePath,
   buildId,
   now = Date.now,
   run = runCommand,
   resolveCli = resolveSentryCli,
+  retryUpload = false,
 }: {
+  retryUpload?: boolean;
   archivePath: string;
   buildId: string;
   now?: () => number;
@@ -271,7 +281,7 @@ export async function verifyIosSymbolPackage({
   try {
     const artifacts = readArchive(readFileSync(archivePath), 'PACKAGE_EXTRACTION');
     return {
-      ...(await verifyPackageArtifacts(artifacts, buildId, now, run, resolveCli)),
+      ...(await verifyPackageArtifacts(artifacts, buildId, now, run, resolveCli, retryUpload)),
       archivePath: sanitizeDiagnostic(resolve(archivePath)),
     };
   } catch (error) {
@@ -302,6 +312,7 @@ async function verifyPackageArtifacts(
   now: () => number,
   run: Run,
   resolveCli: () => string,
+  retryUpload = false,
 ) {
   const directories = new Set<string>();
   for (const path of artifacts.keys()) {
@@ -316,11 +327,20 @@ async function verifyPackageArtifacts(
     'Expected exactly one ios-symbols directory',
   );
   const root = [...directories][0];
-  const markerBytes = artifacts.get(`${root}/package.complete`);
-  requirePackage(markerBytes, 'PACKAGE_INCOMPLETE');
-  const marker = readJson(artifacts, `${root}/package.complete`);
+  const complete = artifacts.has(`${root}/package.complete`);
+  const repairing = !complete && retryUpload && artifacts.has(`${root}/upload.pending`);
   requirePackage(
-    typeof marker?.directory === 'string' && /^package-[A-Za-z0-9]+$/.test(marker.directory),
+    complete || repairing,
+    'PACKAGE_INCOMPLETE',
+    'Verified package unavailable. If upload.pending exists, retry the same build with --retry-upload.',
+  );
+  const marker = readJson(
+    artifacts,
+    `${root}/${repairing ? 'upload.pending' : 'package.complete'}`,
+  );
+  const directoryPattern = repairing ? /^attempt-[A-Za-z0-9]+$/ : /^package-[A-Za-z0-9]+$/;
+  requirePackage(
+    typeof marker?.directory === 'string' && directoryPattern.test(marker.directory),
     'PACKAGE_INCOMPLETE',
   );
   const dir = `${root}/${marker.directory}`;
@@ -345,12 +365,13 @@ async function verifyPackageArtifacts(
       manifest.dsyms.length > 0,
     'PACKAGE_SCHEMA',
   );
-  requirePackage(
-    ['preflight', 'upload', 'remoteVerification'].every(
-      (stage) => receipt[stage]?.status === 'passed',
-    ) && receipt.failure === null,
-    'PACKAGE_GATE_STATUS',
-  );
+  if (!repairing)
+    requirePackage(
+      ['preflight', 'upload', 'remoteVerification'].every(
+        (stage) => receipt[stage]?.status === 'passed',
+      ) && receipt.failure === null,
+      'PACKAGE_GATE_STATUS',
+    );
   const plist = artifacts.get(`${dir}/archive-info.plist`);
   requirePackage(plist, 'PACKAGE_PLIST_MISSING');
   const plistEvidence = evidence(plist);
@@ -377,11 +398,10 @@ async function verifyPackageArtifacts(
     )
       continue;
     dsyms.set(path, bytes);
-    readMachOSlices(bytes);
   }
   requirePackage(dsyms.size > 0, 'PACKAGE_DSYM_INSPECTION', 'No dSYM DWARF files');
-  const expected: UuidArch[] = [];
-  for (const image of manifest.bundles) expected.push(...pairs(image.uuids));
+  const owned = requiredIosBundles<{ identifier: string; uuids: unknown }>(manifest.bundles);
+  const expected = owned.flatMap((image) => pairs(image.uuids));
   for (const dsym of manifest.dsyms) {
     const identities = pairs(dsym.uuids);
     requirePackage(
@@ -398,6 +418,8 @@ async function verifyPackageArtifacts(
       original.size === dsym.size && original.sha256 === dsym.sha256,
       'PACKAGE_DWARF_SHA256',
     );
+    if (!identities.some((slice) => expected.some((pair) => pairKey(pair) === pairKey(slice))))
+      continue;
     const actualPairs = new Set(readMachOSlices(actual).map(pairKey));
     for (const pair of identities)
       requirePackage(
@@ -408,27 +430,31 @@ async function verifyPackageArtifacts(
     requirePackage(actualPairs.size === identities.length, 'PACKAGE_UUID_COVERAGE');
   }
   // Thin fat objects exactly as the upload gate does, so debug on one architecture
-  // cannot qualify a stripped sibling. Only distributed pairs require debug evidence.
+  // cannot qualify a stripped sibling. Only the three Cherry targets require source-line evidence.
   const scratch = mkdtempSync(join(tmpdir(), 'cherry-package-debug-'));
   try {
+    const uploadPaths: string[] = [];
     const cli = resolveCli(); // @sentry/cli getPath(), never its JS launcher.
-    for (const [path, bytes] of dsyms) {
-      const slices = readMachOSlices(bytes);
+    for (const dsym of manifest.dsyms) {
+      const path = dsym.dwarfPath as string;
+      const slices = pairs(dsym.uuids);
+      const bytes = dsyms.get(posix.normalize(path))!;
       const required = slices.filter((slice) =>
         expected.some((pair) => pairKey(pair) === pairKey(slice)),
       );
       if (!required.length) continue;
-      const original = join(scratch, 'original');
+      const original = join(scratch, `original-${uploadPaths.length}`);
       writeFileSync(original, bytes);
+      uploadPaths.push(original);
       for (const pair of required) {
         let object = original;
         if (slices.length > 1) {
           object = join(scratch, 'thin');
           await checked(run, 'xcrun', ['lipo', original, '-thin', pair.arch, '-output', object]);
         }
-        let features;
+        let inspection;
         try {
-          features = await inspectDsymSlice(run, cli, object, pair);
+          inspection = await inspectDsymSlice(run, cli, object, pair);
         } catch (error) {
           throw new GateError(
             error instanceof GateError && error.code === 'LOCAL_DEBUG_SCHEMA'
@@ -437,7 +463,7 @@ async function verifyPackageArtifacts(
             `Cannot inspect local dSYM: ${path} ${pairKey(pair)}`,
           );
         }
-        if (features.includes('debug')) covered.add(pairKey(pair));
+        if (inspection.sourceLineBytes > 0) covered.add(pairKey(pair));
       }
     }
     for (const pair of expected)
@@ -446,6 +472,56 @@ async function verifyPackageArtifacts(
         'PACKAGE_UUID_COVERAGE',
         `Missing extracted full-debug slice: ${pairKey(pair)}`,
       );
+    if (repairing) {
+      const target = sentryTargetFromEnv(process.env);
+      requirePackage(
+        sentryTargetFingerprint(target) === manifest.sentryTarget,
+        'PACKAGE_SENTRY_TARGET',
+      );
+      await queryDebugFiles({
+        ctx: target,
+        uuid: expected[0].uuid,
+        deadlineMs: now() + VERIFICATION_TIMEOUT_MS,
+        preflight: true,
+        now,
+      });
+      const result = await uploadSymbolFiles(
+        run,
+        cli,
+        target,
+        uploadPaths,
+        true,
+        UPLOAD_TIMEOUT_MS,
+      );
+      requirePackage(
+        result.exitCode === 0 && !result.signal && !result.spawnError && !result.timedOut,
+        'PACKAGE_REPAIR_UPLOAD',
+      );
+      const deadlineMs = now() + VERIFICATION_TIMEOUT_MS;
+      receipt.records = await waitForRemoteDebug({
+        uuids: expected,
+        deadlineMs,
+        now,
+        fetchRecords: (uuid) => queryDebugFiles({ ctx: target, uuid, deadlineMs, now }),
+      });
+    }
+    for (const pair of expected) {
+      requirePackage(
+        Array.isArray(receipt.records) &&
+          receipt.records.some(
+            (record: Record<string, unknown>) =>
+              record?.uuid === pair.uuid &&
+              record.arch === pair.arch &&
+              record.symbolType === 'macho' &&
+              typeof record.id === 'string' &&
+              /^[0-9]+$/.test(record.id) &&
+              Array.isArray(record.features) &&
+              record.features.includes('debug'),
+          ),
+        'PACKAGE_REMOTE_COVERAGE',
+        `Missing Sentry verification for ${pairKey(pair)}`,
+      );
+    }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -455,6 +531,8 @@ async function verifyPackageArtifacts(
     manifestSha256: receipt.manifestSha256,
     symbolPackage: zip,
     slices: covered.size,
+    thirdPartySymbols: receipt.thirdPartySymbols ?? [],
+    ...(repairing ? { repairedRecords: receipt.records } : {}),
     verifiedAt: new Date(now()).toISOString(),
     expiry: 'unknown',
   };
@@ -464,6 +542,7 @@ if (basename(process.argv[1] ?? '') === 'verifyIosSymbolPackage.ts') {
   void verifyIosSymbolPackage({
     archivePath: resolve(process.argv[2] ?? ''),
     buildId: process.argv[3] ?? '',
+    retryUpload: process.argv[4] === '--retry-upload',
   }).then(
     (result) => console.log(JSON.stringify(result, null, 2)),
     (error) => {

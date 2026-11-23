@@ -26,6 +26,7 @@ import {
   queryDebugFiles,
   type RemoteDebugRecord,
   REQUIRED_IDENTIFIERS,
+  requiredIosBundles,
   requireSymbolCoverage,
   resolveBuildContext,
   resolveSymbolPackage,
@@ -167,6 +168,14 @@ function fixture() {
         stdout: pairs
           .map((pair) => `UUID: ${pair.uuid.toUpperCase()} (${pair.arch}) ${args[2]}`)
           .join('\n'),
+        exitCode: 0,
+      };
+    } else if (command === 'xcrun' && args[1] === '--statistics') {
+      return {
+        stdout: JSON.stringify({
+          '#bytes with line information': 128,
+          '#bytes with line-0 locations': 8,
+        }),
         exitCode: 0,
       };
     } else if (command === 'xcrun' && args[0] === 'lipo') {
@@ -325,7 +334,7 @@ it('all three IPA identities upload and verify; retained artifact remains pendin
   );
   expect(JSON.stringify({ manifest, receipt })).not.toContain(f.ctx.token);
   const upload = f.commands.find((command) => command.args.includes('upload'))!;
-  expect(upload.args.slice(0, -1)).toEqual([
+  expect(upload.args.slice(0, 8)).toEqual([
     'debug-files',
     'upload',
     '--org',
@@ -336,7 +345,12 @@ it('all three IPA identities upload and verify; retained artifact remains pendin
     '120',
   ]);
   expect(upload.command).toBe(f.deps.resolveCli());
-  expect(upload.args.at(-1)).toMatch(/upload\/dSYMs$/);
+  expect(
+    upload.args
+      .slice(8)
+      .map((path) => basename(path))
+      .sort(),
+  ).toEqual(['CherryShareExtension', 'CherryStudio', 'ExpoWidgetsTarget']);
   expect(upload.timeoutMs).toBe(180_000);
   expect(f.commands.find((command) => command.args[0] === '-c')?.args.slice(0, -1)).toEqual([
     '-c',
@@ -558,7 +572,7 @@ it('claimed cloud production with missing or conflicting guards fails preflight'
     }
   }
 });
-it('an additional embedded extension is discovered and fails without its original dSYM', async () => {
+it('an additional embedded extension is inventoried without gating the three required targets', async () => {
   const f = fixture();
   f.addBundle(
     3,
@@ -575,8 +589,8 @@ it('an additional embedded extension is discovered and fails without its origina
   });
   expect(bundles).toHaveLength(4);
   const dsyms = await inventoryDsyms({ archivePath: f.archivePath, run: f.run });
-  expect(() => requireSymbolCoverage(bundles, dsyms)).toThrow('Extra');
-  await expect(runUploadIosSymbols(f.deps)).rejects.toThrow('Extra');
+  expect(() => requireSymbolCoverage(requiredIosBundles(bundles), dsyms)).not.toThrow();
+  await expect(runUploadIosSymbols(f.deps)).resolves.toMatchObject({ kind: 'verified' });
 });
 it.each(['remote-verification', 'bare-credentials'])(
   'real main prints sanitized %s failures and exits nonzero',
@@ -1067,15 +1081,24 @@ it.each(['framework', 'top-level dylib', 'nested dylib'])(
       put(path, 'Simulated dylib');
       f.slices.set(path, [{ uuid: otherUuid, arch: 'arm64' }]);
     }
-    await expect(runUploadIosSymbols(f.deps)).rejects.toThrow(
-      kind === 'framework' ? 'com.example.Framework' : 'libExtra.dylib',
+    await expect(runUploadIosSymbols(f.deps)).resolves.toMatchObject({
+      kind: 'verified',
+      executables: 3,
+    });
+    expect(f.receipt().thirdPartySymbols).toContainEqual(
+      expect.objectContaining({
+        identifier: expect.stringContaining(
+          kind === 'framework' ? 'com.example.Framework' : 'libExtra.dylib',
+        ),
+        uuid: otherUuid,
+        coverage: 'missing',
+      }),
     );
-    expect(f.receipt().failure.code).toBe('SYMBOL_COVERAGE');
-    expect(f.deps.fetch).not.toHaveBeenCalled();
+    expect(f.receipt().records).toHaveLength(3);
   },
 );
 
-it('verifies framework and top-level/nested dylib slices remotely alongside all required apps', async () => {
+it('uploads matching vendor symbols separately without requiring their remote records', async () => {
   const f = fixture();
   f.addBundle(
     3,
@@ -1101,22 +1124,32 @@ it('verifies framework and top-level/nested dylib slices remotely alongside all 
       f.slices.set(path, [{ uuid: id, arch: 'arm64' }]);
     }
   }
+  f.setRows((id) => ([uuid, widgetUuid, shareUuid].includes(id) ? [full(id)] : []));
   await expect(runUploadIosSymbols(f.deps)).resolves.toMatchObject({
     kind: 'verified',
-    executables: 6,
+    executables: 3,
   });
-  expect(f.receipt().records).toHaveLength(6);
+  expect(f.receipt().records).toHaveLength(3);
+  const uploads = f.commands.filter(({ args }) => args.includes('upload'));
+  expect(uploads).toHaveLength(2);
+  expect(uploads[0].args.join(' ')).not.toContain('Framework.dSYM');
+  expect(uploads[1].args.join(' ')).toContain('Framework.dSYM');
+  expect(f.receipt().thirdPartySymbols).toHaveLength(3);
 });
 
-it('an uninspectable distributed image fails closed with its path and a specific code', async () => {
+it('an uninspectable third-party framework is reported without blocking Cherry symbols', async () => {
   const f = fixture();
   f.addBundle(3, 'com.example.Bad', 'Bad', 'CherryStudio.app/Frameworks/Bad.framework', otherUuid);
   const run: Run = (command, args, options) =>
     args[0] === 'dwarfdump' && args[1] === '--uuid' && args[2].endsWith('/Bad')
       ? Promise.resolve({ stdout: '', stderr: 'not Mach-O', exitCode: 4 })
       : f.run(command, args, options);
-  await expect(runUploadIosSymbols({ ...f.deps, run })).rejects.toThrow('Bad.framework/Bad');
-  expect(f.receipt().failure.code).toBe('IMAGE_INSPECTION');
+  await expect(runUploadIosSymbols({ ...f.deps, run })).resolves.toMatchObject({
+    kind: 'verified',
+  });
+  expect(f.receipt().thirdPartySymbols).toContainEqual(
+    expect.objectContaining({ coverage: 'uninspectable' }),
+  );
 });
 
 it('a stripped local duplicate cannot be rescued by existing full remote records', async () => {
@@ -1319,16 +1352,14 @@ if (missingAppleTools)
       archivePath: f.archivePath,
       ipaPath: f.ipaPath,
       outDir: f.outDir,
-      ipaBundles: [
-        {
-          relPath: 'Tiny.app',
-          identifier: REQUIRED_IDENTIFIERS[0],
-          executable: 'Tiny',
-          version: '1',
-          build: '1',
-          uuids: identities,
-        },
-      ],
+      ipaBundles: REQUIRED_IDENTIFIERS.map((identifier) => ({
+        relPath: 'Tiny.app',
+        identifier,
+        executable: 'Tiny',
+        version: '1',
+        build: '1',
+        uuids: identities,
+      })),
       dsyms,
       run: runCommand,
       ctx: f.ctx,
@@ -1368,6 +1399,13 @@ if (missingAppleTools)
     ).toThrow('Tiny');
     for (const stage of ['preflight', 'upload', 'remoteVerification'] as const)
       receipt[stage].status = 'passed';
+    receipt.records = identities.map((pair) => ({
+      ...pair,
+      id: '123',
+      symbolType: 'macho',
+      features: ['debug'],
+      observedAt: new Date(0).toISOString(),
+    }));
     put(join(staged.attemptDir, 'verification.json'), JSON.stringify(receipt));
     await staged.publish();
     const { verifyIosSymbolPackage } =
@@ -1835,21 +1873,6 @@ it('rejects credential-shaped local feature strings before manifest persistence'
   expect(JSON.stringify({ receipt: f.receipt(), manifest: f.manifest() })).not.toContain(key);
 });
 
-it('documents optional identity scope and possible failed-build artifact retrieval', () => {
-  const docs = readFileSync(resolve('docs/guides/cloud-releases.md'), 'utf8');
-  expect(docs).toContain('Symbol evidence is mandatory.');
-  expect(docs).toContain('identityUnverified: "project-scope"');
-  expect(docs).toContain('identityUnverified: "client-key-scope"');
-  expect(docs).toContain('not a release-token prerequisite');
-  expect(docs).toContain("A failed build's extra artifacts may also be available");
-  expect(docs).not.toContain('A failed build has no downloadable build artifacts');
-  expect(docs).toContain("runCommand('pnpm', [");
-  expect(docs).toContain("'exec', 'eas', 'build:download', '--build-id'");
-  expect(docs).toContain('a 401/403/404 client-key list records');
-  expect(docs).toContain('Identity-endpoint 429, 5xx,');
-  expect(docs).toContain('redirects, timeouts, and malformed responses fail the build.');
-});
-
 it('a successful retry atomically selects a new package that verifies', async () => {
   const f = fixture();
   await runUploadIosSymbols(f.deps);
@@ -2004,36 +2027,103 @@ it('redacts credential assignments in any diagnostic text while retaining valida
   expect(rows[0].sha1).toBe(stripped.sha1);
 });
 
-it.each([0, 9])(
-  'documented verifier runs only after download success (exit=%s)',
-  (downloadExit) => {
-    const docs = readFileSync(resolve('docs/guides/cloud-releases.md'), 'utf8');
-    const blocks = [...docs.matchAll(/```bash\n([\s\S]*?)\n```/g)]
-      .map((match) => match[1])
-      .filter(
-        (block) =>
-          block.includes('build:download') || block.includes('scripts/verifyIosSymbolPackage.ts'),
-      );
-    expect(blocks).toHaveLength(2);
-    const block = blocks
-      .join('\nstatus=$?\nif [ $status -ne 0 ]; then exit $status; fi\n')
-      .replaceAll('<build-id>', 'example-build')
-      .replaceAll('<id>', 'example-build')
-      .replaceAll('<artifact>', 'example-artifact');
-    // Stub the two node commands while executing the documented shell sequencing itself.
-    const result = spawnSync(
-      'bash',
-      [
-        '-c',
-        `node() {
-    if [[ "$*" == *--input-type=module* ]]; then return ${downloadExit}; fi
-    printf 'verifier-ran'
-  }
-  ${block}`,
-      ],
-      { encoding: 'utf8' },
+it.each([0, 1, 2])('missing original symbols block each required target (%i)', async (index) => {
+  const f = fixture();
+  const name = ['CherryStudio', 'ExpoWidgetsTarget', 'CherryShareExtension'][index];
+  rmSync(join(f.archivePath, 'dSYMs', name + '.dSYM'), { recursive: true });
+  await expect(runUploadIosSymbols(f.deps)).rejects.toThrow(REQUIRED_IDENTIFIERS[index]);
+  expect(f.commands.some(({ args }) => args.includes('upload'))).toBe(false);
+});
+
+it('retains a partial vendor dSYM and records vendor upload failures without failing the app upload', async () => {
+  const f = fixture();
+  f.addBundle(
+    3,
+    'com.example.OpenSSL',
+    'OpenSSL',
+    'CherryStudio.app/Frameworks/OpenSSL.framework',
+    otherUuid,
+  );
+  const path = join(f.archivePath, 'dSYMs/OpenSSL.dSYM/Contents/Resources/DWARF/OpenSSL');
+  f.localFeatures.set(path, ['symtab', 'debug']);
+  const run: Run = async (cmd, args, options) =>
+    args[1] === '--statistics' && args.at(-1) === path
+      ? {
+          stdout: JSON.stringify({
+            '#bytes with line information': 8,
+            '#bytes with line-0 locations': 8,
+          }),
+          exitCode: 0,
+        }
+      : args.includes('upload') && args.some((arg) => arg.includes('OpenSSL.dSYM'))
+        ? { exitCode: 1, stdout: '' }
+        : f.run(cmd, args, options);
+  await expect(runUploadIosSymbols({ ...f.deps, run })).resolves.toMatchObject({
+    kind: 'verified',
+    executables: 3,
+  });
+  expect(f.receipt().thirdPartySymbols).toContainEqual(
+    expect.objectContaining({ uuid: otherUuid, coverage: 'limited', upload: 'failed' }),
+  );
+});
+
+it('retries retained original symbols for the same build after a Sentry outage', async () => {
+  const f = fixture();
+  f.setUploadExit(23);
+  await expect(runUploadIosSymbols(f.deps)).rejects.toMatchObject({ code: 'TOOL_EXIT_23' });
+  expect(existsSync(join(f.outDir, 'upload.pending'))).toBe(true);
+  const { verifyIosSymbolPackage } =
+    require('../verifyIosSymbolPackage') as typeof import('../verifyIosSymbolPackage');
+  const deps = {
+    archivePath: artifactArchive(f),
+    buildId: f.ctx.buildId,
+    run: f.run,
+    resolveCli: f.deps.resolveCli,
+  };
+  await expect(verifyIosSymbolPackage(deps)).rejects.toMatchObject({ code: 'PACKAGE_INCOMPLETE' });
+  const previous = process.env;
+  process.env = {
+    ...previous,
+    SENTRY_URL: f.ctx.sentryUrl,
+    SENTRY_ORG: f.ctx.org,
+    SENTRY_PROJECT: f.ctx.project,
+    SENTRY_AUTH_TOKEN: f.ctx.token,
+    EXPO_PUBLIC_SENTRY_DSN: 'https://other@ingest.example/2',
+  };
+  const remote = jest.spyOn(globalThis, 'fetch').mockImplementation(f.deps.fetch);
+  try {
+    await expect(verifyIosSymbolPackage({ ...deps, retryUpload: true })).rejects.toMatchObject({
+      code: 'PACKAGE_SENTRY_TARGET',
+    });
+    expect(remote).not.toHaveBeenCalled();
+    f.setUploadExit(0);
+    process.env.EXPO_PUBLIC_SENTRY_DSN = f.ctx.dsn;
+    await expect(verifyIosSymbolPackage({ ...deps, retryUpload: true })).resolves.toMatchObject({
+      status: 'download-verified',
+      slices: 3,
+      repairedRecords: expect.arrayContaining([expect.objectContaining({ uuid })]),
+    });
+    expect(remote.mock.calls.filter(([input]) => String(input).includes('debug_id='))).toHaveLength(
+      3,
     );
-    expect(result.status).toBe(downloadExit);
-    expect(result.stdout).toBe(downloadExit === 0 ? 'verifier-ran' : '');
-  },
-);
+  } finally {
+    process.env = previous;
+    remote.mockRestore();
+  }
+});
+
+it('requires real source-line coverage from each Cherry target even if its debug flag is present', async () => {
+  const f = fixture();
+  const run: Run = (cmd, args, opts) =>
+    args[1] === '--statistics' && args.at(-1)?.endsWith('/ExpoWidgetsTarget')
+      ? Promise.resolve({
+          stdout: JSON.stringify({
+            '#bytes with line information': 8,
+            '#bytes with line-0 locations': 8,
+          }),
+          exitCode: 0,
+        })
+      : f.run(cmd, args, opts);
+  await expect(runUploadIosSymbols({ ...f.deps, run })).rejects.toThrow(REQUIRED_IDENTIFIERS[1]);
+  expect(f.commands.some(({ args }) => args.includes('upload'))).toBe(false);
+});

@@ -51,6 +51,9 @@ export class GateError extends Error {
     super(message);
   }
 }
+// The local originals are intact. TestFlight remains gated by the downloaded-package verifier.
+export class PendingSymbolUpload extends GateError {}
+
 class RetryableError extends GateError {
   constructor(readonly retryAfterMs = FIRST_POLL_MS) {
     super('HTTP_RETRY');
@@ -74,11 +77,27 @@ export interface Bundle {
   build: string;
   uuids: UuidArch[];
 }
+export function requiredIosBundles<T extends { identifier: string }>(bundles: readonly T[]): T[] {
+  return REQUIRED_IDENTIFIERS.map((id) => {
+    const matches = bundles.filter((bundle) => bundle.identifier === id);
+    requireValue(matches.length === 1, `IPA bundle ${id}`);
+    return matches[0];
+  });
+}
+
+type VendorSymbol = {
+  identifier: string;
+  uuid?: string;
+  arch?: string;
+  coverage: 'missing' | 'limited' | 'debug-present' | 'uninspectable';
+  upload?: 'submitted' | 'failed' | 'skipped';
+};
+
 export interface Dsym {
   relPath: string;
   exePath: string;
   uuids: UuidArch[];
-  slices: (UuidArch & { features: string[] })[];
+  slices: (UuidArch & { features: string[]; sourceLineBytes: number | null })[];
 }
 export interface ActiveContext {
   kind: 'active';
@@ -94,6 +113,10 @@ export interface ActiveContext {
   archivePath: string;
   ipaPath: string;
 }
+type SentryTarget = Pick<
+  ActiveContext,
+  'sentryUrl' | 'org' | 'project' | 'token' | 'dsnProjectId' | 'dsn' | 'env'
+>;
 type BuildContext = ActiveContext | { kind: 'skip'; reason: string };
 export interface CommandResult {
   stdout: string;
@@ -327,6 +350,12 @@ export function validateBuildContext(ctx: ActiveContext) {
     requireValue(!env[name] || env[name] === 'false' || env[name] === '0', name);
   const services = jsonFile(resolve('src/frontend/appShell/observability/reportingServices.json'));
   requireValue(services.sentry?.enabled === true, 'Sentry reporting configuration');
+  Object.assign(ctx, sentryTargetFromEnv(env));
+}
+
+export function sentryTargetFromEnv(env: NodeJS.ProcessEnv): SentryTarget {
+  requireValue(env.SENTRY_AUTH_TOKEN?.trim(), 'SENTRY_AUTH_TOKEN');
+  requireValue(env.EXPO_PUBLIC_SENTRY_DSN?.trim(), 'EXPO_PUBLIC_SENTRY_DSN');
   const plugins = jsonFile(resolve('app.json')).expo.plugins as unknown[];
   const plugin = plugins.find(
     (entry) => Array.isArray(entry) && entry[0] === '@sentry/react-native/expo',
@@ -351,15 +380,45 @@ export function validateBuildContext(ctx: ActiveContext) {
     org === plugin[1].organization && project === plugin[1].project,
     'Sentry org/project configuration conflict',
   );
-  Object.assign(ctx, {
+  return {
     sentryUrl: url.href.replace(/\/$/, ''),
     org,
     project,
     token: env.SENTRY_AUTH_TOKEN!,
     dsnProjectId: parseDsnProjectId(env.EXPO_PUBLIC_SENTRY_DSN!),
     dsn: env.EXPO_PUBLIC_SENTRY_DSN!,
-  });
+  };
 }
+export function sentryTargetFingerprint(ctx: SentryTarget) {
+  return createHash('sha256')
+    .update(JSON.stringify([ctx.sentryUrl, ctx.org, ctx.project, ctx.dsn]))
+    .digest('hex');
+}
+
+export function uploadSymbolFiles(
+  run: Run,
+  cli: string,
+  ctx: SentryTarget,
+  paths: string[],
+  wait: boolean,
+  timeoutMs: number,
+) {
+  return run(
+    cli,
+    [
+      'debug-files',
+      'upload',
+      '--org',
+      ctx.org,
+      '--project',
+      ctx.project,
+      ...(wait ? ['--wait-for', '120'] : []),
+      ...paths,
+    ],
+    { timeoutMs, env: { ...process.env, SENTRY_AUTH_TOKEN: ctx.token, SENTRY_URL: ctx.sentryUrl } },
+  );
+}
+
 function selectIpa(buildDir: string): string {
   const candidates = existsSync(buildDir)
     ? readdirSync(buildDir).filter(
@@ -415,10 +474,12 @@ async function discoverBundles(
   for (const path of walk(root, new Set(), checkDeadline).filter(
     (path) => /\.(app|appex|framework)$/i.test(path) && statSync(path).isDirectory(),
   )) {
+    let identifier = relative(root, path);
     try {
       const plist = JSON.parse(
         await checked(run, 'plutil', ['-convert', 'json', '-o', '-', join(path, 'Info.plist')]),
       );
+      if (typeof plist.CFBundleIdentifier === 'string') identifier = plist.CFBundleIdentifier;
       for (const key of ['CFBundleIdentifier', 'CFBundleExecutable'])
         requireValue(typeof plist[key] === 'string' && plist[key].trim(), `bundle plist ${key}`);
       requireValue(
@@ -445,6 +506,17 @@ async function discoverBundles(
       });
     } catch (error) {
       if (error instanceof GateError && error.code === 'HOOK_DEADLINE') throw error;
+      if (!REQUIRED_IDENTIFIERS.includes(identifier)) {
+        bundles.push({
+          relPath: relative(root, path),
+          identifier,
+          executable: basename(path),
+          version: '',
+          build: '',
+          uuids: [],
+        });
+        continue;
+      }
       throw new GateError(
         'IMAGE_INSPECTION',
         `Cannot inspect distributed image ${relative(root, path)}: ${error instanceof GateError ? error.message : 'invalid bundle metadata'}`,
@@ -464,7 +536,10 @@ async function discoverBundles(
       executable: basename(exePath),
       version: '',
       build: '',
-      uuids: await inspectImage(exePath, run),
+      uuids: await inspectImage(exePath, run).catch((error) => {
+        if (error instanceof GateError && error.code === 'HOOK_DEADLINE') throw error;
+        return [];
+      }),
     });
   }
   return bundles;
@@ -496,12 +571,7 @@ export async function inventoryIpaBundles({
   mkdirSync(unpacked, { recursive: true });
   await checked(run, 'ditto', ['-x', '-k', ipaPath, unpacked], PACKAGING_TIMEOUT_MS);
   const bundles = await discoverBundles(unpacked, run, checkDeadline);
-  for (const identifier of REQUIRED_IDENTIFIERS)
-    requireValue(
-      bundles.some((bundle) => bundle.identifier === identifier),
-      `IPA bundle ${identifier}`,
-    );
-  return { bundles };
+  return { bundles, owned: requiredIosBundles(bundles) };
 }
 /** Read the pinned CLI's documented features/variants evidence for one native object. */
 export async function inspectDsymSlice(run: Run, cli: string, path: string, pair: UuidArch) {
@@ -531,14 +601,25 @@ export async function inspectDsymSlice(run: Run, cli: string, path: string, pair
     .filter(Boolean);
   if (!features.every((feature: string) => DIF_FEATURES.has(feature)))
     throw new GateError('LOCAL_DEBUG_SCHEMA');
-  return features;
+  let sourceLineBytes = 0;
+  if (features.includes('debug')) {
+    const stats = JSON.parse(await checked(run, 'xcrun', ['dwarfdump', '--statistics', path]));
+    sourceLineBytes = stats['#bytes with line information'] - stats['#bytes with line-0 locations'];
+    requireValue(
+      Number.isSafeInteger(sourceLineBytes) && sourceLineBytes >= 0,
+      'DWARF source-line statistics',
+    );
+  }
+  return { features, sourceLineBytes };
 }
 export async function inventoryDsyms({
   archivePath,
   run,
   cli = resolveSentryCli(),
   checkDeadline = () => {},
+  required,
 }: {
+  required?: Bundle[];
   archivePath: string;
   run: Run;
   cli?: string;
@@ -549,21 +630,39 @@ export async function inventoryDsyms({
     (path) => /\.dSYM\/Contents\/Resources\/DWARF\/[^/]+$/.test(path) && statSync(path).isFile(),
   );
   requireValue(paths.length, 'archive dSYM DWARF files');
+  const requiredPairs =
+    required && new Set(required.flatMap((bundle) => bundle.uuids.map(pairKey)));
   const result: Dsym[] = [];
   for (const exePath of paths) {
     checkDeadline();
-    const uuids = parseUuidLines(await checked(run, 'xcrun', ['dwarfdump', '--uuid', exePath]));
+    let uuids: UuidArch[];
+    try {
+      uuids = parseUuidLines(await checked(run, 'xcrun', ['dwarfdump', '--uuid', exePath]));
+    } catch (error) {
+      if (!required || (error instanceof GateError && error.code === 'HOOK_DEADLINE')) throw error;
+      // Unidentified files remain in the recovery zip. Coverage is decided from confirmed UUIDs.
+      continue;
+    }
     const slices: Dsym['slices'] = [];
     const scratch = mkdtempSync(join(tmpdir(), 'cherry-dsym-slices-'));
     try {
       for (const pair of uuids) {
-        let path = exePath;
-        if (uuids.length > 1) {
-          path = join(scratch, pair.arch);
-          await checked(run, 'xcrun', ['lipo', exePath, '-thin', pair.arch, '-output', path]);
+        try {
+          let path = exePath;
+          if (uuids.length > 1) {
+            path = join(scratch, pair.arch);
+            await checked(run, 'xcrun', ['lipo', exePath, '-thin', pair.arch, '-output', path]);
+          }
+          slices.push({ ...pair, ...(await inspectDsymSlice(run, cli, path, pair)) });
+        } catch (error) {
+          if (
+            !requiredPairs ||
+            requiredPairs.has(pairKey(pair)) ||
+            (error instanceof GateError && error.code === 'HOOK_DEADLINE')
+          )
+            throw error;
+          slices.push({ ...pair, features: [], sourceLineBytes: null });
         }
-        const features = await inspectDsymSlice(run, cli, path, pair);
-        slices.push({ ...pair, features });
       }
     } finally {
       rmSync(scratch, { recursive: true, force: true });
@@ -583,7 +682,7 @@ function pairKey(pair: UuidArch) {
 export function requireSymbolCoverage(ipaBundles: Bundle[], dsyms: Dsym[]) {
   const covered = new Set(
     dsyms.flatMap((dsym) =>
-      dsym.slices.filter((slice) => slice.features.includes('debug')).map(pairKey),
+      dsym.slices.filter((slice) => (slice.sourceLineBytes ?? 0) > 0).map(pairKey),
     ),
   );
   for (const bundle of ipaBundles)
@@ -647,6 +746,7 @@ interface Receipt {
   cliExitStatus: number | null;
   failure: { stage: string; code: string; message?: string; observedAt: string } | null;
   records: Observation[];
+  thirdPartySymbols: VendorSymbol[];
   identityUnverified?: 'project-scope' | 'client-key-scope';
   retention: { status: 'pending-post-build-check'; expiry: null; downloadVerified: false };
 }
@@ -678,6 +778,7 @@ function initialReceipt(ctx: ActiveContext, outDir: string, timestamp: string): 
     cliExitStatus: null,
     failure: null,
     records: [],
+    thirdPartySymbols: [],
     retention: { status: 'pending-post-build-check', expiry: null, downloadVerified: false },
   };
   return receipt;
@@ -792,7 +893,9 @@ export async function stageSymbols({
         ...(await fileEvidence(dsym.exePath, checkDeadline)),
         inspection: {
           tool: 'xcrun dwarfdump --uuid; sentry-cli debug-files check --json per slice',
-          status: 'passed',
+          status: dsym.slices.every((slice) => slice.sourceLineBytes !== null)
+            ? 'passed'
+            : 'uninspectable',
         },
         matchingBundles: ipaBundles
           .filter((bundle) =>
@@ -807,6 +910,7 @@ export async function stageSymbols({
       schemaVersion: 1,
       buildId: ctx.buildId,
       sourceSha: ctx.sourceSha,
+      sentryTarget: sentryTargetFingerprint(ctx),
       runner: 'eas-build',
       platform: 'ios',
       profile: redact(ctx.env?.EAS_BUILD_PROFILE ?? 'production'),
@@ -958,7 +1062,7 @@ export async function queryDebugFiles({
   clientKeys = false,
   onIdentityUnverified,
 }: {
-  ctx: ActiveContext;
+  ctx: SentryTarget;
   uuid: string;
   fetch?: typeof fetch;
   now?: () => number;
@@ -1227,6 +1331,7 @@ export async function runUploadIosSymbols({
   let receipt = initialReceipt(ctx, outDir, timestamp());
   let executables = 0;
   let failure: GateError | undefined;
+  let remoteWork = false;
   let stage: 'preflight' | 'upload' | 'remoteVerification' = 'preflight';
   const attemptDir = mkdtempSync(join(outDir, 'attempt-'));
   const save = () => writeJson(join(attemptDir, 'verification.json'), receipt);
@@ -1279,7 +1384,7 @@ export async function runUploadIosSymbols({
     // These Apple tools have no independent version option; they ship with macOS.
     versions.plutil = `macOS ${macOS}`;
     versions.ditto = `macOS ${macOS}`;
-    const { bundles } = await inventoryIpaBundles({
+    const { bundles, owned } = await inventoryIpaBundles({
       ipaPath: ctx.ipaPath,
       workDir,
       run: boundedRun,
@@ -1290,18 +1395,46 @@ export async function runUploadIosSymbols({
       run: boundedRun,
       cli,
       checkDeadline,
+      required: owned,
     });
     await staged.completeManifest(bundles, dsyms, versions);
-    requireSymbolCoverage(bundles, dsyms);
+    const requiredPairs = owned.flatMap((bundle) => bundle.uuids);
+    requireSymbolCoverage(owned, dsyms);
     requireArchiveIdentity(
-      bundles,
-      await discoverBundles(
-        join(ctx.archivePath, 'Products', 'Applications'),
-        boundedRun,
-        checkDeadline,
+      owned,
+      requiredIosBundles(
+        await discoverBundles(
+          join(ctx.archivePath, 'Products', 'Applications'),
+          boundedRun,
+          checkDeadline,
+        ),
       ),
     );
     checkDeadline();
+    const vendors = bundles.filter((bundle) => !REQUIRED_IDENTIFIERS.includes(bundle.identifier));
+    const localSlices = dsyms.flatMap((dsym) => dsym.slices);
+    for (const bundle of vendors) {
+      const identifier = sanitizeDiagnostic(bundle.identifier, diagnosticEnv);
+      if (!bundle.uuids.length)
+        receipt.thirdPartySymbols.push({ identifier, coverage: 'uninspectable' });
+      for (const pair of bundle.uuids) {
+        const slices = localSlices.filter((slice) => pairKey(slice) === pairKey(pair));
+        const coverage = !slices.length
+          ? 'missing'
+          : slices.some((slice) => (slice.sourceLineBytes ?? 0) > 0)
+            ? 'debug-present'
+            : slices.some((slice) => slice.sourceLineBytes !== null)
+              ? 'limited'
+              : 'uninspectable';
+        receipt.thirdPartySymbols.push({
+          identifier,
+          ...pair,
+          coverage,
+          ...(slices.length ? { upload: 'skipped' as const } : {}),
+        });
+      }
+    }
+    remoteWork = true;
     const preflightDeadline = Math.min(hookDeadline, now() + VERIFICATION_TIMEOUT_MS);
     await retryPreflight({
       now,
@@ -1310,7 +1443,7 @@ export async function runUploadIosSymbols({
       query: () =>
         queryDebugFiles({
           ctx,
-          uuid: bundles[0].uuids[0].uuid,
+          uuid: requiredPairs[0].uuid,
           fetch: fetchImpl,
           now,
           deadlineMs: preflightDeadline,
@@ -1323,42 +1456,40 @@ export async function runUploadIosSymbols({
     receipt.preflight = { status: 'passed', updatedAt: timestamp() };
     save();
     stage = 'upload';
-    const result = await boundedRun(
+    const localFiles = (pairs: UuidArch[], requireDebug: boolean) =>
+      dsyms
+        .filter((dsym) =>
+          dsym.slices.some(
+            (slice) =>
+              pairs.some((pair) => pairKey(pair) === pairKey(slice)) &&
+              (!requireDebug || (slice.sourceLineBytes ?? 0) > 0),
+          ),
+        )
+        .map((dsym) =>
+          join(staged.stagedDsymsDir, relative(join(ctx.archivePath, 'dSYMs'), dsym.exePath)),
+        );
+    const uploadDiagnostics = { ...process.env, SENTRY_AUTH_TOKEN: ctx.token };
+    const result = await uploadSymbolFiles(
+      boundedRun,
       cli,
-      [
-        'debug-files',
-        'upload',
-        '--org',
-        ctx.org,
-        '--project',
-        ctx.project,
-        '--wait-for',
-        '120',
-        staged.stagedDsymsDir,
-      ],
-      {
-        timeoutMs: UPLOAD_TIMEOUT_MS,
-        env: { ...process.env, SENTRY_AUTH_TOKEN: ctx.token, SENTRY_URL: ctx.sentryUrl },
-      },
+      ctx,
+      localFiles(requiredPairs, true),
+      true,
+      UPLOAD_TIMEOUT_MS,
     );
+    const uploadFailure = commandFailure(result, 'sentry-cli', uploadDiagnostics);
     receipt.cliExitStatus = result.exitCode;
     receipt.upload = {
-      status: commandFailure(result, 'sentry-cli', { ...process.env, SENTRY_AUTH_TOKEN: ctx.token })
-        ? 'failed'
-        : 'passed',
+      status: uploadFailure ? 'failed' : 'passed',
       updatedAt: timestamp(),
     };
     save();
-    const uploadFailure = commandFailure(result, 'sentry-cli', {
-      ...process.env,
-      SENTRY_AUTH_TOKEN: ctx.token,
-    });
     if (uploadFailure)
       throw new GateError(uploadFailure.code, `Sentry CLI upload failed: ${uploadFailure.message}`);
     stage = 'remoteVerification';
     const deadlineMs = Math.min(hookDeadline, now() + VERIFICATION_TIMEOUT_MS);
     await waitForRemoteDebug({
-      uuids: bundles.flatMap((bundle) => bundle.uuids),
+      uuids: requiredPairs,
       now,
       sleep,
       deadlineMs,
@@ -1369,10 +1500,37 @@ export async function runUploadIosSymbols({
       },
     });
     checkDeadline();
+    remoteWork = false;
     receipt.remoteVerification = { status: 'passed', updatedAt: timestamp() };
+    const vendorFiles = localFiles(
+      vendors.flatMap((bundle) => bundle.uuids),
+      false,
+    );
+    if (vendorFiles.length) {
+      // Reserve the remaining deadline for publishing the mandatory recovery package.
+      const budget = Math.min(30_000, Math.floor((hookDeadline - now()) / 4));
+      let upload: VendorSymbol['upload'] = 'skipped';
+      if (budget > 0) {
+        try {
+          const optional = await uploadSymbolFiles(
+            boundedRun,
+            cli,
+            ctx,
+            vendorFiles,
+            false,
+            budget,
+          );
+          upload = commandFailure(optional, 'sentry-cli') ? 'failed' : 'submitted';
+        } catch {
+          upload = 'failed';
+        }
+      }
+      for (const entry of receipt.thirdPartySymbols)
+        if (entry.upload === 'skipped') entry.upload = upload;
+    }
     save();
     await staged.publish();
-    executables = bundles.length;
+    executables = owned.length;
   } catch (error) {
     receipt[stage] = { status: 'failed', updatedAt: timestamp() };
     receipt.failure = {
@@ -1385,9 +1543,14 @@ export async function runUploadIosSymbols({
       observedAt: timestamp(),
     };
     save();
-    failure = new GateError(receipt.failure.code, receipt.failure.message);
+    if (remoteWork) {
+      writeJson(join(outDir, 'upload.pending'), { directory: basename(attemptDir) });
+      failure = new PendingSymbolUpload(receipt.failure.code, receipt.failure.message);
+    } else failure = new GateError(receipt.failure.code, receipt.failure.message);
   } finally {
-    if (!failure) rmSync(workDir, { recursive: true, force: true });
+    // On a remote failure the original zip, manifest and failed receipt already survive in attemptDir.
+    if (!failure || failure instanceof PendingSymbolUpload)
+      rmSync(workDir, { recursive: true, force: true });
     activeAttemptReceipt = undefined;
   }
   if (!failure && now() >= hookDeadline) {
@@ -1397,6 +1560,8 @@ export async function runUploadIosSymbols({
     throw new GateError('HOOK_DEADLINE');
   }
   if (failure) throw failure;
+  // EAS archives this directory. Keep one copy of a successful attempt's original dSYMs.
+  rmSync(attemptDir, { recursive: true, force: true });
   return { kind: 'verified' as const, executables, receipt };
 }
 export async function main() {
@@ -1444,7 +1609,11 @@ export async function main() {
     console.error(
       sanitizeDiagnostic(error instanceof GateError ? error.message : 'iOS symbol gate failed'),
     );
-    process.exitCode = 1;
+    if (error instanceof PendingSymbolUpload) {
+      console.error(
+        'Original symbols retained for retry. The submission gate requires Sentry verification for this build.',
+      );
+    } else process.exitCode = 1;
   } finally {
     clearTimeout(watchdog);
   }

@@ -259,7 +259,7 @@ the upload tasks.
 
 Cloud-production iOS builds also run the after-archive symbol gate described in
 [Cloud Releases](./cloud-releases.md#ios). It matches the exported IPA to original dSYMs, stages a
-recovery artifact, and requires full-debug records on Sentry before success. This gate applies only
+recovery artifact, and requires matching Sentry records for the main app, widget and share extension before TestFlight submission. Other bundled libraries have best-effort symbol coverage. This gate applies only
 to cloud production iOS builds; local production builds retain their existing upload behavior and
 need their own verification. Keep automatic uploads enabled as required above.
 
