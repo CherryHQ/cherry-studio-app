@@ -83,6 +83,15 @@ export function ContextUsageRing({
       </Composer.Action>
       <AnchoredInfoPopover
         anchor={anchor}
+        footer={
+          onCompact ? (
+            <ContextCompactionButton
+              onCompact={onCompact}
+              disabled={compactDisabled}
+              onDone={close}
+            />
+          ) : undefined
+        }
         onClose={close}
         placement="above"
         text={t('chat.contextUsage.summary', {
@@ -92,16 +101,7 @@ export function ContextUsageRing({
         testID="chat-context-usage-popover"
         width={272}
       >
-        <View className="gap-2">
-          <ContextUsageProgress usage={usage} />
-          {onCompact ? (
-            <ContextCompactionButton
-              onCompact={onCompact}
-              disabled={compactDisabled}
-              onDone={close}
-            />
-          ) : null}
-        </View>
+        <ContextUsageProgress usage={usage} />
       </AnchoredInfoPopover>
     </View>
   );
@@ -135,6 +135,10 @@ function ContextCompactionButton({
       }
     } catch (error) {
       if (error instanceof AgentProtocolError && error.view.code === 'CANCELLED') return;
+      if (error instanceof AgentProtocolError && error.view.code === 'SESSION_BUSY') {
+        toast.show({ label: t('chat.compaction.unavailable') });
+        return;
+      }
       toast.show({ label: t('chat.compaction.failed'), variant: 'danger' });
     } finally {
       setCompacting(false);

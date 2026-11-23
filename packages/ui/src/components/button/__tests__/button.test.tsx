@@ -2,7 +2,32 @@ import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
+import { MenuInteraction } from '../../menu/menu-interaction';
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
+
+let mockNativePressed = false;
+const nativeMenuInteraction = {
+  isOpen: true,
+  close: () => undefined,
+  shouldUseNativePresses: true,
+};
+jest.mock('react-native-gesture-handler', () => {
+  const React = jest.requireActual('react');
+  return {
+    Pressable: function GesturePressable({
+      children,
+      ...props
+    }: {
+      children?: React.ReactNode | ((state: { pressed: boolean }) => React.ReactNode);
+    }) {
+      return React.createElement(
+        'GesturePressable',
+        props,
+        typeof children === 'function' ? children({ pressed: mockNativePressed }) : children,
+      );
+    },
+  };
+});
 
 jest.mock('../../loading/spinner', () => {
   const React = jest.requireActual('react');
@@ -320,5 +345,43 @@ describe('Button', () => {
       checked: true,
       disabled: true,
     });
+  });
+
+  test('uses GesturePressable with native View styles inside a native-press overlay', () => {
+    mockNativePressed = false;
+    const onPress = jest.fn();
+    act(() => {
+      renderer = create(
+        <MenuInteraction.Provider value={nativeMenuInteraction}>
+          <Button onPress={onPress} variant="ghost">
+            Compact
+          </Button>
+        </MenuInteraction.Provider>,
+      );
+    });
+
+    const gesture = renderer!.root.findByType('GesturePressable' as never);
+    const view = gesture.findByType(View);
+    const baseClasses = (view.props.className as string).split(' ');
+    expect(baseClasses).not.toContain('active:opacity-80');
+    expect(baseClasses).not.toContain('active:bg-secondary');
+    expect(baseClasses).not.toContain('bg-secondary');
+
+    mockNativePressed = true;
+    act(() => {
+      renderer!.update(
+        <MenuInteraction.Provider value={nativeMenuInteraction}>
+          <Button onPress={onPress} variant="ghost">
+            Compact
+          </Button>
+        </MenuInteraction.Provider>,
+      );
+    });
+    expect((gesture.findByType(View).props.className as string).split(' ')).toContain(
+      'bg-secondary',
+    );
+    act(() => gesture.props.onPress({ nativeEvent: {} }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+    mockNativePressed = false;
   });
 });

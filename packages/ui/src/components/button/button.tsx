@@ -10,15 +10,22 @@ import {
   Platform,
   Pressable,
   Text,
+  View,
   type PressableProps,
   type TextProps,
   type TextInstance,
   type ViewInstance,
 } from 'react-native';
+import {
+  Pressable as GesturePressable,
+  type PressableEvent as GesturePressableEvent,
+  type PressableProps as GesturePressableProps,
+} from 'react-native-gesture-handler';
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
+import { MenuInteraction } from '../menu/menu-interaction';
 
 export type ButtonVariant =
   | 'default'
@@ -47,6 +54,13 @@ export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'>;
 // Keep an explicit zero when switching away from a bordered variant (react-native#54217).
 const rootBaseStyles =
   'flex-row items-center justify-center overflow-hidden border-0 active:opacity-80 disabled:opacity-40';
+const nativeRootBaseStyles = 'flex-row items-center justify-center overflow-hidden border-0';
+
+const nativePressedStyles: Partial<Record<ButtonVariant, string>> = {
+  ghost: 'bg-secondary',
+  link: 'opacity-70',
+  text: 'opacity-70',
+};
 
 const shapeStyles: Record<ButtonShape, string> = {
   pill: 'rounded-full',
@@ -166,6 +180,16 @@ const ButtonLabel = forwardRef<TextInstance, ButtonLabelProps>(function ButtonLa
 
 ButtonLabel.displayName = 'Button.Label';
 
+function toGestureHandler<Event>(
+  handler: ((event: Event) => unknown) | null | undefined,
+): ((event: GesturePressableEvent) => void) | undefined {
+  return handler
+    ? (event) => {
+        handler(event as unknown as Event);
+      }
+    : undefined;
+}
+
 const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
   {
     accessibilityRole = 'button',
@@ -182,9 +206,11 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
   },
   ref,
 ) {
+  const shouldUseNativePresses = useContext(MenuInteraction)?.shouldUseNativePresses === true;
   const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
   const isIconOnly = icon !== undefined && children == null;
+  const resolvedHitSlop = hitSlop ?? (size === 'xs' ? 8 : undefined);
   const labelStyle = useResolveClassNames(variantStyles[variant].label);
   const spinnerColor = typeof labelStyle.color === 'string' ? labelStyle.color : undefined;
   const iconElement = icon
@@ -202,41 +228,97 @@ const ButtonRoot = forwardRef<ViewInstance, ButtonProps>(function Button(
     // Android can retain the previous busy description when the key is omitted.
     busy: loading || accessibilityState?.busy || false,
   };
+  const content = (
+    <>
+      {loading ? (
+        <Spinner
+          accessibilityElementsHidden
+          color={spinnerColor}
+          importantForAccessibility="no"
+          size={sizeStyles[resolvedSize].spinner}
+        />
+      ) : null}
+      {!loading ? iconElement : null}
+      {typeof children === 'string' || typeof children === 'number' ? (
+        <ButtonLabel>{children}</ButtonLabel>
+      ) : (
+        children
+      )}
+    </>
+  );
+
+  let control: ReactNode;
+  if (shouldUseNativePresses) {
+    const {
+      blockNativeResponder: _blockNativeResponder,
+      onHoverIn,
+      onHoverOut,
+      onLongPress,
+      onPress,
+      onPressIn,
+      onPressMove: _onPressMove,
+      onPressOut,
+      ...gestureProps
+    } = props;
+    control = (
+      <GesturePressable
+        {...(gestureProps as Omit<GesturePressableProps, 'children' | 'style' | 'ref'>)}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={mergedAccessibilityState}
+        disabled={isDisabled}
+        hitSlop={resolvedHitSlop as GesturePressableProps['hitSlop']}
+        onHoverIn={toGestureHandler(onHoverIn)}
+        onHoverOut={toGestureHandler(onHoverOut)}
+        onLongPress={toGestureHandler(onLongPress)}
+        onPress={toGestureHandler(onPress)}
+        onPressIn={toGestureHandler(onPressIn)}
+        onPressOut={toGestureHandler(onPressOut)}
+        ref={ref as GesturePressableProps['ref']}
+      >
+        {({ pressed }) => (
+          // Uniwind's interactive selectors belong to RN Pressable. Keep the
+          // button's geometry and pressed/disabled styling on a native View here.
+          <View
+            className={cn(
+              nativeRootBaseStyles,
+              variantStyles[variant].root.replace(/\bactive:\S+/g, ''),
+              shapeStyles[shape],
+              sizeStyles[resolvedSize].root,
+              isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
+              pressed && (nativePressedStyles[variant] ?? 'opacity-80'),
+              isDisabled && 'opacity-40',
+            )}
+          >
+            {content}
+          </View>
+        )}
+      </GesturePressable>
+    );
+  } else {
+    control = (
+      <Pressable
+        {...props}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={mergedAccessibilityState}
+        className={cn(
+          rootBaseStyles,
+          variantStyles[variant].root,
+          shapeStyles[shape],
+          sizeStyles[resolvedSize].root,
+          isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
+        )}
+        disabled={isDisabled}
+        hitSlop={resolvedHitSlop}
+        ref={ref}
+      >
+        {content}
+      </Pressable>
+    );
+  }
 
   return (
     <ButtonVariantContext.Provider value={variant}>
-      <ButtonSizeContext.Provider value={resolvedSize}>
-        <Pressable
-          {...props}
-          accessibilityRole={accessibilityRole}
-          accessibilityState={mergedAccessibilityState}
-          className={cn(
-            rootBaseStyles,
-            variantStyles[variant].root,
-            shapeStyles[shape],
-            sizeStyles[resolvedSize].root,
-            isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
-          )}
-          disabled={isDisabled}
-          hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
-          ref={ref}
-        >
-          {loading ? (
-            <Spinner
-              accessibilityElementsHidden
-              color={spinnerColor}
-              importantForAccessibility="no"
-              size={sizeStyles[resolvedSize].spinner}
-            />
-          ) : null}
-          {!loading ? iconElement : null}
-          {typeof children === 'string' || typeof children === 'number' ? (
-            <ButtonLabel>{children}</ButtonLabel>
-          ) : (
-            children
-          )}
-        </Pressable>
-      </ButtonSizeContext.Provider>
+      <ButtonSizeContext.Provider value={resolvedSize}>{control}</ButtonSizeContext.Provider>
     </ButtonVariantContext.Provider>
   );
 });

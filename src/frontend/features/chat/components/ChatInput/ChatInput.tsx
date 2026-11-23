@@ -748,6 +748,7 @@ function TextChatInput({
                     ? () => controls.compactContext(contextUsage.messageId)
                     : undefined
                 }
+                compactDisabled={isBusy || controls.canSend === false}
                 onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={
