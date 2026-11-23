@@ -1,9 +1,18 @@
 // macOS verifier: use the repository-pinned @sentry/cli native binary for local debug evidence.
 // Archive/identity/checksum checks stay in-process; no Sentry endpoint is contacted.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, posix, resolve } from 'node:path';
+import { basename, join, posix, relative, resolve } from 'node:path';
 
 import { gunzipSync, unzipSync } from 'fflate';
 
@@ -258,7 +267,38 @@ function pairs(value: unknown): UuidArch[] {
 }
 const pairKey = (pair: UuidArch) => `${pair.uuid.toLowerCase()}/${pair.arch.toLowerCase()}`;
 
-/** Verify the local recovery archive. An explicit retry can repair a pending Sentry upload. */
+function readDirectoryArtifacts(rootDir: string): Map<string, Uint8Array> {
+  const entries = new Map<string, Uint8Array>();
+  const walkDir = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === '.DS_Store' || entry.name === '__MACOSX') continue;
+      const fullPath = join(dir, entry.name);
+      const stat = lstatSync(fullPath);
+      requirePackage(
+        !stat.isSymbolicLink(),
+        'PACKAGE_EXTRACTION',
+        'Symlink not allowed in symbol directory',
+      );
+      if (stat.isDirectory()) {
+        walkDir(fullPath);
+      } else if (stat.isFile()) {
+        const rel = relative(rootDir, fullPath).split(/[/\\]/).join('/');
+        requirePackage(
+          rel.length > 0 && !rel.startsWith('/') && !rel.split('/').includes('..'),
+          'PACKAGE_EXTRACTION',
+        );
+        const key = posix.normalize(`ios-symbols/${rel}`);
+        requirePackage(!entries.has(key), 'PACKAGE_EXTRACTION', `Duplicate archive entry: ${key}`);
+        entries.set(key, readFileSync(fullPath));
+      }
+    }
+  };
+  walkDir(rootDir);
+  requirePackage(entries.size > 0, 'PACKAGE_EXTRACTION', 'Empty symbol directory');
+  return entries;
+}
+
+/** Verify the local recovery archive or staged directory. An explicit retry can repair a pending Sentry upload. */
 export async function verifyIosSymbolPackage({
   archivePath,
   buildId,
@@ -274,12 +314,15 @@ export async function verifyIosSymbolPackage({
   run?: Run;
   resolveCli?: () => string;
 }) {
-  requirePackage(
-    existsSync(archivePath) && statSync(archivePath).isFile(),
-    'PACKAGE_ARCHIVE_MISSING',
-  );
+  requirePackage(existsSync(archivePath), 'PACKAGE_ARCHIVE_MISSING');
+  const topStat = lstatSync(archivePath);
+  requirePackage(!topStat.isSymbolicLink(), 'PACKAGE_ARCHIVE_MISSING');
+  const stat = statSync(archivePath);
+  requirePackage(stat.isFile() || stat.isDirectory(), 'PACKAGE_ARCHIVE_MISSING');
   try {
-    const artifacts = readArchive(readFileSync(archivePath), 'PACKAGE_EXTRACTION');
+    const artifacts = stat.isDirectory()
+      ? readDirectoryArtifacts(archivePath)
+      : readArchive(readFileSync(archivePath), 'PACKAGE_EXTRACTION');
     return {
       ...(await verifyPackageArtifacts(artifacts, buildId, now, run, resolveCli, retryUpload)),
       archivePath: sanitizeDiagnostic(resolve(archivePath)),

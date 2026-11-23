@@ -2215,3 +2215,57 @@ it('requires real source-line coverage from each Cherry target even if its debug
   await expect(runUploadIosSymbols({ ...f.deps, run })).rejects.toThrow(REQUIRED_IDENTIFIERS[1]);
   expect(f.commands.some(({ args }) => args.includes('upload'))).toBe(false);
 });
+
+it('runs and records local-build-plugin runner when CHERRY_LOCAL_RELEASE_SYMBOL_GATE is enabled', async () => {
+  const f = fixture();
+  const localBuildId = '550e8400-e29b-41d4-a716-446655440000';
+  const sourceSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
+  const localEnv: NodeJS.ProcessEnv = {
+    ...productionEnv(),
+    EAS_BUILD_RUNNER: 'local-build-plugin',
+    CHERRY_LOCAL_RELEASE_SYMBOL_GATE: 'true',
+    CHERRY_LOCAL_BUILD_ID: localBuildId,
+    CHERRY_SOURCE_SHA: sourceSha,
+    EXPO_PUBLIC_SENTRY_DSN: f.ctx.dsn,
+    SENTRY_URL: f.ctx.sentryUrl,
+  };
+  delete localEnv.EAS_BUILD_ID;
+  delete localEnv.EAS_BUILD_GIT_COMMIT_HASH;
+
+  const cwd = process.cwd();
+  process.chdir(f.project);
+  let ctx: ReturnType<typeof resolveBuildContext>;
+  try {
+    ctx = resolveBuildContext(localEnv);
+  } finally {
+    process.chdir(cwd);
+  }
+  expect(ctx.kind).toBe('active');
+  if (ctx.kind !== 'active') throw new Error('expected active context');
+  expect(ctx.buildId).toBe(localBuildId);
+  expect(ctx.sourceSha).toBe(sourceSha);
+
+  const result = await runUploadIosSymbols({ ...f.deps, ctx });
+  expect(result).toMatchObject({ kind: 'verified', executables: 3 });
+  expect(f.manifest().runner).toBe('local-build-plugin');
+  expect(f.manifest().buildId).toBe(localBuildId);
+  expect(f.manifest().sourceSha).toBe(sourceSha);
+});
+
+it.each([
+  { field: 'CHERRY_LOCAL_BUILD_ID', value: 'not-a-uuid' },
+  { field: 'CHERRY_SOURCE_SHA', value: 'short' },
+  { field: 'PROFILE', value: 'development' },
+])('local release symbol gate fails preflight when $field is invalid', ({ field, value }) => {
+  const localEnv: NodeJS.ProcessEnv = {
+    ...productionEnv(),
+    EAS_BUILD_RUNNER: 'local-build-plugin',
+    CHERRY_LOCAL_RELEASE_SYMBOL_GATE: 'true',
+    CHERRY_LOCAL_BUILD_ID: '550e8400-e29b-41d4-a716-446655440000',
+    CHERRY_SOURCE_SHA: '1e1bc7acbe0e23dbde016b0e97976f24651c487f',
+    [field]: value,
+  };
+  delete localEnv.EAS_BUILD_ID;
+  delete localEnv.EAS_BUILD_GIT_COMMIT_HASH;
+  expect(() => resolveBuildContext(localEnv)).toThrow();
+});

@@ -1,0 +1,617 @@
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
+import {
+  assertDiskSpace,
+  assertReleaseEnv,
+  DEFAULT_ANDROID_GRADLE_OPTS,
+  DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
+  findCompleteBuild,
+  parseReleaseTag,
+  pruneReleases,
+  recordSubmitReceipt,
+  REQUIRED_RELEASE_ENV_VARS,
+  resolveReleaseRoot,
+  runLocalReleaseBuild,
+  type RunLocalCommand,
+} from '../releaseLocalBuild';
+
+const createdRoots: string[] = [];
+
+function makeTempDir(prefix = 'cherry-release-test-'): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  createdRoots.push(dir);
+  return dir;
+}
+
+function makeReleaseEnv(
+  overrides: Partial<Record<string, string | undefined>> = {},
+): NodeJS.ProcessEnv {
+  const defaults: NodeJS.ProcessEnv = {
+    NODE_ENV: 'test',
+    EXPO_TOKEN: 'synthetic-expo-token-0000',
+    EXPO_PUBLIC_SENTRY_DSN: 'https://syntheticKey@ingest.example/1',
+    SENTRY_AUTH_TOKEN: 'synthetic-sentry-auth-token-9999',
+    CHERRY_CLOUD_CLIENT_SECRET: 'synthetic-cloud-secret-1111',
+    CHERRYAI_CLIENT_SECRET: 'synthetic-cherryai-secret-2222',
+    CONFIG_SERVICE_ORIGIN: 'https://config.example.test',
+    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: 'synthetic-gh-client-id-3333',
+    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: 'synthetic-gh-client-secret-4444',
+  };
+  const merged: NodeJS.ProcessEnv = { ...defaults };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) delete merged[key];
+    else merged[key] = value;
+  }
+  return merged;
+}
+
+function makeProjectFixture(root: string): {
+  projectDir: string;
+  easCliPath: string;
+  localPluginPath: string;
+} {
+  const projectDir = join(root, 'repo');
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(
+    join(projectDir, 'app.json'),
+    JSON.stringify({
+      expo: {
+        version: '0.6.2',
+        ios: { bundleIdentifier: 'com.cherryai.cherrystudio-app' },
+        android: { package: 'com.cherryai.cherrystudio_app' },
+      },
+    }),
+  );
+  const easCliPath = join(projectDir, 'node_modules/eas-cli/bin/run');
+  const localPluginPath = join(projectDir, 'node_modules/eas-cli-local-build-plugin/bin/run');
+  mkdirSync(dirname(easCliPath), { recursive: true });
+  mkdirSync(dirname(localPluginPath), { recursive: true });
+  writeFileSync(easCliPath, '#!/usr/bin/env node\n');
+  writeFileSync(localPluginPath, '#!/usr/bin/env node\n');
+  return { projectDir, easCliPath, localPluginPath };
+}
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  for (const root of createdRoots.splice(0)) {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+describe('assertReleaseEnv & resolveReleaseRoot', () => {
+  it('validates and trims all 8 required release env vars', () => {
+    expect(REQUIRED_RELEASE_ENV_VARS).toHaveLength(8);
+    const loaded = assertReleaseEnv(
+      makeReleaseEnv({
+        EXPO_TOKEN: '  expo-token-value  ',
+        CONFIG_SERVICE_ORIGIN: ' https://config.example.test ',
+      }),
+    );
+    expect(loaded.EXPO_TOKEN).toBe('expo-token-value');
+    expect(loaded.CONFIG_SERVICE_ORIGIN).toBe('https://config.example.test');
+  });
+
+  it('rejects missing or whitespace-only release env vars without echoing present secrets', () => {
+    const presentSecret = 'super-secret-do-not-echo-9876';
+    let errorMessage = '';
+    try {
+      assertReleaseEnv(
+        makeReleaseEnv({
+          SENTRY_AUTH_TOKEN: presentSecret,
+          CHERRYAI_CLIENT_SECRET: '   ',
+          EXPO_TOKEN: undefined,
+        }),
+      );
+    } catch (error) {
+      errorMessage = (error as Error).message;
+    }
+    expect(errorMessage).toContain('EXPO_TOKEN');
+    expect(errorMessage).toContain('CHERRYAI_CLIENT_SECRET');
+    expect(errorMessage).not.toContain('SENTRY_AUTH_TOKEN');
+    expect(errorMessage).not.toContain(presentSecret);
+  });
+
+  it('resolves release root with explicitRoot > RUNNER_RELEASE_ROOT > CHERRY_RELEASE_ROOT > ~/releases', () => {
+    const explicit = join(tmpdir(), 'explicit-root');
+    const orgRoot = join(tmpdir(), 'org-runner-root');
+    const legacyRoot = join(tmpdir(), 'legacy-cherry-root');
+    expect(
+      resolveReleaseRoot(
+        { RUNNER_RELEASE_ROOT: orgRoot, CHERRY_RELEASE_ROOT: legacyRoot },
+        explicit,
+      ),
+    ).toBe(explicit);
+    expect(
+      resolveReleaseRoot({ RUNNER_RELEASE_ROOT: orgRoot, CHERRY_RELEASE_ROOT: legacyRoot }),
+    ).toBe(orgRoot);
+    expect(resolveReleaseRoot({ CHERRY_RELEASE_ROOT: legacyRoot })).toBe(legacyRoot);
+    expect(resolveReleaseRoot({})).toBe(join(homedir(), 'releases'));
+  });
+});
+
+describe('assertDiskSpace & parseReleaseTag', () => {
+  it('enforces minimum free GiB threshold', () => {
+    const ok = assertDiskSpace('/tmp', 30, () => ({ bavail: 40 * 1024 ** 2, bsize: 1024 }));
+    expect(ok.availableBytes).toBeGreaterThanOrEqual(ok.requiredBytes);
+    expect(() =>
+      assertDiskSpace('/tmp', 50, () => ({ bavail: 20 * 1024 ** 2, bsize: 1024 })),
+    ).toThrow('Insufficient disk space');
+  });
+
+  it('parses stable and prerelease tags and rejects malformed tags', () => {
+    expect(parseReleaseTag('v0.6.2')).toEqual({
+      tag: 'v0.6.2',
+      releaseVersion: '0.6.2',
+      baseVersion: '0.6.2',
+      isPrerelease: false,
+    });
+    expect(parseReleaseTag('v0.6.2-rc.1')).toEqual({
+      tag: 'v0.6.2-rc.1',
+      releaseVersion: '0.6.2-rc.1',
+      baseVersion: '0.6.2',
+      isPrerelease: true,
+    });
+    expect(() => parseReleaseTag('0.6.2')).toThrow('Invalid release tag');
+  });
+});
+
+describe('pruneReleases', () => {
+  it('retains 5 newest stable versions within cherry-studio-app, honors .pin, and preserves sibling repos and non-version folders', () => {
+    const root = makeTempDir();
+    const releasesDir = join(root, 'cherry-studio-app');
+    const versions = ['v0.6.0', 'v0.6.1', 'v0.6.2', 'v0.6.3', 'v0.6.4', 'v0.6.5', 'v0.6.6'];
+    versions.forEach((tag, index) => {
+      const complete = join(
+        releasesDir,
+        tag,
+        'android-public',
+        `build-10${index}-abc-run1`,
+        '.complete',
+      );
+      mkdirSync(dirname(complete), { recursive: true });
+      writeFileSync(complete, '{}');
+      const time = new Date(1_700_000_000_000 + index * 1000);
+      utimesSync(complete, time, time);
+    });
+    // Pin oldest stable release v0.6.0 so it survives rolling pruning.
+    writeFileSync(join(releasesDir, 'v0.6.0', '.pin'), '');
+
+    for (const [idx, pre] of ['v0.6.5-rc.1', 'v0.6.6-rc.1'].entries()) {
+      const complete = join(
+        releasesDir,
+        pre,
+        'ios-production',
+        `build-5${idx}-abc-run2`,
+        '.complete',
+      );
+      mkdirSync(dirname(complete), { recursive: true });
+      writeFileSync(complete, '{}');
+      const time = new Date(1_700_000_100_000 + idx * 1000);
+      utimesSync(complete, time, time);
+    }
+
+    // Sibling org repo and non-version folder must never be touched by cherry-studio-app pruning.
+    const siblingMarker = join(root, 'cherry-studio/v1.0.0/macos-arm64/.complete');
+    const nonVersionMarker = join(releasesDir, 'notes/readme.txt');
+    mkdirSync(dirname(siblingMarker), { recursive: true });
+    mkdirSync(dirname(nonVersionMarker), { recursive: true });
+    writeFileSync(siblingMarker, '{}');
+    writeFileSync(nonVersionMarker, 'keep');
+
+    const dry = pruneReleases({
+      releaseRoot: root,
+      keepStable: 5,
+      keepPrerelease: 1,
+      dryRun: true,
+    });
+    expect(dry.removed.sort()).toEqual(['v0.6.1', 'v0.6.5-rc.1']);
+    expect(existsSync(join(releasesDir, 'v0.6.1'))).toBe(true);
+
+    const applied = pruneReleases({ releaseRoot: root, keepStable: 5, keepPrerelease: 1 });
+    expect(applied.removed.sort()).toEqual(['v0.6.1', 'v0.6.5-rc.1']);
+    expect(existsSync(join(releasesDir, 'v0.6.0'))).toBe(true);
+    expect(existsSync(join(releasesDir, 'v0.6.1'))).toBe(false);
+    expect(existsSync(join(releasesDir, 'v0.6.2'))).toBe(true);
+    expect(existsSync(join(releasesDir, 'v0.6.6'))).toBe(true);
+    expect(existsSync(join(releasesDir, 'v0.6.6-rc.1'))).toBe(true);
+    expect(existsSync(join(releasesDir, 'v0.6.5-rc.1'))).toBe(false);
+    expect(existsSync(siblingMarker)).toBe(true);
+    expect(existsSync(nonVersionMarker)).toBe(true);
+  });
+});
+
+describe('runLocalReleaseBuild', () => {
+  const commitSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
+
+  it('builds and archives android-public APK under <root>/cherry-studio-app/<tag>, enforces install permission, and cleans _workdirs', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+    const baseEnv = makeReleaseEnv({ EAS_LOCAL_BUILD_ARTIFACT_PATH: '/should/be/cleared' });
+
+    let capturedBuildEnv: NodeJS.ProcessEnv | undefined;
+    let capturedEasArgs: string[] = [];
+    let includeInstallPermission = true;
+    const apkBytes = Buffer.from('synthetic-public-apk-payload');
+
+    const run: RunLocalCommand = jest.fn(async (_cmd, args, opts) => {
+      if (args[0] === easCliPath) {
+        capturedEasArgs = args;
+        capturedBuildEnv = opts?.env;
+        const artifactsDir = opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!;
+        writeFileSync(join(artifactsDir, 'build-123.apk'), apkBytes);
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (args[0] === '-Z1')
+        return { stdout: 'AndroidManifest.xml\nclasses.dex\n', exitCode: 0, stderr: '' };
+      if (args[0] === 'verify') {
+        return {
+          stdout: 'Signer #1 certificate SHA-256 digest: abcdef0123456789\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'dump' && args[1] === 'badging') {
+        return {
+          stdout: [
+            "package: name='com.cherryai.cherrystudio_app' versionCode='128' versionName='0.6.2'",
+            ...(includeInstallPermission
+              ? ["uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'"]
+              : []),
+          ].join('\n'),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command args: ${args.join(' ')}`);
+    });
+
+    const result = await runLocalReleaseBuild({
+      target: 'android-public',
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9001',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: baseEnv,
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+      now: () => new Date('2026-11-23T06:00:00.000Z'),
+    });
+
+    expect(capturedEasArgs.slice(1)).toEqual([
+      'build',
+      '--local',
+      '--platform',
+      'android',
+      '--profile',
+      'production',
+      '--non-interactive',
+    ]);
+    expect(capturedEasArgs).not.toContain('--output');
+    expect(capturedBuildEnv?.EAS_LOCAL_BUILD_ARTIFACT_PATH).toBeUndefined();
+    expect(capturedBuildEnv?.EAS_LOCAL_BUILD_SKIP_CLEANUP).toBe('1');
+    expect(capturedBuildEnv?.SENTRY_ALLOW_FAILURE).toBe('false');
+    expect(capturedBuildEnv?.PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH).toBe(
+      DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
+    );
+    expect(capturedBuildEnv?.GRADLE_OPTS).toBe(DEFAULT_ANDROID_GRADLE_OPTS);
+    expect(capturedBuildEnv?.CHERRY_CLOUD_CLIENT_SECRET).toBe(baseEnv.CHERRY_CLOUD_CLIENT_SECRET);
+
+    expect(result.nativeBuildVersion).toBe('128');
+    expect(result.archiveDir).toBe(
+      join(releaseRoot, 'cherry-studio-app/v0.6.2/android-public/build-128-1e1bc7a-run9001'),
+    );
+    expect(existsSync(join(result.archiveDir, '.complete'))).toBe(true);
+    expect(readFileSync(join(result.archiveDir, 'SHA256SUMS'), 'utf8')).toBe(
+      `${createHash('sha256').update(apkBytes).digest('hex')}  cherry-studio-0.6.2-android.apk\n`,
+    );
+    const latestLink = join(releaseRoot, 'cherry-studio-app/v0.6.2/android-public/latest');
+    expect(lstatSync(latestLink).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(latestLink)).toBe('build-128-1e1bc7a-run9001');
+
+    const manifestText = readFileSync(join(result.archiveDir, 'build-manifest.json'), 'utf8');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest.commitSha).toBe(commitSha);
+    expect(manifest.signing.certificateSha256).toBe('abcdef0123456789');
+    for (const secretValue of REQUIRED_RELEASE_ENV_VARS.map((key) => baseEnv[key]!)) {
+      expect(manifestText).not.toContain(secretValue);
+    }
+
+    // Shared _workdirs and temporary staging directories must be completely cleaned.
+    expect(readdirSync(join(releaseRoot, '_workdirs'))).toEqual([]);
+    expect(
+      readdirSync(join(releaseRoot, 'cherry-studio-app/v0.6.2/android-public')).some((name) =>
+        name.startsWith('.staging-'),
+      ),
+    ).toBe(false);
+
+    // Public APK missing REQUEST_INSTALL_PACKAGES must fail and leave no staging/workdir leftovers.
+    includeInstallPermission = false;
+    await expect(
+      runLocalReleaseBuild({
+        target: 'android-public',
+        tag: 'v0.6.2',
+        commitSha,
+        runId: '9002',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+        run,
+      }),
+    ).rejects.toThrow('REQUEST_INSTALL_PACKAGES');
+    expect(readdirSync(join(releaseRoot, '_workdirs'))).toEqual([]);
+    expect(
+      readdirSync(join(releaseRoot, 'cherry-studio-app/v0.6.2/android-public')).some((name) =>
+        name.startsWith('.staging-'),
+      ),
+    ).toBe(false);
+  });
+
+  it('validates Google Play AAB and domestic-stores APK isolation and rejects install permission', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+
+    let badPermission = false;
+    const run: RunLocalCommand = jest.fn(async (_cmd, args, opts) => {
+      if (args[0] === easCliPath) {
+        const isPlay = args.includes('production-google-play');
+        writeFileSync(
+          join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, isPlay ? 'app.aab' : 'app.apk'),
+          isPlay ? 'aab-bytes' : 'apk-bytes',
+        );
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (args[0] === '-Z1') {
+        const isAab = args[1]!.endsWith('.aab');
+        return {
+          stdout: isAab ? 'base/manifest/AndroidManifest.xml\n' : 'AndroidManifest.xml\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === '-verify') return { stdout: 'jar verified.\n', stderr: '', exitCode: 0 };
+      if (args[0] === 'dump' && args[1] === 'manifest') {
+        return {
+          stdout: `<manifest package="com.cherryai.cherrystudio_app" android:versionCode="129">${
+            badPermission
+              ? '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
+              : ''
+          }</manifest>`,
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'verify') {
+        return {
+          stdout: 'Signer #1 certificate SHA-256 digest: 00112233\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'dump' && args[1] === 'badging') {
+        return {
+          stdout: `package: name='com.cherryai.cherrystudio_app' versionCode='130'`,
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    });
+
+    const play = await runLocalReleaseBuild({
+      target: 'android-google-play',
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9003',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+    });
+    expect(play.artifactName).toBe('cherry-studio-0.6.2-android.aab');
+    expect(play.archiveDir).toContain('cherry-studio-app/v0.6.2/android-google-play');
+
+    badPermission = true;
+    await expect(
+      runLocalReleaseBuild({
+        target: 'android-google-play',
+        tag: 'v0.6.2',
+        commitSha,
+        runId: '9004',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+        run,
+      }),
+    ).rejects.toThrow('REQUEST_INSTALL_PACKAGES');
+
+    const domestic = await runLocalReleaseBuild({
+      target: 'android-domestic-stores',
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9005',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+    });
+    expect(domestic.archiveDir).toContain('cherry-studio-app/v0.6.2/android-domestic-stores');
+    const domesticManifest = JSON.parse(
+      readFileSync(join(domestic.archiveDir, 'release-manifest.json'), 'utf8'),
+    );
+    expect(domesticManifest).toMatchObject({
+      commit: commitSha,
+      packageName: 'com.cherryai.cherrystudio_app',
+      appVersion: '0.6.2',
+      versionCode: '130',
+      channel: 'production-domestic-stores',
+      signingCertificateSha256: '00112233',
+    });
+  });
+
+  it('builds ios-production, selects .ipa over buildArtifactPaths .tar.gz, archives ios-symbols, and supports findCompleteBuild + recordSubmitReceipt', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+
+    const localBuildId = '550e8400-e29b-41d4-a716-446655440000';
+    let capturedEnv: NodeJS.ProcessEnv | undefined;
+    const ipaBytes = Buffer.from('synthetic-ios-ipa-bytes');
+
+    const run: RunLocalCommand = jest.fn(async (cmd, args, opts) => {
+      if (args[0] === easCliPath) {
+        capturedEnv = opts?.env;
+        const artifactsDir = opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!;
+        const workdir = opts!.env!.EAS_LOCAL_BUILD_WORKINGDIR!;
+        // Simulate local-build-plugin writing both IPA and buildArtifactPaths tar.gz.
+        writeFileSync(join(artifactsDir, 'build-100.ipa'), ipaBytes);
+        writeFileSync(join(artifactsDir, 'build-101.tar.gz'), Buffer.from('symbols-tar'));
+        const symbolsDir = join(workdir, 'build/ios/build/ios-symbols');
+        mkdirSync(join(symbolsDir, 'package-abc'), { recursive: true });
+        writeFileSync(join(symbolsDir, 'package.complete'), '{"directory":"package-abc"}');
+        writeFileSync(join(symbolsDir, 'package-abc/dsyms.zip'), 'dsyms');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'unzip' && args[0] === '-Z1') {
+        return { stdout: 'Payload/CherryStudio.app/Info.plist\n', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args.includes('-j')) {
+        const destDir = args[args.indexOf('-d') + 1]!;
+        writeFileSync(join(destDir, 'Info.plist'), 'bplist00');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'plutil') {
+        return {
+          stdout: JSON.stringify({
+            CFBundleIdentifier: 'com.cherryai.cherrystudio-app',
+            CFBundleVersion: '64',
+          }),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command ${cmd} ${args.join(' ')}`);
+    });
+
+    const verifySymbols = jest.fn(async ({ archivePath, buildId }) => ({
+      status: 'download-verified' as const,
+      buildId,
+      manifestSha256: 'abc',
+      symbolPackage: { size: 5, sha256: 'def' },
+      slices: 3,
+      thirdPartySymbols: [],
+      verifiedAt: '2026-11-23T06:00:00.000Z',
+      expiry: 'unknown' as const,
+      archivePath,
+    }));
+
+    const result = await runLocalReleaseBuild({
+      target: 'ios-production',
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9006',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      localBuildId,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+      verifySymbols,
+    });
+
+    expect(capturedEnv?.CHERRY_LOCAL_RELEASE_SYMBOL_GATE).toBe('true');
+    expect(capturedEnv?.CHERRY_LOCAL_BUILD_ID).toBe(localBuildId);
+    expect(capturedEnv?.CHERRY_SOURCE_SHA).toBe(commitSha);
+    expect(capturedEnv?.EAS_LOCAL_BUILD_SKIP_CLEANUP).toBe('1');
+    expect(capturedEnv?.PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH).toBe(
+      DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
+    );
+    expect(readFileSync(result.artifactPath)).toEqual(ipaBytes);
+    expect(existsSync(join(result.symbolsDir, 'package.complete'))).toBe(true);
+    expect(existsSync(join(result.archiveDir, 'ios-symbol-verification.json'))).toBe(true);
+    expect(verifySymbols).toHaveBeenCalledWith({
+      archivePath: expect.stringMatching(/\.staging-run9006-attempt1-[^/]+\/ios-symbols$/),
+      buildId: localBuildId,
+    });
+    expect(readdirSync(join(releaseRoot, '_workdirs'))).toEqual([]);
+
+    const found = await findCompleteBuild({
+      target: 'ios-production',
+      tag: 'v0.6.2',
+      commitSha,
+      releaseRoot,
+    });
+    expect(found).toEqual({
+      found: true,
+      buildId: localBuildId,
+      archiveDir: result.archiveDir,
+      artifactPath: result.artifactPath,
+      symbolsDir: result.symbolsDir,
+      nativeBuildVersion: '64',
+    });
+
+    const wrongSha = await findCompleteBuild({
+      target: 'ios-production',
+      tag: 'v0.6.2',
+      commitSha: 'f'.repeat(40),
+      releaseRoot,
+    });
+    expect(wrongSha).toEqual({ found: false });
+
+    const receipt = recordSubmitReceipt({
+      buildDir: result.archiveDir,
+      buildId: localBuildId,
+      status: 'succeeded',
+      now: () => new Date('2026-11-23T06:05:00.000Z'),
+    });
+    expect(receipt.status).toBe('succeeded');
+    expect(existsSync(join(result.archiveDir, 'submit-receipt.json'))).toBe(true);
+
+    // Tampered IPA must invalidate findCompleteBuild reuse.
+    writeFileSync(result.artifactPath, 'corrupt-ipa');
+    await expect(
+      findCompleteBuild({ target: 'ios-production', tag: 'v0.6.2', commitSha, releaseRoot }),
+    ).resolves.toEqual({ found: false });
+  });
+});

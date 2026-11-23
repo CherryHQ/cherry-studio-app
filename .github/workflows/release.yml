@@ -31,27 +31,25 @@ jobs:
     needs: validate
     uses: ./.github/workflows/pr-ci.yml
 
+  # Native production builds run on the shared CherryHQ self-hosted macOS release runner.
   android:
     needs: ci
     permissions:
-      # GitHub's generate-notes API requires contents: write.
+      # GitHub's generate-notes and release publication require contents: write.
       contents: write
     uses: ./.github/workflows/android-release.yml
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    secrets: inherit
 
   ios:
     needs: ci
     uses: ./.github/workflows/ios-release.yml
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    secrets: inherit
 
   google-play:
     needs: ci
     if: ${{ !contains(github.ref_name, '-') }}
     uses: ./.github/workflows/google-play-release.yml
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    secrets: inherit
 
   # domestic-stores:
   #   needs: ci
@@ -59,5 +57,4 @@ jobs:
   #   uses: ./.github/workflows/android-release.yml
   #   with:
   #     domestic: true
-  #   secrets:
-  #     EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  #   secrets: inherit

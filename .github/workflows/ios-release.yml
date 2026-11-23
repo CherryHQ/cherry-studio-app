@@ -2,9 +2,6 @@ name: iOS TestFlight
 
 on:
   workflow_call:
-    secrets:
-      EXPO_TOKEN:
-        required: true
 
 permissions:
   contents: read
@@ -13,94 +10,74 @@ env:
   EAS_CLI_VERSION: 24.4.2
 
 jobs:
-  build-ios:
-    name: Build iOS on EAS
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    outputs:
-      build_id: ${{ steps.build.outputs.build_id }}
+  release-ios:
+    name: Build and upload iOS to TestFlight
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
+    concurrency:
+      group: cherry-studio-app-ios-local-build
+      cancel-in-progress: false
+    timeout-minutes: 210
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
         with:
-          node-version: 24.19.0
+          persist-credentials: false
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 12.2.1
-
-      - name: Configure EAS CLI install scripts
-        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
+      - name: Verify runner toolchain
         run: |
-          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
-          mkdir -p "$eas_cli_dir"
-          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
-
-      - name: Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: ${{ env.EAS_CLI_VERSION }}
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: pnpm
+          node -p 'process.version' | grep -Eq '^v24\.'
+          test "$(pnpm -v)" = "12.2.1"
+          command -v jq > /dev/null
+          command -v plutil > /dev/null
+          command -v xcodebuild > /dev/null
+          command -v pod > /dev/null
+          command -v fastlane > /dev/null
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build iOS on EAS and wait for completion
-        id: build
-        run: |
-          eas build --platform ios --profile production --non-interactive --wait --json > "$RUNNER_TEMP/ios-build.json"
-          jq -e 'length == 1 and .[0].status == "FINISHED" and .[0].platform == "IOS"' "$RUNNER_TEMP/ios-build.json"
-          build_id="$(jq -er '.[0].id' "$RUNNER_TEMP/ios-build.json")"
-          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
-          echo "iOS EAS build: $build_id" >> "$GITHUB_STEP_SUMMARY"
-
-  submit-ios:
-    name: Upload iOS to TestFlight
-    needs: build-ios
-    runs-on: macos-15
-    timeout-minutes: 90
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.19.0
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 12.2.1
-
-      - name: Configure EAS CLI install scripts
-        # Match expo-github-action's temporary CLI directory; allowBuilds is project-only.
-        run: |
-          eas_cli_dir="$RUNNER_TEMP/eas-cli/$EAS_CLI_VERSION/$(node -p 'require("node:os").arch()')"
-          mkdir -p "$eas_cli_dir"
-          pnpm --dir "$eas_cli_dir" config set --location=project --json allowBuilds '{"dtrace-provider": false, "protobufjs": false}'
-
-      - name: Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: ${{ env.EAS_CLI_VERSION }}
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify downloaded iOS symbols
+      - name: Reuse complete local iOS build if already archived
+        id: reuse
         env:
-          IOS_BUILD_ID: ${{ needs.build-ios.outputs.build_id }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          bash scripts/verifyEasIosSymbols.sh "$IOS_BUILD_ID" > "$RUNNER_TEMP/ios-symbol-verification.json"
+          node --import tsx scripts/releaseLocalBuild.ts find-complete \
+            --target ios-production \
+            --tag "$RELEASE_TAG" \
+            --commit "$GITHUB_SHA" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Build and archive iOS locally
+        id: build
+        if: ${{ steps.reuse.outputs.found != 'true' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          CHERRY_CLOUD_CLIENT_SECRET: ${{ secrets.CHERRY_CLOUD_CLIENT_SECRET }}
+          CHERRYAI_CLIENT_SECRET: ${{ secrets.CHERRYAI_CLIENT_SECRET }}
+          CONFIG_SERVICE_ORIGIN: ${{ secrets.CONFIG_SERVICE_ORIGIN }}
+          EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID }}
+          EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --import tsx scripts/releaseLocalBuild.ts build \
+            --target ios-production \
+            --tag "$RELEASE_TAG" \
+            --commit "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify local iOS symbols
+        env:
+          IOS_SYMBOLS_DIR: ${{ steps.reuse.outputs.found == 'true' && steps.reuse.outputs.symbols_dir || steps.build.outputs.symbols_dir }}
+          IOS_BUILD_ID: ${{ steps.reuse.outputs.found == 'true' && steps.reuse.outputs.build_id || steps.build.outputs.build_id }}
+        run: |
+          node --import tsx scripts/verifyIosSymbolPackage.ts "$IOS_SYMBOLS_DIR" "$IOS_BUILD_ID" > "$RUNNER_TEMP/ios-symbol-verification.json"
           echo '### iOS debug symbols' >> "$GITHUB_STEP_SUMMARY"
           jq -r '"Verified Cherry slices: \(.slices)", "Third-party symbol coverage:", (.thirdPartySymbols[] | "    " + tojson)' \
             "$RUNNER_TEMP/ios-symbol-verification.json" >> "$GITHUB_STEP_SUMMARY"
@@ -110,9 +87,24 @@ jobs:
 
       - name: Submit this build and wait for upload
         env:
-          IOS_BUILD_ID: ${{ needs.build-ios.outputs.build_id }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          IOS_BUILD_ID: ${{ steps.reuse.outputs.found == 'true' && steps.reuse.outputs.build_id || steps.build.outputs.build_id }}
+          IOS_ARCHIVE_DIR: ${{ steps.reuse.outputs.found == 'true' && steps.reuse.outputs.archive_dir || steps.build.outputs.archive_dir }}
+          IOS_IPA_PATH: ${{ steps.reuse.outputs.found == 'true' && steps.reuse.outputs.artifact_path || steps.build.outputs.artifact_path }}
           PROFILE: production
         run: |
-          eas submit --platform ios --profile production --id "$IOS_BUILD_ID" \
-            --non-interactive --wait --no-auto-testflight-setup
-          echo "Uploaded iOS build $IOS_BUILD_ID to App Store Connect. Apple processing and TestFlight tester configuration remain in App Store Connect." >> "$GITHUB_STEP_SUMMARY"
+          if pnpm exec eas submit --platform ios --profile production --path "$IOS_IPA_PATH" \
+            --non-interactive --wait --no-auto-testflight-setup; then
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$IOS_ARCHIVE_DIR" \
+              --build-id "$IOS_BUILD_ID" \
+              --status succeeded
+            echo "Uploaded iOS build $IOS_BUILD_ID from $IOS_IPA_PATH to App Store Connect. Apple processing and TestFlight tester configuration remain in App Store Connect." >> "$GITHUB_STEP_SUMMARY"
+          else
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$IOS_ARCHIVE_DIR" \
+              --build-id "$IOS_BUILD_ID" \
+              --status failed \
+              --message "eas submit exited nonzero" || true
+            exit 1
+          fi
