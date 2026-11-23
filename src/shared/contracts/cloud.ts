@@ -1,5 +1,10 @@
 import * as z from 'zod';
 
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
+
 export const CLOUD_PROVIDER_ID = 'cherryai-subscription';
 export const CLOUD_PROVIDER_NAME = 'CherryAI';
 export type CloudModelUse = 'agent' | 'general';
@@ -74,23 +79,45 @@ export const CloudAccountSchema = z.object({
   quota_pools: z.array(CloudQuotaPoolSchema),
 });
 
-export const CloudModelSchema = z.object({
-  id: z.string().min(1),
-  display_name: z.string(),
-  endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
-  context_window: z.number().int().positive(),
-  max_output_tokens: z.number().int().positive(),
-  capabilities: z.array(z.string()),
-  available_features: z.array(z.string()),
-  requires_login: z.boolean(),
-  requires_plan: z.boolean(),
-  is_free: z.boolean(),
-  standalone: z.boolean(),
-  provider: z.string().nullable(),
-  activation_required: z.boolean(),
-  activation_endpoint: z.string().nullable(),
+const ModelStringListSchema = z
+  .array(z.unknown())
+  .catch([])
+  .transform((values) => values.filter((value) => typeof value === 'string'));
+
+export const CloudModelSchema = z
+  .object({
+    id: z.string().regex(/\S/),
+    endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
+    display_name: z.string().trim().catch(''),
+    context_window: z.number().int().positive().catch(DEFAULT_MODEL_CONTEXT_WINDOW),
+    max_output_tokens: z.number().int().positive().catch(DEFAULT_MODEL_MAX_OUTPUT_TOKENS),
+    capabilities: ModelStringListSchema,
+    available_features: ModelStringListSchema,
+    requires_login: z.boolean().catch(true),
+    requires_plan: z.boolean().catch(true),
+    is_free: z.boolean().catch(false),
+    standalone: z.boolean().catch(false),
+    provider: z.string().trim().min(1).nullable().catch(null),
+    activation_required: z.boolean().nullable().catch(null),
+    activation_endpoint: z.string().trim().min(1).nullable().catch(null),
+  })
+  .transform((model) => ({
+    ...model,
+    display_name: model.display_name || model.id,
+    // Plan coverage can admit a regular subscription model. Other offers need explicit activation status.
+    activation_required:
+      model.activation_required ??
+      (!model.requires_plan || model.provider !== null || model.activation_endpoint !== null),
+  }));
+
+export const CloudModelCatalogSchema = z.object({
+  data: z.array(z.unknown()).transform((rows) =>
+    rows.flatMap((row) => {
+      const model = CloudModelSchema.safeParse(row);
+      return model.success ? [model.data] : [];
+    }),
+  ),
 });
-export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
 
 export const CloudAmdStatusSchema = z.object({
   status: z.enum([

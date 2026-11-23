@@ -5,6 +5,10 @@ import {
   getActiveCloudEntitlements,
   CloudModelCatalogSchema,
 } from '@/shared/contracts/cloud';
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
 
 import { cloudSnapshot } from './_cloudFixtures';
 
@@ -90,7 +94,7 @@ test('the plans contract keeps available paid plans when there is no current sub
   expect(plans.available_plans).toEqual([plan]);
 });
 
-test('parses all 14 fields for paid, free-plan, AMD and member-only standalone models in one catalog', () => {
+test('preserves advertised rules for paid, free-plan, AMD and standalone models', () => {
   const base = cloudSnapshot().models[0];
   const data = [
     base,
@@ -109,13 +113,60 @@ test('parses all 14 fields for paid, free-plan, AMD and member-only standalone m
   ];
   expect(CloudModelCatalogSchema.parse({ data })).toEqual({ data });
   expect(CloudModelCatalogSchema.parse({ data: [] }).data).toEqual([]);
-  expect(
-    CloudModelCatalogSchema.safeParse({
-      data: [{ ...base, provider: 'another-partner', new_field: true }],
-    }).success,
-  ).toBe(true);
-  for (const key of Object.keys(base)) {
-    const incomplete = { data: [{ ...base, [key]: undefined }] };
-    expect(CloudModelCatalogSchema.safeParse(incomplete).success).toBe(false);
-  }
+});
+
+test('reads usable rows and fields independently, applying defaults to missing or invalid metadata', () => {
+  const routing = { id: 'cloud-model', endpoint_type: 'anthropic-messages' };
+  const { data } = CloudModelCatalogSchema.parse({
+    data: [
+      null,
+      { endpoint_type: routing.endpoint_type },
+      { ...routing, id: ' ' },
+      { ...routing, endpoint_type: 'future-protocol' },
+      {
+        ...routing,
+        display_name: null,
+        context_window: -1,
+        capabilities: ['function-call', {}],
+        available_features: ['chat', 3, 'translate'],
+        requires_login: 'false',
+        extra_field: true,
+      },
+    ],
+  });
+  expect(data).toEqual([
+    {
+      ...routing,
+      display_name: routing.id,
+      context_window: DEFAULT_MODEL_CONTEXT_WINDOW,
+      max_output_tokens: DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+      capabilities: ['function-call'],
+      available_features: ['chat', 'translate'],
+      requires_login: true,
+      requires_plan: true,
+      is_free: false,
+      standalone: false,
+      provider: null,
+      activation_required: false,
+      activation_endpoint: null,
+    },
+  ]);
+  expect(CloudModelCatalogSchema.safeParse({ data: null }).success).toBe(false);
+});
+
+test('missing activation status cannot unlock a plan-free offer', () => {
+  const state = cloudSnapshot();
+  const { data: models } = CloudModelCatalogSchema.parse({
+    data: [
+      {
+        ...state.models[0],
+        requires_login: false,
+        requires_plan: false,
+        activation_required: undefined,
+      },
+    ],
+  });
+  expect(cloudModelUnavailable({ ...state, models }, models[0].id, 'agent', now)).toBe(
+    'unavailable',
+  );
 });

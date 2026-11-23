@@ -1223,23 +1223,31 @@ test('a recognized plan refusal refreshes account entitlements, without signing 
   }
 });
 
-test('rejects a signed-in catalog that omits model access rules', async () => {
+test('a subscriber can use a covered model when catalog metadata is incomplete', async () => {
   const model = {
     id: 'cloud-model',
-    display_name: 'Cloud model',
     endpoint_type: 'anthropic-messages',
-    context_window: 128000,
-    max_output_tokens: 8192,
-    capabilities: [],
-    available_features: ['agent', 'chat', 'translate'],
+    available_features: ['agent'],
   };
   mockGet.mockImplementation(async (account: string, path: string) =>
-    path === '/v1/models?limit=1000&catalog=full' ? { data: [model] } : reply(account, path),
+    path === '/v1/models?limit=1000&catalog=full'
+      ? { data: [{ id: 'unsupported' }, model] }
+      : reply(account, path),
   );
+  mockInference.mockResolvedValue(new Response(null, { status: 200 }));
   const { runtime } = await setup();
   try {
-    await expect(runtime.refresh()).rejects.toThrow();
-    expect(runtime.getState()).toMatchObject({ phase: 'error', models: [] });
+    await runtime.refresh();
+    expect(runtime.getState()).toMatchObject({
+      phase: 'ready',
+      models: [{ id: model.id, display_name: model.id, capabilities: [], requires_plan: true }],
+    });
+    await expect(
+      runtime.createModelFetch(model.id, 'agent')('https://cloud.example/v1/messages', {
+        method: 'POST',
+        body: JSON.stringify({ model: model.id }),
+      }),
+    ).resolves.toMatchObject({ status: 200 });
   } finally {
     await runtime._doStop();
   }
