@@ -199,4 +199,12 @@ Done.`),
     expect(normalizeLatexDelimiters('Trailing \\', true)).toBe('Trailing ');
     expect(normalizeLatexDelimiters('Trailing \\', false)).toBe('Trailing \\');
   });
+
+  test('trims outer whitespace from inline bodies without clipping escaped spaces', () => {
+    expect(normalizeLatexDelimiters('\\( x + 1 \\)')).toBe('$x + 1$');
+    expect(normalizeLatexDelimiters('\\(\nx + y\n\\)')).toBe('$x + y$');
+    expect(normalizeLatexDelimiters('\\(   \\)')).toBe('\\(   \\)');
+    expect(normalizeLatexDelimiters('\\(x\\ \\)')).toBe('$x\\ $');
+    expect(normalizeLatexDelimiters('\\(x\\\\ \\)')).toBe('$x\\\\$');
+  });
 });
