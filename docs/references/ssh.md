@@ -12,7 +12,7 @@ The upload chooser uses the same rows while retaining destination and overwrite 
 Opening an Agent draft reuses the shared `AgentPickerSheet` with standard Agents only; target
 selection stays in the profile owner so closing the choice sheet cannot cancel the handoff.
 The chat composer's plus menu opens an anchored server picker and inserts the selected server as
-an inline mention. That picker only selects servers. Opening a draft or selecting a target does
+an inline mention. After selecting a server, reopening the picker lets the user manage temporary file access. Opening a draft or selecting a target does
 not send a message or run a command. There is no standalone command panel.
 Sent messages retain the mention's label and UTF-16 text offset so it keeps the composer's link
 color after loading history, editing, or retrying. This display snapshot carries no connection
@@ -96,8 +96,13 @@ grant one-hour access while approving a command to a fixed set of read-only diag
 nonempty stdin, or custom working directory still requires approval. The SSH approval sheet shows
 the complete command, resolved cwd, stdin, target and timeout. Background actions must open the app
 for SSH approvals. Revocation, expiry, target changes, profile changes and deletion
-cancel affected AI operations. SSH file tools always require their own approval; the command grant
-does not promote them. If approval submission fails, only the grant created for that submission is
+cancel affected AI operations. The command grant only covers diagnostics. In the composer's SSH picker, the user can instead
+list the selected profile directory and explicitly allow this conversation to list that directory
+and read checked regular files for one hour. No files are preselected. The picker shows the login,
+host, port and resolved directory before confirmation and allows revocation. Subdirectories,
+other files, commands, transfers and writes retain their usual approval rules. Granted reads
+check the exact canonical server path before opening the file. A conversation holds one grant at
+a time. First send transfers a draft's temporary file access to that session. If approval submission fails, only the grant created for that submission is
 revoked; a newer selection or replacement grant is preserved. Browser and AI operations share a
 connection only through exclusive leases. All conversation bindings and grants disappear when the
 process restarts. The device remembers the most recent 64 explicit Session selections as profile

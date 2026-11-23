@@ -226,7 +226,11 @@ export function createSystemCapabilitySource(
                   ...policy,
                   effect: descriptor.effect ?? 'write',
                   // Only this explicitly scoped user grant can promote SSH approval.
-                  ...(descriptor.capabilityId === 'ssh_execute' ? { approval: tool.approval } : {}),
+                  ...(['ssh_execute', 'ssh_list_files', 'ssh_read_file'].includes(
+                    descriptor.capabilityId,
+                  )
+                    ? { approval: tool.approval }
+                    : {}),
                 },
                 resources,
               ),
