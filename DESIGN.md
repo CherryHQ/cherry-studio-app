@@ -286,8 +286,8 @@ adaptation remain with that owner.
 
 ### Haptics
 
-Use the shared CherryUI semantic haptic intents (`selection`, `light`, `medium`, `success`, `warning`,
-`error`) under three rules:
+Use the shared CherryUI semantic haptic intents from `@cherrystudio/ui/haptics` (`selection`,
+`light`, `medium`, `success`, `warning`, `error`) under three rules:
 
 1. **Fire on the exact causal frame.** Trigger on commit or detent — never on `onPressIn` (where
    scroll cancellation could misfire) and never after an animation settles.
