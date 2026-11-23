@@ -192,6 +192,16 @@ export function readPiSubmission(value: JsonObject | undefined): PiStoredSubmiss
   return PiSubmissionSchema.parse(value);
 }
 
+export function serializePiConfiguration(configuration: PiStoredConfiguration): JsonObject {
+  const web = configuration.webTools;
+  // An embedded v2 reader requires the boolean to resume work after an OTA fallback.
+  // The saved routes still decide which tools that unfinished request can use.
+  return detachedJson({
+    ...configuration,
+    ...(web && { webTools: { ...web, modelToolsPreferred: web.modelTools === 'preferred' } }),
+  });
+}
+
 export function detachedJson(value: unknown): JsonObject {
   return RuntimeJsonValueSchema.parse(JSON.parse(JSON.stringify(value))) as JsonObject;
 }

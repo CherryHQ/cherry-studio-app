@@ -127,6 +127,7 @@ that every historic task is recoverable. Normal task and approval waits are not 
 Agent may not use the web. The Runtime selects and persists one route per web capability with the
 configuration. `RuntimeExecutionRequest` serves isolated probes and carries no web policy. See
 [Web Search](../web-search.md#native-tools-and-selection) for the selection contract.
+Version 2 also writes the legacy boolean beside the selector so embedded clients can reopen unfinished work after an OTA fallback. The saved routes remain authoritative for that work.
 
 Native sources use Runtime output parts `{ id, type: 'source-url', sourceId, url, title? }`.
 Google's supplied search presentation uses `{ id, type: 'data-search-suggestions', data: { html } }`

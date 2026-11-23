@@ -8,7 +8,12 @@ import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentErrorView, toAgentMessagePart } from '../../../host/runtimeProjection';
 import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
-import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
+import {
+  PiConfigurationSchema,
+  piToolBlueprint,
+  projectPiTurn,
+  serializePiConfiguration,
+} from '../piDurableProjection';
 import { piDurableSetupError } from '../piDurableStream';
 import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
 
@@ -1324,6 +1329,26 @@ describe('web policy persistence', () => {
       expect(parsed.webTools).toEqual({ ...readiness, modelTools });
       expect(parsed.webRoutes).toEqual(webRoutes);
       expect(PiConfigurationSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
+    },
+  );
+
+  test.each(['preferred', 'fallback', 'disabled'] as const)(
+    'persists the v2 fields required by the embedded runtime for %s',
+    (modelTools) => {
+      const routes = modelTools === 'disabled' ? { search: 'none', fetch: 'client' } : webRoutes;
+      const parsed = PiConfigurationSchema.parse({
+        ...configuration,
+        webTools: { ...readiness, modelTools },
+        webRoutes: routes,
+      });
+      const saved = serializePiConfiguration(parsed);
+      expect(saved.webTools).toEqual({
+        ...readiness,
+        modelTools,
+        modelToolsPreferred: modelTools === 'preferred',
+      });
+      expect(saved.webRoutes).toEqual(routes);
+      expect(PiConfigurationSchema.parse(saved)).toEqual(parsed);
     },
   );
 
