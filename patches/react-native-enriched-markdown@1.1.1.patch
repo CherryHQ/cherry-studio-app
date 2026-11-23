@@ -3755,3 +3755,47 @@ diff --git a/ios/input/ENRMMarkdownSerializer.mm b/ios/input/ENRMMarkdownSeriali
    }
  
    if (lastPosition < textLength) {
+diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
+--- a/cpp/md4c/md4c.c
++++ b/cpp/md4c/md4c.c
+@@ -3661,10 +3661,22 @@
+                 if(tmp - off <= 2) {
+                     unsigned flags = MD_MARK_POTENTIAL_OPENER | MD_MARK_POTENTIAL_CLOSER;
+ 
+-                    if(off > line->beg  &&  !ISUNICODEWHITESPACEBEFORE(off)  &&  !ISUNICODEPUNCTBEFORE(off))
+-                        flags &= ~MD_MARK_POTENTIAL_OPENER;
+-                    if(tmp < line->end  &&  !ISUNICODEWHITESPACE(tmp)  &&  !ISUNICODEPUNCT(tmp))
++                    /* Cherry Mobile: CJK prose puts inline math directly against its
++                     * characters (`设$x$为`), so a CJK or fullwidth neighbour delimits a
++                     * formula like whitespace does. Latin neighbours keep the upstream
++                     * rule that leaves prices such as `$5 and $10` as text. */
++#define CHERRY_MD_IS_CJK(c) (((c) >= 0x1100 && (c) <= 0x11FF) || ((c) >= 0x2E80 && (c) <= 0x9FFF) || \
++                             ((c) >= 0xA960 && (c) <= 0xA97F) || ((c) >= 0xAC00 && (c) <= 0xD7AF) || \
++                             ((c) >= 0xF900 && (c) <= 0xFAFF) || ((c) >= 0xFF00 && (c) <= 0xFFEF) || \
++                             ((c) >= 0x20000 && (c) <= 0x3FFFF))
++                    unsigned before = off > line->beg ? md_decode_utf8_before__(ctx, off) : 0;
++                    unsigned after = tmp < line->end ? md_decode_unicode(ctx->text, tmp, ctx->size, NULL) : 0;
++
++                    if(off > line->beg  &&  !ISUNICODEWHITESPACEBEFORE(off)  &&  !ISUNICODEPUNCTBEFORE(off)  &&  !CHERRY_MD_IS_CJK(before))
++                        flags &= ~MD_MARK_POTENTIAL_OPENER;
++                    if(tmp < line->end  &&  !ISUNICODEWHITESPACE(tmp)  &&  !ISUNICODEPUNCT(tmp)  &&  !CHERRY_MD_IS_CJK(after))
+                         flags &= ~MD_MARK_POTENTIAL_CLOSER;
++#undef CHERRY_MD_IS_CJK
+                     if(flags != 0)
+                         ADD_MARK(ch, off, tmp, flags);
+                 }
+@@ -4714,8 +4726,12 @@
+     emph_mark_types[n_emph_mark_types++] = _T('&');
+     emph_mark_types[n_emph_mark_types++] = _T('*');
+     emph_mark_types[n_emph_mark_types++] = _T('_');
+-    if(ctx->parser.flags & MD_FLAG_LATEXMATHSPANS)
+-        emph_mark_types[n_emph_mark_types++] = _T('$');
++    /* Cherry Mobile: a math span holds literal TeX, like a code span, so it is
++     * resolved before emphasis can pair a `*` or `_` inside it with one outside. */
++    if(ctx->parser.flags & MD_FLAG_LATEXMATHSPANS) {
++        md_analyze_marks(ctx, lines, n_lines, mark_beg, mark_end, _T("$"), NULL);
++        DOLLAR_OPENERS.top = -1;
++    }
+     if(ctx->parser.flags & MD_FLAG_HIGHLIGHT)
+         emph_mark_types[n_emph_mark_types++] = _T('=');
+     if(ctx->parser.flags & MD_FLAG_INSERT)
