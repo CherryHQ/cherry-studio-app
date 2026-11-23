@@ -3758,7 +3758,7 @@ diff --git a/ios/input/ENRMMarkdownSerializer.mm b/ios/input/ENRMMarkdownSeriali
 diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
 --- a/cpp/md4c/md4c.c
 +++ b/cpp/md4c/md4c.c
-@@ -3661,10 +3661,22 @@
+@@ -3661,10 +3661,32 @@
                  if(tmp - off <= 2) {
                      unsigned flags = MD_MARK_POTENTIAL_OPENER | MD_MARK_POTENTIAL_CLOSER;
  
@@ -3766,12 +3766,15 @@ diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
 -                        flags &= ~MD_MARK_POTENTIAL_OPENER;
 -                    if(tmp < line->end  &&  !ISUNICODEWHITESPACE(tmp)  &&  !ISUNICODEPUNCT(tmp))
 +                    /* Cherry Mobile: CJK prose puts inline math directly against its
-+                     * characters (`设$x$为`), so a CJK or fullwidth neighbour delimits a
-+                     * formula like whitespace does. Latin neighbours keep the upstream
-+                     * rule that leaves prices such as `$5 and $10` as text. */
++                     * characters (`设$x$为`), so a CJK neighbour delimits a formula like
++                     * whitespace does. Fullwidth punctuation is already in PUNCT_MAP;
++                     * exclude fullwidth digits/Latin so `$５ and $１０` stays literal.
++                     * Single `$` also cannot open before whitespace or close after
++                     * whitespace or before a TeX `\cmd`, keeping `$5` inside emphasis
++                     * from hijacking a later formula opener. */
 +#define CHERRY_MD_IS_CJK(c) (((c) >= 0x1100 && (c) <= 0x11FF) || ((c) >= 0x2E80 && (c) <= 0x9FFF) || \
 +                             ((c) >= 0xA960 && (c) <= 0xA97F) || ((c) >= 0xAC00 && (c) <= 0xD7AF) || \
-+                             ((c) >= 0xF900 && (c) <= 0xFAFF) || ((c) >= 0xFF00 && (c) <= 0xFFEF) || \
++                             ((c) >= 0xF900 && (c) <= 0xFAFF) || ((c) >= 0xFF66 && (c) <= 0xFFDC) || \
 +                             ((c) >= 0x20000 && (c) <= 0x3FFFF))
 +                    unsigned before = off > line->beg ? md_decode_utf8_before__(ctx, off) : 0;
 +                    unsigned after = tmp < line->end ? md_decode_unicode(ctx->text, tmp, ctx->size, NULL) : 0;
@@ -3780,11 +3783,18 @@ diff --git a/cpp/md4c/md4c.c b/cpp/md4c/md4c.c
 +                        flags &= ~MD_MARK_POTENTIAL_OPENER;
 +                    if(tmp < line->end  &&  !ISUNICODEWHITESPACE(tmp)  &&  !ISUNICODEPUNCT(tmp)  &&  !CHERRY_MD_IS_CJK(after))
                          flags &= ~MD_MARK_POTENTIAL_CLOSER;
++                    if(tmp - off == 1) {
++                        if(tmp >= line->end  ||  ISUNICODEWHITESPACE(tmp))
++                            flags &= ~MD_MARK_POTENTIAL_OPENER;
++                        if(off == line->beg  ||  ISUNICODEWHITESPACEBEFORE(off)  ||
++                           (tmp + 1 < line->end  &&  CH(tmp) == _T('\\')  &&  ISALPHA(tmp + 1)))
++                            flags &= ~MD_MARK_POTENTIAL_CLOSER;
++                    }
 +#undef CHERRY_MD_IS_CJK
                      if(flags != 0)
                          ADD_MARK(ch, off, tmp, flags);
                  }
-@@ -4714,8 +4726,12 @@
+@@ -4714,8 +4736,12 @@
      emph_mark_types[n_emph_mark_types++] = _T('&');
      emph_mark_types[n_emph_mark_types++] = _T('*');
      emph_mark_types[n_emph_mark_types++] = _T('_');

@@ -62,6 +62,31 @@ const cases: [markdown: string, inline: string][] = [
   ['$a$ *b* $c$', '<math>a</math> <em>b</em> <math>c</math>'],
   ['~~$x$~~', '<del><math>x</math></del>'],
   ['2^10^ 和 $2^{10}$', '2<sup>10</sup> 和 <math>2^{10}</math>'],
+  // Currency inside emphasis or adjacent to prose must not hijack a later formula opener.
+  ['**$5** and $\\frac{1}{2}$', '<strong>$5</strong> and <math>\\frac{1}{2}</math>'],
+  ['**$5** and **$\\alpha$**', '<strong>$5</strong> and <strong><math>\\alpha</math></strong>'],
+  [
+    '**价格 $5**，其中 $\\text{＋}$ 表示加',
+    '<strong>价格 $5</strong>，其中 <math>\\text{＋}</math> 表示加',
+  ],
+  [
+    '**价格$5**，其中$\\text{＋}$表示加',
+    '<strong>价格$5</strong>，其中<math>\\text{＋}</math>表示加',
+  ],
+  ['*$5* and $-x$', '<em>$5</em> and <math>-x</math>'],
+  ['~~$5~~ and $(a+b)$', '<del>$5</del> and <math>(a+b)</math>'],
+  ['**$5** (in $)', '<strong>$5</strong> (in $)'],
+  ['价格$5，其中$\\text{＋}$表示加', '价格$5，其中<math>\\text{＋}</math>表示加'],
+  ['price $5 and $\\frac{1}{2}$', 'price $5 and <math>\\frac{1}{2}</math>'],
+  // Fullwidth digits remain literal currency; halfwidth Katakana and spaced display math work.
+  ['price $５ and $１０', 'price $５ and $１０'],
+  ['价格$５，折后$３', '价格$５，折后$３'],
+  ['ﾃｽﾄ$x$ﾃｽﾄ', 'ﾃｽﾄ<math>x</math>ﾃｽﾄ'],
+  ['$$ E = mc^2 $$', '<dmath> E = mc^2 </dmath>'],
+  // Operators inside math still cannot be paired with emphasis or superscripts outside.
+  ['*x $a*b$ y*', '<em>x <math>a*b</math> y</em>'],
+  ['_x $a_{1}$ y_', '<em>x <math>a_{1}</math> y</em>'],
+  ['2^10 $a^2$', '2^10 <math>a^2</math>'],
 ];
 
 describe('Enriched Markdown inline math parsing', () => {
