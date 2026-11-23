@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
+import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import {
   CompactionTask,
   createRegistry,
@@ -977,6 +978,116 @@ describe('PiDurableRuntime identity and handoff', () => {
       expect(await runtime.binding(seed.sessionId)).toMatchObject({ revision: 1 });
       await expect(runtime.ensureConversation(seed)).rejects.toThrow('obsolete');
     } finally {
+      await runtime.close();
+    }
+  });
+
+  test('joins an idle background compaction instead of reporting busy and spares it on caller abort', async () => {
+    const configuration = options();
+    let resolveSummary!: (decision: { summary: string }) => void;
+    let compactSignal!: AbortSignal;
+    let markStarted!: () => void;
+    const compactStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const beforeCompact = jest.fn(
+      async (
+        _compaction: unknown,
+        _api: unknown,
+        context: { abortSignal?: AbortSignal },
+      ): Promise<{ summary: string }> => {
+        compactSignal = context.abortSignal!;
+        markStarted();
+        return new Promise((resolve) => {
+          resolveSummary = resolve;
+        });
+      },
+    );
+    configuration.registry.install({
+      name: 'test.background-compaction',
+      hooks: [hook(CompactionTask, { beforeCompact })],
+    });
+    const model: Model<Api> = {
+      api: 'openai-responses',
+      provider: 'test',
+      id: 'small-context',
+      name: 'Small context',
+      baseUrl: '',
+      contextWindow: 120,
+      maxTokens: 32,
+      input: ['text'],
+      reasoning: false,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    jest.spyOn(configuration.models, 'getModel').mockReturnValue(model);
+    jest.spyOn(configuration.models, 'streamSimple').mockImplementation(() => {
+      const stream = new AssistantMessageEventStream();
+      const message = {
+        ...emptyAssistantMessage(model),
+        stopReason: 'stop' as const,
+        content: [{ type: 'text' as const, text: 'Answer' }],
+      };
+      stream.push({ type: 'done', reason: 'stop', message });
+      stream.end(message);
+      return stream;
+    });
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), {
+      ...configuration,
+      settings: {
+        ...configuration.settings,
+        compaction: {
+          enabled: true,
+          reserveTokens: 20,
+          keepRecentTokens: 1,
+          backgroundTokens: 60,
+        },
+      },
+    });
+    try {
+      const conversation = await runtime.ensureConversation({
+        ...seed,
+        agent: { model: { provider: model.provider, modelId: model.id } },
+        entries: [
+          {
+            kind: UserEntry.kind,
+            model: [{ role: 'user', content: 'Old context '.repeat(14), timestamp: 1 }],
+          },
+        ],
+      });
+      const turn = await runtime.submit(
+        seed.sessionId,
+        { type: 'input', requestId: 'turn-1', content: 'Short question' },
+        { userMessageId: 'user-1', assistantMessageId: 'assistant-1' },
+      );
+      expect((await turn.wait(BACKGROUND_CONTEXT)).status).toBe('done');
+      await compactStarted;
+
+      const aborted = new AbortController();
+      const cancelled = runtime.compactContext(seed.sessionId, aborted.signal);
+      aborted.abort();
+      await expect(cancelled).rejects.toThrow();
+      expect(compactSignal.aborted).toBe(false);
+      expect(beforeCompact).toHaveBeenCalledTimes(1);
+
+      const joined = runtime.compactContext(seed.sessionId, new AbortController().signal);
+      expect(beforeCompact).toHaveBeenCalledTimes(1);
+      resolveSummary({ summary: 'Background compacted summary' });
+      await expect(joined).resolves.toBe('compacted');
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: expect.stringContaining('Background compacted summary'),
+              },
+            ],
+          }),
+        ]),
+      );
+    } finally {
+      resolveSummary?.({ summary: 'Cleanup' });
       await runtime.close();
     }
   });

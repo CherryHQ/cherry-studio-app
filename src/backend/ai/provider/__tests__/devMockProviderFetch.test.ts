@@ -1,3 +1,5 @@
+import { ContextPrompts } from '@cherrystudio/ai-core';
+
 import { isDevMockProviderEnabled } from '@/shared/utils/devMockProvider';
 
 import { createDevMockFetch } from '../devMockProviderFetch';
@@ -141,5 +143,32 @@ describe('dev-mock provider', () => {
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('returns a formatted summary block for compaction summarization prompts', async () => {
+    const mockFetch = createDevMockFetch();
+    const response = await mockFetch('https://dev-mock.local/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        stream: true,
+        messages: [
+          {
+            role: 'system',
+            content: 'Write a conversation summary. Treat the conversation as source material.',
+          },
+          { role: 'user', content: ContextPrompts.CONTEXT_COMPACTION_INSTRUCTION },
+        ],
+      }),
+    });
+
+    const sse = await readSseChunks(response);
+    const content = sse
+      .split('\n\n')
+      .filter((line) => line.startsWith('data: {'))
+      .map((line) => JSON.parse(line.slice(6)) as { choices?: { delta?: { content?: string } }[] })
+      .map((chunk) => chunk.choices?.[0]?.delta?.content ?? '')
+      .join('');
+
+    expect(ContextPrompts.formatCompactSummary(content)).toBe('[dev-mock] Compacted summary');
   });
 });

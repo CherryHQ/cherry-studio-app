@@ -215,6 +215,7 @@ export type RuntimeContextUsage = Readonly<{
   messageId: string;
   tokens: number;
   estimated?: boolean;
+  canCompact?: boolean;
 }>;
 
 export type RuntimeInputParent = {

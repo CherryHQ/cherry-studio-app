@@ -1,5 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import {
   configure,
   defineDoc,
@@ -971,12 +971,19 @@ export class PiDurableRuntime {
   }
 
   async compactContext(sessionId: string, signal: AbortSignal) {
-    const context = { ...BACKGROUND_CONTEXT, abortSignal: signal };
+    const context = withAbortSignal(signal, BACKGROUND_CONTEXT);
     const conversation = await this.requireSession(sessionId, context);
     const live = await this.harness.snapshot(LiveDoc, conversation.id, context);
-    if (live?.run || live?.compactions?.length) return 'busy' as const;
+    const background =
+      !live?.run &&
+      live?.compactions?.length === 1 &&
+      !live.compactions[0]!.blocking &&
+      live.compactions[0]!.trigger !== 'manual'
+        ? live.compactions[0]!.taskId
+        : undefined;
+    if (live?.run || (live?.compactions?.length && !background)) return 'busy' as const;
     try {
-      const task = await conversation.compact(undefined, context);
+      const task = background ?? (await conversation.compact(undefined, context));
       const { state } = await this.harness.waitForTask(task, context);
       if (state.outcome.status !== 'completed')
         throw new Error('The conversation could not be summarized.');
@@ -989,7 +996,7 @@ export class PiDurableRuntime {
       }
       return entryId !== undefined ? ('compacted' as const) : ('unchanged' as const);
     } finally {
-      if (signal.aborted) await conversation.abort(BACKGROUND_CONTEXT);
+      if (!background && signal.aborted) await conversation.abort(BACKGROUND_CONTEXT);
     }
   }
 

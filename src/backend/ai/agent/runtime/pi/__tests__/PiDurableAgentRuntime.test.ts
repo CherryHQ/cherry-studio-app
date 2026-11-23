@@ -1690,6 +1690,48 @@ describe('Persistent Agent facade', () => {
       preflight.mockRestore();
     }
   });
+  test('manually compacts an idle working copy after a cold open using its saved model and provider session', async () => {
+    const state = fixture();
+    let runtime = state.create();
+    const signal = new AbortController().signal;
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      expect(await runtime.compactContext(lane, signal)).toBe('unchanged');
+      await submitAndWait(runtime, input('earlier'));
+      await submitAndWait(runtime, {
+        ...input('latest'),
+        input: [{ type: 'text', text: 'recent material '.repeat(2_000) }],
+      });
+      await runtime.close();
+
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      expect(await runtime.compactContext(lane, signal)).toBe('compacted');
+      expect(state.providerSessions).toHaveLength(3);
+      expect(state.providerSessions[0]).toEqual(expect.any(String));
+      expect(state.providerSessions[2]).toBe(state.providerSessions[0]);
+      const { contextCheckpoint } = await runtime.exportTurn(lane, 'latest', {
+        currentContext: true,
+      });
+      expect(contextCheckpoint?.payload).toMatchObject({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: [{ type: 'text', text: expect.stringContaining('Response 3') }],
+          }),
+        ]),
+      });
+      await runtime.drainUsage();
+      expect(state.ports.recordUsage).toHaveBeenCalledWith(
+        { ...lane, turnId: null, requestId: null },
+        expect.objectContaining({ usage: expect.objectContaining({ totalTokens: 5 }) }),
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('reopens an existing working copy and continues without replaying tools', async () => {
     const fixtureState = fixture();
     let runtime = fixtureState.create();

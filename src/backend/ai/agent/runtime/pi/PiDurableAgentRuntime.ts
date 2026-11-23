@@ -258,22 +258,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         })
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
-      for (const lane of await this.unfinishedLanes()) {
-        signal?.throwIfAborted();
-        const stored = await this.runtime.configuration(laneKey(lane));
-        signal?.throwIfAborted();
-        const configuration = PiConfigurationSchema.parse(stored);
-        const agent = await this.installConfiguration(lane, configuration, true, signal);
-        signal?.throwIfAborted();
-        if (stored?.version === 1)
-          await this.runtime.restoreConfiguration(
-            laneKey(lane),
-            detachedJson(configuration),
-            agent,
-          );
-        signal?.throwIfAborted();
-        await this.bindProvider(lane);
-      }
+      for (const lane of await this.unfinishedLanes()) await this.restoreLane(lane, signal);
       signal?.throwIfAborted();
     } catch (error) {
       this.runtimeFailed = !signal?.aborted;
@@ -713,8 +698,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     await this.requireRuntime().stop(laneKey(lane));
   }
 
-  compactContext(lane: RuntimeLane, signal: AbortSignal) {
-    return this.requireRuntime().compactContext(laneKey(lane), signal);
+  async compactContext(lane: RuntimeLane, signal: AbortSignal) {
+    const key = laneKey(lane);
+    const configuration = this.configurations.get(key);
+    if (!configuration || !this.models.getModel(configuration.model, configuration.kind))
+      await this.restoreLane(lane, signal);
+    return this.requireRuntime().compactContext(key, signal);
   }
 
   async discardConversation(lane: RuntimeLane) {
@@ -778,6 +767,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
+  }
+
+  private async restoreLane(lane: RuntimeLane, signal?: AbortSignal) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    signal?.throwIfAborted();
+    const stored = await runtime.configuration(key);
+    signal?.throwIfAborted();
+    const configuration = PiConfigurationSchema.parse(stored);
+    const agent = await this.installConfiguration(lane, configuration, true, signal);
+    try {
+      signal?.throwIfAborted();
+      if (stored?.version === 1)
+        await runtime.restoreConfiguration(key, detachedJson(configuration), agent);
+      signal?.throwIfAborted();
+      await this.bindProvider(lane);
+    } catch (error) {
+      this.configurations.delete(key);
+      throw error;
+    }
   }
 
   private async installConfiguration(
@@ -950,13 +959,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             try {
               const providerSessionId = await this.requireRuntime().providerSessionId(key, context);
               if (!providerSessionId) return { failure };
+              const configuration = this.requireConfiguration(key);
               const summary = await summarizePiCompaction(
                 messages,
                 api.models,
-                this.requireModel(this.requireConfiguration(key)),
-                providerSessionId,
-                signal,
-                instructions,
+                this.requireModel(configuration),
+                {
+                  limits: await this.preflightModel(configuration.model),
+                  sessionId: providerSessionId,
+                  signal,
+                  instructions,
+                },
               );
               return summary ? { summary } : { failure };
             } catch {

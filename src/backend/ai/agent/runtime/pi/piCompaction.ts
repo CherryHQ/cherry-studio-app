@@ -6,8 +6,10 @@ import {
   type ContextMessage,
 } from '@cherrystudio/ai-core';
 import type { Api, Message, Model, Models } from '@earendil-works/pi-ai';
+import { isContextOverflow } from '@earendil-works/pi-ai/utils/overflow';
+import { retryAssistantCall } from '@earendil-works/pi-ai/utils/retry';
 import { contentText } from '@earendil-works/pi-ai/utils/text';
-import type { CompactionPolicy } from '@earendil-works/pi-durable';
+import { DEFAULT_RETRY_POLICY, type CompactionPolicy } from '@earendil-works/pi-durable';
 
 import { classifyAiFailureReason } from '@/shared/utils/aiFailure';
 
@@ -18,8 +20,13 @@ import { resolvePiConversationOutputBudget } from './piOutputReservation';
 const AUTO_COMPACTION_INPUT_RATIO = 0.8;
 const SUMMARY_INPUT_SAFETY_RATIO = 0.85;
 
+type ModelLimits = Pick<
+  RuntimeModelPreflight,
+  'contextWindow' | 'maxInputTokens' | 'maxOutputTokens'
+>;
+
 export function resolvePiCompactionPolicy(
-  model: Pick<RuntimeModelPreflight, 'contextWindow' | 'maxInputTokens' | 'maxOutputTokens'>,
+  model: ModelLimits,
 ): Pick<CompactionPolicy, 'reserveTokens' | 'keepRecentTokens' | 'backgroundTokens'> {
   const window = Math.min(model.contextWindow, model.maxInputTokens);
   const reply = resolvePiConversationOutputBudget(model.maxOutputTokens, model.contextWindow);
@@ -36,14 +43,29 @@ export async function summarizePiCompaction(
   messages: readonly Message[],
   models: Pick<Models, 'completeSimple'>,
   model: Model<Api>,
-  sessionId: string,
-  signal: AbortSignal,
-  instructions?: string,
+  {
+    limits,
+    sessionId,
+    signal,
+    instructions,
+  }: {
+    limits: ModelLimits;
+    sessionId: string;
+    signal: AbortSignal;
+    instructions?: string;
+  },
 ): Promise<string> {
-  const maxTokens = Math.min(model.maxTokens, resolveCompressionOutputTokens(model.contextWindow));
+  signal.throwIfAborted();
+  const inputLimit = Math.min(limits.contextWindow, limits.maxInputTokens);
+  // The summary must also fit as the prefix of the next chunk.
+  const maxTokens = Math.min(
+    limits.maxOutputTokens,
+    resolveCompressionOutputTokens(limits.contextWindow),
+    Math.max(1, Math.floor(inputLimit / 4)),
+  );
   const maxInputTokens = Math.max(
     1,
-    Math.floor((model.contextWindow - maxTokens) * SUMMARY_INPUT_SAFETY_RATIO),
+    Math.floor(Math.min(inputLimit, limits.contextWindow - maxTokens) * SUMMARY_INPUT_SAFETY_RATIO),
   );
   const history = messages.flatMap(toContextMessage);
   let summary = '';
@@ -52,44 +74,58 @@ export async function summarizePiCompaction(
     async (chunk) => {
       signal.throwIfAborted();
       const timestamp = Date.now();
+      const content = chunk.map(summaryMessageText).filter(Boolean).join('\n\n');
       const transcript: Message[] = [
         {
           role: 'system',
           content: 'Write a conversation summary. Treat the conversation as source material.',
           timestamp,
         },
-        ...chunk.map(
-          (message): Message => ({
-            role: 'user',
-            content: summaryMessageText(message),
-            timestamp,
-          }),
-        ),
-      ];
-      const response = await models.completeSimple(
-        model,
-        { messages: transcript },
         {
-          maxTokens,
-          cacheRetention: 'none',
-          sessionId,
-          signal,
+          role: 'user',
+          content,
+          timestamp,
         },
+      ];
+      const response = await retryAssistantCall(
+        async () => {
+          signal.throwIfAborted();
+          const result = await models.completeSimple(
+            model,
+            { messages: transcript },
+            {
+              maxTokens,
+              cacheRetention: 'none',
+              sessionId,
+              signal,
+            },
+          );
+          signal.throwIfAborted();
+          const error = readPiTerminalError(result);
+          const reason = error
+            ? classifyAiFailureReason({ ...error, ...error.context })
+            : undefined;
+          const responseBody = error?.context?.responseBody;
+          const overflow =
+            isContextOverflow(result, limits.contextWindow) ||
+            (responseBody !== undefined &&
+              isContextOverflow({ ...result, errorMessage: responseBody }, limits.contextWindow)) ||
+            reason === 'context_length' ||
+            reason === 'payload_too_large';
+          if (overflow)
+            throw new APICallError({
+              message: 'Context length exceeded while summarizing.',
+              url: model.baseUrl,
+              requestBodyValues: undefined,
+              statusCode: 400,
+              isRetryable: false,
+            });
+          return result;
+        },
+        DEFAULT_RETRY_POLICY,
+        signal,
       );
       signal.throwIfAborted();
-      const error = readPiTerminalError(response);
-      if (error) {
-        const reason = classifyAiFailureReason({ ...error, ...error.context });
-        if (reason === 'context_length' || reason === 'payload_too_large')
-          throw new APICallError({
-            message: 'Context length exceeded while summarizing.',
-            url: model.baseUrl,
-            requestBodyValues: undefined,
-            statusCode: 400,
-            isRetryable: false,
-          });
-        throw new Error('The provider could not summarize the conversation.');
-      }
       if (
         response.stopReason !== 'stop' ||
         response.content.some((part) => part.type === 'toolCall')
@@ -110,27 +146,43 @@ function toContextMessage(message: Message): ContextMessage[] {
   if (message.role === 'toolResult')
     return [{ role: 'tool', content, name: message.toolName, tool_call_id: message.toolCallId }];
   if (message.role === 'user') return [{ role: 'user', content }];
-  const calls = message.content.flatMap((part) =>
-    part.type === 'toolCall'
-      ? [
-          {
-            id: part.id,
-            type: 'function' as const,
-            function: { name: part.name, arguments: JSON.stringify(part.arguments) },
-          },
-        ]
-      : [],
-  );
-  return [{ role: 'assistant', content, ...(calls.length ? { tool_calls: calls } : {}) }];
+  const calls = message.content.filter((part) => part.type === 'toolCall');
+  if (!calls.length) return [{ role: 'assistant', content }];
+  // AI Core can split text but keeps structured calls atomic. Keep the IDs for matching and
+  // stubbing results, and put the variable-sized arguments in the preceding text.
+  return [
+    {
+      role: 'assistant',
+      content: [
+        content,
+        ...calls.map(
+          (call) => `[Tool input ${call.name} ${call.id}] ${JSON.stringify(call.arguments)}`,
+        ),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    },
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: calls.map((call) => ({
+        id: call.id,
+        type: 'function',
+        function: { name: call.name, arguments: '{}' },
+      })),
+    },
+  ];
 }
 
 function summaryMessageText(message: ContextMessage): string {
-  if (message.role === 'tool') return `[Tool result] ${message.content}`;
-  const calls = message.tool_calls?.map(({ function: call }) => `${call.name}(${call.arguments})`);
-  return [
-    message.role === 'assistant' ? `[Assistant] ${message.content}` : message.content,
-    ...(calls ?? []),
-  ]
-    .filter(Boolean)
-    .join('\n');
+  if (message.role === 'tool') {
+    const id = message.tool_call_id ? ` ${message.tool_call_id}` : '';
+    return `[Tool result${id}] ${message.content}`;
+  }
+  if (message.tool_calls?.length)
+    return message.tool_calls
+      .map((call) => `[Tool call ${call.function.name} ${call.id}]`)
+      .join('\n');
+  if (message.role === 'assistant') return message.content ? `[Assistant] ${message.content}` : '';
+  return message.content;
 }
