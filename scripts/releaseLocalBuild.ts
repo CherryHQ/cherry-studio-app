@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, type StdioOptions } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
@@ -19,6 +19,7 @@ import {
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import { parseArgs } from 'node:util';
 
 import { sanitizeDiagnostic } from './uploadIosSymbols';
@@ -111,6 +112,9 @@ export interface LocalCommandResult {
   exitCode: number | null;
 }
 
+const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
+const MAX_STREAM_TAIL_CHARS = 256 * 1024;
+
 export type RunLocalCommand = (
   command: string,
   args: string[],
@@ -119,26 +123,148 @@ export type RunLocalCommand = (
     env?: NodeJS.ProcessEnv;
     input?: string | Buffer;
     streamOutput?: boolean;
+    logPrefix?: string;
   },
 ) => Promise<LocalCommandResult>;
 
-export const defaultRunLocalCommand: RunLocalCommand = async (command, args, options) => {
-  const result = spawnSync(command, args, {
-    cwd: options?.cwd,
-    env: options?.env ?? process.env,
-    input: options?.input,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: options?.streamOutput
-      ? 'inherit'
-      : [options?.input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-  });
-  if (result.error) throw result.error;
+function appendRollingTail(current: string, chunk: string): string {
+  const combined = current + chunk;
+  return combined.length > MAX_STREAM_TAIL_CHARS
+    ? combined.slice(combined.length - MAX_STREAM_TAIL_CHARS)
+    : combined;
+}
+
+function createPrefixedLineWriter(prefix: string, target: NodeJS.WriteStream) {
+  const decoder = new StringDecoder('utf8');
+  let remainder = '';
   return {
-    stdout: typeof result.stdout === 'string' ? result.stdout : '',
-    stderr: typeof result.stderr === 'string' ? result.stderr : '',
-    exitCode: result.status,
+    push(chunk: Buffer) {
+      const text = remainder + decoder.write(chunk);
+      const lines = text.split('\n');
+      remainder = lines.pop() ?? '';
+      for (const line of lines) {
+        const clean = line.endsWith('\r') ? line.slice(0, -1) : line;
+        target.write(`[${prefix}] ${clean}\n`);
+      }
+      return text;
+    },
+    flush() {
+      const finalText = remainder + decoder.end();
+      remainder = '';
+      if (finalText.length > 0) {
+        const clean = finalText.endsWith('\r') ? finalText.slice(0, -1) : finalText;
+        target.write(`[${prefix}] ${clean}\n`);
+      }
+      return finalText;
+    },
   };
+}
+
+export const defaultRunLocalCommand: RunLocalCommand = async (command, args, options) => {
+  const streamOutput = Boolean(options?.streamOutput);
+  const logPrefix = options?.logPrefix?.trim();
+  const usePrefixedPipes = streamOutput && Boolean(logPrefix);
+
+  return await new Promise<LocalCommandResult>((resolvePromise, rejectPromise) => {
+    const stdio: StdioOptions = streamOutput
+      ? usePrefixedPipes
+        ? ['ignore', 'pipe', 'pipe']
+        : 'inherit'
+      : [options?.input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'];
+
+    const child = spawn(command, args, {
+      cwd: options?.cwd,
+      env: options?.env ?? process.env,
+      stdio,
+    });
+
+    let settled = false;
+    const finishWithError = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      rejectPromise(error instanceof Error ? error : new Error(String(error)));
+    };
+
+    child.on('error', finishWithError);
+
+    let stdoutTail = '';
+    let stderrTail = '';
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let totalBytes = 0;
+
+    if (usePrefixedPipes && logPrefix) {
+      const stdoutWriter = createPrefixedLineWriter(logPrefix, process.stdout);
+      const stderrWriter = createPrefixedLineWriter(logPrefix, process.stderr);
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        const text = stdoutWriter.push(chunk);
+        stdoutTail = appendRollingTail(stdoutTail, text);
+      });
+      child.stdout?.on('end', () => {
+        const tail = stdoutWriter.flush();
+        if (tail) stdoutTail = appendRollingTail(stdoutTail, tail);
+      });
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = stderrWriter.push(chunk);
+        stderrTail = appendRollingTail(stderrTail, text);
+      });
+      child.stderr?.on('end', () => {
+        const tail = stderrWriter.flush();
+        if (tail) stderrTail = appendRollingTail(stderrTail, tail);
+      });
+    } else if (!streamOutput) {
+      child.stdout?.on('data', (chunk: Buffer) => {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_CAPTURE_BYTES) {
+          child.kill('SIGTERM');
+          finishWithError(
+            new Error(`${basename(command)} output exceeded ${MAX_CAPTURE_BYTES} bytes.`),
+          );
+          return;
+        }
+        stdoutChunks.push(chunk);
+      });
+
+      child.stderr?.on('data', (chunk: Buffer) => {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_CAPTURE_BYTES) {
+          child.kill('SIGTERM');
+          finishWithError(
+            new Error(`${basename(command)} output exceeded ${MAX_CAPTURE_BYTES} bytes.`),
+          );
+          return;
+        }
+        stderrChunks.push(chunk);
+      });
+
+      if (options?.input !== undefined && child.stdin) {
+        child.stdin.on('error', () => {
+          // Child termination surfaces via close exitCode.
+        });
+        child.stdin.end(options.input);
+      }
+    }
+
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (usePrefixedPipes) {
+        resolvePromise({ stdout: stdoutTail, stderr: stderrTail, exitCode: code });
+        return;
+      }
+      if (streamOutput) {
+        resolvePromise({ stdout: '', stderr: '', exitCode: code });
+        return;
+      }
+      resolvePromise({
+        stdout: Buffer.concat(stdoutChunks).toString('utf8'),
+        stderr: Buffer.concat(stderrChunks).toString('utf8'),
+        exitCode: code,
+      });
+    });
+  });
 };
 
 export function resolveTargetConfig(name: string): ReleaseTargetConfig {
@@ -702,6 +828,8 @@ export interface RunLocalReleaseBuildOptions {
   localPluginPath?: string;
   keepStable?: number;
   keepPrerelease?: number;
+  skipPrune?: boolean;
+  logPrefix?: string;
 }
 
 export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions) {
@@ -731,6 +859,7 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
     ...Object.values(releaseSecrets),
     baseEnv.GH_TOKEN ?? '',
     baseEnv.GITHUB_TOKEN ?? '',
+    baseEnv.GITCODE_TOKEN ?? '',
   ].filter(Boolean);
 
   assertDiskSpace(releaseRoot, target.minFreeDiskGb, options.statfs);
@@ -795,7 +924,7 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
         target.profile,
         '--non-interactive',
       ],
-      { cwd: projectDir, env: buildEnv, streamOutput: true },
+      { cwd: projectDir, env: buildEnv, streamOutput: true, logPrefix: options.logPrefix },
     );
     if (buildResult.exitCode !== 0) {
       const detail = sanitizeSecrets(
@@ -919,12 +1048,14 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
     );
     updateLatestSymlink(channelDir, basename(finalDir));
 
-    const pruneResult = pruneReleases({
-      releaseRoot,
-      keepStable: options.keepStable ?? 5,
-      keepPrerelease: options.keepPrerelease ?? 1,
-      activeVersion: parsedTag.tag,
-    });
+    const pruneResult = options.skipPrune
+      ? { kept: [], removed: [] }
+      : pruneReleases({
+          releaseRoot,
+          keepStable: options.keepStable ?? 5,
+          keepPrerelease: options.keepPrerelease ?? 1,
+          activeVersion: parsedTag.tag,
+        });
 
     return {
       target: target.id,
@@ -995,6 +1126,8 @@ export async function findCompleteBuild({
       ) {
         continue;
       }
+      const checksumPath = join(dir, 'SHA256SUMS');
+      if (!existsSync(checksumPath) || !statSync(checksumPath).isFile()) continue;
       const artifactPath = join(dir, manifest.artifact.filename);
       if (!existsSync(artifactPath) || !statSync(artifactPath).isFile()) continue;
       if (target.platform === 'ios' && !existsSync(join(dir, 'ios-symbols', 'package.complete'))) {
@@ -1006,15 +1139,45 @@ export async function findCompleteBuild({
         found: true as const,
         buildId: manifest.localBuildId,
         archiveDir: dir,
+        artifactName: manifest.artifact.filename,
         artifactPath,
         symbolsDir: target.platform === 'ios' ? join(dir, 'ios-symbols') : '',
         nativeBuildVersion: manifest.nativeBuildVersion,
+        sha256: liveEvidence.sha256,
       };
     } catch {
       continue;
     }
   }
   return { found: false as const };
+}
+
+export interface SubmitReceipt {
+  schemaVersion: number;
+  buildId: string | null;
+  status: 'succeeded' | 'failed';
+  message: string | null;
+  recordedAt: string;
+}
+
+export function readSubmitReceipt(buildDir: string): SubmitReceipt | null {
+  const receiptPath = join(buildDir, 'submit-receipt.json');
+  if (!existsSync(receiptPath)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(receiptPath, 'utf8')) as Partial<SubmitReceipt>;
+    if (parsed.status !== 'succeeded' && parsed.status !== 'failed') {
+      return null;
+    }
+    return {
+      schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 1,
+      buildId: typeof parsed.buildId === 'string' ? parsed.buildId : null,
+      status: parsed.status,
+      message: typeof parsed.message === 'string' ? parsed.message : null,
+      recordedAt: typeof parsed.recordedAt === 'string' ? parsed.recordedAt : '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function recordSubmitReceipt({
@@ -1033,7 +1196,7 @@ export function recordSubmitReceipt({
   if (!existsSync(buildDir) || !statSync(buildDir).isDirectory()) {
     throw new Error(`Archived build directory does not exist: ${buildDir}`);
   }
-  const receipt = {
+  const receipt: SubmitReceipt = {
     schemaVersion: 1,
     buildId: buildId ?? null,
     status,
@@ -1042,6 +1205,297 @@ export function recordSubmitReceipt({
   };
   writeFileSync(join(buildDir, 'submit-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
   return receipt;
+}
+
+export type BatchTargetOutcome =
+  | {
+      target: ReleaseTargetId;
+      status: 'built' | 'reused';
+      buildId: string;
+      archiveDir: string;
+      artifactName: string;
+      artifactPath: string;
+      symbolsDir: string;
+      nativeBuildVersion: string;
+      sha256: string;
+    }
+  | {
+      target: ReleaseTargetId;
+      status: 'failed';
+      error: string;
+    }
+  | {
+      target: ReleaseTargetId;
+      status: 'skipped';
+    };
+
+export interface RunLocalReleaseBatchOptions {
+  tag: string;
+  commitSha: string;
+  runId: string;
+  attempt: string;
+  projectDir?: string;
+  releaseRoot?: string;
+  env?: NodeJS.ProcessEnv;
+  run?: RunLocalCommand;
+  statfs?: (path: string) => { bavail: number | bigint; bsize: number | bigint };
+  verifySymbols?: typeof verifyIosSymbolPackage;
+  now?: () => Date;
+  easCliPath?: string;
+  localPluginPath?: string;
+  keepStable?: number;
+  keepPrerelease?: number;
+  includeGooglePlay?: boolean;
+  includeDomesticStores?: boolean;
+  reuseExisting?: boolean;
+}
+
+export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions): Promise<{
+  tag: string;
+  commitSha: string;
+  overallOk: boolean;
+  targets: Record<ReleaseTargetId, BatchTargetOutcome>;
+  pruned: string[];
+}> {
+  const parsedTag = parseReleaseTag(options.tag);
+  if (!SHA_RE.test(options.commitSha)) {
+    throw new Error(`Invalid commit SHA: ${options.commitSha}`);
+  }
+  const commitSha = options.commitSha.toLowerCase();
+  const projectDir = resolve(options.projectDir ?? process.cwd());
+  const baseEnv = options.env ?? process.env;
+
+  const { version: appVersion } = readAppIdentifiers(projectDir);
+  if (parsedTag.baseVersion !== appVersion) {
+    throw new Error(
+      `Release tag ${parsedTag.tag} base version (${parsedTag.baseVersion}) does not match app.json expo.version (${appVersion}).`,
+    );
+  }
+
+  const releaseSecrets = assertReleaseEnv(baseEnv);
+  const secretValues = [
+    ...Object.values(releaseSecrets),
+    baseEnv.GH_TOKEN ?? '',
+    baseEnv.GITHUB_TOKEN ?? '',
+    baseEnv.GITCODE_TOKEN ?? '',
+  ].filter(Boolean);
+
+  const releaseRoot = resolveReleaseRoot(baseEnv, options.releaseRoot);
+
+  const includeGooglePlay = options.includeGooglePlay ?? !parsedTag.isPrerelease;
+  const includeDomesticStores = options.includeDomesticStores ?? false;
+  const androidTargets: ReleaseTargetId[] = [
+    'android-public',
+    ...(includeGooglePlay ? (['android-google-play'] as const) : []),
+    ...(includeDomesticStores ? (['android-domestic-stores'] as const) : []),
+  ];
+  const iosTargets: ReleaseTargetId[] = ['ios-production'];
+  const requestedTargets: ReleaseTargetId[] = [...androidTargets, ...iosTargets];
+
+  const reused = new Map<
+    ReleaseTargetId,
+    Extract<Awaited<ReturnType<typeof findCompleteBuild>>, { found: true }>
+  >();
+  if (options.reuseExisting !== false) {
+    for (const targetId of requestedTargets) {
+      const existing = await findCompleteBuild({
+        target: targetId,
+        tag: parsedTag.tag,
+        commitSha,
+        releaseRoot,
+      });
+      if (existing.found) {
+        reused.set(targetId, existing);
+      }
+    }
+  }
+
+  const androidNeedsBuild = androidTargets.some((id) => !reused.has(id));
+  const iosNeedsBuild = iosTargets.some((id) => !reused.has(id));
+  if (androidNeedsBuild || iosNeedsBuild) {
+    const requiredGb =
+      (androidNeedsBuild ? RELEASE_TARGETS['android-public'].minFreeDiskGb : 0) +
+      (iosNeedsBuild ? RELEASE_TARGETS['ios-production'].minFreeDiskGb : 0);
+    assertDiskSpace(releaseRoot, requiredGb, options.statfs);
+  }
+
+  const targets: Record<ReleaseTargetId, BatchTargetOutcome> = {
+    'android-public': { target: 'android-public', status: 'skipped' },
+    'android-google-play': { target: 'android-google-play', status: 'skipped' },
+    'android-domestic-stores': { target: 'android-domestic-stores', status: 'skipped' },
+    'ios-production': { target: 'ios-production', status: 'skipped' },
+  };
+
+  const executeTarget = async (targetId: ReleaseTargetId) => {
+    const existing = reused.get(targetId);
+    if (existing) {
+      targets[targetId] = {
+        target: targetId,
+        status: 'reused',
+        buildId: existing.buildId,
+        archiveDir: existing.archiveDir,
+        artifactName: existing.artifactName,
+        artifactPath: existing.artifactPath,
+        symbolsDir: existing.symbolsDir,
+        nativeBuildVersion: existing.nativeBuildVersion,
+        sha256: existing.sha256,
+      };
+      return;
+    }
+
+    try {
+      const built = await runLocalReleaseBuild({
+        target: targetId,
+        tag: parsedTag.tag,
+        commitSha,
+        runId: options.runId,
+        attempt: options.attempt,
+        projectDir,
+        releaseRoot,
+        env: baseEnv,
+        run: options.run,
+        statfs: options.statfs,
+        verifySymbols: options.verifySymbols,
+        now: options.now,
+        easCliPath: options.easCliPath,
+        localPluginPath: options.localPluginPath,
+        skipPrune: true,
+        logPrefix: targetId,
+      });
+      targets[targetId] = {
+        target: targetId,
+        status: 'built',
+        buildId: built.buildId,
+        archiveDir: built.archiveDir,
+        artifactName: built.artifactName,
+        artifactPath: built.artifactPath,
+        symbolsDir: built.symbolsDir,
+        nativeBuildVersion: built.nativeBuildVersion,
+        sha256: built.sha256,
+      };
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      targets[targetId] = {
+        target: targetId,
+        status: 'failed',
+        error: sanitizeSecrets(rawMessage, secretValues, baseEnv),
+      };
+    }
+  };
+
+  // Run Android targets sequentially so auto-incremented versionCodes never race, while iOS builds in parallel.
+  const runAndroidLane = async () => {
+    for (const targetId of androidTargets) {
+      await executeTarget(targetId);
+    }
+  };
+  const runIosLane = async () => {
+    for (const targetId of iosTargets) {
+      await executeTarget(targetId);
+    }
+  };
+
+  await Promise.all([runAndroidLane(), runIosLane()]);
+
+  const hasAnyReady = requestedTargets.some(
+    (id) => targets[id].status === 'built' || targets[id].status === 'reused',
+  );
+  const pruneResult = hasAnyReady
+    ? pruneReleases({
+        releaseRoot,
+        keepStable: options.keepStable ?? 5,
+        keepPrerelease: options.keepPrerelease ?? 1,
+        activeVersion: parsedTag.tag,
+      })
+    : { kept: [], removed: [] };
+
+  const overallOk = requestedTargets.every(
+    (id) => targets[id].status === 'built' || targets[id].status === 'reused',
+  );
+
+  return {
+    tag: parsedTag.tag,
+    commitSha,
+    overallOk,
+    targets,
+    pruned: pruneResult.removed,
+  };
+}
+
+const BATCH_OUTPUT_TARGETS: readonly ReleaseTargetId[] = [
+  'android-public',
+  'android-google-play',
+  'ios-production',
+];
+
+function formatBatchOutputs(
+  overallOk: boolean,
+  targets: Record<ReleaseTargetId, BatchTargetOutcome>,
+): Record<string, string> {
+  const outputs: Record<string, string> = {
+    overall_ok: overallOk ? 'true' : 'false',
+  };
+  for (const targetId of BATCH_OUTPUT_TARGETS) {
+    const prefix = targetId.replace(/-/g, '_');
+    const outcome = targets[targetId];
+    const isReady = outcome.status === 'built' || outcome.status === 'reused';
+    outputs[`${prefix}_ready`] = isReady ? 'true' : 'false';
+    outputs[`${prefix}_status`] = outcome.status;
+    outputs[`${prefix}_build_id`] = isReady ? outcome.buildId : '';
+    outputs[`${prefix}_archive_dir`] = isReady ? outcome.archiveDir : '';
+    outputs[`${prefix}_artifact_name`] = isReady ? outcome.artifactName : '';
+    outputs[`${prefix}_artifact_path`] = isReady ? outcome.artifactPath : '';
+    outputs[`${prefix}_native_build_version`] = isReady ? outcome.nativeBuildVersion : '';
+    outputs[`${prefix}_sha256`] = isReady ? outcome.sha256 : '';
+    if (targetId === 'ios-production') {
+      outputs[`${prefix}_symbols_dir`] = isReady ? outcome.symbolsDir : '';
+    }
+  }
+  return outputs;
+}
+
+function formatBatchSummary(
+  tag: string,
+  targets: Record<ReleaseTargetId, BatchTargetOutcome>,
+): string {
+  const lines: string[] = [
+    `### Native Build Summary (${tag})`,
+    '',
+    '| Target | Status | Native Build | SHA-256 | Archive |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  const failures: string[] = [];
+
+  for (const targetId of BATCH_OUTPUT_TARGETS) {
+    const outcome = targets[targetId];
+    if (outcome.status === 'built' || outcome.status === 'reused') {
+      lines.push(
+        `| \`${targetId}\` | ${outcome.status} | \`${outcome.nativeBuildVersion}\` | \`${outcome.sha256}\` | \`${outcome.archiveDir}\` |`,
+      );
+    } else if (outcome.status === 'failed') {
+      lines.push(`| \`${targetId}\` | failed | — | — | — |`);
+      failures.push(`- \`${targetId}\`: ${outcome.error}`);
+    } else {
+      lines.push(`| \`${targetId}\` | skipped | — | — | — |`);
+    }
+  }
+
+  const playOutcome = targets['android-google-play'];
+  if (playOutcome.status === 'built' || playOutcome.status === 'reused') {
+    lines.push(
+      '',
+      '### Google Play AAB (Manual Upload)',
+      '',
+      `Signed AAB and \`SHA256SUMS\` are archived on the build machine at: \`${playOutcome.archiveDir}\``,
+      'Verify with `shasum -a 256 -c SHA256SUMS` before uploading `.aab` in Google Play Console.',
+    );
+  }
+
+  if (failures.length > 0) {
+    lines.push('', '### Build Failures', '', ...failures);
+  }
+
+  return `${lines.join('\n')}\n`;
 }
 
 async function main() {
@@ -1092,6 +1546,55 @@ async function main() {
     return;
   }
 
+  if (command === 'build-all') {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        tag: { type: 'string' },
+        commit: { type: 'string' },
+        'run-id': { type: 'string' },
+        attempt: { type: 'string' },
+        root: { type: 'string' },
+        'google-play': { type: 'string', default: 'auto' },
+        'no-reuse': { type: 'boolean', default: false },
+        'allow-partial-failure': { type: 'boolean', default: false },
+        'github-output': { type: 'string' },
+        summary: { type: 'string' },
+      },
+      strict: true,
+    });
+    if (!values.tag || !values.commit) {
+      throw new Error('Missing required flags: --tag, --commit.');
+    }
+    const googlePlayMode = values['google-play'] ?? 'auto';
+    if (googlePlayMode !== 'auto' && googlePlayMode !== 'true' && googlePlayMode !== 'false') {
+      throw new Error(`Invalid --google-play value: ${googlePlayMode}. Expected auto|true|false.`);
+    }
+    const result = await runLocalReleaseBatch({
+      tag: values.tag,
+      commitSha: values.commit,
+      runId: values['run-id'] ?? 'manual',
+      attempt: values.attempt ?? '1',
+      releaseRoot: values.root,
+      includeGooglePlay: googlePlayMode === 'auto' ? undefined : googlePlayMode === 'true',
+      reuseExisting: !values['no-reuse'],
+    });
+    if (values['github-output']) {
+      writeGitHubOutputs(
+        values['github-output'],
+        formatBatchOutputs(result.overallOk, result.targets),
+      );
+    }
+    if (values.summary) {
+      appendFileSync(values.summary, formatBatchSummary(result.tag, result.targets));
+    }
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.overallOk && !values['allow-partial-failure']) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (command === 'find-complete') {
     const { values } = parseArgs({
       args: rest,
@@ -1122,14 +1625,42 @@ async function main() {
               found: 'true',
               build_id: result.buildId,
               archive_dir: result.archiveDir,
+              artifact_name: result.artifactName,
               artifact_path: result.artifactPath,
               symbols_dir: result.symbolsDir,
               native_build_version: result.nativeBuildVersion,
+              sha256: result.sha256,
             }
           : { found: 'false' },
       );
     }
     console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === 'check-submit') {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        'build-dir': { type: 'string' },
+        'build-id': { type: 'string' },
+        'github-output': { type: 'string' },
+      },
+      strict: true,
+    });
+    if (!values['build-dir']) {
+      throw new Error('Usage: check-submit --build-dir <dir> [--build-id <id>]');
+    }
+    const receipt = readSubmitReceipt(resolve(values['build-dir']));
+    const alreadySubmitted =
+      receipt?.status === 'succeeded' &&
+      (!values['build-id'] || receipt.buildId === values['build-id']);
+    if (values['github-output']) {
+      writeGitHubOutputs(values['github-output'], {
+        already_submitted: alreadySubmitted ? 'true' : 'false',
+      });
+    }
+    console.log(JSON.stringify({ alreadySubmitted, receipt }, null, 2));
     return;
   }
 
@@ -1189,7 +1720,7 @@ async function main() {
   }
 
   throw new Error(
-    'Usage: releaseLocalBuild.ts <build|find-complete|record-submit|prune> [options]',
+    'Usage: releaseLocalBuild.ts <build|build-all|find-complete|check-submit|record-submit|prune> [options]',
   );
 }
 

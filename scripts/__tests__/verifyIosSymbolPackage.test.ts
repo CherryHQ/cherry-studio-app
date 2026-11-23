@@ -297,9 +297,9 @@ echo submit >> "$CALLS"
 if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi`,
     );
     const repo = resolve(__dirname, '../..');
-    const workflow = parse(readFileSync(join(repo, '.github/workflows/ios-release.yml'), 'utf8'));
-    expect(Object.keys(workflow.jobs)).toEqual(['release-ios']);
-    const steps = workflow.jobs['release-ios'].steps.filter(
+    const workflow = parse(readFileSync(join(repo, '.github/workflows/release.yml'), 'utf8'));
+    expect(workflow.jobs['submit-ios']).toBeDefined();
+    const steps = workflow.jobs['submit-ios'].steps.filter(
       (step: { run?: string }) =>
         step.run?.includes('verifyIosSymbolPackage.ts') ||
         step.run?.includes('eas submit --platform ios'),

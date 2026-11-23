@@ -22,9 +22,11 @@ import {
   findCompleteBuild,
   parseReleaseTag,
   pruneReleases,
+  readSubmitReceipt,
   recordSubmitReceipt,
   REQUIRED_RELEASE_ENV_VARS,
   resolveReleaseRoot,
+  runLocalReleaseBatch,
   runLocalReleaseBuild,
   type RunLocalCommand,
 } from '../releaseLocalBuild';
@@ -586,10 +588,14 @@ describe('runLocalReleaseBuild', () => {
       found: true,
       buildId: localBuildId,
       archiveDir: result.archiveDir,
+      artifactName: result.artifactName,
       artifactPath: result.artifactPath,
       symbolsDir: result.symbolsDir,
       nativeBuildVersion: '64',
+      sha256: result.sha256,
     });
+
+    expect(readSubmitReceipt(result.archiveDir)).toBeNull();
 
     const wrongSha = await findCompleteBuild({
       target: 'ios-production',
@@ -607,11 +613,313 @@ describe('runLocalReleaseBuild', () => {
     });
     expect(receipt.status).toBe('succeeded');
     expect(existsSync(join(result.archiveDir, 'submit-receipt.json'))).toBe(true);
+    expect(readSubmitReceipt(result.archiveDir)).toEqual(receipt);
 
     // Tampered IPA must invalidate findCompleteBuild reuse.
     writeFileSync(result.artifactPath, 'corrupt-ipa');
     await expect(
       findCompleteBuild({ target: 'ios-production', tag: 'v0.6.2', commitSha, releaseRoot }),
     ).resolves.toEqual({ found: false });
+  });
+});
+
+describe('runLocalReleaseBatch', () => {
+  const commitSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
+
+  function createDeferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  function makeBatchCommandRunner({
+    onEasStart,
+    failIosWithSecret,
+  }: {
+    onEasStart?: (platform: string, profile: string) => Promise<void>;
+    failIosWithSecret?: string;
+  } = {}): RunLocalCommand {
+    return jest.fn(async (cmd, args, opts) => {
+      if (args.includes('--local')) {
+        const profile = args[args.indexOf('--profile') + 1]!;
+        const platform = args[args.indexOf('--platform') + 1]!;
+        if (onEasStart) {
+          await onEasStart(platform, profile);
+        }
+        if (platform === 'ios' && failIosWithSecret) {
+          return { stdout: '', stderr: `ios failed token=${failIosWithSecret}`, exitCode: 1 };
+        }
+        const artifactsDir = opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!;
+        const workdir = opts!.env!.EAS_LOCAL_BUILD_WORKINGDIR!;
+        if (platform === 'ios') {
+          writeFileSync(join(artifactsDir, 'app.ipa'), Buffer.from('batch-ios-ipa'));
+          const symbolsDir = join(workdir, 'build/ios/build/ios-symbols');
+          mkdirSync(join(symbolsDir, 'package-abc'), { recursive: true });
+          writeFileSync(join(symbolsDir, 'package.complete'), '{"directory":"package-abc"}');
+          writeFileSync(join(symbolsDir, 'package-abc/dsyms.zip'), 'dsyms');
+        } else if (profile === 'production-google-play') {
+          writeFileSync(join(artifactsDir, 'app.aab'), Buffer.from('batch-play-aab'));
+        } else {
+          writeFileSync(join(artifactsDir, 'app.apk'), Buffer.from('batch-public-apk'));
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'unzip' && args[0] === '-Z1') {
+        const file = args[1]!;
+        if (file.endsWith('.ipa')) {
+          return { stdout: 'Payload/CherryStudio.app/Info.plist\n', stderr: '', exitCode: 0 };
+        }
+        return {
+          stdout: file.endsWith('.aab')
+            ? 'base/manifest/AndroidManifest.xml\n'
+            : 'AndroidManifest.xml\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (cmd === 'unzip' && args.includes('-j')) {
+        const destDir = args[args.indexOf('-d') + 1]!;
+        writeFileSync(join(destDir, 'Info.plist'), 'bplist00');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'plutil') {
+        return {
+          stdout: JSON.stringify({
+            CFBundleIdentifier: 'com.cherryai.cherrystudio-app',
+            CFBundleVersion: '70',
+          }),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === '-verify') return { stdout: 'jar verified.\n', stderr: '', exitCode: 0 };
+      if (args[0] === 'dump' && args[1] === 'manifest') {
+        return {
+          stdout: '<manifest package="com.cherryai.cherrystudio_app" android:versionCode="202"/>',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'verify') {
+        return {
+          stdout: 'Signer #1 certificate SHA-256 digest: 0123456789abcdef\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'dump' && args[1] === 'badging') {
+        return {
+          stdout: [
+            "package: name='com.cherryai.cherrystudio_app' versionCode='201' versionName='0.6.2'",
+            "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'",
+          ].join('\n'),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command ${cmd} ${args.join(' ')}`);
+    });
+  }
+
+  const okVerifySymbols = jest.fn(async ({ archivePath, buildId }) => ({
+    status: 'download-verified' as const,
+    buildId,
+    manifestSha256: 'abc',
+    symbolPackage: { size: 5, sha256: 'def' },
+    slices: 3,
+    thirdPartySymbols: [],
+    verifiedAt: '2026-11-23T06:00:00.000Z',
+    expiry: 'unknown' as const,
+    archivePath,
+  }));
+
+  it('builds Android sequentially and iOS in parallel, checks combined disk space upfront, and prunes once', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+
+    // Pre-populate 6 old stable versions so single prune at end removes only oldest after all builds finish.
+    for (let i = 0; i < 6; i++) {
+      const marker = join(
+        releaseRoot,
+        'cherry-studio-app',
+        `v0.5.${i}`,
+        'android-public',
+        `build-${i}-abc-run1`,
+        '.complete',
+      );
+      mkdirSync(dirname(marker), { recursive: true });
+      writeFileSync(marker, '{}');
+      const time = new Date(1_700_000_000_000 + i * 1000);
+      utimesSync(marker, time, time);
+    }
+
+    // Combined threshold for Android (30 GiB) + iOS (50 GiB) must reject 75 GiB before starting any build.
+    await expect(
+      runLocalReleaseBatch({
+        tag: 'v0.6.2',
+        commitSha,
+        runId: '9100',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 75 * 1024 ** 2, bsize: 1024 }),
+        run: jest.fn(),
+        verifySymbols: okVerifySymbols,
+      }),
+    ).rejects.toThrow('Insufficient disk space');
+
+    const activeBuilds = new Set<string>();
+    let sawConcurrentAndroidAndIos = false;
+    const bothStarted = createDeferred();
+    let androidPublicFinished = false;
+    let playSawFinishedPublic = false;
+
+    const run = makeBatchCommandRunner({
+      onEasStart: async (platform, profile) => {
+        const key = `${platform}:${profile}`;
+        activeBuilds.add(key);
+        if (profile === 'production-google-play') {
+          playSawFinishedPublic = androidPublicFinished;
+        }
+        if (activeBuilds.has('android:production') && activeBuilds.has('ios:production')) {
+          sawConcurrentAndroidAndIos = true;
+          bothStarted.resolve();
+        }
+        if (profile === 'production' && !sawConcurrentAndroidAndIos) {
+          await bothStarted.promise;
+        }
+        activeBuilds.delete(key);
+        if (key === 'android:production') {
+          androidPublicFinished = true;
+        }
+      },
+    });
+
+    const result = await runLocalReleaseBatch({
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9101',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+      verifySymbols: okVerifySymbols,
+    });
+
+    expect(sawConcurrentAndroidAndIos).toBe(true);
+    expect(playSawFinishedPublic).toBe(true);
+    expect(result.overallOk).toBe(true);
+    expect(result.targets['android-public'].status).toBe('built');
+    expect(result.targets['android-google-play'].status).toBe('built');
+    expect(result.targets['ios-production'].status).toBe('built');
+    expect(result.targets['android-domestic-stores'].status).toBe('skipped');
+    // activeVersion (v0.6.2) is pinned for the batch, so keeping 5 unpinned stable versions prunes only v0.5.0.
+    expect(result.pruned).toEqual(['v0.5.0']);
+    expect(existsSync(join(releaseRoot, 'cherry-studio-app', 'v0.5.0'))).toBe(false);
+    expect(existsSync(join(releaseRoot, 'cherry-studio-app', 'v0.5.1'))).toBe(true);
+  });
+
+  it('isolates iOS failure from Android success and reuses archived Android builds on retry', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+    const secretToken = 'secret-sentry-value-do-not-leak';
+    const env = makeReleaseEnv({ SENTRY_AUTH_TOKEN: secretToken });
+
+    const firstRun = makeBatchCommandRunner({ failIosWithSecret: secretToken });
+    const failedBatch = await runLocalReleaseBatch({
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9201',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env,
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run: firstRun,
+      verifySymbols: okVerifySymbols,
+    });
+
+    expect(failedBatch.overallOk).toBe(false);
+    expect(failedBatch.targets['android-public'].status).toBe('built');
+    expect(failedBatch.targets['android-google-play'].status).toBe('built');
+    expect(failedBatch.targets['ios-production']).toMatchObject({
+      target: 'ios-production',
+      status: 'failed',
+    });
+    if (failedBatch.targets['ios-production'].status === 'failed') {
+      expect(failedBatch.targets['ios-production'].error).toContain('[redacted]');
+      expect(failedBatch.targets['ios-production'].error).not.toContain(secretToken);
+    }
+
+    // Retry should require only 50 GiB (iOS only), reuse both Android artifacts, and build only iOS.
+    const seenPlatforms: string[] = [];
+    const retryRun: RunLocalCommand = jest.fn(async (cmd, args, opts) => {
+      if (args.includes('--local')) {
+        seenPlatforms.push(args[args.indexOf('--platform') + 1]!);
+      }
+      return makeBatchCommandRunner()(cmd, args, opts);
+    });
+
+    const retriedBatch = await runLocalReleaseBatch({
+      tag: 'v0.6.2',
+      commitSha,
+      runId: '9202',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env,
+      // 60 GiB is enough for iOS alone (50 GiB) because Android builds are reused.
+      statfs: () => ({ bavail: 60 * 1024 ** 2, bsize: 1024 }),
+      run: retryRun,
+      verifySymbols: okVerifySymbols,
+    });
+
+    expect(seenPlatforms).toEqual(['ios']);
+    expect(retriedBatch.overallOk).toBe(true);
+    expect(retriedBatch.targets['android-public'].status).toBe('reused');
+    expect(retriedBatch.targets['android-google-play'].status).toBe('reused');
+    expect(retriedBatch.targets['ios-production'].status).toBe('built');
+  });
+
+  it('skips Google Play AAB on prerelease tags', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+
+    const result = await runLocalReleaseBatch({
+      tag: 'v0.6.2-rc.1',
+      commitSha,
+      runId: '9301',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run: makeBatchCommandRunner(),
+      verifySymbols: okVerifySymbols,
+    });
+
+    expect(result.overallOk).toBe(true);
+    expect(result.targets['android-public'].status).toBe('built');
+    expect(result.targets['android-google-play'].status).toBe('skipped');
+    expect(result.targets['ios-production'].status).toBe('built');
   });
 });

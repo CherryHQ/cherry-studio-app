@@ -11,50 +11,325 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  EAS_CLI_VERSION: 24.4.2
+
 jobs:
   validate:
     name: Validate release version
     runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.tag.outputs.is_prerelease }}
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - name: Match the tag to app.json
+        id: tag
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
           version="${RELEASE_TAG#v}"
           test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
   ci:
     needs: validate
     uses: ./.github/workflows/pr-ci.yml
 
-  # Native production builds run on the shared CherryHQ self-hosted macOS release runner.
-  android:
-    needs: ci
+  # Build and verify Android + iOS in a single self-hosted Mac job so one runner executes both
+  # platforms in parallel while Android APK and Google Play AAB stay sequential.
+  build-native:
+    name: Build and verify native releases
+    needs: [validate, ci]
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
+    concurrency:
+      group: cherry-studio-app-native-local-build
+      cancel-in-progress: false
+    timeout-minutes: 240
+    outputs:
+      overall_ok: ${{ steps.build.outputs.overall_ok }}
+      android_public_ready: ${{ steps.build.outputs.android_public_ready }}
+      android_public_status: ${{ steps.build.outputs.android_public_status }}
+      android_public_build_id: ${{ steps.build.outputs.android_public_build_id }}
+      android_public_archive_dir: ${{ steps.build.outputs.android_public_archive_dir }}
+      android_public_artifact_name: ${{ steps.build.outputs.android_public_artifact_name }}
+      android_public_artifact_path: ${{ steps.build.outputs.android_public_artifact_path }}
+      android_public_native_build_version: ${{ steps.build.outputs.android_public_native_build_version }}
+      android_public_sha256: ${{ steps.build.outputs.android_public_sha256 }}
+      android_google_play_ready: ${{ steps.build.outputs.android_google_play_ready }}
+      android_google_play_status: ${{ steps.build.outputs.android_google_play_status }}
+      android_google_play_build_id: ${{ steps.build.outputs.android_google_play_build_id }}
+      android_google_play_archive_dir: ${{ steps.build.outputs.android_google_play_archive_dir }}
+      android_google_play_artifact_name: ${{ steps.build.outputs.android_google_play_artifact_name }}
+      android_google_play_native_build_version: ${{ steps.build.outputs.android_google_play_native_build_version }}
+      android_google_play_sha256: ${{ steps.build.outputs.android_google_play_sha256 }}
+      ios_production_ready: ${{ steps.build.outputs.ios_production_ready }}
+      ios_production_status: ${{ steps.build.outputs.ios_production_status }}
+      ios_production_build_id: ${{ steps.build.outputs.ios_production_build_id }}
+      ios_production_archive_dir: ${{ steps.build.outputs.ios_production_archive_dir }}
+      ios_production_artifact_path: ${{ steps.build.outputs.ios_production_artifact_path }}
+      ios_production_symbols_dir: ${{ steps.build.outputs.ios_production_symbols_dir }}
+      ios_production_native_build_version: ${{ steps.build.outputs.ios_production_native_build_version }}
+      ios_production_sha256: ${{ steps.build.outputs.ios_production_sha256 }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify runner toolchain
+        env:
+          IS_PRERELEASE: ${{ needs.validate.outputs.is_prerelease }}
+        run: |
+          node -p 'process.version' | grep -Eq '^v24\.'
+          test "$(pnpm -v)" = "12.2.1"
+          command -v jq > /dev/null
+          command -v apksigner > /dev/null
+          command -v aapt2 > /dev/null
+          command -v plutil > /dev/null
+          command -v xcodebuild > /dev/null
+          command -v pod > /dev/null
+          command -v fastlane > /dev/null
+          if [[ "$IS_PRERELEASE" != "true" ]]; then
+            command -v bundletool > /dev/null
+            command -v jarsigner > /dev/null
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify native targets
+        id: build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          CHERRY_CLOUD_CLIENT_SECRET: ${{ secrets.CHERRY_CLOUD_CLIENT_SECRET }}
+          CHERRYAI_CLIENT_SECRET: ${{ secrets.CHERRYAI_CLIENT_SECRET }}
+          CONFIG_SERVICE_ORIGIN: ${{ secrets.CONFIG_SERVICE_ORIGIN }}
+          EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID }}
+          EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --import tsx scripts/releaseLocalBuild.ts build-all \
+            --tag "$RELEASE_TAG" \
+            --commit "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --allow-partial-failure \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail job if any native target failed
+        if: ${{ steps.build.outputs.overall_ok != 'true' }}
+        env:
+          ANDROID_PUBLIC_STATUS: ${{ steps.build.outputs.android_public_status }}
+          ANDROID_GOOGLE_PLAY_STATUS: ${{ steps.build.outputs.android_google_play_status }}
+          IOS_PRODUCTION_STATUS: ${{ steps.build.outputs.ios_production_status }}
+        run: |
+          echo "Native build failed for one or more targets: android-public=$ANDROID_PUBLIC_STATUS, android-google-play=$ANDROID_GOOGLE_PLAY_STATUS, ios-production=$IOS_PRODUCTION_STATUS" >&2
+          exit 1
+
+  publish-github:
+    name: Publish APK to GitHub Release
+    needs: [validate, build-native]
+    if: ${{ !cancelled() && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.android_public_ready == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
     permissions:
       # GitHub's generate-notes and release publication require contents: write.
       contents: write
-    uses: ./.github/workflows/android-release.yml
-    secrets: inherit
+    concurrency:
+      group: cherry-studio-app-publish-github-${{ github.ref_name }}
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - name: Verify GitHub release tools
+        run: |
+          command -v gh > /dev/null
+          command -v jq > /dev/null
 
-  ios:
-    needs: ci
-    uses: ./.github/workflows/ios-release.yml
-    secrets: inherit
+      - name: Publish GitHub release with APK and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          ARCHIVE_DIR: ${{ needs.build-native.outputs.android_public_archive_dir }}
+          ARTIFACT_NAME: ${{ needs.build-native.outputs.android_public_artifact_name }}
+          NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_public_native_build_version }}
+          LOCAL_BUILD_ID: ${{ needs.build-native.outputs.android_public_build_id }}
+        run: |
+          cd "$ARCHIVE_DIR"
+          shasum -a 256 -c SHA256SUMS
+          NOTES_FILE="$RUNNER_TEMP/github-release-notes.md"
+          printf '# Cherry Studio %s\n\n' "${RELEASE_TAG#v}" > "$NOTES_FILE"
+          gh api --method POST "repos/$GH_REPO/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" -f target_commitish="$GITHUB_SHA" \
+            --jq .body >> "$NOTES_FILE"
+          cat >> "$NOTES_FILE" <<EOF
 
-  google-play:
-    needs: ci
-    if: ${{ !contains(github.ref_name, '-') }}
-    uses: ./.github/workflows/google-play-release.yml
-    secrets: inherit
+          ## Download and Installation
 
-  # domestic-stores:
-  #   needs: ci
-  #   if: ${{ !contains(github.ref_name, '-') }}
-  #   uses: ./.github/workflows/android-release.yml
-  #   with:
-  #     domestic: true
-  #   secrets: inherit
+          - Android: download the attached APK (ARM64) and install it on your device.
+          - Google Play and iOS App Store availability depend on their independent uploads, review, and publication. This GitHub release does not publish either store listing.
+          - SHA-256 checksums are included in SHA256SUMS.
+
+          Source: $GITHUB_SHA
+          Local build ID: $LOCAL_BUILD_ID
+          Native versionCode: $NATIVE_BUILD_VERSION
+          EOF
+          prerelease=false
+          if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=true; fi
+          if ! gh release view "$RELEASE_TAG" --json id > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
+              --title "$RELEASE_TAG" --notes-file "$NOTES_FILE" --prerelease="$prerelease"
+          fi
+          gh release view "$RELEASE_TAG" --json assets > "$RUNNER_TEMP/github-release.json"
+          mkdir -p "$RUNNER_TEMP/existing-assets"
+          for asset in SHA256SUMS "$ARTIFACT_NAME"; do
+            if jq -e --arg name "$asset" '.assets[] | select(.name == $name)' "$RUNNER_TEMP/github-release.json" > /dev/null; then
+              gh release download "$RELEASE_TAG" --pattern "$asset" --dir "$RUNNER_TEMP/existing-assets"
+              cmp "$asset" "$RUNNER_TEMP/existing-assets/$asset"
+            else
+              gh release upload "$RELEASE_TAG" "$asset"
+            fi
+          done
+          rm -rf "$RUNNER_TEMP/existing-assets" "$RUNNER_TEMP/github-release.json" "$NOTES_FILE"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease"
+          echo "GitHub Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-gitcode:
+    name: Publish APK to GitCode Release
+    needs: [validate, build-native, publish-github]
+    if: ${{ !cancelled() && needs.publish-github.result == 'success' && needs.build-native.outputs.android_public_ready == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
+    concurrency:
+      group: cherry-studio-app-publish-gitcode-${{ github.ref_name }}
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify Node and pnpm toolchain
+        run: |
+          node -p 'process.version' | grep -Eq '^v24\.'
+          test "$(pnpm -v)" = "12.2.1"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish GitCode release with APK and checksums
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          GITCODE_API_URL: ${{ vars.GITCODE_API_URL }}
+          GITCODE_OWNER: ${{ vars.GITCODE_OWNER }}
+          GITCODE_REPO: ${{ vars.GITCODE_REPO }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          ARCHIVE_DIR: ${{ needs.build-native.outputs.android_public_archive_dir }}
+          ARTIFACT_NAME: ${{ needs.build-native.outputs.android_public_artifact_name }}
+          LOCAL_BUILD_ID: ${{ needs.build-native.outputs.android_public_build_id }}
+          NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_public_native_build_version }}
+        run: |
+          node --import tsx scripts/publishGitcodeRelease.ts \
+            --tag "$RELEASE_TAG" \
+            --commit "$GITHUB_SHA" \
+            --archive-dir "$ARCHIVE_DIR" \
+            --artifact-name "$ARTIFACT_NAME" \
+            --build-id "$LOCAL_BUILD_ID" \
+            --native-build-version "$NATIVE_BUILD_VERSION" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+  submit-ios:
+    name: Submit iOS IPA to TestFlight
+    needs: [validate, build-native]
+    if: ${{ !cancelled() && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.ios_production_ready == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
+    concurrency:
+      group: cherry-studio-app-submit-ios-${{ github.ref_name }}
+      cancel-in-progress: false
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify submission toolchain
+        run: |
+          node -p 'process.version' | grep -Eq '^v24\.'
+          test "$(pnpm -v)" = "12.2.1"
+          command -v jq > /dev/null
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check existing iOS submit receipt
+        id: receipt
+        env:
+          IOS_ARCHIVE_DIR: ${{ needs.build-native.outputs.ios_production_archive_dir }}
+          IOS_BUILD_ID: ${{ needs.build-native.outputs.ios_production_build_id }}
+        run: |
+          node --import tsx scripts/releaseLocalBuild.ts check-submit \
+            --build-dir "$IOS_ARCHIVE_DIR" \
+            --build-id "$IOS_BUILD_ID" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Note already submitted iOS build
+        if: ${{ steps.receipt.outputs.already_submitted == 'true' }}
+        env:
+          IOS_BUILD_ID: ${{ needs.build-native.outputs.ios_production_build_id }}
+          IOS_ARCHIVE_DIR: ${{ needs.build-native.outputs.ios_production_archive_dir }}
+        run: |
+          echo "iOS build $IOS_BUILD_ID at $IOS_ARCHIVE_DIR already has a succeeded submit receipt; skipping duplicate TestFlight upload." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify local iOS symbols
+        if: ${{ steps.receipt.outputs.already_submitted != 'true' }}
+        env:
+          IOS_SYMBOLS_DIR: ${{ needs.build-native.outputs.ios_production_symbols_dir }}
+          IOS_BUILD_ID: ${{ needs.build-native.outputs.ios_production_build_id }}
+        run: |
+          node --import tsx scripts/verifyIosSymbolPackage.ts "$IOS_SYMBOLS_DIR" "$IOS_BUILD_ID" > "$RUNNER_TEMP/ios-symbol-verification.json"
+          echo '### iOS debug symbols' >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Verified Cherry slices: \(.slices)", "Third-party symbol coverage:", (.thirdPartySymbols[] | "    " + tojson)' \
+            "$RUNNER_TEMP/ios-symbol-verification.json" >> "$GITHUB_STEP_SUMMARY"
+          if jq -e 'any(.thirdPartySymbols[]; .coverage != "debug-present" or .upload != "submitted")' "$RUNNER_TEMP/ios-symbol-verification.json" > /dev/null; then
+            echo "::warning::Some third-party iOS symbols have incomplete coverage or upload. See the job summary."
+          fi
+
+      - name: Submit this build and wait for upload
+        if: ${{ steps.receipt.outputs.already_submitted != 'true' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          IOS_BUILD_ID: ${{ needs.build-native.outputs.ios_production_build_id }}
+          IOS_ARCHIVE_DIR: ${{ needs.build-native.outputs.ios_production_archive_dir }}
+          IOS_IPA_PATH: ${{ needs.build-native.outputs.ios_production_artifact_path }}
+          PROFILE: production
+        run: |
+          if pnpm exec eas submit --platform ios --profile production --path "$IOS_IPA_PATH" \
+            --non-interactive --wait --no-auto-testflight-setup; then
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$IOS_ARCHIVE_DIR" \
+              --build-id "$IOS_BUILD_ID" \
+              --status succeeded
+            echo "Uploaded iOS build $IOS_BUILD_ID from $IOS_IPA_PATH to App Store Connect. Apple processing and TestFlight tester configuration remain in App Store Connect." >> "$GITHUB_STEP_SUMMARY"
+          else
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$IOS_ARCHIVE_DIR" \
+              --build-id "$IOS_BUILD_ID" \
+              --status failed \
+              --message "eas submit exited nonzero" || true
+            exit 1
+          fi
