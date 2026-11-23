@@ -46,6 +46,7 @@ type ChatInputSurfaceProps = {
   contextUsage?: ContextUsage;
   contextUsageSessionId?: string;
   contextUsageMessageId?: string;
+  onCompactContext?: () => Promise<'compacted' | 'unchanged' | 'unavailable'>;
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
   trailingAction?: ReactNode;
@@ -101,6 +102,7 @@ function ChatInputLayout({
   contextUsage,
   contextUsageSessionId,
   contextUsageMessageId,
+  onCompactContext,
   leadingAction,
   secondaryAction,
   trailingAction,
@@ -134,6 +136,8 @@ function ChatInputLayout({
     <ContextUsageRing
       key={JSON.stringify([contextUsageSessionId, contextUsageMessageId])}
       usage={contextUsage}
+      onCompact={onCompactContext}
+      compactDisabled={streaming}
       testID={isEditing ? 'chat-context-usage-editing' : 'chat-context-usage-compact'}
     />
   ) : null;

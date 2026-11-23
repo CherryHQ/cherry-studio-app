@@ -351,6 +351,10 @@ export interface DurableAgentRuntime {
     requestId: string,
     options?: { currentContext?: boolean },
   ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
+  compactContext(
+    lane: RuntimeLane,
+    signal: AbortSignal,
+  ): Promise<'compacted' | 'unchanged' | 'busy'>;
   abort(lane: RuntimeLane): Promise<void>;
   /** Abort and retire the application binding through public APIs. File reclamation is separate. */
   discardConversation(lane: RuntimeLane): Promise<void>;

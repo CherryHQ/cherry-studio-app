@@ -743,6 +743,11 @@ function TextChatInput({
                 contextUsage={compatibleUsage}
                 contextUsageSessionId={sessionId}
                 contextUsageMessageId={contextUsage?.messageId}
+                onCompactContext={
+                  sessionId && contextUsage?.canCompact && !editing
+                    ? () => controls.compactContext(contextUsage.messageId)
+                    : undefined
+                }
                 onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={

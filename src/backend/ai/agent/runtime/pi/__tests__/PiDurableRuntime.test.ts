@@ -2,12 +2,14 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
 import {
+  CompactionTask,
   createRegistry,
   CompactionEntry,
   ResetEntry,
   defineDocFamily,
   defineTask,
   Harness,
+  hook,
   InboxDoc,
   LiveDoc,
   GenerationTask,
@@ -587,8 +589,18 @@ describe('PiDurableRuntime identity and handoff', () => {
     },
   );
 
-  test('a failed blocking compaction settles its input and advances queued input', async () => {
+  test.each(['provider', 'hook'])('settles failed compaction (%s)', async (source) => {
     const configuration = options();
+    if (source === 'hook') {
+      configuration.registry.install({
+        name: 'test.summary-failure',
+        hooks: [
+          hook(CompactionTask, {
+            beforeCompact: () => ({ failure: 'Compaction provider failed' }),
+          }),
+        ],
+      });
+    }
     const model: Model<Api> = {
       api: 'openai-responses',
       provider: 'test',
@@ -667,7 +679,7 @@ describe('PiDurableRuntime identity and handoff', () => {
           entry: expect.any(Number),
         });
       }
-      expect(summarize).toHaveBeenCalledTimes(2);
+      expect(summarize).toHaveBeenCalledTimes(source === 'hook' ? 0 : 2);
       expect(generate).not.toHaveBeenCalled();
       expect((await harness.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
     } finally {

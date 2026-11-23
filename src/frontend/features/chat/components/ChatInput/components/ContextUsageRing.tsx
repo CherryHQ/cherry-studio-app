@@ -1,15 +1,34 @@
-import { AnchoredInfoPopover, Composer, type InfoPopoverAnchor } from '@cherrystudio/ui/components';
+import {
+  AnchoredInfoPopover,
+  Button,
+  Composer,
+  type InfoPopoverAnchor,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, type ViewInstance } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 
 import { type ContextUsage, formatContextUsagePercent } from '../utils/contextUsage';
 import { ContextUsageProgress } from './ContextUsageProgress';
 
-export function ContextUsageRing({ usage, testID }: { usage: ContextUsage; testID: string }) {
+type CompactContext = () => Promise<'compacted' | 'unchanged' | 'unavailable'>;
+
+export function ContextUsageRing({
+  usage,
+  testID,
+  onCompact,
+  compactDisabled,
+}: {
+  usage: ContextUsage;
+  testID: string;
+  onCompact?: CompactContext;
+  compactDisabled?: boolean;
+}) {
   const { arcRatio, severity, ratio } = usage;
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage ?? i18n.language;
@@ -73,8 +92,65 @@ export function ContextUsageRing({ usage, testID }: { usage: ContextUsage; testI
         testID="chat-context-usage-popover"
         width={272}
       >
-        <ContextUsageProgress usage={usage} />
+        <View className="gap-2">
+          <ContextUsageProgress usage={usage} />
+          {onCompact ? (
+            <ContextCompactionButton
+              onCompact={onCompact}
+              disabled={compactDisabled}
+              onDone={close}
+            />
+          ) : null}
+        </View>
       </AnchoredInfoPopover>
     </View>
+  );
+}
+
+function ContextCompactionButton({
+  onCompact,
+  disabled,
+  onDone,
+}: {
+  onCompact: CompactContext;
+  disabled?: boolean;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [compacting, setCompacting] = useState(false);
+
+  async function compact() {
+    if (compacting || disabled) return;
+    setCompacting(true);
+    try {
+      const result = await onCompact();
+      if (result === 'compacted') {
+        onDone();
+        toast.show({ label: t('chat.compaction.compacted_plain'), variant: 'success' });
+      } else if (result === 'unchanged') {
+        toast.show({ label: t('chat.compaction.unchanged') });
+      } else {
+        toast.show({ label: t('chat.compaction.unavailable'), variant: 'danger' });
+      }
+    } catch (error) {
+      if (error instanceof AgentProtocolError && error.view.code === 'CANCELLED') return;
+      toast.show({ label: t('chat.compaction.failed'), variant: 'danger' });
+    } finally {
+      setCompacting(false);
+    }
+  }
+
+  return (
+    <Button
+      disabled={disabled}
+      loading={compacting}
+      onPress={() => void compact()}
+      size="sm"
+      testID="chat-compact-context"
+      variant="secondary"
+    >
+      <Button.Label>{t('chat.compaction.action')}</Button.Label>
+    </Button>
   );
 }

@@ -1,8 +1,9 @@
-import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model, Models } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import type { RuntimeModelPreflight, RuntimeOptions } from '../../types';
+import { summarizePiCompaction } from '../piCompaction';
 import { createPiDurableModels } from '../piDurableModels';
 import type { PiModelResolution } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -135,7 +136,7 @@ describe('Pi durable model bridge', () => {
     [1_048_576, 131_072, 262_144, 131_072],
     [1_048_576, 1_024, 512, 512],
     [1_048_576, 13_107, undefined, 13_107],
-    [128_000, undefined, undefined, 128_000],
+    [128_000, undefined, undefined, 65_536],
   ])(
     'reserves output for ceiling %i, options %s, selected %s',
     async (ceiling, options, selected, expected) => {
@@ -164,7 +165,7 @@ describe('Pi durable model bridge', () => {
     },
   );
 
-  test('fits compaction into small input windows without changing large-window defaults', async () => {
+  test('fits compaction into small input windows and keeps image requests exempt', async () => {
     for (const contextWindow of [512, 8_192, 131_072]) {
       const bridge = setup(undefined, {
         ...preflight,
@@ -177,12 +178,6 @@ describe('Pi durable model bridge', () => {
       expect(
         policy.reserveTokens! + policy.keepRecentTokens! + policy.backgroundTokens!,
       ).toBeLessThan(contextWindow);
-      if (contextWindow === 131_072)
-        expect(policy).toEqual({
-          reserveTokens: 16_384,
-          keepRecentTokens: 20_000,
-          backgroundTokens: 32_768,
-        });
       await bridge.registerModel(reference, 'image');
       const image = bridge.getModel(reference, 'image')!;
       expect(bridge.compactionOverrides[`${image.provider}/${image.id}`]).toEqual({
@@ -192,6 +187,56 @@ describe('Pi durable model bridge', () => {
         policy,
       );
     }
+  });
+
+  test('starts background compaction at 80 percent of the input budget of a million-token model', async () => {
+    const bridge = setup(undefined, {
+      ...preflight,
+      contextWindow: 1_000_000,
+      maxInputTokens: 1_000_000,
+      maxOutputTokens: 393_216,
+    });
+    await bridge.registerModel(reference);
+    const policy = bridge.compactionOverrides[`${reference.providerId}/${reference.modelId}`]!;
+    const blocking = 1_000_000 - policy.reserveTokens!;
+    expect(blocking).toBe(930_368);
+    expect(blocking - policy.backgroundTokens!).toBe(744_294);
+  });
+
+  test('summarizes oversized history in order and carries successful summaries forward', async () => {
+    const model = { ...wire, contextWindow: 8_192, maxTokens: 512 };
+    const signal = new AbortController().signal;
+    const completeSimple = jest.fn<Promise<AssistantMessage>, Parameters<Models['completeSimple']>>(
+      async (_model, _context, _options) => {
+        const number = completeSimple.mock.calls.length;
+        return {
+          ...emptyAssistantMessage(model),
+          stopReason: 'stop',
+          content: [{ type: 'text', text: `<summary>chunk ${number}</summary>` }],
+        };
+      },
+    );
+    const history = Array.from({ length: 8 }, (_, index) => ({
+      role: 'user' as const,
+      content: `entry ${index} ${'distinct words '.repeat(800)}`,
+      timestamp: index,
+    }));
+    const summary = await summarizePiCompaction(
+      history,
+      { completeSimple },
+      model,
+      'session',
+      signal,
+    );
+    const requests = completeSimple.mock.calls.map(([, context]) =>
+      context.messages.map((message) => message.content).join('\n'),
+    );
+    expect(requests.length).toBeGreaterThan(1);
+    expect(requests[0]).toContain('entry 0');
+    expect(requests[0]).not.toContain('entry 7');
+    expect(requests[1]).toContain('chunk 1');
+    expect(requests.at(-1)).toContain('entry 7');
+    expect(summary).toBe(`chunk ${requests.length}`);
   });
 
   test('records configuration failures that happen before resolving the provider transport', async () => {

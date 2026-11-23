@@ -352,6 +352,10 @@ export class AgentSessionChatClient {
     }
   }
 
+  compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.compactContext(input));
+  }
+
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
     // A retry without a model replaces the displayed answer; explicit model selection adds
     // another answer and keeps its source visible. A returned Session also needs invalidation.
