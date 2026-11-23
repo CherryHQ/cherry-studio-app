@@ -21,7 +21,6 @@ import {
   CloudAccessError,
   CloudAccountSchema,
   CloudAmdStatusSchema,
-  CloudMemberModelCatalogSchema,
   CloudModelCatalogSchema,
   CloudPlansSchema,
   cloudModelUnavailable,
@@ -404,7 +403,7 @@ export class CloudRuntime extends BaseService implements CloudModule {
         throw accountRead.reason;
       throw catalogRead.reason;
     }
-    const { data: models } = CloudMemberModelCatalogSchema.parse(catalogRead.value);
+    const { data: models } = CloudModelCatalogSchema.parse(catalogRead.value);
     if (accountRead.status === 'rejected') {
       if (mode !== 'background' || this.snapshot.phase !== 'ready') {
         // The signed directory remains browsable while personal admission is unavailable.
