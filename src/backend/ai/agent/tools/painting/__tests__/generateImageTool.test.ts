@@ -166,9 +166,11 @@ describe('createGenerateImageTool', () => {
     });
 
     test.each(
-      [null, [''], ['   '], [ENTRY.id, ENTRY.id], [ENTRY.id, 'other-id']].map((imageIds) => ({
-        imageIds,
-      })),
+      [null, ['', ' '], [ENTRY.id, ' '], [ENTRY.id, ENTRY.id], [ENTRY.id, 'other-id']].map(
+        (imageIds) => ({
+          imageIds,
+        }),
+      ),
     )(
       'rejects malformed or excessive references without side effects: %j',
       async ({ imageIds }) => {
@@ -469,7 +471,8 @@ describe('createGenerateImageTool', () => {
             image_ids: {
               type: 'array',
               maxItems: 1,
-              items: { type: 'string', minLength: 1 },
+              items:
+                reference === 'required' ? { type: 'string', minLength: 1 } : { type: 'string' },
             },
           },
         });

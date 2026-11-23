@@ -231,13 +231,16 @@ export function buildGenerateImageToolSchema(
   }
 
   if (strategy.acceptsImages) {
+    const fileId = z.string().trim();
     const imageIds = z
-      .array(z.string().trim().min(1))
+      .array(strategy.canGenerate ? fileId : fileId.min(1))
       .max(MAX_INPUT_IMAGES)
       .describe(
         `Reference image file entry id, not a message id, tool call id, or URL. ${strategy.canGenerate ? 'Omit image_ids or pass [] to generate a new image without a reference. Do not pass null.' : 'Required for every call. Provide one non-empty reference image file entry id; empty arrays and null are invalid.'}`,
       );
-    inputShape.image_ids = strategy.canGenerate ? imageIds.optional() : imageIds.min(1);
+    inputShape.image_ids = strategy.canGenerate
+      ? imageIds.overwrite((ids) => ids.filter(Boolean)).optional()
+      : imageIds.min(1);
   }
 
   return z.object(inputShape).strict();
