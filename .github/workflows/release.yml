@@ -119,6 +119,7 @@ jobs:
           EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          ulimit -n 10240 2>/dev/null || true
           node --import tsx scripts/releaseLocalBuild.ts build-all \
             --tag "$RELEASE_TAG" \
             --commit "$GITHUB_SHA" \
@@ -208,8 +209,8 @@ jobs:
 
   publish-gitcode:
     name: Publish APK to GitCode Release
-    needs: [validate, build-native, publish-github]
-    if: ${{ !cancelled() && needs.publish-github.result == 'success' && needs.build-native.outputs.android_public_ready == 'true' }}
+    needs: [validate, build-native]
+    if: ${{ !cancelled() && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.android_public_ready == 'true' }}
     runs-on: [self-hosted, macOS, ARM64, release]
     environment: local-release
     concurrency:
@@ -294,6 +295,18 @@ jobs:
           IOS_ARCHIVE_DIR: ${{ needs.build-native.outputs.ios_production_archive_dir }}
         run: |
           echo "iOS build $IOS_BUILD_ID at $IOS_ARCHIVE_DIR already has a succeeded submit receipt; skipping duplicate TestFlight upload." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify archived iOS IPA integrity
+        if: ${{ steps.receipt.outputs.already_submitted != 'true' }}
+        env:
+          IOS_IPA_PATH: ${{ needs.build-native.outputs.ios_production_artifact_path }}
+          IOS_EXPECTED_SHA256: ${{ needs.build-native.outputs.ios_production_sha256 }}
+          IOS_SYMBOLS_DIR: ${{ needs.build-native.outputs.ios_production_symbols_dir }}
+        run: |
+          node --import tsx scripts/releaseLocalBuild.ts verify-ipa \
+            --ipa-path "$IOS_IPA_PATH" \
+            --expected-sha256 "$IOS_EXPECTED_SHA256" \
+            --symbols-dir "$IOS_SYMBOLS_DIR"
 
       - name: Verify local iOS symbols
         if: ${{ steps.receipt.outputs.already_submitted != 'true' }}

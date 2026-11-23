@@ -291,22 +291,25 @@ each console actually reports.
 
 ## iOS
 
-The build job waits for a production IPA, then passes its exact build ID to a separate submission
-job. `eas submit --id ... --wait --no-auto-testflight-setup` uploads it to App Store Connect and
-waits for submission completion. The workflow does not attach the IPA to a public release.
+`build-native` builds the production IPA on the Mac release runner, stages `ios-symbols` locally,
+and runs `scripts/verifyIosSymbolPackage.ts` before marking `ios-production` ready. A separate
+`submit-ios` job checks `submit-receipt.json` (`check-submit`), verifies the archived IPA checksum
+against `ios_production_sha256` and the symbol manifest (`verify-ipa`), re-runs symbol package
+verification, and runs `eas submit --platform ios --profile production --path <ipa-path> --non-interactive --wait --no-auto-testflight-setup`.
+The workflow does not attach the IPA to a public release.
 
 ### Native crash symbols
 
 The production EAS iOS hook runs after archive/export. It stages the original dSYMs, the archive
 Info.plist, a manifest with build ID, IPA checksum and image UUIDs, and a verification receipt in
-the private `ios/build/ios-symbols` build artifact before contacting Sentry.
+the local `ios/build/ios-symbols` directory before contacting Sentry.
 
 Three targets gate submission: CherryStudio, ExpoWidgetsTarget, and CherryShareExtension. Each
 distributed architecture must match the archive, an original dSYM with the same UUID, debug info
 and nonzero source-line coverage, and a Sentry Mach-O record with the same UUID, architecture and
 `debug` feature. The pinned Sentry CLI and Xcode's DWARF statistics inspect local evidence.
 Project and DSN identity are cross-checked when the token can read the project and its client
-keys. An unavailable identity scope is recorded in the receipt. The production token stays on EAS.
+keys. An unavailable identity scope is recorded in the receipt.
 
 Other frameworks, extensions and dylibs are inventoried separately. Matching available symbols
 are submitted best effort after Cherry's remote verification. The release summary lists each
@@ -315,41 +318,37 @@ when applicable. `debug-present` establishes some source-line coverage. Individu
 still lack line information. A missing third-party file or rejected third-party upload allows
 submission once all three Cherry targets and the downloaded recovery package pass.
 
-The macOS `submit-ios` job fetches the private extra artifact for the exact successful EAS build
-ID and requires matching build identity, manifest and archive checksums, extracted UUIDs,
-source-line coverage and remote evidence for the three targets before calling `eas submit`.
-Download or validation failure stops submission. Re-run the failed submission job with the same
-build ID. Retention beyond a successful download depends on EAS's retention window. Keep an
-access-controlled copy when longer retention is required.
+The `submit-ios` job verifies the archived `.ipa` checksum and `ios-symbols` directory on the Mac
+release runner (matching build identity, manifest and archive checksums, extracted UUIDs,
+source-line coverage and remote evidence for the three targets) before calling `eas submit --path`.
+Validation failure stops submission. Retention depends on the Mac archive pruning policy (5 newest
+stable versions and 1 prerelease; pin a version directory with `.pin` when longer retention is
+required).
 
 ### Recovery with the same build
 
-From the release checkout on macOS with dependencies installed and EAS access, run:
+If Sentry upload fails or hits the hook deadline after local validation, `releaseLocalBuild.ts`
+retains the signed IPA, `build-manifest.json`, and `ios-symbols` (with `upload.pending`) under a
+non-`.complete` recovery directory (`<release-root>/cherry-studio-app/<tag>/ios-production/pending-symbols-.../`).
+It does not publish `.complete` or allow `submit-ios` until recovery passes. Once Sentry service or
+credentials are restored, export the release's `EXPO_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, and
+configured `SENTRY_URL` on the Mac release runner and retry verification against the retained
+`ios-symbols` directory and recorded `localBuildId` without recompiling:
 
 ```bash
-bash scripts/verifyEasIosSymbols.sh "$BUILD_ID"
+node --import tsx scripts/verifyIosSymbolPackage.ts <pending-dir>/ios-symbols <local-build-id> --retry-upload > ios-symbol-recovery.json &&
+  pnpm exec eas submit --platform ios --profile production --path <pending-dir>/<ipa-filename> --non-interactive --wait --no-auto-testflight-setup
 ```
 
-If the Sentry step failed or ran out of hook time after local validation, EAS keeps the signed IPA
-and the original recovery bundle. Its `upload.pending` marker blocks ordinary submission. Once the Sentry
-service or credentials are restored, export the release's `EXPO_PUBLIC_SENTRY_DSN`,
-`SENTRY_AUTH_TOKEN` and configured `SENTRY_URL` on the workstation. The operator can retry
-the recorded build without compiling it again:
-
-```bash
-bash scripts/verifyEasIosSymbols.sh "$BUILD_ID" --retry-upload > ios-symbol-recovery.json &&
-  eas submit --platform ios --profile production --id "$BUILD_ID" --non-interactive --wait --no-auto-testflight-setup
-```
-
-Retry mode verifies the downloaded originals and their build-bound target fingerprint before
+Retry mode verifies the retained original dSYMs and their build-bound target fingerprint before
 uploading the required dSYMs. It checks Sentry again and returns the matching records in the
 JSON receipt. Preserve that receipt with the release evidence. If the original app dSYMs are
 actually missing, recover matching originals first. Rebuilding cannot repair an already shipped
 binary's identity.
 
-For the first production acceptance, use the exact candidate IPA and downloaded dSYMs to resolve
-a known project code address to a source file and line for each of the three targets. Fetching and
-verifying the recovery package is independent of submitting the build to TestFlight.
+For the first production acceptance, use the exact candidate IPA and archived dSYMs to resolve
+a known project code address to a source file and line for each of the three targets. Verifying
+the symbol recovery package is independent of submitting the build to TestFlight.
 See [iOS symbol recovery records](../references/ios-symbol-recovery.md) for build 59.
 
 A successful workflow means the upload completed. Apple processing, compliance questions, tester
@@ -365,20 +364,24 @@ not configure groups or submit the app for an App Store public release.
   in GitHub Actions. `build-native` reuses already-complete local archives via `findCompleteBuild`
   for the same tag and commit SHA, and publishing retries verify checksums / `submit-receipt.json`
   without rebuilding succeeded targets.
-- Before retrying an interrupted iOS submission, check its EAS submission page and App Store Connect.
-  If Apple already received it, do not upload it again. A failed EAS submission can also be retried
-  from EAS without building another IPA.
+- Before retrying an interrupted iOS submission, check App Store Connect and the Mac archive's
+  `submit-receipt.json`. If Apple already received the IPA, do not upload it again; `submit-ios`
+  automatically skips duplicate uploads when `submit-receipt.json` records `succeeded` for the same
+  `buildId`.
 - Before retrying a manual Google Play upload, check Play Console. If Play already accepted the
-  version code, complete the existing release. Otherwise, upload the original saved AAB again;
-  no new build is needed merely to retry an upload.
+  version code, complete the existing release. Otherwise, upload the original archived AAB from the
+  Mac release archive again; no new build is needed merely to retry an upload.
 - For a domestic store upload retry, check that store's submission first. Resume an accepted
   submission or upload the same archived domestic APK if it was not accepted. Preserve the other
   stores' submissions and record each result separately.
-- **Re-run all jobs** creates new EAS builds and increments native build numbers. Use it only when a
-  new build is intended. A build job timeout does not cancel the remote EAS build; check EAS first.
-- Saved Actions artifacts expire after 30 days. Recover the GitHub APK from its published release
-  or EAS; recover the Google Play AAB or domestic APK from its exact recorded EAS build. Use the
-  domestic `release-manifest.json` to identify its build rather than substituting the public APK.
+- **Re-run all jobs** reuses complete archived builds for the same tag and commit SHA by default;
+  run `releaseLocalBuild.ts build-all --no-reuse` (or remove the archived `build-*` directory) only
+  when a fresh native build and incremented build number are intended.
+- Local archives keep the 5 newest stable versions and 1 prerelease by default (honoring `.pin`
+  files inside version directories). Recover the public APK from the GitHub/GitCode release or the
+  Mac archive; recover the Google Play AAB or domestic APK from the Mac archive directory under
+  `${RUNNER_RELEASE_ROOT:-$HOME/releases}/cherry-studio-app/<tag>/` (using `release-manifest.json`
+  for domestic store builds rather than substituting the public APK).
 
 ## Release Status
 

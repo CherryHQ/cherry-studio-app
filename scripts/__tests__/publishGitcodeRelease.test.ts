@@ -82,6 +82,10 @@ describe('publishGitcodeRelease', () => {
         return new Response(JSON.stringify({ tag_name: 'v0.6.2' }), { status: 201 });
       }
 
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.6.2' }), { status: 200 });
+      }
+
       if (method === 'GET' && url.includes('/upload_url?file_name=')) {
         const fileName = decodeURIComponent(new URL(url).searchParams.get('file_name')!);
         uploadedOrder.push(`url:${fileName}`);
@@ -111,6 +115,13 @@ describe('publishGitcodeRelease', () => {
       buildId: 'build-uuid-1',
       nativeBuildVersion: '128',
       token,
+      // Simulate GitHub Actions passing empty strings for unset optional vars.
+      env: {
+        NODE_ENV: 'test',
+        GITCODE_API_URL: '   ',
+        GITCODE_OWNER: '',
+        GITCODE_REPO: '',
+      },
       fetchImpl,
       sleep: async () => {},
       createFileBody: async () => Buffer.from('body'),
@@ -121,7 +132,7 @@ describe('publishGitcodeRelease', () => {
       tag: 'v0.6.2',
       releaseStatus: 'latest',
       created: true,
-      patched: false,
+      patched: true,
       uploaded: [fixture.artifactName, 'SHA256SUMS'],
       skipped: [],
       hashes: {
@@ -136,16 +147,60 @@ describe('publishGitcodeRelease', () => {
       'put:SHA256SUMS',
     ]);
 
+    // Stable releases must stage as pre-release first and promote to latest only after attachment verification.
     const postCall = calls.find((call) => call.method === 'POST')!;
-    const payload = JSON.parse(postCall.body!);
-    expect(payload.release_status).toBe('latest');
-    expect(payload.target_commitish).toBe(commitSha);
-    expect(payload.body).toMatch(/^# Cherry Studio 0\.6\.2\n/);
-    expect(payload.body).toContain('\n## 下载安装\n');
+    const postPayload = JSON.parse(postCall.body!);
+    expect(postPayload.release_status).toBe('pre');
+    expect(postPayload.target_commitish).toBe(commitSha);
+    expect(postPayload.body).toMatch(/^# Cherry Studio 0\.6\.2\n/);
+    expect(postPayload.body).toContain('\n## 下载安装\n');
+
+    const patchIndex = calls.findIndex((call) => call.method === 'PATCH');
+    const lastPutIndex = calls.map((call) => call.method).lastIndexOf('PUT');
+    expect(patchIndex).toBeGreaterThan(lastPutIndex);
+    const patchPayload = JSON.parse(calls[patchIndex]!.body!);
+    expect(patchPayload.release_status).toBe('latest');
 
     // Never forward GitCode bearer token to third-party signed upload storage URLs.
     const putCalls = calls.filter((call) => call.method === 'PUT');
     expect(putCalls.every((call) => call.auth === null)).toBe(true);
+  });
+
+  it('never promotes a new stable release to latest if attachment upload fails', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    const methods: string[] = [];
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      methods.push(method);
+      if (method === 'GET' && url.includes('/releases/tags/')) {
+        return new Response('{}', { status: 404 });
+      }
+      if (method === 'POST') {
+        return new Response('{}', { status: 201 });
+      }
+      if (url.includes('/upload_url')) {
+        return new Response('upload failed', { status: 500 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        commitSha,
+        archiveDir: fixture.archiveDir,
+        artifactName: fixture.artifactName,
+        token,
+        fetchImpl,
+        sleep: async () => {},
+        createFileBody: async () => Buffer.from('body'),
+      }),
+    ).rejects.toThrow('Failed to upload');
+
+    expect(methods).toContain('POST');
+    expect(methods).not.toContain('PATCH');
   });
 
   it('marks prerelease tags as release_status=pre', async () => {

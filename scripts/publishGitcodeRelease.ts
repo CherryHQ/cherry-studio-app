@@ -201,18 +201,19 @@ export async function publishGitcodeRelease(
 
   const sanitize = (text: string) => sanitizeSecrets(text, secretValues, env);
 
-  const apiUrl = (options.apiUrl ?? env.GITCODE_API_URL ?? DEFAULT_API_URL)
-    .trim()
-    .replace(/\/+$/, '');
-  const owner = (options.owner ?? env.GITCODE_OWNER ?? DEFAULT_OWNER).trim();
-  const repo = (options.repo ?? env.GITCODE_REPO ?? DEFAULT_REPO).trim();
+  const apiUrl = (options.apiUrl?.trim() || env.GITCODE_API_URL?.trim() || DEFAULT_API_URL).replace(
+    /\/+$/,
+    '',
+  );
+  const owner = options.owner?.trim() || env.GITCODE_OWNER?.trim() || DEFAULT_OWNER;
+  const repo = options.repo?.trim() || env.GITCODE_REPO?.trim() || DEFAULT_REPO;
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? defaultSleep;
   const createFileBody = options.createFileBody ?? defaultCreateFileBody;
 
   // Validate archived files and SHA256SUMS locally before touching the remote API.
   const verified = await verifyArchivedApk(options.archiveDir, options.artifactName);
-  const releaseStatus: 'pre' | 'latest' = parsedTag.isPrerelease ? 'pre' : 'latest';
+  const finalReleaseStatus: 'pre' | 'latest' = parsedTag.isPrerelease ? 'pre' : 'latest';
   const releaseName = options.releaseName?.trim() || parsedTag.tag;
   const defaultBody = buildDefaultGitcodeNotes({
     releaseVersion: parsedTag.releaseVersion,
@@ -234,6 +235,8 @@ export async function publishGitcodeRelease(
   let created = false;
   let patched = false;
   let existingAssets: GitcodeAsset[] = [];
+  let currentRemoteStatus: string | undefined;
+  let effectiveBody = options.notesText?.trim() ? options.notesText : defaultBody;
 
   const getResponse = await fetchImpl(tagReleaseUrl, {
     method: 'GET',
@@ -244,18 +247,19 @@ export async function publishGitcodeRelease(
   if (getResponse.status === 200) {
     const existing = (await getResponse.json()) as GitcodeRelease;
     existingAssets = Array.isArray(existing.assets) ? existing.assets : [];
+    currentRemoteStatus = existing.release_status;
 
     const hasExplicitNotes = Boolean(options.notesText?.trim());
     const existingBody = existing.body?.trim() ?? '';
-    const needsPatch =
-      hasExplicitNotes || !existingBody || existing.release_status !== releaseStatus;
+    effectiveBody = hasExplicitNotes
+      ? options.notesText!
+      : existingBody
+        ? existing.body!
+        : defaultBody;
 
-    if (needsPatch) {
-      const bodyToWrite = hasExplicitNotes
-        ? options.notesText!
-        : existingBody
-          ? existing.body!
-          : defaultBody;
+    // Keep an incomplete release out of /releases/latest until attachments are verified below.
+    if (hasExplicitNotes || !existingBody) {
+      const metadataStatus = currentRemoteStatus === 'latest' ? 'latest' : 'pre';
       const patchResponse = await fetchImpl(
         `${releasesBaseUrl}/${encodeURIComponent(parsedTag.tag)}`,
         {
@@ -266,8 +270,8 @@ export async function publishGitcodeRelease(
           },
           body: JSON.stringify({
             name: releaseName,
-            body: bodyToWrite,
-            release_status: releaseStatus,
+            body: effectiveBody,
+            release_status: metadataStatus,
           }),
           signal: AbortSignal.timeout(60_000),
         },
@@ -278,10 +282,11 @@ export async function publishGitcodeRelease(
           `Failed to update GitCode release ${parsedTag.tag} (${patchResponse.status})${detail ? `: ${detail}` : ''}`,
         );
       }
+      currentRemoteStatus = metadataStatus;
       patched = true;
     }
   } else if (getResponse.status === 404) {
-    const bodyToWrite = options.notesText?.trim() ? options.notesText : defaultBody;
+    // Stage new releases as pre-release first so update clients never resolve a release before attachments exist.
     const createResponse = await fetchImpl(releasesBaseUrl, {
       method: 'POST',
       headers: {
@@ -291,9 +296,9 @@ export async function publishGitcodeRelease(
       body: JSON.stringify({
         tag_name: parsedTag.tag,
         name: releaseName,
-        body: bodyToWrite,
+        body: effectiveBody,
         target_commitish: commitSha,
-        release_status: releaseStatus,
+        release_status: 'pre',
       }),
       signal: AbortSignal.timeout(60_000),
     });
@@ -308,6 +313,7 @@ export async function publishGitcodeRelease(
       );
     }
     created = true;
+    currentRemoteStatus = 'pre';
   } else {
     const detail = sanitize(await readErrorBody(getResponse));
     throw new Error(
@@ -442,13 +448,39 @@ export async function publishGitcodeRelease(
     }
   }
 
+  if (currentRemoteStatus !== finalReleaseStatus) {
+    const promoteResponse = await fetchImpl(
+      `${releasesBaseUrl}/${encodeURIComponent(parsedTag.tag)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          name: releaseName,
+          body: effectiveBody,
+          release_status: finalReleaseStatus,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      },
+    );
+    if (!promoteResponse.ok) {
+      const detail = sanitize(await readErrorBody(promoteResponse));
+      throw new Error(
+        `Failed to promote GitCode release ${parsedTag.tag} to ${finalReleaseStatus} (${promoteResponse.status})${detail ? `: ${detail}` : ''}`,
+      );
+    }
+    patched = true;
+  }
+
   const webBaseUrl = new URL(apiUrl).origin.replace(/^https?:\/\/api\./, 'https://');
   const releaseWebUrl = `${webBaseUrl}/${owner}/${repo}/releases/tag/${parsedTag.tag}`;
 
   return {
     releaseUrl: releaseWebUrl,
     tag: parsedTag.tag,
-    releaseStatus,
+    releaseStatus: finalReleaseStatus,
     created,
     patched,
     uploaded,

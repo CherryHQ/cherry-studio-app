@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -8,6 +9,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -17,8 +19,10 @@ import { dirname, join } from 'node:path';
 import {
   assertDiskSpace,
   assertReleaseEnv,
+  cleanupStaleWorkdirs,
   DEFAULT_ANDROID_GRADLE_OPTS,
   DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
+  defaultRunLocalCommand,
   findCompleteBuild,
   parseReleaseTag,
   pruneReleases,
@@ -28,6 +32,7 @@ import {
   resolveReleaseRoot,
   runLocalReleaseBatch,
   runLocalReleaseBuild,
+  verifyArchivedIpa,
   type RunLocalCommand,
 } from '../releaseLocalBuild';
 
@@ -310,7 +315,8 @@ describe('runLocalReleaseBuild', () => {
     ]);
     expect(capturedEasArgs).not.toContain('--output');
     expect(capturedBuildEnv?.EAS_LOCAL_BUILD_ARTIFACT_PATH).toBeUndefined();
-    expect(capturedBuildEnv?.EAS_LOCAL_BUILD_SKIP_CLEANUP).toBe('1');
+    expect(capturedBuildEnv?.EAS_LOCAL_BUILD_SKIP_CLEANUP).toBeUndefined();
+    expect(statSync(join(releaseRoot, '_workdirs')).mode & 0o777).toBe(0o700);
     expect(capturedBuildEnv?.SENTRY_ALLOW_FAILURE).toBe('false');
     expect(capturedBuildEnv?.PNPM_CONFIG_VIRTUAL_STORE_DIR_MAX_LENGTH).toBe(
       DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH,
@@ -378,6 +384,7 @@ describe('runLocalReleaseBuild', () => {
     const releaseRoot = join(root, 'releases');
 
     let badPermission = false;
+    let unsignedEntriesWarning = false;
     const run: RunLocalCommand = jest.fn(async (_cmd, args, opts) => {
       if (args[0] === easCliPath) {
         const isPlay = args.includes('production-google-play');
@@ -396,7 +403,15 @@ describe('runLocalReleaseBuild', () => {
           exitCode: 0,
         };
       }
-      if (args[0] === '-verify') return { stdout: 'jar verified.\n', stderr: '', exitCode: 0 };
+      if (args.includes('-verify')) {
+        return {
+          stdout: unsignedEntriesWarning
+            ? 'jar verified.\n\nWarning:\nThis jar contains unsigned entries which have not been integrity-checked.\n'
+            : 'jar verified.\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
       if (args[0] === 'dump' && args[1] === 'manifest') {
         return {
           stdout: `<manifest package="com.cherryai.cherrystudio_app" android:versionCode="129">${
@@ -441,6 +456,25 @@ describe('runLocalReleaseBuild', () => {
     });
     expect(play.artifactName).toBe('cherry-studio-0.6.2-android.aab');
     expect(play.archiveDir).toContain('cherry-studio-app/v0.6.2/android-google-play');
+
+    unsignedEntriesWarning = true;
+    await expect(
+      runLocalReleaseBuild({
+        target: 'android-google-play',
+        tag: 'v0.6.2',
+        commitSha,
+        runId: '9003b',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+        run,
+      }),
+    ).rejects.toThrow('unsigned entries');
+    unsignedEntriesWarning = false;
 
     badPermission = true;
     await expect(
@@ -695,7 +729,7 @@ describe('runLocalReleaseBatch', () => {
           exitCode: 0,
         };
       }
-      if (args[0] === '-verify') return { stdout: 'jar verified.\n', stderr: '', exitCode: 0 };
+      if (args.includes('-verify')) return { stdout: 'jar verified.\n', stderr: '', exitCode: 0 };
       if (args[0] === 'dump' && args[1] === 'manifest') {
         return {
           stdout: '<manifest package="com.cherryai.cherrystudio_app" android:versionCode="202"/>',
@@ -921,5 +955,323 @@ describe('runLocalReleaseBatch', () => {
     expect(result.targets['android-public'].status).toBe('built');
     expect(result.targets['android-google-play'].status).toBe('skipped');
     expect(result.targets['ios-production'].status).toBe('built');
+  });
+});
+
+describe('release hardening & integrity guards', () => {
+  const commitSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
+
+  it('redacts secrets across chunk boundaries and final partial lines during live streaming', async () => {
+    const secret = 'super-live-secret-token-4242';
+    const stdoutWrites: string[] = [];
+    const stderrWrites: string[] = [];
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutWrites.push(String(chunk));
+      return true;
+    });
+    const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
+
+    try {
+      const script = [
+        `const s = ${JSON.stringify(secret)};`,
+        `process.stdout.write('url=https://example.test/build chunk=' + s.slice(0, 10));`,
+        `setTimeout(() => {`,
+        `  process.stdout.write(s.slice(10) + '\\n');`,
+        `  process.stderr.write('tail-no-newline=' + s);`,
+        `}, 25);`,
+      ].join('\n');
+
+      const res = await defaultRunLocalCommand(process.execPath, ['-e', script], {
+        streamOutput: true,
+        logPrefix: 'ios-production',
+        secrets: [secret],
+      });
+
+      expect(res.exitCode).toBe(0);
+      expect(stdoutWrites.join('')).toContain('https://example.test/build');
+      expect(stdoutWrites.join('')).toContain(
+        '[ios-production] url=https://example.test/build chunk=[redacted]',
+      );
+      expect(stdoutWrites.join('')).not.toContain(secret);
+      expect(stderrWrites.join('')).toContain('[ios-production] tail-no-newline=[redacted]');
+      expect(stderrWrites.join('')).not.toContain(secret);
+      expect(res.stdout).not.toContain(secret);
+      expect(res.stderr).not.toContain(secret);
+    } finally {
+      stdoutSpy.mockRestore();
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('cleans up dead-PID and aged untracked _workdirs while preserving live and sibling dirs', () => {
+    const root = makeTempDir();
+    const workdirsRoot = join(root, '_workdirs');
+    mkdirSync(workdirsRoot, { recursive: true });
+
+    const deadDir = join(workdirsRoot, 'cherry-studio-app-1-android-public-dead');
+    const liveDir = join(workdirsRoot, 'cherry-studio-app-2-ios-production-live');
+    const oldLegacyDir = join(workdirsRoot, 'cherry-studio-app-3-legacy');
+    const siblingDir = join(workdirsRoot, 'cherry-studio-9-macos-live');
+    for (const dir of [deadDir, liveDir, oldLegacyDir, siblingDir]) {
+      mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(join(deadDir, '.owner.pid'), '999001\n');
+    writeFileSync(join(liveDir, '.owner.pid'), `${process.pid}\n`);
+    writeFileSync(join(siblingDir, '.owner.pid'), '999001\n');
+    const staleDate = new Date(Date.now() - 10 * 60_000);
+    utimesSync(oldLegacyDir, staleDate, staleDate);
+
+    const originalKill = process.kill;
+    const killSpy = jest.spyOn(process, 'kill').mockImplementation(((
+      pid: number,
+      signal?: number,
+    ) => {
+      if (pid === 999001 && signal === 0) {
+        const err = new Error('ESRCH') as NodeJS.ErrnoException;
+        err.code = 'ESRCH';
+        throw err;
+      }
+      return originalKill.call(process, pid, signal as NodeJS.Signals | number | undefined);
+    }) as typeof process.kill);
+
+    try {
+      const removed = cleanupStaleWorkdirs(workdirsRoot);
+      expect(removed.sort()).toEqual([
+        'cherry-studio-app-1-android-public-dead',
+        'cherry-studio-app-3-legacy',
+      ]);
+      expect(existsSync(deadDir)).toBe(false);
+      expect(existsSync(oldLegacyDir)).toBe(false);
+      expect(existsSync(liveDir)).toBe(true);
+      expect(existsSync(siblingDir)).toBe(true);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('retains signed IPA and original symbols in pending-symbols-* when upload.pending is present', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+    const localBuildId = '660e8400-e29b-41d4-a716-446655440000';
+    const ipaBytes = Buffer.from('pending-ios-ipa-bytes');
+
+    const run: RunLocalCommand = jest.fn(async (cmd, args, opts) => {
+      if (args[0] === easCliPath) {
+        writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'build.ipa'), ipaBytes);
+        const symbolsDir = join(
+          opts!.env!.EAS_LOCAL_BUILD_WORKINGDIR!,
+          'build/ios/build/ios-symbols',
+        );
+        mkdirSync(join(symbolsDir, 'attempt-abc'), { recursive: true });
+        writeFileSync(join(symbolsDir, 'upload.pending'), '{"directory":"attempt-abc"}');
+        writeFileSync(join(symbolsDir, 'attempt-abc/dsyms.zip'), 'orig-dsyms');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (cmd === 'unzip' && args[0] === '-Z1') {
+        return { stdout: 'Payload/CherryStudio.app/Info.plist\n', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'unzip' && args.includes('-j')) {
+        const destDir = args[args.indexOf('-d') + 1]!;
+        writeFileSync(join(destDir, 'Info.plist'), 'bplist00');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'plutil') {
+        return {
+          stdout: JSON.stringify({
+            CFBundleIdentifier: 'com.cherryai.cherrystudio-app',
+            CFBundleVersion: '65',
+          }),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected command ${cmd}`);
+    });
+
+    await expect(
+      runLocalReleaseBuild({
+        target: 'ios-production',
+        tag: 'v0.6.2',
+        commitSha,
+        runId: '9401',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        localBuildId,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+        run,
+        verifySymbols: jest.fn(),
+      }),
+    ).rejects.toThrow('pending-symbols-65-');
+
+    const channelDir = join(releaseRoot, 'cherry-studio-app/v0.6.2/ios-production');
+    const entries = readdirSync(channelDir);
+    const pendingName = entries.find((name) => name.startsWith('pending-symbols-65-'));
+    expect(pendingName).toBeDefined();
+    const pendingDir = join(channelDir, pendingName!);
+    expect(existsSync(join(pendingDir, 'cherry-studio-0.6.2-ios.ipa'))).toBe(true);
+    expect(existsSync(join(pendingDir, 'ios-symbols/upload.pending'))).toBe(true);
+    expect(existsSync(join(pendingDir, '.complete'))).toBe(false);
+    expect(
+      JSON.parse(readFileSync(join(pendingDir, 'build-manifest.json'), 'utf8')).sentry,
+    ).toMatchObject({
+      pendingUpload: true,
+      verified: false,
+      symbolPackageComplete: false,
+    });
+    expect(readdirSync(join(releaseRoot, '_workdirs'))).toEqual([]);
+    await expect(
+      findCompleteBuild({ target: 'ios-production', tag: 'v0.6.2', commitSha, releaseRoot }),
+    ).resolves.toEqual({ found: false });
+  });
+
+  it('enforces git HEAD / clean tree and isolates git clones when isolateGitRepo is enabled', async () => {
+    const root = makeTempDir();
+    const { projectDir, easCliPath, localPluginPath } = makeProjectFixture(root);
+    const releaseRoot = join(root, 'releases');
+
+    writeFileSync(join(projectDir, '.gitignore'), 'node_modules/\n');
+    execFileSync('git', ['init', '-q'], { cwd: projectDir });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: projectDir });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: projectDir });
+    execFileSync('git', ['add', 'app.json', '.gitignore'], { cwd: projectDir });
+    execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: projectDir });
+    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: projectDir,
+      encoding: 'utf8',
+    }).trim();
+
+    // Mismatched --commit must fail before launching EAS.
+    await expect(
+      runLocalReleaseBuild({
+        target: 'android-public',
+        tag: 'v0.6.2',
+        commitSha: 'a'.repeat(40),
+        runId: '9501',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      }),
+    ).rejects.toThrow('does not match --commit');
+
+    // Dirty working tree must fail.
+    writeFileSync(join(projectDir, 'untracked-dirty.txt'), 'dirty');
+    await expect(
+      runLocalReleaseBuild({
+        target: 'android-public',
+        tag: 'v0.6.2',
+        commitSha: headSha,
+        runId: '9502',
+        attempt: '1',
+        projectDir,
+        releaseRoot,
+        easCliPath,
+        localPluginPath,
+        env: makeReleaseEnv(),
+        statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      }),
+    ).rejects.toThrow('dirty git working tree');
+    rmSync(join(projectDir, 'untracked-dirty.txt'));
+
+    let easCwd = '';
+    let hadIsolatedGit = false;
+    let hadLinkedNodeModules = false;
+    const run: RunLocalCommand = async (cmd, args, opts) => {
+      if (args[0] === easCliPath) {
+        easCwd = opts?.cwd ?? '';
+        hadIsolatedGit = existsSync(join(easCwd, '.git')) && easCwd !== projectDir;
+        hadLinkedNodeModules = lstatSync(join(easCwd, 'node_modules')).isSymbolicLink();
+        writeFileSync(join(opts!.env!.EAS_LOCAL_BUILD_ARTIFACTS_DIR!, 'app.apk'), 'apk');
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      if (cmd === 'git') {
+        return defaultRunLocalCommand(cmd, args, opts);
+      }
+      if (args[0] === '-tq') return { stdout: '', stderr: '', exitCode: 0 };
+      if (args[0] === '-Z1') return { stdout: 'AndroidManifest.xml\n', stderr: '', exitCode: 0 };
+      if (args[0] === 'verify') {
+        return {
+          stdout: 'Signer #1 certificate SHA-256 digest: abcdef\n',
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      if (args[0] === 'dump' && args[1] === 'badging') {
+        return {
+          stdout: [
+            "package: name='com.cherryai.cherrystudio_app' versionCode='128' versionName='0.6.2'",
+            "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'",
+          ].join('\n'),
+          stderr: '',
+          exitCode: 0,
+        };
+      }
+      throw new Error(`Unexpected ${cmd} ${args.join(' ')}`);
+    };
+
+    const isolatedResult = await runLocalReleaseBuild({
+      target: 'android-public',
+      tag: 'v0.6.2',
+      commitSha: headSha,
+      runId: '9503',
+      attempt: '1',
+      projectDir,
+      releaseRoot,
+      easCliPath,
+      localPluginPath,
+      isolateGitRepo: true,
+      env: makeReleaseEnv(),
+      statfs: () => ({ bavail: 100 * 1024 ** 2, bsize: 1024 }),
+      run,
+    });
+
+    expect(isolatedResult.nativeBuildVersion).toBe('128');
+    expect(easCwd).toMatch(
+      /\/_workdirs\/cherry-studio-app-9503-android-public-attempt1-[^/]+\/src$/,
+    );
+    expect(hadIsolatedGit).toBe(true);
+    expect(hadLinkedNodeModules).toBe(true);
+  });
+
+  it('verifyArchivedIpa validates IPA SHA-256 against output and symbol manifest', async () => {
+    const root = makeTempDir();
+    const ipaPath = join(root, 'cherry-studio-0.6.2-ios.ipa');
+    const ipaBytes = Buffer.from('verified-ipa-bytes');
+    const sha256 = createHash('sha256').update(ipaBytes).digest('hex');
+    writeFileSync(ipaPath, ipaBytes);
+
+    const symbolsDir = join(root, 'ios-symbols');
+    mkdirSync(join(symbolsDir, 'package-1'), { recursive: true });
+    writeFileSync(join(symbolsDir, 'package.complete'), '{"directory":"package-1"}');
+    writeFileSync(join(symbolsDir, 'package-1/manifest.json'), JSON.stringify({ ipa: { sha256 } }));
+
+    await expect(
+      verifyArchivedIpa({ ipaPath, expectedSha256: sha256, symbolsDir }),
+    ).resolves.toEqual({ ipaPath, sha256, size: ipaBytes.length });
+
+    writeFileSync(
+      join(symbolsDir, 'package-1/manifest.json'),
+      JSON.stringify({ ipa: { sha256: '0'.repeat(64) } }),
+    );
+    await expect(
+      verifyArchivedIpa({ ipaPath, expectedSha256: sha256, symbolsDir }),
+    ).rejects.toThrow('does not match archived IPA');
+
+    writeFileSync(ipaPath, Buffer.from('swapped-ipa-bytes'));
+    await expect(
+      verifyArchivedIpa({ ipaPath, expectedSha256: sha256, symbolsDir }),
+    ).rejects.toThrow('SHA-256 mismatch');
   });
 });

@@ -2,6 +2,7 @@ import { spawn, type StdioOptions } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
+  chmodSync,
   copyFileSync,
   cpSync,
   createReadStream,
@@ -115,6 +116,43 @@ export interface LocalCommandResult {
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 const MAX_STREAM_TAIL_CHARS = 256 * 1024;
 
+export function redactSecretsInStream(
+  text: string,
+  secrets: Iterable<string> = [],
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const candidates = new Set<string>();
+  const addSecret = (value: string | undefined) => {
+    if (!value || value.length < 4) return;
+    candidates.add(value);
+    try {
+      const parsed = new URL(value);
+      for (const cred of [parsed.username, parsed.password]) {
+        for (const part of [cred, decodeURIComponent(cred)]) {
+          if (part && part.length >= 4) candidates.add(part);
+        }
+      }
+    } catch {
+      // Non-URL secret value.
+    }
+  };
+  for (const value of secrets) addSecret(value);
+  for (const [key, value] of Object.entries(env)) {
+    if (value && /token|secret|password|dsn/i.test(key)) {
+      addSecret(value);
+    }
+  }
+  let redacted = text;
+  // Mask longest values first so full URLs/DSNs redact before component secrets.
+  for (const value of [...candidates].sort((a, b) => b.length - a.length)) {
+    redacted = redacted.split(value).join('[redacted]');
+  }
+  return redacted
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/\b(key|token|sig|signature|X-Amz-[a-z0-9-]+)=([^\s&#"']*)/gi, '$1=[redacted]')
+    .replace(/(?:sntrys_|sntryu_)[a-zA-Z0-9_]+/g, '[redacted]');
+}
+
 export type RunLocalCommand = (
   command: string,
   args: string[],
@@ -124,6 +162,7 @@ export type RunLocalCommand = (
     input?: string | Buffer;
     streamOutput?: boolean;
     logPrefix?: string;
+    secrets?: Iterable<string>;
   },
 ) => Promise<LocalCommandResult>;
 
@@ -134,7 +173,10 @@ function appendRollingTail(current: string, chunk: string): string {
     : combined;
 }
 
-function createPrefixedLineWriter(prefix: string, target: NodeJS.WriteStream) {
+function createStreamLineWriter(
+  target: NodeJS.WriteStream,
+  { prefix, redact }: { prefix?: string; redact: (line: string) => string },
+) {
   const decoder = new StringDecoder('utf8');
   let remainder = '';
   return {
@@ -142,34 +184,38 @@ function createPrefixedLineWriter(prefix: string, target: NodeJS.WriteStream) {
       const text = remainder + decoder.write(chunk);
       const lines = text.split('\n');
       remainder = lines.pop() ?? '';
+      let emitted = '';
       for (const line of lines) {
         const clean = line.endsWith('\r') ? line.slice(0, -1) : line;
-        target.write(`[${prefix}] ${clean}\n`);
+        const safeLine = redact(clean);
+        target.write(prefix ? `[${prefix}] ${safeLine}\n` : `${safeLine}\n`);
+        emitted += `${safeLine}\n`;
       }
-      return text;
+      return emitted;
     },
     flush() {
       const finalText = remainder + decoder.end();
       remainder = '';
       if (finalText.length > 0) {
         const clean = finalText.endsWith('\r') ? finalText.slice(0, -1) : finalText;
-        target.write(`[${prefix}] ${clean}\n`);
+        const safeLine = redact(clean);
+        target.write(prefix ? `[${prefix}] ${safeLine}\n` : `${safeLine}\n`);
+        return safeLine;
       }
-      return finalText;
+      return '';
     },
   };
 }
 
 export const defaultRunLocalCommand: RunLocalCommand = async (command, args, options) => {
   const streamOutput = Boolean(options?.streamOutput);
-  const logPrefix = options?.logPrefix?.trim();
-  const usePrefixedPipes = streamOutput && Boolean(logPrefix);
+  const logPrefix = options?.logPrefix?.trim() || undefined;
+  const redact = (line: string) => redactSecretsInStream(line, options?.secrets, options?.env);
 
   return await new Promise<LocalCommandResult>((resolvePromise, rejectPromise) => {
+    // Always pipe streamed output so secrets are redacted line-by-line even across chunk boundaries.
     const stdio: StdioOptions = streamOutput
-      ? usePrefixedPipes
-        ? ['ignore', 'pipe', 'pipe']
-        : 'inherit'
+      ? ['ignore', 'pipe', 'pipe']
       : [options?.input !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'];
 
     const child = spawn(command, args, {
@@ -193,13 +239,13 @@ export const defaultRunLocalCommand: RunLocalCommand = async (command, args, opt
     const stderrChunks: Buffer[] = [];
     let totalBytes = 0;
 
-    if (usePrefixedPipes && logPrefix) {
-      const stdoutWriter = createPrefixedLineWriter(logPrefix, process.stdout);
-      const stderrWriter = createPrefixedLineWriter(logPrefix, process.stderr);
+    if (streamOutput) {
+      const stdoutWriter = createStreamLineWriter(process.stdout, { prefix: logPrefix, redact });
+      const stderrWriter = createStreamLineWriter(process.stderr, { prefix: logPrefix, redact });
 
       child.stdout?.on('data', (chunk: Buffer) => {
         const text = stdoutWriter.push(chunk);
-        stdoutTail = appendRollingTail(stdoutTail, text);
+        if (text) stdoutTail = appendRollingTail(stdoutTail, text);
       });
       child.stdout?.on('end', () => {
         const tail = stdoutWriter.flush();
@@ -208,13 +254,13 @@ export const defaultRunLocalCommand: RunLocalCommand = async (command, args, opt
 
       child.stderr?.on('data', (chunk: Buffer) => {
         const text = stderrWriter.push(chunk);
-        stderrTail = appendRollingTail(stderrTail, text);
+        if (text) stderrTail = appendRollingTail(stderrTail, text);
       });
       child.stderr?.on('end', () => {
         const tail = stderrWriter.flush();
         if (tail) stderrTail = appendRollingTail(stderrTail, tail);
       });
-    } else if (!streamOutput) {
+    } else {
       child.stdout?.on('data', (chunk: Buffer) => {
         totalBytes += chunk.length;
         if (totalBytes > MAX_CAPTURE_BYTES) {
@@ -250,12 +296,8 @@ export const defaultRunLocalCommand: RunLocalCommand = async (command, args, opt
     child.on('close', (code) => {
       if (settled) return;
       settled = true;
-      if (usePrefixedPipes) {
-        resolvePromise({ stdout: stdoutTail, stderr: stderrTail, exitCode: code });
-        return;
-      }
       if (streamOutput) {
-        resolvePromise({ stdout: '', stderr: '', exitCode: code });
+        resolvePromise({ stdout: stdoutTail, stderr: stderrTail, exitCode: code });
         return;
       }
       resolvePromise({
@@ -447,6 +489,7 @@ export interface InspectedArtifact {
   signingCertificateSha256: string | null;
   symbolVerification?: unknown;
   iosSymbolsStagedDir?: string;
+  symbolUploadPending?: boolean;
 }
 
 async function inspectApk({
@@ -540,7 +583,24 @@ async function inspectAab({
     throw new Error(`AAB is missing base/manifest/AndroidManifest.xml: ${artifactPath}`);
   }
 
-  await runChecked(run, 'jarsigner', ['-verify', artifactPath], { env, secrets });
+  const verifyResult = await runChecked(
+    run,
+    'jarsigner',
+    ['-J-Duser.language=en', '-J-Duser.country=US', '-verify', '-verbose:summary', artifactPath],
+    {
+      env: { ...env, LC_ALL: 'C', LANG: 'C' },
+      secrets,
+    },
+  );
+  const verifyOutput = `${verifyResult.stdout}\n${verifyResult.stderr}`;
+  if (
+    !/jar verified\./i.test(verifyResult.stdout) ||
+    /contains unsigned entries|\bjar is unsigned\b/i.test(verifyOutput)
+  ) {
+    throw new Error(
+      `AAB signature verification failed or found unsigned entries: ${sanitizeSecrets(verifyOutput, secrets, env)}`,
+    );
+  }
   const manifestResult = await runChecked(
     run,
     'bundletool',
@@ -648,6 +708,17 @@ async function inspectIpa({
   }
   const stagedSymbolsDir = join(stagingDir, 'ios-symbols');
   cpSync(sourceSymbolsDir, stagedSymbolsDir, { recursive: true });
+  const hasPendingUpload =
+    existsSync(join(stagedSymbolsDir, 'upload.pending')) &&
+    !existsSync(join(stagedSymbolsDir, 'package.complete'));
+  if (hasPendingUpload) {
+    return {
+      nativeBuildVersion: buildNumber,
+      signingCertificateSha256: null,
+      iosSymbolsStagedDir: stagedSymbolsDir,
+      symbolUploadPending: true,
+    };
+  }
   const symbolVerification = await verifySymbols({
     archivePath: stagedSymbolsDir,
     buildId: localBuildId,
@@ -810,6 +881,128 @@ function resolveProjectBinaries(projectDir: string) {
   };
 }
 
+const STALE_UNTRACKED_WORKDIR_AGE_MS = 5 * 60_000;
+
+export function cleanupStaleWorkdirs(workdirsRoot: string, nowMs = Date.now()): string[] {
+  if (!existsSync(workdirsRoot)) return [];
+  const removed: string[] = [];
+  for (const entry of readdirSync(workdirsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(`${REPO_RELEASE_NAMESPACE}-`)) {
+      continue;
+    }
+    const entryPath = join(workdirsRoot, entry.name);
+    const pidFile = join(entryPath, '.owner.pid');
+    let shouldRemove = false;
+    if (existsSync(pidFile)) {
+      const pid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10);
+      if (Number.isInteger(pid) && pid > 0) {
+        if (pid === process.pid) {
+          continue;
+        }
+        try {
+          process.kill(pid, 0);
+          continue;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code === 'ESRCH') {
+            shouldRemove = true;
+          } else {
+            continue;
+          }
+        }
+      } else if (statSync(entryPath).mtimeMs < nowMs - STALE_UNTRACKED_WORKDIR_AGE_MS) {
+        shouldRemove = true;
+      }
+    } else if (statSync(entryPath).mtimeMs < nowMs - STALE_UNTRACKED_WORKDIR_AGE_MS) {
+      shouldRemove = true;
+    }
+
+    if (shouldRemove) {
+      rmSync(entryPath, { recursive: true, force: true });
+      removed.push(entry.name);
+    }
+  }
+  return removed;
+}
+
+async function verifyGitWorkspaceMatchesCommit({
+  projectDir,
+  expectedSha,
+  env,
+  run,
+  secrets,
+}: {
+  projectDir: string;
+  expectedSha: string;
+  env: NodeJS.ProcessEnv;
+  run: RunLocalCommand;
+  secrets: string[];
+}) {
+  const headResult = await runChecked(run, 'git', ['rev-parse', 'HEAD'], {
+    cwd: projectDir,
+    env,
+    secrets,
+  });
+  const actualSha = headResult.stdout.trim().toLowerCase();
+  if (actualSha !== expectedSha) {
+    throw new Error(
+      `Refusing release build: git HEAD (${actualSha || 'unknown'}) does not match --commit (${expectedSha}).`,
+    );
+  }
+  const statusResult = await runChecked(
+    run,
+    'git',
+    ['status', '--porcelain', '--untracked-files=normal'],
+    {
+      cwd: projectDir,
+      env,
+      secrets,
+    },
+  );
+  if (statusResult.stdout.trim().length > 0) {
+    throw new Error(
+      `Refusing release build from dirty git working tree in ${projectDir}. Commit or clean changes first.`,
+    );
+  }
+}
+
+async function cloneIsolatedProjectDir({
+  projectDir,
+  isolatedDir,
+  env,
+  run,
+  secrets,
+}: {
+  projectDir: string;
+  isolatedDir: string;
+  env: NodeJS.ProcessEnv;
+  run: RunLocalCommand;
+  secrets: string[];
+}) {
+  await runChecked(
+    run,
+    'git',
+    ['clone', '-q', '--no-hardlinks', '--depth', '1', `file://${projectDir}`, isolatedDir],
+    { env, secrets },
+  );
+  const rootNodeModules = join(projectDir, 'node_modules');
+  const destRootNodeModules = join(isolatedDir, 'node_modules');
+  if (existsSync(rootNodeModules) && !existsSync(destRootNodeModules)) {
+    symlinkSync(rootNodeModules, destRootNodeModules);
+  }
+  const packagesDir = join(projectDir, 'packages');
+  if (existsSync(packagesDir) && statSync(packagesDir).isDirectory()) {
+    for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const srcPkgModules = join(packagesDir, entry.name, 'node_modules');
+      const destPkgDir = join(isolatedDir, 'packages', entry.name);
+      const destPkgModules = join(destPkgDir, 'node_modules');
+      if (existsSync(srcPkgModules) && existsSync(destPkgDir) && !existsSync(destPkgModules)) {
+        symlinkSync(srcPkgModules, destPkgModules);
+      }
+    }
+  }
+}
+
 export interface RunLocalReleaseBuildOptions {
   target: ReleaseTargetId;
   tag: string;
@@ -830,6 +1023,9 @@ export interface RunLocalReleaseBuildOptions {
   keepPrerelease?: number;
   skipPrune?: boolean;
   logPrefix?: string;
+  isolateGitRepo?: boolean;
+  verifyGitHead?: boolean;
+  skipStaleWorkdirCleanup?: boolean;
 }
 
 export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions) {
@@ -862,14 +1058,34 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
     baseEnv.GITCODE_TOKEN ?? '',
   ].filter(Boolean);
 
+  if (options.verifyGitHead !== false && existsSync(join(projectDir, '.git'))) {
+    await verifyGitWorkspaceMatchesCommit({
+      projectDir,
+      expectedSha: commitSha,
+      env: baseEnv,
+      run,
+      secrets: secretValues,
+    });
+  }
+
   assertDiskSpace(releaseRoot, target.minFreeDiskGb, options.statfs);
 
   const workdirsRoot = join(releaseRoot, '_workdirs');
-  mkdirSync(workdirsRoot, { recursive: true });
+  mkdirSync(workdirsRoot, { recursive: true, mode: 0o700 });
+  chmodSync(workdirsRoot, 0o700);
+  if (!options.skipStaleWorkdirCleanup) {
+    cleanupStaleWorkdirs(workdirsRoot, now().getTime());
+  }
+
   const jobSlug = `${REPO_RELEASE_NAMESPACE}-${options.runId}-${target.id}-attempt${options.attempt}-${randomBytes(4).toString('hex')}`;
-  const workdir = join(workdirsRoot, `${jobSlug}-work`);
-  const artifactsDir = join(workdirsRoot, `${jobSlug}-artifacts`);
-  mkdirSync(artifactsDir, { recursive: true });
+  const jobDir = join(workdirsRoot, jobSlug);
+  mkdirSync(jobDir, { recursive: true, mode: 0o700 });
+  chmodSync(jobDir, 0o700);
+  writeFileSync(join(jobDir, '.owner.pid'), `${process.pid}\n`, { mode: 0o600 });
+
+  const workdir = join(jobDir, 'work');
+  const artifactsDir = join(jobDir, 'artifacts');
+  mkdirSync(artifactsDir, { recursive: true, mode: 0o700 });
 
   const channelDir = join(resolveRepoReleasesDir(releaseRoot), parsedTag.tag, target.id);
   mkdirSync(channelDir, { recursive: true });
@@ -880,6 +1096,19 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
   mkdirSync(stagingDir, { recursive: true });
 
   try {
+    let buildProjectDir = projectDir;
+    if (options.isolateGitRepo && existsSync(join(projectDir, '.git'))) {
+      const isolatedDir = join(jobDir, 'src');
+      await cloneIsolatedProjectDir({
+        projectDir,
+        isolatedDir,
+        env: baseEnv,
+        run,
+        secrets: secretValues,
+      });
+      buildProjectDir = isolatedDir;
+    }
+
     const resolvedBins =
       options.easCliPath && options.localPluginPath
         ? { easCliPath: options.easCliPath, localPluginPath: options.localPluginPath }
@@ -897,12 +1126,13 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
         baseEnv.EAS_LOCAL_BUILD_PLUGIN_PATH ?? resolvedBins.localPluginPath,
       EAS_LOCAL_BUILD_WORKINGDIR: workdir,
       EAS_LOCAL_BUILD_ARTIFACTS_DIR: artifactsDir,
-      EAS_LOCAL_BUILD_SKIP_CLEANUP: '1',
       SENTRY_ALLOW_FAILURE: 'false',
       SENTRY_DISABLE_AUTO_UPLOAD: 'false',
       SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD: 'false',
       ...(target.platform === 'ios'
         ? {
+            // Retain workdir briefly so inspectIpa can stage and verify ios-symbols before finally cleans up.
+            EAS_LOCAL_BUILD_SKIP_CLEANUP: '1',
             CHERRY_LOCAL_RELEASE_SYMBOL_GATE: 'true',
             CHERRY_LOCAL_BUILD_ID: localBuildId,
             CHERRY_SOURCE_SHA: commitSha,
@@ -911,6 +1141,9 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
         : {}),
     };
     delete buildEnv.EAS_LOCAL_BUILD_ARTIFACT_PATH;
+    if (target.platform === 'android') {
+      delete buildEnv.EAS_LOCAL_BUILD_SKIP_CLEANUP;
+    }
 
     const buildResult = await run(
       process.execPath,
@@ -924,7 +1157,13 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
         target.profile,
         '--non-interactive',
       ],
-      { cwd: projectDir, env: buildEnv, streamOutput: true, logPrefix: options.logPrefix },
+      {
+        cwd: buildProjectDir,
+        env: buildEnv,
+        streamOutput: true,
+        logPrefix: options.logPrefix,
+        secrets: secretValues,
+      },
     );
     if (buildResult.exitCode !== 0) {
       const detail = sanitizeSecrets(
@@ -1006,8 +1245,9 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
       },
       sentry: {
         autoUpload: true,
-        verified: target.platform === 'ios',
-        symbolPackageComplete: target.platform === 'ios',
+        verified: target.platform === 'ios' && !inspected.symbolUploadPending,
+        symbolPackageComplete: target.platform === 'ios' && !inspected.symbolUploadPending,
+        ...(inspected.symbolUploadPending ? { pendingUpload: true } : {}),
       },
       githubRun: {
         runId: options.runId,
@@ -1032,6 +1272,17 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
       const serializedDomestic = `${JSON.stringify(domesticManifest, null, 2)}\n`;
       assertNoSecretLeak(serializedDomestic, secretValues);
       writeFileSync(join(stagingDir, 'release-manifest.json'), serializedDomestic);
+    }
+
+    if (inspected.symbolUploadPending) {
+      const pendingDir = join(
+        channelDir,
+        `pending-symbols-${inspected.nativeBuildVersion}-${commitSha.slice(0, 7)}-run${options.runId}-attempt${options.attempt}-${randomBytes(3).toString('hex')}`,
+      );
+      renameSync(stagingDir, pendingDir);
+      throw new Error(
+        `iOS symbol upload to Sentry is pending verification. Retained signed IPA and original symbols at ${pendingDir} (symbols: ${join(pendingDir, 'ios-symbols')}, buildId: ${localBuildId}). Retry with verifyIosSymbolPackage.ts --retry-upload once Sentry is available.`,
+      );
     }
 
     const finalDir = allocateFinalBuildDir(
@@ -1069,8 +1320,7 @@ export async function runLocalReleaseBuild(options: RunLocalReleaseBuildOptions)
       pruned: pruneResult.removed,
     };
   } finally {
-    rmSync(workdir, { recursive: true, force: true });
-    rmSync(artifactsDir, { recursive: true, force: true });
+    rmSync(jobDir, { recursive: true, force: true });
     rmSync(stagingDir, { recursive: true, force: true });
   }
 }
@@ -1203,8 +1453,76 @@ export function recordSubmitReceipt({
     message: message ? sanitizeDiagnostic(message) : null,
     recordedAt: now().toISOString(),
   };
-  writeFileSync(join(buildDir, 'submit-receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+  const receiptPath = join(buildDir, 'submit-receipt.json');
+  const tempPath = join(
+    buildDir,
+    `.submit-receipt-${process.pid}-${randomBytes(4).toString('hex')}.tmp`,
+  );
+  try {
+    writeFileSync(tempPath, `${JSON.stringify(receipt, null, 2)}\n`);
+    renameSync(tempPath, receiptPath);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
   return receipt;
+}
+
+export async function verifyArchivedIpa({
+  ipaPath,
+  expectedSha256,
+  symbolsDir,
+}: {
+  ipaPath: string;
+  expectedSha256: string;
+  symbolsDir?: string;
+}): Promise<{ ipaPath: string; sha256: string; size: number }> {
+  const resolvedIpa = resolve(ipaPath);
+  if (!existsSync(resolvedIpa) || !statSync(resolvedIpa).isFile()) {
+    throw new Error(`Archived IPA does not exist: ${resolvedIpa}`);
+  }
+  const normalizedExpected = expectedSha256.trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(normalizedExpected)) {
+    throw new Error(`Invalid expected IPA SHA-256: ${expectedSha256}`);
+  }
+  const liveEvidence = await fileEvidence(resolvedIpa);
+  if (liveEvidence.sha256 !== normalizedExpected) {
+    throw new Error(
+      `Archived IPA SHA-256 mismatch: expected ${normalizedExpected}, got ${liveEvidence.sha256}.`,
+    );
+  }
+
+  if (symbolsDir?.trim()) {
+    const resolvedSymbols = resolve(symbolsDir);
+    const pointerPath = join(resolvedSymbols, 'package.complete');
+    if (!existsSync(pointerPath) || !statSync(pointerPath).isFile()) {
+      throw new Error(`Missing iOS symbol completion pointer at ${pointerPath}`);
+    }
+    const pointer = JSON.parse(readFileSync(pointerPath, 'utf8')) as { directory?: string };
+    if (!pointer.directory || !/^[A-Za-z0-9-]+$/.test(pointer.directory)) {
+      throw new Error(`Invalid iOS symbol completion pointer directory in ${pointerPath}`);
+    }
+    const manifestPath = join(resolvedSymbols, pointer.directory, 'manifest.json');
+    if (existsSync(manifestPath)) {
+      const symbolManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        ipa?: { sha256?: string };
+      };
+      if (
+        typeof symbolManifest.ipa?.sha256 === 'string' &&
+        symbolManifest.ipa.sha256.toLowerCase() !== liveEvidence.sha256
+      ) {
+        throw new Error(
+          `iOS symbol manifest IPA SHA-256 (${symbolManifest.ipa.sha256}) does not match archived IPA (${liveEvidence.sha256}).`,
+        );
+      }
+    }
+  }
+
+  return {
+    ipaPath: resolvedIpa,
+    sha256: liveEvidence.sha256,
+    size: liveEvidence.size,
+  };
 }
 
 export type BatchTargetOutcome =
@@ -1248,6 +1566,7 @@ export interface RunLocalReleaseBatchOptions {
   includeGooglePlay?: boolean;
   includeDomesticStores?: boolean;
   reuseExisting?: boolean;
+  verifyGitHead?: boolean;
 }
 
 export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions): Promise<{
@@ -1264,6 +1583,8 @@ export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions)
   const commitSha = options.commitSha.toLowerCase();
   const projectDir = resolve(options.projectDir ?? process.cwd());
   const baseEnv = options.env ?? process.env;
+  const run = options.run ?? defaultRunLocalCommand;
+  const now = options.now ?? (() => new Date());
 
   const { version: appVersion } = readAppIdentifiers(projectDir);
   if (parsedTag.baseVersion !== appVersion) {
@@ -1280,7 +1601,21 @@ export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions)
     baseEnv.GITCODE_TOKEN ?? '',
   ].filter(Boolean);
 
+  if (options.verifyGitHead !== false && existsSync(join(projectDir, '.git'))) {
+    await verifyGitWorkspaceMatchesCommit({
+      projectDir,
+      expectedSha: commitSha,
+      env: baseEnv,
+      run,
+      secrets: secretValues,
+    });
+  }
+
   const releaseRoot = resolveReleaseRoot(baseEnv, options.releaseRoot);
+  const workdirsRoot = join(releaseRoot, '_workdirs');
+  mkdirSync(workdirsRoot, { recursive: true, mode: 0o700 });
+  chmodSync(workdirsRoot, 0o700);
+  cleanupStaleWorkdirs(workdirsRoot, now().getTime());
 
   const includeGooglePlay = options.includeGooglePlay ?? !parsedTag.isPrerelease;
   const includeDomesticStores = options.includeDomesticStores ?? false;
@@ -1319,6 +1654,8 @@ export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions)
     assertDiskSpace(releaseRoot, requiredGb, options.statfs);
   }
 
+  const isolateGitRepo = androidNeedsBuild && iosNeedsBuild;
+
   const targets: Record<ReleaseTargetId, BatchTargetOutcome> = {
     'android-public': { target: 'android-public', status: 'skipped' },
     'android-google-play': { target: 'android-google-play', status: 'skipped' },
@@ -1353,14 +1690,17 @@ export async function runLocalReleaseBatch(options: RunLocalReleaseBatchOptions)
         projectDir,
         releaseRoot,
         env: baseEnv,
-        run: options.run,
+        run,
         statfs: options.statfs,
         verifySymbols: options.verifySymbols,
-        now: options.now,
+        now,
         easCliPath: options.easCliPath,
         localPluginPath: options.localPluginPath,
         skipPrune: true,
         logPrefix: targetId,
+        isolateGitRepo,
+        verifyGitHead: false,
+        skipStaleWorkdirCleanup: true,
       });
       targets[targetId] = {
         target: targetId,
@@ -1688,6 +2028,30 @@ async function main() {
     return;
   }
 
+  if (command === 'verify-ipa') {
+    const { values } = parseArgs({
+      args: rest,
+      options: {
+        'ipa-path': { type: 'string' },
+        'expected-sha256': { type: 'string' },
+        'symbols-dir': { type: 'string' },
+      },
+      strict: true,
+    });
+    if (!values['ipa-path'] || !values['expected-sha256']) {
+      throw new Error(
+        'Usage: verify-ipa --ipa-path <path> --expected-sha256 <sha256> [--symbols-dir <dir>]',
+      );
+    }
+    const verified = await verifyArchivedIpa({
+      ipaPath: values['ipa-path'],
+      expectedSha256: values['expected-sha256'],
+      symbolsDir: values['symbols-dir'],
+    });
+    console.log(JSON.stringify(verified, null, 2));
+    return;
+  }
+
   if (command === 'prune') {
     const { values } = parseArgs({
       args: rest,
@@ -1720,7 +2084,7 @@ async function main() {
   }
 
   throw new Error(
-    'Usage: releaseLocalBuild.ts <build|build-all|find-complete|check-submit|record-submit|prune> [options]',
+    'Usage: releaseLocalBuild.ts <build|build-all|find-complete|check-submit|record-submit|verify-ipa|prune> [options]',
   );
 }
 

@@ -299,6 +299,11 @@ if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi`,
     const repo = resolve(__dirname, '../..');
     const workflow = parse(readFileSync(join(repo, '.github/workflows/release.yml'), 'utf8'));
     expect(workflow.jobs['submit-ios']).toBeDefined();
+    const stepNames = workflow.jobs['submit-ios'].steps.map((step: { name: string }) => step.name);
+    expect(stepNames.indexOf('Verify archived iOS IPA integrity')).toBeGreaterThan(-1);
+    expect(stepNames.indexOf('Verify archived iOS IPA integrity')).toBeLessThan(
+      stepNames.indexOf('Verify local iOS symbols'),
+    );
     const steps = workflow.jobs['submit-ios'].steps.filter(
       (step: { run?: string }) =>
         step.run?.includes('verifyIosSymbolPackage.ts') ||
