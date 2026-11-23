@@ -14,7 +14,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View, type ViewInstance } from 'react-native';
+import { Keyboard, View, type ViewInstance } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,7 +32,6 @@ import {
   useRemoteConversationSource,
 } from '@/frontend/appShell/conversation/remote';
 import { MainHeaderView } from '@/frontend/appShell/header';
-import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   parseRemoteChatRoute,
   type RemoteChatRouteParams,
@@ -298,11 +297,6 @@ function RemoteChatSession() {
                     draftKey={draftKey}
                     onSessionCreated={onSessionCreated}
                   />
-                  <ChatDockFooter>
-                    <Text className="text-center text-xs text-muted-foreground">
-                      {t('chat.input.disclaimer')}
-                    </Text>
-                  </ChatDockFooter>
                 </View>
               </ComposerDock>
             </ChatShareComposerGuard>
