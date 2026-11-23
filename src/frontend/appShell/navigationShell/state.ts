@@ -32,7 +32,13 @@ export {
   type NavTabId,
 } from './dockTabs';
 export {
+  DEFAULT_FLOATING_DOCK_ROW_HEIGHT,
   FILES_MASTER_WIDTH,
+  FLOATING_DOCK_CLEARANCE_GAP,
+  FLOATING_DOCK_MIN_BOTTOM_PADDING,
+  FLOATING_DOCK_SAFE_AREA_OFFSET,
+  resolveFloatingDockBottomPadding,
+  resolveFloatingDockClearance,
   resolveNavigationShellMode,
   VERTICAL_RAIL_WIDTH,
   WIDE_RAIL_WIDTH,

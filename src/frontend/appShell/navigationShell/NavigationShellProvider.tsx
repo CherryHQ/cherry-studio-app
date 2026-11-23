@@ -24,7 +24,11 @@ import {
   resolveNavDestination,
   unpinTab,
 } from './dockTabs';
-import { resolveNavigationShellMode } from './shellMode';
+import {
+  DEFAULT_FLOATING_DOCK_ROW_HEIGHT,
+  resolveFloatingDockClearance,
+  resolveNavigationShellMode,
+} from './shellMode';
 import {
   type DockRect,
   type MainNavigatorHandler,
@@ -36,8 +40,6 @@ import {
   type NavPinPopoverState,
 } from './state';
 
-const DEFAULT_RESTING_DOCK_HEIGHT = 56;
-const DOCK_CLEARANCE_GAP = 8;
 const DOCK_HIT_SLOP_TOP = 36;
 const DOCK_HIT_SLOP_X = 16;
 const DRAG_OUT_THRESHOLD = 52;
@@ -107,7 +109,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   );
 
   const [hideDockCount, setHideDockCount] = useState(0);
-  const [restingDockHeight, setRestingDockHeight] = useState(DEFAULT_RESTING_DOCK_HEIGHT);
+  const [restingDockHeight, setRestingDockHeight] = useState(DEFAULT_FLOATING_DOCK_ROW_HEIGHT);
   const [columnWidths, setColumnWidths] = useState<{ files: number; sidebar: number }>({
     files: 0,
     sidebar: 0,
@@ -123,7 +125,9 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   const isDockVisible =
     shellMode === 'compact-dock' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
   const dockClearance =
-    shellMode === 'compact-dock' && isAtRoot ? restingDockHeight + DOCK_CLEARANCE_GAP : 0;
+    shellMode === 'compact-dock' && isAtRoot
+      ? resolveFloatingDockClearance(restingDockHeight, insets.bottom)
+      : 0;
 
   const middleColumnWidth =
     shellMode !== 'wide-rail'

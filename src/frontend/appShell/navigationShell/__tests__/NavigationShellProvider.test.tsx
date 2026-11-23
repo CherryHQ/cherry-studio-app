@@ -106,7 +106,18 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isDockVisible).toBe(true);
-    expect(latest.dockClearance).toBeGreaterThan(0);
+    expect(latest.dockClearance).toBe(42);
+
+    mockInsets = { bottom: 0, left: 0, right: 0, top: 20 };
+    act(() => {
+      renderer.update(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+    expect(latest.shellMode).toBe('compact-dock');
+    expect(latest.dockClearance).toBe(64);
 
     mockWindowClass = 'wide';
     mockDimensions = { height: 834, width: 1194 };

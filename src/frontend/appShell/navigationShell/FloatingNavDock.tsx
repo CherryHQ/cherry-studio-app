@@ -12,6 +12,7 @@ import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSche
 
 import { getNavTitleKey, type NavTabId, resolveDockTabs } from './dockTabs';
 import { NavIcon } from './NavIcon';
+import { resolveFloatingDockBottomPadding } from './shellMode';
 import { useNavigationShell } from './state';
 import { usePinDragGesture } from './usePinDragGesture';
 
@@ -54,7 +55,7 @@ function DockMiddleTabButton({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
-        className={`h-12 flex-1 items-center justify-center rounded-full ${
+        className={`h-11 flex-1 items-center justify-center rounded-full ${
           isActive ? 'bg-secondary-active' : ''
         } ${isDraggingOut ? 'opacity-35' : ''}`}
         onPress={onPress}
@@ -121,7 +122,7 @@ export function FloatingNavDock() {
 
   const handleRowLayout = useCallback(
     (event: { nativeEvent: { layout: { height: number } } }) => {
-      reportDockHeight(event.nativeEvent.layout.height + 8);
+      reportDockHeight(event.nativeEvent.layout.height);
       measureDockBounds();
     },
     [measureDockBounds, reportDockHeight],
@@ -132,7 +133,7 @@ export function FloatingNavDock() {
   }
 
   const maxWidth = resolveTabMaxWidth(tabs.length);
-  const bottomPadding = Math.max(insets.bottom, 10);
+  const bottomPadding = resolveFloatingDockBottomPadding(insets.bottom);
 
   return (
     <Animated.View
@@ -145,14 +146,20 @@ export function FloatingNavDock() {
       <LinearGradient
         colors={[fadeStartColor, fadeEndColor, fadeEndColor]}
         end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.38, 1]}
+        locations={isChatSurface ? [0, 0.25, 1] : [0, 0.38, 1]}
         pointerEvents="none"
         start={{ x: 0.5, y: 0 }}
-        style={{ bottom: 0, left: 0, position: 'absolute', right: 0, top: -18 }}
+        style={{
+          bottom: 0,
+          left: 0,
+          position: 'absolute',
+          right: 0,
+          top: isChatSurface ? 0 : -18,
+        }}
       />
       <View
         ref={rowRef}
-        className="flex-row items-center justify-center gap-2.5 px-4 pt-2"
+        className="flex-row items-center justify-center gap-2.5 px-4"
         onLayout={handleRowLayout}
         pointerEvents={isDockVisible ? 'auto' : 'none'}
       >
@@ -172,7 +179,7 @@ export function FloatingNavDock() {
                 accessibilityLabel={label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
-                className={`h-12 flex-1 items-center justify-center rounded-full ${
+                className={`h-11 flex-1 items-center justify-center rounded-full ${
                   isActive ? 'bg-secondary-active' : ''
                 }`}
                 onPress={handlePress}
