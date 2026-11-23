@@ -98,7 +98,8 @@ responses. They use the same boundary without buffering the response or construc
   badge uses its generic Cloud label and omits unconfirmed quota associations. The profile exposes
   no purchase or management action. The managed provider opens a read-only model list, without connection
   settings or model mutation actions.
-  Community settings and the chat picker show the published catalog, including locked models.
+  Community settings show the published catalog, including locked models. The chat picker shows
+  these offers while the provider is enabled.
 - Ordinary plan models require an effective free or paid entitlement and support for the selected
   use. The gateway enforces quotas on each request. The sidebar displays the most recently
   confirmed remaining units, including the effect of server reservations.
@@ -109,10 +110,10 @@ responses. They use the same boundary without buffering the response or construc
   Money quotas use 1,000,000 units per currency unit. Recovery
   timestamps describe the earliest partial recovery, not a complete reset.
 - `cherryai-subscription` is the reserved, managed `CherryAI` provider. Provider queries
-  pin it first, including cursor pagination, without changing other providers' saved order keys.
-  Settings render their own fixed entry above the saved providers. Ordinary provider/model mutation
-  services reject edits to it. Projection writes no credentials. Revoked models are disabled and hidden,
-  keeping their IDs/names for history; user-configured providers and conversations remain.
+  pin it first in its settings group and keep other providers' saved order. The local provider switch
+  owns enablement. Cloud owns connection settings and model availability. The provider and model
+  services reject changes to managed settings and prevent deletion. Projection disables and hides
+  revoked models and retains their IDs and names for history. It stores no credentials.
 - Cold start checks subscription display once after account restoration. A newly signed-in or
   replaced account loads its own state, while signed-out installations fetch the HMAC model directory
   without querying personal account endpoints. The sidebar overlay reads the current snapshot on

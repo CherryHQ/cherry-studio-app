@@ -291,6 +291,63 @@ The build job waits for a production IPA, then passes its exact build ID to a se
 job. `eas submit --id ... --wait --no-auto-testflight-setup` uploads it to App Store Connect and
 waits for submission completion. The workflow does not attach the IPA to a public release.
 
+### Native crash symbols
+
+The production EAS iOS hook runs after archive/export. It stages the original dSYMs, the archive
+Info.plist, a manifest with build ID, IPA checksum and image UUIDs, and a verification receipt in
+the private `ios/build/ios-symbols` build artifact before contacting Sentry.
+
+Three targets gate submission: CherryStudio, ExpoWidgetsTarget, and CherryShareExtension. Each
+distributed architecture must match the archive, an original dSYM with the same UUID, debug info
+and nonzero source-line coverage, and a Sentry Mach-O record with the same UUID, architecture and
+`debug` feature. The pinned Sentry CLI and Xcode's DWARF statistics inspect local evidence.
+Project and DSN identity are cross-checked when the token can read the project and its client
+keys. An unavailable identity scope is recorded in the receipt. The production token stays on EAS.
+
+Other frameworks, extensions and dylibs are inventoried separately. Matching available symbols
+are submitted best effort after Cherry's remote verification. The release summary lists each
+vendor slice as `missing`, `limited`, `debug-present` or `uninspectable`, with its upload result
+when applicable. `debug-present` establishes some source-line coverage. Individual frames may
+still lack line information. A missing third-party file or rejected third-party upload allows
+submission once all three Cherry targets and the downloaded recovery package pass.
+
+The macOS `submit-ios` job fetches the private extra artifact for the exact successful EAS build
+ID and requires matching build identity, manifest and archive checksums, extracted UUIDs,
+source-line coverage and remote evidence for the three targets before calling `eas submit`.
+Download or validation failure stops submission. Re-run the failed submission job with the same
+build ID. Retention beyond a successful download depends on EAS's retention window. Keep an
+access-controlled copy when longer retention is required.
+
+### Recovery with the same build
+
+From the release checkout on macOS with dependencies installed and EAS access, run:
+
+```bash
+bash scripts/verifyEasIosSymbols.sh "$BUILD_ID"
+```
+
+If the Sentry step failed or ran out of hook time after local validation, EAS keeps the signed IPA
+and the original recovery bundle. Its `upload.pending` marker blocks ordinary submission. Once the Sentry
+service or credentials are restored, export the release's `EXPO_PUBLIC_SENTRY_DSN`,
+`SENTRY_AUTH_TOKEN` and configured `SENTRY_URL` on the workstation. The operator can retry
+the recorded build without compiling it again:
+
+```bash
+bash scripts/verifyEasIosSymbols.sh "$BUILD_ID" --retry-upload > ios-symbol-recovery.json &&
+  eas submit --platform ios --profile production --id "$BUILD_ID" --non-interactive --wait --no-auto-testflight-setup
+```
+
+Retry mode verifies the downloaded originals and their build-bound target fingerprint before
+uploading the required dSYMs. It checks Sentry again and returns the matching records in the
+JSON receipt. Preserve that receipt with the release evidence. If the original app dSYMs are
+actually missing, recover matching originals first. Rebuilding cannot repair an already shipped
+binary's identity.
+
+For the first production acceptance, use the exact candidate IPA and downloaded dSYMs to resolve
+a known project code address to a source file and line for each of the three targets. Fetching and
+verifying the recovery package is independent of submitting the build to TestFlight.
+See [iOS symbol recovery records](../references/ios-symbol-recovery.md) for build 59.
+
 A successful workflow means the upload completed. Apple processing, compliance questions, tester
 groups, invitations, and any external beta review remain in App Store Connect. The workflow does
 not configure groups or submit the app for an App Store public release.

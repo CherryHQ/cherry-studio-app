@@ -4,13 +4,17 @@ import { editionCapabilities } from '@/shared/data/managedPolicy';
 import { isDevMockProviderEnabled } from '@/shared/utils/devMockProvider';
 
 import type { DbService } from '../DbService';
+import { cloudProviderSeed } from './seeders/cloudProviderSeed';
 import { syncDevMockProvider } from './seeders/devMockProviderSeed';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
 import { SeedRunner } from './SeedRunner';
 
 export async function seedDatabase(dbService: DbService) {
-  await new SeedRunner(dbService).runAll([new PreferenceSeeder()]);
+  await new SeedRunner(dbService).runAll([
+    new PreferenceSeeder(),
+    ...(editionCapabilities().providerSettings ? [cloudProviderSeed] : []),
+  ]);
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     await syncDevMockProvider(dbService, isDevMockProviderEnabled());
   }
