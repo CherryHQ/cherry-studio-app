@@ -2,9 +2,15 @@ import { createContext, type PropsWithChildren, use, useCallback, useMemo, useSt
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isAcross, useCanDockSidebar, useWindowFoldRegion } from '@/frontend/appShell/layout';
+import { useCanDockSidebar, useWindowFoldRegion } from '@/frontend/appShell/layout';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane/state';
+import {
+  getNavHref,
+  resolveCompactLeadingAction,
+  useOptionalNavigationShell,
+  useReportMiddleColumnWidth,
+  WIDE_RAIL_WIDTH,
+} from '@/frontend/appShell/navigationShell/state';
 import { usePreference } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -57,25 +63,32 @@ export function useSidebarColumn() {
   if (!state) throw new Error('useSidebarColumn requires SidebarColumnProvider');
   const canDock = useCanDockSidebar();
   const { isChatFocused } = useChatSource();
-  const pane = useFilePane();
+  const shell = useOptionalNavigationShell();
   const fold = useWindowFoldRegion();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  // The pane takes the column only beside the chat; a page covering the chat brings the sidebar
-  // back. A fold across the window stacks the pane above the chat instead.
-  const isPaneInColumn = Boolean(
-    isChatFocused && pane?.isAvailable && pane.isOpen && !(fold && isAcross(fold)),
-  );
+  const railOffset = shell?.shellMode === 'wide-rail' ? WIDE_RAIL_WIDTH : 0;
+  const canOpenCompactDrawer = shell
+    ? (shell.activeDestination === 'chat' && shell.isAtRoot) ||
+      (shell.isAtRoot &&
+        resolveCompactLeadingAction(
+          shell.activeDestination ? getNavHref(shell.activeDestination) : '',
+          shell.pinnedTabs,
+        ) === 'drawer')
+    : isChatFocused;
+  const adjustedFold =
+    fold && railOffset > 0 ? { ...fold, x: Math.max(0, fold.x - railOffset) } : fold;
   const column = resolveSidebarColumn({
+    canOpenCompactDrawer,
     content: state.content,
-    fold,
+    fold: adjustedFold,
     insetLeft: insets.left,
     insetRight: insets.right,
     isChatFocused,
     isCollapsed: state.isCollapsed,
-    isPaneInColumn,
+    isPaneInColumn: false,
     isWide: canDock,
-    windowWidth: width,
+    windowWidth: Math.max(0, width - railOffset),
   });
 
   return { column, setCollapsed: state.setCollapsed, setContent: state.setContent };
@@ -87,6 +100,11 @@ export function useSidebarColumn() {
  */
 export function SidebarToggleProvider({ children }: PropsWithChildren) {
   const { column, setCollapsed } = useSidebarColumn();
+  const insets = useSafeAreaInsets();
+  useReportMiddleColumnWidth(
+    'sidebar',
+    column.kind === 'permanent' ? Math.max(0, column.width - insets.left) : 0,
+  );
   const action = resolveSidebarToggleAction(column);
   const value = useMemo(
     () => (action ? { action, setCollapsed } : undefined),

@@ -1,7 +1,9 @@
 /** Sidebar entries that open a page in the content region instead of a conversation. */
 export type SidebarDestination =
   | 'agents'
+  | 'devices'
   | 'library'
+  | 'more'
   | 'paintings'
   | 'plugins'
   | 'settings'
@@ -10,12 +12,14 @@ export type SidebarDestination =
 
 const destinationRoots: readonly [string, SidebarDestination][] = [
   ['/agents', 'agents'],
+  ['/devices', 'devices'],
   ['/drawings', 'paintings'],
   ['/paintings', 'paintings'],
   ['/plugins', 'plugins'],
   ['/skills', 'skills'],
   ['/library', 'library'],
   ['/trash', 'library'],
+  ['/more', 'more'],
   ['/settings', 'settings'],
   ['/scheduled-tasks', 'scheduled-tasks'],
 ];

@@ -30,6 +30,8 @@ export type SidebarColumn =
 type SidebarColumnInput = {
   isWide: boolean;
   isChatFocused: boolean;
+  /** Compact roots like 「更多」 and pinned tabs can also open the overlay drawer. */
+  canOpenCompactDrawer?: boolean;
   /** The user hid the column; only a wide window has one to hide. */
   isCollapsed: boolean;
   /** The file pane is open beside a focused chat and holds the left column. */
@@ -48,18 +50,20 @@ type SidebarColumnInput = {
  * sidebar returns until the device lies flat again.
  */
 export function resolveSidebarColumn({
+  canOpenCompactDrawer,
   content,
   fold,
   insetLeft,
   insetRight,
   isChatFocused,
   isCollapsed,
-  isPaneInColumn,
   isWide,
   windowWidth,
 }: SidebarColumnInput): SidebarColumn {
-  if (!isWide) return { kind: isChatFocused ? 'overlay' : 'inactive' };
-  if (isPaneInColumn) return { kind: 'yielded' };
+  if (!isWide) {
+    return { kind: (canOpenCompactDrawer ?? isChatFocused) ? 'overlay' : 'inactive' };
+  }
+  if (!isChatFocused) return { kind: 'inactive' };
 
   if (fold && !isAcross(fold)) {
     const end = fold.x + fold.width;

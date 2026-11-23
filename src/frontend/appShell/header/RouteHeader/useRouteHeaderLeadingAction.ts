@@ -6,6 +6,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
 import { type SidebarToggle, useSidebarToggle } from '@/frontend/appShell/sidebar/toggle';
 
 import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
@@ -19,7 +20,7 @@ function useRouteHeaderLeadingKind(): RouteHeaderRootAction {
   const rootAction = useRouteHeaderRootAction();
   const isStackChild = useNavigationState((state) => state.index > 0);
 
-  return rootAction === 'drawer' && isStackChild ? 'back' : rootAction;
+  return (rootAction === 'drawer' || rootAction === 'none') && isStackChild ? 'back' : rootAction;
 }
 
 /** The header's leading action, or undefined when the route root leads with nothing. */
@@ -29,10 +30,12 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
   const openDrawer = useOpenDrawer();
   const sidebar = useSidebarToggle();
   const pane = usePaneChrome();
+  const shell = useOptionalNavigationShell();
   const routeKind = useRouteHeaderLeadingKind();
   // A pane is not a stack screen: it leads with its own exit unless the page declares a back step.
   // A page that intercepts back keeps it even at a root that otherwise leads with the sidebar.
-  const action = pane || (onBack && routeKind === 'drawer') ? 'back' : routeKind;
+  const action =
+    pane || (onBack && (routeKind === 'drawer' || routeKind === 'none')) ? 'back' : routeKind;
   const goBack = useCallback(() => {
     if (onBack) {
       onBack();
@@ -44,40 +47,55 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
       return;
     }
 
+    const dest = shell?.activeDestination;
+    if (
+      shell?.isAtRoot &&
+      dest &&
+      dest !== 'chat' &&
+      dest !== 'more' &&
+      dest !== 'settings' &&
+      !shell.pinnedTabs.includes(dest)
+    ) {
+      router.replace('/more');
+      return;
+    }
+
     router.replace('/');
-  }, [onBack, router]);
+  }, [onBack, router, shell]);
 
   const routeAction = useMemo<HeaderToolbarAction | undefined>(
     () =>
-      action === 'drawer'
-        ? sidebar && {
-            accessibilityLabel: t(sidebarButtons[sidebar.action].accessibilityLabel),
-            icon: SidebarExpandIcon,
-            key: 'route-leading',
-            nativeIcon: require('@/assets/header-toolbar/sidebar.png'),
-            onPress: () => toggleSidebar(sidebar, openDrawer),
-            testID: sidebarButtons[sidebar.action].testID,
-            type: 'icon',
-          }
-        : action === 'close'
-          ? {
-              accessibilityLabel: t('common.close'),
-              icon: XIcon,
+      action === 'none'
+        ? undefined
+        : action === 'drawer'
+          ? sidebar && {
+              accessibilityLabel: t(sidebarButtons[sidebar.action].accessibilityLabel),
+              icon: SidebarExpandIcon,
               key: 'route-leading',
-              nativeIcon: require('@/assets/header-toolbar/x.png'),
-              onPress: goBack,
-              testID: 'route-header-close',
+              nativeIcon: require('@/assets/header-toolbar/sidebar.png'),
+              onPress: () => toggleSidebar(sidebar, openDrawer),
+              testID: sidebarButtons[sidebar.action].testID,
               type: 'icon',
             }
-          : {
-              accessibilityLabel: t('navigation.back'),
-              icon: ArrowLeftIcon,
-              key: 'route-leading',
-              nativeIcon: require('@/assets/header-toolbar/arrow-left.png'),
-              onPress: goBack,
-              testID: 'route-header-back',
-              type: 'icon',
-            },
+          : action === 'close'
+            ? {
+                accessibilityLabel: t('common.close'),
+                icon: XIcon,
+                key: 'route-leading',
+                nativeIcon: require('@/assets/header-toolbar/x.png'),
+                onPress: goBack,
+                testID: 'route-header-close',
+                type: 'icon',
+              }
+            : {
+                accessibilityLabel: t('navigation.back'),
+                icon: ArrowLeftIcon,
+                key: 'route-leading',
+                nativeIcon: require('@/assets/header-toolbar/arrow-left.png'),
+                onPress: goBack,
+                testID: 'route-header-back',
+                type: 'icon',
+              },
     [action, goBack, openDrawer, sidebar, t],
   );
 

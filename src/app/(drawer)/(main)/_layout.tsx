@@ -1,8 +1,16 @@
-import { Stack } from 'expo-router';
+import { Stack, useNavigation, usePathname } from 'expo-router';
+import { View } from 'react-native';
 
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
-import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import { getRootHeaderStyle, paintingRouteId } from '@/frontend/appShell/navigation';
+import {
+  FloatingDragOverlay,
+  FloatingNavDock,
+  NavPinPopover,
+  resolveCompactLeadingAction,
+  useNavigationShell,
+  useRegisterMainNavigator,
+} from '@/frontend/appShell/navigationShell';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
@@ -10,63 +18,96 @@ import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 export const unstable_settings = { initialRouteName: '(chat)' };
 
 /**
- * The content region beside the sidebar. In a wide window the sidebar stays beside every page here,
- * so its first-level destinations replace one another without a back step or push animation and
- * lead with the button that hides or shows the sidebar; a compact window pushes the same pages over
- * the chat. One tree serves both, so crossing between them keeps every page mounted.
+ * The content region beside the sidebar and navigation rail.
+ * Wide mode hides the left hamburger on non-chat roots (using `none`) because the permanent
+ * left rail handles primary navigation; compact mode keeps `drawer` on chat, 「更多」, and
+ * pinned roots, while unpinned modules opened from 「更多」 lead with `back`.
  */
 export default function MainStackLayout() {
   const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
-  const canDockSidebar = useCanDockSidebar();
-  // Opened from the sidebar, a first-level page swaps in place; deeper pages still push.
-  const destination = {
-    animation: canDockSidebar ? ('none' as const) : undefined,
-    gestureEnabled: !canDockSidebar,
+  const navigation = useNavigation();
+  const pathname = usePathname();
+  const { activeDestination, pinnedTabs, shellMode } = useNavigationShell();
+  useRegisterMainNavigator(navigation);
+
+  const isWideRail = shellMode === 'wide-rail';
+  const rootAction = isWideRail
+    ? activeDestination === 'chat'
+      ? 'drawer'
+      : 'none'
+    : resolveCompactLeadingAction(pathname, pinnedTabs);
+
+  const railOrPinnedDestination = {
+    animation: 'none' as const,
+    gestureEnabled: false,
     headerShown: false,
   };
 
+  const moduleDestination = (pinId: (typeof pinnedTabs)[number]) => {
+    const isPinnedOnCompact = !isWideRail && pinnedTabs.includes(pinId);
+    if (isWideRail || isPinnedOnCompact) {
+      return railOrPinnedDestination;
+    }
+    return {
+      gestureEnabled: true,
+      headerShown: false,
+    };
+  };
+
   return (
-    <RouteHeaderProvider rootAction={canDockSidebar ? 'drawer' : 'back'}>
-      <Stack
-        screenOptions={{
-          ...headerScreenOptions,
-          headerStyle: getRootHeaderStyle(backgroundColor),
-          headerTransparent: isLiquidGlassAvailable,
-          headerTintColor: foregroundColor,
-        }}
-      >
-        <Stack.Screen name="(chat)" options={{ headerShown: false }} />
-        <Stack.Screen name="agents" options={destination} />
-        <Stack.Screen name="drawings" options={destination} />
-        <Stack.Screen name="plugins" options={destination} />
-        <Stack.Screen name="skills" options={destination} />
-        <Stack.Screen name="scheduled-tasks" options={destination} />
-        <Stack.Screen name="library" options={destination} />
-        {/* Settings owns a nested stack and draws its headers there. */}
-        <Stack.Screen name="settings" options={destination} />
-        <Stack.Screen name="trash" />
-        <Stack.Screen
-          // Task notifications reuse their task; each new draft owns its own page.
-          getId={({ params }) => paintingRouteId(params)}
-          name="paintings/index"
-          options={{
-            // Keep the full-bleed board's native canvas in sync with the app theme.
-            contentStyle: { backgroundColor },
-            headerStyle: { backgroundColor: 'transparent' },
-            headerTransparent: true,
-            title: '',
+    <RouteHeaderProvider rootAction={rootAction}>
+      <View className="flex-1">
+        <Stack
+          screenOptions={{
+            ...headerScreenOptions,
+            headerStyle: getRootHeaderStyle(backgroundColor),
+            headerTransparent: isLiquidGlassAvailable,
+            headerTintColor: foregroundColor,
           }}
-        />
-        {/* Released task links and viewer routes redirect into the board. */}
-        <Stack.Screen
-          name="paintings/[paintingId]"
-          options={{ contentStyle: { backgroundColor }, headerShown: false }}
-        />
-        <Stack.Screen
-          name="paintings/[paintingId]/conversation"
-          options={{ contentStyle: { backgroundColor }, headerShown: false }}
-        />
-      </Stack>
+        >
+          <Stack.Screen name="(chat)" options={{ headerShown: false }} />
+          <Stack.Screen name="agents" options={moduleDestination('agents')} />
+          <Stack.Screen name="drawings" options={moduleDestination('drawings')} />
+          <Stack.Screen name="plugins" options={moduleDestination('plugins')} />
+          <Stack.Screen name="skills" options={moduleDestination('marketplace')} />
+          <Stack.Screen name="library" options={moduleDestination('files')} />
+          <Stack.Screen name="devices" options={moduleDestination('devices')} />
+          <Stack.Screen name="more" options={railOrPinnedDestination} />
+          <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
+          {/* Settings owns a nested stack and draws its headers there. */}
+          <Stack.Screen
+            name="settings"
+            options={
+              isWideRail ? railOrPinnedDestination : { gestureEnabled: true, headerShown: false }
+            }
+          />
+          <Stack.Screen name="trash" />
+          <Stack.Screen
+            // Task notifications reuse their task; each new draft owns its own page.
+            getId={({ params }) => paintingRouteId(params)}
+            name="paintings/index"
+            options={{
+              // Keep the full-bleed board's native canvas in sync with the app theme.
+              contentStyle: { backgroundColor },
+              headerStyle: { backgroundColor: 'transparent' },
+              headerTransparent: true,
+              title: '',
+            }}
+          />
+          {/* Released task links and viewer routes redirect into the board. */}
+          <Stack.Screen
+            name="paintings/[paintingId]"
+            options={{ contentStyle: { backgroundColor }, headerShown: false }}
+          />
+          <Stack.Screen
+            name="paintings/[paintingId]/conversation"
+            options={{ contentStyle: { backgroundColor }, headerShown: false }}
+          />
+        </Stack>
+        <FloatingNavDock />
+        <NavPinPopover />
+        <FloatingDragOverlay />
+      </View>
     </RouteHeaderProvider>
   );
 }

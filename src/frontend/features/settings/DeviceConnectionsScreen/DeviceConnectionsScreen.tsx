@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
+import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -16,6 +17,9 @@ import { describeCapabilities } from '../describeCapabilities';
 export function DeviceConnectionsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const shell = useOptionalNavigationShell();
+  const baseRoute =
+    shell?.activeDestination === 'devices' ? '/devices' : '/settings/device-connections';
   const { connections, error, isLoading, refetch } = useDesktopConnections();
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -24,11 +28,11 @@ export function DeviceConnectionsScreen() {
         icon: CameraIcon,
         key: 'scan-device',
         nativeIcon: require('@/assets/header-toolbar/camera.png'),
-        onPress: () => router.push('/settings/device-connections/scan'),
+        onPress: () => router.push(`${baseRoute}/scan`),
         type: 'icon',
       },
     ],
-    [router, t],
+    [baseRoute, router, t],
   );
 
   return (
@@ -57,7 +61,7 @@ export function DeviceConnectionsScreen() {
           }
           primaryAction={{
             children: t('settings.deviceConnections.scan.action'),
-            onPress: () => router.push('/settings/device-connections/scan'),
+            onPress: () => router.push(`${baseRoute}/scan`),
           }}
           title={t('settings.deviceConnections.empty')}
         />
@@ -75,7 +79,7 @@ export function DeviceConnectionsScreen() {
               onPress={() =>
                 router.push({
                   params: { connectionId: connection.id },
-                  pathname: '/settings/device-connections/[connectionId]',
+                  pathname: `${baseRoute}/[connectionId]`,
                 })
               }
             />

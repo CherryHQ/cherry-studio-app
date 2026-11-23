@@ -33,13 +33,16 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn(input)).toEqual({ kind: 'overlay' });
   });
 
-  test('keeps a 280-point column beside the content in a wide window', () => {
-    expect(resolveSidebarColumn({ ...wide, isChatFocused: false })).toEqual({
-      content: 'sidebar',
-      foldGap: 0,
-      kind: 'permanent',
-      width: 280,
-    });
+  test('returns inactive in a wide window when chat is not focused and preserves compact drawer roots', () => {
+    expect(resolveSidebarColumn({ ...wide, isChatFocused: false })).toEqual({ kind: 'inactive' });
+    expect(
+      resolveSidebarColumn({
+        ...wide,
+        canOpenCompactDrawer: true,
+        isChatFocused: false,
+        isWide: false,
+      }),
+    ).toEqual({ kind: 'overlay' });
   });
 
   test('widens to the file pane width while searching', () => {
@@ -53,17 +56,10 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn({ ...wide, insetLeft: 24 })).toMatchObject({ width: 304 });
   });
 
-  test('yields the column to the file pane beside the chat', () => {
-    expect(resolveSidebarColumn({ ...wide, isPaneInColumn: true })).toEqual({ kind: 'yielded' });
-  });
-
-  test('hides a collapsed column until the window narrows or the file pane takes it', () => {
+  test('hides a collapsed column until the window narrows', () => {
     const collapsed = { ...wide, isCollapsed: true };
     expect(resolveSidebarColumn(collapsed)).toEqual({ kind: 'collapsed' });
     expect(resolveSidebarColumn({ ...collapsed, isWide: false })).toEqual({ kind: 'overlay' });
-    expect(resolveSidebarColumn({ ...collapsed, isPaneInColumn: true })).toEqual({
-      kind: 'yielded',
-    });
   });
 
   test('keeps a collapsed column on the leading side of a fold that divides the window', () => {
@@ -99,15 +95,15 @@ describe('resolveSidebarColumn', () => {
 });
 
 describe('resolveSidebarDrawer', () => {
-  test('opening and closing Files stays in permanent drawer mode', () => {
-    const drawer = (isPaneInColumn: boolean) =>
-      resolveSidebarDrawer(resolveSidebarColumn({ ...wide, isPaneInColumn }), 400);
-    expect(drawer(false)).toMatchObject({ drawerType: 'permanent', drawerStyle: { width: 280 } });
-    expect(drawer(true)).toMatchObject({
+  test('switches cleanly between permanent chat sidebar and inactive non-chat pages', () => {
+    const drawer = (isChatFocused: boolean) =>
+      resolveSidebarDrawer(resolveSidebarColumn({ ...wide, isChatFocused }), 400);
+    expect(drawer(true)).toMatchObject({ drawerType: 'permanent', drawerStyle: { width: 280 } });
+    expect(drawer(false)).toMatchObject({
       drawerType: 'permanent',
       drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none' },
     });
-    expect(drawer(false).drawerStyle).toEqual({ width: 280 });
+    expect(drawer(true).drawerStyle).toEqual({ width: 280 });
   });
 
   test('a compact window still slides the sidebar over the chat', () => {

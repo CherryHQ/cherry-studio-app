@@ -4,9 +4,11 @@ import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 
 type PaneChrome = {
   /** Leads the pane's header when the page declares no back behavior of its own. */
-  leadingAction: HeaderToolbarAction;
+  leadingAction?: HeaderToolbarAction;
   /** The pane's own control, placed before the page's trailing actions. */
   headerAction?: HeaderToolbarAction;
+  /** Aligns the inline pane header title left (e.g. master list root) instead of centered. */
+  titleAlign?: 'left' | 'center';
 };
 
 const PaneChromeContext = createContext<PaneChrome | null>(null);
@@ -19,8 +21,12 @@ export function PaneChromeProvider({
   children,
   headerAction,
   leadingAction,
+  titleAlign,
 }: PropsWithChildren<PaneChrome>) {
-  const value = useMemo(() => ({ headerAction, leadingAction }), [headerAction, leadingAction]);
+  const value = useMemo(
+    () => ({ headerAction, leadingAction, titleAlign }),
+    [headerAction, leadingAction, titleAlign],
+  );
 
   return <PaneChromeContext value={value}>{children}</PaneChromeContext>;
 }
