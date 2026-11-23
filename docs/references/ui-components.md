@@ -199,7 +199,7 @@ behavior or presentation where it differs:
 | System alerts | semantic content, actions, roles, and state | native presentation and dismissal |
 | Action and context menus | semantic content, actions, roles, state, and Android composer-style presentation | iOS native presentation; Android long-press configuration and back events |
 | Permissions | pre-permission explanation and denied-state recovery | the system authorization prompt |
-| Haptics and accessibility | intent, labels, state, and reduced-motion behavior | supported feedback and accessibility APIs |
+| Haptics and accessibility | semantic haptic intents (`selection`, `light`, `medium`, `success`, `warning`, `error`), labels, state, and reduced-motion behavior | native haptic playback, unsupported-hardware fallback, and accessibility APIs |
 
 Top-bar actions reach the native navigation bar through `headerLeft`, `headerRight`, or
 `Stack.Toolbar` with Cherry-owned content.
@@ -255,6 +255,9 @@ Reviewable from the change itself:
 Reviewable by running the app:
 
 - Controls expose accessible labels, state, disabled/loading behavior, and usable touch targets.
+- Interactive product controls give immediate press-in feedback that clears cleanly on cancellation.
+- Haptic feedback pairs with standalone visual and accessible cues so silent devices and disabled
+  system haptics retain the complete outcome.
 - A committed scroll or app-defined pan cancels competing tap and long-press candidates;
   cancellation remains inert through pointer-up.
 - Text scales and wraps without fixed dimensions clipping its content.
