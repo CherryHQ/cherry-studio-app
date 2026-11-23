@@ -129,12 +129,15 @@ request. Pi's history does not model those parts, so they are stored with the me
 to their place in later payloads for the same model. See the official
 [tool combination contract](https://ai.google.dev/gemini-api/docs/generate-content/tool-combination).
 
-Anthropic responses retain their complete content blocks, including signed thinking, streamed
+Stored Anthropic responses retain their complete content blocks, including signed thinking, streamed
 tool inputs, encrypted search results and fetched documents. Later requests to the same provider
 and model restore the original assistant content before sending client tool results, so a server
 tool deferred behind a parallel function call can run. A deferred call that can no longer run,
 because web tools were withdrawn or the turn moved on without it, is omitted from the restored
-content. A response cut off inside a tool call is not restored; later requests carry its answer
+content. On requests to the official Anthropic endpoint, signed and redacted thinking from
+completed turns is omitted after this reconstruction because a changed prompt can invalidate
+its signature. The current tool loop keeps the original thinking and tool results. A response
+cut off inside a tool call is not restored; later requests carry its answer
 text and source facts. A `pause_turn` response is continued as-is with the same tools, at most
 five times per model invocation. Continued text keeps its streaming offsets, citations and
 accumulated usage; exceeding the limit ends with an error and preserves the partial answer. The
