@@ -49,7 +49,7 @@ function MoreModuleCard({ id, isArmed, isDragged, onArmedChange, onPress }: More
       <Pressable
         accessibilityLabel={t(getNavTitleKey(id))}
         accessibilityRole="button"
-        className={`min-h-[118px] flex-1 justify-between rounded-3xl border p-4 ${
+        className={`min-h-16 flex-1 flex-row items-center gap-3 rounded-3xl border py-3 pr-4 pl-3 ${
           isDragged
             ? 'bg-secondary/40 border-border-strong border-dashed opacity-35'
             : isArmed
@@ -60,14 +60,9 @@ function MoreModuleCard({ id, isArmed, isDragged, onArmedChange, onPress }: More
         testID={`more-module-card-${id}`}
       >
         <NavCardBadge id={id} />
-        <View className="mt-4">
-          <Text className="text-foreground text-base font-semibold" numberOfLines={1}>
-            {t(getNavTitleKey(id))}
-          </Text>
-          <Text className="text-muted-foreground mt-0.5 text-xs leading-4" numberOfLines={2}>
-            {t(`navigation.moreSubtitle.${id}`)}
-          </Text>
-        </View>
+        <Text className="text-foreground min-w-0 flex-1 text-base font-medium" numberOfLines={1}>
+          {t(getNavTitleKey(id))}
+        </Text>
       </Pressable>
     </GestureDetector>
   );
@@ -114,7 +109,8 @@ export function MoreScreen() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingBottom: insets.bottom + dockClearance + 24,
-          paddingHorizontal: 16,
+          paddingLeft: insets.left + 16,
+          paddingRight: insets.right + 16,
           paddingTop: 12,
         }}
         contentInsetAdjustmentBehavior="automatic"
