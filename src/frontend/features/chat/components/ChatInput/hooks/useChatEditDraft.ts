@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffectEvent, useLayoutEffect, useRef } from 'react';
 
 import {
   useComposerActions,
@@ -53,6 +53,18 @@ export function useChatEditDraft() {
   // Cancelling hands the buffer back to the restored draft, so a rejection
   // that arrives afterwards belongs to a dead attempt and must not roll back.
   const editSendPendingRef = useRef(false);
+  // Edit mode belongs to the screen. On departure return its borrowed buffer to the conversation.
+  const restoreStash = useCallback(() => {
+    editSendPendingRef.current = false;
+    const saved = stash.current;
+    if (!saved) return;
+    stash.current = undefined;
+    loadedMessageId.current = undefined;
+    setDraft(saved.draft);
+    setAttachments([...saved.attachments]);
+  }, [setAttachments, setDraft]);
+  const releaseEdit = useEffectEvent(restoreStash);
+  useLayoutEffect(() => () => releaseEdit(), []);
   const beginEditSend = useCallback(() => {
     editSendPendingRef.current = true;
   }, []);
@@ -64,14 +76,9 @@ export function useChatEditDraft() {
   }, []);
 
   const cancelEdit = useCallback(() => {
-    editSendPendingRef.current = false;
-    if (stash.current !== undefined) {
-      setDraft(stash.current.draft);
-      setAttachments([...stash.current.attachments]);
-      stash.current = undefined;
-    }
+    restoreStash();
     endEdit();
-  }, [endEdit, setAttachments, setDraft]);
+  }, [endEdit, restoreStash]);
 
   // ComposerSurface clears the submitted edit before awaiting its admission.
   // Restoring here is safe only after that admission has succeeded.

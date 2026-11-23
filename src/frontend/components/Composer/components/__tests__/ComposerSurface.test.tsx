@@ -4,12 +4,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 
+import { ComposerDraft } from '../../ComposerDraft';
 import { useComposerActions, useComposerState } from '../../context/ComposerProvider';
 import type {
   ComposerAttachmentDraft,
   ComposerAttachmentReady,
 } from '../../utils/composerAttachments';
 import { ComposerAttachments } from '../ComposerAttachments';
+import { ComposerSessionProvider } from '../ComposerSessionProvider';
 import { ComposerSurface } from '../ComposerSurface';
 import { ComposerTestProvider } from './_composerTestProvider';
 
@@ -61,6 +63,8 @@ jest.mock('@cherrystudio/ui/components', () => {
     useAlert: () => ({ alert: mockAlert }),
   };
 });
+
+jest.mock('@/frontend/data', () => ({ useBackendModule: () => ({}) }));
 
 jest.mock('@/frontend/components/FileEntryPreview', () => ({ FileEntryPreview: () => null }));
 
@@ -256,6 +260,43 @@ describe('ComposerSurface', () => {
 
     expect(onSend).toHaveBeenNthCalledWith(1, { attachments: [], text: 'first' });
     expect(onSend).toHaveBeenNthCalledWith(2, { attachments: [], text: 'second' });
+  });
+
+  it('restores a rejected send and its feedback only in the originating conversation', async () => {
+    const attachment = readyAttachment();
+    const a = new ComposerDraft('Read the PDF', [attachment]);
+    const b = new ComposerDraft('B only');
+    const admission = deferred<void>();
+    const onSend = jest.fn(() => admission.promise);
+    const tree = (id: string, buffer: ComposerDraft) => (
+      <ComposerSessionProvider key={id} workspaceSessionId={id} draftStore={buffer}>
+        <ComposerSurface onSend={onSend} onStop={jest.fn()} streaming={false}>
+          <StateProbe />
+        </ComposerSurface>
+      </ComposerSessionProvider>
+    );
+    act(() => {
+      renderer = create(tree('A', a));
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = Promise.resolve(mockComposerProps!.onSend());
+    });
+    act(() => mockComposerActions!.setDraft('Later note'));
+    act(() => renderer!.update(tree('B', b)));
+    await act(async () => {
+      admission.reject(new Error('PDF preparation failed'));
+      await sending;
+    });
+    expect(mockComposerState?.draft).toBe('B only');
+    expect(mockComposerState?.attachments).toEqual([]);
+    expect(mockToastShow).not.toHaveBeenCalled();
+    act(() => renderer!.update(tree('A', a)));
+    expect(mockComposerState?.draft).toBe('Read the PDF\nLater note');
+    expect(mockComposerState?.attachments).toEqual([attachment]);
+    expect(mockToastShow).toHaveBeenCalledTimes(1);
+    expect(mockComposerProps!.canSend).toBe(true);
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 
   it('restores the exact draft and attachments once when sending fails', async () => {

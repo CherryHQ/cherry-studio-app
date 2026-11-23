@@ -89,7 +89,12 @@ let chatControls: AgentChatControls | undefined;
 let draftHandoff: ReturnType<typeof useAgentChatDraftHandoff>;
 let imageResult: import('@/frontend/appShell/conversation').ConversationImageResult | undefined;
 
-type HarnessProps = { sessionId?: string; composerKey?: number; persistedImage?: AgentMessageView };
+type HarnessProps = {
+  sessionId?: string;
+  composerKey?: number;
+  persistedImage?: AgentMessageView;
+  routeKey?: string;
+};
 
 function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
   const controls = useAgentChatControls({ agentId: 'agent-1', sessionId, composerKey });
@@ -112,10 +117,15 @@ function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
   return null;
 }
 
-function Harness({ sessionId, composerKey, persistedImage }: HarnessProps) {
+function Harness({ sessionId, composerKey, persistedImage, routeKey }: HarnessProps) {
   return (
     <ChatProvider>
-      <Probe sessionId={sessionId} composerKey={composerKey} persistedImage={persistedImage} />
+      <Probe
+        key={routeKey}
+        sessionId={sessionId}
+        composerKey={composerKey}
+        persistedImage={persistedImage}
+      />
     </ChatProvider>
   );
 }
@@ -416,6 +426,79 @@ describe('ChatProvider Draft handoff', () => {
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
+
+  it('restores unsent text and managed files after visiting other conversations without sending', () => {
+    const open = (sessionId: string, composerKey: number) => {
+      const tree = (
+        <Harness routeKey={String(composerKey)} sessionId={sessionId} composerKey={composerKey} />
+      );
+      act(() => {
+        if (renderer) renderer.update(tree);
+        else renderer = create(tree);
+      });
+      return currentControls().composer.draft;
+    };
+    const a = open('A', 0);
+    a.setText('Read this file');
+    const attachments = [
+      {
+        id: 'tile',
+        kind: 'file' as const,
+        status: 'ready' as const,
+        fileEntryId: '00000000-0000-7000-8000-000000000017' as const,
+        name: 'notes.pdf',
+        mediaType: 'application/pdf',
+        uri: 'file:///managed/notes.pdf',
+      },
+    ];
+    a.attachments.set(attachments);
+    const b = open('B', 1);
+    expect(b.text.get()).toBe('');
+    expect(b.attachments.get()).toEqual([]);
+    b.setText('B only');
+    open('C', 2);
+    const back = open('A', 3);
+    expect(back.text.get()).toBe('Read this file');
+    expect(back.attachments.get()).toBe(attachments);
+    back.setText('');
+    back.attachments.set([]);
+    expect(open('B', 4).text.get()).toBe('B only');
+    expect(open('A', 5).attachments.get()).toEqual([]);
+    expect(currentControls().composer.draft.text.get()).toBe('');
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an existing conversation’s pending message and draft across composer instances', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockReturnValueOnce(admission.promise);
+    act(() => {
+      renderer = create(<Harness sessionId="A" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Question' }] });
+    });
+    const pending = currentControls().pendingSend;
+    const draft = currentControls().composer.draft;
+    act(() => draft.setText('Next question'));
+    act(() => renderer!.update(<Harness sessionId="B" composerKey={1} />));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().composer.draft.text.get()).toBe('');
+    act(() => currentControls().composer.draft.setText('B only'));
+    act(() => renderer!.update(<Harness sessionId="A" composerKey={2} />));
+    expect(currentControls().pendingSend).toBe(pending);
+    expect(currentControls().canSend).toBe(false);
+    expect(currentControls().composer.draft.text.get()).toBe('Next question');
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    act(() => currentControls().completePendingSend(pending!.messages[0].id));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(mockSubmitMessage).toHaveBeenCalledTimes(1);
+    act(() => renderer!.update(<Harness sessionId="B" composerKey={3} />));
+    expect(currentControls().composer.draft.text.get()).toBe('B only');
+  });
 
   it('leaves a follow-up behind a running answer to the queue instead of the transcript', async () => {
     const admission = deferred<void>();

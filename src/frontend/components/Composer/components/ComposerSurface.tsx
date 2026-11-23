@@ -14,6 +14,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
   useComposerActions,
+  useComposerMeta,
   useComposerPresentationActions,
   useComposerState,
 } from '../context/ComposerProvider';
@@ -84,9 +85,22 @@ export function ComposerSurface({
     getSendErrorLabel,
     sendFailedLabel: labels?.sendFailed,
   });
+  const { failedSend, isFocused } = useComposerMeta();
+  useLayoutEffect(() => {
+    if (!failedSend || !isFocused) return;
+    const report = () => {
+      const failure = failedSend.get();
+      if (!failure) return;
+      failedSend.set(undefined);
+      reportSendError(failure.error, failure.attemptId);
+    };
+    const unsubscribe = failedSend.subscribe(report);
+    report();
+    return unsubscribe;
+  }, [failedSend, isFocused, reportSendError]);
   const { attachments, draft, isSubmitting } = useComposerState();
   const {
-    addAttachments,
+    restoreAttachments,
     beginSendAttempt,
     clearAttachments,
     editDraft,
@@ -134,11 +148,12 @@ export function ComposerSurface({
       try {
         await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
       } catch (error) {
-        reportSendError(error, attemptId);
         setDraft((current) =>
           current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
         );
-        addAttachments([...attachmentSnapshot]);
+        restoreAttachments(attachmentSnapshot);
+        if (failedSend) failedSend.set({ error, attemptId });
+        else reportSendError(error, attemptId);
       } finally {
         endSendAttempt();
       }
@@ -150,9 +165,10 @@ export function ComposerSurface({
       dismissInput,
       dismissKeyboardOnSend,
       endSendAttempt,
+      failedSend,
       reportSendError,
       labels?.sendFailed,
-      addAttachments,
+      restoreAttachments,
       setDraft,
       t,
       toast,
