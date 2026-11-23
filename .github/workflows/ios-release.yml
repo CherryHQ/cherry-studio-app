@@ -63,7 +63,7 @@ jobs:
   submit-ios:
     name: Upload iOS to TestFlight
     needs: build-ios
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 90
     steps:
       - name: Checkout repository
@@ -95,6 +95,18 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify downloaded iOS symbols
+        env:
+          IOS_BUILD_ID: ${{ needs.build-ios.outputs.build_id }}
+        run: |
+          bash scripts/verifyEasIosSymbols.sh "$IOS_BUILD_ID" > "$RUNNER_TEMP/ios-symbol-verification.json"
+          echo '### iOS debug symbols' >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Verified Cherry slices: \(.slices)", "Third-party symbol coverage:", (.thirdPartySymbols[] | "    " + tojson)' \
+            "$RUNNER_TEMP/ios-symbol-verification.json" >> "$GITHUB_STEP_SUMMARY"
+          if jq -e 'any(.thirdPartySymbols[]; .coverage != "debug-present" or .upload != "submitted")' "$RUNNER_TEMP/ios-symbol-verification.json" > /dev/null; then
+            echo "::warning::Some third-party iOS symbols have incomplete coverage or upload. See the job summary."
+          fi
 
       - name: Submit this build and wait for upload
         env:
