@@ -48,6 +48,8 @@ export const AgentContextUsageSchema = z.strictObject({
   tokens: z.number().finite().nonnegative(),
   /** Recovery without a working copy cannot provide a fresh provider measurement. */
   estimated: z.boolean().optional(),
+  /** The selected answer has an execution copy that can be compacted. */
+  canCompact: z.boolean().optional(),
 });
 export type AgentContextUsage = z.infer<typeof AgentContextUsageSchema>;
 

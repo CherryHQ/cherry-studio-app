@@ -4,7 +4,33 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
 import { pressMotion } from '../../../motion';
+import { MenuInteraction } from '../../menu/menu-interaction';
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
+
+let mockNativePressed = false;
+const nativeMenuInteraction = {
+  isOpen: true,
+  close: () => undefined,
+  shouldUseNativePresses: true,
+};
+
+jest.mock('react-native-gesture-handler', () => {
+  const React = jest.requireActual('react');
+  return {
+    Pressable: function GesturePressable({
+      children,
+      ...props
+    }: {
+      children?: React.ReactNode | ((state: { pressed: boolean }) => React.ReactNode);
+    }) {
+      return React.createElement(
+        'GesturePressable',
+        props,
+        typeof children === 'function' ? children({ pressed: mockNativePressed }) : children,
+      );
+    },
+  };
+});
 
 const mockWithTiming = jest.fn((value: number, _config?: unknown) => value);
 const mockWithSpring = jest.fn((value: number, _config?: unknown) => value);
@@ -445,6 +471,74 @@ describe('Button', () => {
       checked: true,
       disabled: true,
     });
+  });
+
+  test('uses GesturePressable with native surface styles inside a native-press overlay', async () => {
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockResolvedValue(false);
+    mockNativePressed = false;
+    try {
+      const onPress = jest.fn();
+      act(() => {
+        renderer = create(
+          <MenuInteraction.Provider value={nativeMenuInteraction}>
+            <Button haptic="light" onPress={onPress} variant="ghost">
+              Compact
+            </Button>
+          </MenuInteraction.Provider>,
+        );
+      });
+      await act(async () => {});
+
+      const gesture = renderer!.root.findByType('GesturePressable' as never);
+      const view = gesture.findByType(View);
+      const baseClasses = (view.props.className as string).split(' ');
+      expect(baseClasses).not.toContain('active:opacity-80');
+      expect(baseClasses).not.toContain('active:bg-secondary');
+      expect(baseClasses).not.toContain('bg-secondary');
+      expect(baseClasses).not.toContain('opacity-40');
+
+      mockNativePressed = true;
+      act(() => {
+        renderer!.update(
+          <MenuInteraction.Provider value={nativeMenuInteraction}>
+            <Button haptic="light" onPress={onPress} variant="ghost">
+              Compact
+            </Button>
+          </MenuInteraction.Provider>,
+        );
+      });
+      expect((gesture.findByType(View).props.className as string).split(' ')).toEqual(
+        expect.arrayContaining(['bg-secondary', 'opacity-80']),
+      );
+
+      act(() => gesture.props.onPressIn({ nativeEvent: {} }));
+      expect(mockWithTiming).toHaveBeenCalledWith(pressMotion.scale, {
+        ...pressMotion.pressIn,
+        reduceMotion: 'never',
+      });
+      act(() => gesture.props.onPressOut({ nativeEvent: {} }));
+      expect(mockWithSpring).toHaveBeenCalledWith(1, expect.objectContaining(pressMotion.pressOut));
+
+      act(() => gesture.props.onPress({ nativeEvent: {} }));
+      expect(mockImpactAsync).toHaveBeenCalledWith('light');
+      expect(onPress).toHaveBeenCalledTimes(1);
+
+      mockNativePressed = false;
+      act(() => {
+        renderer!.update(
+          <MenuInteraction.Provider value={nativeMenuInteraction}>
+            <Button disabled haptic="light" onPress={onPress} variant="ghost">
+              Compact
+            </Button>
+          </MenuInteraction.Provider>,
+        );
+      });
+      expect((gesture.findByType(View).props.className as string).split(' ')).toContain(
+        'opacity-40',
+      );
+    } finally {
+      mockNativePressed = false;
+    }
   });
 
   test('scales down on press-in, springs back on release, and forwards caller callbacks', async () => {

@@ -60,11 +60,12 @@ const mockQuoteActions = { capture: mockCapture };
 const mockSend = jest.fn();
 const mockNoop = jest.fn();
 const mockControls = {
-  editMessage: mockEditMessage,
-  sendMessage: mockSend,
-  canSend: true,
-  isBusy: false,
   cancel: mockNoop,
+  canSend: true,
+  compactContext: mockNoop,
+  editMessage: mockEditMessage,
+  isBusy: false,
+  sendMessage: mockSend,
 };
 const mockModelItem = { modelId: 'p::m', model: { id: 'p::m' } };
 const mockSshProfile = {
@@ -202,6 +203,7 @@ beforeEach(() => {
   mockGetRememberedTarget.mockReset();
   mockDecideRememberedTarget.mockReset();
   mockDraft = '';
+  mockControls.canSend = true;
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
   mockFields = fields;
@@ -585,4 +587,51 @@ test('falls back from removed or disallowed draftModel to agent.model and clears
     renderer.update(renderDraft('agent-b', [defaultModel, customModel, thirdModel])),
   );
   expect(mockPickerApi.replyModels).toBeNull();
+});
+
+test('disables manual compaction on ChatInputSurface when canSend is false even while idle', async () => {
+  mockControls.isBusy = false;
+  mockControls.canSend = false;
+  await act(async () => {
+    renderer = create(
+      <ChatInput
+        agentId="a"
+        sessionId="s"
+        contextUsage={{
+          sessionId: 's',
+          messageId: 'answer-1',
+          modelId: 'p::m' as UniqueModelId,
+          providerId: 'p',
+          providerModelId: 'm',
+          tokens: 1000,
+          canCompact: true,
+        }}
+        controls={mockControls as never}
+      />,
+    );
+  });
+  const surface = renderer.root.findByType('TextSurface' as never);
+  expect(surface.props.compactDisabled).toBe(true);
+  expect(surface.props.onCompactContext).toEqual(expect.any(Function));
+
+  mockControls.canSend = true;
+  await act(async () => {
+    renderer.update(
+      <ChatInput
+        agentId="a"
+        sessionId="s"
+        contextUsage={{
+          sessionId: 's',
+          messageId: 'answer-1',
+          modelId: 'p::m' as UniqueModelId,
+          providerId: 'p',
+          providerModelId: 'm',
+          tokens: 1000,
+          canCompact: true,
+        }}
+        controls={mockControls as never}
+      />,
+    );
+  });
+  expect(renderer.root.findByType('TextSurface' as never).props.compactDisabled).toBe(false);
 });

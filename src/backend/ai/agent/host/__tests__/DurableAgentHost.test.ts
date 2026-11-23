@@ -149,6 +149,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     hasUnfinishedWork: async () => (await conversations.unfinishedLanes()).length > 0,
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
+    compactContext: jest.fn(async () => 'unchanged' as const),
     configure: async () => {},
     editReply: jest.fn(async () => undefined),
     resourceFileEntryIds: async () => [],

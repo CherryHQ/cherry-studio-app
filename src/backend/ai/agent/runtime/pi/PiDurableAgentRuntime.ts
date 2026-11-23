@@ -4,6 +4,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { estimateTextTokens } from '@earendil-works/pi-ai/utils/estimate';
 import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
+  CompactionTask,
   createRegistry,
   GenerationTask,
   hook,
@@ -48,6 +49,7 @@ import { estimatePiContextUsage, toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_CODEMODE_STORE_CHARACTERS, retainPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
+import { summarizePiCompaction } from './piCompaction';
 import { cherryClientIdentity, createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
@@ -159,7 +161,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           await this.grantInputFiles(owner);
         }
         signal.throwIfAborted();
-        return this.requireRuntime().requestOptions(providerId);
+        const options = await this.requireRuntime().requestOptions(providerId);
+        return owner.requestId ? options : { ...options, reasoningEffort: 'none' };
       },
       async (providerId, signal) => {
         const owner = this.executionOwner(providerId, signal);
@@ -256,22 +259,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         })
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
-      for (const lane of await this.unfinishedLanes()) {
-        signal?.throwIfAborted();
-        const stored = await this.runtime.configuration(laneKey(lane));
-        signal?.throwIfAborted();
-        const configuration = PiConfigurationSchema.parse(stored);
-        const agent = await this.installConfiguration(lane, configuration, true, signal);
-        signal?.throwIfAborted();
-        if (stored?.version === 1)
-          await this.runtime.restoreConfiguration(
-            laneKey(lane),
-            serializePiConfiguration(configuration),
-            agent,
-          );
-        signal?.throwIfAborted();
-        await this.bindProvider(lane);
-      }
+      for (const lane of await this.unfinishedLanes()) await this.restoreLane(lane, signal);
       signal?.throwIfAborted();
     } catch (error) {
       this.runtimeFailed = !signal?.aborted;
@@ -711,6 +699,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     await this.requireRuntime().stop(laneKey(lane));
   }
 
+  async compactContext(lane: RuntimeLane, signal: AbortSignal) {
+    const key = laneKey(lane);
+    const configuration = this.configurations.get(key);
+    if (!configuration || !this.models.getModel(configuration.model, configuration.kind))
+      await this.restoreLane(lane, signal);
+    return this.requireRuntime().compactContext(key, signal);
+  }
+
   async discardConversation(lane: RuntimeLane) {
     const runtime = this.requireRuntime();
     const key = laneKey(lane);
@@ -772,6 +768,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       fullReasoning: options?.fullReasoning,
       inherited: record.conversationId !== conversation.id,
     });
+  }
+
+  private async restoreLane(lane: RuntimeLane, signal?: AbortSignal) {
+    const runtime = this.requireRuntime();
+    const key = laneKey(lane);
+    signal?.throwIfAborted();
+    const stored = await runtime.configuration(key);
+    signal?.throwIfAborted();
+    const configuration = PiConfigurationSchema.parse(stored);
+    const agent = await this.installConfiguration(lane, configuration, true, signal);
+    try {
+      signal?.throwIfAborted();
+      if (stored?.version === 1)
+        await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);
+      signal?.throwIfAborted();
+      await this.bindProvider(lane);
+    } catch (error) {
+      this.configurations.delete(key);
+      throw error;
+    }
   }
 
   private async installConfiguration(
@@ -937,6 +953,32 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       ],
       hooks: [
         ...(extension.hooks ?? []),
+        hook(CompactionTask, {
+          beforeCompact: async ({ messages, instructions }, api, context) => {
+            const signal = requireSignal(context);
+            const failure = 'The conversation could not be summarized.';
+            try {
+              const providerSessionId = await this.requireRuntime().providerSessionId(key, context);
+              if (!providerSessionId) return { failure };
+              const configuration = this.requireConfiguration(key);
+              const summary = await summarizePiCompaction(
+                messages,
+                api.models,
+                this.requireModel(configuration),
+                {
+                  limits: await this.preflightModel(configuration.model),
+                  sessionId: providerSessionId,
+                  signal,
+                  instructions,
+                },
+              );
+              return summary ? { summary } : { failure };
+            } catch {
+              signal.throwIfAborted();
+              return { failure };
+            }
+          },
+        }),
         hook(GenerationTask, {
           beforeRequest: async (_request, api, context) => {
             // The harness derives this context from the same invocation signal it forwards to Models.

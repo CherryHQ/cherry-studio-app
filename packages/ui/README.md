@@ -706,9 +706,10 @@ taps, system back, and viewport changes dismiss it without changing the underlyi
 wrapping a trigger. Native editor links and inline transcript text use it when they measure their
 own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
 Its keyboard-preserving overlay shares the existing menu surface and bounded text reader. Optional
-children compose a visual readout while `text` supplies its accessible description; `width` requests
-a compact panel within the usual safe-area bounds, and `placement="above"` prefers the space above
-the anchor. The composed presentation remains stable through dismissal.
+children compose a visual readout while `text` supplies its accessible description; optional
+`footer` renders interactive actions below the readout outside its `accessible` node, `width`
+requests a compact panel within the usual safe-area bounds, and `placement="above"` prefers the
+space above the anchor. The composed presentation remains stable through dismissal.
 
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the

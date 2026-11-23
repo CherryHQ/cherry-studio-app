@@ -213,6 +213,7 @@ export class PiDurableObserver {
           this.contextInput && through !== undefined && this.contextInput.entry <= through
             ? {
                 messageId: this.contextInput.messageId,
+                canCompact: true,
                 ...(await this.runtime.contextUsageEstimate(laneKey(this.lane), through)),
               }
             : null;
@@ -369,7 +370,12 @@ export class PiDurableObserver {
   }
 
   private contextStatus(): 'compacting' | 'compaction-failed' | null {
-    if (this.live.compactions?.some((compaction) => compaction.blocking)) return 'compacting';
+    if (
+      this.live.compactions?.some(
+        (compaction) => compaction.blocking || compaction.trigger === 'manual',
+      )
+    )
+      return 'compacting';
     return !this.live.compactions?.length && this.live.compactionFailure
       ? 'compaction-failed'
       : null;

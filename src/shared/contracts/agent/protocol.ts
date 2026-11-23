@@ -85,6 +85,11 @@ export interface AgentProtocol {
    */
   retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
 
+  /** Compacts the current copy of the selected answer of an idle local Session. */
+  compactContext(
+    input: AgentSelectMessageInput,
+  ): Promise<'compacted' | 'unchanged' | 'unavailable'>;
+
   /**
    * Editing a settled question sends a new sibling question under the same
    * parent through the shared submission path: the edited text is the payload,

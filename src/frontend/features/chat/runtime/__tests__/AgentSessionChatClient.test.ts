@@ -162,6 +162,7 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelSubmission: jest.fn(),
+    compactContext: jest.fn(),
     steerQueuedInput: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<

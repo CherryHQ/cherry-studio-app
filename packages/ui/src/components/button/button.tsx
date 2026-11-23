@@ -15,6 +15,11 @@ import {
   type TextInstance,
   type ViewInstance,
 } from 'react-native';
+import {
+  Pressable as GesturePressable,
+  type PressableEvent as GesturePressableEvent,
+  type PressableProps as GesturePressableProps,
+} from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
@@ -22,6 +27,7 @@ import { type PressHapticIntent, triggerHaptic } from '../../haptics';
 import { pressMotion } from '../../motion';
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
+import { MenuInteraction } from '../menu/menu-interaction';
 import { useTactilePress } from './use-tactile-press';
 
 export type ButtonVariant =
@@ -178,6 +184,16 @@ function ButtonLabel({ ref, ...props }: ButtonLabelProps) {
 
 ButtonLabel.displayName = 'Button.Label';
 
+function toGestureHandler<Event>(
+  handler: ((event: Event) => unknown) | null | undefined,
+): ((event: GesturePressableEvent) => void) | undefined {
+  return handler
+    ? (event) => {
+        handler(event as unknown as Event);
+      }
+    : undefined;
+}
+
 function ButtonRoot({
   accessibilityRole = 'button',
   accessibilityState,
@@ -196,6 +212,7 @@ function ButtonRoot({
   variant = 'default',
   ...props
 }: ButtonProps) {
+  const shouldUseNativePresses = use(MenuInteraction)?.shouldUseNativePresses === true;
   const resolvedSize = size === 'footer' && Platform.OS !== 'android' ? 'lg' : size;
   const isDisabled = disabled || loading;
   const hasPressInteraction = Boolean(onPress || onPressIn || onPressOut);
@@ -208,6 +225,7 @@ function ButtonRoot({
     scaleTo: resolveButtonPressScale(variant),
   });
   const isIconOnly = icon !== undefined && children == null;
+  const resolvedHitSlop = hitSlop ?? (size === 'xs' ? 8 : undefined);
   const labelStyle = useResolveClassNames(variantStyles[variant].label);
   const spinnerColor = typeof labelStyle.color === 'string' ? labelStyle.color : undefined;
   const iconElement = icon
@@ -225,6 +243,41 @@ function ButtonRoot({
     // Android can retain the previous busy description when the key is omitted.
     busy: loading || accessibilityState?.busy || false,
   };
+  const content = (
+    <>
+      {loading ? (
+        <Spinner
+          accessibilityElementsHidden
+          color={spinnerColor}
+          importantForAccessibility="no"
+          size={sizeStyles[resolvedSize].spinner}
+        />
+      ) : null}
+      {!loading ? iconElement : null}
+      {typeof children === 'string' || typeof children === 'number' ? (
+        <ButtonLabel>{children}</ButtonLabel>
+      ) : (
+        children
+      )}
+    </>
+  );
+
+  const renderSurface = (pressed: boolean, interactionClassName?: string) => (
+    <Animated.View
+      className={cn(
+        surfaceBaseStyles,
+        variantStyles[variant].root,
+        shapeStyles[shape],
+        sizeStyles[resolvedSize].root,
+        isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
+        pressed && variant === 'ghost' && 'bg-secondary',
+        interactionClassName,
+      )}
+      style={animatedStyle}
+    >
+      {content}
+    </Animated.View>
+  );
 
   const handlePressIn: PressableProps['onPressIn'] = (event) => {
     handleTactilePressIn();
@@ -248,55 +301,70 @@ function ButtonRoot({
       }
     : undefined;
 
+  let control: ReactNode;
+  if (shouldUseNativePresses) {
+    const {
+      blockNativeResponder: _blockNativeResponder,
+      onHoverIn,
+      onHoverOut,
+      onLongPress,
+      onPressMove: _onPressMove,
+      ...gestureProps
+    } = props;
+    control = (
+      <GesturePressable
+        {...(gestureProps as Omit<GesturePressableProps, 'children' | 'style' | 'ref'>)}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={mergedAccessibilityState}
+        disabled={isDisabled}
+        hitSlop={resolvedHitSlop as GesturePressableProps['hitSlop']}
+        onHoverIn={toGestureHandler(onHoverIn)}
+        onHoverOut={toGestureHandler(onHoverOut)}
+        onLongPress={toGestureHandler(onLongPress)}
+        onPress={toGestureHandler(handlePress)}
+        onPressIn={hasPressInteraction ? toGestureHandler(handlePressIn) : undefined}
+        onPressOut={hasPressInteraction ? toGestureHandler(handlePressOut) : undefined}
+        ref={ref as GesturePressableProps['ref']}
+      >
+        {({ pressed }) =>
+          // Uniwind's interactive selectors belong to RN Pressable. Keep pressed/disabled
+          // opacity on the surface view when running inside native-press overlays.
+          renderSurface(
+            pressed,
+            cn(
+              pressed && (variant === 'link' || variant === 'text' ? 'opacity-70' : 'opacity-80'),
+              isDisabled && 'opacity-40',
+            ),
+          )
+        }
+      </GesturePressable>
+    );
+  } else {
+    control = (
+      /* Keep Pressable outermost so hitSlop extends freely on Android without parent clipping. */
+      <Pressable
+        {...props}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={mergedAccessibilityState}
+        className={cn(
+          'active:opacity-80 disabled:opacity-40',
+          (variant === 'link' || variant === 'text') && 'active:opacity-70',
+        )}
+        disabled={isDisabled}
+        hitSlop={resolvedHitSlop}
+        onPress={handlePress}
+        onPressIn={hasPressInteraction ? handlePressIn : undefined}
+        onPressOut={hasPressInteraction ? handlePressOut : undefined}
+        ref={ref}
+      >
+        {({ pressed }) => renderSurface(pressed)}
+      </Pressable>
+    );
+  }
+
   return (
     <ButtonVariantContext value={variant}>
-      <ButtonSizeContext value={resolvedSize}>
-        {/* Keep Pressable outermost so hitSlop extends freely on Android without parent clipping. */}
-        <Pressable
-          {...props}
-          accessibilityRole={accessibilityRole}
-          accessibilityState={mergedAccessibilityState}
-          className={cn(
-            'active:opacity-80 disabled:opacity-40',
-            (variant === 'link' || variant === 'text') && 'active:opacity-70',
-          )}
-          disabled={isDisabled}
-          hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
-          onPress={handlePress}
-          onPressIn={hasPressInteraction ? handlePressIn : undefined}
-          onPressOut={hasPressInteraction ? handlePressOut : undefined}
-          ref={ref}
-        >
-          {({ pressed }) => (
-            <Animated.View
-              className={cn(
-                surfaceBaseStyles,
-                variantStyles[variant].root,
-                shapeStyles[shape],
-                sizeStyles[resolvedSize].root,
-                isIconOnly ? sizeStyles[resolvedSize].iconOnly : undefined,
-                pressed && variant === 'ghost' && 'bg-secondary',
-              )}
-              style={animatedStyle}
-            >
-              {loading ? (
-                <Spinner
-                  accessibilityElementsHidden
-                  color={spinnerColor}
-                  importantForAccessibility="no"
-                  size={sizeStyles[resolvedSize].spinner}
-                />
-              ) : null}
-              {!loading ? iconElement : null}
-              {typeof children === 'string' || typeof children === 'number' ? (
-                <ButtonLabel>{children}</ButtonLabel>
-              ) : (
-                children
-              )}
-            </Animated.View>
-          )}
-        </Pressable>
-      </ButtonSizeContext>
+      <ButtonSizeContext value={resolvedSize}>{control}</ButtonSizeContext>
     </ButtonVariantContext>
   );
 }

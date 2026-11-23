@@ -139,3 +139,33 @@ index 1c5c127ea6b007eb4033486fcbde0d5e6b20cc16..762d61c9d02dbe38509e922ff821c3f3
              const text = loaded.length === 0
                  ? "No matching tools found."
                  : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
+diff --git a/dist/harness/compaction.js b/dist/harness/compaction.js
+--- a/dist/harness/compaction.js
++++ b/dist/harness/compaction.js
+@@ -85,6 +85,14 @@
+                 if (decision === undefined)
+                     decision = await hook(compaction, runtime, context);
+             });
++            if (decision !== undefined && "failure" in decision) {
++                const message = decision.failure;
++                await runtime.commit(async (tx) => {
++                    failCompactionStatus(await tx.doc(LiveDoc, conversationId), runtime.taskId, message);
++                    return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "model_error" } } } };
++                }, context);
++                return;
++            }
+             if (decision !== undefined && "decline" in decision)
+                 return complete(runtime, context);
+             if (decision !== undefined)
+diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
+--- a/dist/harness/types.d.ts
++++ b/dist/harness/types.d.ts
+@@ -988,6 +988,8 @@
+         readonly decline: true;
+     } | {
+         readonly summary: string;
++    } | {
++        readonly failure: string;
+     }>;
+ }
+ export {};

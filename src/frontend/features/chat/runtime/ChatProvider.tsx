@@ -455,9 +455,17 @@ export function useAgentChatControls(
     },
     [client],
   );
+  const compactContext = useCallback(
+    (messageId: string) =>
+      sessionId
+        ? client.compactContext({ sessionId, messageId })
+        : Promise.resolve('unavailable' as const),
+    [client, sessionId],
+  );
   return {
     composer,
     cancel,
+    compactContext,
     completePendingSend: composer.acknowledge,
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,

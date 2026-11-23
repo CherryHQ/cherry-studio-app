@@ -1257,6 +1257,34 @@ export class DurableAgentHost implements AgentProtocol {
     return result.session;
   }
 
+  async compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    const { sessionId, messageId } = AgentSelectMessageInputSchema.parse(input);
+    this.assertIdle(sessionId);
+    return this.admit(sessionId, async (signal) => {
+      const lanes = await this.syncSession(sessionId, true);
+      const session = await this.requireSession(sessionId);
+      if (session.activeNodeId !== messageId) return 'unavailable' as const;
+      for (const lane of lanes) {
+        signal.throwIfAborted();
+        const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
+        if (!latest || latest.assistantMessageId !== messageId) continue;
+        if ((await this.conversations.configuration(lane)).kind !== 'language')
+          return 'unavailable' as const;
+        const outcome = await this.conversations.compactContext(lane, signal);
+        if (outcome === 'busy') fail('SESSION_BUSY', 'The conversation is already compacting.');
+        if (outcome === 'compacted' && latest.status === 'completed') {
+          await this.captureCheckpoint(lane, latest).catch((error: unknown) => {
+            logger.warn('Could not save the compacted Agent checkpoint', error as Error, {
+              sessionId,
+            });
+          });
+        }
+        return outcome;
+      }
+      return 'unavailable' as const;
+    });
+  }
+
   async retryMessage(
     input: Parameters<AgentProtocol['retryMessage']>[0],
   ): Promise<AgentSessionView | void> {
@@ -2281,20 +2309,24 @@ export class DurableAgentHost implements AgentProtocol {
       if (!(await this.isCurrentConversation(lane))) continue;
       const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
-      await this.traceOperation('ai.checkpoint', latest.identity, async () => {
-        const { contextCheckpoint } = await this.conversations.exportTurn(
-          lane,
-          latest.identity.requestId,
-          { currentContext: true },
-        );
-        if (contextCheckpoint)
-          await this.store.saveContextCheckpoint(
-            latest.assistantMessageId,
-            latest.identity.turnId,
-            contextCheckpoint,
-          );
-      });
+      await this.captureCheckpoint(lane, latest);
     }
+  }
+
+  private captureCheckpoint(lane: RuntimeLane, turn: RuntimeDurableTurn) {
+    return this.traceOperation('ai.checkpoint', turn.identity, async () => {
+      const { contextCheckpoint } = await this.conversations.exportTurn(
+        lane,
+        turn.identity.requestId,
+        { currentContext: true },
+      );
+      if (contextCheckpoint)
+        await this.store.saveContextCheckpoint(
+          turn.assistantMessageId,
+          turn.identity.turnId,
+          contextCheckpoint,
+        );
+    });
   }
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
