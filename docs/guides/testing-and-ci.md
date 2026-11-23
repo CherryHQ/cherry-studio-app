@@ -126,6 +126,8 @@ runs the same workflow on the tagged commit before building.
   Nitro's iOS 17 exception compatibility patch. `expoModulesCoreSwiftCompatibility.test.ts` guards
   Expo's Swift consuming-result compiler workaround. `skiaCompilerMemory.test.ts` guards Skia's
   compiler-memory patch delivery and shared C++ compilation graph.
+  `enrichedMarkdownInlineMath.test.ts` compiles the patched md4c and checks the inline math it
+  hands both platforms' renderers.
   `enrichedMarkdownInputMeasurement.test.ts` guards the iOS input measurement patch; its native
   regression requires an explicitly selected simulator
   as described in [Development](./development.md#enriched-markdown-patch). Other `scripts/__tests__/` suites, including
