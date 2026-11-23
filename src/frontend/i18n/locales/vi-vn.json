@@ -2655,6 +2655,7 @@
   "settings.voice.model.verificationFailed": "Xác minh thất bại",
   "settings.voice.model.verifying": "Đang xác minh…",
   "settings.voice.saveFailed": "Không thể lưu cài đặt giọng nói",
+  "settings.voice.speech.background": "Tiếp tục đọc khi chạy nền",
   "settings.voice.speech.engine": "Bộ máy đọc",
   "settings.voice.speech.systemUnavailable": "Không có tính năng đọc thành tiếng của hệ thống.",
   "settings.voice.speech.title": "Đọc to",

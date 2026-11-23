@@ -2693,6 +2693,7 @@
   "settings.voice.model.verificationFailed": "Falha na verificação",
   "settings.voice.model.verifying": "A verificar…",
   "settings.voice.saveFailed": "Não foi possível guardar a definição de voz",
+  "settings.voice.speech.background": "Continuar a leitura em segundo plano",
   "settings.voice.speech.engine": "Motor de leitura",
   "settings.voice.speech.systemUnavailable": "A leitura em voz alta do sistema não está disponível.",
   "settings.voice.speech.title": "Ler em voz alta",

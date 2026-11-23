@@ -2655,6 +2655,7 @@
   "settings.voice.model.verificationFailed": "校验失败",
   "settings.voice.model.verifying": "校验中…",
   "settings.voice.saveFailed": "语音设置保存失败",
+  "settings.voice.speech.background": "后台继续朗读",
   "settings.voice.speech.engine": "朗读引擎",
   "settings.voice.speech.systemUnavailable": "系统朗读不可用。",
   "settings.voice.speech.title": "朗读",

@@ -2674,6 +2674,7 @@
   "settings.voice.model.verificationFailed": "Verifizierung fehlgeschlagen",
   "settings.voice.model.verifying": "Wird verifiziert…",
   "settings.voice.saveFailed": "Die Spracheinstellung konnte nicht gespeichert werden",
+  "settings.voice.speech.background": "Im Hintergrund weiter vorlesen",
   "settings.voice.speech.engine": "Vorlese-Engine",
   "settings.voice.speech.systemUnavailable": "System-Sprachausgabe nicht verfügbar.",
   "settings.voice.speech.title": "Vorlesen",

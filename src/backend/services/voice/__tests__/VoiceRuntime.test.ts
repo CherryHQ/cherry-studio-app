@@ -9,7 +9,7 @@ import {
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { DictationEngine, SpeechEngine, TranscriptionEngine } from '../engines';
-import { createVoiceRuntime } from '../VoiceRuntime';
+import { createVoiceRuntime, type VoiceRuntimeDependencies } from '../VoiceRuntime';
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -59,6 +59,7 @@ function setup({
   systemTranscription,
   cloudTranscription,
   canSpeakInBackground,
+  beginBackgroundPlayback,
 }: {
   transcription?: TranscriptionEngine;
   systemTranscription?: TranscriptionEngine;
@@ -67,6 +68,7 @@ function setup({
   speech?: Partial<Record<VoiceEngineId, SpeechEngine>>;
   selected?: Partial<Record<'dictation' | 'speech' | 'transcription', VoiceEngineId>>;
   canSpeakInBackground?: () => boolean;
+  beginBackgroundPlayback?: VoiceRuntimeDependencies['beginBackgroundPlayback'];
 }) {
   let background: (() => void) | undefined;
   const runtime = createVoiceRuntime({
@@ -90,6 +92,7 @@ function setup({
     language: () => 'zh-CN',
     dictationLanguage: () => 'en-US',
     canSpeakInBackground,
+    beginBackgroundPlayback,
     onBackground: (listener) => {
       background = listener;
       return () => {
@@ -289,6 +292,39 @@ describe('one voice activity at a time', () => {
     runtime.background();
     await reading;
     expect(runtime.module.getActivity()).toEqual({ kind: 'idle' });
+    await runtime.dispose();
+  });
+
+  test('a pending media service must be admitted before speech, then its stop control ends only that reading', async () => {
+    const speech = speechEngine();
+    const admitted = deferred<() => Promise<void>>();
+    const end = jest.fn(async () => {});
+    let stop: (() => void) | undefined;
+    const runtime = setup({
+      speech: { system: speech.engine },
+      beginBackgroundPlayback: (_labels, onStop) => {
+        stop = onStop;
+        return admitted.promise;
+      },
+    });
+    const reading = runtime.module.speak('first', {
+      playbackLabels: { title: 'Read aloud', stop: 'Stop' },
+    });
+    await flush();
+    runtime.background();
+    expect(speech.spoken).toEqual([]);
+    admitted.resolve(end);
+    await flush();
+    expect(speech.spoken).toEqual(['first']);
+    stop!();
+    await reading;
+    expect(end).toHaveBeenCalledTimes(1);
+    const next = runtime.module.speak('second');
+    await flush();
+    stop!();
+    expect(runtime.module.getActivity().kind).toBe('speaking');
+    runtime.background();
+    await next;
     await runtime.dispose();
   });
 

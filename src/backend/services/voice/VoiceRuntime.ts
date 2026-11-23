@@ -7,6 +7,7 @@ import {
   type VoiceCapability,
   type VoiceEngineId,
   type VoiceModule,
+  type SpeakOptions,
   type VoiceRequestOptions,
 } from '@/shared/contracts/voice';
 import type { AppLanguage } from '@/shared/utils/languages';
@@ -25,11 +26,16 @@ export type VoiceRuntimeDependencies = {
   /** Subscribes to the app entering the background. */
   onBackground(listener: () => void): () => void;
   canSpeakInBackground?(): boolean;
+  beginBackgroundPlayback?(
+    labels: NonNullable<SpeakOptions['playbackLabels']>,
+    stop: () => void,
+  ): Promise<() => Promise<void>> | undefined;
 };
 
 type Activity = {
   activity: VoiceActivity;
   controller: AbortController;
+  backgroundPlayback?: boolean;
   settled: Promise<void>;
 };
 
@@ -46,6 +52,7 @@ export function createVoiceRuntime({
   dictationLanguage,
   onBackground,
   canSpeakInBackground = () => false,
+  beginBackgroundPlayback,
 }: VoiceRuntimeDependencies): {
   module: Omit<VoiceModule, 'localModel'>;
   dispose(): Promise<void>;
@@ -81,6 +88,7 @@ export function createVoiceRuntime({
     current = owner;
     listeners.forEach((listener) => listener());
     return {
+      owner,
       signal: linked.signal,
       // A replacement waits for native stop/cleanup before it changes the audio session.
       ready: previous?.settled ?? Promise.resolve(),
@@ -171,7 +179,11 @@ export function createVoiceRuntime({
   }
 
   const unsubscribeBackground = onBackground(() => {
-    if (current?.activity.kind === 'speaking' && canSpeakInBackground()) return;
+    if (
+      current?.activity.kind === 'speaking' &&
+      (current.backgroundPlayback || canSpeakInBackground())
+    )
+      return;
     // File work has no capture/playback session. Its caller owns cancellation; an Agent turn
     // can keep working under the Host's existing background execution lease.
     if (current?.activity.kind !== 'transcribing') current?.controller.abort();
@@ -264,16 +276,40 @@ export function createVoiceRuntime({
       const prose = speakableText(text);
       if (!prose) return;
       const activity = claim({ kind: 'speaking', key: options?.key ?? null }, options?.signal);
+      let endPlayback: (() => Promise<void>) | undefined;
       try {
         await activity.ready;
         activity.signal.throwIfAborted();
+        if (beginBackgroundPlayback && options?.playbackLabels) {
+          const admission = beginBackgroundPlayback(options.playbackLabels, () =>
+            activity.owner.controller.abort(),
+          );
+          if (admission) {
+            // A foreground request may be admitted as the user locks the screen.
+            // Audio starts only after the native service acknowledges promotion.
+            activity.owner.backgroundPlayback = true;
+            endPlayback = await track(admission);
+          }
+          activity.signal.throwIfAborted();
+        }
         const engine = await track(resolve<SpeechEngine>('speech', activity.signal));
-        await track(engine.speak({ text: prose, language: language(), signal: activity.signal }));
+        await track(
+          engine.speak({
+            text: prose,
+            language: language(),
+            signal: activity.signal,
+            backgroundPlayback: Boolean(endPlayback),
+          }),
+        );
       } catch (error) {
         // Stopping, replacement and caller cancellation all end reading normally.
         if (!activity.signal.aborted) throw error;
       } finally {
-        activity.release();
+        try {
+          await endPlayback?.();
+        } finally {
+          activity.release();
+        }
       }
     },
 
@@ -293,7 +329,7 @@ export function createVoiceRuntime({
       disposal ??= (async () => {
         unsubscribeBackground();
         lifetime.abort();
-        await Promise.allSettled([...pending]);
+        await Promise.allSettled([...pending, current?.settled]);
         listeners.clear();
       })();
       return disposal;

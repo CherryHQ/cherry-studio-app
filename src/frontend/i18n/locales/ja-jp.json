@@ -2655,6 +2655,7 @@
   "settings.voice.model.verificationFailed": "検証失敗",
   "settings.voice.model.verifying": "検証中…",
   "settings.voice.saveFailed": "音声設定を保存できませんでした",
+  "settings.voice.speech.background": "バックグラウンドで読み上げを続ける",
   "settings.voice.speech.engine": "読み上げエンジン",
   "settings.voice.speech.systemUnavailable": "システムの読み上げを利用できません。",
   "settings.voice.speech.title": "読み上げ",

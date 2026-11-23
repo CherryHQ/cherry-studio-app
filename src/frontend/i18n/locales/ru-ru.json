@@ -2712,6 +2712,7 @@
   "settings.voice.model.verificationFailed": "Ошибка проверки",
   "settings.voice.model.verifying": "Проверка…",
   "settings.voice.saveFailed": "Не удалось сохранить настройку голоса",
+  "settings.voice.speech.background": "Продолжать чтение вслух в фоне",
   "settings.voice.speech.engine": "Движок озвучивания",
   "settings.voice.speech.systemUnavailable": "Системное озвучивание недоступно.",
   "settings.voice.speech.title": "Чтение вслух",

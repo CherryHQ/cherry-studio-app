@@ -2674,6 +2674,7 @@
   "settings.voice.model.verificationFailed": "Doğrulama başarısız",
   "settings.voice.model.verifying": "Doğrulanıyor…",
   "settings.voice.saveFailed": "Ses ayarı kaydedilemedi",
+  "settings.voice.speech.background": "Arka planda sesli okumaya devam et",
   "settings.voice.speech.engine": "Sesli okuma motoru",
   "settings.voice.speech.systemUnavailable": "Sistem sesli okuma özelliği kullanılamıyor.",
   "settings.voice.speech.title": "Sesli okuma",
