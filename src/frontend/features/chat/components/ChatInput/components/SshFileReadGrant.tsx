@@ -1,7 +1,8 @@
 import { Button, Section } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { AppState, Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { useSshAction } from '@/frontend/hooks/ssh';
@@ -17,13 +18,27 @@ export function SshFileReadGrant({ contextId, target }: { contextId: string; tar
     truncated: boolean;
   }>();
   const [selected, setSelected] = useState<string[]>([]);
+  const [now, setNow] = useState(Date.now);
+  useFocusEffect(
+    useCallback(() => {
+      setNow(Date.now());
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') setNow(Date.now());
+      });
+      return () => subscription.remove();
+    }, []),
+  );
   const { grant, profile } = target;
   const host = `${profile.username}@${profile.host}:${profile.port}`;
-  if (grant) {
+  const activeGrant = grant && grant.expiresAt > now ? grant : null;
+  if (activeGrant) {
     return (
       <Section title={host}>
-        {grant.scope !== 'diagnostics' ? (
-          <Section.Item label={grant.scope.directory} description={grant.scope.files.join('\n')} />
+        {activeGrant.scope !== 'diagnostics' ? (
+          <Section.Item
+            label={activeGrant.scope.directory}
+            description={activeGrant.scope.files.join('\n')}
+          />
         ) : null}
         <Section.Item
           label={t('ssh.fileGrant.revoke')}
@@ -33,6 +48,8 @@ export function SshFileReadGrant({ contextId, target }: { contextId: string; tar
       </Section>
     );
   }
+
+  if (!ssh.supportsFileReadGrants()) return null;
 
   if (!listing) {
     return (

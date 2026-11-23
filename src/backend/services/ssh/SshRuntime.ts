@@ -469,17 +469,15 @@ export class SshRuntime extends BaseService implements SshModule {
 
   setGrant = (sessionId: string, expected: SshTarget, scope: SshGrantScope | null) =>
     this.serialize(async () => {
-      this.assertAgentTarget(sessionId, expected);
-      // Revocation must remain possible even if profile storage is unavailable.
-      if (this.getTarget(sessionId)?.grant?.id !== expected.grant?.id)
-        throw new SshError('changed');
+      this.assertGrantTarget(sessionId, expected);
       if (scope && scope !== 'diagnostics') {
         if (!this.supportsFileReadGrants()) throw new SshError('unavailable');
         scope = SshReadScopeSchema.parse(scope);
       }
+      // Revocation must remain possible even if profile storage is unavailable.
       if (scope) await this.profiles.getRow(expected.profile);
       this.assertActive();
-      this.assertAgentTarget(sessionId, expected);
+      this.assertGrantTarget(sessionId, expected);
       if (!scope || expected.grant)
         for (const run of [...this.active, ...this.transfers])
           if (run.sessionId === sessionId) run.cancel();
@@ -487,7 +485,8 @@ export class SshRuntime extends BaseService implements SshModule {
         ...expected,
         // Enabling future diagnostics must not invalidate the command being approved.
         // Revocation still retires every captured authorization, including in-flight work.
-        selectionId: scope === 'diagnostics' ? expected.selectionId : randomUUID(),
+        selectionId:
+          scope === 'diagnostics' && !expected.grant ? expected.selectionId : randomUUID(),
         grant: scope ? { scope, id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
       };
       this.targets.set(sessionId, target);
@@ -510,10 +509,6 @@ export class SshRuntime extends BaseService implements SshModule {
       };
       this.profiles.rememberTarget(sessionId, attached.profile);
       this.targets.set(sessionId, attached);
-      if (attached.grant && attached.grant.scope !== 'diagnostics') {
-        this.clearGrantTimer(`draft:${draftId}`);
-        this.targets.set(`draft:${draftId}`, this.newTarget(target.profile));
-      }
       this.scheduleGrantExpiry(sessionId, attached);
       this.notifyTargets();
     });
@@ -801,6 +796,17 @@ export class SshRuntime extends BaseService implements SshModule {
       !sameReference(current.profile, target.profile) ||
       (target.grant && current.grant?.id !== target.grant.id) ||
       (current.grant && current.grant.expiresAt <= Date.now())
+    )
+      throw new SshError('changed');
+  }
+
+  private assertGrantTarget(sessionId: string, expected: SshTarget) {
+    const current = this.targets.get(sessionId);
+    if (
+      !current ||
+      current.selectionId !== expected.selectionId ||
+      !sameReference(current.profile, expected.profile) ||
+      current.grant?.id !== expected.grant?.id
     )
       throw new SshError('changed');
   }

@@ -723,6 +723,54 @@ test('rolling back an older grant cannot revoke a newer authorization', async ()
   expect(runtime.getTarget('conversation')).toEqual(replacement);
 });
 
+test('can replace and revoke an expired grant before its expiry timer fires', async () => {
+  const profile = await trusted();
+  await runtime.selectTarget('conversation', profile);
+  const granted = await runtime.setGrant('conversation', runtime.getTarget('conversation')!, {
+    directory: '/srv/logs',
+    files: ['app.log'],
+  });
+  const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(granted.grant!.expiresAt + 1);
+  const renewed = await runtime.setGrant('conversation', granted, 'diagnostics');
+  expect(renewed.selectionId).not.toBe(granted.selectionId);
+  expect(renewed.grant?.scope).toBe('diagnostics');
+  await expect(runtime.setGrant('conversation', granted, null)).rejects.toMatchObject({
+    code: 'changed',
+  });
+  nowSpy.mockReturnValue(renewed.grant!.expiresAt + 1);
+  const revoked = await runtime.setGrant('conversation', renewed, null);
+  expect(revoked.grant).toBeNull();
+  expect(revoked.selectionId).not.toBe(renewed.selectionId);
+  expect(runtime.getTarget('conversation')?.grant).toBeNull();
+  await expect(runtime.setGrant('conversation', renewed, null)).rejects.toMatchObject({
+    code: 'changed',
+  });
+});
+
+test('retains a draft file grant across a failed send before clearing on send success', async () => {
+  const profile = await trusted();
+  const draftId = mockRandomUUID();
+  const firstSessionId = mockRandomUUID();
+  const secondSessionId = mockRandomUUID();
+  await runtime.selectTarget(`draft:${draftId}`, profile);
+  const draftTarget = await runtime.setGrant(
+    `draft:${draftId}`,
+    runtime.getTarget(`draft:${draftId}`)!,
+    { directory: '/srv/logs', files: ['app.log'] },
+  );
+  await runtime.attachDraftTarget(draftId, firstSessionId);
+  expect(runtime.getTarget(`draft:${draftId}`)).toEqual(draftTarget);
+  await runtime.selectTarget(firstSessionId, null);
+  expect(runtime.getTarget(`draft:${draftId}`)).toEqual(draftTarget);
+  await runtime.attachDraftTarget(draftId, secondSessionId);
+  await runtime.selectTarget(`draft:${draftId}`, null);
+  expect(runtime.getTarget(`draft:${draftId}`)).toBeNull();
+  expect((await runtime.resolveAgentTarget(secondSessionId))?.grant?.scope).toEqual({
+    directory: '/srv/logs',
+    files: ['app.log'],
+  });
+});
+
 const reusedFailure = (state = 'not-started') =>
   JSON.stringify({
     state,
