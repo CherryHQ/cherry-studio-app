@@ -8,11 +8,12 @@ import {
   useCallback,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
 } from 'react';
 
 import type { FileEntryId } from '@/shared/data/types/file';
 
+import type { ComposerDraft } from '../ComposerDraft';
 import { useComposerPresentation } from '../hooks/useComposerPresentation';
 import type {
   ComposerAttachmentDraft,
@@ -42,6 +43,7 @@ type ComposerActionsContextValue = {
     listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
   ) => () => void;
   addAttachments: (attachments: ComposerAttachmentDraft[]) => void;
+  restoreAttachments: (attachments: ComposerAttachmentReady[]) => void;
   clearAttachments: () => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
@@ -62,6 +64,7 @@ type ComposerActionsContextValue = {
 
 export type ComposerAttachmentStore = Pick<
   ComposerActionsContextValue,
+  | 'restoreAttachments'
   | 'addAttachments'
   | 'clearAttachments'
   | 'removeAttachment'
@@ -73,6 +76,8 @@ export type ComposerAttachmentStore = Pick<
 };
 
 type ComposerMetaContextValue = {
+  failedSend?: ComposerDraft['failedSend'];
+  isFocused?: boolean;
   /**
    * The field itself, for the two things no prop can express: taking focus
    * away, and inserting an entity — a tool mention is a link, and no string
@@ -96,7 +101,9 @@ const ComposerPresentationActionsContext =
 
 type ComposerProviderProps = PropsWithChildren<{
   attachmentStore: ComposerAttachmentStore;
-  initialDraft?: string | (() => string);
+  draftStore: ComposerDraft;
+  failedSend?: ComposerDraft['failedSend'];
+  isFocused?: boolean;
 }>;
 
 /**
@@ -108,11 +115,18 @@ type ComposerProviderProps = PropsWithChildren<{
 export function ComposerProvider({
   attachmentStore,
   children,
-  initialDraft = '',
+  draftStore: buffer,
+  failedSend,
+  isFocused = true,
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
-  const [draft, setDraft] = useState(initialDraft);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const draft = useSyncExternalStore(buffer.text.subscribe, buffer.text.get, buffer.text.get);
+  const isSubmitting = useSyncExternalStore(
+    buffer.submitting.subscribe,
+    buffer.submitting.get,
+    buffer.submitting.get,
+  );
+  const setDraft = buffer.setText;
   const draftEditListeners = useRef(new Set<() => void>());
   const subscribeDraftEdits = useCallback((listener: () => void) => {
     draftEditListeners.current.add(listener);
@@ -120,25 +134,19 @@ export function ComposerProvider({
       draftEditListeners.current.delete(listener);
     };
   }, []);
-  const editDraft = useCallback((next: string) => {
-    draftEditListeners.current.forEach((listener) => listener());
-    setDraft(next);
-  }, []);
-  const activeSendAttemptIdRef = useRef<number | null>(null);
-  const nextSendAttemptIdRef = useRef(0);
-  // The surface may remount while file preparation or draft recovery is pending.
+  const editDraft = useCallback(
+    (next: string) => {
+      draftEditListeners.current.forEach((listener) => listener());
+      setDraft(next);
+    },
+    [setDraft],
+  );
   const beginSendAttempt = useCallback(() => {
-    if (activeSendAttemptIdRef.current !== null) return null;
-    const attemptId = ++nextSendAttemptIdRef.current;
-    activeSendAttemptIdRef.current = attemptId;
-    draftEditListeners.current.forEach((listener) => listener());
-    setIsSubmitting(true);
-    return attemptId;
-  }, []);
-  const endSendAttempt = useCallback(() => {
-    activeSendAttemptIdRef.current = null;
-    setIsSubmitting(false);
-  }, []);
+    const attempt = buffer.beginSend();
+    if (attempt !== null) draftEditListeners.current.forEach((listener) => listener());
+    return attempt;
+  }, [buffer]);
+  const endSendAttempt = buffer.endSend;
   const presentation = useComposerPresentation(inputRef);
   const {
     addAttachments,
@@ -146,6 +154,7 @@ export function ComposerProvider({
     clearAttachments,
     removeAttachment,
     replaceAttachment,
+    restoreAttachments,
     setAttachments,
     subscribeAttachmentChanges,
   } = attachmentStore;
@@ -166,6 +175,7 @@ export function ComposerProvider({
       removeAttachment,
       setAttachments,
       replaceAttachment,
+      restoreAttachments,
       setDraft,
       subscribeAttachmentChanges,
     }),
@@ -179,11 +189,13 @@ export function ComposerProvider({
       removeAttachment,
       setAttachments,
       replaceAttachment,
+      restoreAttachments,
+      setDraft,
       subscribeAttachmentChanges,
     ],
   );
 
-  const metaValue = useMemo(() => ({ inputRef }), []);
+  const metaValue = useMemo(() => ({ inputRef, failedSend, isFocused }), [failedSend, isFocused]);
 
   return (
     <ComposerStateContext value={stateValue}>

@@ -1,18 +1,18 @@
 import { useToast } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntryId } from '@/shared/data/types/file';
 
+import type { ComposerDraft } from '../ComposerDraft';
 import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
   appendComposerAttachments,
   cleanupDropStagedFile,
   type ComposerAttachmentDraft,
   type ComposerAttachmentSource,
-  type ComposerInitialAttachment,
   createReadyAttachmentDraft,
   isComposerAttachmentReady,
   isDropStagedFile,
@@ -22,33 +22,23 @@ import {
 } from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('useManagedComposerAttachments');
-const emptyInitialAttachments: readonly ComposerInitialAttachment[] = [];
 type ImportResult = 'failed' | 'ignored' | 'ready';
 
 /** Imports belong to My Files; this session owns only their draft references. */
 export function useManagedComposerAttachments(
-  initialAttachments: readonly ComposerInitialAttachment[] = emptyInitialAttachments,
+  buffer: ComposerDraft,
   workspaceSessionId?: string,
   workspaceFolderId?: string | null,
 ): ComposerAttachmentStore {
   const { t } = useTranslation();
   const { toast } = useToast();
   const file = useBackendModule('file');
-  const [initialSources] = useState(() =>
-    initialAttachments.filter(
-      (attachment): attachment is ComposerAttachmentSource =>
-        !isComposerAttachmentReady(attachment),
-    ),
-  );
-  const didImportInitialAttachmentsRef = useRef(false);
   const isMountedRef = useRef(true);
-  const importTokensRef = useRef(new Map<string, symbol>());
-  const [attachments, setAttachmentState] = useState<ComposerAttachmentDraft[]>(() =>
-    initialAttachments.map((attachment) =>
-      isComposerAttachmentReady(attachment) ? attachment : { ...attachment, status: 'importing' },
-    ),
+  const attachments = useSyncExternalStore(
+    buffer.attachments.subscribe,
+    buffer.attachments.get,
+    buffer.attachments.get,
   );
-  const attachmentsRef = useRef(attachments);
   const listeners = useRef(new Set<(attachments: readonly ComposerAttachmentDraft[]) => void>());
   const subscribeAttachmentChanges = useCallback(
     (listener: (attachments: readonly ComposerAttachmentDraft[]) => void) => {
@@ -60,11 +50,13 @@ export function useManagedComposerAttachments(
     [],
   );
 
-  const commitAttachments = useCallback((next: ComposerAttachmentDraft[], notify = true) => {
-    attachmentsRef.current = next;
-    if (isMountedRef.current) setAttachmentState(next);
-    if (notify) for (const listener of listeners.current) listener(next);
-  }, []);
+  const commitAttachments = useCallback(
+    (next: ComposerAttachmentDraft[], notify = true) => {
+      buffer.attachments.set(next);
+      if (notify) for (const listener of listeners.current) listener(next);
+    },
+    [buffer],
+  );
 
   const importAttachment = useCallback(
     async (
@@ -92,27 +84,26 @@ export function useManagedComposerAttachments(
         // The managed entry owns the bytes now; a drop's staged cache copy
         // would otherwise linger until the OS evicts Caches.
         if (isDropStagedFile(source.uri)) void cleanupDropStagedFile(source.uri);
-        // A removed tile or departed screen cannot restore a stale reference.
-        // The completed import remains in My Files in either case.
-        if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current)
-          return 'ignored';
-        importTokensRef.current.delete(source.id);
+        // Removal or replacement revokes the token, including while another chat is open.
+        if (buffer.imports.get(source.id) !== token) return 'ignored';
+        buffer.imports.delete(source.id);
         commitAttachments(
-          attachmentsRef.current.map((attachment) =>
-            attachment.id === source.id
-              ? createReadyAttachmentDraft(resolved, source.id)
-              : attachment,
-          ),
+          buffer.attachments
+            .get()
+            .map((attachment) =>
+              attachment.id === source.id
+                ? createReadyAttachmentDraft(resolved, source.id)
+                : attachment,
+            ),
         );
         return 'ready';
       } catch {
         // The failed import owns no bytes; a drop's staged cache copy would
         // otherwise linger with no one left to clean it.
         if (isDropStagedFile(source.uri)) void cleanupDropStagedFile(source.uri);
-        if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current)
-          return 'ignored';
-        importTokensRef.current.delete(source.id);
-        commitAttachments(removeComposerAttachment(attachmentsRef.current, source.id));
+        if (buffer.imports.get(source.id) !== token) return 'ignored';
+        buffer.imports.delete(source.id);
+        commitAttachments(removeComposerAttachment(buffer.attachments.get(), source.id));
         logger.warn('Failed to import an attachment', {
           kind: source.kind,
           size: source.size ?? null,
@@ -120,7 +111,7 @@ export function useManagedComposerAttachments(
         return 'failed';
       }
     },
-    [commitAttachments, file, workspaceSessionId, workspaceFolderId],
+    [buffer, commitAttachments, file, workspaceSessionId, workspaceFolderId],
   );
 
   const importAttachments = useCallback(
@@ -128,7 +119,7 @@ export function useManagedComposerAttachments(
       const results = await Promise.all(
         sources.map((source) => {
           const token = Symbol(source.id);
-          importTokensRef.current.set(source.id, token);
+          buffer.imports.set(source.id, token);
           return importAttachment(source, token);
         }),
       );
@@ -140,12 +131,12 @@ export function useManagedComposerAttachments(
         });
       }
     },
-    [importAttachment, t, toast],
+    [buffer, importAttachment, t, toast],
   );
 
   const addAttachments = useCallback(
     (next: ComposerAttachmentDraft[]) => {
-      const current = attachmentsRef.current;
+      const current = buffer.attachments.get();
       const accepted = appendComposerAttachments(current, next).slice(current.length);
       // A rejected draft (duplicate or over the limit) owns no reference; a
       // drop-staged source behind it would linger with no one to clean it.
@@ -182,25 +173,33 @@ export function useManagedComposerAttachments(
       ]);
       if (sources.length > 0) void importAttachments(sources);
     },
-    [commitAttachments, importAttachments, workspaceSessionId, workspaceFolderId],
+    [buffer, commitAttachments, importAttachments, workspaceSessionId, workspaceFolderId],
+  );
+
+  const restoreAttachments = useCallback(
+    (restored: ComposerAttachmentReady[]) => {
+      if (restored.length)
+        commitAttachments(appendComposerAttachments(buffer.attachments.get(), restored));
+    },
+    [buffer, commitAttachments],
   );
 
   const removeAttachment = useCallback(
     (id: string) => {
-      importTokensRef.current.delete(id);
-      commitAttachments(removeComposerAttachment(attachmentsRef.current, id));
+      buffer.imports.delete(id);
+      commitAttachments(removeComposerAttachment(buffer.attachments.get(), id));
     },
-    [commitAttachments],
+    [buffer, commitAttachments],
   );
 
   const clearAttachments = useCallback(() => {
-    importTokensRef.current.clear();
+    buffer.imports.clear();
     commitAttachments([], false);
-  }, [commitAttachments]);
+  }, [buffer, commitAttachments]);
 
   const setAttachments = useCallback(
     (next: ComposerAttachmentDraft[]) => {
-      importTokensRef.current.clear();
+      buffer.imports.clear();
       commitAttachments([...next], false);
       // Clearing the tokens orphaned every in-flight import, so a tile
       // restored as still importing has no operation left that can finish
@@ -213,24 +212,24 @@ export function useManagedComposerAttachments(
       });
       if (restored.length > 0) void importAttachments(restored);
     },
-    [commitAttachments, importAttachments],
+    [buffer, commitAttachments, importAttachments],
   );
 
   const replaceAttachment = useCallback(
     (attachmentId: string, sourceId: FileEntryId, replacement: ComposerAttachmentReady) => {
       if (!isMountedRef.current) return false;
       const next = replaceComposerAttachment(
-        attachmentsRef.current,
+        buffer.attachments.get(),
         attachmentId,
         sourceId,
         replacement,
       );
       if (!next) return false;
-      importTokensRef.current.delete(attachmentId);
+      buffer.imports.delete(attachmentId);
       commitAttachments(next);
       return true;
     },
-    [commitAttachments],
+    [buffer, commitAttachments],
   );
 
   useEffect(() => {
@@ -241,11 +240,13 @@ export function useManagedComposerAttachments(
   }, []);
 
   useEffect(() => {
-    if (!didImportInitialAttachmentsRef.current) {
-      didImportInitialAttachmentsRef.current = true;
-      if (initialSources.length > 0) void importAttachments(initialSources);
-    }
-  }, [importAttachments, initialSources]);
+    const sources = buffer.attachments.get().flatMap((item): ComposerAttachmentSource[] => {
+      if (item.status !== 'importing' || buffer.imports.has(item.id)) return [];
+      const { status: _status, ...source } = item;
+      return [source];
+    });
+    if (sources.length) void importAttachments(sources);
+  }, [buffer, importAttachments]);
 
   return useMemo(
     () => ({
@@ -254,6 +255,7 @@ export function useManagedComposerAttachments(
       clearAttachments,
       removeAttachment,
       replaceAttachment,
+      restoreAttachments,
       setAttachments,
       subscribeAttachmentChanges,
     }),
@@ -263,6 +265,7 @@ export function useManagedComposerAttachments(
       clearAttachments,
       removeAttachment,
       replaceAttachment,
+      restoreAttachments,
       setAttachments,
       subscribeAttachmentChanges,
     ],

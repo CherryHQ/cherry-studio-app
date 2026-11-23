@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import { getRootHeaderStyle, paintingRouteId } from '@/frontend/appShell/navigation';
+import { ChatProvider } from '@/frontend/features/chat/runtime';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
@@ -26,47 +27,49 @@ export default function MainStackLayout() {
   };
 
   return (
-    <RouteHeaderProvider rootAction={canDockSidebar ? 'drawer' : 'back'}>
-      <Stack
-        screenOptions={{
-          ...headerScreenOptions,
-          headerStyle: getRootHeaderStyle(backgroundColor),
-          headerTransparent: isLiquidGlassAvailable,
-          headerTintColor: foregroundColor,
-        }}
-      >
-        <Stack.Screen name="(chat)" options={{ headerShown: false }} />
-        <Stack.Screen name="agents" options={destination} />
-        <Stack.Screen name="drawings" options={destination} />
-        <Stack.Screen name="plugins" options={destination} />
-        <Stack.Screen name="skills" options={destination} />
-        <Stack.Screen name="scheduled-tasks" options={destination} />
-        <Stack.Screen name="library" options={destination} />
-        {/* Settings owns a nested stack and draws its headers there. */}
-        <Stack.Screen name="settings" options={destination} />
-        <Stack.Screen name="trash" />
-        <Stack.Screen
-          // Task notifications reuse their task; each new draft owns its own page.
-          getId={({ params }) => paintingRouteId(params)}
-          name="paintings/index"
-          options={{
-            // Keep the full-bleed board's native canvas in sync with the app theme.
-            contentStyle: { backgroundColor },
-            headerStyle: { backgroundColor: 'transparent' },
-            headerTransparent: true,
-            title: '',
+    <ChatProvider>
+      <RouteHeaderProvider rootAction={canDockSidebar ? 'drawer' : 'back'}>
+        <Stack
+          screenOptions={{
+            ...headerScreenOptions,
+            headerStyle: getRootHeaderStyle(backgroundColor),
+            headerTransparent: isLiquidGlassAvailable,
+            headerTintColor: foregroundColor,
           }}
-        />
-        {/* Released task links and viewer routes redirect into the board. */}
-        <Stack.Screen
-          name="paintings/[paintingId]"
-          options={{ contentStyle: { backgroundColor }, headerShown: false }}
-        />
-        <Stack.Screen
-          name="paintings/[paintingId]/conversation"
-          options={{ contentStyle: { backgroundColor }, headerShown: false }}
-        />
-      </Stack>
-    </RouteHeaderProvider>
+        >
+          <Stack.Screen name="(chat)" options={{ headerShown: false }} />
+          <Stack.Screen name="agents" options={destination} />
+          <Stack.Screen name="drawings" options={destination} />
+          <Stack.Screen name="plugins" options={destination} />
+          <Stack.Screen name="skills" options={destination} />
+          <Stack.Screen name="scheduled-tasks" options={destination} />
+          <Stack.Screen name="library" options={destination} />
+          {/* Settings owns a nested stack and draws its headers there. */}
+          <Stack.Screen name="settings" options={destination} />
+          <Stack.Screen name="trash" />
+          <Stack.Screen
+            // Task notifications reuse their task; each new draft owns its own page.
+            getId={({ params }) => paintingRouteId(params)}
+            name="paintings/index"
+            options={{
+              // Keep the full-bleed board's native canvas in sync with the app theme.
+              contentStyle: { backgroundColor },
+              headerStyle: { backgroundColor: 'transparent' },
+              headerTransparent: true,
+              title: '',
+            }}
+          />
+          {/* Released task links and viewer routes redirect into the board. */}
+          <Stack.Screen
+            name="paintings/[paintingId]"
+            options={{ contentStyle: { backgroundColor }, headerShown: false }}
+          />
+          <Stack.Screen
+            name="paintings/[paintingId]/conversation"
+            options={{ contentStyle: { backgroundColor }, headerShown: false }}
+          />
+        </Stack>
+      </RouteHeaderProvider>
+    </ChatProvider>
   );
 }
