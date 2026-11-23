@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
 
@@ -10,7 +9,6 @@ type Palette = {
   brand: string;
   outline: string;
   surface: string;
-  secondary: string;
   white: string;
 };
 
@@ -46,30 +44,6 @@ function Connection({ brand, outline, surface, white }: Palette) {
         <Rect x={149} y={76} width={44} height={31} rx={13} fill={brand} />
         <Path d="M176 87h6" stroke={white} strokeWidth={2.4} />
       </G>
-    </>
-  );
-}
-
-function Conversation({ brand, outline, secondary, surface }: Palette) {
-  return (
-    <>
-      <Path
-        d="M143 81h43c16 0 29 13 29 29v5c0 16-13 29-29 29h-1v10c0 2-2 3-4 2l-16-12h-22c-16 0-29-13-29-29v-5c0-16 13-29 29-29Z"
-        fill={brand}
-        fillOpacity={0.13}
-        stroke={outline}
-      />
-      <G fill={outline}>
-        <Circle cx={174} cy={116} r={2.5} />
-        <Circle cx={184} cy={116} r={2.5} />
-        <Circle cx={194} cy={116} r={2.5} />
-      </G>
-      <Path
-        d="M83 43h52a41 41 0 0 1 0 82H96l-21 14c-2 1-4 0-4-3v-13a41 41 0 0 1 12-80Z"
-        fill={surface}
-        stroke={outline}
-      />
-      <Circle cx={109} cy={84} r={28} fill={secondary} />
     </>
   );
 }
@@ -181,32 +155,30 @@ function Trash({ brand, outline, surface }: Palette) {
 
 const SCENES = {
   connection: Connection,
-  conversation: Conversation,
   creation: Creation,
   collection: Collection,
   search: Search,
   trash: Trash,
 };
 
-type EmptyIllustrationProps = { size?: keyof typeof ILLUSTRATION_WIDTHS } & (
-  | { scene: 'conversation'; children?: ReactNode }
-  | { scene: Exclude<keyof typeof SCENES, 'conversation'>; children?: never }
-);
+type EmptyIllustrationProps = {
+  scene: keyof typeof SCENES;
+  size?: keyof typeof ILLUSTRATION_WIDTHS;
+};
 
-/** Decorative Cherry artwork. A conversation can place its actual Agent avatar in the bubble. */
-export function EmptyIllustration({ children, scene, size = 'page' }: EmptyIllustrationProps) {
-  const [brand, outline, surface, secondary, white] = useThemeColor([
+/** Decorative Cherry artwork. */
+export function EmptyIllustration({ scene, size = 'page' }: EmptyIllustrationProps) {
+  const [brand, outline, surface, white] = useThemeColor([
     'brand',
     'foreground-tertiary',
     'card',
-    'secondary',
     'constant-white',
   ]);
   const Scene = SCENES[scene];
 
   return (
     <View
-      className="relative max-w-full"
+      className="max-w-full"
       pointerEvents="none"
       style={{ aspectRatio: 260 / 190, width: ILLUSTRATION_WIDTHS[size] }}
     >
@@ -222,19 +194,8 @@ export function EmptyIllustration({ children, scene, size = 'page' }: EmptyIllus
         viewBox="0 0 260 190"
         width="100%"
       >
-        <Scene
-          brand={brand}
-          outline={outline}
-          surface={surface}
-          secondary={secondary}
-          white={white}
-        />
+        <Scene brand={brand} outline={outline} surface={surface} white={white} />
       </Svg>
-      {children ? (
-        <View className="absolute top-[29.47%] left-[31.15%] aspect-square w-[21.54%] items-center justify-center">
-          {children}
-        </View>
-      ) : null}
     </View>
   );
 }
