@@ -26,6 +26,8 @@ import type {
 import type { LanguageVarious } from './preferenceTypes';
 import { ThemeMode } from './preferenceTypes';
 
+export type ModelWebToolsPreference = 'preferred' | 'fallback' | 'disabled';
+
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
@@ -88,7 +90,7 @@ export interface PreferenceSchema {
   'chat.web_search.default_fetch_urls_provider': WebSearchProviderId;
   'chat.web_search.default_search_keywords_provider': WebSearchProviderId;
   'chat.web_search.max_results': number;
-  'chat.web_search.model_tools_preferred': boolean;
+  'chat.web_search.model_tools': ModelWebToolsPreference;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
   'chat.input.enter_to_send': boolean;
   'chat.deepseek.safety_check': boolean;
@@ -155,7 +157,7 @@ export const PreferenceDefaults = {
   'chat.web_search.default_fetch_urls_provider': 'jina',
   'chat.web_search.default_search_keywords_provider': 'exa-mcp',
   'chat.web_search.max_results': 5,
-  'chat.web_search.model_tools_preferred': true,
+  'chat.web_search.model_tools': 'preferred',
   'chat.web_search.provider_overrides': {},
   'chat.input.enter_to_send': false,
 

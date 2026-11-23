@@ -301,9 +301,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       this.webSearchService.isConfigured('fetchUrls'),
     ]);
     return {
-      modelToolsPreferred: this.preferenceService.readCached(
-        'chat.web_search.model_tools_preferred',
-      ),
+      modelTools: this.preferenceService.readCached('chat.web_search.model_tools'),
       clientSearchAvailable,
       clientFetchAvailable,
     };
