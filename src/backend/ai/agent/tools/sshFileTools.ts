@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
 import {
+  grantedSshReadPath,
   SshError,
   SshDownloadError,
   SshFilePathSchema,
@@ -20,7 +21,8 @@ export function createSshFileTools(
   target: SshTarget,
   access: WorkspaceFileAccess,
 ): RuntimeTool[] {
-  const { profile } = target;
+  const { profile, grant } = target;
+  const fileGrant = grant && grant.scope !== 'diagnostics' ? grant : null;
   const destination = `${profile.username}@${profile.host}:${profile.port}`;
   const scope = {
     target: z.literal(destination).optional(),
@@ -79,9 +81,12 @@ export function createSshFileTools(
       description,
       inputSchema: toRuntimeInputSchema(schema),
       inputPreview: { nameField: 'target', textField: operation === 'write' ? 'content' : 'path' },
-      // The temporary grant covers selected read-only diagnostics only. File
-      // operations keep their own explicit approval, including downloads/uploads.
-      approval: 'ask',
+      approval: fileGrant && (operation === 'list' || operation === 'read') ? 'auto' : 'ask',
+      requiresApproval(input) {
+        const parsed = schema.safeParse(input);
+        return !parsed.success || !grantedSshReadPath(target, operation, parsed.data.path);
+      },
+      executionSettingsKey: fileGrant?.id,
       autoApprovalEligible: false,
       effect: operation === 'list' || operation === 'read' ? 'read' : 'write',
       failureGroup: `ssh:${profile.id}`,

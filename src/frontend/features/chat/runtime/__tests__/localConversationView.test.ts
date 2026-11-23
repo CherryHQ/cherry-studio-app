@@ -48,7 +48,7 @@ const question = {
 };
 function fixture(
   initial: Partial<AgentSessionChatState> = {},
-  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>,
+  ssh?: Pick<SshModule, 'getTarget' | 'setGrant'>,
 ) {
   let state: AgentSessionChatState = {
     sessionId: 'session',
@@ -170,19 +170,19 @@ const sshApproval = {
 };
 const grantedTarget: SshTarget = {
   ...sshTarget,
-  grant: { id: 'created-grant', expiresAt: Date.now() + 3600000 },
+  grant: { scope: 'diagnostics' as const, id: 'created-grant', expiresAt: Date.now() + 3600000 },
 };
 
 test('only a matching local SSH approval can grant diagnostics, before approving the command', async () => {
-  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
+  const ssh = { getTarget: () => sshTarget, setGrant: jest.fn(async () => grantedTarget) };
   const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
   const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
   expect(interaction.canGrantSshDiagnostics).toBe(true);
   expect(
     await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
   ).toMatchObject({ state: 'applied' });
-  expect(ssh.setCommandGrant).toHaveBeenCalledWith('session', sshTarget, true);
-  expect(ssh.setCommandGrant.mock.invocationCallOrder[0]).toBeLessThan(
+  expect(ssh.setGrant).toHaveBeenCalledWith('session', sshTarget, 'diagnostics');
+  expect(ssh.setGrant.mock.invocationCallOrder[0]).toBeLessThan(
     f.client.respondApproval.mock.invocationCallOrder[0]!,
   );
 });
@@ -190,7 +190,7 @@ test('only a matching local SSH approval can grant diagnostics, before approving
 test.each(['mcp', 'stale', 'denied', 'plain'] as const)(
   'does not create a diagnostics grant for %s approval',
   async (mode) => {
-    const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
+    const ssh = { getTarget: () => sshTarget, setGrant: jest.fn(async () => grantedTarget) };
     const pending =
       mode === 'mcp'
         ? {
@@ -209,7 +209,7 @@ test.each(['mcp', 'stale', 'denied', 'plain'] as const)(
           ? { kind: 'approve' }
           : { kind: 'approve', sshDiagnosticsGrant: true },
     );
-    expect(ssh.setCommandGrant).not.toHaveBeenCalled();
+    expect(ssh.setGrant).not.toHaveBeenCalled();
     expect(f.client.respondApproval).toHaveBeenCalledTimes(
       mode === 'mcp' || mode === 'stale' ? 0 : 1,
     );
@@ -219,7 +219,7 @@ test.each(['mcp', 'stale', 'denied', 'plain'] as const)(
 test('a target invalidated during grant admission leaves the command pending', async () => {
   const ssh = {
     getTarget: () => sshTarget,
-    setCommandGrant: jest.fn(async () => {
+    setGrant: jest.fn(async () => {
       throw new SshError('changed');
     }),
   };
@@ -232,16 +232,16 @@ test('a target invalidated during grant admission leaves the command pending', a
 });
 
 test('a rejected approval rolls back the exact diagnostics grant it created', async () => {
-  const ssh = { getTarget: () => sshTarget, setCommandGrant: jest.fn(async () => grantedTarget) };
+  const ssh = { getTarget: () => sshTarget, setGrant: jest.fn(async () => grantedTarget) };
   const f = fixture({ pendingApprovals: [sshApproval] }, ssh);
   f.client.respondApproval.mockRejectedValue(new Error('Approval is no longer pending'));
   const interaction = f.projector.snapshot(f.state, undefined).interactions[0]!;
   expect(
     await interaction.respond!.execute({ kind: 'approve', sshDiagnosticsGrant: true }),
   ).toMatchObject({ state: 'rejected' });
-  expect(ssh.setCommandGrant.mock.calls).toEqual([
-    ['session', sshTarget, true],
-    ['session', grantedTarget, false],
+  expect(ssh.setGrant.mock.calls).toEqual([
+    ['session', sshTarget, 'diagnostics'],
+    ['session', grantedTarget, null],
   ]);
 });
 

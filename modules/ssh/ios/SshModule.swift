@@ -3,7 +3,7 @@ import ExpoModulesCore
 public class SshModule: Module {
   public func definition() -> ModuleDefinition {
     Name("Ssh")
-    Constants(["resultVersion": 2])
+    Constants(["resultVersion": 2, "supportsPinnedReadPaths": true])
     Events("onEvent")
     Function("prepare") { (id: String) in SshRunner.prepare(id) }
     Function("cancel") { (id: String) in SshRunner.cancel(id) }
@@ -20,7 +20,7 @@ public class SshModule: Module {
         let result = SshRunner.run(id, strings: [options.host, options.username, options.fingerprint,
           options.password, options.privateKey, options.passphrase, options.command,
           options.cwd, options.stdin, options.directory, options.poolKey, options.operation,
-          options.path, options.localPath, options.content],
+          options.path, options.localPath, options.content, options.expectedPath],
           port: Int32(clamping: options.port), timeout: Int32(clamping: options.timeoutMs), probe: options.probe, overwrite: options.overwrite
         ) { stream, base64 in
           self.sendEvent("onEvent", ["runId": id, "stream": stream, "base64": base64])
@@ -46,6 +46,7 @@ struct SshOptions: Record {
   @Field var poolKey: String = ""
   @Field var operation: String = "exec"
   @Field var path: String = ""
+  @Field var expectedPath: String = ""
   @Field var localPath: String = ""
   @Field var content: String = ""
   @Field var overwrite: Bool = false
