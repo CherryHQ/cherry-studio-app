@@ -4,7 +4,6 @@ import {
   cloudModelUnavailable,
   getActiveCloudEntitlements,
   CloudModelCatalogSchema,
-  CloudMemberModelCatalogSchema,
 } from '@/shared/contracts/cloud';
 
 import { cloudSnapshot } from './_cloudFixtures';
@@ -109,7 +108,7 @@ test('parses all 14 fields for paid, free-plan, AMD and member-only standalone m
     { ...base, id: 'standalone', requires_plan: false, standalone: true, is_free: true },
   ];
   expect(CloudModelCatalogSchema.parse({ data })).toEqual({ data });
-  expect(CloudMemberModelCatalogSchema.parse({ data })).toEqual({ data });
+  expect(CloudModelCatalogSchema.parse({ data: [] }).data).toEqual([]);
   expect(
     CloudModelCatalogSchema.safeParse({
       data: [{ ...base, provider: 'another-partner', new_field: true }],
@@ -118,36 +117,5 @@ test('parses all 14 fields for paid, free-plan, AMD and member-only standalone m
   for (const key of Object.keys(base)) {
     const incomplete = { data: [{ ...base, [key]: undefined }] };
     expect(CloudModelCatalogSchema.safeParse(incomplete).success).toBe(false);
-    expect(CloudMemberModelCatalogSchema.safeParse(incomplete).success).toBe(false);
-  }
-});
-
-test('only signed-in discovery accepts the seven subscription fields from Global', () => {
-  const legacy = {
-    id: 'subscription-model',
-    display_name: 'Subscription model',
-    endpoint_type: 'anthropic-messages',
-    context_window: 128000,
-    max_output_tokens: 8192,
-    capabilities: null,
-    available_features: null,
-  };
-  expect(CloudModelCatalogSchema.safeParse({ data: [legacy] }).success).toBe(false);
-  expect(CloudMemberModelCatalogSchema.parse({ data: [legacy] }).data[0]).toEqual({
-    ...legacy,
-    capabilities: [],
-    available_features: [],
-    requires_login: true,
-    requires_plan: true,
-    is_free: false,
-    standalone: false,
-    provider: null,
-    activation_required: false,
-    activation_endpoint: null,
-  });
-  for (const partial of [{ provider: 'amd' }, { standalone: true }, { requires_login: false }]) {
-    expect(
-      CloudMemberModelCatalogSchema.safeParse({ data: [{ ...legacy, ...partial }] }).success,
-    ).toBe(false);
   }
 });

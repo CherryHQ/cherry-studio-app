@@ -138,12 +138,9 @@ HMAC credential. Guest inference signs the final POST body with the same applica
 Guest transport omits cookies, Product Bearer and device headers. The gateway rate-limits requests
 by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
 
-The CN gateway serves the full 14-field catalog. Its login, plan, guest and AMD activation
-rules come directly from the directory. The Global gateway currently returns only the signed-in
-account’s subscription models as 7-field rows. Mobile reads these as requiring login and an active
-entitlement covering the model. An account without an active plan receives an empty directory.
-AMD, standalone and guest offers require the full catalog. A guest may call an eligible model
-with `requires_login=false`. Login replaces the guest snapshot and transport.
+The CN and Global gateways return the same 14-field model format. Each gateway lists its
+published models, including plan models the account cannot yet use. A guest may call an eligible
+model with `requires_login=false`. Login replaces the guest snapshot and transport.
 Member requests sign the same directory path and query using a Product Session and v2 device
 signature with a fresh nonce. The catalog owns the free badge (`is_free`) and the plan gate
 (`requires_plan`). A free plan model still needs an active account entitlement containing its ID.
