@@ -93,6 +93,29 @@ describe('DataApiService', () => {
     ).resolves.toEqual({ modelId: 'Kwai-Kolors/Kolors', providerId: 'silicon' });
   });
 
+  it('routes model order endpoints ahead of the greedy uniqueModelId wildcard', async () => {
+    const reorderSingle = jest.fn(async ({ params }) => params.uniqueModelId);
+    const reorderBatch = jest.fn(async ({ body }) => body);
+    const updateModel = jest.fn(async () => ({}));
+    const service = createService({
+      '/models/:uniqueModelId*': { PATCH: updateModel },
+      '/models/:uniqueModelId*/order': { PATCH: reorderSingle },
+      '/models/order:batch': { PATCH: reorderBatch },
+    });
+
+    await expect(
+      service.patch('/models/cherryin::openai/gpt-4o/order', { body: { position: 'first' } }),
+    ).resolves.toBe('cherryin::openai/gpt-4o');
+    expect(reorderSingle).toHaveBeenCalledTimes(1);
+    expect(updateModel).not.toHaveBeenCalled();
+
+    await service.patch('/models/order:batch', {
+      body: { moves: [{ id: 'cherryin::a', anchor: { position: 'last' } }] },
+    });
+    expect(reorderBatch).toHaveBeenCalledTimes(1);
+    expect(updateModel).not.toHaveBeenCalled();
+  });
+
   it('distinguishes an unsupported method from an unknown route', async () => {
     const service = createService({
       '/agents': { GET: jest.fn(async () => ({ items: [] })) },

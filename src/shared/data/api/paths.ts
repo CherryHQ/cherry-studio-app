@@ -28,13 +28,29 @@ type HasMatchingSegmentCount<
       ? false
       : true;
 
-export type MatchApiPath<Path extends string> = {
-  [K in keyof ApiSchemas]: Path extends ResolvedPath<K & string>
+type NonTrailingBareSplatApiPaths = {
+  [K in keyof ApiSchemas]: K extends `${string}*` ? never : K;
+}[keyof ApiSchemas] &
+  string;
+
+type TrailingBareSplatApiPaths = {
+  [K in keyof ApiSchemas]: K extends `${string}*` ? K : never;
+}[keyof ApiSchemas] &
+  string;
+
+type MatchInKeys<Path extends string, Keys extends keyof ApiSchemas> = {
+  [K in Keys]: Path extends ResolvedPath<K & string>
     ? HasMatchingSegmentCount<Path, K & string> extends true
       ? K
       : never
     : never;
-}[keyof ApiSchemas];
+}[Keys];
+
+export type MatchApiPath<Path extends string> = [
+  MatchInKeys<Path, NonTrailingBareSplatApiPaths>,
+] extends [never]
+  ? MatchInKeys<Path, TrailingBareSplatApiPaths>
+  : MatchInKeys<Path, NonTrailingBareSplatApiPaths>;
 
 type SchemaKeyForPath<Path extends string> = Path extends TemplateApiPaths
   ? Path

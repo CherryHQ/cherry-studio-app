@@ -16,6 +16,7 @@ jest.mock('uuid', () => ({
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
 jest.mock('../utils/orderKey', () => ({
+  applyScopedMoves: jest.fn(),
   insertManyWithOrderKey: jest.fn(),
   insertWithOrderKey: jest.fn(),
 }));
