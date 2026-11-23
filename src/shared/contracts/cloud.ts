@@ -7,6 +7,7 @@ import {
 
 export const CLOUD_PROVIDER_ID = 'cherryai-subscription';
 export const CLOUD_PROVIDER_NAME = 'CherryAI';
+export const CLOUD_DEFAULT_CHAT_ENDPOINT = 'anthropic-messages' as const;
 export type CloudModelUse = 'agent' | 'general';
 
 const UnitsSchema = z.number().int().nonnegative();
@@ -87,7 +88,9 @@ const ModelStringListSchema = z
 export const CloudModelSchema = z
   .object({
     id: z.string().regex(/\S/),
-    endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
+    endpoint_type: z
+      .enum([CLOUD_DEFAULT_CHAT_ENDPOINT, 'openai-chat-completions'])
+      .catch(CLOUD_DEFAULT_CHAT_ENDPOINT),
     display_name: z.string().trim().catch(''),
     context_window: z.number().int().positive().catch(DEFAULT_MODEL_CONTEXT_WINDOW),
     max_output_tokens: z.number().int().positive().catch(DEFAULT_MODEL_MAX_OUTPUT_TOKENS),
@@ -98,25 +101,19 @@ export const CloudModelSchema = z
     is_free: z.boolean().catch(false),
     standalone: z.boolean().catch(false),
     provider: z.string().trim().min(1).nullable().catch(null),
-    activation_required: z.boolean().nullable().catch(null),
+    activation_required: z.boolean().catch(false),
     activation_endpoint: z.string().trim().min(1).nullable().catch(null),
   })
   .transform((model) => ({
     ...model,
     display_name: model.display_name || model.id,
-    // Plan coverage can admit a regular subscription model. Other offers need explicit activation status.
-    activation_required:
-      model.activation_required ??
-      (!model.requires_plan || model.provider !== null || model.activation_endpoint !== null),
   }));
 
 export const CloudModelCatalogSchema = z.object({
-  data: z.array(z.unknown()).transform((rows) =>
-    rows.flatMap((row) => {
-      const model = CloudModelSchema.safeParse(row);
-      return model.success ? [model.data] : [];
-    }),
-  ),
+  data: z
+    .array(CloudModelSchema.nullable().catch(null))
+    .catch([])
+    .transform((models) => models.filter((model) => model !== null)),
 });
 
 export const CloudAmdStatusSchema = z.object({

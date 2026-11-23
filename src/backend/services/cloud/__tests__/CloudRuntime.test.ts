@@ -1226,12 +1226,11 @@ test('a recognized plan refusal refreshes account entitlements, without signing 
 test('a subscriber can use a covered model when catalog metadata is incomplete', async () => {
   const model = {
     id: 'cloud-model',
-    endpoint_type: 'anthropic-messages',
     available_features: ['agent'],
   };
   mockGet.mockImplementation(async (account: string, path: string) =>
     path === '/v1/models?limit=1000&catalog=full'
-      ? { data: [{ id: 'unsupported' }, model] }
+      ? { data: [{ display_name: 'No model ID' }, model] }
       : reply(account, path),
   );
   mockInference.mockResolvedValue(new Response(null, { status: 200 }));

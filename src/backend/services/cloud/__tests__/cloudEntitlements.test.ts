@@ -122,7 +122,6 @@ test('reads usable rows and fields independently, applying defaults to missing o
       null,
       { endpoint_type: routing.endpoint_type },
       { ...routing, id: ' ' },
-      { ...routing, endpoint_type: 'future-protocol' },
       {
         ...routing,
         display_name: null,
@@ -151,22 +150,36 @@ test('reads usable rows and fields independently, applying defaults to missing o
       activation_endpoint: null,
     },
   ]);
-  expect(CloudModelCatalogSchema.safeParse({ data: null }).success).toBe(false);
+  expect(CloudModelCatalogSchema.parse({}).data).toEqual([]);
+  expect(CloudModelCatalogSchema.parse({ data: null }).data).toEqual([]);
 });
 
-test('missing activation status cannot unlock a plan-free offer', () => {
-  const state = cloudSnapshot();
-  const { data: models } = CloudModelCatalogSchema.parse({
+test('defaults each field independently for models with only an ID or additional provider metadata', () => {
+  const { data } = CloudModelCatalogSchema.parse({
     data: [
+      { id: 'bare-model' },
       {
-        ...state.models[0],
-        requires_login: false,
+        id: 'partner-model',
+        endpoint_type: 'future-protocol',
+        provider: 'partner',
         requires_plan: false,
-        activation_required: undefined,
+        activation_endpoint: '/activate',
       },
     ],
   });
-  expect(cloudModelUnavailable({ ...state, models }, models[0].id, 'agent', now)).toBe(
-    'unavailable',
-  );
+  expect(data).toMatchObject([
+    {
+      id: 'bare-model',
+      display_name: 'bare-model',
+      endpoint_type: 'anthropic-messages',
+      requires_plan: true,
+      activation_required: false,
+    },
+    {
+      id: 'partner-model',
+      endpoint_type: 'anthropic-messages',
+      requires_plan: false,
+      activation_required: false,
+    },
+  ]);
 });

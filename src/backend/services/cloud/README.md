@@ -139,11 +139,11 @@ Guest transport omits cookies, Product Bearer and device headers. The gateway ra
 by IP; Mobile honors its `Retry-After`. Missing signatures stop both guest transports.
 
 Both regions list published models, including plan models the account cannot yet use.
-Mobile reads each entry independently and skips entries without a model ID or a supported
-endpoint type. A missing name falls back to the ID, invalid token limits use the mobile defaults,
-and only advertised features and capabilities are used. Missing access flags require login and
-plan coverage. Partner models, models with an activation endpoint and plan-free models need
-explicit activation status before use. A guest may call an eligible model with
+The model list defaults to empty. Mobile reads the fields it uses from each model with an ID.
+The display name defaults to the ID and the protocol to the CherryAI provider's default chat
+endpoint. Token limits use the mobile defaults. Feature and capability lists default to empty.
+Login and plan requirements each default to true. The app prompts for activation when the
+gateway sets `activation_required` to true. A guest may call an eligible model with
 `requires_login=false`. Login replaces the guest snapshot and transport.
 Member requests sign the same directory path and query using a Product Session and v2 device
 signature with a fresh nonce. The catalog owns the free badge (`is_free`) and the plan gate
