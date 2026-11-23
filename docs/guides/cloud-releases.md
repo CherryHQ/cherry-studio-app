@@ -326,8 +326,8 @@ From the release checkout on macOS with dependencies installed and EAS access, r
 bash scripts/verifyEasIosSymbols.sh "$BUILD_ID"
 ```
 
-If the Sentry step failed after local validation, EAS keeps the signed IPA and the original
-recovery bundle. Its `upload.pending` marker blocks ordinary submission. Once the Sentry
+If the Sentry step failed or ran out of hook time after local validation, EAS keeps the signed IPA
+and the original recovery bundle. Its `upload.pending` marker blocks ordinary submission. Once the Sentry
 service or credentials are restored, export the release's `EXPO_PUBLIC_SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN` and configured `SENTRY_URL` on the workstation. The operator can retry
 the recorded build without compiling it again:

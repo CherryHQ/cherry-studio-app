@@ -31,6 +31,7 @@ import {
   resolveBuildContext,
   resolveSymbolPackage,
   parseDsnProjectId,
+  PendingSymbolUpload,
   resolveSentryCli,
   type Run,
   runUploadIosSymbols,
@@ -1483,6 +1484,87 @@ it.each(['current', 'previous'])(
   },
 );
 
+it('a Sentry upload cut off at the hook deadline leaves the build repairable', () => {
+  const f = fixture();
+  const child = join(f.root, 'deadline-upload.cjs');
+  put(
+    child,
+    `
+    require(${JSON.stringify(require.resolve('tsx/cjs'))});
+    const { readFileSync } = require('node:fs');
+    const { transformSync } = require(${JSON.stringify(require.resolve('@babel/core'))});
+    const Module = require('node:module');
+    const filename = ${JSON.stringify(resolve('scripts/uploadIosSymbols.ts'))};
+    const code = transformSync(readFileSync(filename, 'utf8'), { filename, configFile: false, babelrc: false, presets: [${JSON.stringify(require.resolve('@babel/preset-typescript'))}], plugins: [${JSON.stringify(require.resolve('@babel/plugin-transform-modules-commonjs'))}] }).code;
+    // Shift only hook-budget timers, keeping their real order and gaps.
+    const timer = global.setTimeout;
+    global.setTimeout = (fn, ms, ...args) => timer(fn, ms > 500000 ? ms - 599700 : ms, ...args);
+    const m = new Module(filename, module); m.filename = filename; m.paths = Module._nodeModulePaths(require('node:path').dirname(filename));
+    require.cache[filename] = m;
+    // Mirror boundedRun: a real native upload is bounded by the remaining hook budget.
+    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active",buildId:"${f.ctx.buildId}"}); runUploadIosSymbols = async ({ deadlineMs }) => { const result = await runCommand("/bin/sleep", ["30"], { timeoutMs: deadlineMs - Date.now() }); throw new PendingSymbolUpload(result.timedOut ? "HOOK_DEADLINE" : "UNEXPECTED"); };', filename);
+    m.exports.main();
+  `,
+  );
+  const result = spawnSync(process.execPath, [child], {
+    cwd: f.project,
+    encoding: 'utf8',
+    timeout: 10000,
+  });
+  expect(result.stderr).not.toContain('hook deadline exceeded');
+  expect(result.stderr).toContain('Original symbols retained for retry');
+  expect(result.status).toBe(0);
+});
+
+it('the watchdog records a hung Sentry stage as pending instead of failing the build', () => {
+  const f = fixture();
+  const child = join(f.root, 'watchdog-pending.cjs');
+  put(
+    child,
+    `
+    require(${JSON.stringify(require.resolve('tsx/cjs'))});
+    const { readFileSync } = require('node:fs');
+    const { transformSync } = require(${JSON.stringify(require.resolve('@babel/core'))});
+    const Module = require('node:module');
+    const filename = ${JSON.stringify(resolve('scripts/uploadIosSymbols.ts'))};
+    const code = transformSync(readFileSync(filename, 'utf8'), { filename, configFile: false, babelrc: false, presets: [${JSON.stringify(require.resolve('@babel/preset-typescript'))}], plugins: [${JSON.stringify(require.resolve('@babel/plugin-transform-modules-commonjs'))}] }).code;
+    const timer = global.setTimeout;
+    global.setTimeout = (fn, ms, ...args) => timer(fn, ms > 500000 ? 20 : ms, ...args);
+    const m = new Module(filename, module); m.filename = filename; m.paths = Module._nodeModulePaths(require('node:path').dirname(filename));
+    require.cache[filename] = m;
+    m._compile(code + '\\nresolveBuildContext = () => ({kind:"active",buildId:"${f.ctx.buildId}"}); runUploadIosSymbols = () => { activePendingMarker = { outDir: ${JSON.stringify(f.outDir)}, directory: "attempt-hung" }; return new Promise(() => {}); };', filename);
+    m.exports.main();
+  `,
+  );
+  mkdirSync(f.outDir, { recursive: true });
+  const result = spawnSync(process.execPath, [child], {
+    cwd: f.project,
+    encoding: 'utf8',
+    timeout: 10000,
+  });
+  expect(result.stderr).toContain('HOOK_DEADLINE');
+  expect(result.status).toBe(0);
+  expect(JSON.parse(readFileSync(join(f.outDir, 'upload.pending'), 'utf8'))).toEqual({
+    directory: 'attempt-hung',
+  });
+});
+
+it('a deadline after Sentry verification keeps the same build repairable', async () => {
+  const f = fixture();
+  const originalRun = f.run;
+  let uploaded = false;
+  f.deps.run = async (command, args, options) => {
+    if (args.includes('upload')) uploaded = true;
+    // Publishing re-inspects the prepared package; let it overrun the hook budget.
+    if (uploaded && args.includes('check')) await f.sleep(600000);
+    return originalRun(command, args, options);
+  };
+  await expect(runUploadIosSymbols(f.deps)).rejects.toBeInstanceOf(PendingSymbolUpload);
+  expect(f.receipt().upload.status).toBe('passed');
+  expect(existsSync(join(f.outDir, 'upload.pending'))).toBe(true);
+  expect(existsSync(join(f.outDir, 'package.complete'))).toBe(false);
+});
+
 it.each([
   ['ExpoWidgetsTarget', 'com.cherryai.cherrystudio-app.ExpoWidgetsTarget'],
   ['CherryShareExtension', 'com.cherryai.cherrystudio-app.CherryShareExtension'],
@@ -1620,6 +1702,12 @@ it.each(['plist', 'manifest', 'receipt', 'marker'])(
     expect(readFileSync(join(f.outDir, 'package.complete'))).toEqual(marker);
     for (const [name, bytes] of Object.entries(previous))
       expect(readFileSync(join(previousDirectory, name))).toEqual(bytes);
+    if (boundary === 'receipt' || boundary === 'marker') {
+      // Publication follows Sentry work, so the attempt's original ZIP stays repairable.
+      const pending = JSON.parse(readFileSync(join(f.outDir, 'upload.pending'), 'utf8'));
+      expect(existsSync(join(f.outDir, pending.directory, 'dsyms.zip'))).toBe(true);
+      return;
+    }
     const copies = walk(f.outDir).filter(
       (path) => path.includes('/work-') && path.endsWith('/DWARF/CherryStudio'),
     );

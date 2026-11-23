@@ -25,6 +25,8 @@ import { verifyPreparedSymbolPackage } from './verifyIosSymbolPackage';
 
 // Initial unmeasured policy bounds, not measurements of worker or Sentry performance.
 export const HOOK_DEADLINE_MS = 10 * 60_000;
+// The watchdog is a backstop. It fires after the in-process deadline can record a pending upload.
+export const WATCHDOG_GRACE_MS = 30_000;
 export const TOOL_TIMEOUT_MS = 60_000;
 export const PACKAGING_TIMEOUT_MS = 120_000;
 export const UPLOAD_TIMEOUT_MS = 180_000;
@@ -163,6 +165,13 @@ export function sanitizeDiagnostic(
 }
 const activeChildKills = new Set<() => void>();
 let activeAttemptReceipt: string | undefined;
+// Set once the attempt package is complete and Sentry work has started.
+let activePendingMarker: { outDir: string; directory: string } | undefined;
+const PENDING_MESSAGE =
+  'Original symbols retained for retry. The submission gate requires Sentry verification for this build.';
+function writePendingMarker({ outDir, directory }: { outDir: string; directory: string }) {
+  writeJson(join(outDir, 'upload.pending'), { directory });
+}
 export const runCommand: Run = (command, args, options) =>
   new Promise((accept) => {
     const env = options?.env ?? process.env;
@@ -1331,7 +1340,6 @@ export async function runUploadIosSymbols({
   let receipt = initialReceipt(ctx, outDir, timestamp());
   let executables = 0;
   let failure: GateError | undefined;
-  let remoteWork = false;
   let stage: 'preflight' | 'upload' | 'remoteVerification' = 'preflight';
   const attemptDir = mkdtempSync(join(outDir, 'attempt-'));
   const save = () => writeJson(join(attemptDir, 'verification.json'), receipt);
@@ -1434,7 +1442,8 @@ export async function runUploadIosSymbols({
         });
       }
     }
-    remoteWork = true;
+    // From here on, any failure leaves the complete attempt repairable with --retry-upload.
+    activePendingMarker = { outDir, directory: basename(attemptDir) };
     const preflightDeadline = Math.min(hookDeadline, now() + VERIFICATION_TIMEOUT_MS);
     await retryPreflight({
       now,
@@ -1500,7 +1509,6 @@ export async function runUploadIosSymbols({
       },
     });
     checkDeadline();
-    remoteWork = false;
     receipt.remoteVerification = { status: 'passed', updatedAt: timestamp() };
     const vendorFiles = localFiles(
       vendors.flatMap((bundle) => bundle.uuids),
@@ -1543,8 +1551,8 @@ export async function runUploadIosSymbols({
       observedAt: timestamp(),
     };
     save();
-    if (remoteWork) {
-      writeJson(join(outDir, 'upload.pending'), { directory: basename(attemptDir) });
+    if (activePendingMarker) {
+      writePendingMarker(activePendingMarker);
       failure = new PendingSymbolUpload(receipt.failure.code, receipt.failure.message);
     } else failure = new GateError(receipt.failure.code, receipt.failure.message);
   } finally {
@@ -1552,12 +1560,7 @@ export async function runUploadIosSymbols({
     if (!failure || failure instanceof PendingSymbolUpload)
       rmSync(workDir, { recursive: true, force: true });
     activeAttemptReceipt = undefined;
-  }
-  if (!failure && now() >= hookDeadline) {
-    receipt[stage] = { status: 'failed', updatedAt: timestamp() };
-    receipt.failure = { stage, code: 'HOOK_DEADLINE', observedAt: timestamp() };
-    save();
-    throw new GateError('HOOK_DEADLINE');
+    activePendingMarker = undefined;
   }
   if (failure) throw failure;
   // EAS archives this directory. Keep one copy of a successful attempt's original dSYMs.
@@ -1592,9 +1595,19 @@ export async function main() {
         }
         for (const kill of activeChildKills) kill();
         console.error('HOOK_DEADLINE: iOS symbol hook deadline exceeded');
+        const pending = activePendingMarker;
+        if (pending) {
+          try {
+            writePendingMarker(pending);
+            console.error(PENDING_MESSAGE);
+            process.exit(0);
+          } catch {
+            console.error('Could not record the pending iOS symbol upload');
+          }
+        }
         process.exit(1);
       },
-      Math.max(0, deadlineMs - Date.now()),
+      Math.max(0, deadlineMs + WATCHDOG_GRACE_MS - Date.now()),
     );
     ctx = resolveBuildContext(process.env);
     if (Date.now() >= deadlineMs) throw new GateError('HOOK_DEADLINE');
@@ -1610,9 +1623,7 @@ export async function main() {
       sanitizeDiagnostic(error instanceof GateError ? error.message : 'iOS symbol gate failed'),
     );
     if (error instanceof PendingSymbolUpload) {
-      console.error(
-        'Original symbols retained for retry. The submission gate requires Sentry verification for this build.',
-      );
+      console.error(PENDING_MESSAGE);
     } else process.exitCode = 1;
   } finally {
     clearTimeout(watchdog);
