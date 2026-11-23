@@ -430,7 +430,7 @@ void fileOperation(Connection &connection, const Options &options, const std::st
       throw Failure(options.overwrite ? "path" : "file-exists");
   } else {
     result.path = canonicalPath(connection, candidate, run, deadline);
-    if (!withinRoot(root, result.path)) throw Failure("path");
+    if (!withinRoot(root, result.path) || (!options.expectedPath.empty() && result.path != options.expectedPath)) throw Failure("path");
   }
   if (options.operation == "list") {
     openFile(connection, result.path, 0, LIBSSH2_SFTP_OPENDIR, run, deadline);

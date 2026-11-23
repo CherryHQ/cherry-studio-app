@@ -12,6 +12,7 @@ export type SshNativeOptions = {
   cwd?: string;
   stdin?: string;
   directory?: string;
+  expectedPath?: string;
   poolKey?: string;
   operation?: 'exec' | 'list' | 'read' | 'write' | 'download' | 'upload';
   path?: string;
@@ -24,6 +25,7 @@ export type SshNativeOptions = {
 
 export type SshNative = {
   readonly resultVersion: number;
+  readonly supportsPinnedReadPaths?: boolean;
   prepare(id: string): boolean;
   cancel(id: string): void;
   respond(id: string, challenge: string, responses: readonly string[]): void;

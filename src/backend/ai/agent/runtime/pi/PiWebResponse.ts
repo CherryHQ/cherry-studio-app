@@ -189,7 +189,33 @@ function replayAnthropicContent(
   }
   for (const index of restored)
     replayed[index] = withoutStrandedAnthropicCalls(replayed, index, body.tools);
-  return { ...body, messages: replayed };
+  // Other Messages-compatible providers can require their original thinking for tool replay.
+  if (!/^https:\/\/api\.anthropic\.com(?::443)?(?:\/|$)/i.test(model.baseUrl)) {
+    return { ...body, messages: replayed };
+  }
+  // A user message carrying tool results still belongs to the active tool loop.
+  const lastQuestion = replayed.findLastIndex((value) => {
+    const message = record(value);
+    return (
+      message?.role === 'user' &&
+      !array(message.content).some((part) => record(part)?.type === 'tool_result')
+    );
+  });
+  if (lastQuestion <= 0) return { ...body, messages: replayed };
+  return {
+    ...body,
+    messages: replayed.flatMap((value, index) => {
+      const message = record(value);
+      if (index >= lastQuestion || message?.role !== 'assistant' || !Array.isArray(message.content))
+        return [value];
+      const content = message.content.filter((part) => {
+        const type = record(part)?.type;
+        return type !== 'thinking' && type !== 'redacted_thinking';
+      });
+      if (content.length === message.content.length) return [value];
+      return content.length ? [{ ...message, content }] : [];
+    }),
+  };
 }
 
 /**

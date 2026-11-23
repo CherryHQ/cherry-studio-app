@@ -13,12 +13,16 @@ const logger = loggerService.withContext('VoiceAudioSession');
  * aloud is requested media playback, so it plays with the ring switch silenced.
  */
 export const voiceAudioSession = {
-  playback: () =>
+  playback: (backgroundPlayback = false) =>
     setAudioModeAsync({
       allowsRecording: false,
       playsInSilentMode: true,
       // The voice runtime still stops reading on background entry without consent.
-      shouldPlayInBackground: Platform.OS === 'ios',
+      shouldPlayInBackground: Platform.OS === 'ios' || backgroundPlayback,
+      // The Android playback service holds speech focus across synthesis and utterance gaps.
+      ...(Platform.OS === 'android'
+        ? { interruptionMode: backgroundPlayback ? 'mixWithOthers' : 'doNotMix' }
+        : {}),
     }),
   /** Release only after the native speech/capture operation has actually settled. */
   async acquire(kind: 'speech' | 'capture'): Promise<() => Promise<void>> {

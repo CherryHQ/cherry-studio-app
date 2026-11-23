@@ -76,7 +76,7 @@ export function createSystemSpeechEngine({
     // Every supported iOS and Android device ships a speech engine.
     status: async () => 'ready',
     listVoices,
-    async speak({ text, language, signal }) {
+    async speak({ text, language, signal, backgroundPlayback }) {
       const [voiceId, voices] = await Promise.all([voice(), listVoices(language, signal)]);
       signal.throwIfAborted();
       // Resolve an installed ID even for the default. expo-speech 58's Android adapter parses
@@ -94,7 +94,7 @@ export function createSystemSpeechEngine({
       const release = await voiceAudioSession.acquire('speech');
       try {
         signal.throwIfAborted();
-        await voiceAudioSession.playback();
+        await voiceAudioSession.playback(backgroundPlayback);
         for (const chunk of splitSpeechText(text, Speech.maxSpeechInputLength)) {
           signal.throwIfAborted();
           await utter(chunk, language, selected.id, signal);

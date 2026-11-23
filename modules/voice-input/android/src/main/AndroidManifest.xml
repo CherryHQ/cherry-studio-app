@@ -1,3 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <application>
+    <service android:name=".SpeechPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+  </application>
 </manifest>

@@ -9,7 +9,7 @@ import expo.modules.kotlin.records.Record
 class SshModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Ssh")
-    Constants("resultVersion" to 2)
+    Constants("resultVersion" to 2, "supportsPinnedReadPaths" to true)
     Events("onEvent")
     Function("prepare") { id: String -> SshNative.prepare(id.toByteArray(Charsets.UTF_8)) }
     Function("cancel") { id: String -> SshNative.cancel(id.toByteArray(Charsets.UTF_8)) }
@@ -27,7 +27,7 @@ class SshModule : Module() {
           val result = SshNative.run(id.toByteArray(Charsets.UTF_8),
             arrayOf(options.host, options.username, options.fingerprint, options.password,
               options.privateKey, options.passphrase, options.command, options.cwd, options.stdin,
-              options.directory, options.poolKey, options.operation, options.path, options.localPath, options.content).map { it.toByteArray(Charsets.UTF_8) }.toTypedArray(),
+              options.directory, options.poolKey, options.operation, options.path, options.localPath, options.content, options.expectedPath).map { it.toByteArray(Charsets.UTF_8) }.toTypedArray(),
             options.port, options.timeoutMs, options.probe, options.overwrite,
             SshOutput { stream, data ->
               sendEvent("onEvent", mapOf("runId" to id, "stream" to String(stream, Charsets.UTF_8), "base64" to String(data, Charsets.UTF_8)))
@@ -56,6 +56,7 @@ class SshOptions : Record {
   @Field var poolKey: String = ""
   @Field var operation: String = "exec"
   @Field var path: String = ""
+  @Field var expectedPath: String = ""
   @Field var localPath: String = ""
   @Field var content: String = ""
   @Field var overwrite: Boolean = false

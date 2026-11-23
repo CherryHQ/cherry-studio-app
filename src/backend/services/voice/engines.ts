@@ -26,6 +26,8 @@ export interface DictationEngine {
 }
 
 export type SpeechRequest = {
+  /** Android has admitted this reading to its media service. */
+  backgroundPlayback?: boolean;
   /** Plain prose; the runtime has already removed Markdown. */
   text: string;
   language: AppLanguage;

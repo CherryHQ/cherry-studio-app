@@ -18,6 +18,7 @@ import {
   readSshMentions,
   removeSshMentions,
 } from '../utils/sshMentions';
+import { SshFileReadGrant } from './SshFileReadGrant';
 
 export function ChatInputSshSheet({
   contextId,
@@ -160,6 +161,9 @@ export function ChatInputSshSheet({
           </Pressable>
         );
       })}
+      {open && target && contextId && (target.grant || ssh.supportsFileReadGrants()) ? (
+        <SshFileReadGrant key={target.selectionId} target={target} contextId={contextId} />
+      ) : null}
     </ScrollView>
   );
   return (

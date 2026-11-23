@@ -302,3 +302,55 @@ function createFakeDbService(rows: PreferenceInputRow[] = []) {
 
   return service;
 }
+
+test.each([null, '', 'preferred ', 0, true, false, [], {}])(
+  'returns disabled for stored null before preference defaulting (%p)',
+  async (value) => {
+    const key = 'chat.web_search.model_tools';
+    const db = createFakeDbService([{ key, value }]);
+    const service = new PreferenceService(db);
+    await service._doInit();
+    expect(service.getCachedValue(key)).toBe('disabled');
+    expect(service.readCached(key)).toBe('disabled');
+    await expect(service.get(key)).resolves.toBe('disabled');
+    expect(db.rows.get(key)?.value).toEqual(value);
+    expect(db.writeCount).toBe(0);
+  },
+);
+
+test.each(['preferred', 'fallback', 'disabled'] as const)(
+  'persists each model-tools choice across service initialization (%s)',
+  async (choice) => {
+    const legacy = 'chat.web_search.model_tools_preferred';
+    const db = createFakeDbService([
+      { key: legacy, value: false },
+      {
+        key: 'chat.web_search.model_tools',
+        value: choice === 'preferred' ? 'fallback' : 'preferred',
+      },
+    ]);
+    const first = new PreferenceService(db);
+    await first._doInit();
+    await first.set('chat.web_search.model_tools', choice);
+    const second = new PreferenceService(db);
+    await second._doInit();
+    expect(second.readCached('chat.web_search.model_tools')).toBe(choice);
+    expect(db.rows.get('chat.web_search.model_tools')?.value).toBe(choice);
+    expect(second.getAll()).not.toHaveProperty(legacy);
+    expect(db.rows.get(legacy)?.value).toBe(false);
+  },
+);
+
+test('rolls the model-tools subscription back after a failed save', async () => {
+  const key = 'chat.web_search.model_tools';
+  const db = createFakeDbService([{ key, value: 'fallback' }]);
+  const service = new PreferenceService(db);
+  await service._doInit();
+  const observed: unknown[] = [];
+  service.subscribeChange(key)(() => observed.push(service.readCached(key)));
+  db.failNextWrite = true;
+  await expect(service.set(key, 'disabled')).rejects.toThrow('write failed');
+  expect(observed).toEqual(['disabled', 'fallback']);
+  expect(service.readCached(key)).toBe('fallback');
+  expect(db.rows.get(key)?.value).toBe('fallback');
+});

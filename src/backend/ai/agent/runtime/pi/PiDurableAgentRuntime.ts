@@ -56,6 +56,7 @@ import {
   detachedJson,
   failedPiToolGroups,
   PiConfigurationSchema,
+  serializePiConfiguration,
   piSubmissionMetadata,
   piToolBlueprint,
   projectPiTurn,
@@ -463,7 +464,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         revision: seed.revision,
         agent,
         options: configuration.options,
-        configuration: detachedJson(configuration),
+        configuration: serializePiConfiguration(configuration),
         initialInstructions: configuration.initialInstructions,
         resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
         entries: originalEntries,
@@ -489,7 +490,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         revision: seed.revision,
         agent,
         options: configuration.options,
-        configuration: detachedJson(configuration),
+        configuration: serializePiConfiguration(configuration),
         initialInstructions: configuration.initialInstructions,
         at: parseBoundary(seed.from.boundary),
         resourceFileEntryIds: seed.referencedFileEntryIds,
@@ -508,7 +509,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         agent,
         configuration.options,
         BACKGROUND_CONTEXT,
-        detachedJson(configuration),
+        serializePiConfiguration(configuration),
         configuration.initialInstructions,
       );
       await this.bindProvider(lane);
@@ -780,7 +781,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     try {
       signal?.throwIfAborted();
       if (stored?.version === 1)
-        await runtime.restoreConfiguration(key, detachedJson(configuration), agent);
+        await runtime.restoreConfiguration(key, serializePiConfiguration(configuration), agent);
       signal?.throwIfAborted();
       await this.bindProvider(lane);
     } catch (error) {

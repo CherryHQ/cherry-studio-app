@@ -1,7 +1,13 @@
 import * as z from 'zod';
 
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
+
 export const CLOUD_PROVIDER_ID = 'cherryai-subscription';
 export const CLOUD_PROVIDER_NAME = 'CherryAI';
+export const CLOUD_DEFAULT_CHAT_ENDPOINT = 'anthropic-messages' as const;
 export type CloudModelUse = 'agent' | 'general';
 
 const UnitsSchema = z.number().int().nonnegative();
@@ -74,49 +80,42 @@ export const CloudAccountSchema = z.object({
   quota_pools: z.array(CloudQuotaPoolSchema),
 });
 
-const CloudModelFields = {
-  id: z.string().min(1),
-  display_name: z.string(),
-  endpoint_type: z.enum(['anthropic-messages', 'openai-chat-completions']),
-  context_window: z.number().int().positive(),
-  max_output_tokens: z.number().int().positive(),
-  capabilities: z.array(z.string()),
-  available_features: z.array(z.string()),
-};
-export const CloudModelSchema = z.object({
-  ...CloudModelFields,
-  requires_login: z.boolean(),
-  requires_plan: z.boolean(),
-  is_free: z.boolean(),
-  standalone: z.boolean(),
-  provider: z.string().nullable(),
-  activation_required: z.boolean(),
-  activation_endpoint: z.string().nullable(),
-});
-export const CloudModelCatalogSchema = z.object({ data: z.array(CloudModelSchema) });
+const ModelStringListSchema = z
+  .array(z.unknown())
+  .catch([])
+  .transform((values) => values.filter((value) => typeof value === 'string'));
 
-const LegacySubscriptionModelSchema = z
-  .strictObject({
-    ...CloudModelFields,
-    capabilities: CloudModelFields.capabilities.nullable(),
-    available_features: CloudModelFields.available_features.nullable(),
+export const CloudModelSchema = z
+  .object({
+    id: z.string().regex(/\S/),
+    endpoint_type: z
+      .enum([CLOUD_DEFAULT_CHAT_ENDPOINT, 'openai-chat-completions'])
+      .catch(CLOUD_DEFAULT_CHAT_ENDPOINT),
+    display_name: z.string().trim().catch(''),
+    context_window: z.number().int().positive().catch(DEFAULT_MODEL_CONTEXT_WINDOW),
+    max_output_tokens: z.number().int().positive().catch(DEFAULT_MODEL_MAX_OUTPUT_TOKENS),
+    capabilities: ModelStringListSchema,
+    available_features: ModelStringListSchema,
+    requires_login: z.boolean().catch(true),
+    requires_plan: z.boolean().catch(true),
+    is_free: z.boolean().catch(false),
+    standalone: z.boolean().catch(false),
+    provider: z.string().trim().min(1).nullable().catch(null),
+    activation_required: z.boolean().catch(false),
+    activation_endpoint: z.string().trim().min(1).nullable().catch(null),
   })
   .transform((model) => ({
     ...model,
-    capabilities: model.capabilities ?? [],
-    available_features: model.available_features ?? [],
-    requires_login: true,
-    requires_plan: true,
-    is_free: false,
-    standalone: false,
-    provider: null,
-    activation_required: false,
-    activation_endpoint: null,
+    display_name: model.display_name || model.id,
   }));
-export const CloudMemberModelCatalogSchema = z.union([
-  CloudModelCatalogSchema,
-  z.object({ data: z.array(LegacySubscriptionModelSchema) }),
-]);
+
+export const CloudModelCatalogSchema = z.object({
+  data: z
+    .array(CloudModelSchema.nullable().catch(null))
+    .catch([])
+    .transform((models) => models.filter((model) => model !== null)),
+});
+
 export const CloudAmdStatusSchema = z.object({
   status: z.enum([
     'unregistered',
