@@ -7,6 +7,21 @@ export type NavTabId = 'chat' | NavigationPinTabId | 'more';
 export type NavDestinationId = NavTabId | 'settings';
 export type MoreModuleId = Exclude<NavigationPinTabId, 'agents'>;
 
+export type DockDragPreviewInput = {
+  draggingOut: boolean;
+  id: NavigationPinTabId;
+  insertIndex: number;
+  overDock: boolean;
+  source: 'dock' | 'more';
+};
+
+export type DockDragPreviewState = {
+  canDrop: boolean;
+  isFull: boolean;
+  previewTabId: NavigationPinTabId | null;
+  tabs: NavTabId[];
+};
+
 export const DEFAULT_PINNED_TABS: readonly NavigationPinTabId[] = ['agents'];
 export const MAX_MIDDLE_TABS = 3;
 export const MAX_DOCK_TABS = MAX_MIDDLE_TABS + 2;
@@ -168,6 +183,70 @@ export function reorderPinnedTab(
 /** Resolves the 3–5 bottom/vertical dock tabs with locked `chat` and `more` bookends. */
 export function resolveDockTabs(pinnedTabs: readonly NavigationPinTabId[]): NavTabId[] {
   return ['chat', ...normalizePinnedTabs(pinnedTabs), 'more'];
+}
+
+/** Computes the live post-drop dock layout shown while dragging a module or dock tab. */
+export function resolveDockDragPreview(
+  pinnedTabs: readonly NavigationPinTabId[],
+  drag: DockDragPreviewInput | null,
+): DockDragPreviewState {
+  const normalized = normalizePinnedTabs(pinnedTabs);
+  if (!drag) {
+    return {
+      canDrop: false,
+      isFull: false,
+      previewTabId: null,
+      tabs: resolveDockTabs(normalized),
+    };
+  }
+
+  if (drag.source === 'more') {
+    const canPin = canPinTab(normalized, drag.id);
+    if (!drag.overDock || !canPin) {
+      return {
+        canDrop: false,
+        isFull: !canPin,
+        previewTabId: null,
+        tabs: resolveDockTabs(normalized),
+      };
+    }
+
+    return {
+      canDrop: true,
+      isFull: false,
+      previewTabId: drag.id,
+      tabs: resolveDockTabs(pinTab(normalized, drag.id, drag.insertIndex)),
+    };
+  }
+
+  if (drag.draggingOut) {
+    if (canUnpinTab(normalized, drag.id)) {
+      return {
+        canDrop: true,
+        isFull: false,
+        previewTabId: null,
+        tabs: resolveDockTabs(unpinTab(normalized, drag.id)),
+      };
+    }
+
+    return {
+      canDrop: false,
+      isFull: false,
+      previewTabId: drag.id,
+      tabs: resolveDockTabs(normalized),
+    };
+  }
+
+  const nextPinned = drag.overDock
+    ? reorderPinnedTab(normalized, drag.id, drag.insertIndex)
+    : normalized;
+
+  return {
+    canDrop: drag.overDock,
+    isFull: false,
+    previewTabId: drag.id,
+    tabs: resolveDockTabs(nextPinned),
+  };
 }
 
 /** Modules shown inside 「更多」 remain mutually exclusive with pinned dock tabs. */

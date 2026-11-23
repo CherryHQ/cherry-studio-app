@@ -2,6 +2,7 @@ import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import PinIcon from '@cherrystudio/app-icons/icons/pin';
 import PinOffIcon from '@cherrystudio/app-icons/icons/pin-off';
+import { Surface } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
@@ -13,7 +14,7 @@ import { useNavigationShell } from './state';
 const POPOVER_MARGIN = 12;
 const POPOVER_ESTIMATED_WIDTH = 220;
 
-/** Floating capsule action bar shown after a 440ms long-press on 「更多」 cards or dock middle tabs. */
+/** Floating capsule action bar shown after a 350ms long-press on 「更多」 cards or dock middle tabs. */
 export function NavPinPopover() {
   const { t } = useTranslation();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -46,82 +47,84 @@ export function NavPinPopover() {
         onPress={closePinPopover}
         testID="nav-pin-popover-backdrop"
       />
-      <View
-        className="bg-popover border-border-subtle absolute z-50 flex-row items-center gap-1 rounded-full border p-1.5 shadow-lg"
-        style={{ left, top }}
-        testID="nav-pin-popover"
-      >
-        {popover.source === 'more' ? (
-          <Pressable
-            accessibilityRole="button"
-            className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${
-              canPin ? 'bg-secondary-active' : 'opacity-60'
-            }`}
-            onPress={() => {
-              pinTabToDock(popover.id);
-              closePinPopover();
-            }}
-            testID={`nav-popover-pin-${popover.id}`}
-          >
-            <PinIcon color={foregroundColor} size={15} />
-            <Text className="text-foreground text-xs font-medium">{t('navigation.pinToDock')}</Text>
-          </Pressable>
-        ) : (
-          <>
-            {canMoveLeft ? (
+      <View className="absolute z-50" style={{ left, top }}>
+        <Surface interactive shape="pill">
+          <View className="flex-row items-center gap-1 p-1.5" testID="nav-pin-popover">
+            {popover.source === 'more' ? (
               <Pressable
                 accessibilityRole="button"
-                className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
-                onPress={() => {
-                  reorderMiddleTab(popover.id, currentIndex - 1);
-                  closePinPopover();
-                }}
-                testID={`nav-popover-move-left-${popover.id}`}
-              >
-                <ChevronLeftIcon color={foregroundColor} size={14} />
-                <Text className="text-foreground text-xs font-medium">
-                  {t('navigation.moveLeft')}
-                </Text>
-              </Pressable>
-            ) : null}
-            {canMoveRight ? (
-              <Pressable
-                accessibilityRole="button"
-                className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
-                onPress={() => {
-                  reorderMiddleTab(popover.id, currentIndex + 1);
-                  closePinPopover();
-                }}
-                testID={`nav-popover-move-right-${popover.id}`}
-              >
-                <Text className="text-foreground text-xs font-medium">
-                  {t('navigation.moveRight')}
-                </Text>
-                <ChevronRightIcon color={foregroundColor} size={14} />
-              </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              className={`flex-row items-center gap-1.5 rounded-full px-3 py-2 ${
-                canUnpin ? '' : 'opacity-60'
-              }`}
-              onPress={() => {
-                unpinTabFromDock(popover.id);
-                closePinPopover();
-              }}
-              testID={`nav-popover-unpin-${popover.id}`}
-            >
-              <PinOffIcon color={canUnpin ? foregroundColor : mutedForegroundColor} size={15} />
-              <Text
-                className={`text-xs font-medium ${
-                  canUnpin ? 'text-foreground' : 'text-muted-foreground'
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${
+                  canPin ? 'bg-secondary-active' : 'opacity-60'
                 }`}
+                onPress={() => {
+                  pinTabToDock(popover.id);
+                  closePinPopover();
+                }}
+                testID={`nav-popover-pin-${popover.id}`}
               >
-                {t('navigation.unpinFromDock')}
-              </Text>
-            </Pressable>
-          </>
-        )}
+                <PinIcon color={foregroundColor} size={15} />
+                <Text className="text-foreground text-xs font-medium">
+                  {t('navigation.pinToDock')}
+                </Text>
+              </Pressable>
+            ) : (
+              <>
+                {canMoveLeft ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
+                    onPress={() => {
+                      reorderMiddleTab(popover.id, currentIndex - 1);
+                      closePinPopover();
+                    }}
+                    testID={`nav-popover-move-left-${popover.id}`}
+                  >
+                    <ChevronLeftIcon color={foregroundColor} size={14} />
+                    <Text className="text-foreground text-xs font-medium">
+                      {t('navigation.moveLeft')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {canMoveRight ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    className="flex-row items-center gap-1 rounded-full px-2.5 py-2"
+                    onPress={() => {
+                      reorderMiddleTab(popover.id, currentIndex + 1);
+                      closePinPopover();
+                    }}
+                    testID={`nav-popover-move-right-${popover.id}`}
+                  >
+                    <Text className="text-foreground text-xs font-medium">
+                      {t('navigation.moveRight')}
+                    </Text>
+                    <ChevronRightIcon color={foregroundColor} size={14} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-2 ${
+                    canUnpin ? '' : 'opacity-60'
+                  }`}
+                  onPress={() => {
+                    unpinTabFromDock(popover.id);
+                    closePinPopover();
+                  }}
+                  testID={`nav-popover-unpin-${popover.id}`}
+                >
+                  <PinOffIcon color={canUnpin ? foregroundColor : mutedForegroundColor} size={15} />
+                  <Text
+                    className={`text-xs font-medium ${
+                      canUnpin ? 'text-foreground' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {t('navigation.unpinFromDock')}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </Surface>
       </View>
     </>
   );

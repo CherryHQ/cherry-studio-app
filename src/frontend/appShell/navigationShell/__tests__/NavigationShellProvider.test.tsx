@@ -208,4 +208,78 @@ describe('NavigationShellProvider', () => {
     expect(latest.unpinTabFromDock('drawings')).toBe(true);
     expect(mockSetPreference).toHaveBeenLastCalledWith(['agents', 'files']);
   });
+
+  it('tracks symmetrical middle drop slots, 72pt top slop, and executes pin/reorder/unpin on drop', () => {
+    act(() => {
+      renderer = create(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+
+    act(() => {
+      latest.registerDockRect({ height: 44, width: 400, x: 0, y: 780 });
+      // Enter top hit slop (780 - 72 = 708): x in left half of middle band -> insertIndex 0
+      latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 720 });
+    });
+    expect(latest.dragState).toMatchObject({
+      draggingOut: false,
+      id: 'drawings',
+      insertIndex: 0,
+      overDock: true,
+      source: 'more',
+    });
+
+    // Move to right half of middle band -> insertIndex 1
+    act(() => {
+      latest.updateDrag(280, 790);
+    });
+    expect(latest.dragState).toMatchObject({
+      insertIndex: 1,
+      overDock: true,
+    });
+
+    // Drop on dock -> pins drawings at index 1
+    act(() => {
+      latest.endDrag();
+    });
+    expect(latest.dragState).toBeNull();
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['agents', 'drawings']);
+
+    // Now reorder drawings to slot 0 inside dock
+    act(() => {
+      latest.startDrag({ id: 'drawings', source: 'dock', x: 260, y: 800 });
+      latest.updateDrag(120, 800);
+    });
+    expect(latest.dragState).toMatchObject({
+      draggingOut: false,
+      insertIndex: 0,
+      overDock: true,
+    });
+    act(() => {
+      latest.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['drawings', 'agents']);
+
+    // Drag drawings above dock (780 - 56 = 724) -> unpins on release, whereas agents cannot unpin
+    act(() => {
+      latest.startDrag({ id: 'agents', source: 'dock', x: 260, y: 800 });
+      latest.updateDrag(260, 700);
+    });
+    expect(latest.dragState?.draggingOut).toBe(false);
+    act(() => {
+      latest.endDrag();
+    });
+
+    act(() => {
+      latest.startDrag({ id: 'drawings', source: 'dock', x: 140, y: 800 });
+      latest.updateDrag(140, 700);
+    });
+    expect(latest.dragState?.draggingOut).toBe(true);
+    act(() => {
+      latest.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['agents']);
+  });
 });

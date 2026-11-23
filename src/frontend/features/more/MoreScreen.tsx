@@ -1,6 +1,6 @@
 import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { type Href, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
@@ -30,19 +30,32 @@ function chunkItems<T>(items: readonly T[], columns: number): T[][] {
 
 type MoreModuleCardProps = {
   id: MoreModuleId;
+  isArmed: boolean;
+  isDragged: boolean;
+  onArmedChange: (id: MoreModuleId, armed: boolean) => void;
   onPress: () => void;
 };
 
-function MoreModuleCard({ id, onPress }: MoreModuleCardProps) {
+function MoreModuleCard({ id, isArmed, isDragged, onArmedChange, onPress }: MoreModuleCardProps) {
   const { t } = useTranslation();
-  const gesture = usePinDragGesture(id, 'more');
+  const handleArmedChange = useCallback(
+    (armed: boolean) => onArmedChange(id, armed),
+    [id, onArmedChange],
+  );
+  const gesture = usePinDragGesture(id, 'more', { onArmedChange: handleArmedChange });
 
   return (
     <GestureDetector gesture={gesture}>
       <Pressable
         accessibilityLabel={t(getNavTitleKey(id))}
         accessibilityRole="button"
-        className="bg-card border-border-subtle min-h-[118px] flex-1 justify-between rounded-3xl border p-4 active:opacity-80"
+        className={`min-h-[118px] flex-1 justify-between rounded-3xl border p-4 ${
+          isDragged
+            ? 'bg-secondary/40 border-border-strong border-dashed opacity-35'
+            : isArmed
+              ? 'bg-popover border-border-selected scale-[0.98] shadow-md'
+              : 'bg-card border-border-subtle active:opacity-80'
+        }`}
         onPress={onPress}
         testID={`more-module-card-${id}`}
       >
@@ -68,7 +81,12 @@ export function MoreScreen() {
   const windowClass = useWindowClass();
   const fold = useFoldRegion();
   const dockClearance = useNavigationDockClearance();
-  const { pinnedTabs } = useNavigationShell();
+  const { dragState, pinnedTabs } = useNavigationShell();
+  const [armedCardId, setArmedCardId] = useState<MoreModuleId | null>(null);
+
+  const handleCardArmedChange = useCallback((id: MoreModuleId, armed: boolean) => {
+    setArmedCardId((current) => (armed ? id : current === id ? null : current));
+  }, []);
 
   const modules = useMemo(() => resolveMoreModules(pinnedTabs), [pinnedTabs]);
   const isWideUnfolded = windowClass === 'wide' && !(fold && !isAcross(fold));
@@ -100,6 +118,7 @@ export function MoreScreen() {
           paddingTop: 12,
         }}
         contentInsetAdjustmentBehavior="automatic"
+        scrollEnabled={!dragState && !armedCardId}
         showsVerticalScrollIndicator={false}
       >
         <View className="mx-auto w-full max-w-[720px] pb-2">
@@ -117,6 +136,9 @@ export function MoreScreen() {
                     <MoreModuleCard
                       key={id}
                       id={id}
+                      isArmed={armedCardId === id}
+                      isDragged={dragState?.source === 'more' && dragState.id === id}
+                      onArmedChange={handleCardArmedChange}
                       onPress={() => router.push(getNavHref(id) as Href)}
                     />
                   ))}

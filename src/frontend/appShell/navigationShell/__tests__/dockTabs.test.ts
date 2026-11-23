@@ -9,6 +9,7 @@ import {
   reorderPinnedTab,
   resolveActiveDockTab,
   resolveCompactLeadingAction,
+  resolveDockDragPreview,
   resolveDockTabs,
   resolveMoreModules,
   resolveNavDestination,
@@ -86,5 +87,122 @@ describe('dockTabs', () => {
     expect(resolveCompactLeadingAction('/drawings', ['agents'])).toBe('back');
     expect(resolveCompactLeadingAction('/drawings', ['agents', 'drawings'])).toBe('drawer');
     expect(resolveCompactLeadingAction('/agents/new', ['agents'])).toBe('back');
+  });
+
+  test('computes live post-drop dock preview across idle, More hover, full dock, reorder, and unpin', () => {
+    expect(resolveDockDragPreview(['agents'], null)).toEqual({
+      canDrop: false,
+      isFull: false,
+      previewTabId: null,
+      tabs: ['chat', 'agents', 'more'],
+    });
+
+    // Hovering above dock keeps current dock order
+    expect(
+      resolveDockDragPreview(['agents'], {
+        draggingOut: false,
+        id: 'drawings',
+        insertIndex: 0,
+        overDock: false,
+        source: 'more',
+      }),
+    ).toEqual({
+      canDrop: false,
+      isFull: false,
+      previewTabId: null,
+      tabs: ['chat', 'agents', 'more'],
+    });
+
+    // Hovering inside left or right half of middle band places preview strictly inside middle band
+    expect(
+      resolveDockDragPreview(['agents'], {
+        draggingOut: false,
+        id: 'drawings',
+        insertIndex: 0,
+        overDock: true,
+        source: 'more',
+      }),
+    ).toEqual({
+      canDrop: true,
+      isFull: false,
+      previewTabId: 'drawings',
+      tabs: ['chat', 'drawings', 'agents', 'more'],
+    });
+    expect(
+      resolveDockDragPreview(['agents'], {
+        draggingOut: false,
+        id: 'drawings',
+        insertIndex: 1,
+        overDock: true,
+        source: 'more',
+      }),
+    ).toEqual({
+      canDrop: true,
+      isFull: false,
+      previewTabId: 'drawings',
+      tabs: ['chat', 'agents', 'drawings', 'more'],
+    });
+
+    // Full middle band rejects new drops from More without inserting past `more`
+    expect(
+      resolveDockDragPreview(['agents', 'drawings', 'files'], {
+        draggingOut: false,
+        id: 'plugins',
+        insertIndex: 3,
+        overDock: true,
+        source: 'more',
+      }),
+    ).toEqual({
+      canDrop: false,
+      isFull: true,
+      previewTabId: null,
+      tabs: ['chat', 'agents', 'drawings', 'files', 'more'],
+    });
+
+    // Dragging an existing pinned tab inside dock previews the reordered order
+    expect(
+      resolveDockDragPreview(['agents', 'drawings', 'files'], {
+        draggingOut: false,
+        id: 'files',
+        insertIndex: 0,
+        overDock: true,
+        source: 'dock',
+      }),
+    ).toEqual({
+      canDrop: true,
+      isFull: false,
+      previewTabId: 'files',
+      tabs: ['chat', 'files', 'agents', 'drawings', 'more'],
+    });
+
+    // Dragging a removable dock tab upward previews post-unpin dock, while core `agents` remains locked
+    expect(
+      resolveDockDragPreview(['agents', 'drawings'], {
+        draggingOut: true,
+        id: 'drawings',
+        insertIndex: 1,
+        overDock: false,
+        source: 'dock',
+      }),
+    ).toEqual({
+      canDrop: true,
+      isFull: false,
+      previewTabId: null,
+      tabs: ['chat', 'agents', 'more'],
+    });
+    expect(
+      resolveDockDragPreview(['agents', 'drawings'], {
+        draggingOut: true,
+        id: 'agents',
+        insertIndex: 0,
+        overDock: false,
+        source: 'dock',
+      }),
+    ).toEqual({
+      canDrop: false,
+      isFull: false,
+      previewTabId: 'agents',
+      tabs: ['chat', 'agents', 'drawings', 'more'],
+    });
   });
 });

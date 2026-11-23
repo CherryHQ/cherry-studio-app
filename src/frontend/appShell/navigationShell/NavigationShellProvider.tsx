@@ -40,9 +40,9 @@ import {
   type NavPinPopoverState,
 } from './state';
 
-const DOCK_HIT_SLOP_TOP = 36;
+const DOCK_HIT_SLOP_TOP = 72;
 const DOCK_HIT_SLOP_X = 16;
-const DRAG_OUT_THRESHOLD = 52;
+const DRAG_OUT_THRESHOLD = 56;
 
 function resolveDragMetrics(
   dockRect: DockRect | null,
@@ -62,14 +62,12 @@ function resolveDragMetrics(
 
   const draggingOut = source === 'dock' && y < dockRect.y - DRAG_OUT_THRESHOLD;
 
-  const totalTabs = pinnedCount + 2;
   const maxMiddleSlot = Math.max(0, source === 'more' ? pinnedCount : pinnedCount - 1);
-  const relativeX = Math.max(0, Math.min(dockRect.width, x - dockRect.x));
-  const rawSlot = Math.floor(
-    (relativeX / dockRect.width) * (totalTabs + (source === 'more' ? 1 : 0)),
-  );
-  // Middle slots begin after `chat` (index 0) and stop before `more`.
-  const insertIndex = Math.max(0, Math.min(maxMiddleSlot, rawSlot - 1));
+  // Map across the centered middle band [18%..82%] so `chat` and `more` bookends leave symmetrical drop slots.
+  const middleStart = dockRect.width * 0.18;
+  const middleWidth = Math.max(1, dockRect.width * 0.64);
+  const normalizedX = Math.max(0, Math.min(0.999, (x - dockRect.x - middleStart) / middleWidth));
+  const insertIndex = Math.floor(normalizedX * (maxMiddleSlot + 1));
 
   return { draggingOut, insertIndex, overDock };
 }
@@ -264,13 +262,19 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
         x,
         y,
       );
+      const nextDraggingOut = metrics.draggingOut && canUnpinTab(pinnedTabs, current.id);
+      if ((!current.overDock && metrics.overDock) || (!current.draggingOut && nextDraggingOut)) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+      } else if (metrics.overDock && current.insertIndex !== metrics.insertIndex) {
+        void Haptics.selectionAsync().catch(() => undefined);
+      }
       const next: NavDragState = {
         ...current,
         x,
         y,
         overDock: metrics.overDock,
         insertIndex: metrics.insertIndex,
-        draggingOut: metrics.draggingOut && canUnpinTab(pinnedTabs, current.id),
+        draggingOut: nextDraggingOut,
       };
       dragStateRef.current = next;
       setDragState(next);

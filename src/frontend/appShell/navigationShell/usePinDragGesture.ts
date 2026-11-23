@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { useMemo } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
@@ -6,13 +7,22 @@ import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSche
 
 import { useNavigationShell } from './state';
 
-const LONG_PRESS_DURATION_MS = 440;
-const DRAG_MOVE_THRESHOLD = 10;
+const LONG_PRESS_DURATION_MS = 350;
+const DRAG_MOVE_THRESHOLD = 8;
+
+type UsePinDragGestureOptions = {
+  onArmedChange?: (armed: boolean) => void;
+};
 
 /** Shared long-press popover + drag gesture for dock middle tabs and 「更多」 module cards. */
-export function usePinDragGesture(id: NavigationPinTabId, source: 'dock' | 'more') {
+export function usePinDragGesture(
+  id: NavigationPinTabId,
+  source: 'dock' | 'more',
+  options?: UsePinDragGestureOptions,
+) {
   const { endDrag, openPinPopover, startDrag, updateDrag } = useNavigationShell();
   const dragActivated = useSharedValue(false);
+  const onArmedChange = options?.onArmedChange;
 
   return useMemo(() => {
     return Gesture.Pan()
@@ -20,6 +30,8 @@ export function usePinDragGesture(id: NavigationPinTabId, source: 'dock' | 'more
       .runOnJS(true)
       .onStart(() => {
         dragActivated.set(false);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        onArmedChange?.(true);
       })
       .onUpdate((event) => {
         if (
@@ -27,6 +39,7 @@ export function usePinDragGesture(id: NavigationPinTabId, source: 'dock' | 'more
           Math.hypot(event.translationX, event.translationY) >= DRAG_MOVE_THRESHOLD
         ) {
           dragActivated.set(true);
+          onArmedChange?.(false);
           startDrag({ id, source, x: event.absoluteX, y: event.absoluteY });
           return;
         }
@@ -35,6 +48,7 @@ export function usePinDragGesture(id: NavigationPinTabId, source: 'dock' | 'more
         }
       })
       .onEnd((event) => {
+        onArmedChange?.(false);
         if (dragActivated.get()) {
           endDrag();
         } else {
@@ -43,10 +57,11 @@ export function usePinDragGesture(id: NavigationPinTabId, source: 'dock' | 'more
         dragActivated.set(false);
       })
       .onFinalize(() => {
+        onArmedChange?.(false);
         if (dragActivated.get()) {
           endDrag();
           dragActivated.set(false);
         }
       });
-  }, [dragActivated, endDrag, id, openPinPopover, source, startDrag, updateDrag]);
+  }, [dragActivated, endDrag, id, onArmedChange, openPinPopover, source, startDrag, updateDrag]);
 }

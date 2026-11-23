@@ -1,20 +1,43 @@
+import { Surface } from '@cherrystudio/ui/components';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View, type ViewInstance } from 'react-native';
+import { Pressable, Text, View, type ViewInstance } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  ReduceMotion,
+  useAnimatedStyle,
+  withTiming,
+  ZoomIn,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
-import { getNavTitleKey, type NavTabId, resolveDockTabs } from './dockTabs';
+import { getNavTitleKey, type NavTabId, resolveDockDragPreview } from './dockTabs';
 import { NavIcon } from './NavIcon';
 import { resolveFloatingDockBottomPadding } from './shellMode';
 import { useNavigationShell } from './state';
 import { usePinDragGesture } from './usePinDragGesture';
+
+const dockTabLayout = LinearTransition.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
+const dockPreviewEnter = ZoomIn.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
+const dockPillEnter = FadeIn.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
+const dockPillExit = FadeOut.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
 
 function toColor(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
@@ -30,8 +53,8 @@ type DockMiddleTabGestureProps = {
   accessibilityLabel: string;
   foregroundColor: string;
   isActive: boolean;
+  isDragPreview: boolean;
   isDraggingOut: boolean;
-  maxWidth: number;
   mutedForegroundColor: string;
   onPress: () => void;
   tabId: NavigationPinTabId;
@@ -41,8 +64,8 @@ function DockMiddleTabButton({
   accessibilityLabel,
   foregroundColor,
   isActive,
+  isDragPreview,
   isDraggingOut,
-  maxWidth,
   mutedForegroundColor,
   onPress,
   tabId,
@@ -55,16 +78,19 @@ function DockMiddleTabButton({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
-        className={`h-11 flex-1 items-center justify-center rounded-full ${
-          isActive ? 'bg-secondary-active' : ''
+        className={`h-11 w-full items-center justify-center rounded-full ${
+          isDragPreview
+            ? 'bg-secondary-active border-border-selected border border-dashed'
+            : isActive
+              ? 'bg-secondary-active'
+              : ''
         } ${isDraggingOut ? 'opacity-35' : ''}`}
         onPress={onPress}
-        style={{ maxWidth }}
         testID={`floating-nav-tab-${tabId}`}
       >
         <NavIcon
-          color={isActive ? foregroundColor : mutedForegroundColor}
-          filled={isActive}
+          color={isActive || isDragPreview ? foregroundColor : mutedForegroundColor}
+          filled={isActive || isDragPreview}
           id={tabId}
           size={22}
         />
@@ -102,7 +128,10 @@ export function FloatingNavDock() {
   );
 
   const rowRef = useRef<ViewInstance>(null);
-  const tabs = useMemo(() => resolveDockTabs(pinnedTabs), [pinnedTabs]);
+  const preview = useMemo(
+    () => resolveDockDragPreview(pinnedTabs, dragState),
+    [dragState, pinnedTabs],
+  );
   const isChatSurface = activeDestination === 'chat';
   const fadeStartColor = isChatSurface ? transparentChatSurface : transparentDefaultSurface;
   const fadeEndColor = isChatSurface ? chatSurfaceColor : defaultSurfaceColor;
@@ -120,6 +149,12 @@ export function FloatingNavDock() {
     });
   }, [registerDockRect]);
 
+  const isDragging = Boolean(dragState);
+  useEffect(() => {
+    if (!isDockVisible || shellMode !== 'compact-dock' || !isAtRoot) return;
+    measureDockBounds();
+  }, [isAtRoot, isDockVisible, isDragging, measureDockBounds, preview.tabs.length, shellMode]);
+
   const handleRowLayout = useCallback(
     (event: { nativeEvent: { layout: { height: number } } }) => {
       reportDockHeight(event.nativeEvent.layout.height);
@@ -132,8 +167,42 @@ export function FloatingNavDock() {
     return null;
   }
 
-  const maxWidth = resolveTabMaxWidth(tabs.length);
+  const maxWidth = resolveTabMaxWidth(preview.tabs.length);
   const bottomPadding = resolveFloatingDockBottomPadding(insets.bottom);
+
+  const trayClassName = !dragState
+    ? null
+    : dragState.overDock && preview.canDrop
+      ? 'h-14 w-full rounded-full bg-secondary/25'
+      : dragState.overDock && preview.isFull
+        ? 'h-14 w-full rounded-full bg-secondary/50'
+        : dragState.source === 'more'
+          ? 'h-14 w-full rounded-full bg-secondary/10'
+          : 'h-14 w-full rounded-full';
+
+  const statusBanner =
+    dragState?.source === 'more' && dragState.overDock && preview.canDrop
+      ? {
+          boxClassName: '',
+          label: t('navigation.dropToPin'),
+          textClassName: 'text-foreground text-xs font-medium',
+        }
+      : dragState?.source === 'more' && dragState.overDock && preview.isFull
+        ? {
+            boxClassName: 'bg-secondary/40',
+            label: t('navigation.dockFullToast'),
+            textClassName: 'text-muted-foreground text-xs font-medium',
+          }
+        : dragState?.source === 'dock' && dragState.draggingOut
+          ? {
+              boxClassName: '',
+              label: t('navigation.dropToUnpin'),
+              textClassName: 'text-foreground text-xs font-medium',
+            }
+          : null;
+
+  const isDragOutUnpinning =
+    dragState?.source === 'dock' && dragState.draggingOut && !preview.tabs.includes(dragState.id);
 
   return (
     <Animated.View
@@ -157,74 +226,135 @@ export function FloatingNavDock() {
           top: isChatSurface ? 0 : -18,
         }}
       />
-      <View
-        ref={rowRef}
-        className="flex-row items-center justify-center gap-2.5 px-4"
-        onLayout={handleRowLayout}
-        pointerEvents={isDockVisible ? 'auto' : 'none'}
-      >
-        {tabs.map((tabId: NavTabId, index) => {
-          const isActive = activeDockTab === tabId;
-          const label = t(getNavTitleKey(tabId));
-          const handlePress = () => navigateToDestination(tabId);
-          const showInsertIndicator =
-            dragState?.source === 'more' &&
-            dragState.overDock &&
-            index === dragState.insertIndex + 1;
-
-          if (tabId === 'chat' || tabId === 'more') {
-            return (
-              <Pressable
-                key={tabId}
-                accessibilityLabel={label}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                className={`h-11 flex-1 items-center justify-center rounded-full ${
-                  isActive ? 'bg-secondary-active' : ''
-                }`}
-                onPress={handlePress}
-                style={{ maxWidth }}
-                testID={`floating-nav-tab-${tabId}`}
-              >
-                <NavIcon
-                  color={isActive ? foregroundColor : mutedForegroundColor}
-                  filled={isActive}
-                  id={tabId}
-                  size={22}
-                />
-              </Pressable>
-            );
-          }
-
-          return (
+      {statusBanner ? (
+        <Animated.View
+          className="items-center"
+          entering={dockPillEnter}
+          exiting={dockPillExit}
+          pointerEvents="none"
+          style={{ bottom: 58 + bottomPadding, left: 16, position: 'absolute', right: 16 }}
+        >
+          <Surface shape="pill">
             <View
-              key={tabId}
-              className="flex-1 flex-row items-center justify-center"
-              style={{ maxWidth }}
+              className={`px-3.5 py-1.5 ${statusBanner.boxClassName}`}
+              testID="floating-dock-status-pill"
             >
-              {showInsertIndicator ? (
-                <View className="bg-secondary-active border-border-selected mr-1 h-10 w-1.5 rounded-full border" />
-              ) : null}
-              <DockMiddleTabButton
-                accessibilityLabel={label}
-                foregroundColor={foregroundColor}
-                isActive={isActive}
-                isDraggingOut={
-                  dragState?.source === 'dock' && dragState.id === tabId && dragState.draggingOut
-                }
-                maxWidth={maxWidth}
-                mutedForegroundColor={mutedForegroundColor}
-                onPress={handlePress}
-                tabId={tabId}
-              />
+              <Text className={statusBanner.textClassName}>{statusBanner.label}</Text>
             </View>
-          );
-        })}
-        {dragState?.source === 'more' &&
-        dragState.overDock &&
-        dragState.insertIndex >= tabs.length - 2 ? (
-          <View className="bg-secondary-active border-border-selected h-10 w-1.5 rounded-full border" />
+          </Surface>
+        </Animated.View>
+      ) : null}
+      <View className="relative" pointerEvents="box-none">
+        {trayClassName ? (
+          <View
+            pointerEvents="none"
+            style={{ bottom: -6, left: 12, position: 'absolute', right: 12, top: -6 }}
+          >
+            <Surface shape="pill">
+              <View className={trayClassName} testID="floating-dock-drop-tray" />
+            </Surface>
+          </View>
         ) : null}
+        <View
+          ref={rowRef}
+          className="flex-row items-center justify-center gap-2.5 px-4"
+          onLayout={handleRowLayout}
+          pointerEvents={isDockVisible ? 'auto' : 'none'}
+        >
+          {preview.tabs.map((tabId: NavTabId) => {
+            const isActive = activeDockTab === tabId;
+            const label = t(getNavTitleKey(tabId));
+            const handlePress = () => navigateToDestination(tabId);
+
+            if (tabId === preview.previewTabId && dragState?.source === 'more') {
+              return (
+                <Animated.View
+                  key={tabId}
+                  className="flex-1 items-center justify-center"
+                  entering={dockPreviewEnter}
+                  layout={dockTabLayout}
+                  style={{ maxWidth }}
+                  testID={`floating-nav-preview-${tabId}`}
+                >
+                  <View className="bg-secondary-active border-border-selected h-11 w-full items-center justify-center rounded-full border border-dashed">
+                    <NavIcon color={foregroundColor} filled id={tabId} size={22} />
+                  </View>
+                </Animated.View>
+              );
+            }
+
+            if (tabId === 'chat' || tabId === 'more') {
+              return (
+                <Animated.View
+                  key={tabId}
+                  className="flex-1 items-center justify-center"
+                  layout={dockTabLayout}
+                  style={{ maxWidth }}
+                >
+                  <Pressable
+                    accessibilityLabel={label}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isActive }}
+                    className={`h-11 w-full items-center justify-center rounded-full ${
+                      isActive ? 'bg-secondary-active' : ''
+                    }`}
+                    onPress={handlePress}
+                    testID={`floating-nav-tab-${tabId}`}
+                  >
+                    <NavIcon
+                      color={isActive ? foregroundColor : mutedForegroundColor}
+                      filled={isActive}
+                      id={tabId}
+                      size={22}
+                    />
+                  </Pressable>
+                </Animated.View>
+              );
+            }
+
+            const isDockDragPreview =
+              dragState?.source === 'dock' && dragState.id === tabId && !dragState.draggingOut;
+
+            return (
+              <Animated.View
+                key={tabId}
+                className="flex-1 items-center justify-center"
+                layout={dockTabLayout}
+                style={{ maxWidth }}
+              >
+                <DockMiddleTabButton
+                  accessibilityLabel={label}
+                  foregroundColor={foregroundColor}
+                  isActive={isActive}
+                  isDragPreview={isDockDragPreview}
+                  isDraggingOut={false}
+                  mutedForegroundColor={mutedForegroundColor}
+                  onPress={handlePress}
+                  tabId={tabId}
+                />
+              </Animated.View>
+            );
+          })}
+          {isDragOutUnpinning ? (
+            <Animated.View
+              key={dragState.id}
+              layout={dockTabLayout}
+              style={{ height: 0, opacity: 0, overflow: 'hidden', width: 0 }}
+              testID={`floating-nav-detached-${dragState.id}`}
+            >
+              <DockMiddleTabButton
+                accessibilityLabel={t(getNavTitleKey(dragState.id))}
+                foregroundColor={foregroundColor}
+                isActive={false}
+                isDragPreview={false}
+                isDraggingOut
+                mutedForegroundColor={mutedForegroundColor}
+                onPress={() => undefined}
+                tabId={dragState.id}
+              />
+            </Animated.View>
+          ) : null}
+        </View>
       </View>
     </Animated.View>
   );
