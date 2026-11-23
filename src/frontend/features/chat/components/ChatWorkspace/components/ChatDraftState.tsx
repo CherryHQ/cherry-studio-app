@@ -1,6 +1,7 @@
 import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
@@ -38,23 +39,20 @@ export function ChatDraftState({
 }: ChatDraftStateProps) {
   const { t } = useTranslation();
   const greeting = (
-    <ContentState.Empty
-      icon={
-        <EmptyIllustration scene="conversation">
-          {assistantName ? (
-            <AgentAvatar
-              avatar={assistantAvatar}
-              emoji={assistantEmoji}
-              name={assistantName}
-              size={48}
-              uri={assistantAvatarUri}
-            />
-          ) : null}
-        </EmptyIllustration>
-      }
-      prominence="prominent"
-      title={t('chat.draft.greeting')}
-    />
+    <View className="items-center gap-6">
+      {assistantName ? (
+        <AgentAvatar
+          avatar={assistantAvatar}
+          emoji={assistantEmoji}
+          name={assistantName}
+          size={48}
+          uri={assistantAvatarUri}
+        />
+      ) : null}
+      <Text className="text-center font-medium text-foreground text-xl" numberOfLines={2}>
+        {t('chat.draft.greeting')}
+      </Text>
+    </View>
   );
 
   return (
