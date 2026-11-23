@@ -106,6 +106,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isDockVisible).toBe(true);
+    expect(latest.isVerticalRailVisible).toBe(false);
     expect(latest.dockClearance).toBe(42);
 
     mockInsets = { bottom: 0, left: 0, right: 0, top: 20 };
@@ -117,6 +118,7 @@ describe('NavigationShellProvider', () => {
       );
     });
     expect(latest.shellMode).toBe('compact-dock');
+    expect(latest.isVerticalRailVisible).toBe(false);
     expect(latest.dockClearance).toBe(64);
 
     mockWindowClass = 'wide';
@@ -130,6 +132,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('wide-rail');
     expect(latest.isDockVisible).toBe(false);
+    expect(latest.isVerticalRailVisible).toBe(false);
     expect(latest.dockClearance).toBe(0);
     expect(latest.middleColumnWidth).toBe(280);
 
@@ -145,6 +148,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('vertical-rail');
     expect(latest.isDockVisible).toBe(false);
+    expect(latest.isVerticalRailVisible).toBe(true);
   });
 
   it('hides dock when keyboard is open, overlay hides it, or route is a detail page', () => {
@@ -275,6 +279,83 @@ describe('NavigationShellProvider', () => {
     act(() => {
       latest.startDrag({ id: 'drawings', source: 'dock', x: 140, y: 800 });
       latest.updateDrag(140, 700);
+    });
+    expect(latest.dragState?.draggingOut).toBe(true);
+    act(() => {
+      latest.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['agents']);
+  });
+
+  it('supports vertical-rail drag pin, vertical reorder, and leftward unpin on Duo', () => {
+    mockWindowClass = 'compact';
+    mockInsets = { bottom: 0, left: 0, right: 86, top: 0 };
+    mockDimensions = { height: 678, width: 466 };
+
+    act(() => {
+      renderer = create(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+
+    expect(latest.shellMode).toBe('vertical-rail');
+    expect(latest.isVerticalRailVisible).toBe(true);
+
+    act(() => {
+      latest.registerDockRect({ height: 152, width: 52, x: 397, y: 500 });
+      // Enter leftward hit slop (397 - 56 = 341): y in upper middle band -> insertIndex 0
+      latest.startDrag({ id: 'drawings', source: 'more', x: 360, y: 540 });
+    });
+    expect(latest.dragState).toMatchObject({
+      draggingOut: false,
+      insertIndex: 0,
+      overDock: true,
+    });
+
+    // Move to lower middle band -> insertIndex 1
+    act(() => {
+      latest.updateDrag(420, 610);
+    });
+    expect(latest.dragState).toMatchObject({
+      insertIndex: 1,
+      overDock: true,
+    });
+
+    act(() => {
+      latest.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['agents', 'drawings']);
+
+    // Reorder inside vertical rail
+    act(() => {
+      latest.startDrag({ id: 'drawings', source: 'dock', x: 420, y: 600 });
+      latest.updateDrag(420, 535);
+    });
+    expect(latest.dragState).toMatchObject({
+      draggingOut: false,
+      insertIndex: 0,
+      overDock: true,
+    });
+    act(() => {
+      latest.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['drawings', 'agents']);
+
+    // Drag left outside rail (x < 397 - 56 = 341) -> unpin drawings, while protecting core agents
+    act(() => {
+      latest.startDrag({ id: 'agents', source: 'dock', x: 420, y: 580 });
+      latest.updateDrag(300, 580);
+    });
+    expect(latest.dragState?.draggingOut).toBe(false);
+    act(() => {
+      latest.endDrag();
+    });
+
+    act(() => {
+      latest.startDrag({ id: 'drawings', source: 'dock', x: 420, y: 535 });
+      latest.updateDrag(300, 535);
     });
     expect(latest.dragState?.draggingOut).toBe(true);
     act(() => {

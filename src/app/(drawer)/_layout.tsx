@@ -16,8 +16,6 @@ import {
   NavigationShellProvider,
   resolveCompactLeadingAction,
   useNavigationShell,
-  VERTICAL_RAIL_WIDTH,
-  VerticalNavRail,
   WIDE_RAIL_WIDTH,
   WideNavRail,
 } from '@/frontend/appShell/navigationShell';
@@ -71,14 +69,13 @@ function DrawerShell() {
   const contentInsets = {
     ...outerInsets,
     left: shellMode === 'wide-rail' ? 0 : outerInsets.left,
-    right: shellMode === 'vertical-rail' ? 0 : outerInsets.right,
+    right: outerInsets.right,
   };
   const sheetInsetLeft =
     shellMode === 'wide-rail'
       ? outerInsets.left + WIDE_RAIL_WIDTH + middleColumnWidth
       : outerInsets.left;
-  const sheetInsetRight =
-    shellMode === 'vertical-rail' ? outerInsets.right + VERTICAL_RAIL_WIDTH : outerInsets.right;
+  const sheetInsetRight = outerInsets.right;
 
   return (
     <View className="flex-1 flex-row">
@@ -98,7 +95,6 @@ function DrawerShell() {
           </BottomSheetBoundsProvider>
         </SafeAreaInsetsContext>
       </View>
-      {shellMode === 'vertical-rail' ? <VerticalNavRail /> : null}
     </View>
   );
 }
@@ -116,10 +112,7 @@ function SidebarDrawer() {
     'sidebar-border',
     'scrim',
   ]);
-  const overlayWidth =
-    shellMode === 'vertical-rail'
-      ? Math.max(280, width - outerInsets.right - VERTICAL_RAIL_WIDTH)
-      : Math.max(280, width - outerInsets.right);
+  const overlayWidth = Math.max(280, width - outerInsets.right);
   const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth);
   const swipeEnabled =
     shellMode !== 'wide-rail' &&

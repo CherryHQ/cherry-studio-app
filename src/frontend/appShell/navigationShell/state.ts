@@ -97,6 +97,7 @@ export type NavigationShellContextValue = {
   isAtRoot: boolean;
   isDockVisible: boolean;
   isFileListCollapsed: boolean;
+  isVerticalRailVisible: boolean;
   middleColumnWidth: number;
   navigateToDestination: (id: NavDestinationId, options?: NavigationNavigateOptions) => void;
   openPinPopover: (popover: NavPinPopoverState) => void;

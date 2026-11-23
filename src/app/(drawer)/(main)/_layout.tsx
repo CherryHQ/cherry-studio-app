@@ -10,6 +10,7 @@ import {
   resolveCompactLeadingAction,
   useNavigationShell,
   useRegisterMainNavigator,
+  VerticalNavRail,
 } from '@/frontend/appShell/navigationShell';
 import { ChatProvider } from '@/frontend/features/chat/runtime';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -107,6 +108,7 @@ export default function MainStackLayout() {
             />
           </Stack>
           <FloatingNavDock />
+          <VerticalNavRail />
           <NavPinPopover />
           <FloatingDragOverlay />
         </View>

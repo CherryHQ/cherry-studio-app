@@ -43,6 +43,9 @@ import {
 const DOCK_HIT_SLOP_TOP = 72;
 const DOCK_HIT_SLOP_X = 16;
 const DRAG_OUT_THRESHOLD = 56;
+const RAIL_HIT_SLOP_X = 56;
+const RAIL_HIT_SLOP_Y = 28;
+const RAIL_DRAG_OUT_THRESHOLD = 56;
 
 function resolveDragMetrics(
   dockRect: DockRect | null,
@@ -50,9 +53,26 @@ function resolveDragMetrics(
   source: 'dock' | 'more',
   x: number,
   y: number,
+  orientation: 'horizontal' | 'vertical',
 ): { draggingOut: boolean; insertIndex: number; overDock: boolean } {
-  if (!dockRect || dockRect.width <= 0) {
+  if (!dockRect || dockRect.width <= 0 || dockRect.height <= 0) {
     return { draggingOut: false, insertIndex: pinnedCount, overDock: false };
+  }
+
+  const maxMiddleSlot = Math.max(0, source === 'more' ? pinnedCount : pinnedCount - 1);
+
+  if (orientation === 'vertical') {
+    const overDock =
+      x >= dockRect.x - RAIL_HIT_SLOP_X &&
+      y >= dockRect.y - RAIL_HIT_SLOP_Y &&
+      y <= dockRect.y + dockRect.height + RAIL_HIT_SLOP_Y;
+    const draggingOut = source === 'dock' && x < dockRect.x - RAIL_DRAG_OUT_THRESHOLD;
+    // Map across the centered middle band [18%..82%] vertically so top/bottom ends stay symmetrical.
+    const middleStart = dockRect.height * 0.18;
+    const middleHeight = Math.max(1, dockRect.height * 0.64);
+    const normalizedY = Math.max(0, Math.min(0.999, (y - dockRect.y - middleStart) / middleHeight));
+    const insertIndex = Math.floor(normalizedY * (maxMiddleSlot + 1));
+    return { draggingOut, insertIndex, overDock };
   }
 
   const overDock =
@@ -62,7 +82,6 @@ function resolveDragMetrics(
 
   const draggingOut = source === 'dock' && y < dockRect.y - DRAG_OUT_THRESHOLD;
 
-  const maxMiddleSlot = Math.max(0, source === 'more' ? pinnedCount : pinnedCount - 1);
   // Map across the centered middle band [18%..82%] so `chat` and `more` bookends leave symmetrical drop slots.
   const middleStart = dockRect.width * 0.18;
   const middleWidth = Math.max(1, dockRect.width * 0.64);
@@ -122,6 +141,8 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
 
   const isDockVisible =
     shellMode === 'compact-dock' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
+  const isVerticalRailVisible =
+    shellMode === 'vertical-rail' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
   const dockClearance =
     shellMode === 'compact-dock' && isAtRoot
       ? resolveFloatingDockClearance(restingDockHeight, insets.bottom)
@@ -228,6 +249,8 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     [pinnedTabs, setRawPinnedTabs],
   );
 
+  const dragOrientation = shellMode === 'vertical-rail' ? 'vertical' : 'horizontal';
+
   const startDrag = useCallback(
     (input: { id: NavigationPinTabId; source: 'dock' | 'more'; x: number; y: number }) => {
       setPopover(null);
@@ -238,6 +261,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
         input.source,
         input.x,
         input.y,
+        dragOrientation,
       );
       const next: NavDragState = {
         ...input,
@@ -248,7 +272,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dragStateRef.current = next;
       setDragState(next);
     },
-    [pinnedTabs],
+    [dragOrientation, pinnedTabs],
   );
 
   const updateDrag = useCallback(
@@ -261,6 +285,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
         current.source,
         x,
         y,
+        dragOrientation,
       );
       const nextDraggingOut = metrics.draggingOut && canUnpinTab(pinnedTabs, current.id);
       if ((!current.overDock && metrics.overDock) || (!current.draggingOut && nextDraggingOut)) {
@@ -279,7 +304,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dragStateRef.current = next;
       setDragState(next);
     },
-    [pinnedTabs],
+    [dragOrientation, pinnedTabs],
   );
 
   const endDrag = useCallback(() => {
@@ -352,6 +377,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       isAtRoot,
       isDockVisible,
       isFileListCollapsed,
+      isVerticalRailVisible,
       middleColumnWidth,
       navigateToDestination,
       openPinPopover,
@@ -382,6 +408,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       isAtRoot,
       isDockVisible,
       isFileListCollapsed,
+      isVerticalRailVisible,
       middleColumnWidth,
       navigateToDestination,
       openPinPopover,
