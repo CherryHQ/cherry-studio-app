@@ -225,7 +225,7 @@ function ModelPickerDrawerContent({
   setSelectedBadge: (badge: ModelPickerBadge | null) => void;
 }) {
   const { t } = useTranslation();
-  const { error, groups, hasLoadedCatalog, isLoading, refresh } = useModelPickerData({
+  const { error, groups, hasLoadedCatalog, isLoading, providers, refresh } = useModelPickerData({
     cloudUse,
     modelType,
     providerId,
@@ -265,7 +265,7 @@ function ModelPickerDrawerContent({
     allowedModelIds === null &&
     !isModelVisible &&
     modelType !== 'image' &&
-    (!providerId || providerId === CLOUD_PROVIDER_ID);
+    providers.some((provider) => provider.id === CLOUD_PROVIDER_ID);
   const {
     state: cloudState,
     accountState,

@@ -85,7 +85,7 @@ export function useCompleteOnboarding() {
         if (!selection.isLocal) await models.reconcile(providerId, { toAdd: [selection.model] });
       }
       signal.throwIfAborted();
-      // Account models are already enabled by Cloud and reject user configuration writes.
+      // Selecting a managed model preserves the CherryAI switch and its cloud-owned model settings.
       if (providerId !== CLOUD_PROVIDER_ID)
         await Promise.all([
           enableModel.trigger({ params: { uniqueModelId: modelId }, body: { isEnabled: true } }),

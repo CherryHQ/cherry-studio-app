@@ -1,6 +1,7 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { batchUpsertProviders } from '@/backend/data/services/ProviderService';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 
 import { PresetProviderSeeder } from '../PresetProviderSeeder';
 
@@ -31,7 +32,9 @@ describe('PresetProviderSeeder', () => {
   });
 
   test('installs recommended providers through the supplied database transaction', async () => {
-    const database = createDbService({});
+    const database = createDbService({
+      existingProviders: [{ providerId: CLOUD_PROVIDER_ID, presetProviderId: null }],
+    });
     await new PresetProviderSeeder().run(database);
 
     expect(batchUpsertProviders).toHaveBeenCalledWith(database.getDb(), [

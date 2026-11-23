@@ -42,6 +42,28 @@ describe('ProviderService integration', () => {
     expect(second.nextCursor).toBeUndefined();
   });
 
+  it('allows only the CherryAI switch and places its disabled row after enabled providers', async () => {
+    insertProvider(CLOUD_PROVIDER_ID, true, 'z');
+    insertProvider('enabled', true, 'a');
+    insertProvider('disabled', false, 'b');
+    await service.update(CLOUD_PROVIDER_ID, { isEnabled: false });
+    const first = await service.listPage({ limit: 1 });
+    expect(first.items.map((item) => item.id)).toEqual(['enabled']);
+    const second = await service.listPage({ cursor: first.nextCursor, limit: 1 });
+    expect(second.items.map((item) => item.id)).toEqual([CLOUD_PROVIDER_ID]);
+    const third = await service.listPage({ cursor: second.nextCursor, limit: 1 });
+    expect(third.items.map((item) => item.id)).toEqual(['disabled']);
+
+    await expect(
+      service.update(CLOUD_PROVIDER_ID, { isEnabled: true, name: 'renamed' }),
+    ).rejects.toThrow();
+    await expect(service.delete(CLOUD_PROVIDER_ID)).rejects.toThrow();
+    expect(await service.getByProviderId(CLOUD_PROVIDER_ID)).toMatchObject({ isEnabled: false });
+    expect(await service.update(CLOUD_PROVIDER_ID, { isEnabled: true })).toMatchObject({
+      isEnabled: true,
+    });
+  });
+
   it('pins Plan first in full and enabled lists without changing other providers saved order', async () => {
     insertProvider('disabled-a', false, 'a');
     insertProvider('enabled-a', true, 'b');

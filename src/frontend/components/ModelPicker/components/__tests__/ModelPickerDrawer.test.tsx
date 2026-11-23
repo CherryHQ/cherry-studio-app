@@ -10,6 +10,7 @@ import type { ModelPickerGroup } from '../../utils/modelPickerData';
 import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
 
+let mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
 let mockGroups: ModelPickerGroup[] = [];
 const signedOutCloud: CloudState = {
   account: null,
@@ -123,6 +124,7 @@ jest.mock('../../hooks/useModelPickerData', () => ({
   useModelPickerData: () => ({
     cloudState: mockCloudState,
     groups: mockGroups,
+    providers: mockEnabledProviders,
     hasLoadedCatalog: true,
     isLoading: false,
   }),
@@ -147,6 +149,7 @@ describe('ModelPickerDrawer', () => {
   beforeEach(() => {
     mockCloudState = signedOutCloud;
     mockGroups = [];
+    mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
     mockListProps = undefined;
     mockOnSizeChange = undefined;
     mockFilterItems = [];
@@ -167,22 +170,24 @@ describe('ModelPickerDrawer', () => {
     act(() => renderer.unmount());
   });
 
-  test('keeps the built-in CherryAI group in chat without a provider record or selectable models', () => {
+  test('shows the empty CherryAI group only while the provider is enabled', () => {
     expect(mockListProps?.listItems).toEqual([]);
 
-    act(() => {
-      renderer.update(
-        <ModelPickerDrawer
-          modelType="text"
-          onClose={jest.fn()}
-          onSelect={jest.fn()}
-          open
-          selectedModelId={null}
-          variant="chat"
-        />,
-      );
-    });
+    const renderChat = () =>
+      act(() => {
+        renderer.update(
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant="chat"
+          />,
+        );
+      });
 
+    renderChat();
     expect(mockListProps?.listItems).toEqual([
       expect.objectContaining({
         provider: expect.objectContaining({ id: CLOUD_PROVIDER_ID }),
@@ -190,6 +195,10 @@ describe('ModelPickerDrawer', () => {
         type: 'groupHeader',
       }),
     ]);
+    mockEnabledProviders = [];
+    renderChat();
+    expect(mockListProps?.listItems).toEqual([]);
+    expect(mockListProps?.cherryAiEntry).toBeUndefined();
   });
 
   test('finds the locked AMD row by name and by the free badge without a local projection', () => {
@@ -258,6 +267,9 @@ describe('ModelPickerDrawer', () => {
     ]);
 
     render('usage');
+    expect(mockListProps?.listItems).toEqual([]);
+    mockEnabledProviders = [];
+    render('chat');
     expect(mockListProps?.listItems).toEqual([]);
   });
 
