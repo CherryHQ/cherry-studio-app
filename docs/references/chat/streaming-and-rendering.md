@@ -41,7 +41,7 @@ transport is a global replacement for the other.
 
 ## Frontend Observation Boundary
 
-The chat page's `ChatProvider` (`frontend/features/chat/runtime`) owns the local
+The main stack's `ChatProvider` (`frontend/features/chat/runtime`) owns the local
 `AgentSessionChatClient`. `useLocalConversation` subscribes to the client for the route's Session
 and projects that state into the shared Conversation snapshot through `useSyncExternalStore`; the
 app-shell `ConversationProvider` owns only the catalog sources. The client:
@@ -50,7 +50,7 @@ app-shell `ConversationProvider` owns only the catalog sources. The client:
 - applies `part.add`, `text.append`, and `part.replace` deltas to the live message projection;
 - exposes active-turn status, pending approvals, and the entering user-message id through narrow
   selectors;
-- releases the Host observation when the final React subscriber leaves;
+- releases the Host observation once both the final screen subscriber and pending admission have finished;
 - replaces observed Session state from a fresh snapshot when the app returns to the foreground.
 
 Selecting an Agent opens an isolated Draft composer and does not create a Session. The first send

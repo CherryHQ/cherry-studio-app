@@ -104,10 +104,9 @@ Before enabling it, verify:
   management and detail pages use back navigation. Pairing and import preserve their source pages;
   only their transient steps replace each other. Opening desktop chat from device details switches
   the chat destination rather than creating another detail level.
-- The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
-  nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
-  provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes
-  the frontend observation but does not cancel the Host's active turn.
+- The chat surface is the drawer's initial scene. Its nested native Stack hosts the toolbar.
+  The main stack owns `ChatProvider` so local drafts and in-flight submissions survive replacing
+  a chat route. Each chat page subscribes to its Session while mounted.
 - Route files stay thin and re-export exact page boundaries from `src/frontend/features`.
 
 ## Window Sizes

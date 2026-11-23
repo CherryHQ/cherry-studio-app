@@ -446,7 +446,7 @@ const legacyPageUseEffectLimits = {
   'src/frontend/features/chat/remote/RemoteChatScreen.tsx': 1,
   'src/frontend/features/chat/remote/RemoteComposer.tsx': 4,
   'src/frontend/features/chat/remote/useRemoteDraftPersistence.ts': 2,
-  'src/frontend/features/chat/runtime/ChatProvider.tsx': 5,
+  'src/frontend/features/chat/runtime/ChatProvider.tsx': 4,
   'src/frontend/features/chat/runtime/useLocalConversation.ts': 2,
   'src/frontend/features/chat/share/ChatShareDragSelection.tsx': 4,
   'src/frontend/features/chat/share/ChatShareSelectionProvider.tsx': 2,

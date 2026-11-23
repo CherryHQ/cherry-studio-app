@@ -113,8 +113,8 @@ and queued submissions; the Host reconstructs capabilities before scheduling res
 The app-shell `ConversationProvider` owns the local catalog and retained remote sources shared by
 the sidebar and Agent picker. Local chat observation belongs to the feature `ChatProvider`, which
 creates and disposes `AgentSessionChatClient`, manages composer navigation, refreshes observed
-Sessions on foreground and invalidates their queries. The client observes only Sessions with React
-subscribers and composes snapshots/deltas into live state. Removing an observation does not cancel
+Sessions on foreground and invalidates their queries. A screen subscriber or an unfinished admission keeps its Session entry alive.
+The client composes snapshots and deltas into live state. Removing an observation does not cancel
 the Host's turn; reopening the route installs a fresh snapshot.
 
 `features/chat/runtime` reads persisted transcripts through
