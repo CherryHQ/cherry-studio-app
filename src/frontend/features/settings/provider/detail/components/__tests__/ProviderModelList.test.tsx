@@ -1,7 +1,12 @@
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { useProviderModelManagement } from '../../../models/hooks/useProviderModelManagement';
 import { ProviderModelList } from '../ProviderModelList';
+
+const mockReorder = jest.fn();
+const mockToastShow = jest.fn();
+const mockListContentProps: { canReorder?: boolean; ListEmptyComponent?: ReactElement }[] = [];
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
@@ -25,12 +30,25 @@ jest.mock('@cherrystudio/ui/components', () => {
       ),
   };
 
-  return { ContentState, OptionPickerBottomSheet: () => null };
+  return {
+    ContentState,
+    OptionPickerBottomSheet: () => null,
+    useToast: () => ({ toast: { show: mockToastShow } }),
+  };
 });
 
+jest.mock('@/frontend/data', () => ({
+  useReorder: () => ({ isPending: false, reorder: mockReorder, reorderIndex: jest.fn() }),
+}));
+
 jest.mock('../../../models/components/ProviderModelListContent', () => ({
-  ProviderModelListContent: ({ ListEmptyComponent }: { ListEmptyComponent?: ReactElement }) =>
-    ListEmptyComponent ?? null,
+  ProviderModelListContent: (props: {
+    canReorder?: boolean;
+    ListEmptyComponent?: ReactElement;
+  }) => {
+    mockListContentProps.push(props);
+    return props.ListEmptyComponent ?? null;
+  },
 }));
 
 jest.mock('../../../models/hooks/useProviderModelEndpointUpdate', () => ({
@@ -46,6 +64,12 @@ jest.mock('react-i18next', () => ({
 
 describe('ProviderModelList empty state', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockListContentProps.length = 0;
+    mockReorder.mockReset();
+    mockToastShow.mockReset();
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -91,5 +115,40 @@ describe('ProviderModelList empty state', () => {
     expect(renderer?.root.findByType('Text').props.children).toBe(
       'settings.provider.models.search.empty',
     );
+  });
+
+  it('keeps reordering active on purpose tabs and disables it only while searching', () => {
+    const management = {
+      isDeleting: false,
+      isSelecting: false,
+    } as ReturnType<typeof useProviderModelManagement>;
+
+    act(() => {
+      renderer = create(
+        <ProviderModelList
+          isFiltered
+          isLoading={false}
+          isSearchActive={false}
+          management={management}
+          models={[]}
+          provider={undefined}
+        />,
+      );
+    });
+    expect(mockListContentProps.at(-1)?.canReorder).toBe(true);
+
+    act(() => {
+      renderer?.update(
+        <ProviderModelList
+          isFiltered
+          isLoading={false}
+          isSearchActive
+          management={management}
+          models={[]}
+          provider={undefined}
+        />,
+      );
+    });
+    expect(mockListContentProps.at(-1)?.canReorder).toBe(false);
   });
 });

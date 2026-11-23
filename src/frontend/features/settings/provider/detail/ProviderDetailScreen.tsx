@@ -307,6 +307,7 @@ function ProviderDetailSettings({
                 isEndpointSelectionDisabled={management.isDeleting}
                 isFiltered={isModelListFiltered}
                 isLoading={allProviderModelsQuery.isPending}
+                isSearchActive={isModelSearchActive}
                 models={listedModels}
                 onAddModelManually={openModelAddSettings}
                 onPullModels={startModelSync}

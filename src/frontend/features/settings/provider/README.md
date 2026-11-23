@@ -63,6 +63,10 @@ the new provider's state without replaying an entrance. System Reduce Motion ski
 movement and label crossfade, leaving the final switch, text, and group state intact. Colors use
 the shared theme tokens in both light and dark themes.
 
+The list supports within-group long-press reordering (`Sortable`) for enabled and disabled
+providers while keeping CherryAI pinned first and disabling moves during active search. Reordered
+providers drive `ModelPicker` section order immediately with optimistic rollback on error.
+
 ## Provider Catalog
 
 `catalog/ProviderCatalogScreen` owns the bundled provider catalog. A fixed custom-provider row is the first
@@ -122,11 +126,12 @@ written once on Save, and Delete removes it. Empty, duplicate or multi-key input
 the sheet and blocks saving it. Short keys are fully masked; longer keys expose only their last
 four characters.
 
-Multiple keys expose an ordering sheet with CherryUI `ReorderList`. Moves save immediately (or
-update the creation draft), preserve each entry's identity and metadata, and roll back on failure.
+Multiple keys support long-press `Sortable` drag within the card and a contextual `Move to top`
+action without a separate ordering sheet. Moves save immediately (or update the creation draft),
+preserve each entry's identity and metadata, and roll back on failure.
 Moves made while a write is in flight show at once and queue only the latest list for the next write.
-Labels and masked suffixes appear in management, ordering and connection-test selection; unnamed
-keys use a stable fallback rather than a position-based name.
+Labels and masked suffixes appear in management and connection-test selection; unnamed keys use a
+stable fallback rather than a position-based name.
 
 ## Connectivity And Models
 
@@ -143,8 +148,10 @@ tasks that must complete activation. Saving models and enabling a provider have 
 so an activation failure can be retried without adding the same models again.
 
 The model tab has separate synchronization and manual-add icon actions. It lists all installed
-provider models for management, labels unavailable models, and supports detail, edit, contextual
-menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
+provider models for management, labels unavailable models, supports detail, edit, scoped
+multi-selection, and within-group long-press `Sortable` reordering (`Move to top` or direct drag),
+and preserves user-defined model order across model-list refreshes while appending newly discovered
+models. The detail page's `model/` branch owns model inspection and its
 `edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
 `models/`.
 
