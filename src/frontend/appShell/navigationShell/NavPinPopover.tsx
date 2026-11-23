@@ -9,7 +9,11 @@ import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { canPinTab, canUnpinTab } from './dockTabs';
-import { useNavigationShell } from './state';
+import {
+  useNavigationShell,
+  useNavigationShellActions,
+  useNavigationShellInteraction,
+} from './state';
 
 const POPOVER_MARGIN = 12;
 const POPOVER_ESTIMATED_WIDTH = 220;
@@ -18,8 +22,10 @@ const POPOVER_ESTIMATED_WIDTH = 220;
 export function NavPinPopover() {
   const { t } = useTranslation();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const { closePinPopover, pinTabToDock, pinnedTabs, popover, reorderMiddleTab, unpinTabFromDock } =
-    useNavigationShell();
+  const { pinnedTabs } = useNavigationShell();
+  const { closePinPopover, pinTabToDock, reorderMiddleTab, unpinTabFromDock } =
+    useNavigationShellActions();
+  const { popover } = useNavigationShellInteraction();
   const [foregroundColor, mutedForegroundColor] = useThemeColor(['foreground', 'muted-foreground']);
 
   if (!popover) {

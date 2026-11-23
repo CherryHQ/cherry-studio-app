@@ -6,6 +6,7 @@ import { getRootHeaderStyle, paintingRouteId } from '@/frontend/appShell/navigat
 import {
   FloatingDragOverlay,
   FloatingNavDock,
+  NAV_ROUTE_MANIFEST,
   NavPinPopover,
   resolveCompactLeadingAction,
   useNavigationShell,
@@ -68,18 +69,42 @@ export default function MainStackLayout() {
               headerTintColor: foregroundColor,
             }}
           >
-            <Stack.Screen name="(chat)" options={{ headerShown: false }} />
-            <Stack.Screen name="agents" options={moduleDestination('agents')} />
-            <Stack.Screen name="drawings" options={moduleDestination('drawings')} />
-            <Stack.Screen name="plugins" options={moduleDestination('plugins')} />
-            <Stack.Screen name="skills" options={moduleDestination('marketplace')} />
-            <Stack.Screen name="library" options={moduleDestination('files')} />
-            <Stack.Screen name="devices" options={moduleDestination('devices')} />
-            <Stack.Screen name="more" options={railOrPinnedDestination} />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.chat.stackRoute}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.agents.stackRoute}
+              options={moduleDestination('agents')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.drawings.stackRoute}
+              options={moduleDestination('drawings')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.plugins.stackRoute}
+              options={moduleDestination('plugins')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.marketplace.stackRoute}
+              options={moduleDestination('marketplace')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.files.stackRoute}
+              options={moduleDestination('files')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.devices.stackRoute}
+              options={moduleDestination('devices')}
+            />
+            <Stack.Screen
+              name={NAV_ROUTE_MANIFEST.more.stackRoute}
+              options={railOrPinnedDestination}
+            />
             <Stack.Screen name="scheduled-tasks" options={railOrPinnedDestination} />
             {/* Settings owns a nested stack and draws its headers there. */}
             <Stack.Screen
-              name="settings"
+              name={NAV_ROUTE_MANIFEST.settings.stackRoute}
               options={
                 isWideRail ? railOrPinnedDestination : { gestureEnabled: true, headerShown: false }
               }

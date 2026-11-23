@@ -5,6 +5,22 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { NavDragState } from '../state';
 import { VerticalNavRail } from '../VerticalNavRail';
 
+const createMockSharedValue = <T,>(initialValue: T) => {
+  let current = initialValue;
+  return {
+    get: () => current,
+    set: (next: T) => {
+      current = next;
+    },
+    get value() {
+      return current;
+    },
+    set value(next: T) {
+      current = next;
+    },
+  };
+};
+
 let mockInsets = { bottom: 0, left: 0, right: 86, top: 0 };
 let mockShellState = {
   activeDestination: 'chat' as const,
@@ -88,6 +104,11 @@ jest.mock('../usePinDragGesture', () => ({
 
 jest.mock('../state', () => ({
   useNavigationShell: () => mockShellState,
+  useNavigationShellInteraction: () => ({
+    dragPosition: { x: createMockSharedValue(0), y: createMockSharedValue(0) },
+    dragState: mockShellState.dragState,
+    popover: null,
+  }),
 }));
 
 function renderedRailOrder(renderer: ReactTestRenderer): string[] {
@@ -155,8 +176,6 @@ describe('VerticalNavRail', () => {
       insertIndex: 0,
       overDock: true,
       source: 'more',
-      x: 420,
-      y: 540,
     };
 
     act(() => {

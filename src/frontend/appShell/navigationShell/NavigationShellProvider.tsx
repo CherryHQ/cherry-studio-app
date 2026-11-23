@@ -1,10 +1,18 @@
 import { useToast } from '@cherrystudio/ui/components';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@cherrystudio/ui/haptics';
 import { type Href, usePathname, useRouter } from 'expo-router';
-import { type PropsWithChildren, useCallback, useMemo, useRef, useState } from 'react';
+import {
+  type PropsWithChildren,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFoldRegionLayout, useWindowClass } from '@/frontend/appShell/layout';
@@ -35,8 +43,12 @@ import {
   type MiddleColumnSource,
   type NavDragState,
   type NavigationNavigateOptions,
+  type NavigationShellActions,
+  NavigationShellActionsContext,
   NavigationShellContext,
-  type NavigationShellContextValue,
+  type NavigationShellInteraction,
+  NavigationShellInteractionContext,
+  type NavigationShellState,
   type NavPinPopoverState,
 } from './state';
 
@@ -135,9 +147,35 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   const [popover, setPopover] = useState<NavPinPopoverState | null>(null);
   const [dragState, setDragState] = useState<NavDragState | null>(null);
 
+  const dragPositionX = useSharedValue(0);
+  const dragPositionY = useSharedValue(0);
+  const dragPosition = useMemo(
+    () => ({ x: dragPositionX, y: dragPositionY }),
+    [dragPositionX, dragPositionY],
+  );
+
+  const dragOrientation = shellMode === 'vertical-rail' ? 'vertical' : 'horizontal';
+
   const dockRectRef = useRef<DockRect | null>(null);
   const mainNavigatorRef = useRef<MainNavigatorHandler | null>(null);
   const dragStateRef = useRef<NavDragState | null>(null);
+  const pinnedTabsRef = useRef(pinnedTabs);
+  const pathnameRef = useRef(pathname);
+  const dragOrientationRef = useRef<'horizontal' | 'vertical'>(dragOrientation);
+  const setRawPinnedTabsRef = useRef(setRawPinnedTabs);
+  const routerRef = useRef(router);
+  const toastRef = useRef(toast);
+  const tRef = useRef(t);
+
+  useLayoutEffect(() => {
+    pinnedTabsRef.current = pinnedTabs;
+    pathnameRef.current = pathname;
+    dragOrientationRef.current = dragOrientation;
+    setRawPinnedTabsRef.current = setRawPinnedTabs;
+    routerRef.current = router;
+    toastRef.current = toast;
+    tRef.current = t;
+  });
 
   const isDockVisible =
     shellMode === 'compact-dock' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
@@ -191,7 +229,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   }, []);
 
   const openPinPopover = useCallback((next: NavPinPopoverState) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    haptics.light();
     setPopover(next);
   }, []);
 
@@ -199,104 +237,109 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     setPopover(null);
   }, []);
 
-  const pinTabToDock = useCallback(
-    (id: NavigationPinTabId, insertIndex?: number): boolean => {
-      if (pinnedTabs.includes(id)) return false;
-      if (!canPinTab(pinnedTabs, id)) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-          () => undefined,
-        );
-        toast.show({ label: t('navigation.dockFullToast') });
-        return false;
-      }
-      const next = pinTab(pinnedTabs, id, insertIndex);
-      void setRawPinnedTabs(next);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-      return true;
-    },
-    [pinnedTabs, setRawPinnedTabs, t, toast],
-  );
+  const pinTabToDock = useCallback((id: NavigationPinTabId, insertIndex?: number): boolean => {
+    const currentPinned = pinnedTabsRef.current;
+    if (currentPinned.includes(id)) return false;
+    if (!canPinTab(currentPinned, id)) {
+      haptics.warning();
+      toastRef.current.show({ label: tRef.current('navigation.dockFullToast') });
+      return false;
+    }
+    const next = pinTab(currentPinned, id, insertIndex);
+    void setRawPinnedTabsRef.current(next);
+    haptics.medium();
+    return true;
+  }, []);
 
-  const unpinTabFromDock = useCallback(
-    (id: NavigationPinTabId): boolean => {
-      if (!canUnpinTab(pinnedTabs, id)) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-          () => undefined,
-        );
-        toast.show({ label: t('navigation.coreTabCannotUnpin') });
-        return false;
-      }
-      const next = unpinTab(pinnedTabs, id);
-      void setRawPinnedTabs(next);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-      return true;
-    },
-    [pinnedTabs, setRawPinnedTabs, t, toast],
-  );
+  const unpinTabFromDock = useCallback((id: NavigationPinTabId): boolean => {
+    const currentPinned = pinnedTabsRef.current;
+    if (!canUnpinTab(currentPinned, id)) {
+      haptics.warning();
+      toastRef.current.show({ label: tRef.current('navigation.coreTabCannotUnpin') });
+      return false;
+    }
+    const next = unpinTab(currentPinned, id);
+    void setRawPinnedTabsRef.current(next);
+    haptics.light();
+    return true;
+  }, []);
 
-  const reorderMiddleTab = useCallback(
-    (id: NavigationPinTabId, targetIndex: number) => {
-      const next = reorderPinnedTab(pinnedTabs, id, targetIndex);
-      if (
-        next.length === pinnedTabs.length &&
-        next.every((item, index) => item === pinnedTabs[index])
-      ) {
-        return;
-      }
-      void setRawPinnedTabs(next);
-      void Haptics.selectionAsync().catch(() => undefined);
-    },
-    [pinnedTabs, setRawPinnedTabs],
-  );
-
-  const dragOrientation = shellMode === 'vertical-rail' ? 'vertical' : 'horizontal';
+  const reorderMiddleTab = useCallback((id: NavigationPinTabId, targetIndex: number) => {
+    const currentPinned = pinnedTabsRef.current;
+    const next = reorderPinnedTab(currentPinned, id, targetIndex);
+    if (
+      next.length === currentPinned.length &&
+      next.every((item, index) => item === currentPinned[index])
+    ) {
+      return;
+    }
+    void setRawPinnedTabsRef.current(next);
+    haptics.selection();
+  }, []);
 
   const startDrag = useCallback(
     (input: { id: NavigationPinTabId; source: 'dock' | 'more'; x: number; y: number }) => {
       setPopover(null);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+      dragPositionX.set(input.x);
+      dragPositionY.set(input.y);
+      haptics.medium();
+
+      const currentPinned = pinnedTabsRef.current;
       const metrics = resolveDragMetrics(
         dockRectRef.current,
-        pinnedTabs.length,
+        currentPinned.length,
         input.source,
         input.x,
         input.y,
-        dragOrientation,
+        dragOrientationRef.current,
       );
       const next: NavDragState = {
-        ...input,
+        id: input.id,
+        source: input.source,
         overDock: metrics.overDock,
         insertIndex: metrics.insertIndex,
-        draggingOut: metrics.draggingOut && canUnpinTab(pinnedTabs, input.id),
+        draggingOut: metrics.draggingOut && canUnpinTab(currentPinned, input.id),
       };
       dragStateRef.current = next;
       setDragState(next);
     },
-    [dragOrientation, pinnedTabs],
+    [dragPositionX, dragPositionY],
   );
 
   const updateDrag = useCallback(
     (x: number, y: number) => {
+      dragPositionX.set(x);
+      dragPositionY.set(y);
+
       const current = dragStateRef.current;
       if (!current) return;
+
+      const currentPinned = pinnedTabsRef.current;
       const metrics = resolveDragMetrics(
         dockRectRef.current,
-        pinnedTabs.length,
+        currentPinned.length,
         current.source,
         x,
         y,
-        dragOrientation,
+        dragOrientationRef.current,
       );
-      const nextDraggingOut = metrics.draggingOut && canUnpinTab(pinnedTabs, current.id);
+      const nextDraggingOut = metrics.draggingOut && canUnpinTab(currentPinned, current.id);
       if ((!current.overDock && metrics.overDock) || (!current.draggingOut && nextDraggingOut)) {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        haptics.light();
       } else if (metrics.overDock && current.insertIndex !== metrics.insertIndex) {
-        void Haptics.selectionAsync().catch(() => undefined);
+        haptics.selection();
       }
+
+      if (
+        current.overDock === metrics.overDock &&
+        current.insertIndex === metrics.insertIndex &&
+        current.draggingOut === nextDraggingOut
+      ) {
+        return;
+      }
+
       const next: NavDragState = {
         ...current,
-        x,
-        y,
         overDock: metrics.overDock,
         insertIndex: metrics.insertIndex,
         draggingOut: nextDraggingOut,
@@ -304,7 +347,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       dragStateRef.current = next;
       setDragState(next);
     },
-    [dragOrientation, pinnedTabs],
+    [dragPositionX, dragPositionY],
   );
 
   const endDrag = useCallback(() => {
@@ -333,96 +376,88 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     (id: NavDestinationId, options?: NavigationNavigateOptions) => {
       setPopover(null);
       const href = getNavHref(id) as Href;
+      const currentRouter = routerRef.current;
+
       if (options?.push) {
-        router.push(href);
+        currentRouter.push(href);
         return;
       }
-      const navigatorResult = mainNavigatorRef.current?.(id);
-      if (navigatorResult === true || navigatorResult === 'handled') {
-        return;
-      }
-      if (typeof navigatorResult === 'object' && navigatorResult.action === 'dismiss') {
-        router.dismiss(navigatorResult.count);
-        return;
-      }
-      if (navigatorResult === 'push') {
-        router.push(href);
-        return;
-      }
-      if (navigatorResult === 'replace') {
-        router.replace(href);
+      if (mainNavigatorRef.current?.(id, currentRouter, href)) {
         return;
       }
       if (id === 'chat') {
-        router.navigate('/');
+        currentRouter.navigate('/');
         return;
       }
-      if (pathname === '/') {
-        router.push(href);
+      if (pathnameRef.current === '/') {
+        currentRouter.push(href);
         return;
       }
-      router.replace(href);
+      currentRouter.replace(href);
     },
-    [pathname, router],
+    [],
   );
 
-  const value = useMemo<NavigationShellContextValue>(
+  const stateValue = useMemo<NavigationShellState>(
     () => ({
       activeDestination,
       activeDockTab,
-      closePinPopover,
       dockClearance,
-      dragState,
-      endDrag,
       isAtRoot,
       isDockVisible,
       isFileListCollapsed,
       isVerticalRailVisible,
       middleColumnWidth,
+      pinnedTabs,
+      restingDockHeight,
+      shellMode,
+    }),
+    [
+      activeDestination,
+      activeDockTab,
+      dockClearance,
+      isAtRoot,
+      isDockVisible,
+      isFileListCollapsed,
+      isVerticalRailVisible,
+      middleColumnWidth,
+      pinnedTabs,
+      restingDockHeight,
+      shellMode,
+    ],
+  );
+
+  const actionsValue = useMemo<NavigationShellActions>(
+    () => ({
+      closePinPopover,
+      endDrag,
       navigateToDestination,
       openPinPopover,
       pinTabToDock,
-      pinnedTabs,
-      popover,
       registerDockRect,
       registerHideDock,
       registerMainNavigator,
       reorderMiddleTab,
       reportDockHeight,
       reportMiddleColumnWidth,
-      restingDockHeight,
       setFileListCollapsed,
-      shellMode,
       startDrag,
       toggleFileListCollapsed,
       unpinTabFromDock,
       updateDrag,
     }),
     [
-      activeDestination,
-      activeDockTab,
       closePinPopover,
-      dockClearance,
-      dragState,
       endDrag,
-      isAtRoot,
-      isDockVisible,
-      isFileListCollapsed,
-      isVerticalRailVisible,
-      middleColumnWidth,
       navigateToDestination,
       openPinPopover,
       pinTabToDock,
-      pinnedTabs,
-      popover,
       registerDockRect,
       registerHideDock,
       registerMainNavigator,
       reorderMiddleTab,
       reportDockHeight,
       reportMiddleColumnWidth,
-      restingDockHeight,
-      shellMode,
       startDrag,
       toggleFileListCollapsed,
       unpinTabFromDock,
@@ -430,5 +465,22 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  return <NavigationShellContext value={value}>{children}</NavigationShellContext>;
+  const interactionValue = useMemo<NavigationShellInteraction>(
+    () => ({
+      dragPosition,
+      dragState,
+      popover,
+    }),
+    [dragPosition, dragState, popover],
+  );
+
+  return (
+    <NavigationShellActionsContext value={actionsValue}>
+      <NavigationShellContext value={stateValue}>
+        <NavigationShellInteractionContext value={interactionValue}>
+          {children}
+        </NavigationShellInteractionContext>
+      </NavigationShellContext>
+    </NavigationShellActionsContext>
+  );
 }

@@ -1,17 +1,24 @@
+import type { Href } from 'expo-router';
 import { StackActions } from 'expo-router/react-navigation';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
   type MainNavigatorHandler,
-  NavigationShellContext,
-  type NavigationShellContextValue,
+  NavigationShellActionsContext,
+  type NavigationShellActions,
 } from '../state';
 import {
   type MainStackNavigationLike,
+  planMainStackNavigation,
   useRegisterMainNavigator,
 } from '../useRegisterMainNavigator';
 
 const mockDispatch = jest.fn();
+const mockRouter = {
+  dismiss: jest.fn(),
+  push: jest.fn(),
+  replace: jest.fn(),
+};
 let mockState: ReturnType<MainStackNavigationLike['getState']>;
 let registeredHandler: MainNavigatorHandler | null = null;
 
@@ -22,11 +29,11 @@ function Harness({ navigation }: { navigation: MainStackNavigationLike }) {
 
 describe('useRegisterMainNavigator', () => {
   let renderer: ReactTestRenderer;
-  const shellValue = {
+  const actionsValue = {
     registerMainNavigator: (handler: MainNavigatorHandler | null) => {
       registeredHandler = handler;
     },
-  } as unknown as NavigationShellContextValue;
+  } as unknown as NavigationShellActions;
 
   const navigation: MainStackNavigationLike = {
     dispatch: mockDispatch,
@@ -42,7 +49,23 @@ describe('useRegisterMainNavigator', () => {
     act(() => renderer?.unmount());
   });
 
-  it('targets the nested (main) stack state when navigation resolves to parent drawer', () => {
+  it('plans transitions cleanly as a pure function', () => {
+    expect(planMainStackNavigation(undefined, 'files')).toEqual({ type: 'fallback' });
+
+    const rootOnlyState = {
+      index: 0,
+      key: 'stack-main',
+      routeNames: ['(chat)', 'library'],
+      routes: [{ key: 'chat-key', name: '(chat)' }],
+      stale: false,
+      type: 'stack',
+    } as NonNullable<ReturnType<MainStackNavigationLike['getState']>>;
+
+    expect(planMainStackNavigation(rootOnlyState, 'chat')).toEqual({ type: 'noop' });
+    expect(planMainStackNavigation(rootOnlyState, 'files')).toEqual({ type: 'push' });
+  });
+
+  it('targets the nested (main) stack state and pushes when opening a tab from chat root', () => {
     mockState = {
       index: 0,
       key: 'drawer-1',
@@ -67,18 +90,19 @@ describe('useRegisterMainNavigator', () => {
 
     act(() => {
       renderer = create(
-        <NavigationShellContext value={shellValue}>
+        <NavigationShellActionsContext value={actionsValue}>
           <Harness navigation={navigation} />
-        </NavigationShellContext>,
+        </NavigationShellActionsContext>,
       );
     });
 
     expect(registeredHandler).not.toBeNull();
-    expect(registeredHandler?.('files')).toBe('push');
+    expect(registeredHandler?.('files', mockRouter, '/library' as Href)).toBe(true);
+    expect(mockRouter.push).toHaveBeenCalledWith('/library');
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 
-  it('returns false when (main) nested stack state is not yet mounted', () => {
+  it('returns false so provider falls back when (main) nested stack state is not yet mounted', () => {
     mockState = {
       index: 0,
       key: 'drawer-1',
@@ -90,13 +114,14 @@ describe('useRegisterMainNavigator', () => {
 
     act(() => {
       renderer = create(
-        <NavigationShellContext value={shellValue}>
+        <NavigationShellActionsContext value={actionsValue}>
           <Harness navigation={navigation} />
-        </NavigationShellContext>,
+        </NavigationShellActionsContext>,
       );
     });
 
-    expect(registeredHandler?.('files')).toBe(false);
+    expect(registeredHandler?.('files', mockRouter, '/library' as Href)).toBe(false);
+    expect(mockRouter.push).not.toHaveBeenCalled();
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 
@@ -142,31 +167,32 @@ describe('useRegisterMainNavigator', () => {
 
     act(() => {
       renderer = create(
-        <NavigationShellContext value={shellValue}>
+        <NavigationShellActionsContext value={actionsValue}>
           <Harness navigation={navigation} />
-        </NavigationShellContext>,
+        </NavigationShellActionsContext>,
       );
     });
 
-    expect(registeredHandler?.('agents')).toBe('handled');
+    expect(registeredHandler?.('agents', mockRouter, '/agents' as Href)).toBe(true);
     expect(mockDispatch).toHaveBeenCalledWith({
       ...StackActions.popToTop(),
       target: 'stack-agents',
     });
 
     mockDispatch.mockClear();
-    expect(registeredHandler?.('marketplace')).toBe('replace');
+    expect(registeredHandler?.('marketplace', mockRouter, '/skills' as Href)).toBe(true);
+    expect(mockRouter.replace).toHaveBeenCalledWith('/skills');
     expect(mockDispatch).not.toHaveBeenCalled();
 
     mockDispatch.mockClear();
-    expect(registeredHandler?.('chat')).toBe('handled');
+    expect(registeredHandler?.('chat', mockRouter, '/' as Href)).toBe(true);
     expect(mockDispatch).toHaveBeenCalledWith({
       ...StackActions.popToTop(),
       target: 'stack-main',
     });
   });
 
-  it('pops extra child depth before replacing when switching roots from depth 2', () => {
+  it('pops extra child depth before replacing and dismisses to existing ancestors from depth 2', () => {
     mockState = {
       index: 2,
       key: 'stack-main',
@@ -182,20 +208,23 @@ describe('useRegisterMainNavigator', () => {
 
     act(() => {
       renderer = create(
-        <NavigationShellContext value={shellValue}>
+        <NavigationShellActionsContext value={actionsValue}>
           <Harness navigation={navigation} />
-        </NavigationShellContext>,
+        </NavigationShellActionsContext>,
       );
     });
 
-    expect(registeredHandler?.('plugins')).toBe('replace');
+    expect(registeredHandler?.('plugins', mockRouter, '/plugins' as Href)).toBe(true);
     expect(mockDispatch).toHaveBeenCalledWith({
       ...StackActions.pop(1),
       target: 'stack-main',
     });
+    expect(mockRouter.replace).toHaveBeenCalledWith('/plugins');
 
     mockDispatch.mockClear();
-    expect(registeredHandler?.('more')).toEqual({ action: 'dismiss', count: 1 });
+    mockRouter.replace.mockClear();
+    expect(registeredHandler?.('more', mockRouter, '/more' as Href)).toBe(true);
+    expect(mockRouter.dismiss).toHaveBeenCalledWith(1);
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 });

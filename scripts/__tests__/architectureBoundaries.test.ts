@@ -362,4 +362,44 @@ describe('resolved architecture boundaries', () => {
       },
     );
   });
+
+  describe('direct expo-haptics guardrail', () => {
+    async function hapticsImportErrors(filePath: string, source: string) {
+      const [result] = await eslint.lintText(source, { filePath: path.join(root, filePath) });
+      expect(result.fatalErrorCount).toBe(0);
+      return result.messages.filter((message) => message.ruleId === 'no-restricted-imports');
+    }
+
+    it.each([
+      [
+        'src/frontend/appShell/navigationShell/probe.ts',
+        "import * as Haptics from 'expo-haptics';",
+      ],
+      ['src/frontend/features/more/probe.ts', "import * as Haptics from 'expo-haptics';"],
+    ])('rejects direct expo-haptics import in %s', async (filePath, source) => {
+      expect(await hapticsImportErrors(filePath, source)).not.toHaveLength(0);
+    });
+
+    it.each([
+      [
+        'src/frontend/appShell/navigationShell/probe.ts',
+        "import { haptics } from '@cherrystudio/ui/haptics';",
+      ],
+      [
+        'src/frontend/features/more/probe.ts',
+        "import { triggerHaptic } from '@cherrystudio/ui/haptics';",
+      ],
+    ])('allows shared @cherrystudio/ui/haptics import in %s', async (filePath, source) => {
+      expect(await hapticsImportErrors(filePath, source)).toEqual([]);
+    });
+
+    it('keeps every legacy direct expo-haptics exemption on an existing file', () => {
+      const guardrail = eslintConfig.find(
+        (entry) => entry.name === 'legacy-direct-haptics-allowlist',
+      );
+      const files = guardrail?.files ?? [];
+      expect(files.length).toBeGreaterThan(0);
+      expect(files.filter((file) => !fs.existsSync(path.join(root, String(file))))).toEqual([]);
+    });
+  });
 });

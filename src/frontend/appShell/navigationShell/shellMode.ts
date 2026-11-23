@@ -22,6 +22,7 @@ export function resolveFloatingDockClearance(rowHeight: number, bottomInset: num
   );
 }
 
+const VERTICAL_LEADING_INSET_MAX = 24;
 const VERTICAL_SYSTEM_INSET_MIN = 44;
 const VERTICAL_TOP_INSET_MAX = 24;
 
@@ -44,6 +45,7 @@ type ShellModeInput = {
 export function resolveNavigationShellMode({
   fold,
   height,
+  insetLeft,
   insetRight,
   insetTop,
   width,
@@ -52,6 +54,7 @@ export function resolveNavigationShellMode({
   const hasTrailingSystemBar =
     width > 0 &&
     height > 0 &&
+    insetLeft <= VERTICAL_LEADING_INSET_MAX &&
     insetRight >= VERTICAL_SYSTEM_INSET_MIN &&
     insetTop <= VERTICAL_TOP_INSET_MAX;
 

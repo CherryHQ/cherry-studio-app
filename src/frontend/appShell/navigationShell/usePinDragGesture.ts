@@ -1,11 +1,11 @@
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@cherrystudio/ui/haptics';
 import { useMemo } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
-import { useNavigationShell } from './state';
+import { useNavigationShellActions } from './state';
 
 const LONG_PRESS_DURATION_MS = 350;
 const DRAG_MOVE_THRESHOLD = 8;
@@ -20,7 +20,7 @@ export function usePinDragGesture(
   source: 'dock' | 'more',
   options?: UsePinDragGestureOptions,
 ) {
-  const { endDrag, openPinPopover, startDrag, updateDrag } = useNavigationShell();
+  const { endDrag, openPinPopover, startDrag, updateDrag } = useNavigationShellActions();
   const dragActivated = useSharedValue(false);
   const onArmedChange = options?.onArmedChange;
 
@@ -30,7 +30,7 @@ export function usePinDragGesture(
       .runOnJS(true)
       .onStart(() => {
         dragActivated.set(false);
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        haptics.light();
         onArmedChange?.(true);
       })
       .onUpdate((event) => {

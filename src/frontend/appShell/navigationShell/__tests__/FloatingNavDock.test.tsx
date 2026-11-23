@@ -4,6 +4,22 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { FloatingNavDock } from '../FloatingNavDock';
 import type { NavDragState } from '../state';
 
+const createMockSharedValue = <T,>(initialValue: T) => {
+  let current = initialValue;
+  return {
+    get: () => current,
+    set: (next: T) => {
+      current = next;
+    },
+    get value() {
+      return current;
+    },
+    set value(next: T) {
+      current = next;
+    },
+  };
+};
+
 let mockShellState = {
   activeDestination: 'more' as const,
   activeDockTab: 'more' as const,
@@ -98,6 +114,11 @@ jest.mock('../usePinDragGesture', () => ({
 
 jest.mock('../state', () => ({
   useNavigationShell: () => mockShellState,
+  useNavigationShellInteraction: () => ({
+    dragPosition: { x: createMockSharedValue(0), y: createMockSharedValue(0) },
+    dragState: mockShellState.dragState,
+    popover: null,
+  }),
 }));
 
 function renderedDockOrder(renderer: ReactTestRenderer): string[] {
@@ -143,8 +164,6 @@ describe('FloatingNavDock drag preview', () => {
       insertIndex: 0,
       overDock: true,
       source: 'more',
-      x: 130,
-      y: 780,
     };
 
     act(() => {
@@ -170,7 +189,7 @@ describe('FloatingNavDock drag preview', () => {
       'floating-nav-tab-more',
     ]);
 
-    mockShellState.dragState = { ...mockShellState.dragState, insertIndex: 1, x: 270 };
+    mockShellState.dragState = { ...mockShellState.dragState, insertIndex: 1 };
     act(() => {
       renderer!.update(<FloatingNavDock />);
     });
@@ -191,8 +210,6 @@ describe('FloatingNavDock drag preview', () => {
       insertIndex: 1,
       overDock: true,
       source: 'more',
-      x: 200,
-      y: 780,
     };
 
     act(() => {
@@ -219,8 +236,6 @@ describe('FloatingNavDock drag preview', () => {
       insertIndex: 1,
       overDock: false,
       source: 'dock',
-      x: 220,
-      y: 660,
     };
 
     act(() => {

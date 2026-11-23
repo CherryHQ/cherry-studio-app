@@ -2,7 +2,13 @@ import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { NavigationShellProvider } from '../NavigationShellProvider';
-import { useHideFloatingDock, useNavigationShell, useReportMiddleColumnWidth } from '../state';
+import {
+  useHideFloatingDock,
+  useNavigationShell,
+  useNavigationShellActions,
+  useNavigationShellInteraction,
+  useReportMiddleColumnWidth,
+} from '../state';
 
 const mockToastShow = jest.fn();
 const mockSetPreference = jest.fn().mockResolvedValue(undefined);
@@ -17,13 +23,41 @@ let mockKeyboardVisible = false;
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
-jest.mock('expo-haptics', () => ({
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
-  NotificationFeedbackType: { Warning: 'warning' },
-  impactAsync: jest.fn().mockResolvedValue(undefined),
-  notificationAsync: jest.fn().mockResolvedValue(undefined),
-  selectionAsync: jest.fn().mockResolvedValue(undefined),
+jest.mock('@cherrystudio/ui/haptics', () => ({
+  haptics: {
+    error: jest.fn(),
+    light: jest.fn(),
+    medium: jest.fn(),
+    selection: jest.fn(),
+    success: jest.fn(),
+    trigger: jest.fn(),
+    warning: jest.fn(),
+  },
 }));
+jest.mock('react-native-reanimated', () => {
+  const { useRef } = jest.requireActual('react');
+  return {
+    useSharedValue: <T,>(initialValue: T) => {
+      const ref = useRef(null as unknown);
+      if (ref.current === null) {
+        let current = initialValue;
+        ref.current = {
+          get: () => current,
+          set: (next: T) => {
+            current = next;
+          },
+          get value() {
+            return current;
+          },
+          set value(next: T) {
+            current = next;
+          },
+        };
+      }
+      return ref.current;
+    },
+  };
+});
 jest.mock('expo-router', () => ({
   usePathname: () => mockPathname,
   useRouter: () => ({
@@ -62,6 +96,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 let latest: ReturnType<typeof useNavigationShell>;
+let latestInteraction: ReturnType<typeof useNavigationShellInteraction>;
 let renderer: ReactTestRenderer;
 
 function Probe({
@@ -72,10 +107,12 @@ function Probe({
   middleWidth?: number;
 }) {
   const shell = useNavigationShell();
+  const interaction = useNavigationShellInteraction();
   useHideFloatingDock(hideDock);
   useReportMiddleColumnWidth('sidebar', middleWidth);
   useLayoutEffect(() => {
     latest = shell;
+    latestInteraction = interaction;
   });
   return null;
 }
@@ -227,28 +264,32 @@ describe('NavigationShellProvider', () => {
       // Enter top hit slop (780 - 72 = 708): x in left half of middle band -> insertIndex 0
       latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 720 });
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       draggingOut: false,
       id: 'drawings',
       insertIndex: 0,
       overDock: true,
       source: 'more',
     });
+    expect(latestInteraction.dragPosition.x.get()).toBe(140);
+    expect(latestInteraction.dragPosition.y.get()).toBe(720);
 
     // Move to right half of middle band -> insertIndex 1
     act(() => {
       latest.updateDrag(280, 790);
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       insertIndex: 1,
       overDock: true,
     });
+    expect(latestInteraction.dragPosition.x.get()).toBe(280);
+    expect(latestInteraction.dragPosition.y.get()).toBe(790);
 
     // Drop on dock -> pins drawings at index 1
     act(() => {
       latest.endDrag();
     });
-    expect(latest.dragState).toBeNull();
+    expect(latestInteraction.dragState).toBeNull();
     expect(mockSetPreference).toHaveBeenLastCalledWith(['agents', 'drawings']);
 
     // Now reorder drawings to slot 0 inside dock
@@ -256,7 +297,7 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'drawings', source: 'dock', x: 260, y: 800 });
       latest.updateDrag(120, 800);
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       draggingOut: false,
       insertIndex: 0,
       overDock: true,
@@ -271,7 +312,7 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'agents', source: 'dock', x: 260, y: 800 });
       latest.updateDrag(260, 700);
     });
-    expect(latest.dragState?.draggingOut).toBe(false);
+    expect(latestInteraction.dragState?.draggingOut).toBe(false);
     act(() => {
       latest.endDrag();
     });
@@ -280,7 +321,7 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'drawings', source: 'dock', x: 140, y: 800 });
       latest.updateDrag(140, 700);
     });
-    expect(latest.dragState?.draggingOut).toBe(true);
+    expect(latestInteraction.dragState?.draggingOut).toBe(true);
     act(() => {
       latest.endDrag();
     });
@@ -308,7 +349,7 @@ describe('NavigationShellProvider', () => {
       // Enter leftward hit slop (397 - 56 = 341): y in upper middle band -> insertIndex 0
       latest.startDrag({ id: 'drawings', source: 'more', x: 360, y: 540 });
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       draggingOut: false,
       insertIndex: 0,
       overDock: true,
@@ -318,7 +359,7 @@ describe('NavigationShellProvider', () => {
     act(() => {
       latest.updateDrag(420, 610);
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       insertIndex: 1,
       overDock: true,
     });
@@ -333,7 +374,7 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'drawings', source: 'dock', x: 420, y: 600 });
       latest.updateDrag(420, 535);
     });
-    expect(latest.dragState).toMatchObject({
+    expect(latestInteraction.dragState).toMatchObject({
       draggingOut: false,
       insertIndex: 0,
       overDock: true,
@@ -348,7 +389,7 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'agents', source: 'dock', x: 420, y: 580 });
       latest.updateDrag(300, 580);
     });
-    expect(latest.dragState?.draggingOut).toBe(false);
+    expect(latestInteraction.dragState?.draggingOut).toBe(false);
     act(() => {
       latest.endDrag();
     });
@@ -357,10 +398,108 @@ describe('NavigationShellProvider', () => {
       latest.startDrag({ id: 'drawings', source: 'dock', x: 420, y: 535 });
       latest.updateDrag(300, 535);
     });
-    expect(latest.dragState?.draggingOut).toBe(true);
+    expect(latestInteraction.dragState?.draggingOut).toBe(true);
     act(() => {
       latest.endDrag();
     });
     expect(mockSetPreference).toHaveBeenLastCalledWith(['agents']);
+  });
+
+  it('isolates drag and popover interactions from layout and actions consumers', () => {
+    let layoutRenders = 0;
+    let actionRenders = 0;
+    let interactionRenders = 0;
+    let actionsRef: ReturnType<typeof useNavigationShellActions>;
+    let interactionRef: ReturnType<typeof useNavigationShellInteraction>;
+
+    function LayoutConsumer() {
+      useNavigationShell();
+      useLayoutEffect(() => {
+        layoutRenders += 1;
+      });
+      return null;
+    }
+
+    function ActionConsumer() {
+      const actions = useNavigationShellActions();
+      useLayoutEffect(() => {
+        actionsRef = actions;
+        actionRenders += 1;
+      });
+      return null;
+    }
+
+    function InteractionConsumer() {
+      const interaction = useNavigationShellInteraction();
+      useLayoutEffect(() => {
+        interactionRef = interaction;
+        interactionRenders += 1;
+      });
+      return null;
+    }
+
+    const staticTree = (
+      <>
+        <LayoutConsumer />
+        <ActionConsumer />
+        <InteractionConsumer />
+      </>
+    );
+
+    act(() => {
+      renderer = create(<NavigationShellProvider>{staticTree}</NavigationShellProvider>);
+    });
+
+    expect(layoutRenders).toBe(1);
+    expect(actionRenders).toBe(1);
+    expect(interactionRenders).toBe(1);
+
+    act(() => {
+      actionsRef.registerDockRect({ height: 44, width: 400, x: 0, y: 780 });
+      actionsRef.openPinPopover({ id: 'drawings', source: 'more', x: 100, y: 200 });
+    });
+
+    expect(layoutRenders).toBe(1);
+    expect(actionRenders).toBe(1);
+    expect(interactionRenders).toBe(2);
+
+    // Dragging outside the dock hit zone through release causes 0 layout/action re-renders.
+    act(() => {
+      actionsRef.startDrag({ id: 'drawings', source: 'more', x: 100, y: 200 });
+    });
+    expect(layoutRenders).toBe(1);
+    expect(actionRenders).toBe(1);
+    expect(interactionRenders).toBe(3);
+
+    // Continuous pointer movement inside the same discrete region updates SharedValues with 0 React re-renders.
+    act(() => {
+      actionsRef.updateDrag(125, 225);
+      actionsRef.updateDrag(130, 230);
+      actionsRef.updateDrag(135, 235);
+    });
+
+    expect(layoutRenders).toBe(1);
+    expect(actionRenders).toBe(1);
+    expect(interactionRenders).toBe(3);
+    expect(interactionRef!.dragPosition.x.get()).toBe(135);
+    expect(interactionRef!.dragPosition.y.get()).toBe(235);
+
+    act(() => {
+      actionsRef.endDrag();
+    });
+    expect(layoutRenders).toBe(1);
+    expect(actionRenders).toBe(1);
+    expect(interactionRenders).toBe(4);
+
+    // Dropping on dock mutates pinnedTabs -> layout consumer updates once, actions stay constant.
+    act(() => {
+      actionsRef.startDrag({ id: 'drawings', source: 'more', x: 120, y: 720 });
+    });
+    act(() => {
+      actionsRef.endDrag();
+    });
+    expect(mockSetPreference).toHaveBeenLastCalledWith(['drawings', 'agents']);
+    expect(layoutRenders).toBe(2);
+    expect(actionRenders).toBe(1);
   });
 });

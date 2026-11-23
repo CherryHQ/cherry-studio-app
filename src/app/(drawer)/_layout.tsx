@@ -16,6 +16,7 @@ import {
   NavigationShellProvider,
   resolveCompactLeadingAction,
   useNavigationShell,
+  useNavigationShellInteraction,
   WIDE_RAIL_WIDTH,
   WideNavRail,
 } from '@/frontend/appShell/navigationShell';
@@ -105,7 +106,8 @@ function SidebarDrawer() {
   const pathname = usePathname();
   const { theme } = useUniwind();
   const { column } = useSidebarColumn();
-  const { dragState, pinnedTabs, shellMode } = useNavigationShell();
+  const { pinnedTabs, shellMode } = useNavigationShell();
+  const { dragState } = useNavigationShellInteraction();
   const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
     'background',
     'sidebar',

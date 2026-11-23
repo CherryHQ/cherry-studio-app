@@ -1,4 +1,6 @@
-import { createContext, use, useEffect } from 'react';
+import type { Href } from 'expo-router';
+import { createContext, use, useEffect, useMemo } from 'react';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
 
@@ -10,6 +12,7 @@ export {
   canUnpinTab,
   DEFAULT_PINNED_TABS,
   getNavHref,
+  getNavStackRoute,
   getNavTitleKey,
   isMoreModuleId,
   isRootNavPathname,
@@ -17,6 +20,8 @@ export {
   MAX_DOCK_TABS,
   MAX_MIDDLE_TABS,
   MORE_MODULE_IDS,
+  NAV_DESTINATION_IDS,
+  NAV_ROUTE_MANIFEST,
   normalizePinnedTabs,
   pinTab,
   reorderPinnedTab,
@@ -32,6 +37,7 @@ export {
   type DockDragPreviewState,
   type MoreModuleId,
   type NavDestinationId,
+  type NavRouteSpec,
   type NavTabId,
 } from './dockTabs';
 export {
@@ -62,14 +68,18 @@ export type NavPinPopoverState = {
   y: number;
 };
 
+/** Discrete drag metadata kept in React state; continuous coordinates live in SharedValues. */
 export type NavDragState = {
   draggingOut: boolean;
   id: NavigationPinTabId;
   insertIndex: number;
   overDock: boolean;
   source: 'dock' | 'more';
-  x: number;
-  y: number;
+};
+
+export type NavDragPosition = {
+  x: SharedValue<number>;
+  y: SharedValue<number>;
 };
 
 export type NavigationNavigateOptions = {
@@ -78,41 +88,45 @@ export type NavigationNavigateOptions = {
 
 export type MiddleColumnSource = 'files' | 'sidebar';
 
-export type MainNavigatorResult =
-  | boolean
-  | 'handled'
-  | 'push'
-  | 'replace'
-  | { action: 'dismiss'; count: number };
+export type MainStackRouterLike = {
+  dismiss: (count?: number) => void;
+  push: (href: Href) => void;
+  replace: (href: Href) => void;
+};
 
-export type MainNavigatorHandler = (id: NavDestinationId) => MainNavigatorResult;
+export type MainNavigatorHandler = (
+  id: NavDestinationId,
+  router: MainStackRouterLike,
+  href: Href,
+) => boolean;
 
-export type NavigationShellContextValue = {
+export type NavigationShellState = {
   activeDestination: NavDestinationId | undefined;
   activeDockTab: NavTabId | undefined;
-  closePinPopover: () => void;
   dockClearance: number;
-  dragState: NavDragState | null;
-  endDrag: () => void;
   isAtRoot: boolean;
   isDockVisible: boolean;
   isFileListCollapsed: boolean;
   isVerticalRailVisible: boolean;
   middleColumnWidth: number;
+  pinnedTabs: NavigationPinTabId[];
+  restingDockHeight: number;
+  shellMode: NavigationShellMode;
+};
+
+export type NavigationShellActions = {
+  closePinPopover: () => void;
+  endDrag: () => void;
   navigateToDestination: (id: NavDestinationId, options?: NavigationNavigateOptions) => void;
   openPinPopover: (popover: NavPinPopoverState) => void;
   pinTabToDock: (id: NavigationPinTabId, insertIndex?: number) => boolean;
-  pinnedTabs: NavigationPinTabId[];
-  popover: NavPinPopoverState | null;
   registerDockRect: (rect: DockRect | null) => void;
   registerHideDock: () => () => void;
   registerMainNavigator: (handler: MainNavigatorHandler | null) => void;
   reorderMiddleTab: (id: NavigationPinTabId, targetIndex: number) => void;
   reportDockHeight: (height: number) => void;
   reportMiddleColumnWidth: (source: MiddleColumnSource, width: number) => void;
-  restingDockHeight: number;
   setFileListCollapsed: (collapsed: boolean) => void;
-  shellMode: NavigationShellMode;
   startDrag: (input: {
     id: NavigationPinTabId;
     source: 'dock' | 'more';
@@ -124,24 +138,56 @@ export type NavigationShellContextValue = {
   updateDrag: (x: number, y: number) => void;
 };
 
-export const NavigationShellContext = createContext<NavigationShellContextValue | null>(null);
+export type NavigationShellInteraction = {
+  dragPosition: NavDragPosition;
+  dragState: NavDragState | null;
+  popover: NavPinPopoverState | null;
+};
 
-export function useOptionalNavigationShell(): NavigationShellContextValue | null {
+export type NavigationShellContextValue = NavigationShellState & NavigationShellActions;
+
+export const NavigationShellContext = createContext<NavigationShellState | null>(null);
+export const NavigationShellActionsContext = createContext<NavigationShellActions | null>(null);
+export const NavigationShellInteractionContext = createContext<NavigationShellInteraction | null>(
+  null,
+);
+
+export function useOptionalNavigationShell(): NavigationShellState | null {
   return use(NavigationShellContext);
 }
 
+export function useOptionalNavigationShellActions(): NavigationShellActions | null {
+  return use(NavigationShellActionsContext);
+}
+
+export function useNavigationShellActions(): NavigationShellActions {
+  const actions = use(NavigationShellActionsContext);
+  if (!actions) {
+    throw new Error('useNavigationShellActions must be used inside NavigationShellProvider');
+  }
+  return actions;
+}
+
+export function useNavigationShellInteraction(): NavigationShellInteraction {
+  const interaction = use(NavigationShellInteractionContext);
+  if (!interaction) {
+    throw new Error('useNavigationShellInteraction must be used inside NavigationShellProvider');
+  }
+  return interaction;
+}
+
 export function useNavigationShell(): NavigationShellContextValue {
-  const value = use(NavigationShellContext);
-  if (!value) {
+  const state = use(NavigationShellContext);
+  const actions = use(NavigationShellActionsContext);
+  if (!state || !actions) {
     throw new Error('useNavigationShell must be used inside NavigationShellProvider');
   }
-  return value;
+  return useMemo(() => ({ ...state, ...actions }), [actions, state]);
 }
 
 /** Hides the compact floating dock while temporary overlays/composers own the bottom edge. */
 export function useHideFloatingDock(hidden: boolean): void {
-  const shell = useOptionalNavigationShell();
-  const register = shell?.registerHideDock;
+  const register = useOptionalNavigationShellActions()?.registerHideDock;
 
   useEffect(() => {
     if (!hidden || !register) return;
@@ -151,8 +197,7 @@ export function useHideFloatingDock(hidden: boolean): void {
 
 /** Reports a permanent middle column width so BottomSheets center inside the open pane. */
 export function useReportMiddleColumnWidth(source: MiddleColumnSource, width: number): void {
-  const shell = useOptionalNavigationShell();
-  const report = shell?.reportMiddleColumnWidth;
+  const report = useOptionalNavigationShellActions()?.reportMiddleColumnWidth;
 
   useEffect(() => {
     if (!report) return;

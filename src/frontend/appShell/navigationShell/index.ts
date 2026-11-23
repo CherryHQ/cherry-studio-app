@@ -6,6 +6,11 @@ export { NavIcon } from './NavIcon';
 export { NavPinPopover } from './NavPinPopover';
 export * from './state';
 export { usePinDragGesture } from './usePinDragGesture';
-export { useRegisterMainNavigator, type MainStackNavigationLike } from './useRegisterMainNavigator';
+export {
+  type MainStackNavigationLike,
+  type MainStackNavigationPlan,
+  planMainStackNavigation,
+  useRegisterMainNavigator,
+} from './useRegisterMainNavigator';
 export { VerticalNavRail } from './VerticalNavRail';
 export { WideNavRail } from './WideNavRail';

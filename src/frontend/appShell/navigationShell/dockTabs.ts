@@ -3,9 +3,29 @@ import {
   type NavigationPinTabId,
 } from '@/shared/data/preference/preferenceSchema';
 
-export type NavTabId = 'chat' | NavigationPinTabId | 'more';
-export type NavDestinationId = NavTabId | 'settings';
-export type MoreModuleId = Exclude<NavigationPinTabId, 'agents'>;
+import {
+  getNavHref,
+  getNavStackRoute,
+  getNavTitleKey,
+  type MoreModuleId,
+  NAV_DESTINATION_IDS,
+  NAV_ROUTE_MANIFEST,
+  type NavDestinationId,
+  type NavRouteSpec,
+  type NavTabId,
+} from './navRouteManifest';
+
+export {
+  getNavHref,
+  getNavStackRoute,
+  getNavTitleKey,
+  NAV_DESTINATION_IDS,
+  NAV_ROUTE_MANIFEST,
+  type MoreModuleId,
+  type NavDestinationId,
+  type NavRouteSpec,
+  type NavTabId,
+};
 
 export type DockDragPreviewInput = {
   draggingOut: boolean;
@@ -48,65 +68,14 @@ const PINNABLE_SET = new Set<string>(NAVIGATION_PINNABLE_TAB_IDS);
 const MORE_MODULE_SET = new Set<string>(MORE_MODULE_IDS);
 const REQUIRED_MIDDLE_TABS = new Set<NavigationPinTabId>(['agents']);
 
-const NAV_HREF_BY_ID: Record<NavDestinationId, string> = {
-  chat: '/',
-  agents: '/agents',
-  drawings: '/drawings',
-  plugins: '/plugins',
-  marketplace: '/skills',
-  files: '/library',
-  devices: '/devices',
-  more: '/more',
-  settings: '/settings',
-};
+const ROOT_PATHNAME_TO_DEST: readonly [string, NavDestinationId][] = NAV_DESTINATION_IDS.flatMap(
+  (id) =>
+    NAV_ROUTE_MANIFEST[id].pathPrefixes.map((prefix): [string, NavDestinationId] => [prefix, id]),
+);
 
-const NAV_TITLE_KEY_BY_ID: Record<NavDestinationId, string> = {
-  chat: 'navigation.chat',
-  agents: 'navigation.agents',
-  drawings: 'navigation.paintings',
-  plugins: 'plugins.title',
-  marketplace: 'marketplace.title',
-  files: 'navigation.library',
-  devices: 'settings.deviceConnections.title',
-  more: 'common.more',
-  settings: 'navigation.settings',
-};
-
-const ROOT_PATHNAME_TO_DEST: readonly [string, NavDestinationId][] = [
-  ['/', 'chat'],
-  ['/remote', 'chat'],
-  ['/scheduled-tasks', 'chat'],
-  ['/agents', 'agents'],
-  ['/drawings', 'drawings'],
-  ['/paintings', 'drawings'],
-  ['/plugins', 'plugins'],
-  ['/skills', 'marketplace'],
-  ['/library', 'files'],
-  ['/trash', 'files'],
-  ['/devices', 'devices'],
-  ['/more', 'more'],
-  ['/settings', 'settings'],
-];
-
-const EXACT_ROOT_PATHNAMES = new Set([
-  '/',
-  '/remote',
-  '/agents',
-  '/drawings',
-  '/plugins',
-  '/skills',
-  '/library',
-  '/devices',
-  '/more',
-]);
-
-export function getNavHref(id: NavDestinationId): string {
-  return NAV_HREF_BY_ID[id];
-}
-
-export function getNavTitleKey(id: NavDestinationId): string {
-  return NAV_TITLE_KEY_BY_ID[id];
-}
+const EXACT_ROOT_PATHNAMES = new Set<string>(
+  NAV_DESTINATION_IDS.flatMap((id) => NAV_ROUTE_MANIFEST[id].exactRootPathnames),
+);
 
 /** Sanitizes persisted middle tabs: valid pinnable IDs, unique, `agents` always kept, capped at 3. */
 export function normalizePinnedTabs(raw: readonly string[] | undefined): NavigationPinTabId[] {

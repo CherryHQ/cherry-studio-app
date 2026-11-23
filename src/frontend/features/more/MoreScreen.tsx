@@ -17,6 +17,7 @@ import {
   resolveMoreModules,
   useNavigationDockClearance,
   useNavigationShell,
+  useNavigationShellInteraction,
   usePinDragGesture,
 } from '@/frontend/appShell/navigationShell';
 
@@ -76,7 +77,8 @@ export function MoreScreen() {
   const windowClass = useWindowClass();
   const fold = useFoldRegion();
   const dockClearance = useNavigationDockClearance();
-  const { dragState, pinnedTabs } = useNavigationShell();
+  const { pinnedTabs } = useNavigationShell();
+  const { dragState } = useNavigationShellInteraction();
   const [armedCardId, setArmedCardId] = useState<MoreModuleId | null>(null);
 
   const handleCardArmedChange = useCallback((id: MoreModuleId, armed: boolean) => {
