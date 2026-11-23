@@ -2693,6 +2693,7 @@
   "settings.voice.model.verificationFailed": "Échec de la vérification",
   "settings.voice.model.verifying": "Vérification…",
   "settings.voice.saveFailed": "Impossible d'enregistrer le réglage vocal",
+  "settings.voice.speech.background": "Poursuivre la lecture en arrière-plan",
   "settings.voice.speech.engine": "Moteur de lecture",
   "settings.voice.speech.systemUnavailable": "Synthèse vocale du système indisponible.",
   "settings.voice.speech.title": "Lecture à voix haute",

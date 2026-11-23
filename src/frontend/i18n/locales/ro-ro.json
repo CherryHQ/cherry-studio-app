@@ -2693,6 +2693,7 @@
   "settings.voice.model.verificationFailed": "Verificarea a eșuat",
   "settings.voice.model.verifying": "Se verifică…",
   "settings.voice.saveFailed": "Setarea vocală nu a putut fi salvată",
+  "settings.voice.speech.background": "Continuă citirea cu voce tare în fundal",
   "settings.voice.speech.engine": "Motor de citire",
   "settings.voice.speech.systemUnavailable": "Citirea cu voce tare a sistemului nu este disponibilă.",
   "settings.voice.speech.title": "Citire cu voce tare",

@@ -2674,6 +2674,7 @@
   "settings.voice.model.verificationFailed": "Verification failed",
   "settings.voice.model.verifying": "Verifying…",
   "settings.voice.saveFailed": "Couldn't save the voice setting.",
+  "settings.voice.speech.background": "Continue reading in the background",
   "settings.voice.speech.engine": "Speech engine",
   "settings.voice.speech.systemUnavailable": "System speech unavailable.",
   "settings.voice.speech.title": "Read aloud",

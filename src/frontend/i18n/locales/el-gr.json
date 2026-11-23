@@ -2674,6 +2674,7 @@
   "settings.voice.model.verificationFailed": "Αποτυχία επαλήθευσης",
   "settings.voice.model.verifying": "Επαλήθευση…",
   "settings.voice.saveFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης φωνής",
+  "settings.voice.speech.background": "Συνέχιση ανάγνωσης στο παρασκήνιο",
   "settings.voice.speech.engine": "Μηχανή εκφώνησης",
   "settings.voice.speech.systemUnavailable": "Η εκφώνηση του συστήματος δεν είναι διαθέσιμη.",
   "settings.voice.speech.title": "Ανάγνωση",

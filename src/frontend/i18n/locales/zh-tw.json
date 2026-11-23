@@ -2655,6 +2655,7 @@
   "settings.voice.model.verificationFailed": "驗證失敗",
   "settings.voice.model.verifying": "驗證中…",
   "settings.voice.saveFailed": "語音設定儲存失敗",
+  "settings.voice.speech.background": "在背景繼續朗讀",
   "settings.voice.speech.engine": "朗讀引擎",
   "settings.voice.speech.systemUnavailable": "系統朗讀無法使用。",
   "settings.voice.speech.title": "朗讀",

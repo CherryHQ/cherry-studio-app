@@ -97,7 +97,7 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
         { id: 'tide', name: 'Tide' },
       ];
     },
-    async speak({ text, signal }) {
+    async speak({ text, signal, backgroundPlayback }) {
       const voiceId = await voice();
       if (voiceId !== 'stella' && voiceId !== 'tide')
         throw new VoiceError('invalid-voice', 'The selected DeepSeek voice is unavailable.');
@@ -105,7 +105,7 @@ export function createDeepseekSpeech(voice: () => Promise<string>): SpeechEngine
       const api = createHttpClient({ baseUrl: connection.baseUrl, timeoutMs: 180_000 });
       const release = await voiceAudioSession.acquire('speech');
       try {
-        await voiceAudioSession.playback();
+        await voiceAudioSession.playback(backgroundPlayback);
         for (const chunk of splitSpeechText(text, 400)) {
           signal.throwIfAborted();
           const response = await api.request<ArrayBuffer>({
