@@ -29,6 +29,16 @@ import { ThemeMode } from './preferenceTypes';
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
 export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
+export const NAVIGATION_PINNABLE_TAB_IDS = [
+  'agents',
+  'drawings',
+  'plugins',
+  'marketplace',
+  'files',
+  'devices',
+] as const;
+export type NavigationPinTabId = (typeof NAVIGATION_PINNABLE_TAB_IDS)[number];
+
 /** These defaults are delivered by the organization in enterprise profiles. */
 export const ENTERPRISE_DEFAULT_MODEL_KEYS = [
   'agent.default_model_id',
@@ -120,6 +130,7 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  'ui.navigation.pinned_tabs': NavigationPinTabId[];
   /** The user hid the sidebar a wide window would otherwise keep beside the content. */
   'ui.sidebar.collapsed': boolean;
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
@@ -181,6 +192,7 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.navigation.pinned_tabs': ['agents'],
   'ui.sidebar.collapsed': false,
   'ui.sidebar.recent_view_mode': 'sessions',
   'ui.sidebar.session_tree_enabled': true,
@@ -204,6 +216,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'file.export.watermark_enabled',
   'ui.font_size_step',
   'ui.library.view_mode',
+  'ui.navigation.pinned_tabs',
   'ui.sidebar.collapsed',
   'ui.sidebar.recent_view_mode',
   'ui.theme_mode',

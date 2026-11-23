@@ -29,6 +29,8 @@ export type ComposerDockProps = PropsWithChildren<{
   /** Expandable overlays publish contentInset instead of reserving parent flow space. */
   layoutMode?: 'floating' | 'flow' | 'expandable' | 'expandable-overlay';
   collapseLabel?: string;
+  /** Extra resting bottom clearance (e.g. a floating bottom navigation bar), eased to 0 on keyboard/expansion. */
+  extraBottomOffset?: number;
   /**
    * Follows keyboard coordinates only while true, so another surface can own input. Read on the
    * UI thread: focus lifts the dock on the keyboard's first frame, not after a React commit.
@@ -42,6 +44,7 @@ export function ComposerDock({
   backgroundClassName,
   children,
   containerRef,
+  extraBottomOffset = 0,
   layoutMode = 'floating',
   collapseLabel = 'Collapse editor',
   keyboardTracking,
@@ -122,11 +125,17 @@ export function ComposerDock({
   const restingBackgroundStyle = useAnimatedStyle(() => ({
     opacity: 1 - (progress?.get() ?? 0),
   }));
-  const dockStyle = useAnimatedStyle(() => ({
-    paddingBottom: bottomPadding,
-    paddingHorizontal:
-      composerHorizontalScreenInset * (1 - (isExpandable ? (progress?.get() ?? 0) : 0)),
-  }));
+  const dockStyle = useAnimatedStyle(() => {
+    const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
+    const restingOffset =
+      extraBottomOffset > 0
+        ? extraBottomOffset * Math.max(0, 1 - keyboardProgress.get()) * (1 - expandProgress)
+        : 0;
+    return {
+      paddingBottom: bottomPadding + restingOffset,
+      paddingHorizontal: composerHorizontalScreenInset * (1 - expandProgress),
+    };
+  });
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -151,14 +160,7 @@ export function ComposerDock({
         (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
       }
       pointerEvents="box-none"
-      style={
-        isExpandable
-          ? stickyStyle
-          : [
-              { paddingBottom: bottomPadding, paddingHorizontal: composerHorizontalScreenInset },
-              stickyStyle,
-            ]
-      }
+      style={isExpandable ? stickyStyle : [dockStyle, stickyStyle]}
     >
       {isExpandable ? (
         <Animated.View pointerEvents="box-none" style={dockStyle}>
