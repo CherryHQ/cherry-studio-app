@@ -120,7 +120,7 @@ export class BackgroundActivityEnvironment extends BaseService {
     });
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     this.unsubscribeActions?.();
     this.unsubscribeActions = undefined;
     this.actionListeners.clear();

@@ -7,6 +7,8 @@ data profile. Navigation never treats a community guest as an expired enterprise
 ## Entry and completion
 
 - Settings opens `accountSignInHref(returnTo)` with push navigation, retaining its source page.
+  An entry can supply `cancelTo` when closing login should return to its source and success should
+  continue to another page.
 - `useAccountSignInForm` records the entry's validated return target before authentication. The
   existing profile-scoped persistent UI cache holds only that href, never credentials or callback
   codes. Onboarding supplies `/onboarding`; organization switching records its profile settings page.
@@ -15,7 +17,7 @@ data profile. Navigation never treats a community guest as an expired enterprise
   The last target remains until another attempt replaces it, so duplicate delivery has the same
   destination. `AccountRuntime` still owns one-use callback validation and deduplication.
 - An expired callback failure returns to the retryable login route. Other failures return to the
-  initiating surface. Without saved intent, interrupted onboarding resumes from its persisted
+  saved target. Without saved intent, interrupted onboarding resumes from its persisted
   status; an ordinary cold entry falls back to profile settings.
 - A callback effect that has been left cannot navigate later. A direct browser result only closes
   the login page while that page is focused. Cross-profile activation reloads the app instead of

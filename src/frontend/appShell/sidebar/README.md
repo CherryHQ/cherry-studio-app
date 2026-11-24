@@ -17,16 +17,20 @@ The header's leading sidebar button is the one entry for every width. `SidebarTo
 the drawer and publishes `resolveSidebarToggleAction` for the column through `useSidebarToggle`,
 exported from `@/frontend/appShell/sidebar/toggle` so headers do not load the sidebar UI: `open`
 for the overlay, `hide` or `show` for a wide column, and nothing while the file pane or a fold holds
-it. Hiding and showing switch the drawer between its permanent and closed overlay types in one step:
-animating the column's width would relayout the chat on every frame. Swiping only opens the
-overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
+it. Wide windows keep the drawer in permanent mode. A hidden sidebar stays mounted outside the
+layout row, so opening or closing Files exchanges the left column in one layout change. Swiping
+opens the overlay in compact windows. Navigation state reports a permanent drawer as closed, so visibility comes from
 `useSidebarPresence`: `persistent`, `open`, or `closed`. Selection mode, the title marquee, and read
 receipts use it instead of the raw drawer status.
 
 In a wide window the sidebar stays beside every page in the content region, so its actions read the
 content stack when they run. Agents, Paintings, Plugins, Marketplace, and the avatar's Settings push above
 the chat, or take the place of the destination already open, and the matching row (or the avatar)
-shows selected through `resolveSidebarDestination`. Conversation rows, New chat, device switching,
+shows selected through `resolveSidebarDestination`. Selecting the same page and chat context keeps
+the existing page mounted. In compact windows, a page entry closes the drawer and starts navigation
+in the same tap. With the chat covered, the sidebar remains mounted outside the content row and
+the page transition is the only visible motion. An external launch still waits for the overlay to
+close, and a newer action can cancel it. Conversation rows, New chat, device switching,
 and Files first pop the content region back to the chat. Plugins and Marketplace act for the chat beside
 the sidebar, or the one a page covers, which `ChatSourceProvider` keeps as `localChat`; the provider
 also keeps the covered chat's source, so the sidebar does not switch catalogs while Settings fills
@@ -141,9 +145,12 @@ The original local sidebar is the visual and interaction baseline for both sourc
 keep the full-width avatar/name/disclosure row; tapping anywhere on that row only toggles the
 group. New chat lives in the chat header. The bottom dock shows the avatar and nickname in one
 settings row. Community accounts with a confirmed, currently effective paid subscription also show
-the existing dashed plan badge beside the nickname; free, expired, signed-out, unavailable and
-enterprise accounts keep it hidden. Plan names come from plan metadata; remaining percentages use
-the account quota snapshot, matched to the plan by allocation ID. Exhausted quotas still show 0%.
+the dashed plan badge beside the nickname. Opening the overlay displays the Cloud service's last
+confirmed snapshot without triggering a refresh. A permanent sidebar refreshes stale data when it
+becomes visible in the foreground. The badge keeps the last confirmed values during a refresh or
+temporary failure while the entitlement is still effective. Remaining percentages use the account
+quota snapshot, matched to confirmed plan metadata by allocation ID.
+Exhausted quotas show 0%.
 The badge cycles the plan name for four seconds and each quota for three seconds through CherryUI
 `TextAnimation.Rotating`. Rotation stops while the drawer is hidden, the app is backgrounded, or
 selection is active; Reduce Motion shows the plan and first remaining percentage statically. Row gutters,

@@ -1,16 +1,28 @@
+import { BottomSheetBoundsProvider } from '@cherrystudio/ui/components';
+import { usePathname } from 'expo-router';
 import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
-import { StyleSheet, useWindowDimensions } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { LegacyPanGesture } from 'react-native-gesture-handler';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import {
   ChatDockLayoutProvider,
   FoldRegionProvider,
+  useCanDockSidebar,
   WindowFoldRegion,
 } from '@/frontend/appShell/layout';
-import { ChatSourceProvider, useChatSource } from '@/frontend/appShell/navigation/chat';
-import { FilePaneProvider } from '@/frontend/appShell/pane';
+import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
 import {
+  NavigationShellProvider,
+  resolveCompactLeadingAction,
+  useNavigationShell,
+  useNavigationShellInteraction,
+  WIDE_RAIL_WIDTH,
+  WideNavRail,
+} from '@/frontend/appShell/navigationShell';
+import {
+  resolveSidebarDrawer,
   Sidebar,
   SidebarColumnProvider,
   SidebarToggleProvider,
@@ -41,71 +53,98 @@ export default function DrawerLayout() {
   return (
     <ChatSourceProvider>
       <FoldRegionProvider>
-        <FilePaneProvider>
-          <SidebarColumnProvider>
-            <ChatDockLayoutProvider>
-              <WindowFoldRegion>
-                <SidebarToggleProvider>
-                  <SidebarDrawer />
-                </SidebarToggleProvider>
-              </WindowFoldRegion>
-            </ChatDockLayoutProvider>
-          </SidebarColumnProvider>
-        </FilePaneProvider>
+        <WindowFoldRegion>
+          <NavigationShellProvider>
+            <DrawerShell />
+          </NavigationShellProvider>
+        </WindowFoldRegion>
       </FoldRegionProvider>
     </ChatSourceProvider>
   );
 }
 
+function DrawerShell() {
+  const outerInsets = useSafeAreaInsets();
+  const { middleColumnWidth, shellMode } = useNavigationShell();
+
+  const contentInsets = {
+    ...outerInsets,
+    left: shellMode === 'wide-rail' ? 0 : outerInsets.left,
+    right: outerInsets.right,
+  };
+  const sheetInsetLeft =
+    shellMode === 'wide-rail'
+      ? outerInsets.left + WIDE_RAIL_WIDTH + middleColumnWidth
+      : outerInsets.left;
+  const sheetInsetRight = outerInsets.right;
+
+  return (
+    <View className="flex-1 flex-row">
+      {shellMode === 'wide-rail' ? <WideNavRail /> : null}
+      <View className="min-w-0 flex-1">
+        <SafeAreaInsetsContext value={contentInsets}>
+          <BottomSheetBoundsProvider insetLeft={sheetInsetLeft} insetRight={sheetInsetRight}>
+            <SidebarColumnProvider>
+              <ChatDockLayoutProvider>
+                <SidebarToggleProvider>
+                  <SidebarDrawer />
+                </SidebarToggleProvider>
+              </ChatDockLayoutProvider>
+            </SidebarColumnProvider>
+          </BottomSheetBoundsProvider>
+        </SafeAreaInsetsContext>
+      </View>
+    </View>
+  );
+}
+
 function SidebarDrawer() {
   const { width } = useWindowDimensions();
+  const outerInsets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const canDock = useCanDockSidebar();
   const { theme } = useUniwind();
   const { column } = useSidebarColumn();
-  const { isChatFocused } = useChatSource();
+  const { pinnedTabs, shellMode } = useNavigationShell();
+  const { dragState } = useNavigationShellInteraction();
   const [backgroundColor, sidebarColor, sidebarBorderColor, overlayColor] = useThemeColor([
     'background',
     'sidebar',
     'sidebar-border',
     'scrim',
   ]);
-  const isPermanent = column.kind === 'permanent';
+  const overlayWidth = Math.min(
+    appSidebar.maxWidth,
+    Math.max(280, width - Math.max(appSidebar.sceneRevealWidth, outerInsets.right)),
+  );
+  const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth, canDock);
+  const swipeEnabled =
+    shellMode !== 'wide-rail' &&
+    column.kind === 'overlay' &&
+    resolveCompactLeadingAction(pathname, pinnedTabs) === 'drawer' &&
+    !dragState;
 
   return (
     <Drawer
       drawerContent={renderSidebar}
       screenOptions={{
         configureGestureHandler: configureDrawerGesture,
-        // An overlay stops short of the right edge so a dimmed strip of chat stays
-        // visible: it tells the user where they came from and closes the drawer on
-        // tap. A permanent sidebar is a column of its own, separated by a hairline.
         drawerStyle: {
           backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
           borderEndColor: sidebarBorderColor,
-          borderEndWidth: isPermanent || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
-          width: isPermanent
-            ? column.width
-            : Math.min(appSidebar.maxWidth, width - appSidebar.sceneRevealWidth),
+          borderEndWidth: StyleSheet.hairlineWidth,
+          ...drawerStyle,
         },
-        // The content region is stable context. In compact windows the sidebar is a temporary
-        // surface sliding over it; wide windows keep it beside every page until the file pane
-        // takes its column or the user hides it. Switching keeps the same content tree mounted.
-        drawerType: isPermanent ? 'permanent' : 'front',
+        drawerType,
         headerShown: false,
-        // Dim the exposed scene while preserving the drawer's native progress
-        // animation and tap-to-close interaction.
         overlayColor,
         sceneStyle: {
-          // Keep the scene opaque where a screen leaves its own content style
-          // transparent, including beneath the overlaid sidebar.
           backgroundColor,
-          // The full-screen scene reaches every window edge. Let the display
-          // handle physical corners without clipping the header's blur.
           overflow: 'hidden',
         },
         swipeEdgeWidth: width,
-        // Pages pushed over the chat lead with back, so the full-width gesture only exposes the
-        // overlay from the chat itself.
-        swipeEnabled: column.kind === 'overlay' && isChatFocused,
+        swipeEnabled,
+        swipeMinDistance: 44,
       }}
     >
       <Drawer.Screen name="(main)" />

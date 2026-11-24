@@ -1,6 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -23,6 +23,7 @@ import type {
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { useModelChoice } from '@/frontend/components/Policy';
+import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatEditing } from '../../../context/ChatEditingProvider';
@@ -122,7 +123,9 @@ export function AssistantMessageActionsProvider({
   const inFlight = useRef(new Set<string>());
   const isSelecting = useIsChatShareSelecting();
   // The answer whose question the model picker adds an answer to.
-  const [answeringMessageId, setAnsweringMessageId] = useState<string>();
+  const [pickedMessageId, setAnsweringMessageId] = useState<string>();
+  const { cloudAnswerMessage } = useLocalSearchParams<{ cloudAnswerMessage?: string }>();
+  const answeringMessageId = cloudAnswerMessage || pickedMessageId;
   const { allowedModelIds, isLocked: isModelLocked } = useModelChoice();
   useEffect(() => {
     mounted.current = true;
@@ -333,18 +336,22 @@ export function AssistantMessageActionsProvider({
   const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
     if (!latest.current.isBusy) setAnsweringMessageId(messageId);
   }, []);
-  const closeAnswerModelPicker = useCallback(() => setAnsweringMessageId(undefined), []);
+  const closeAnswerModelPicker = useCallback(() => {
+    setAnsweringMessageId(undefined);
+    if (cloudAnswerMessage)
+      router.setParams({ cloudAnswerMessage: undefined, cloudModel: undefined });
+  }, [cloudAnswerMessage]);
   const answerWith = useCallback(
     (item: ModelPickerModelItem) => {
       const messageId = answeringMessageId;
-      setAnsweringMessageId(undefined);
+      closeAnswerModelPicker();
       const current = latest.current;
       if (!messageId || current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions
         .answerWith;
       void run(`answer:${messageId}`, action, { modelId: item.modelId }, 'retryFailed');
     },
-    [answeringMessageId, run],
+    [answeringMessageId, closeAnswerModelPicker, run],
   );
   const answeringMessage = answeringMessageId
     ? messages.find((message) => message.key === answeringMessageId)
@@ -408,6 +415,15 @@ export function AssistantMessageActionsProvider({
           onSelect={answerWith}
           open
           selectedModelId={answeringMessage.display.model?.id ?? null}
+          loginReturnTo={
+            sessionId
+              ? '/?' +
+                new URLSearchParams({
+                  sessionId,
+                  cloudAnswerMessage: answeringMessage.key,
+                }).toString()
+              : undefined
+          }
           title={t('chat.messageActions.answerWith')}
           variant="chat"
         />
@@ -457,8 +473,9 @@ export function ChatMessageActionsProvider({
 }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [copiedMessageId, setCopiedMessageId] = useState<string>();
-  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { value: copiedMessageId, show: showCopiedMessageId } = useTransientValue<string>(
+    COPIED_FEEDBACK_DURATION_MS,
+  );
   const copyOperationIdRef = useRef(0);
   const isMountedRef = useRef(true);
 
@@ -471,19 +488,7 @@ export function ChatMessageActionsProvider({
             return;
           }
 
-          if (copiedFeedbackTimerRef.current !== null) {
-            clearTimeout(copiedFeedbackTimerRef.current);
-          }
-
-          setCopiedMessageId(messageId);
-          copiedFeedbackTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            copiedFeedbackTimerRef.current = null;
-            setCopiedMessageId(undefined);
-          }, COPIED_FEEDBACK_DURATION_MS);
+          showCopiedMessageId(messageId);
         })
         .catch((error) => {
           logger.error('Copy assistant message failed', error as Error);
@@ -495,7 +500,7 @@ export function ChatMessageActionsProvider({
           toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
         });
     },
-    [t, toast],
+    [showCopiedMessageId, t, toast],
   );
 
   const stateValue = useMemo(
@@ -555,10 +560,6 @@ export function ChatMessageActionsProvider({
     return () => {
       isMountedRef.current = false;
       copyOperationIdRef.current += 1;
-      if (copiedFeedbackTimerRef.current !== null) {
-        clearTimeout(copiedFeedbackTimerRef.current);
-        copiedFeedbackTimerRef.current = null;
-      }
     };
   }, []);
 

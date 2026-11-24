@@ -69,7 +69,7 @@ describe('createGatewayGeminiImageModel', () => {
     const result = await model.doGenerate(callOptions({ prompt: 'a fox' }));
 
     expect(result.images).toEqual(['BASE64DATA']);
-    const sent = doGenerate.mock.calls[0][0];
+    const sent = doGenerate.mock.calls[0]![0];
     expect(sent.providerOptions.google.responseModalities).toEqual(['IMAGE']);
     expect(sent.prompt).toEqual([{ role: 'user', content: [{ type: 'text', text: 'a fox' }] }]);
   });
@@ -88,7 +88,7 @@ describe('createGatewayGeminiImageModel', () => {
 
     await model.doGenerate(callOptions({ aspectRatio: '16:9' }));
 
-    expect(doGenerate.mock.calls[0][0].providerOptions.google.imageConfig).toEqual({
+    expect(doGenerate.mock.calls[0]![0].providerOptions.google.imageConfig).toEqual({
       aspectRatio: '16:9',
     });
   });
@@ -114,11 +114,11 @@ describe('createGatewayGeminiImageModel', () => {
         DEFAULT_DIFFUSION_REGISTRATION,
         vendorBag,
       );
-      providerOptions.gateway.only = ['google'];
+      providerOptions.gateway!.only = ['google'];
 
       await model.doGenerate(callOptions({ providerOptions }));
 
-      const sent = doGenerate.mock.calls[0][0];
+      const sent = doGenerate.mock.calls[0]![0];
       expect(sent.providerOptions.gateway).toEqual({ only: ['google'] });
       expect(sent.providerOptions.google.imageConfig).toEqual({ imageSize: imageResolution });
     },
@@ -140,7 +140,7 @@ describe('createGatewayGeminiImageModel', () => {
       callOptions({ providerOptions: { gateway: { imageResolution: 'auto' } } }),
     );
 
-    expect(doGenerate.mock.calls[0][0].providerOptions).toEqual({
+    expect(doGenerate.mock.calls[0]![0].providerOptions).toEqual({
       google: { responseModalities: ['IMAGE'] },
     });
   });
@@ -167,7 +167,7 @@ describe('createGatewayGeminiImageModel', () => {
       }),
     );
 
-    const sent = doGenerate.mock.calls[0][0];
+    const sent = doGenerate.mock.calls[0]![0];
     // gateway routing options must survive
     expect(sent.providerOptions.gateway).toEqual({ only: ['google'] });
     // existing imageSize is kept while aspectRatio is added
@@ -216,7 +216,7 @@ describe('createGatewayGeminiImageModel', () => {
     );
 
     expect(result.images).toEqual(['EDITED']);
-    const content = doGenerate.mock.calls[0][0].prompt[0].content;
+    const content = doGenerate.mock.calls[0]![0].prompt[0].content;
     expect(content).toContainEqual({ type: 'file', mediaType: 'image/png', data: 'INPUT' });
   });
 });

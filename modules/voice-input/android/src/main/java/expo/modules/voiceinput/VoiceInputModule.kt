@@ -25,13 +25,26 @@ private const val SAMPLE_RATE = 16000
 private const val MAX_SAMPLES = SAMPLE_RATE * 30
 
 class VoiceInputModule : Module() {
+  private var playbackId: String? = null
   private val lock = Any()
   private var transcription: SystemAudioTranscription? = null
   private var capture: VoiceCapture? = null
 
   override fun definition() = ModuleDefinition {
     Name("VoiceInput")
-    Events("finished", "level")
+    Events("finished", "level", "playbackStopped")
+
+    AsyncFunction("beginPlayback") { id: String, title: String, stop: String, promise: Promise ->
+      SpeechPlaybackService.begin(requireNotNull(appContext.reactContext), id, title, stop, promise) {
+        sendEvent("playbackStopped", mapOf("id" to id))
+      }
+      playbackId = id
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("endPlayback") { id: String ->
+      SpeechPlaybackService.end(id)
+      if (playbackId == id) playbackId = null
+    }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("modelDirectory") {
       val context = requireNotNull(appContext.reactContext)
@@ -109,7 +122,10 @@ class VoiceInputModule : Module() {
     }
     OnDestroy {
       synchronized(lock) { capture }?.cancel()
-      Handler(Looper.getMainLooper()).post { transcription?.cancel() }
+      Handler(Looper.getMainLooper()).post {
+        playbackId?.let { SpeechPlaybackService.end(it) }
+        transcription?.cancel()
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ import type {
   SshCommandResult,
   SshCommandInput,
   SshFileRequest,
+  SshGrantScope,
   SshFileResult,
   SshAuthenticationRequest,
   SshTransferProgress,
@@ -18,6 +19,7 @@ import type { ResolvedFile, TemporaryFilePreview } from './file';
 export type SshHostProbe = { token: string; fingerprint: string };
 export interface SshModule {
   isAvailable(): boolean;
+  supportsFileReadGrants(): boolean;
   save(input: SaveSshProfile): Promise<SshProfile>;
   remove(reference: SshReference): Promise<void>;
   probe(reference: SshReference, signal: AbortSignal): Promise<SshHostProbe>;
@@ -57,13 +59,16 @@ export interface SshModule {
   respondAuthentication(id: string, responses: readonly string[] | null): void;
   selectTarget(sessionId: string, reference: SshReference | null): Promise<void>;
   /** Returns the exact new authorization so a failed approval can revoke only its own grant. */
-  setCommandGrant(
-    sessionId: string,
-    expected: SshTarget,
-    allowCommands: boolean,
-  ): Promise<SshTarget>;
+  setGrant(sessionId: string, expected: SshTarget, scope: SshGrantScope | null): Promise<SshTarget>;
   /** Copies a user-selected draft binding to the session allocated by its first send. */
   attachDraftTarget(draftId: string, sessionId: string): Promise<void>;
   getTarget(sessionId: string): SshTarget | null;
+  /** Returns the previous selection only when it is still valid and needs confirmation. */
+  getRememberedTarget(sessionId: string): Promise<SshProfile | null>;
+  decideRememberedTarget(
+    sessionId: string,
+    reference: SshReference,
+    decision: 'restore' | 'forget',
+  ): Promise<void>;
   subscribeTargets(listener: () => void): () => void;
 }

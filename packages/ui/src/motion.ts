@@ -1,4 +1,4 @@
-// The package's motion vocabulary.
+// The package's motion vocabulary across four tiers (Tactile, Morph, Spatial, Ambient).
 //
 // Curves and durations are separate axes on purpose. A curve is a design token:
 // it means the same thing however far the thing travels, so it is shared. A
@@ -21,13 +21,27 @@ export const easing = {
    * the right one for anything that changes an existing thing's size or place.
    */
   settle: Easing.bezier(0.22, 1, 0.36, 1),
+  /** Smooth symmetric curve for on-screen morphs without pure ease-in sluggishness. */
+  inOut: Easing.bezier(0.42, 0, 0.2, 1),
+  /** Soft deceleration matched to mobile sheets, drawers, and floating capsules. */
+  sheet: Easing.bezier(0.32, 0.72, 0, 1),
 } as const;
 
 // Springs are curves too, so they live here rather than in a component. They
-// carry no duration axis on purpose: a critically damped spring takes the same
-// time to settle however far it travels, which is the property that makes one
-// safe to share across gestures whose distances are decided at runtime.
+// carry no duration axis on purpose: a spring settles by physics across variable
+// distances, which is the property that makes one safe to share across runtime
+// gesture amplitudes.
 export const spring = {
+  /**
+   * Responsive, soft-landing spring (zeta ~0.91) for tactile press recovery
+   * and crisp icon swaps without wobble.
+   */
+  tactile: { damping: 32, mass: 0.6, stiffness: 520 },
+  /**
+   * Warm, gently lively spring (zeta ~0.73) for in-place state morphs
+   * (send/stop swaps, copy confirmation, anchored chips).
+   */
+  morph: { damping: 24, mass: 0.85, stiffness: 320 },
   /**
    * Critically damped: the fastest arrival that never overshoots. For something
    * travelling to a position that has to be exact — a pinned row, a snap target
@@ -37,9 +51,13 @@ export const spring = {
    * 63.5ms time constant: ~99% of the distance in 420ms.
    */
   settle: { damping: 31.5, mass: 1, stiffness: 248 },
+  /** Unhurried, warm spatial entrance for welcome anchors and ambient reveals. */
+  gentle: { damping: 26, mass: 1, stiffness: 180 },
 } as const;
 
 export const duration = {
+  /** Tactile press-in and crisp micro-state swaps. */
+  instant: 120,
   /** Cross-fades, and anything that should be over before a shape settles. */
   fast: 200,
   /** Size and position changes. */
@@ -48,8 +66,22 @@ export const duration = {
   slow: 350,
 } as const;
 
+/** Shared tactile press-in and spring recovery tokens for interactive controls. */
+export const pressMotion = {
+  scale: 0.97,
+  subtleScale: 0.985,
+  pressIn: { duration: 110, easing: easing.settle },
+  pressOut: spring.tactile,
+} as const;
+
+/** Calm, breathing timing tokens for active AI waiting and progress states. */
+export const ambientMotion = {
+  pulseDuration: 1400,
+  shimmerDuration: 2000,
+} as const;
+
 /** Continuous glyph highlight used by shared loading and pending-state copy. */
 export const shimmerTextMotion = {
-  duration: 2000,
+  duration: ambientMotion.shimmerDuration,
   easing: easing.linear,
 } as const;

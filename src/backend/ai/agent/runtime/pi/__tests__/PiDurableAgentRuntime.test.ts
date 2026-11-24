@@ -1690,6 +1690,48 @@ describe('Persistent Agent facade', () => {
       preflight.mockRestore();
     }
   });
+  test('manually compacts an idle working copy after a cold open using its saved model and provider session', async () => {
+    const state = fixture();
+    let runtime = state.create();
+    const signal = new AbortController().signal;
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      expect(await runtime.compactContext(lane, signal)).toBe('unchanged');
+      await submitAndWait(runtime, input('earlier'));
+      await submitAndWait(runtime, {
+        ...input('latest'),
+        input: [{ type: 'text', text: 'recent material '.repeat(2_000) }],
+      });
+      await runtime.close();
+
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      expect(await runtime.compactContext(lane, signal)).toBe('compacted');
+      expect(state.providerSessions).toHaveLength(3);
+      expect(state.providerSessions[0]).toEqual(expect.any(String));
+      expect(state.providerSessions[2]).toBe(state.providerSessions[0]);
+      const { contextCheckpoint } = await runtime.exportTurn(lane, 'latest', {
+        currentContext: true,
+      });
+      expect(contextCheckpoint?.payload).toMatchObject({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: [{ type: 'text', text: expect.stringContaining('Response 3') }],
+          }),
+        ]),
+      });
+      await runtime.drainUsage();
+      expect(state.ports.recordUsage).toHaveBeenCalledWith(
+        { ...lane, turnId: null, requestId: null },
+        expect.objectContaining({ usage: expect.objectContaining({ totalTokens: 5 }) }),
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('reopens an existing working copy and continues without replaying tools', async () => {
     const fixtureState = fixture();
     let runtime = fixtureState.create();
@@ -1921,7 +1963,7 @@ describe('Native web tools', () => {
     ...seed.configuration,
     tools,
     webTools: {
-      modelToolsPreferred: true,
+      modelTools: 'preferred' as const,
       clientSearchAvailable: true,
       clientFetchAvailable: true,
     },
@@ -2035,6 +2077,174 @@ describe('Native web tools', () => {
     functionToolMixing: true,
     dialect: 'anthropic',
   };
+
+  test('disabled retains external functions without native request definitions', async () => {
+    const state = nativeFixture(
+      [anthropicResponse([{ type: 'text', text: 'Done.' }])],
+      nativeAnthropic,
+      'anthropic-messages',
+      streamAnthropic as PiStreamFn,
+    );
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        configuration: {
+          ...configuration,
+          webTools: { ...configuration.webTools, modelTools: 'disabled' },
+        },
+      });
+      await submitAndWait(runtime, input('disabled'));
+      expect(state.payloads[0]!.tools).toEqual([
+        expect.objectContaining({ name: 'web_search', input_schema: expect.any(Object) }),
+        expect.objectContaining({ name: 'web_fetch', input_schema: expect.any(Object) }),
+        expect.objectContaining({ name: 'read_file', input_schema: expect.any(Object) }),
+      ]);
+      expect(state.payloads[0]!.tools.every((definition) => definition.type === undefined)).toBe(
+        true,
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])(
+    'disabled omits unavailable web capabilities without native fallback (%s/%s)',
+    async (clientSearchAvailable, clientFetchAvailable) => {
+      const state = nativeFixture(
+        [anthropicResponse([{ type: 'text', text: 'Done.' }])],
+        nativeAnthropic,
+        'anthropic-messages',
+        streamAnthropic as PiStreamFn,
+      );
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation({
+          ...seed,
+          configuration: {
+            ...configuration,
+            webTools: { modelTools: 'disabled', clientSearchAvailable, clientFetchAvailable },
+          },
+        });
+        await submitAndWait(runtime, input('disabled'));
+        expect(state.payloads[0]!.tools).toEqual([
+          ...(clientSearchAvailable
+            ? [expect.objectContaining({ name: 'web_search', input_schema: expect.any(Object) })]
+            : []),
+          ...(clientFetchAvailable
+            ? [expect.objectContaining({ name: 'web_fetch', input_schema: expect.any(Object) })]
+            : []),
+          expect.objectContaining({ name: 'read_file', input_schema: expect.any(Object) }),
+        ]);
+        expect(state.payloads[0]!.tools.every((definition) => definition.type === undefined)).toBe(
+          true,
+        );
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  test('recovery preserves disabled routes without recomputing availability', async () => {
+    const response = anthropicResponse([{ type: 'text', text: 'Done.' }]);
+    const state = nativeFixture(
+      [response],
+      nativeAnthropic,
+      'anthropic-messages',
+      streamAnthropic as PiStreamFn,
+    );
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const policy = {
+      modelTools: 'disabled' as const,
+      clientSearchAvailable: true,
+      clientFetchAvailable: false,
+    };
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...configuration, webTools: policy },
+      });
+      await runtime.close();
+      // Persist an unfinished input without scheduling it, then reopen through recovery.
+      const inspection = await PiDurableRuntime.open(state.storage, {
+        models: createModels({
+          authContext: { env: async () => undefined, fileExists: async () => false },
+        }),
+        registry: createRegistry(),
+      });
+      const conversation = (await inspection.conversation('session'))!;
+      const submission = input('recovered-disabled');
+      const submissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.submission',
+        version: 1,
+        scope: 'session',
+        checkpointWhen: () => false,
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      await conversation.commit(async (tx) => {
+        await tx.doc(
+          submissionMetadata,
+          `${conversation.id}:${submission.requestId}`,
+          piSubmissionMetadata(submission, tools),
+        );
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'Question recovered-disabled', timestamp: 1 }],
+        });
+        const record = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'placed',
+          requestId: submission.requestId,
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          GenerationTask,
+          {},
+          { ownership: { kind: 'conversation' }, conversationId: conversation.id },
+        );
+        const live = await tx.doc(LiveDoc, conversation.id);
+        live.run = { taskId, inputs: [record.id], turns: 0 };
+      }, BACKGROUND_CONTEXT);
+      await inspection.close();
+      // Readiness changed outside the stored conversation. Recovery must not consult it.
+      policy.clientSearchAvailable = false;
+      policy.clientFetchAvailable = true;
+      const availability = jest.fn(async () => nativeAnthropic);
+      state.dependencies.nativeWebTools = availability;
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      const complete = deferred<void>();
+      const observation = await runtime.observe(lane, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') complete.resolve();
+      });
+      runtime.resume();
+      await complete.promise;
+      await observation.unsubscribe();
+      expect(availability).not.toHaveBeenCalled();
+      expect((await runtime.configuration(lane)).webTools).toEqual({
+        modelTools: 'disabled',
+        clientSearchAvailable: true,
+        clientFetchAvailable: false,
+      });
+      expect(state.payloads[0]!.tools).toEqual([
+        expect.objectContaining({ name: 'web_search', input_schema: expect.any(Object) }),
+        expect.objectContaining({ name: 'read_file', input_schema: expect.any(Object) }),
+      ]);
+      expect(state.payloads[0]!.tools.every((definition) => definition.type === undefined)).toBe(
+        true,
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
 
   test('continues an Anthropic pause with intact content and tools, retaining text and usage', async () => {
     const paused = [

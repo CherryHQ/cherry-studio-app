@@ -27,6 +27,7 @@ import {
 import { subscribeBackgroundActivityActions } from '@/backend/services/backgroundActivity/actionTransport';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import type { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { createReplyCompletionNotifier } from '@/backend/services/backgroundReply/replyCompletionNotifications';
@@ -55,6 +56,7 @@ import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
+import { resolvePublicCatalogOrigin } from '@/bootstrap/profile/cloudLoginConfig';
 import { installationAccount } from '@/bootstrap/profile/installationAccount';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
@@ -107,6 +109,10 @@ export function createAppBootstrapRuntime(
   const replyCompletionNotifications =
     Platform.OS === 'ios'
       ? createReplyCompletionNotifier({
+          hasProgressActivity: () =>
+            host.container
+              .get<BackgroundActivityManager>('BackgroundActivityManager')
+              .hasProgressActivity(),
           isReplyCompletionNotificationEnabled,
           onForegroundAttention: publishForegroundActivityAttention,
         })
@@ -177,6 +183,12 @@ export function createAppBootstrapRuntime(
   cloud.configure(
     {
       getIdentity: account.getCommunityIdentity,
+      getGuestCatalogOrigin: (signal) =>
+        resolvePublicCatalogOrigin(
+          Constants.expoConfig?.extra?.configServiceOrigin,
+          Platform.OS,
+          signal,
+        ),
       getTokens: account.getCommunityTokens,
       refreshServices: account.refreshCommunityServices,
       subscribe: account.subscribe,
@@ -397,10 +409,7 @@ export function createAppBootstrapRuntime(
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
       void account.verify();
-      const results = await Promise.allSettled([
-        region.getCountry(),
-        providerCatalog.ensureReady(),
-      ]);
+      const results = await Promise.allSettled([region.getRegion(), providerCatalog.ensureReady()]);
       if (host.state === 'ready') {
         for (const result of results) {
           if (result.status === 'rejected') {

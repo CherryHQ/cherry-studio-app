@@ -34,6 +34,11 @@ Android service compliance with file-source extras still requires device accepta
 ignore unsupported extras. JavaScript requests Speech access on iOS and the system API's required
 microphone permission on Android before a file operation.
 
+On Android, `beginPlayback` admits an explicitly started reading to a media-playback foreground service.
+Its media session exposes a stop control; focus loss and task removal also signal the owning
+reading by ID. The caller releases that ID once the engine has stopped. Microphone capture keeps
+its independent background interruption rule.
+
 Native changes require new development clients. Compilation and iOS/Android device acceptance have
 not been run for this implementation; microphone interruptions and stop/cancel races need device
 acceptance before release.

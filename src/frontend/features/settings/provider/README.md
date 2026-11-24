@@ -36,6 +36,15 @@ addresses in a locked group, the connection check still available, and the model
 group without sync, add or endpoint actions. A model opens the same details page with its settings
 locked and without its delete action.
 
+Community profiles install CherryAI enabled by default. Its list switch moves it between the
+enabled and disabled groups. The choice persists across account and catalog refreshes.
+Opening it opens the CherryAI model page directly, showing the signed guest or account catalog
+with the standard free and vision badges. Tapping a login-required row while signed out pushes
+the app login route; success returns to the CherryAI model page and resumes that row, while cancel
+returns without resuming. An AMD model that needs activation has a lock and opens the confirmation
+dialog when pressed. Available AMD model rows link to their web account and usage actions.
+The app refreshes the catalog and status on browser return.
+
 ## Provider List Motion
 
 The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows
@@ -179,15 +188,14 @@ development and preview builds cannot complete provider sign-in.
 
 ## Regional Discovery
 
-The shared IP country selects the new-provider catalog and recommendations from the
-bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
-All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
-international discovery once detected. Discovery and first-install recommendations share
-`getProviderCatalogEdition`; when detection is unavailable, they use the device region
-from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
-global entries; only a missing device region retains the domestic default. The detection result
-remains unknown. Mobile capability exclusions and the
-recommended-provider subset remain locally owned; model metadata is shared across editions. Saved providers keep their
-settings, visibility and runtime availability across region changes. Chat setup also lists saved
-presets absent from the current regional catalog beside custom connections, so travelling does not
-remove their setup path.
+The shared network region (`CN` or `GLOBAL`) selects the new-provider catalog and recommendations
+from the bundled registry's upstream edition labels. Successful detections are cached for ten
+minutes. All distributions, including domestic-store builds, use this policy: an overseas VPN exit
+allows international discovery once detected. Discovery and first-install recommendations share
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region from
+`getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select global
+entries; only a missing device region retains the domestic default. The detection result remains
+unknown. Mobile capability exclusions and the recommended-provider subset remain locally owned;
+model metadata is shared across editions. Saved providers keep their settings, visibility and
+runtime availability across region changes. Chat setup also lists saved presets absent from the
+current regional catalog beside custom connections, so travelling does not remove their setup path.

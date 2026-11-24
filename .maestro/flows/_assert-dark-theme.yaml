@@ -1,0 +1,21 @@
+appId: ${APP_ID}
+name: Shared helper - verify the dark theme is selected
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: theme-preview-dark
+            text: '^radio button, checked$'
+          timeout: 10000
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: theme-preview-dark
+            checked: true
+          timeout: 10000

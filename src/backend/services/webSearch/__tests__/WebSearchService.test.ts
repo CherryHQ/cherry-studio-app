@@ -11,7 +11,7 @@ import { mobileWebSearchTransport } from '../transport';
 jest.mock('../transport', () => ({ mobileWebSearchTransport: { request: jest.fn() } }));
 jest.mock('../http/downloadWebPage', () => ({ downloadWebPage: jest.fn() }));
 jest.mock('@/backend/core/application/Application', () => ({
-  application: { get: () => ({ getCountry: async () => 'US' }) },
+  application: { get: () => ({ getRegion: async () => 'GLOBAL' }) },
 }));
 
 const request = jest.mocked(mobileWebSearchTransport.request);

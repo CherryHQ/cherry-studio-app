@@ -49,7 +49,12 @@ export function PrivacyConsentDialog({
         <Button disabled={isSaving} loading={isSaving} onPress={onAccept}>
           {t('privacyConsent.accept')}
         </Button>
-        <Button disabled={isSaving} onPress={onDecline} variant="ghost">
+        <Button
+          disabled={isSaving}
+          onPress={onDecline}
+          testID="privacy-consent-decline"
+          variant="ghost"
+        >
           {t('privacyConsent.decline')}
         </Button>
       </View>

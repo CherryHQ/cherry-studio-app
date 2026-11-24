@@ -54,10 +54,10 @@ Platform-specific channels in `eas.json` preserve existing build profile names a
 workflows. GitHub and GitCode distribute the same APK and use `production-apk`. Channels separate
 distribution configuration; matching runtime versions additionally enforce native compatibility.
 
-The shared package-update infrastructure uses the cached IP country to select GitCode APK upgrades
-in CN or GitHub APK upgrades elsewhere, and uses that country for App Store lookup. Failed country
-detection leaves the region unknown; package-update clients retain their CN request/source fallback.
-IP lookup runs independently of data-collection consent. Store update channels remain tied to the installed distribution.
+APK checks use the cached network region: `GLOBAL` selects GitHub; `CN` or unknown selects GitCode.
+On iOS, StoreKit supplies the current App Store storefront for Apple's release lookup. Without a
+storefront, the check reports unavailable rather than guessing from the network or device settings.
+Store update channels remain tied to the installed distribution.
 Its APK strategy compares the installed
 version from `expo-application`, rather than an OTA manifest's version, and packaged builds enable
 APK downloads only on the native channel `production-apk`, which an OTA cannot change. A development client

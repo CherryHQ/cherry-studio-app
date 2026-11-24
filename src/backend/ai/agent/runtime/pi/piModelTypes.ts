@@ -22,7 +22,10 @@ import type { PiNativeWebTools } from './piWebTools';
 export type PiStreamFn = (
   model: Model<Api>,
   context: TranscriptContext,
-  options?: SimpleStreamOptions & { trace?: TraceSpan },
+  options?: SimpleStreamOptions & {
+    trace?: TraceSpan;
+    reportFetchFailure?: (error: unknown) => void;
+  },
 ) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
 
 export type PiModelResolution = {

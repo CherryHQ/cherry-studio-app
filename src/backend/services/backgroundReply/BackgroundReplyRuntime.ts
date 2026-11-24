@@ -115,7 +115,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     const unsubscribe = this.environment.subscribeActions?.((response) => {
       void this.respondToAction(response).catch((error: unknown) =>
         logger.warn('Background decision failed', { error }),
@@ -304,7 +304,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     record.session = undefined;
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
 

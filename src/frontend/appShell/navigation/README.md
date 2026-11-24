@@ -17,12 +17,10 @@ domains.
   setup presentation explicitly; URL parameters cannot activate it from ordinary settings.
 - `FirstUseGate` owns first-use admission before restoring a chat target. It preserves existing
   installations and lets skipped/completed users enter chat normally. A new setup records progress
-  through welcome → inline privacy → permissions → notification/background settings → SDK sign-in
-  → subscription/model setup, inside the dedicated onboarding route.
-  Existing enterprise profiles keep their normal entry; a newly switched organization profile
-  inherits the completed preparation and finishes with organization-owned models. Community accounts
-  with active subscriptions select their default from the account catalog; other accounts and skipped
-  sign-ins enter local model setup. A failed entitlement lookup stays retryable.
+  through welcome, inline privacy, permissions, notification/background settings, and sign-in
+  inside the dedicated onboarding route. Signing in completes onboarding. A newly switched
+  organization profile inherits the completed preparation and uses organization-owned models.
+  Users who skip sign-in continue to model setup, where a failed local model lookup stays retryable.
   `useFirstUseEligibility` also lets privacy presentation distinguish a first run from an existing
   installation. It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
   destination. Background refreshes do not unmount the admitted chat.

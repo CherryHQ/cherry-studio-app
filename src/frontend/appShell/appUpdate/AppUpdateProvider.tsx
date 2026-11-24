@@ -23,6 +23,7 @@ const UNAVAILABLE_KEYS = {
   unknownVersion: 'appUpdate.unknownVersion',
   noRelease: 'appUpdate.noRelease',
   nativeUnavailable: 'appUpdate.nativeUnavailable',
+  storefrontUnavailable: 'appUpdate.failed',
 } as const;
 
 type AppUpdateActions = {
@@ -141,7 +142,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       }
       const options = appUpdateQueryOptions(appUpdate);
       const recorded = queryClient.getQueryData(options.queryKey);
-      if (recorded?.status === 'available') {
+      if (recorded?.status === 'available' && recorded.channel !== 'app-store') {
         open(recorded);
         return;
       }

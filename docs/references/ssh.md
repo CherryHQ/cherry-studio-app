@@ -12,7 +12,7 @@ The upload chooser uses the same rows while retaining destination and overwrite 
 Opening an Agent draft reuses the shared `AgentPickerSheet` with standard Agents only; target
 selection stays in the profile owner so closing the choice sheet cannot cancel the handoff.
 The chat composer's plus menu opens an anchored server picker and inserts the selected server as
-an inline mention. That picker only selects servers. Opening a draft or selecting a target does
+an inline mention. After selecting a server, reopening the picker lets the user manage temporary file access. Opening a draft or selecting a target does
 not send a message or run a command. There is no standalone command panel.
 Sent messages retain the mention's label and UTF-16 text offset so it keeps the composer's link
 color after loading history, editing, or retrying. This display snapshot carries no connection
@@ -96,12 +96,25 @@ grant one-hour access while approving a command to a fixed set of read-only diag
 nonempty stdin, or custom working directory still requires approval. The SSH approval sheet shows
 the complete command, resolved cwd, stdin, target and timeout. Background actions must open the app
 for SSH approvals. Revocation, expiry, target changes, profile changes and deletion
-cancel affected AI operations. SSH file tools always require their own approval; the command grant
-does not promote them. If approval submission fails, only the grant created for that submission is
+cancel affected AI operations. The command grant only covers diagnostics. In the composer's SSH picker, the user can instead
+list the selected profile directory and explicitly allow this conversation to list that directory
+and read checked regular files for one hour. No files are preselected. The picker shows the login,
+host, port and resolved directory before confirmation and allows revocation. Subdirectories,
+other files, commands, transfers and writes retain their usual approval rules. Granted reads
+check the exact canonical server path before opening the file. A conversation holds one grant at
+a time. First send transfers a draft's temporary file access to that session. If approval submission fails, only the grant created for that submission is
 revoked; a newer selection or replacement grant is preserved. Browser and AI operations share a
 connection only through exclusive leases. All conversation bindings and grants disappear when the
-process restarts. Draft bindings are copied to the session
-allocated by its first send; a failed admission removes that session's temporary binding.
+process restarts. The device remembers the most recent 64 explicit Session selections as profile
+IDs and revisions in the active storage generation. When a standard chat sends a new message with
+no live target, it can offer to restore a remembered selection before resolving the turn's tools.
+Parallel replies skip this prompt. If a draft explicitly mentions SSH, the composer asks the user
+to switch to one model and keeps the draft.
+The runtime checks the current profile again when the user confirms and restores it with a new
+selection identity and no grant. Cancelling keeps the draft. A message without an explicit SSH
+mention can send without a target and forget the previous selection. Changed or removed profiles
+cannot be restored from old references. Draft bindings are copied to the Session allocated by its
+first send; a failed admission removes that Session's binding and remembered selection.
 
 The runtime admits one native operation per target and at most four native operations overall. A busy
 target reports busy instead of silently queueing commands. Transfers retain a separate four-operation
@@ -127,7 +140,8 @@ Portable backups include a validated `ssh/profiles.json` snapshot without creden
 secret values. Restore initializes a separate MMKV store in the candidate storage generation before
 activation commits, retaining connection metadata and trust while regenerating credential references
 and revisions. Users re-enter credentials after restore, including on the same device. Older backups
-without the optional SSH snapshot restore an empty list. A later boot never reapplies the original
+without the optional SSH snapshot restore an empty list. Conversation selections are device-local
+and excluded from backups. A later boot never reapplies the original
 restore snapshot over subsequent edits, and rollback retains the previous generation's profiles.
 Failed MMKV writes remove newly staged secrets, preserving the previous record.
 Backup/restore's storage gate rejects new work while stores are frozen and observes pending SSH

@@ -48,6 +48,8 @@ export const AgentContextUsageSchema = z.strictObject({
   tokens: z.number().finite().nonnegative(),
   /** Recovery without a working copy cannot provide a fresh provider measurement. */
   estimated: z.boolean().optional(),
+  /** The selected answer has an execution copy that can be compacted. */
+  canCompact: z.boolean().optional(),
 });
 export type AgentContextUsage = z.infer<typeof AgentContextUsageSchema>;
 
@@ -65,7 +67,8 @@ export const AgentEventSchema = z.union([
     type: z.literal('context.usage.updated'),
     usages: z.array(AgentContextUsageSchema),
   }),
-  z.strictObject({ type: z.literal('runtime.failed') }),
+  z.strictObject({ type: z.literal('runtime.failed'), retryable: z.literal(false).optional() }),
+  z.strictObject({ type: z.literal('runtime.recovered') }),
   z.strictObject({
     type: z.literal('question.updated'),
     question: AgentPendingQuestionSchema.nullable(),

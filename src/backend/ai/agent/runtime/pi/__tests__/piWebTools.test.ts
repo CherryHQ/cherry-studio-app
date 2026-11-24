@@ -7,7 +7,7 @@ import {
 } from '../piWebTools';
 
 const policy: RuntimeWebTools = {
-  modelToolsPreferred: true,
+  modelTools: 'preferred' as const,
   clientSearchAvailable: true,
   clientFetchAvailable: true,
 };
@@ -61,14 +61,14 @@ test('commits DeepSeek Chat native calls before answer text prevents credential 
 
 describe('Pi web tool selection', () => {
   test.each([
-    [true, { search: 'server', fetch: 'server' }],
-    [false, { search: 'client', fetch: 'client' }],
+    ['preferred', { search: 'server', fetch: 'server' }],
+    ['fallback', { search: 'client', fetch: 'client' }],
   ] as const)(
     'selects one source per capability for model preference %s',
-    (modelToolsPreferred, expected) => {
-      const routes = resolvePiWebToolRoutes({ ...policy, modelToolsPreferred }, native, tools);
+    (modelTools, expected) => {
+      const routes = resolvePiWebToolRoutes({ ...policy, modelTools }, native, tools);
       expect(routes).toEqual(expected);
-      expect(selectPiClientTools(tools, routes)).toHaveLength(modelToolsPreferred ? 0 : 2);
+      expect(selectPiClientTools(tools, routes)).toHaveLength(modelTools === 'preferred' ? 0 : 2);
     },
   );
 
@@ -82,7 +82,7 @@ describe('Pi web tool selection', () => {
   test('falls back before sending when the preferred external service lacks configuration', () => {
     expect(
       resolvePiWebToolRoutes(
-        { ...policy, modelToolsPreferred: false, clientSearchAvailable: false },
+        { ...policy, modelTools: 'fallback' as const, clientSearchAvailable: false },
         native,
         tools,
       ),
@@ -125,7 +125,11 @@ describe('Pi web tool selection', () => {
 
   test('pairs Qwen Anthropic fetch with search while respecting approvals and denies', () => {
     const qwen = { ...native, dialect: 'qwen-anthropic' as const };
-    const preferClient = { ...policy, modelToolsPreferred: false, clientFetchAvailable: false };
+    const preferClient = {
+      ...policy,
+      modelTools: 'fallback' as const,
+      clientFetchAvailable: false,
+    };
     expect(resolvePiWebToolRoutes(preferClient, qwen, tools)).toEqual({
       search: 'server',
       fetch: 'server',
@@ -147,6 +151,26 @@ describe('Pi web tool selection', () => {
     expect(resolvePiWebToolRoutes(policy, { ...native, functionToolMixing: false }, tools)).toEqual(
       { search: 'server', fetch: 'server' },
     );
+  });
+
+  test('external-first retains the no-mixing coverage override and tie preference', () => {
+    const fallback = { ...policy, modelTools: 'fallback' as const, clientFetchAvailable: false };
+    const noMixing = { ...native, functionToolMixing: false };
+    expect(resolvePiWebToolRoutes(fallback, noMixing, tools)).toEqual({
+      search: 'server',
+      fetch: 'server',
+    });
+    expect(resolvePiWebToolRoutes(fallback, { ...noMixing, search: false }, tools)).toEqual({
+      search: 'client',
+      fetch: 'none',
+    });
+    expect(
+      resolvePiWebToolRoutes(
+        { ...fallback, modelTools: 'preferred' },
+        { ...noMixing, search: false },
+        tools,
+      ),
+    ).toEqual({ search: 'none', fetch: 'server' });
   });
 
   test('does not advertise unconfigured services when neither path is available', () => {
@@ -292,5 +316,74 @@ describe('native request adapters', () => {
       enable_search: true,
       search_options: { ...(strategy ? { search_strategy: strategy } : {}) },
     });
+  });
+});
+
+describe('disabled web policy', () => {
+  const disabled = { ...policy, modelTools: 'disabled' as const };
+  test.each([
+    [true, true],
+    [true, false],
+    [false, true],
+    [false, false],
+  ])(
+    'disabled never uses native fallback for readiness %s/%s',
+    (clientSearchAvailable, clientFetchAvailable) => {
+      const routes = resolvePiWebToolRoutes(
+        { ...disabled, clientSearchAvailable, clientFetchAvailable },
+        native,
+        tools,
+      );
+      expect(routes).toEqual({
+        search: clientSearchAvailable ? 'client' : 'none',
+        fetch: clientFetchAvailable ? 'client' : 'none',
+      });
+    },
+  );
+  test.each([
+    ['no refs', [tool('read_file')], { search: 'none', fetch: 'none' }],
+    ['search-only', [tools[0]!], { search: 'client', fetch: 'none' }],
+    ['fetch-only', [tools[1]!], { search: 'none', fetch: 'client' }],
+    ['tools=[]', [], { search: 'none', fetch: 'none' }],
+  ] as const)(
+    'disabled does not enable native tools for missing references (%s)',
+    (_name, refs, expected) => {
+      const routes = resolvePiWebToolRoutes(disabled, native, refs);
+      expect(routes).toEqual(expected);
+      expect(selectPiClientTools(refs, routes)).toEqual(refs);
+    },
+  );
+  test.each([
+    [true, false],
+    [false, true],
+  ])(
+    'disabled cannot be overridden by coverage selection (%s/%s)',
+    (clientSearchAvailable, clientFetchAvailable) => {
+      expect(
+        resolvePiWebToolRoutes(
+          { ...disabled, clientSearchAvailable, clientFetchAvailable },
+          { ...native, functionToolMixing: false },
+          tools,
+        ),
+      ).toEqual({
+        search: clientSearchAvailable ? 'client' : 'none',
+        fetch: clientFetchAvailable ? 'client' : 'none',
+      });
+    },
+  );
+  test('disabled cannot trigger Qwen native fetch/search pairing', () => {
+    expect(
+      resolvePiWebToolRoutes(
+        { ...disabled, clientFetchAvailable: false },
+        { ...native, dialect: 'qwen-anthropic' },
+        tools,
+      ),
+    ).toEqual({ search: 'client', fetch: 'none' });
+  });
+  test('disabled preserves external ask, denies, and unrelated functions', () => {
+    const refs = [tool('web_search', 'ask'), tool('web_fetch', 'deny'), tool('read_file')];
+    const routes = resolvePiWebToolRoutes(disabled, native, refs);
+    expect(routes).toEqual({ search: 'client', fetch: 'none' });
+    expect(selectPiClientTools(refs, routes)).toEqual([refs[0], refs[2]]);
   });
 });

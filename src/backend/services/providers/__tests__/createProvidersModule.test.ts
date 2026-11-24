@@ -1,4 +1,5 @@
 import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
+import type { NetworkRegion } from '@/backend/services/region';
 import { ProviderSetupError } from '@/shared/contracts';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
@@ -24,7 +25,7 @@ function subject() {
     endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
   } as Provider;
   const dependencies: ProvidersModuleDependencies = {
-    getCountry: jest.fn(async () => 'US'),
+    getRegion: jest.fn(async () => 'GLOBAL'),
     accounts: {
       getStatus: jest.fn(),
       begin: jest.fn(),
@@ -67,16 +68,20 @@ function subject() {
 
 describe('explicit provider activation', () => {
   it.each([
-    { country: 'CN', deviceRegion: 'US', expected: ['deepseek'] },
-    { country: 'US', deviceRegion: 'CN', expected: ['deepseek', 'openai'] },
-    { country: null, deviceRegion: 'CN', expected: ['deepseek'] },
-    { country: null, deviceRegion: 'US', expected: ['deepseek', 'openai'] },
-    { country: null, deviceRegion: null, expected: ['deepseek'] },
+    { region: 'CN' as NetworkRegion | null, deviceRegion: 'US', expected: ['deepseek'] },
+    {
+      region: 'GLOBAL' as NetworkRegion | null,
+      deviceRegion: 'CN',
+      expected: ['deepseek', 'openai'],
+    },
+    { region: null, deviceRegion: 'CN', expected: ['deepseek'] },
+    { region: null, deviceRegion: 'US', expected: ['deepseek', 'openai'] },
+    { region: null, deviceRegion: null, expected: ['deepseek'] },
   ])(
-    'selects discovery from IP $country and device region $deviceRegion',
-    async ({ country, deviceRegion, expected }) => {
+    'selects discovery from IP region $region and device region $deviceRegion',
+    async ({ region, deviceRegion, expected }) => {
       const { dependencies } = subject();
-      dependencies.getCountry = async () => country;
+      dependencies.getRegion = async () => region;
       mockDeviceRegion = deviceRegion;
       dependencies.catalog.list = () =>
         [
@@ -90,10 +95,10 @@ describe('explicit provider activation', () => {
     },
   );
 
-  it('keeps overseas discovery and imports available when detection leaves the country unknown', async () => {
+  it('keeps overseas discovery and imports available when detection leaves the region unknown', async () => {
     mockDeviceRegion = 'US';
     const { dependencies } = subject();
-    dependencies.getCountry = async () => null;
+    dependencies.getRegion = async () => null;
     const loader = new MobileRegistryLoader();
     dependencies.catalog = {
       isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
@@ -113,7 +118,7 @@ describe('explicit provider activation', () => {
 
   it('exposes and imports international presets after detection changes to an overseas VPN exit', async () => {
     const { dependencies } = subject();
-    jest.mocked(dependencies.getCountry).mockResolvedValueOnce('CN').mockResolvedValue('US');
+    jest.mocked(dependencies.getRegion).mockResolvedValueOnce('CN').mockResolvedValue('GLOBAL');
     dependencies.catalog.list = () =>
       [
         { id: 'deepseek', name: 'DeepSeek', availableInEditions: ['global', 'cn'] },
@@ -131,7 +136,7 @@ describe('explicit provider activation', () => {
 
   it('admits Kimi Code in China while retaining regional hiding for global-only presets', async () => {
     const { dependencies } = subject();
-    dependencies.getCountry = async () => 'CN';
+    dependencies.getRegion = async () => 'CN';
     const loader = new MobileRegistryLoader();
     dependencies.catalog = {
       isExcluded: (id) => loader.isProviderExcludedFromCatalog(id),
@@ -146,7 +151,7 @@ describe('explicit provider activation', () => {
 
   it('keeps an installed international provider usable after moving to China', async () => {
     const { dependencies } = subject();
-    dependencies.getCountry = async () => 'CN';
+    dependencies.getRegion = async () => 'CN';
     const installed = { id: 'openai', name: 'Saved OpenAI', isEnabled: true } as Provider;
     jest.mocked(dependencies.providers.find).mockResolvedValue(installed);
     const backend = createProvidersModule(dependencies);
@@ -154,11 +159,11 @@ describe('explicit provider activation', () => {
     expect(dependencies.providers.create).not.toHaveBeenCalled();
   });
 
-  it.each(['CN', null])(
-    'rejects a new international preset for country %s without writing provider data',
-    async (country) => {
+  it.each(['CN', null] as const)(
+    'rejects a new international preset for region %s without writing provider data',
+    async (region) => {
       const { dependencies } = subject();
-      dependencies.getCountry = async () => country;
+      dependencies.getRegion = async () => region;
       dependencies.catalog.list = () =>
         [{ id: 'openai', name: 'OpenAI', availableInEditions: ['global'] }] as ReturnType<
           ProvidersModuleDependencies['catalog']['list']

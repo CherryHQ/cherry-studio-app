@@ -32,7 +32,7 @@ export const getModelSupportedReasoningEffortOptions = (
 
 export const getBaseModelName = (id: string, delimiter = '/'): string => {
   const parts = id.split(delimiter);
-  return parts[parts.length - 1];
+  return parts[parts.length - 1] ?? id;
 };
 
 export const getLowerBaseModelName = (id: string, delimiter = '/'): string => {

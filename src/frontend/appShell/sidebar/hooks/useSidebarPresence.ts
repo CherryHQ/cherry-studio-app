@@ -13,5 +13,6 @@ export function useSidebarPresence(): SidebarPresence {
   const { column } = useSidebarColumn();
   const drawerStatus = useDrawerStatus();
 
-  return column.kind === 'permanent' ? 'persistent' : drawerStatus;
+  if (column.kind === 'overlay') return drawerStatus;
+  return column.kind === 'permanent' ? 'persistent' : 'closed';
 }

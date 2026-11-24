@@ -74,8 +74,8 @@ export const DefaultUseCache: UseCacheSchema = {
  * observable as `undefined`; entries are not initialized from defaults.
  */
 export type BackendCacheSchema = {
-  // Successfully detected egress country; expires after ten minutes.
-  'region.egress_country': string;
+  // Successfully detected egress region; expires after ten minutes.
+  'region.egress_region': 'CN' | 'GLOBAL';
   // Round-robin cursor for enabled provider API keys.
   'settings.provider.${providerId}.last_used_key_id': string;
 };
@@ -92,6 +92,7 @@ export type BackendCacheSchema = {
 export type PersistCacheSchema = {
   /** Origin of the last sign-in attempt, retained for cold and duplicate callback delivery. */
   'account.sign_in.return_to': string | null;
+  'cloud.model_login_return': string | null;
   'app_update.last_reminder': { releaseId: string; remindedAt: number } | null;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
@@ -110,6 +111,7 @@ export type PersistCacheSchema = {
 
 export const DefaultPersistCache: PersistCacheSchema = {
   'account.sign_in.return_to': null,
+  'cloud.model_login_return': null,
   'app_update.last_reminder': null,
   'skills.translations': {},
   'diagnostics.feedback_history': [],

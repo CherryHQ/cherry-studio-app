@@ -23,7 +23,7 @@ type ErrorBoundaryState = {
  * through a class component; everything else stays with the owner's fallback.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, resetKeys: this.props.resetKeys };
+  override state: ErrorBoundaryState = { hasError: false, resetKeys: this.props.resetKeys };
 
   static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
     return { hasError: true };
@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return { hasError: false, resetKeys: props.resetKeys };
   }
 
-  componentDidCatch(error: unknown, info: ErrorInfo) {
+  override componentDidCatch(error: unknown, info: ErrorInfo) {
     logger.error('Render failed', toError(error), {
       componentStack: info.componentStack,
       operation: this.props.operation,
@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({ hasError: false });
   };
 
-  render() {
+  override render() {
     return this.state.hasError ? this.props.fallback(this.reset) : this.props.children;
   }
 }

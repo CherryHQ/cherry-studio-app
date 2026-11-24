@@ -23,5 +23,6 @@ export { COMPOSER_MAX_TEXT_HEIGHT } from './utils/composer-layout';
 export {
   composerContentGap,
   getComposerActionCenterOffset,
+  getComposerBottomPadding,
   getComposerKeyboardStickyOffset,
 } from './utils/composer-dock-layout';

@@ -11,10 +11,11 @@ export type SidebarColumnContent = 'sidebar' | 'search';
 /**
  * How the sidebar meets the content region. A wide window keeps a permanent column unless the user
  * collapsed it; when the file pane takes that column beside the chat, the sidebar steps aside. Both
- * hide it like a closed overlay.
+ * leave the sidebar mounted without reserving space for it, as do pages over a compact chat.
  */
 export type SidebarColumn =
   | { kind: 'overlay' }
+  | { kind: 'inactive' }
   | { kind: 'collapsed' }
   | { kind: 'yielded' }
   | {
@@ -28,6 +29,9 @@ export type SidebarColumn =
 
 type SidebarColumnInput = {
   isWide: boolean;
+  isChatFocused: boolean;
+  /** Compact roots like 「更多」 and pinned tabs can also open the overlay drawer. */
+  canOpenCompactDrawer?: boolean;
   /** The user hid the column; only a wide window has one to hide. */
   isCollapsed: boolean;
   /** The file pane is open beside a focused chat and holds the left column. */
@@ -46,17 +50,20 @@ type SidebarColumnInput = {
  * sidebar returns until the device lies flat again.
  */
 export function resolveSidebarColumn({
+  canOpenCompactDrawer,
   content,
   fold,
   insetLeft,
   insetRight,
+  isChatFocused,
   isCollapsed,
-  isPaneInColumn,
   isWide,
   windowWidth,
 }: SidebarColumnInput): SidebarColumn {
-  if (!isWide) return { kind: 'overlay' };
-  if (isPaneInColumn) return { kind: 'yielded' };
+  if (!isWide) {
+    return { kind: (canOpenCompactDrawer ?? isChatFocused) ? 'overlay' : 'inactive' };
+  }
+  if (!isChatFocused) return { kind: 'inactive' };
 
   if (fold && !isAcross(fold)) {
     const end = fold.x + fold.width;
@@ -74,6 +81,32 @@ export function resolveSidebarColumn({
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
 }
 
+/** Keep an inactive sidebar mounted without flashing or flipping drawer modes on push/pop. */
+export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number, isWide = true) {
+  if (column.kind === 'overlay') {
+    return {
+      drawerType: 'slide',
+      drawerStyle: { pointerEvents: 'auto', width: overlayWidth },
+    } as const;
+  }
+  if (column.kind === 'permanent') {
+    return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
+  }
+  if (!isWide) {
+    // Keep compact drawers in `slide` mode across secondary routes so native drawer
+    // physics and gesture listeners never tear down on navigation transitions.
+    return {
+      drawerType: 'slide',
+      drawerStyle: { pointerEvents: 'none', width: overlayWidth },
+    } as const;
+  }
+  // Keep the list laid out off the flex row, and the closed position ready for a narrower window.
+  return {
+    drawerType: 'permanent',
+    drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none', width: overlayWidth },
+  } as const;
+}
+
 /**
  * What the header's sidebar button does for a column: open the overlay, hide or show a permanent
  * column. A column yielded to the file pane, or sized to a fold, has no button.
@@ -88,6 +121,7 @@ export function resolveSidebarToggleAction(column: SidebarColumn): SidebarToggle
       return 'show';
     case 'permanent':
       return column.foldGap > 0 ? undefined : 'hide';
+    case 'inactive':
     case 'yielded':
       return undefined;
   }

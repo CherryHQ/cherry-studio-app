@@ -12,6 +12,7 @@ import {
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
+  resolveModelWebToolsPreference,
   PreferenceDefaults,
   type PreferenceClient,
   type PreferenceSchema,
@@ -68,7 +69,7 @@ export class PreferenceService extends BaseService implements PreferenceClient {
    * because first paint reads theme, font size, and language straight out of
    * that cache — see `initializeAppRuntime`.
    */
-  protected async onInit() {
+  protected override async onInit() {
     this.cache = { ...PreferenceDefaults };
 
     const rows = await this.db
@@ -91,6 +92,9 @@ export class PreferenceService extends BaseService implements PreferenceClient {
   }
 
   getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceSchema[K] | undefined {
+    if (key === 'chat.web_search.model_tools') {
+      return resolveModelWebToolsPreference(this.cache[key]) as PreferenceSchema[K];
+    }
     return this.cache[key] as PreferenceSchema[K] | undefined;
   }
 

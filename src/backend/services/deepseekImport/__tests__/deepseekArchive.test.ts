@@ -19,7 +19,7 @@ jest.mock('expo-file-system', () => {
     get size() {
       return mockFiles.get(this.uri)?.length ?? 0;
     }
-    create() {
+    override create() {
       mockFiles.set(this.uri, new Uint8Array());
     }
     delete() {

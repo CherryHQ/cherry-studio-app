@@ -1,14 +1,18 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button } from '@cherrystudio/ui/components';
+import { Button, Dialog } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
-import { useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
-import { chatReturnToHref } from '@/frontend/appShell/navigation/chat';
+import {
+  chatReturnToHref,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 import {
   ComposerAttachments,
   type ComposerSendPayload,
@@ -64,6 +68,7 @@ import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEffor
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { useChatInputSessionModelSelection } from './hooks/useChatInputSessionModelSelection';
 import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
+import { useSshTargetRestore } from './hooks/useSshTargetRestore';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
@@ -71,7 +76,7 @@ import { deriveContextUsage } from './utils/contextUsage';
 import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
-import { getSendErrorLabelKey } from './utils/sendErrorLabel';
+import { getSendErrorLabelKey, ParallelSshSendError } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 import { readSshMentions } from './utils/sshMentions';
 
@@ -521,7 +526,26 @@ function TextChatInput({
     setReplyModels,
   });
   const clearReplyModels = useCallback(() => setReplyModels(null), [setReplyModels]);
-  const { close: closeModelPicker } = modelPicker;
+  const { close: closeModelPicker, open: openModelPicker } = modelPicker;
+  const routeParams = useLocalSearchParams<
+    ChatRouteParamsInput & { cloudModel?: string; cloudAnswerMessage?: string }
+  >();
+  const { cloudModel, cloudAnswerMessage } = routeParams;
+  const route = parseChatRoute(routeParams);
+  const cloudReturnTo =
+    route.status === 'ready' ? chatReturnToHref(route.target) : providerSetupReturnTo;
+  const focused = useIsFocused();
+  const { prepare: prepareSshTarget, prompt: restoreSshTarget } = useSshTargetRestore(
+    sessionId,
+    isSshAvailable && focused && !isParallel,
+  );
+  useEffect(() => {
+    if (focused && cloudModel && !cloudAnswerMessage) openModelPicker();
+  }, [cloudAnswerMessage, cloudModel, focused, openModelPicker]);
+  const dismissPicker = () => {
+    if (cloudModel && !cloudAnswerMessage) router.setParams({ cloudModel: undefined });
+    closeModelPicker();
+  };
   const handleAddProvider = useCallback(() => {
     closeModelPicker();
     openProviderSetup();
@@ -574,6 +598,10 @@ function TextChatInput({
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         const sshMentions = readSshMentions(prompt);
+        if (isParallel && sshMentions.references.length > 0)
+          throw new ParallelSshSendError('SSH requires a single reply model.');
+        const sshPreparation = prepareSshTarget(sshMentions.references);
+        if (sshPreparation) await sshPreparation;
         const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
         if (
           sshMentions.references.some(
@@ -646,6 +674,7 @@ function TextChatInput({
       editMessage,
       editing,
       isBusy,
+      isParallel,
       commitEdit,
       settleEditSend,
       quoteActions,
@@ -655,6 +684,7 @@ function TextChatInput({
       mcpApps,
       mode,
       modelOverrideId,
+      prepareSshTarget,
       reasoningEffort,
       reasoningEfforts,
       replyModels,
@@ -713,6 +743,12 @@ function TextChatInput({
                 contextUsage={compatibleUsage}
                 contextUsageSessionId={sessionId}
                 contextUsageMessageId={contextUsage?.messageId}
+                onCompactContext={
+                  sessionId && contextUsage?.canCompact && !editing
+                    ? () => controls.compactContext(contextUsage.messageId)
+                    : undefined
+                }
+                compactDisabled={isBusy || controls.canSend === false}
                 onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={
@@ -751,6 +787,37 @@ function TextChatInput({
           )}
         </ChatInputEffortOverlay>
       </View>
+      {restoreSshTarget ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) restoreSshTarget.decide('cancel');
+          }}
+          title={t('ssh.restoreTarget.title')}
+        >
+          <View className="gap-1">
+            <Text className="text-sm text-muted-foreground">
+              {t('ssh.restoreTarget.description', { name: restoreSshTarget.profile.name })}
+            </Text>
+            <Text className="font-mono text-sm text-foreground">
+              {`${restoreSshTarget.profile.username}@${restoreSshTarget.profile.host}:${restoreSshTarget.profile.port}`}
+            </Text>
+          </View>
+          <View className="gap-2">
+            <Button onPress={() => restoreSshTarget.decide('restore')}>
+              {t('ssh.restoreTarget.confirm')}
+            </Button>
+            {restoreSshTarget.canForget ? (
+              <Button variant="secondary" onPress={() => restoreSshTarget.decide('forget')}>
+                {t('ssh.restoreTarget.forget')}
+              </Button>
+            ) : null}
+            <Button variant="ghost" onPress={() => restoreSshTarget.decide('cancel')}>
+              {t('common.cancel')}
+            </Button>
+          </View>
+        </Dialog>
+      ) : null}
       {modelPicker.isOpen ? (
         <ModelPickerDrawer
           // Parallel answers refuse image generation, so several models are chosen among text ones.
@@ -758,9 +825,10 @@ function TextChatInput({
           multiSelect={modelPicker.multiSelect}
           open
           onAddProvider={handleAddProvider}
-          onClose={closeModelPicker}
+          onClose={dismissPicker}
           onSelect={modelPicker.select}
           selectedModelId={selectedModelId}
+          loginReturnTo={cloudReturnTo}
           variant="chat"
         />
       ) : null}

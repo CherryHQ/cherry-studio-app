@@ -23,6 +23,7 @@ import {
   AgentTranscriptSelectionSchema,
   type AgentTranscriptSelection,
   type AgentSessionMessagePage,
+  type AgentSessionTurns,
   type ListAgentSessionMessagesQueryParams,
   ListAgentSessionMessagesQuerySchema,
   SaveAgentMessageTranslationSchema,
@@ -33,10 +34,14 @@ import {
   type MessageTranslations,
 } from '@/shared/data/types/messageTranslation';
 import { projectAgentMessageDisplay } from '@/shared/utils/agentMessageDisplay';
+import {
+  CONVERSATION_TURN_PREVIEW_LENGTH,
+  formatConversationTurnPreview,
+} from '@/shared/utils/conversationTurnPreview';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import { messageTreeOrder, messagePathIdsSql } from './utils/agentMessageTree';
+import { messageTreeOrder, messagePathIdsSql, messagePathRowsSql } from './utils/agentMessageTree';
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
@@ -200,6 +205,39 @@ export class AgentSessionMessageService {
       session: toAgentSessionView(rows[0].session),
       messages: toReadableAgentMessageViews(
         rows.flatMap(({ message }) => (message && message.role !== 'system' ? [message] : [])),
+      ),
+    };
+  }
+
+  async readTurns(sessionId: string): Promise<AgentSessionTurns> {
+    // The leaf and all previews come from the same database snapshot. Return only the first
+    // readable text part's bounded prefix, without materializing message bodies in JavaScript.
+    const rows = await this.db.values<
+      [activeNodeId: string | null, id: string | null, preview: string | null]
+    >(sql`
+      SELECT session.active_node_id AS activeNodeId, turn.id, turn.preview
+      FROM agent_session AS session
+      LEFT JOIN (
+        SELECT message.id, path.distance, (
+          SELECT substr(ltrim(json_extract(part.value, '$.text'), ${' \t\r\n'}), 1,
+            ${CONVERSATION_TURN_PREVIEW_LENGTH + 1})
+          FROM json_each(CASE WHEN json_valid(message.data) THEN message.data ELSE '{}' END, '$.parts') AS part
+          WHERE CASE WHEN part.type = 'object' THEN json_extract(part.value, '$.type') END = 'text'
+            AND CASE WHEN part.type = 'object' THEN json_type(part.value, '$.text') END = 'text'
+            AND CASE WHEN part.type = 'object' THEN trim(json_extract(part.value, '$.text'), ${' \t\r\n'}) END <> ''
+          ORDER BY part.key LIMIT 1
+        ) AS preview
+        FROM (${messagePathRowsSql(sessionId)}) AS path
+        JOIN agent_session_message AS message ON message.id = path.id AND message.role = 'user'
+      ) AS turn ON 1 = 1
+      WHERE session.id = ${sessionId}
+      ORDER BY turn.distance
+    `);
+    if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
+    return {
+      activeNodeId: rows[0][0],
+      items: rows.flatMap(([, id, preview]) =>
+        id ? [{ id, preview: formatConversationTurnPreview(preview ?? '') }] : [],
       ),
     };
   }

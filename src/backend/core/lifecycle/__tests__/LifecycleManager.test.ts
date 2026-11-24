@@ -15,15 +15,15 @@ let journal: string[] = [];
 
 @Injectable('Storage')
 class Storage extends BaseService {
-  protected onInit(): void {
+  protected override onInit(): void {
     journal.push('Storage:init');
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     journal.push('Storage:stop');
   }
 
-  protected onDestroy(): void {
+  protected override onDestroy(): void {
     journal.push('Storage:destroy');
   }
 }
@@ -35,15 +35,15 @@ class Writer extends BaseService {
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     journal.push('Writer:init');
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     journal.push('Writer:stop');
   }
 
-  protected onDestroy(): void {
+  protected override onDestroy(): void {
     journal.push('Writer:destroy');
   }
 }
@@ -51,11 +51,11 @@ class Writer extends BaseService {
 @Injectable('Reporter')
 @ServicePhase(Phase.PostReady)
 class Reporter extends BaseService {
-  protected onInit(): void {
+  protected override onInit(): void {
     journal.push('Reporter:init');
   }
 
-  protected onAllReady(): void {
+  protected override onAllReady(): void {
     journal.push('Reporter:allReady');
   }
 }
@@ -94,7 +94,7 @@ describe('LifecycleManager.startPhase', () => {
     const makeSlowPeer = (name: string) => {
       @Injectable(name)
       class Peer extends BaseService {
-        protected async onInit(): Promise<void> {
+        protected override async onInit(): Promise<void> {
           started.push(`${name}:enter`);
           await new Promise((resolve) => setTimeout(resolve, 0));
           started.push(`${name}:exit`);
@@ -115,7 +115,7 @@ describe('LifecycleManager.startPhase', () => {
   it('aborts the phase when a fail-fast service throws', async () => {
     @Injectable('Broken')
     class Broken extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('cannot open database');
       }
     }
@@ -130,7 +130,7 @@ describe('LifecycleManager.startPhase', () => {
     @Injectable('BestEffort')
     @ErrorHandling('graceful')
     class BestEffort extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('optional warmup failed');
       }
     }
@@ -145,7 +145,7 @@ describe('LifecycleManager.startPhase', () => {
     @Injectable('LateBroken')
     @ServicePhase(Phase.PostReady)
     class LateBroken extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         throw new Error('prewarm failed');
       }
     }
@@ -159,7 +159,7 @@ describe('LifecycleManager.startPhase', () => {
     @Injectable('LateDependency')
     @ServicePhase(Phase.PostReady)
     class LateDependency extends BaseService {
-      protected onInit(): void {
+      protected override onInit(): void {
         journal.push('LateDependency:init');
       }
     }
@@ -171,7 +171,7 @@ describe('LifecycleManager.startPhase', () => {
         super();
       }
 
-      protected onInit(): void {
+      protected override onInit(): void {
         journal.push('GateConsumer:init');
       }
     }
@@ -188,7 +188,7 @@ describe('LifecycleManager.runAllReady', () => {
   it('runs after every phase and survives a failing hook', async () => {
     @Injectable('NoisyAllReady')
     class NoisyAllReady extends BaseService {
-      protected onAllReady(): void {
+      protected override onAllReady(): void {
         throw new Error('scheduling failed');
       }
     }
@@ -219,7 +219,7 @@ describe('LifecycleManager teardown', () => {
   it('records a throwing onStop as failed without stopping the pass', async () => {
     @Injectable('FailingStop')
     class FailingStop extends BaseService {
-      protected onStop(): void {
+      protected override onStop(): void {
         throw new Error('stop exploded');
       }
     }
@@ -237,7 +237,7 @@ describe('LifecycleManager teardown', () => {
   it('abandons a hanging stop at the ceiling and moves on', async () => {
     @Injectable('Hanging')
     class Hanging extends BaseService {
-      protected onStop(): Promise<void> {
+      protected override onStop(): Promise<void> {
         return new Promise<void>(() => {});
       }
     }
@@ -262,7 +262,7 @@ describe('LifecycleManager teardown', () => {
     // promise does not prove the service was destroyed.
     @Injectable('StuckStop')
     class StuckStop extends BaseService {
-      protected onStop(): Promise<void> {
+      protected override onStop(): Promise<void> {
         return new Promise<void>(() => {});
       }
     }

@@ -21,6 +21,7 @@ import { withPolicy, withResourcePolicy } from '@/frontend/components/Policy';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -133,10 +134,11 @@ function ProviderListView() {
   const updateProviderEnabled = updateProviderEnabledMutation.trigger;
   const toggleProviderEnabled = useCallback(
     (provider: Provider, isEnabled: boolean) => {
+      const needsSetup = isEnabled && provider.id !== CLOUD_PROVIDER_ID;
       if (
         provider.isEnabled === isEnabled ||
         pendingProviderIdsRef.current.has(provider.id) ||
-        (isEnabled && isPreparing)
+        (needsSetup && isPreparing)
       ) {
         return;
       }
@@ -144,7 +146,7 @@ function ProviderListView() {
       pendingProviderIdsRef.current.add(provider.id);
       setPendingProviderStates((current) => new Map(current).set(provider.id, isEnabled));
 
-      const update = isEnabled
+      const update = needsSetup
         ? openSetup(provider.id, '/settings/provider')
         : updateProviderEnabled({
             body: { isEnabled },
@@ -152,7 +154,12 @@ function ProviderListView() {
           })
             .then(() => {
               toast.show({
-                label: t('settings.provider.toast.disabled', { name: provider.name }),
+                label: t(
+                  isEnabled
+                    ? 'settings.provider.toast.enabled'
+                    : 'settings.provider.toast.disabled',
+                  { name: provider.name },
+                ),
                 variant: 'success',
               });
             })
@@ -189,7 +196,7 @@ function ProviderListView() {
     const providers = isFiltering ? (allProvidersQuery.data ?? pagedProviders) : pagedProviders;
     return providers.filter(
       (provider) =>
-        (provider.id !== CLOUD_PROVIDER_ID || provider.isEnabled) &&
+        (provider.id !== CLOUD_PROVIDER_ID || !isEnterpriseProfile()) &&
         (!isFiltering || matchesSearchKeywords(keywords, [provider.name])),
     );
   }, [allProvidersQuery.data, isFiltering, keywords, pagedProviders]);
@@ -212,7 +219,8 @@ function ProviderListView() {
     for (const isEnabled of [true, false]) {
       // Move once, using the persisted order after refresh. The switch responds immediately.
       const providers = listedProviders.filter((provider) => provider.isEnabled === isEnabled);
-      if (providers.length === 0) continue;
+      const count = providers.length;
+      if (count === 0) continue;
 
       items.push({
         id: isEnabled ? 'enabled' : 'disabled',
@@ -220,7 +228,7 @@ function ProviderListView() {
         isFirst: items.length === 0,
         title: t(
           isEnabled ? 'settings.provider.section.enabled' : 'settings.provider.section.disabled',
-          { count: providers.length },
+          { count },
         ),
       });
       providers.forEach((provider, index) => {
@@ -240,12 +248,15 @@ function ProviderListView() {
     return items;
   }, [listedProviders, pendingProviderStates, t]);
   const renderProviderItem = useCallback(
-    ({ item }: { item: ProviderListItem }) =>
-      item.kind === 'header' ? (
-        <ProviderListSlice item={item}>
-          <Section.Header accessibilityRole="header" title={item.title} />
-        </ProviderListSlice>
-      ) : (
+    ({ item }: { item: ProviderListItem }) => {
+      if (item.kind === 'header') {
+        return (
+          <ProviderListSlice item={item}>
+            <Section.Header accessibilityRole="header" title={item.title} />
+          </ProviderListSlice>
+        );
+      }
+      return (
         <ProviderListSlice item={item}>
           {item.isFirst ? null : <SettingsGroupedSeparator />}
           <ProviderListRow
@@ -256,7 +267,8 @@ function ProviderListView() {
             provider={item.provider}
           />
         </ProviderListSlice>
-      ),
+      );
+    },
     [openProvider, toggleProviderEnabled],
   );
   const loadMoreProviders = useCallback(() => {
@@ -266,12 +278,20 @@ function ProviderListView() {
   }, [hasPendingProviderUpdate, isFiltering, loadNextProviderPage]);
   const listFooter = useMemo(
     () =>
-      providersPageQuery.isLoadingMore || (isFiltering && allProvidersQuery.isPending) ? (
+      providersPageQuery.isLoading ||
+      providersPageQuery.isLoadingMore ||
+      (isFiltering && allProvidersQuery.isPending) ? (
         <View className="h-16 items-center justify-center">
           <Spinner accessibilityLabel={t('settings.provider.loading')} />
         </View>
       ) : null,
-    [allProvidersQuery.isPending, isFiltering, providersPageQuery.isLoadingMore, t],
+    [
+      allProvidersQuery.isPending,
+      isFiltering,
+      providersPageQuery.isLoading,
+      providersPageQuery.isLoadingMore,
+      t,
+    ],
   );
   const openProviderCatalog = useCallback(() => {
     router.push('/settings/provider/catalog');

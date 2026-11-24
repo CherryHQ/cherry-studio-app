@@ -33,16 +33,16 @@ that active tasks are interrupted; Android's install-source permission is reques
 after the dialog closes.
 
 Every open dialog loads and displays release notes, including manual checks, retries and transfer
-reopen. The notes query is keyed by release and language with six-hour freshness, so reopening can
-reuse cached notes. Missing notes omit the region. Dialog children use a portal, so provider hooks
+reopen. Notes are cached for six hours per release and language, and for App Store releases per
+storefront URL as well. Missing notes omit the region. Dialog children use a portal, so provider hooks
 remain outside it. GitCode-backed notes are Markdown; vendor notes are plain text. A second trigger
 cannot replace an open prompt.
 
 ## Entry
 
-About keeps its single row with an optional `NEW` badge. A tap opens the dialog for a recorded
-release or an active transfer without a request; otherwise it checks once, sharing one request and
-outcome across repeated taps, and reports up-to-date, unavailable or failed checks with a toast.
+About keeps its single row with an optional `NEW` badge. A tap rechecks the current storefront on
+iOS. On Android, a recorded release or an active transfer reopens without a request. Repeated taps
+share one check, and up-to-date, unavailable or failed checks are reported with a toast.
 Domestic store releases use the same dialog and a generic "Go to app store" action. Query-source
 selection and store routing remain in the backend; there is no store chooser or domestic-specific
 cache policy. Store-open failures use the existing translated failure toast.

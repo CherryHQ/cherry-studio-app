@@ -5,12 +5,13 @@ import { installTestHost, uninstallTestHost } from '@/backend/core/application/t
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { createServiceTestDatabase } from '@/backend/data/serviceTestDatabase';
+import type { NetworkRegion } from '@/backend/services/region';
 
 import { ProviderCatalogRuntime } from '../ProviderCatalogRuntime';
 
 let database: ReturnType<typeof createServiceTestDatabase>;
 let catalog: ProviderCatalogRuntime;
-let country: jest.Mock<Promise<string | null>, []>;
+let region: jest.Mock<Promise<NetworkRegion | null>, []>;
 let mockDeviceRegion: string | null = 'CN';
 
 jest.mock('expo-localization', () => ({
@@ -20,8 +21,8 @@ jest.mock('expo-localization', () => ({
 beforeEach(async () => {
   mockDeviceRegion = 'CN';
   database = createServiceTestDatabase();
-  country = jest.fn(async () => 'CN');
-  await installTestHost({ DbService: database.dbService, RegionService: { getCountry: country } }, [
+  region = jest.fn(async () => 'CN');
+  await installTestHost({ DbService: database.dbService, RegionService: { getRegion: region } }, [
     ProviderCatalogRuntime,
   ]);
   catalog = application.get('ProviderCatalogRuntime');
@@ -32,15 +33,15 @@ afterEach(async () => {
 });
 
 test.each([
-  { ipCountry: 'CN', deviceRegion: 'US', international: false },
-  { ipCountry: 'US', deviceRegion: 'CN', international: true },
-  { ipCountry: null, deviceRegion: 'CN', international: false },
-  { ipCountry: null, deviceRegion: 'US', international: true },
-  { ipCountry: null, deviceRegion: null, international: false },
+  { ipRegion: 'CN' as NetworkRegion | null, deviceRegion: 'US', international: false },
+  { ipRegion: 'GLOBAL' as NetworkRegion | null, deviceRegion: 'CN', international: true },
+  { ipRegion: null, deviceRegion: 'CN', international: false },
+  { ipRegion: null, deviceRegion: 'US', international: true },
+  { ipRegion: null, deviceRegion: null, international: false },
 ])(
-  'seeds recommendations for IP $ipCountry and device region $deviceRegion',
-  async ({ ipCountry, deviceRegion, international }) => {
-    country.mockResolvedValue(ipCountry);
+  'seeds recommendations for IP $ipRegion and device region $deviceRegion',
+  async ({ ipRegion, deviceRegion, international }) => {
+    region.mockResolvedValue(ipRegion);
     mockDeviceRegion = deviceRegion;
     await catalog.ensureReady();
     const providers = await database.database.select().from(userProviderTable);
@@ -56,7 +57,7 @@ test('shutdown releases catalog admission while region detection is pending', as
   const started = new Promise<void>((resolve) => {
     requested = resolve;
   });
-  country.mockImplementation(
+  region.mockImplementation(
     () =>
       new Promise(() => {
         requested();
@@ -72,7 +73,7 @@ test('shutdown releases catalog admission while region detection is pending', as
 });
 
 test('a later cold start in China preserves international providers, credentials and disabled choices', async () => {
-  country.mockResolvedValue('US');
+  region.mockResolvedValue('GLOBAL');
   await catalog.ensureReady();
   await database.database
     .update(userProviderTable)
@@ -84,21 +85,21 @@ test('a later cold start in China preserves international providers, credentials
     .where(eq(userProviderTable.providerId, 'openai'));
   const before = await database.database.select().from(userProviderTable);
   await uninstallTestHost();
-  country.mockClear().mockResolvedValue('CN');
-  await installTestHost({ DbService: database.dbService, RegionService: { getCountry: country } }, [
+  region.mockClear().mockResolvedValue('CN');
+  await installTestHost({ DbService: database.dbService, RegionService: { getRegion: region } }, [
     ProviderCatalogRuntime,
   ]);
   await application.get('ProviderCatalogRuntime').ensureReady();
   expect(await database.database.select().from(userProviderTable)).toEqual(before);
-  expect(country).not.toHaveBeenCalled();
+  expect(region).not.toHaveBeenCalled();
 });
 
 test('a deliberately emptied provider list is not repopulated after a region change', async () => {
   await catalog.ensureReady();
   await database.database.delete(userProviderTable);
   await uninstallTestHost();
-  country.mockResolvedValue('US');
-  await installTestHost({ DbService: database.dbService, RegionService: { getCountry: country } }, [
+  region.mockResolvedValue('GLOBAL');
+  await installTestHost({ DbService: database.dbService, RegionService: { getRegion: region } }, [
     ProviderCatalogRuntime,
   ]);
   await application.get('ProviderCatalogRuntime').ensureReady();
@@ -112,12 +113,12 @@ test('backup admission sees pending initialization and frozen storage rejects a 
   } finally {
     release();
   }
-  let finish!: (value: string) => void;
+  let finish!: (value: NetworkRegion) => void;
   let requested!: () => void;
-  const reachedCountry = new Promise<void>((resolve) => {
+  const reachedRegion = new Promise<void>((resolve) => {
     requested = resolve;
   });
-  country.mockImplementation(
+  region.mockImplementation(
     () =>
       new Promise((resolve) => {
         finish = resolve;
@@ -126,7 +127,7 @@ test('backup admission sees pending initialization and frozen storage rejects a 
   );
   const initializing = catalog.ensureReady();
   expect(catalog.hasPendingStorageWork()).toBe(true);
-  await reachedCountry;
+  await reachedRegion;
   finish('CN');
   await initializing;
   expect(catalog.hasPendingStorageWork()).toBe(false);

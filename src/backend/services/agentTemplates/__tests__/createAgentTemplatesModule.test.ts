@@ -1,3 +1,4 @@
+import type { NetworkRegion } from '@/backend/services/region';
 import type { AgentTemplateCatalog } from '@/shared/data/types/agentTemplate';
 
 import { parseAgentTemplateCatalog } from '../agentTemplateCatalog';
@@ -59,11 +60,11 @@ function response(_baseUrl: string, { path }: Request) {
   };
 }
 
-const getCountry = jest.fn<Promise<string | null>, []>();
+const getRegion = jest.fn<Promise<NetworkRegion | null>, []>();
 let activeModule: ReturnType<typeof createAgentTemplatesModule>;
 beforeEach(() => {
   jest.clearAllMocks();
-  getCountry.mockResolvedValue('US');
+  getRegion.mockResolvedValue('GLOBAL');
   mockRequest.mockImplementation(response);
   jest.mocked(readAgentTemplateSnapshot).mockResolvedValue(null);
   jest
@@ -73,7 +74,7 @@ beforeEach(() => {
       catalog,
       isComplete,
     }));
-  activeModule = createAgentTemplatesModule({ getCountry });
+  activeModule = createAgentTemplatesModule({ getRegion });
 });
 afterEach(async () => {
   await activeModule.dispose();
@@ -81,12 +82,12 @@ afterEach(async () => {
 
 it.each([
   ['CN', 'api.gitcode.com', gitcodeRevision],
-  ['US', 'api.github.com', githubRevision],
+  ['GLOBAL', 'api.github.com', githubRevision],
   [null, 'api.gitcode.com', gitcodeRevision],
-])(
-  'uses the shared country policy for %s and pins both files to that source revision',
-  async (country, host, revision) => {
-    getCountry.mockResolvedValue(country);
+] as const)(
+  'uses the shared region policy for %s and pins both files to that source revision',
+  async (region, host, revision) => {
+    getRegion.mockResolvedValue(region);
     await expect(activeModule.refresh('zh')).resolves.toMatchObject({ language: 'zh', revision });
     expect(new URL(mockRequest.mock.calls[0]![0]).hostname).toBe(host);
     const downloads = mockRequest.mock.calls.filter(
@@ -110,7 +111,7 @@ it.each([
 );
 
 it('reads disk lazily and skips full downloads when the revision is unchanged', async () => {
-  getCountry.mockResolvedValue('CN');
+  getRegion.mockResolvedValue('CN');
   jest.mocked(readAgentTemplateSnapshot).mockResolvedValue(saved);
   expect(readAgentTemplateSnapshot).not.toHaveBeenCalled();
   await expect(activeModule.readCached('en')).resolves.toEqual(savedCatalog);
@@ -121,7 +122,7 @@ it('reads disk lazily and skips full downloads when the revision is unchanged', 
 });
 
 it('falls back after invalid primary content and resolves the fallback commit independently', async () => {
-  getCountry.mockResolvedValue('CN');
+  getRegion.mockResolvedValue('CN');
   mockRequest.mockImplementation((baseUrl: string, request: Request) =>
     baseUrl.includes('gitcode') && request.path !== '/branches/main'
       ? { data: '{' }

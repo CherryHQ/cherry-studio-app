@@ -11,6 +11,7 @@ import {
   chatRouteParams,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
+import { useOptionalNavigationShell } from '@/frontend/appShell/navigationShell/state';
 import { AgentEditor } from '@/frontend/components/AgentEditor';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 
@@ -30,6 +31,8 @@ export function MainHeader({
   selection?: { selectedCount: number; onExit(): void };
 }) {
   const { agent, openNewSession } = useMainHeaderAgent();
+  const shell = useOptionalNavigationShell();
+  const showAgentSwitch = shell?.shellMode === 'wide-rail';
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingAgentId, setEditingAgentId] = useState<string>();
   return (
@@ -45,10 +48,14 @@ export function MainHeader({
           Keyboard.dismiss();
           setEditingAgentId(agent?.id);
         }}
-        onAgentSwitch={() => {
-          Keyboard.dismiss();
-          setPickerOpen(true);
-        }}
+        onAgentSwitch={
+          showAgentSwitch
+            ? () => {
+                Keyboard.dismiss();
+                setPickerOpen(true);
+              }
+            : undefined
+        }
       />
       <ConversationSourceBoundary source={{ kind: 'local' }} fallback={() => null}>
         <LocalAgentPicker

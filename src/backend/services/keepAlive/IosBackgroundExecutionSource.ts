@@ -5,6 +5,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  Emitter,
   Injectable,
   Phase,
   ServicePhase,
@@ -23,14 +24,15 @@ import { KeepAliveInterruptionError } from './KeepAliveInterruptionError';
 type Holder = {
   onInterrupt?: (reason: Error) => void | Promise<void>;
   isInterrupted: boolean;
-  task?: KeepAliveTask;
+  task?: Omit<KeepAliveTask, 'deepLinkUrl'>;
 };
 
 type ContinuedTask = {
+  deepLinkUrl?: string;
   holder: Holder;
   state: 'starting' | 'active' | 'unavailable' | 'expired';
   submitted: boolean;
-  sent?: KeepAliveTask;
+  sent?: Holder['task'];
   success: boolean;
 };
 
@@ -48,6 +50,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
   private readonly holders = new Set<Holder>();
   private readonly continuedTasks = new Map<string, ContinuedTask>();
   private readonly listeners = new Set<() => void>();
+  private readonly activityChanges = new Emitter<string | undefined>();
   private native: SystemIntegrationNativeModule | null = null;
   private taskId?: string;
   private audioId?: string;
@@ -64,7 +67,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     if (Platform.OS !== 'ios') return;
     this.native = getSystemIntegration();
     if (this.native?.beginBackgroundExecution) {
@@ -103,6 +106,7 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
         )
           return;
         continued.state = event.state;
+        this.activityChanges.fire(continued.deepLinkUrl);
         if (event.state === 'expired')
           this.interruptHolder(
             continued.holder,
@@ -137,11 +141,31 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     };
   };
 
+  readonly systemActivities = {
+    has: (deepLinkUrl: string) => {
+      for (const task of this.continuedTasks.values()) {
+        if (task.deepLinkUrl === deepLinkUrl && task.state !== 'unavailable') return true;
+      }
+      return false;
+    },
+    hasActive: () => {
+      for (const task of this.continuedTasks.values()) {
+        if (task.state === 'active' || task.state === 'expired') return true;
+      }
+      return false;
+    },
+    onChange: this.activityChanges.event,
+  };
+
   acquire(_tag: string, onInterrupt?: Holder['onInterrupt'], task?: KeepAliveTask): KeepAliveLease {
     if (this.disposed) return { release: () => {} };
-    const holder: Holder = { onInterrupt, isInterrupted: false, task };
+    const holder: Holder = { onInterrupt, isInterrupted: false };
     this.holders.add(holder);
-    this.requestContinuedTask(holder);
+    if (task) {
+      const { deepLinkUrl, ...progress } = task;
+      holder.task = progress;
+      this.requestContinuedTask(holder, deepLinkUrl);
+    }
     this.publishStatus();
     if (this.isUnprotected()) {
       // Let the caller install its cancellation ownership before notifying it.
@@ -175,13 +199,14 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     };
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.disposed = true;
     this.holders.clear();
     this.publishStatus();
     this.enqueueReconcile();
     await this.operationTail;
     this.listeners.clear();
+    this.activityChanges.dispose();
   }
 
   private readonly handleAppStateChange = (state: AppStateStatus): void => {
@@ -214,43 +239,52 @@ export class IosBackgroundExecutionSource extends BaseService implements KeepAli
     return !this.disposed && this.hasActiveHolders();
   }
 
-  private requestContinuedTask(holder: Holder): void {
+  private requestContinuedTask(holder: Holder, deepLinkUrl: string | undefined): void {
     // Only user-started foreground work may request official processing.
     if (
-      !holder.task ||
+      Number.parseInt(String(Platform.Version), 10) < 26 ||
       AppState.currentState !== 'active' ||
       !this.native?.beginContinuedProcessingTask
     )
       return;
     this.continuedTasks.set(`cherry-continued-${uuidv7()}`, {
+      deepLinkUrl,
       holder,
       state: 'starting',
       submitted: false,
       success: false,
     });
+    this.activityChanges.fire(deepLinkUrl);
   }
 
   private async reconcile(): Promise<void> {
     for (const [id, continued] of this.continuedTasks) {
       const task = continued.holder.task;
       if (this.disposed || !this.holders.has(continued.holder)) {
-        this.continuedTasks.delete(id);
-        await this.native?.endContinuedProcessingTask?.(id, continued.success);
+        try {
+          await this.native?.endContinuedProcessingTask?.(id, continued.success);
+        } finally {
+          this.continuedTasks.delete(id);
+          this.activityChanges.fire(continued.deepLinkUrl);
+        }
       } else if (continued.holder.isInterrupted) {
-        if (continued.state !== 'expired') {
+        if (continued.state !== 'expired' && continued.state !== 'unavailable') {
           continued.state = 'expired';
           await this.native?.endContinuedProcessingTask?.(id, false);
         }
       } else if (!continued.submitted) {
         continued.submitted = true;
         continued.sent = task;
+        let submitted: boolean | undefined;
         try {
-          const submitted = task && (await this.native?.beginContinuedProcessingTask?.(id, task));
-          // A launch/expiry event may already describe the newer state.
-          if (!submitted && continued.state === 'starting') continued.state = 'unavailable';
+          submitted = task && (await this.native?.beginContinuedProcessingTask?.(id, task));
         } catch (error) {
-          if (continued.state === 'starting') continued.state = 'unavailable';
           logger.warn('Continued processing unavailable; using fallback', { error });
+        }
+        // A launch or expiry event may already describe a newer state.
+        if (!submitted && continued.state === 'starting') {
+          continued.state = 'unavailable';
+          this.activityChanges.fire(continued.deepLinkUrl);
         }
       } else if (task && continued.state === 'active' && continued.sent !== task) {
         continued.sent = task;

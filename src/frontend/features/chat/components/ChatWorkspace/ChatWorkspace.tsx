@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type {
-  ConversationHistoryView,
-  ConversationMessage,
-  ConversationSnapshot,
+import {
+  type ConversationHistoryView,
+  type ConversationMessage,
+  ConversationReadError,
+  type ConversationSnapshot,
 } from '@/frontend/appShell/conversation';
 import { MessageFailureReportProvider, type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
@@ -20,6 +21,7 @@ import { useEndReadingWithConversation } from '../../voice/useMessageSpeech';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
+import type { ChatTurnNavigator } from './chatTurns';
 import { ChatComposerClearance } from './components/ChatComposerClearance';
 import { type ChatDraftModelSetup, ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
@@ -30,7 +32,6 @@ import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
 import { useConversationFeedback } from './hooks/useConversationFeedback';
 import { useConversationFeedbackHint } from './hooks/useConversationFeedbackHint';
-import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
 import { MessageTranslationProvider } from './translation/MessageTranslationProvider';
@@ -40,6 +41,7 @@ type ChatWorkspaceProps = {
   onQuoteTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
   onQuoteWindowReady?: () => void;
   onQuoteTakeover?: () => void;
+  turnNavigator?: ChatTurnNavigator;
   enteringUserMessageId?: string;
   pendingSend?: PendingChatSend;
   onPendingSendDisplayed: (userMessageId: string) => void;
@@ -73,6 +75,7 @@ export function ChatWorkspace({
   onQuoteTargetRestored,
   onQuoteWindowReady,
   onQuoteTakeover,
+  turnNavigator,
   snapshot: live,
   messages: sourceMessages,
   enteringUserMessageId,
@@ -124,7 +127,6 @@ export function ChatWorkspace({
   const listKey = sessionId ?? pendingSend?.sessionId;
   useEndReadingWithConversation(sessionId);
   const { t } = useTranslation();
-  const isScreenReaderEnabled = useIsScreenReaderEnabled();
   useEffect(() => {
     if (
       pendingSend &&
@@ -156,6 +158,13 @@ export function ChatWorkspace({
     () => getTimestampMessageIds(projectedMessages),
     [projectedMessages],
   );
+  const latestProjectedMessage = projectedMessages.at(-1);
+  const disclaimerMessageId =
+    !hasNewerMessages &&
+    latestProjectedMessage?.role === 'assistant' &&
+    (latestProjectedMessage.status === 'success' || latestProjectedMessage.status === 'paused')
+      ? latestProjectedMessage.id
+      : undefined;
   // Pagination may not have loaded the persisted boundary yet. Rendering no
   // divider is more accurate than attaching it to the current page edge.
   const forkBoundaryIndex =
@@ -221,22 +230,20 @@ export function ChatWorkspace({
         <ChatMessageRow
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
-          isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
           renderUsage={renderUsage}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [assistantPresentation, isAssistantToolbarEnabled, renderUsage],
   );
   const messageListExtraData = useMemo(
     () => ({
       assistantPresentation,
       isAssistantToolbarEnabled,
-      isScreenReaderEnabled,
       renderUsage,
     }),
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [assistantPresentation, isAssistantToolbarEnabled, renderUsage],
   );
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||
@@ -277,7 +284,8 @@ export function ChatWorkspace({
                   : undefined
               }
               title={t(
-                error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+                (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) ||
+                  (error instanceof ConversationReadError && error.failure.code === 'not-found')
                   ? 'chat.history.messageUnavailable'
                   : 'chat.history.loadFailed',
               )}
@@ -308,6 +316,7 @@ export function ChatWorkspace({
         >
           <ChatMessageRowProvider
             breakAfterMessageId={forkBoundary?.id}
+            disclaimerMessageId={disclaimerMessageId}
             editingMessageId={editing?.messageId}
             messages={mergedMessages}
             timestampMessageIds={timestampMessageIds}
@@ -318,6 +327,7 @@ export function ChatWorkspace({
                   <ChatTranscript
                     onTargetRestored={onQuoteTargetRestored}
                     onReady={onQuoteWindowReady}
+                    turnNavigator={editing ? undefined : turnNavigator}
                     requiresInitialLayout={requiresInitialHistoryLayout}
                     isLoadingMore={isLoadingOlder || isLoadingNewer}
                     contentBottomInset={contentBottomInset}

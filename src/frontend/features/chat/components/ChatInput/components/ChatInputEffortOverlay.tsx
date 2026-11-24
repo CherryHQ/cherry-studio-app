@@ -1,6 +1,6 @@
 import { Portal, TextAnimation, type TextAnimationDirection } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pressable,
@@ -15,14 +15,16 @@ import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-contro
 import Animated, {
   Extrapolation,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
+import { useAfterNextFrame } from '@/frontend/hooks/useNextFrame';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { EffortSlider } from '../effortSlider';
@@ -38,7 +40,7 @@ import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
 const openMountSettleMs = 34;
-const closeDurationMs = duration.base;
+const maxCloseDurationMs = duration.fast;
 const EFFORT_BACKDROP_FADE_INSET = 96;
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
@@ -71,6 +73,7 @@ export function ChatInputEffortOverlay({
   }));
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
+  const closeStartProgress = useSharedValue<number | null>(null);
   const rootRef = useRef<ViewInstance>(null);
   const openingRef = useRef(false);
   const revealPendingRef = useRef(false);
@@ -110,14 +113,28 @@ export function ChatInputEffortOverlay({
       return;
     }
 
-    progress.set(
-      withTiming(0, { duration: closeDurationMs, easing: easing.settle }, (finished) => {
-        if (finished) {
-          runOnJS(setLayout)(null);
-        }
-      }),
-    );
-  }, [layout, progress, reducedMotion]);
+    // Use the on-screen progress so interrupted opens reverse from their current frame.
+    scheduleOnUI(() => {
+      'worklet';
+      if (closeStartProgress.get() !== null) {
+        return;
+      }
+
+      const start = progress.get();
+      closeStartProgress.set(start);
+      progress.set(
+        withTiming(
+          0,
+          { duration: maxCloseDurationMs * start, easing: easing.settle },
+          (finished) => {
+            if (finished) {
+              scheduleOnRN(setLayout, null);
+            }
+          },
+        ),
+      );
+    });
+  }, [closeStartProgress, layout, progress, reducedMotion]);
 
   const open = useCallback(
     (gaugeFrame: ChatInputEffortFrame) => {
@@ -142,6 +159,7 @@ export function ChatInputEffortOverlay({
           return;
         }
 
+        closeStartProgress.set(null);
         progress.set(reducedMotion ? 1 : 0);
         revealPendingRef.current = !reducedMotion;
         setLayout({
@@ -154,6 +172,7 @@ export function ChatInputEffortOverlay({
       });
     },
     [
+      closeStartProgress,
       keyboard.height,
       keyboard.isVisible,
       layout,
@@ -165,23 +184,14 @@ export function ChatInputEffortOverlay({
     ],
   );
 
-  useEffect(() => {
-    if (!layout) {
-      return;
-    }
-
-    const viewportChanged =
-      layout.viewportHeight !== viewportHeight || layout.viewportWidth !== viewportWidth;
-    const keyboardChanged =
+  const shouldCloseOnEnvironmentChange = Boolean(
+    layout &&
+    (layout.viewportHeight !== viewportHeight ||
+      layout.viewportWidth !== viewportWidth ||
       layout.keyboardVisible !== keyboard.isVisible ||
-      (layout.keyboardVisible && Math.abs(layout.keyboardHeight - keyboard.height) > 1);
-    if (viewportChanged || keyboardChanged) {
-      const closeFrame = requestAnimationFrame(close);
-      return () => cancelAnimationFrame(closeFrame);
-    }
-
-    return undefined;
-  }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
+      (layout.keyboardVisible && Math.abs(layout.keyboardHeight - keyboard.height) > 1)),
+  );
+  useAfterNextFrame(shouldCloseOnEnvironmentChange, close);
 
   // Start after the active overlay host has laid out and its native blur has mounted, so mount
   // work lands before the morph instead of skipping its eased start.
@@ -205,6 +215,13 @@ export function ChatInputEffortOverlay({
   );
   const gaugeFrame = layout?.gaugeFrame ?? emptyFrame;
   const sliderFrame = layout?.sliderFrame ?? emptyFrame;
+  // Fade over the remaining trip to the gauge. The backdrop uses the same clock, and
+  // the animation completion removes the tap catcher when the exit finishes.
+  const closeOpacity = useDerivedValue(() => {
+    const start = closeStartProgress.get();
+    if (start === null) return 1;
+    return start === 0 ? 0 : progress.get() / start;
+  });
   const sliderStyle = useAnimatedStyle(() => ({
     height: interpolate(
       progress.value,
@@ -218,6 +235,7 @@ export function ChatInputEffortOverlay({
       [gaugeFrame.left, sliderFrame.left],
       Extrapolation.CLAMP,
     ),
+    opacity: closeOpacity.get(),
     top: interpolate(
       progress.value,
       [0, 1],
@@ -232,12 +250,24 @@ export function ChatInputEffortOverlay({
     ),
   }));
   const sliderContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.5, 1], [0, 1], Extrapolation.CLAMP),
+    // Keep the content at its current reveal level and fade it with the parent surface.
+    opacity: interpolate(
+      closeStartProgress.get() ?? progress.get(),
+      [0.5, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
   }));
   const labelStyle = useAnimatedStyle(() => {
-    const reveal = interpolate(progress.value, [0.58, 1], [0, 1], Extrapolation.CLAMP);
+    const reveal = interpolate(
+      closeStartProgress.get() ?? progress.get(),
+      [0.58, 1],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
+    const opacity = reveal * closeOpacity.get();
 
-    return { opacity: reveal, transform: [{ translateY: 5 * (1 - reveal) }] };
+    return { opacity, transform: [{ translateY: 5 * (1 - opacity) }] };
   });
   const gauge =
     options.length > 0 ? (

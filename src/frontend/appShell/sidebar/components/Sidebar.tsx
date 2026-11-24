@@ -1,23 +1,18 @@
-import { type Href, useRouter } from 'expo-router';
+import { type Href, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { type NavigationState, StackActions } from 'expo-router/react-navigation';
-import { type ComponentType, useCallback, useEffect, useMemo } from 'react';
+import { type ComponentType, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Keyboard, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useCanDockSidebar } from '@/frontend/appShell/layout';
-import {
-  chatRouteParams,
-  useChatSource,
-  useConversationTarget,
-} from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane/state';
+import { useChatSource, useConversationTarget } from '@/frontend/appShell/navigation/chat';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import type { SessionSearchResult } from '../hooks/sessionSearch';
-import { useCloseDrawerForExternalNavigation } from '../hooks/useCloseDrawerForExternalNavigation';
+import { useCloseDrawerForNavigation } from '../hooks/useCloseDrawerForNavigation';
 import {
   sessionSearchResultHref,
   useSessionSearch,
@@ -49,49 +44,59 @@ function getContentStack(navigation: SidebarNavigation) {
 /** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
 export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) {
   const router = useRouter();
-  const { source, remoteTarget, viewMode, localChat } = useChatSource();
-  // Destinations act for the chat beside the sidebar, or the one a page currently covers.
-  const agentId = localChat?.kind === 'draft' ? localChat.agentId : undefined;
-  const sessionId = localChat?.kind === 'session' ? localChat.sessionId : undefined;
-  // Serialized so the actions below change only when the chat does.
-  const sourceChat = localChat ? JSON.stringify(chatRouteParams(localChat)) : undefined;
+  // Compare the exact route (including a nested page) and the context carried by its entry.
+  const page =
+    '/' +
+    useSegments()
+      .filter((segment) => !segment.startsWith('('))
+      .join('/');
+  const params = useGlobalSearchParams();
+  const { source, remoteTarget, viewMode } = useChatSource();
   const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
   const canDock = useCanDockSidebar();
-  const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
-  const prepareExternalNavigation = useCloseDrawerForExternalNavigation(
-    navigation,
-    column.kind === 'permanent',
-  );
+  const { cancelPending, waitForClose } = useCloseDrawerForNavigation(navigation, canDock);
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
 
-  // A permanent drawer has nothing to close, but an overlay left open before the window widened
-  // would otherwise reappear over the chat once the window narrows again.
+  // Clear any overlay left open by a window change or a link that navigated away from the chat.
+  const isOverlay = column.kind === 'overlay';
   useEffect(() => {
-    if (canDock) navigation.closeDrawer();
-  }, [canDock, navigation]);
+    if (!isOverlay) navigation.closeDrawer();
+  }, [isOverlay, navigation]);
+
+  // A link or notification may already have navigated while the drawer was closing.
+  useLayoutEffect(() => cancelPending, [cancelPending, page, params]);
 
   // Conversation actions assume the chat is on screen. Beside a wide window's page, return to the
   // chat first; pages above it are dismissed, as their own back steps would.
   const returnToChat = useCallback(() => {
+    cancelPending();
     const stack = getContentStack(navigation);
     if (stack && stack.index > 0)
       navigation.dispatch({ ...StackActions.popToTop(), target: stack.key });
-  }, [navigation]);
+  }, [cancelPending, navigation]);
 
   // From the chat a destination opens above it; from another destination it takes that one's place,
   // so moving between sidebar entries never builds a back history.
   const openDestination = useCallback(
     (href: Href) => {
-      navigation.closeDrawer();
+      cancelPending();
+      if (isOverlay) navigation.closeDrawer();
+      const pathname = typeof href === 'string' ? href : href.pathname;
+      if (
+        page === pathname &&
+        (typeof href === 'string' ||
+          Object.entries(href.params ?? {}).every(([key, value]) => params[key] === value))
+      )
+        return;
       const stack = getContentStack(navigation);
       if (stack && stack.index > 0) router.replace(href);
       else router.push(href);
     },
-    [navigation, router],
+    [cancelPending, isOverlay, navigation, page, params, router],
   );
 
   const actions = useMemo<SidebarActions>(
@@ -100,30 +105,18 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         navigation.closeDrawer();
         returnToChat();
       },
-      prepareExternalNavigation,
+      prepareExternalNavigation: waitForClose,
       returnToChat,
       openSearch:
         source === 'local'
           ? () => {
+              cancelPending();
               navigation.closeDrawer();
               // A wide window searches in the column, beside the chat its results open.
               if (canDock && SearchPanel) setContent('search');
               else openSessionSearch();
             }
           : undefined,
-      navigateAgents: () => openDestination('/agents'),
-      openLibrary: () => {
-        navigation.closeDrawer();
-        // Files open beside the current chat when the window has room for both. A library page
-        // remembers that chat, so a file can still be added to it.
-        if (pane?.isAvailable) {
-          returnToChat();
-          pane.open();
-        } else router.push({ pathname: '/library', params: sourceChat ? { sourceChat } : {} });
-      },
-      openPaintings: () => openDestination('/drawings'),
-      openPlugins: () => openDestination({ pathname: '/plugins', params: { agentId, sessionId } }),
-      openSkills: () => openDestination({ pathname: '/skills', params: { agentId, sessionId } }),
       openScheduledTasks: () => {
         if (remoteTarget.connectionId)
           openDestination({
@@ -134,17 +127,13 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       openSettings: () => openDestination('/settings'),
     }),
     [
-      agentId,
-      sessionId,
-      sourceChat,
       navigation,
-      prepareExternalNavigation,
+      cancelPending,
+      waitForClose,
       canDock,
       openDestination,
       openSessionSearch,
-      pane,
       returnToChat,
-      router,
       SearchPanel,
       setContent,
       source,
@@ -169,6 +158,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
     [currentConversation.sessionId],
   );
   const foldGap = column.kind === 'permanent' ? column.foldGap : 0;
+  const isColumnHidden = !isOverlay && column.kind !== 'permanent';
   const isSearching = Boolean(
     SearchPanel && column.kind === 'permanent' && column.content === 'search',
   );
@@ -176,8 +166,14 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   return (
     <SidebarActionsContext value={actions}>
       <SidebarSelectionProvider scope={`${source}:${remoteTarget.connectionId ?? ''}:${viewMode}`}>
-        {/* A fold at the column's trailing edge stays empty, as it does beside the file pane. */}
-        <View className="flex-1" style={{ marginEnd: foldGap }} testID="sidebar">
+        {/* A fold at the column's trailing edge stays empty. */}
+        <View
+          accessibilityElementsHidden={isColumnHidden}
+          className="flex-1"
+          importantForAccessibility={isColumnHidden ? 'no-hide-descendants' : 'auto'}
+          style={{ marginEnd: foldGap }}
+          testID="sidebar"
+        >
           {/* Search covers the sidebar instead of replacing it, so its list keeps its place. */}
           <View
             accessibilityElementsHidden={isSearching}

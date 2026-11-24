@@ -12,7 +12,6 @@ import { type AssistantMessagePresentation, ChatMessage } from './ChatMessage';
 type ChatMessageRowProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
-  isScreenReaderEnabled: boolean;
   message: MessageListItem;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
@@ -21,7 +20,6 @@ type ChatMessageRowProps = {
 export const ChatMessageRow = memo(function ChatMessageRow({
   assistantPresentation,
   isMessageActionsEnabled,
-  isScreenReaderEnabled,
   message,
   renderUsage,
 }: ChatMessageRowProps) {
@@ -42,9 +40,9 @@ export const ChatMessageRow = memo(function ChatMessageRow({
           ) : undefined
         }
         isMessageActionsEnabled={isMessageActionsEnabled}
-        isScreenReaderEnabled={isScreenReaderEnabled}
         message={message}
         renderUsage={renderUsage}
+        shouldShowDisclaimer={row.showsDisclaimer}
         shouldShowTimestamp={row.showsTimestamp}
       />
     </ConversationMessageContent>

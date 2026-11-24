@@ -31,7 +31,7 @@ describe('OllamaTransport', () => {
 
     const result = await transport.submit({ ...baseInput, prompt: 'a cat' });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('http://localhost:11434/api/generate');
     const init = call[1] as RequestInit;
     expect(JSON.parse(init.body as string)).toEqual({
@@ -56,7 +56,7 @@ describe('OllamaTransport', () => {
       providerParams: { steps: 9 },
     });
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(JSON.parse(init.body as string)).toEqual({
       model: 'x/z-image-turbo',
       prompt: 'a cat',
@@ -76,7 +76,7 @@ describe('OllamaTransport', () => {
 
     await transport.submit({ ...baseInput, prompt: 'a cat', size: '768x768' });
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
     const body = JSON.parse(init.body as string);
     expect(body.options).toBeUndefined();
     expect(body.seed).toBeUndefined();
@@ -90,7 +90,7 @@ describe('OllamaTransport', () => {
 
     await transport.submit({ ...baseInput, prompt: 'a cat', providerParams: { steps: 'nine' } });
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(JSON.parse(init.body as string)).toEqual({
       model: 'x/z-image-turbo',
       prompt: 'a cat',
@@ -134,7 +134,7 @@ describe('OllamaTransport', () => {
 
     expect(injectedFetch).toHaveBeenCalledTimes(1);
     expect(globalFetchSpy).not.toHaveBeenCalled();
-    const init = injectedFetch.mock.calls[0][1] as RequestInit & { dispatcher?: unknown };
+    const init = injectedFetch.mock.calls[0]![1] as RequestInit & { dispatcher?: unknown };
     expect(init.dispatcher).toBeUndefined();
   });
 
@@ -147,7 +147,7 @@ describe('OllamaTransport', () => {
     await transport.submit({ ...baseInput, prompt: 'a cat' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(init.signal?.aborted).toBe(false);
   });
@@ -163,7 +163,7 @@ describe('OllamaTransport', () => {
 
     await transport.submit({ ...baseInput, prompt: 'a cat' });
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(init.headers).toEqual({
       'Content-Type': 'application/json',
       Authorization: 'Bearer token',
@@ -219,7 +219,7 @@ describe('OllamaTransport', () => {
     controller.abort();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
-    const forwardedSignal = (fetchMock.mock.calls[0][1] as RequestInit).signal as AbortSignal;
+    const forwardedSignal = (fetchMock.mock.calls[0]![1] as RequestInit).signal as AbortSignal;
     expect(forwardedSignal).not.toBe(controller.signal);
     expect(forwardedSignal.aborted).toBe(true);
   });

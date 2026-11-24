@@ -10,8 +10,9 @@
  */
 
 import { fromByteArray } from 'base64-js';
+import { resolveScheme } from 'expo-linking';
 import { getLocales } from 'expo-localization';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
@@ -46,6 +47,7 @@ import type { ScreenAwakeRuntime } from '@/backend/services/screenAwake';
 import { skillStorage } from '@/backend/services/skill';
 import type { SshRuntime } from '@/backend/services/ssh';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { VoiceModule } from '@/shared/contracts/voice';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -90,6 +92,10 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'ScreenAwakeRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
+  shouldRecoverStorage() {
+    return Platform.OS === 'android' && AppState.currentState === 'active';
+  }
+
   scriptSandbox() {
     const native = createJsSandbox();
     return native?.startBridge
@@ -135,19 +141,15 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     onInterrupt,
     sessionId,
   ) => {
-    const lease = this.keepAlive.acquire(
-      sessionId ? 'agent.session' : 'agent.durable',
-      onInterrupt,
-      sessionId
-        ? {
-            title: this.backgroundEnvironment.translate('chat.backgroundReply.assistant'),
-            subtitle: this.backgroundEnvironment.translate('chat.backgroundReply.preparing'),
-            completedUnitCount: 0,
-            totalUnitCount: 3,
-          }
-        : undefined,
-    );
-    if (!sessionId || !lease.update) return lease;
+    if (!sessionId) return this.keepAlive.acquire('agent.durable', onInterrupt);
+    const lease = this.keepAlive.acquire('agent.session', onInterrupt, {
+      deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'chat', sessionId }),
+      title: this.backgroundEnvironment.translate('chat.backgroundReply.assistant'),
+      subtitle: this.backgroundEnvironment.translate('chat.backgroundReply.preparing'),
+      completedUnitCount: 0,
+      totalUnitCount: 3,
+    });
+    if (!lease.update) return lease;
     return {
       ...lease,
       update: (progress) =>
@@ -299,9 +301,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       this.webSearchService.isConfigured('fetchUrls'),
     ]);
     return {
-      modelToolsPreferred: this.preferenceService.readCached(
-        'chat.web_search.model_tools_preferred',
-      ),
+      modelTools: this.preferenceService.readCached('chat.web_search.model_tools'),
       clientSearchAvailable,
       clientFetchAvailable,
     };

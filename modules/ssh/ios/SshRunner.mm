@@ -32,6 +32,7 @@
   options.path = strings[12].UTF8String;
   options.localPath = strings[13].UTF8String;
   options.content = strings[14].UTF8String;
+  options.expectedPath = strings[15].UTF8String;
   options.port = port;
   options.timeoutMs = timeout;
   options.probe = probe;

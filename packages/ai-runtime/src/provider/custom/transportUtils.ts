@@ -54,7 +54,7 @@ export function waitWithSignal(delayMs: number, signal?: AbortSignal): Promise<v
 
 export function uint8ToBase64(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
 

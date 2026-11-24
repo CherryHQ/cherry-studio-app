@@ -529,6 +529,34 @@ describe('AccountRuntime', () => {
     });
   });
 
+  it.each(['signed-in', 'signed-out', 'read-error'] as const)(
+    'tracks community session restoration until stored credentials settle: %s',
+    async (outcome) => {
+      let resolve!: () => void;
+      let reject!: (error: Error) => void;
+      const ready = new Promise<void>((accept, fail) => {
+        resolve = accept;
+        reject = fail;
+      });
+      const { runtime, publish } = setup({ _tag: 'signedOut' }, LOCAL_PROFILE, ready);
+      expect(runtime.getState()).toMatchObject({
+        isRestoringCommunitySession: true,
+        isRestoringSession: false,
+        isSignedIn: false,
+        hasPrompted: false,
+      });
+      if (outcome === 'signed-in') publish(signedIn('cloud'));
+      if (outcome === 'read-error') reject(new Error('Credentials unavailable'));
+      else resolve();
+      await ready.catch(() => {});
+      expect(runtime.getState()).toMatchObject({
+        isRestoringCommunitySession: false,
+        isSignedIn: outcome === 'signed-in',
+        hasPrompted: false,
+      });
+    },
+  );
+
   it('finishes hydration and blocks enterprise data when restoring the portal fails', async () => {
     const failure = new Error('Secure storage unavailable');
     const { runtime, options } = setup(

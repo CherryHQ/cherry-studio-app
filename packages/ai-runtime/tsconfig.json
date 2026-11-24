@@ -7,6 +7,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
     "paths": {
       "@cherrystudio/universal/*": ["../universal/src/*"],
       "@shared/*": ["../universal/src/*"]

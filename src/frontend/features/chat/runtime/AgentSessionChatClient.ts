@@ -1,3 +1,4 @@
+import { createScheduledFlush, type ScheduledFlush } from '@/frontend/utils/scheduling';
 import type {
   AgentApprovalView,
   AgentEditUserMessageInput,
@@ -50,7 +51,7 @@ type SessionEntry = {
   generation: number;
   listeners: Set<() => void>;
   liveMessages: Map<string, AgentMessageView>;
-  liveMessagesFlush?: ReturnType<typeof setTimeout>;
+  liveMessagesFlush: ScheduledFlush;
   observation?: AgentSessionObservation;
   observationPromise?: Promise<void>;
   pendingTextDeltas: Map<string, { chunks: string[]; messageId: string; partId: string }>;
@@ -176,7 +177,9 @@ export class AgentSessionChatClient {
 
     return () => {
       entry.listeners.delete(listener);
-      if (entry.listeners.size === 0) {
+      // The pending operation still owns this entry and its cancellation token.
+      // Its finally block releases it if no screen has returned by then.
+      if (entry.listeners.size === 0 && !entry.submission) {
         this.stopObservation(entry);
         if (this.sessions.get(sessionId) === entry) {
           this.sessions.delete(sessionId);
@@ -233,7 +236,7 @@ export class AgentSessionChatClient {
         for (const event of queuedEvents) {
           this.applyEvent(entry, event);
         }
-        if (entry.liveMessagesFlush !== undefined) {
+        if (entry.liveMessagesFlush.isScheduled()) {
           this.commitLiveMessages(entry);
         }
       })
@@ -349,6 +352,10 @@ export class AgentSessionChatClient {
         this.sessions.delete(sessionId);
       }
     }
+  }
+
+  compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    return this.runTranscriptSubmission(input.sessionId, () => this.protocol.compactContext(input));
   }
 
   async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
@@ -574,6 +581,7 @@ export class AgentSessionChatClient {
       generation: 0,
       listeners: new Set(),
       liveMessages: new Map(),
+      liveMessagesFlush: createScheduledFlush(() => this.commitLiveMessages(entry)),
       pendingTextDeltas: new Map(),
       state: createSessionState(sessionId),
     };
@@ -644,6 +652,8 @@ export class AgentSessionChatClient {
         this.updateState(entry, { ...entry.state, contextUsages: event.usages });
         return;
       case 'runtime.failed':
+        entry.observation?.unsubscribe();
+        entry.observation = undefined;
         this.updateState(entry, {
           ...entry.state,
           contextStatus: null,
@@ -654,10 +664,19 @@ export class AgentSessionChatClient {
           error: new AgentProtocolError({
             code: 'EXECUTION_UNAVAILABLE',
             message: 'Agent storage failed. Reopen the session to resume unfinished work.',
-            retryable: true,
+            retryable: event.retryable ?? true,
           }),
         });
         return;
+      case 'runtime.recovered': {
+        const generation = entry.generation;
+        void Promise.resolve(entry.observationPromise)
+          .then(() => {
+            if (entry.generation === generation) return this.refresh(entry.state.sessionId);
+          })
+          .catch(() => {});
+        return;
+      }
       case 'question.updated':
         this.updateState(entry, { ...entry.state, pendingQuestion: event.question });
         return;
@@ -804,6 +823,14 @@ export class AgentSessionChatClient {
         return;
       }
       case 'approval.requested':
+        // Ignore a late approval request for an active turn that has already settled.
+        if (
+          entry.state.activeTurn &&
+          entry.state.activeTurn.id === event.approval.turnId &&
+          TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status)
+        ) {
+          return;
+        }
         this.updateState(entry, {
           ...entry.state,
           pendingApprovals: [
@@ -823,11 +850,7 @@ export class AgentSessionChatClient {
   }
 
   private cancelLiveMessagesFlush(entry: SessionEntry): void {
-    if (entry.liveMessagesFlush === undefined) {
-      return;
-    }
-    clearTimeout(entry.liveMessagesFlush);
-    entry.liveMessagesFlush = undefined;
+    entry.liveMessagesFlush.cancel();
   }
 
   private installToolInputPreviews(message: AgentMessageView): void {
@@ -852,7 +875,7 @@ export class AgentSessionChatClient {
   }
 
   private scheduleLiveMessagesFlush(entry: SessionEntry): void {
-    if (entry.liveMessagesFlush !== undefined) {
+    if (entry.liveMessagesFlush.isScheduled()) {
       return;
     }
     let chars = 0;
@@ -871,10 +894,7 @@ export class AgentSessionChatClient {
     );
     // Do not move an already scheduled deadline when more deltas arrive: a busy
     // stream must keep becoming visible instead of indefinitely debouncing.
-    entry.liveMessagesFlush = setTimeout(() => {
-      entry.liveMessagesFlush = undefined;
-      this.commitLiveMessages(entry);
-    }, interval);
+    entry.liveMessagesFlush.schedule(interval);
   }
 
   private queueTextDelta(

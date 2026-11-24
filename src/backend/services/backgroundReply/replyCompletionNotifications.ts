@@ -1,3 +1,4 @@
+import type { NotificationContentInput } from 'expo-notifications';
 import { AppState } from 'react-native';
 
 import {
@@ -52,6 +53,7 @@ export type ReplyAttentionNotificationEvent = {
 };
 
 export type ReplyCompletionNotificationEnvironment = {
+  hasProgressActivity(): boolean;
   /** Whether finishing chat replies may raise a system notification. */
   isReplyCompletionNotificationEnabled(): boolean;
   onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
@@ -116,6 +118,14 @@ export function createReplyCompletionNotifier(
 
   const notificationId = (deepLinkUrl: string): string =>
     `cherry-reply-${deepLinkUrl.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+  // Passive delivery retains Notification Center actions without covering another app's content.
+  const notificationStyle = (
+    alert = true,
+  ): Pick<NotificationContentInput, 'interruptionLevel' | 'sound'> =>
+    !alert || environment.hasProgressActivity()
+      ? { interruptionLevel: 'passive' }
+      : { sound: 'default' };
 
   const attentionId = (deepLinkUrl: string): string =>
     `cherry-attention-${encodeURIComponent(deepLinkUrl)}`;
@@ -185,7 +195,7 @@ export function createReplyCompletionNotifier(
         // Simple question text is necessary to answer from the notification.
         body: event.actions ? [event.detail, event.actions.prompt].join('\n') : event.detail,
         ...(event.actions ? { categoryIdentifier: identifier } : {}),
-        ...(event.alert === false ? {} : { sound: 'default' }),
+        ...notificationStyle(event.alert),
         data: {
           owner: BACKGROUND_NOTIFICATION_OWNER,
           attention: true,
@@ -237,7 +247,7 @@ export function createReplyCompletionNotifier(
       content: {
         title: event.title.slice(0, 120),
         body: [event.detail, event.preview].filter(Boolean).join('\n').slice(0, 600),
-        sound: 'default',
+        ...notificationStyle(),
         data: { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true, url: event.deepLinkUrl },
       },
     });

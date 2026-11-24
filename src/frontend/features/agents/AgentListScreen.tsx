@@ -1,4 +1,4 @@
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import {
@@ -39,6 +40,7 @@ type AgentListExtraData = {
   isEditing: boolean;
   lastId: string | undefined;
   onEdit: (agentId: string) => void;
+  onOpenChat: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
   selectedIds: ReadonlySet<string>;
@@ -124,16 +126,34 @@ function AgentListScreenBody() {
     },
     [router],
   );
+  const openAgentChat = useCallback(
+    (agentId: string) => {
+      router.navigate({
+        pathname: '/',
+        params: chatRouteParams({ agentId, kind: 'draft' }),
+      });
+    },
+    [router],
+  );
   const listExtraData = useMemo<AgentListExtraData>(
     () => ({
       isEditing,
       lastId: listedAgents.at(-1)?.id,
       onEdit: openAgentEditor,
+      onOpenChat: openAgentChat,
       onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
     }),
-    [handleStartSelection, isEditing, listedAgents, openAgentEditor, selectedIds, toggleId],
+    [
+      handleStartSelection,
+      isEditing,
+      listedAgents,
+      openAgentChat,
+      openAgentEditor,
+      selectedIds,
+      toggleId,
+    ],
   );
   const listEmpty = isFiltering ? (
     <View className="px-8 py-16">
@@ -176,7 +196,11 @@ function AgentListScreenBody() {
         title={t('agent.list.title')}
       />
       <View className="flex-1">
-        {isEditing ? null : <InlineSearch onChangeText={setQuery} value={query} />}
+        {isEditing ? null : (
+          <View className="mx-auto w-full max-w-[720px]">
+            <InlineSearch onChangeText={setQuery} value={query} />
+          </View>
+        )}
         <LegendList
           alwaysBounceVertical={false}
           contentContainerStyle={listContentStyle}
@@ -211,7 +235,7 @@ function agentKeyExtractor(agent: Agent) {
 }
 
 function renderAgentItem({ extraData, index, item }: LegendListRenderItemProps<Agent>) {
-  const { isEditing, lastId, onEdit, onStartSelection, onToggle, selectedIds } =
+  const { isEditing, lastId, onEdit, onOpenChat, onStartSelection, onToggle, selectedIds } =
     extraData as AgentListExtraData;
   const isFirst = index === 0;
 
@@ -231,6 +255,7 @@ function renderAgentItem({ extraData, index, item }: LegendListRenderItemProps<A
         isEditing={isEditing}
         isSelected={selectedIds.has(item.id)}
         onEdit={onEdit}
+        onOpenChat={onOpenChat}
         onStartSelection={onStartSelection}
         onToggle={onToggle}
       />
@@ -245,6 +270,7 @@ type AgentListRowProps = {
   /** Selection deletes, so only a deletable Agent joins it. */
   isSelectable?: boolean;
   onEdit: (agentId: string) => void;
+  onOpenChat: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
 };
@@ -255,6 +281,7 @@ const AgentListRowView = memo(function AgentListRow({
   isSelectable = true,
   isSelected,
   onEdit,
+  onOpenChat,
   onStartSelection,
   onToggle,
 }: AgentListRowProps) {
@@ -271,7 +298,7 @@ const AgentListRowView = memo(function AgentListRow({
           : [{ name: 'longpress', label: t('agent.selection.start') }]
       }
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole={isEditing ? 'checkbox' : 'link'}
+      accessibilityRole={isEditing ? 'checkbox' : 'button'}
       accessibilityState={isEditing ? { checked: isSelected, disabled: !isSelectable } : undefined}
       className="w-full active:bg-foreground/5"
       disabled={isEditing && !isSelectable}
@@ -285,7 +312,7 @@ const AgentListRowView = memo(function AgentListRow({
         if (isEditing) {
           onToggle(agent.id);
         } else {
-          onEdit(agent.id);
+          onOpenChat(agent.id);
         }
       }}
       testID={`agent-list-${agent.id}`}
@@ -306,7 +333,19 @@ const AgentListRowView = memo(function AgentListRow({
         {isEditing ? (
           <SelectionIndicator locked={!isSelectable} selected={isSelected} />
         ) : (
-          <ChevronRightIcon className="size-5 text-muted-foreground" />
+          <Pressable
+            accessibilityLabel={t('common.edit')}
+            accessibilityRole="button"
+            className="h-9 w-9 items-center justify-center rounded-full active:bg-foreground/10"
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation();
+              onEdit(agent.id);
+            }}
+            testID={`agent-edit-${agent.id}`}
+          >
+            <PencilIcon className="size-4 text-muted-foreground" />
+          </Pressable>
         )}
       </View>
     </Pressable>
@@ -320,6 +359,6 @@ const AgentListRow = withResourcePolicy(
 );
 
 const styles = StyleSheet.create({
-  cardSlice: { borderCurve: 'continuous' },
+  cardSlice: { alignSelf: 'center', borderCurve: 'continuous', maxWidth: 720, width: '100%' },
   list: { flex: 1 },
 });

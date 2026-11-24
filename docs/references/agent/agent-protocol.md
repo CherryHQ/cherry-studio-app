@@ -456,6 +456,7 @@ interface AgentProtocol {
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  compactContext(input: { sessionId: string; messageId: string }): Promise<'compacted' | 'unchanged' | 'unavailable'>
   editUserMessage(input: {
     sessionId: string
     messageId: string
@@ -588,7 +589,8 @@ with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 type AgentEvent =
   | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'context.usage.updated'; usages: AgentContextUsage[] }
-  | { type: 'runtime.failed' }
+  | { type: 'runtime.failed'; retryable?: false }
+  | { type: 'runtime.recovered' }
   | { type: 'question.updated'; question: AgentPendingQuestion | null }
   | { type: 'session.updated'; session: AgentSessionView }
   | { type: 'turn.updated'; turn: AgentTurnView }
@@ -615,11 +617,15 @@ there is no untyped patch object.
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
 
-`context.updated` and `runtime.failed` describe the local engine, not a turn, and persist nothing.
+`context.updated`, `runtime.failed`, and `runtime.recovered` describe the local engine, not a turn, and persist nothing.
 `context.updated` reports a running or failed context compaction; the snapshot repeats the current
-value as `contextStatus`. `runtime.failed` means the engine's storage session closed after a failure:
-the client shows a retry action, and refreshing the Session reopens the engine and resumes
-unfinished work.
+value as `contextStatus`. On Android in the foreground, a storage failure triggers one automatic
+reopen before notifying observers: `runtime.recovered` indicates that the engine reopened so open
+observers refresh their snapshots. `runtime.failed` means the engine's storage session closed after
+a failure: when `retryable` is omitted (or `true`), the client shows a retry action and refreshing
+the Session reopens the engine and resumes unfinished work; when `retryable` is `false`, automatic
+foreground reopen failed or was already exhausted and the client shows the inline unavailable state
+without a retry loop.
 
 `context.usage.updated` replaces the current working-context counts for the Session. Each value is
 anchored to the answer of its newest placed input, so a selected branch cannot consume another

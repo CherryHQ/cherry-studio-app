@@ -48,7 +48,7 @@ function call(
   return {
     type: 'tool-call',
     toolCallId: `dsml_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
-    toolName: matches.length === 1 ? matches[0].name : toolName,
+    toolName: matches.length === 1 && matches[0] ? matches[0].name : toolName,
     input,
   };
 }
@@ -64,7 +64,7 @@ function parseCalls(
       const searchTools = tools.filter((tool) =>
         ['toolsearch', 'tool_search'].includes(tool.name.toLowerCase()),
       );
-      if (searchTools.length !== 1) throw new DeepseekDsmlError();
+      if (searchTools.length !== 1 || !searchTools[0]) throw new DeepseekDsmlError();
       return [call(searchTools[0].name, { query: search[1] }, tools)];
     }
   }

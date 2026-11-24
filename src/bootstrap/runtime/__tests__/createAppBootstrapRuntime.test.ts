@@ -68,7 +68,7 @@ const mockPreference = {
 const mockDesktopConnectionManager = { kind: 'desktop-connection-manager' };
 const mockProviderAccounts = { kind: 'provider-accounts' };
 const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
-const mockRegion = { getCountry: jest.fn(async () => 'US') };
+const mockRegion = { getRegion: jest.fn(async () => 'GLOBAL') };
 const mockProviderCatalog = {
   hasPendingStorageWork: jest.fn(() => false),
   ensureReady: jest.fn(async () => {}),
@@ -499,6 +499,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCloud.configure).toHaveBeenCalledWith(
       {
         getIdentity: mockEnterpriseAccount.getCommunityIdentity,
+        getGuestCatalogOrigin: expect.any(Function),
         getTokens: mockEnterpriseAccount.getCommunityTokens,
         refreshServices: mockEnterpriseAccount.refreshCommunityServices,
         subscribe: mockEnterpriseAccount.subscribe,

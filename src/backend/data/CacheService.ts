@@ -87,7 +87,7 @@ export class CacheService extends BaseService {
     super();
   }
 
-  protected onInit(): void {
+  protected override onInit(): void {
     if (this.initialized) {
       return;
     }
@@ -104,7 +104,7 @@ export class CacheService extends BaseService {
    * all stopped — which reverse-order teardown guarantees, since everything that
    * uses the cache depends on it.
    */
-  protected onStop(): void {
+  protected override onStop(): void {
     if (this.disposed) {
       return;
     }

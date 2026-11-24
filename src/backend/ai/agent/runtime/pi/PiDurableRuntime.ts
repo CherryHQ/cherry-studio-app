@@ -1,5 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import {
   configure,
   defineDoc,
@@ -968,6 +968,36 @@ export class PiDurableRuntime {
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });
+  }
+
+  async compactContext(sessionId: string, signal: AbortSignal) {
+    const context = withAbortSignal(signal, BACKGROUND_CONTEXT);
+    const conversation = await this.requireSession(sessionId, context);
+    const live = await this.harness.snapshot(LiveDoc, conversation.id, context);
+    const background =
+      !live?.run &&
+      live?.compactions?.length === 1 &&
+      !live.compactions[0]!.blocking &&
+      live.compactions[0]!.trigger !== 'manual'
+        ? live.compactions[0]!.taskId
+        : undefined;
+    if (live?.run || (live?.compactions?.length && !background)) return 'busy' as const;
+    try {
+      const task = background ?? (await conversation.compact(undefined, context));
+      const { state } = await this.harness.waitForTask(task, context);
+      if (state.outcome.status !== 'completed')
+        throw new Error('The conversation could not be summarized.');
+      const { entryId, submissionId } = state.outcome.result;
+      if (submissionId !== undefined) {
+        const submission = await this.harness.submission(submissionId, context);
+        if ((await submission?.wait(context))?.status !== 'done')
+          throw new Error('The summary could not be committed.');
+        return 'compacted' as const;
+      }
+      return entryId !== undefined ? ('compacted' as const) : ('unchanged' as const);
+    } finally {
+      if (!background && signal.aborted) await conversation.abort(BACKGROUND_CONTEXT);
+    }
   }
 
   inspect(context: Context = BACKGROUND_CONTEXT) {

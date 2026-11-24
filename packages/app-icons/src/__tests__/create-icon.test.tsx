@@ -3,7 +3,29 @@ import { createElement, forwardRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
+import { createFilledIcon } from '../create-filled-icon';
 import { createIcon } from '../create-icon';
+
+jest.mock('react-native-svg', () => {
+  const { createElement: createReactElement, forwardRef: forwardReactRef } =
+    jest.requireActual('react');
+  const mockSvgNode = (name: string) =>
+    forwardReactRef(function MockSvgNode(props: object, ref: unknown) {
+      return createReactElement(name, { ...props, ref });
+    });
+
+  return {
+    Circle: mockSvgNode('SvgCircle'),
+    Ellipse: mockSvgNode('SvgEllipse'),
+    G: mockSvgNode('SvgG'),
+    Line: mockSvgNode('SvgLine'),
+    Path: mockSvgNode('SvgPath'),
+    Polygon: mockSvgNode('SvgPolygon'),
+    Polyline: mockSvgNode('SvgPolyline'),
+    Rect: mockSvgNode('SvgRect'),
+    Svg: mockSvgNode('SvgRoot'),
+  };
+});
 
 jest.mock('uniwind', () => ({
   useResolveClassNames: jest.fn(),
@@ -71,6 +93,59 @@ describe('createIcon', () => {
       height: 28,
       strokeWidth: 1.5,
       width: 32,
+    });
+  });
+});
+
+describe('createFilledIcon', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockUseResolveClassNames.mockReturnValue({});
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.clearAllMocks();
+  });
+
+  test('resolves currentColor fills/strokes and honors wrapped createIcon dimensions', () => {
+    const Base = createFilledIcon([
+      [
+        'path',
+        {
+          d: 'M0 0h24v24H0z',
+          fill: 'currentColor',
+          fillOpacity: 0.24,
+          key: 'bg',
+          stroke: 'currentColor',
+        },
+      ],
+      ['rect', { fill: 'currentColor', height: 6, key: 'box', rx: 1, width: 6, x: 2, y: 2 }],
+    ] as const);
+    const Wrapped = createIcon(Base, 'TestFilledIcon');
+
+    mockUseResolveClassNames.mockReturnValue({ color: '#112233', height: 22, width: 22 });
+    act(() => {
+      renderer = create(<Wrapped className="text-foreground size-5" strokeWidth={1.85} />);
+    });
+
+    const svg = renderer!.root.findByType('SvgRoot' as never);
+    expect(svg.props).toMatchObject({ height: 22, width: 22 });
+
+    const path = renderer!.root.findByType('SvgPath' as never);
+    expect(path.props).toMatchObject({
+      fill: '#112233',
+      fillOpacity: 0.24,
+      stroke: '#112233',
+      strokeWidth: 1.85,
+    });
+
+    const rect = renderer!.root.findByType('SvgRect' as never);
+    expect(rect.props).toMatchObject({
+      fill: '#112233',
+      stroke: 'none',
     });
   });
 });

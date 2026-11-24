@@ -24,21 +24,21 @@ export function DeviceConnectionPairingScreen() {
     setInput(null);
   }, [setInput]);
 
-  const scanAgain = () =>
-    router.replace({
-      pathname: '/settings/device-connections/scan',
-      params: repairConnectionId ? { connectionId: repairConnectionId } : {},
-    });
-
-  const { cancel } = usePairingNavigation({
+  const { baseRoute, cancel } = usePairingNavigation({
     connectionId: repairConnectionId,
     isMissingConnection: Boolean(input?.connectionId && !repairConnectionId),
   });
 
+  const scanAgain = () =>
+    router.replace({
+      pathname: `${baseRoute}/scan`,
+      params: repairConnectionId ? { connectionId: repairConnectionId } : {},
+    });
+
   const finish = () => {
     if (!connection) return;
     router.dismissTo({
-      pathname: '/settings/device-connections/[connectionId]',
+      pathname: `${baseRoute}/[connectionId]`,
       params: { connectionId: connection.id },
     });
   };

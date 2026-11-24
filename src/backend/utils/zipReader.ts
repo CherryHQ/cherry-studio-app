@@ -1,5 +1,7 @@
 import { type FlateError, FlateErrorCode, Inflate } from 'fflate';
 
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
+
 /**
  * Restricted reader for untrusted single-disk ZIP32 archives: the central directory is validated
  * before any byte is inflated, and extraction streams bounded chunks while yielding to the app.
@@ -79,7 +81,6 @@ const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
 
 const viewOf = (bytes: Uint8Array) =>
   new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-const yieldToRuntime = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function readExact(source: ZipSource, offset: number, length: number, invalid: () => Error) {
   const bytes = source.read(offset, length);

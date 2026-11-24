@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type {
@@ -8,6 +8,7 @@ import type {
 } from '@/frontend/components/Composer/utils/composerAttachments';
 import { type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 
+import { ComposerDraft } from '../../ComposerDraft';
 import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
 
 const mockCreateInternalEntry = jest.fn();
@@ -233,6 +234,32 @@ describe('useManagedComposerAttachments', () => {
 
     expect(snapshot?.attachments).toEqual([]);
     expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('finishes an import in its original draft across a switch without importing twice', async () => {
+    const a = new ComposerDraft();
+    const b = new ComposerDraft();
+    const importing = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockReturnValueOnce(importing.promise);
+    const tree = (id: string, buffer: ComposerDraft) => (
+      <Probe key={id} buffer={buffer} initialAttachments={[]} />
+    );
+    await act(async () => {
+      renderer = create(tree('A', a));
+    });
+    await act(async () => snapshot!.addAttachments([source('slow.pdf')]));
+    await act(async () => renderer!.update(tree('B', b)));
+    expect(snapshot!.attachments).toEqual([]);
+    await act(async () => {
+      importing.resolve(resolvedFile('00000000-0000-7000-8000-000000000014', 'slow.pdf'));
+      await importing.promise;
+    });
+    expect(snapshot!.attachments).toEqual([]);
+    await act(async () => renderer!.update(tree('A', a)));
+    expect(snapshot!.attachments).toEqual([
+      expect.objectContaining({ name: 'slow.pdf', status: 'ready' }),
+    ]);
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an import that finishes after the composer unmounts', async () => {
@@ -477,10 +504,13 @@ describe('useManagedComposerAttachments', () => {
 
 function Probe({
   initialAttachments,
+  buffer,
 }: {
+  buffer?: ComposerDraft;
   initialAttachments: readonly ComposerInitialAttachment[];
 }) {
-  const store = useManagedComposerAttachments(initialAttachments);
+  const [draft] = useState(() => buffer ?? new ComposerDraft('', initialAttachments));
+  const store = useManagedComposerAttachments(draft);
 
   useEffect(() => {
     snapshot = store;

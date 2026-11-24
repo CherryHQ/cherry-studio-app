@@ -1,14 +1,7 @@
 import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import {
-  BackgroundPressExclusion,
-  Button,
-  ContextMenu,
-  ContextMenuExclusion,
-  InfoPopover,
-  type MenuItem,
-} from '@cherrystudio/ui/components';
-import { memo, type ReactElement, type ReactNode, useState } from 'react';
+import { BackgroundPressExclusion, Button, InfoPopover } from '@cherrystudio/ui/components';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -25,14 +18,11 @@ import { MessageQuoteHighlight } from '../../../quotes/MessageQuoteHighlight';
 import { MessageQuotePreview } from '../../../quotes/MessageQuotePreview';
 import { ChatShareSelectionRow } from '../../../share/ChatShareControls';
 import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
-import {
-  useAssistantMessageActions,
-  useAssistantMessageActionsState,
-} from '../context/AssistantMessageActionsProvider';
+import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
-import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { MessageAnswerGroup } from './MessageAnswerGroup';
+import { UserMessageToolbar } from './UserMessageToolbar';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -44,8 +34,8 @@ export type AssistantMessagePresentation = Readonly<{
 type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
-  isScreenReaderEnabled?: boolean;
   message: MessageListItem;
+  shouldShowDisclaimer?: boolean;
   shouldShowTimestamp: boolean;
   attachments?: ReactNode;
   accessories?: ReactNode;
@@ -154,13 +144,16 @@ function AssistantChatMessage({
   message,
   presentation,
   renderUsage,
+  shouldShowDisclaimer = false,
 }: {
   accessories: ReactNode;
   attachments: ReactNode;
   message: MessageListItem;
   presentation: AssistantMessagePresentation;
   renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
+  shouldShowDisclaimer?: boolean;
 }) {
+  const { t } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
   const isSelecting = useIsChatShareSelecting();
   const isGrouped = Boolean(message.branch && selectBranch && !isSelecting);
@@ -171,13 +164,18 @@ function AssistantChatMessage({
       {accessories}
       {message.status !== 'pending' && !isSelecting ? (
         <BackgroundPressExclusion>
-          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+          <View className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
             <AssistantMessageToolbar message={message} />
             <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
-          </ContextMenuExclusion>
+          </View>
         </BackgroundPressExclusion>
       ) : null}
       <MessageTranslationContent message={message} />
+      {shouldShowDisclaimer && message.status !== 'pending' && !isSelecting ? (
+        <Text className="text-xs text-foreground-tertiary" testID="assistant-message-disclaimer">
+          {t('chat.input.disclaimer')}
+        </Text>
+      ) : null}
     </>
   );
 
@@ -205,48 +203,69 @@ function UserQuestionBranch({ message }: { message: MessageListItem }) {
   if (!siblings || siblings.length < 2 || !selectBranch) return null;
   const index = Math.max(0, siblings.indexOf(message.id));
   return (
+    <View className="flex-row items-center">
+      <Button
+        accessibilityLabel={t('chat.branch.previousQuestion')}
+        disabled={index === 0}
+        icon={<ChevronLeftIcon className="size-4 text-muted-foreground" />}
+        onPress={() => {
+          const targetId = siblings[index - 1];
+          if (targetId) {
+            preserveReadingPosition();
+            void selectBranch({ messageId: message.id, targetId });
+          }
+        }}
+        size="xs"
+        testID="question-version-previous"
+        variant="ghost"
+      />
+      <Text
+        accessibilityLabel={t('chat.branch.questionPage', {
+          index: index + 1,
+          total: siblings.length,
+        })}
+        accessibilityLiveRegion="polite"
+        className="text-xs text-muted-foreground tabular-nums"
+      >
+        {(index + 1).toLocaleString(locale)}/{siblings.length.toLocaleString(locale)}
+      </Text>
+      <Button
+        accessibilityLabel={t('chat.branch.nextQuestion')}
+        disabled={index >= siblings.length - 1}
+        icon={<ChevronRightIcon className="size-4 text-muted-foreground" />}
+        onPress={() => {
+          const targetId = siblings[index + 1];
+          if (targetId) {
+            preserveReadingPosition();
+            void selectBranch({ messageId: message.id, targetId });
+          }
+        }}
+        size="xs"
+        testID="question-version-next"
+        variant="ghost"
+      />
+    </View>
+  );
+}
+
+function UserMessageFooter({
+  isMessageActionsEnabled,
+  message,
+}: {
+  isMessageActionsEnabled: boolean;
+  message: MessageListItem;
+}) {
+  const isSelecting = useIsChatShareSelecting();
+  const { selectBranch } = useAssistantMessageActions();
+  if (isSelecting) return null;
+  const hasBranch = Boolean(selectBranch) && (message.questionBranch?.siblings.length ?? 0) >= 2;
+  const showToolbar = isMessageActionsEnabled && message.status !== 'pending';
+  if (!hasBranch && !showToolbar) return null;
+  return (
     <BackgroundPressExclusion>
-      <View className="flex-row items-center justify-end pr-1">
-        <Button
-          accessibilityLabel={t('chat.branch.previousQuestion')}
-          disabled={index === 0}
-          icon={<ChevronLeftIcon className="size-4 text-muted-foreground" />}
-          onPress={() => {
-            const targetId = siblings[index - 1];
-            if (targetId) {
-              preserveReadingPosition();
-              void selectBranch({ messageId: message.id, targetId });
-            }
-          }}
-          size="xs"
-          testID="question-version-previous"
-          variant="ghost"
-        />
-        <Text
-          accessibilityLabel={t('chat.branch.questionPage', {
-            index: index + 1,
-            total: siblings.length,
-          })}
-          accessibilityLiveRegion="polite"
-          className="text-xs text-muted-foreground tabular-nums"
-        >
-          {(index + 1).toLocaleString(locale)}/{siblings.length.toLocaleString(locale)}
-        </Text>
-        <Button
-          accessibilityLabel={t('chat.branch.nextQuestion')}
-          disabled={index >= siblings.length - 1}
-          icon={<ChevronRightIcon className="size-4 text-muted-foreground" />}
-          onPress={() => {
-            const targetId = siblings[index + 1];
-            if (targetId) {
-              preserveReadingPosition();
-              void selectBranch({ messageId: message.id, targetId });
-            }
-          }}
-          size="xs"
-          testID="question-version-next"
-          variant="ghost"
-        />
+      <View className="min-h-7 w-full flex-row items-center justify-end gap-2">
+        {hasBranch ? <UserQuestionBranch message={message} /> : null}
+        {showToolbar ? <UserMessageToolbar message={message} /> : null}
       </View>
     </BackgroundPressExclusion>
   );
@@ -273,8 +292,8 @@ function formatMessageCreatedAt(createdAt: string | undefined): string | undefin
 export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
   isMessageActionsEnabled,
-  isScreenReaderEnabled = false,
   message,
+  shouldShowDisclaimer = false,
   shouldShowTimestamp,
   attachments,
   accessories,
@@ -291,7 +310,7 @@ export const ChatMessage = memo(function ChatMessage({
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
-      <View className="gap-2">
+      <View className="gap-1">
         <UserMessage
           variant={isSelecting ? 'selection' : 'default'}
           editingContext={isSelecting ? undefined : editingContext}
@@ -300,7 +319,7 @@ export const ChatMessage = memo(function ChatMessage({
           quote={quoteFields?.quotes ? <MessageQuotePreview fields={quoteFields} /> : undefined}
         />
         {accessories}
-        {message.questionBranch ? <UserQuestionBranch message={message} /> : null}
+        <UserMessageFooter isMessageActionsEnabled={isMessageActionsEnabled} message={message} />
       </View>
     ) : (
       <AssistantChatMessage
@@ -309,6 +328,7 @@ export const ChatMessage = memo(function ChatMessage({
         message={message}
         presentation={assistantPresentation}
         renderUsage={renderUsage}
+        shouldShowDisclaimer={shouldShowDisclaimer}
       />
     );
 
@@ -338,97 +358,8 @@ export const ChatMessage = memo(function ChatMessage({
             testID="editing-continuation-edge"
           />
         ) : null}
-        <ChatShareSelectionRow message={message}>
-          {isMessageActionsEnabled ? (
-            <ChatMessageContextMenu isScreenReaderEnabled={isScreenReaderEnabled} message={message}>
-              {content}
-            </ChatMessageContextMenu>
-          ) : (
-            content
-          )}
-        </ChatShareSelectionRow>
+        <ChatShareSelectionRow message={message}>{content}</ChatShareSelectionRow>
       </View>
     </View>
   );
 });
-
-function ChatMessageContextMenu({
-  children,
-  isScreenReaderEnabled,
-  message,
-}: {
-  children: ReactElement;
-  isScreenReaderEnabled: boolean;
-  message: MessageListItem;
-}) {
-  const { t } = useTranslation();
-  const isSelecting = useIsChatShareSelecting();
-  const { copyAssistantMessage, editQuestion, shareAssistantMessage } =
-    useAssistantMessageActions();
-  const { editableQuestionIds, isEditQuestionDisabled } = useAssistantMessageActionsState();
-  // These existing actions and the text projection accept either message role.
-  const text =
-    message.status === 'pending'
-      ? ''
-      : copyAssistantMessageText(message.data.parts ?? [], message.data.citationSources);
-  // Non-destructive actions only. A long press competes with native text
-  // selection and lands on whatever the finger happens to reach, which is not
-  // a gesture that should be able to remove a turn.
-  const items: readonly MenuItem[] =
-    message.status === 'pending' || isSelecting
-      ? []
-      : [
-          {
-            disabled: !text,
-            id: 'copy',
-            label: t('common.copy'),
-            onPress: () => copyAssistantMessage({ messageId: message.id, text }),
-          },
-          ...((message.role === 'user' && editQuestion && editableQuestionIds.has(message.id)
-            ? [
-                {
-                  // Editing needs the question's text and an idle Session.
-                  disabled: !text || isEditQuestionDisabled,
-                  id: 'edit',
-                  label: t('chat.messageActions.editQuestionAction'),
-                  onPress: () => editQuestion({ messageId: message.id }),
-                },
-              ]
-            : []) satisfies readonly MenuItem[]),
-          {
-            id: 'share',
-            label: t('chat.share.title'),
-            onPress: () => shareAssistantMessage({ messageId: message.id }),
-          },
-        ];
-
-  return (
-    <ContextMenu items={items}>
-      <View accessible={false} className="w-full gap-2">
-        {children}
-        {/* Keep attachment and text nodes independently reachable. Assistant rows already
-            have a toolbar; user rows need explicit actions when long press is unavailable. */}
-        {isScreenReaderEnabled && message.role === 'user' && items.length > 0 ? (
-          <BackgroundPressExclusion>
-            <ContextMenuExclusion className="flex-row justify-end gap-1">
-              {items
-                .filter((item) => !item.disabled)
-                .map((item) => (
-                  <Button
-                    accessibilityLabel={item.label}
-                    key={item.id}
-                    onPress={item.onPress}
-                    size="xs"
-                    testID={`user-message-${item.id}`}
-                    variant="ghost"
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-            </ContextMenuExclusion>
-          </BackgroundPressExclusion>
-        ) : null}
-      </View>
-    </ContextMenu>
-  );
-}

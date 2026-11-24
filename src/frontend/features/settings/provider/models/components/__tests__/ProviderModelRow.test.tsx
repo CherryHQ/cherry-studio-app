@@ -8,7 +8,6 @@ import { ProviderModelRow } from '../ProviderModelRow';
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/eye', () => () => null);
-jest.mock('@cherrystudio/app-icons/icons/gift', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => ({ SelectionIndicator: () => null }));
 
 jest.mock('react-i18next', () => ({
@@ -46,10 +45,9 @@ describe('ProviderModelRow variants', () => {
 
     expect(renderer?.root.findAllByProps({ children: model.modelId })).toHaveLength(0);
     expect(
-      renderer?.root
-        .findAllByProps({ testID: 'provider-model-badge-free' })
-        .filter((node) => node.type === View),
-    ).toHaveLength(1);
+      renderer?.root.findByProps({ testID: 'provider-model-badge-free' }).findByType(Text).props
+        .children,
+    ).toBe('models.badge.free');
     expect(
       renderer?.root
         .findAllByProps({ testID: 'provider-model-badge-vision' })

@@ -2,7 +2,7 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 import { SshDownloadError, type SshTarget } from '@/shared/data/types/ssh';
 
 import { createSshFileTools } from '../sshFileTools';
-import type { SshToolAccess } from '../sshTool';
+import { createSshTool, type SshToolAccess } from '../sshTool';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
 
 const fileId = '11111111-1111-4111-8111-111111111111';
@@ -21,7 +21,7 @@ const profile = {
 const target: SshTarget = {
   profile,
   selectionId: 'selection',
-  grant: { id: 'grant', expiresAt: Date.now() + 3600000 },
+  grant: { scope: 'diagnostics' as const, id: 'grant', expiresAt: Date.now() + 3600000 },
 };
 const ssh: jest.Mocked<SshToolAccess> = {
   isAvailable: jest.fn(),
@@ -130,3 +130,30 @@ test.each(['not-started', 'unknown'] as const)(
     expect(ssh.downloadForAgent).toHaveBeenCalledTimes(1);
   },
 );
+
+test('read access covers one directory listing and only checked files in that directory', () => {
+  const granted: SshTarget = {
+    ...target,
+    grant: {
+      id: 'read',
+      expiresAt: Date.now() + 60000,
+      scope: { directory: '/srv/project', files: ['app.log'] },
+    },
+  };
+  const tools = createSshFileTools(ssh, 'session', granted, access());
+  const list = tools.find((item) => item.providerName === 'ssh_list_files')!;
+  const read = tools.find((item) => item.providerName === 'ssh_read_file')!;
+  expect(list.approval).toBe('auto');
+  expect(list.requiresApproval!({ path: '.' })).toBe(false);
+  expect(list.requiresApproval!({ path: 'subdir' })).toBe(true);
+  expect(read.requiresApproval!({ path: 'app.log' })).toBe(false);
+  for (const path of ['other.txt', '../app.log', '/srv/project/app.log', 'sub/app.log']) {
+    expect(read.requiresApproval!({ path })).toBe(true);
+  }
+  expect(
+    tools.filter((item) => item !== read && item !== list).every((item) => item.approval === 'ask'),
+  ).toBe(true);
+  expect(createSshTool(ssh, 'session', granted).approval).toBe('ask');
+  jest.spyOn(Date, 'now').mockReturnValueOnce(granted.grant!.expiresAt);
+  expect(read.requiresApproval!({ path: 'app.log' })).toBe(true);
+});

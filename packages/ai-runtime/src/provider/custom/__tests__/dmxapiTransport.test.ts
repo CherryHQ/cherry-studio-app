@@ -42,7 +42,7 @@ describe('DmxapiTransport', () => {
       providerParams: {},
     });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('https://www.dmxapi.com/v1/images/generations');
     const init = call[1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token');
@@ -80,7 +80,7 @@ describe('DmxapiTransport', () => {
       providerParams: {},
     });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('https://www.dmxapi.com/v1/responses');
     const body = JSON.parse((call[1] as RequestInit).body as string);
     expect(body).toMatchObject({
@@ -109,7 +109,7 @@ describe('DmxapiTransport', () => {
       providerParams: {},
     });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('https://www.dmxapi.com/v1/responses');
     const body = JSON.parse((call[1] as RequestInit).body as string);
     expect(body.model).toBe('wan2.5');
@@ -141,7 +141,7 @@ describe('DmxapiTransport', () => {
       providerParams: {},
     });
 
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe('https://www.dmxapi.com/v1/images/generations');
     const body = JSON.parse((call[1] as RequestInit).body as string);
     expect(body).toEqual({ model: 'qwen-image', prompt: 'a fox', n: 1, size: '1024x1024' });
@@ -161,7 +161,7 @@ describe('DmxapiTransport', () => {
       providerParams: { model: 'seededit-3.0', n: 1, mode: 'edit' },
     });
 
-    expect(fetchMock.mock.calls[0][0]).toBe('https://x.test/v1/images/generations');
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://x.test/v1/images/generations');
   });
 
   it('parses b64_json into a data: URL and drops empty entries', async () => {
@@ -248,7 +248,7 @@ describe('DmxapiTransport', () => {
     controller.abort();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
-    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBe(controller.signal);
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).signal).toBe(controller.signal);
   });
 
   it('does not expose polling for the single-shot path', () => {

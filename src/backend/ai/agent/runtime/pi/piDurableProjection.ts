@@ -83,10 +83,15 @@ export const PiConfigurationSchema = z
     tools: z.array(PiToolBlueprintSchema),
     webTools: z
       .object({
-        modelToolsPreferred: z.boolean(),
+        modelTools: z.enum(['preferred', 'fallback', 'disabled']).optional(),
+        modelToolsPreferred: z.boolean().optional(),
         clientSearchAvailable: z.boolean(),
         clientFetchAvailable: z.boolean(),
       })
+      .transform(({ modelTools, modelToolsPreferred, ...readiness }) => ({
+        modelTools: modelTools ?? (modelToolsPreferred === false ? 'fallback' : 'preferred'),
+        ...readiness,
+      }))
       .optional(),
     /** Selected with the configuration, so queued, retried and recovered requests share one route. */
     webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
@@ -186,6 +191,16 @@ export function piSubmissionMetadata(
 
 export function readPiSubmission(value: JsonObject | undefined): PiStoredSubmission {
   return PiSubmissionSchema.parse(value);
+}
+
+export function serializePiConfiguration(configuration: PiStoredConfiguration): JsonObject {
+  const web = configuration.webTools;
+  // An embedded v2 reader requires the boolean to resume work after an OTA fallback.
+  // The saved routes still decide which tools that unfinished request can use.
+  return detachedJson({
+    ...configuration,
+    ...(web && { webTools: { ...web, modelToolsPreferred: web.modelTools === 'preferred' } }),
+  });
 }
 
 export function detachedJson(value: unknown): JsonObject {

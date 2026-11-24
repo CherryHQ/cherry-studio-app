@@ -100,12 +100,13 @@ export function normalizeLatexDelimiters(markdown: string, isStreaming = false):
           continue;
         }
 
-        const body = formulaBody(
+        const rawBody = formulaBody(
           markdown.slice(index + 2, closing),
           next,
           isQuoted(markdown, index),
         );
-        if (next === '[' && !TEX_SIGNAL.test(body)) {
+        const body = next === '(' ? trimInlineBody(rawBody) : rawBody;
+        if ((next === '[' && !TEX_SIGNAL.test(body)) || (next === '(' && !body)) {
           index += 2;
           continue;
         }
@@ -216,4 +217,14 @@ function formulaBody(source: string, opener: string, quoted: boolean): string {
       return result;
     })
     .join(' ');
+}
+
+/** Single-dollar math cannot flank whitespace, so trim outer spaces from `\(...\)` without clipping `\ `. */
+function trimInlineBody(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) return '';
+  if (body.trimEnd().length === body.length) return trimmed;
+  let backslashes = 0;
+  for (let i = trimmed.length - 1; i >= 0 && trimmed[i] === '\\'; i -= 1) backslashes += 1;
+  return backslashes % 2 === 1 ? `${trimmed} ` : trimmed;
 }

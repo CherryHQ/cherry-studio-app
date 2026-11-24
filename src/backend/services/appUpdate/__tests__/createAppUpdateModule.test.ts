@@ -2,6 +2,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
+import type { NetworkRegion } from '@/backend/services/region';
 import type { ApkUpdateRelease, DomesticAppStore } from '@/shared/contracts/appUpdate';
 
 import { createAppUpdateModule } from '../createAppUpdateModule';
@@ -26,7 +27,9 @@ const mockNative = {
   openDomesticStore: jest.fn(async (_store: DomesticAppStore) => {}),
 };
 const mockGetNative = jest.fn(() => mockNative as typeof mockNative | null);
+const mockGetStorefrontCountry = jest.fn(async (): Promise<string | null> => null);
 jest.mock('../../../../../modules/app-update', () => ({
+  getNativeAppStoreUpdate: () => ({ getStorefrontCountry: mockGetStorefrontCountry }),
   getNativeAppUpdate: () => mockGetNative(),
 }));
 const mockDownload = {
@@ -54,9 +57,12 @@ jest.mock('../appStoreRelease', () => ({
   checkAppStoreRelease: (...args: unknown[]) => mockCheckAppStore(...args),
 }));
 const mockPermission = jest.fn(async () => true);
-const mockGetCountry = jest.fn(async () => 'CN');
+const mockGetRegion = jest.fn(async (): Promise<NetworkRegion | null> => 'CN');
 const create = () =>
-  createAppUpdateModule({ getCountry: mockGetCountry, requestInstallPermission: mockPermission });
+  createAppUpdateModule({
+    getRegion: mockGetRegion,
+    requestInstallPermission: mockPermission,
+  });
 const apk: ApkUpdateRelease = {
   channel: 'apk',
   id: 'apk:1.10.0',
@@ -71,7 +77,8 @@ const apk: ApkUpdateRelease = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetCountry.mockResolvedValue('CN');
+  mockGetStorefrontCountry.mockResolvedValue(null);
+  mockGetRegion.mockResolvedValue('CN');
   mockGetNative.mockReturnValue(mockNative);
   mockNative.isApkInstallationEnabled.mockReturnValue(true);
   mockNative.checkPlayUpdate.mockResolvedValue({ available: true, versionCode: 20 });
@@ -164,24 +171,40 @@ test('checks the installed version, forwards cancellation, and never downloads o
   expect(Linking.openURL).not.toHaveBeenCalled();
 });
 
-test('foreign IP selects GitHub for APK updates', async () => {
-  mockGetCountry.mockResolvedValue('JP');
+test.each([
+  ['GLOBAL', 'github'],
+  ['CN', 'gitcode'],
+  [null, 'gitcode'],
+] as const)('region %s selects %s for APK updates', async (region, source) => {
+  mockGetRegion.mockResolvedValue(region);
   await create().check();
-  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'github', undefined);
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', source, undefined);
 });
 
-test('App Store lookup uses the shared IP country', async () => {
+test('App Store lookup uses the current storefront even on a CN network', async () => {
   jest.replaceProperty(Platform, 'OS', 'ios');
   jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
-  mockGetCountry.mockResolvedValue('JP');
+  mockGetStorefrontCountry.mockResolvedValue('JP');
   mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });
   await create().check();
+  expect(mockGetRegion).not.toHaveBeenCalled();
   expect(mockCheckAppStore).toHaveBeenCalledWith('com.example.app', '1.9.0', 'JP', undefined);
 });
 
-test('cancelling while country is being resolved prevents update discovery', async () => {
+test('a missing storefront does not guess a country or query Apple', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
+  await expect(create().check()).resolves.toEqual({
+    status: 'unavailable',
+    reason: 'storefrontUnavailable',
+  });
+  expect(mockCheckAppStore).not.toHaveBeenCalled();
+  expect(mockGetRegion).not.toHaveBeenCalled();
+});
+
+test('cancelling while region is being resolved prevents update discovery', async () => {
   const controller = new AbortController();
-  mockGetCountry.mockImplementationOnce(async () => {
+  mockGetRegion.mockImplementationOnce(async () => {
     controller.abort();
     return 'CN';
   });
@@ -280,6 +303,7 @@ test('Play uses build numbers and does not infer a version name', async () => {
 });
 
 test('iOS reads published store metadata and cannot invoke APK operations', async () => {
+  mockGetStorefrontCountry.mockResolvedValue('CN');
   jest.replaceProperty(Platform, 'OS', 'ios');
   jest.replaceProperty(runningUpdate, 'channel', 'production-ios');
   mockCheckAppStore.mockResolvedValue({ status: 'upToDate', currentVersion: '1.9.0' });

@@ -50,7 +50,7 @@ export class DbService extends BaseService {
    * briefly have two live handles on `cherry.db`. `application.install()`
    * serializes disposal ahead of `start()`, and this hook runs inside `start()`.
    */
-  protected async onInit(): Promise<void> {
+  protected override async onInit(): Promise<void> {
     this.assertOpen();
 
     let finish = startBlockingStartupStage('startup.database.open');
@@ -82,7 +82,7 @@ export class DbService extends BaseService {
     }
   }
 
-  protected onStop(): void {
+  protected override onStop(): void {
     if (this.disposed) {
       return;
     }

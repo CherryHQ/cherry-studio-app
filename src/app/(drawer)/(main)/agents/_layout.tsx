@@ -2,12 +2,13 @@ import { Stack } from 'expo-router';
 
 import { headerScreenOptions } from '@/frontend/appShell/header';
 import { FormContentFrame, useIsFormContentConstrained } from '@/frontend/appShell/layout';
+import { NavRouteHeaderScope } from '@/frontend/appShell/navigationShell';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 export default function AgentsStackLayout() {
-  const foregroundColor = useThemeColor('foreground');
+  const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
   const isFormContentConstrained = useIsFormContentConstrained();
 
   // The editor is a form, not a list: nothing scrolls far enough for a floating
@@ -21,23 +22,26 @@ export default function AgentsStackLayout() {
   // Every screen here keeps the ordinary page background, which the grouped
   // cards of both the list and the editor sit on, as in settings.
   return (
-    <Stack
-      screenLayout={FormContentFrame}
-      screenOptions={{
-        ...headerScreenOptions,
-        // Wide-window search is a content row; the header must reserve its own space.
-        headerTransparent: isLiquidGlassAvailable && !isFormContentConstrained,
-        headerTintColor: foregroundColor,
-      }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen
-        // One editor per Agent, so a repeated tap reuses it instead of stacking a copy.
-        getId={({ params }) => getSingleRouteParam(params?.agentId)}
-        name="[agentId]/edit"
-        options={formScreen}
-      />
-      <Stack.Screen name="new" options={formScreen} />
-    </Stack>
+    <NavRouteHeaderScope destination="agents">
+      <Stack
+        screenLayout={FormContentFrame}
+        screenOptions={{
+          ...headerScreenOptions,
+          contentStyle: { backgroundColor },
+          // Wide-window search is a content row; the header must reserve its own space.
+          headerTransparent: isLiquidGlassAvailable && !isFormContentConstrained,
+          headerTintColor: foregroundColor,
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen
+          // One editor per Agent, so a repeated tap reuses it instead of stacking a copy.
+          getId={({ params }) => getSingleRouteParam(params?.agentId)}
+          name="[agentId]/edit"
+          options={formScreen}
+        />
+        <Stack.Screen name="new" options={formScreen} />
+      </Stack>
+    </NavRouteHeaderScope>
   );
 }

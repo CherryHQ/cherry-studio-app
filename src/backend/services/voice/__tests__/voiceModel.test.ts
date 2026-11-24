@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { downloadFile, FileDownloadError } from '@/backend/services/download';
 import { hashLocalFile } from '@/backend/services/file/fileHash';
+import type { NetworkRegion } from '@/backend/services/region';
 
 import { SENSE_VOICE_ASSETS, SENSE_VOICE_BYTES, SENSE_VOICE_DIRECTORY } from '../senseVoiceAssets';
 import { createVoiceModel } from '../voiceModel';
@@ -27,10 +28,10 @@ beforeEach(() => {
   jest.mocked(downloadFile).mockImplementation(async ({ destination }) => destination);
 });
 
-test.each(['CN', 'US'])(
+test.each(['CN', 'GLOBAL'] as const)(
   'partial model installs are never ready and %s assets keep pinned integrity',
-  async (country) => {
-    const model = createVoiceModel(async () => country);
+  async (region) => {
+    const model = createVoiceModel(async () => region);
     await expect(model.isReady(new AbortController().signal)).resolves.toBe(false);
     await model.module.download();
     expect(model.module.getState()).toMatchObject({
@@ -40,7 +41,7 @@ test.each(['CN', 'US'])(
     for (const asset of SENSE_VOICE_ASSETS)
       expect(downloadFile).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: country === 'CN' ? asset.url : expect.stringMatching(/^https:\/\/huggingface\.co\//),
+          url: region === 'CN' ? asset.url : expect.stringMatching(/^https:\/\/huggingface\.co\//),
           sha256: asset.sha256,
           bytes: asset.bytes,
           maxBytes: asset.bytes,
@@ -89,19 +90,19 @@ test('download failures remain visible until retry and cannot become ready throu
 });
 
 test.each(['cancel', 'dispose'] as const)(
-  '%s releases a pending country wait without cancelling the shared lookup',
+  '%s releases a pending region wait without cancelling the shared lookup',
   async (action) => {
-    let finishCountry!: (value: string) => void;
-    const country = new Promise<string>((resolve) => {
-      finishCountry = resolve;
+    let finishRegion!: (value: NetworkRegion) => void;
+    const region = new Promise<NetworkRegion>((resolve) => {
+      finishRegion = resolve;
     });
-    let countryRequested!: () => void;
+    let regionRequested!: () => void;
     const requested = new Promise<void>((resolve) => {
-      countryRequested = resolve;
+      regionRequested = resolve;
     });
     const model = createVoiceModel(() => {
-      countryRequested();
-      return country;
+      regionRequested();
+      return region;
     });
     const downloading = model.module.download();
     try {
@@ -115,9 +116,9 @@ test.each(['cancel', 'dispose'] as const)(
       expect(model.module.getState().status).toBe('not-downloaded');
       expect(downloadFile).not.toHaveBeenCalled();
 
-      finishCountry('US');
+      finishRegion('GLOBAL');
       await Promise.all([downloading, stopping]);
-      await expect(country).resolves.toBe('US');
+      await expect(region).resolves.toBe('GLOBAL');
       expect(downloadFile).not.toHaveBeenCalled();
 
       if (action === 'cancel') {
@@ -127,20 +128,20 @@ test.each(['cancel', 'dispose'] as const)(
         await expect(model.module.download()).rejects.toThrow('stopped');
       }
     } finally {
-      finishCountry('US');
+      finishRegion('GLOBAL');
       await model.dispose();
       await downloading;
     }
   },
 );
 
-test('immediate cancellation does not start a country lookup', async () => {
-  const getCountry = jest.fn(async () => 'CN');
-  const model = createVoiceModel(getCountry);
+test('immediate cancellation does not start a region lookup', async () => {
+  const getRegion = jest.fn(async (): Promise<NetworkRegion> => 'CN');
+  const model = createVoiceModel(getRegion);
   const downloading = model.module.download();
   await model.module.cancel();
   await downloading;
-  expect(getCountry).not.toHaveBeenCalled();
+  expect(getRegion).not.toHaveBeenCalled();
   expect(downloadFile).not.toHaveBeenCalled();
   await model.dispose();
 });
