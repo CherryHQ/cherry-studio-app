@@ -50,7 +50,7 @@ function MoreModuleCard({ id, isArmed, isDragged, onArmedChange, onPress }: More
       <Pressable
         accessibilityLabel={t(getNavTitleKey(id))}
         accessibilityRole="button"
-        className={`min-h-16 flex-1 flex-row items-center gap-3 rounded-3xl border py-3 pr-4 pl-3 ${
+        className={`min-h-16 grow flex-row items-center gap-3 rounded-3xl border py-3 pr-4 pl-3 ${
           isDragged
             ? 'bg-secondary/40 border-border-strong border-dashed opacity-35'
             : isArmed
@@ -131,14 +131,15 @@ export function MoreScreen() {
               {rows.map((row) => (
                 <View key={row.join('-')} className="flex-row gap-3">
                   {row.map((id) => (
-                    <MoreModuleCard
-                      key={id}
-                      id={id}
-                      isArmed={armedCardId === id}
-                      isDragged={dragState?.source === 'more' && dragState.id === id}
-                      onArmedChange={handleCardArmedChange}
-                      onPress={() => router.push(getNavHref(id) as Href)}
-                    />
+                    <View key={id} className="flex-1">
+                      <MoreModuleCard
+                        id={id}
+                        isArmed={armedCardId === id}
+                        isDragged={dragState?.source === 'more' && dragState.id === id}
+                        onArmedChange={handleCardArmedChange}
+                        onPress={() => router.push(getNavHref(id) as Href)}
+                      />
+                    </View>
                   ))}
                   {row.length < columns
                     ? ([0, 1] as const)
