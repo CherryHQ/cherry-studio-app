@@ -845,6 +845,7 @@
   "cloud.rollingDays_other": "{{days}} günlük hareketli pencere",
   "cloud.rollingHours_one": "Kayan {{hours}} saatlik pencere",
   "cloud.rollingHours_other": "Kayan {{hours}} saatlik pencere",
+  "cloud.sessionExpired": "Oturum süresi doldu",
   "cloud.subscription": "Abonelik",
   "cloud.subscriptionMonth": "Abonelik ayı kotası",
   "cloud.title": "Abonelik ve kota",

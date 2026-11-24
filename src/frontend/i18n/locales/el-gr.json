@@ -845,6 +845,7 @@
   "cloud.rollingDays_other": "Κυλιόμενο παράθυρο {{days}} ημερών",
   "cloud.rollingHours_one": "Κυλιόμενο διάστημα {{hours}} ώρας",
   "cloud.rollingHours_other": "Κυλιόμενο διάστημα {{hours}} ωρών",
+  "cloud.sessionExpired": "Η σύνδεση έληξε",
   "cloud.subscription": "Συνδρομή",
   "cloud.subscriptionMonth": "Όριο μήνα συνδρομής",
   "cloud.title": "Συνδρομή και όριο χρήσης",

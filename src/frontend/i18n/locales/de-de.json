@@ -845,6 +845,7 @@
   "cloud.rollingDays_other": "Rollierendes {{days}}-Tage-Fenster",
   "cloud.rollingHours_one": "Rollierender Zeitraum: {{hours}} Stunde",
   "cloud.rollingHours_other": "Rollierender Zeitraum: {{hours}} Stunden",
+  "cloud.sessionExpired": "Anmeldung abgelaufen",
   "cloud.subscription": "Abonnement",
   "cloud.subscriptionMonth": "Kontingent pro Abonnementmonat",
   "cloud.title": "Abonnement und Kontingent",

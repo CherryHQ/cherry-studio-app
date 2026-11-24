@@ -834,6 +834,7 @@
   "cloud.remainingPercentShort": "残り{{percent}}",
   "cloud.rollingDays_other": "直近 {{days}} 日間",
   "cloud.rollingHours_other": "直近 {{hours}} 時間",
+  "cloud.sessionExpired": "ログインの有効期限が切れました",
   "cloud.subscription": "サブスクリプション",
   "cloud.subscriptionMonth": "契約月の利用枠",
   "cloud.title": "サブスクリプションと利用枠",
