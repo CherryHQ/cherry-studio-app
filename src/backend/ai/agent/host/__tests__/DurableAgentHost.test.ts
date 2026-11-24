@@ -4546,6 +4546,76 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('reopens after foreground continued processing expiry so cancel and completion work cleanly', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.recovered' });
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      await state.host.cancelTurn({
+        sessionId: state.sessionId,
+        turnId: running[0]!.identity.turnId,
+      });
+      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
+      for (const turn of running)
+        state.emit({ ...turn, status: 'cancelled', answerBoundary: null });
+      await settle();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('cancelled');
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
+  test('publishes runtime.failed when foreground lease expiration cannot reopen the runtime', async () => {
+    const protection = executionProtection();
+    const state = fixture({ executionLease: protection.acquire, isForeground: () => true });
+    const events: AgentEvent[] = [];
+    await state.reserve('completed');
+    await state.host.initialize();
+    const observation = await state.host.observeSession(state.sessionId, (event) =>
+      events.push(event),
+    );
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await askTwoModels(state);
+      await settle();
+      await protection.acquire.mock.calls[0]![0](
+        new KeepAliveInterruptionError('continued-processing-expired'),
+      );
+      await settle();
+      expect(events).toContainEqual({ type: 'runtime.failed' });
+    } finally {
+      observation.unsubscribe();
+      await state.host.close();
+    }
+  });
+
   test('losing session execution time suspends parallel replies without cancelling them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
