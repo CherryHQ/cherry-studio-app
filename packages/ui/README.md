@@ -696,6 +696,16 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
+`useFieldText(value, onChangeText)` is exported from `@cherrystudio/ui/components` for
+feature-specific native text editors that need their own presentation. Pass its returned
+`[text, changeText]` to the native input's `value` and `onChangeText`. Call the hook inside the
+component rendered within a sheet's portal, rather than in the component supplying the sheet's
+children. It keeps native edits local while the caller's value echoes through the portal, avoiding
+stale text writes that disrupt Android composition and move the caret on deletion. The caller still
+owns the draft and persistence; update its value synchronously, outside a transition. Changed
+external values and rewritten or rejected edits still reconcile to the caller's value. `Input`
+and `SearchField` already use this hook internally.
+
 `InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
 `children` are presentation-only; the component owns the tap and exposes the caller's
 `accessibilityLabel`, which names the action rather than repeating `text`. Callers supply `text`; the panel displays only that content.

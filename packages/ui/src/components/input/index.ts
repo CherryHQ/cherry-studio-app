@@ -6,3 +6,4 @@ export type {
   InputProps,
   InputReturnKeyType,
 } from './input.types';
+export { useFieldText } from './use-field-text';
