@@ -1,12 +1,32 @@
 import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
+import {
+  ContentState,
+  type MenuItem,
+  ScrollInteractionBoundary,
+  SelectionIndicator,
+  Sortable,
+  useAlert,
+  useSortableScrollController,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  type AccessibilityProps,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ViewProps,
+} from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
@@ -28,6 +48,9 @@ import {
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
+import { useReorder } from '@/frontend/data';
+import { dataApiCollectionFilters } from '@/frontend/data/utils/optimisticQueryUpdate';
+import { reorderLocally } from '@/frontend/data/utils/reorder';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 import type { Agent } from '@/shared/data/types/agent';
@@ -37,9 +60,14 @@ const agentSelectionScope = 'agents';
 const AGENT_ROW_ESTIMATED_HEIGHT = 65;
 
 type AgentListExtraData = {
+  canReorder: boolean;
+  groupSize: number;
+  isDeletionPending: boolean;
   isEditing: boolean;
   lastId: string | undefined;
+  onDelete: (agent: Agent) => void;
   onEdit: (agentId: string) => void;
+  onMoveToTop: (index: number) => void;
   onOpenChat: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
@@ -49,6 +77,9 @@ type AgentListExtraData = {
 function AgentListScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { alert } = useAlert();
+  const { toast } = useToast();
+  const scroll = useSortableScrollController<LegendListRef>();
   const { agents, error, isLoading, refetch } = useAgentsApi();
   const { deleteAgents } = useAgentMutations();
   const { enterEditing, exitEditing, toggleId } = useSelectionActions();
@@ -72,6 +103,31 @@ function AgentListScreenBody() {
     fields: (agent: Agent) => [agent.name, agent.modelName],
     items: visibleAgents,
   });
+  const { reorder: reorderAgents } = useReorder<Agent>({
+    getId: (agent) => agent.id,
+    onError: () => toast.show({ label: t('common.reorderFailed'), variant: 'danger' }),
+    queryFilters: [dataApiCollectionFilters('/agents')],
+    resource: '/agents',
+  });
+  const canReorderAgents =
+    !isEditing && !isFiltering && !isDeletionPending && listedAgents.length > 1;
+  const agentIds = useMemo(() => listedAgents.map((agent) => agent.id), [listedAgents]);
+
+  const handleReorderAgent = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (!canReorderAgents) return;
+      void reorderAgents(listedAgents, reorderLocally(listedAgents, fromIndex, toIndex));
+    },
+    [canReorderAgents, listedAgents, reorderAgents],
+  );
+
+  const handleMoveToTop = useCallback(
+    (fromIndex: number) => {
+      handleReorderAgent(fromIndex, 0);
+    },
+    [handleReorderAgent],
+  );
+
   const selectionSource = useMemo<SelectionSource>(
     () => ({
       copy: {
@@ -99,6 +155,26 @@ function AgentListScreenBody() {
       toggleId(agentId);
     },
     [enterEditing, isDeletionPending, isEditing, toggleId],
+  );
+
+  const handleDeleteAgent = useCallback(
+    (agent: Agent) => {
+      if (isEditing || isDeletionPending || !agentPolicy(agent).canDelete) {
+        return;
+      }
+      alert.confirm({
+        confirmLabel: t('common.delete'),
+        description: t('agent.delete.message', { name: agent.name }),
+        onConfirm: () => {
+          void deleteAgents([agent.id]).catch(() => {
+            toast.show({ label: t('agent.toast.deleteFailed'), variant: 'danger' });
+          });
+        },
+        role: 'destructive',
+        title: t('agent.delete.title'),
+      });
+    },
+    [alert, deleteAgents, isDeletionPending, isEditing, t, toast],
   );
 
   const openCreateAgent = useCallback(() => {
@@ -137,16 +213,25 @@ function AgentListScreenBody() {
   );
   const listExtraData = useMemo<AgentListExtraData>(
     () => ({
+      canReorder: canReorderAgents,
+      groupSize: listedAgents.length,
+      isDeletionPending,
       isEditing,
       lastId: listedAgents.at(-1)?.id,
+      onDelete: handleDeleteAgent,
       onEdit: openAgentEditor,
+      onMoveToTop: handleMoveToTop,
       onOpenChat: openAgentChat,
       onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
     }),
     [
+      canReorderAgents,
+      handleDeleteAgent,
+      handleMoveToTop,
       handleStartSelection,
+      isDeletionPending,
       isEditing,
       listedAgents,
       openAgentChat,
@@ -154,6 +239,16 @@ function AgentListScreenBody() {
       selectedIds,
       toggleId,
     ],
+  );
+  const renderAgentItem = useCallback(
+    ({ extraData, index, item }: LegendListRenderItemProps<Agent>) => (
+      <AgentSortableListItem
+        extraData={extraData as AgentListExtraData}
+        index={index}
+        item={item}
+      />
+    ),
+    [],
   );
   const listEmpty = isFiltering ? (
     <View className="px-8 py-16">
@@ -201,21 +296,43 @@ function AgentListScreenBody() {
             <InlineSearch onChangeText={setQuery} value={query} />
           </View>
         )}
-        <LegendList
-          alwaysBounceVertical={false}
-          contentContainerStyle={listContentStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          data={listedAgents}
-          estimatedItemSize={AGENT_ROW_ESTIMATED_HEIGHT}
-          extraData={listExtraData}
-          keyExtractor={agentKeyExtractor}
-          ListEmptyComponent={listEmpty}
-          maintainVisibleContentPosition={false}
-          recycleItems
-          renderItem={renderAgentItem}
-          showsVerticalScrollIndicator={false}
-          style={styles.list}
-        />
+        <Sortable.Root scrollController={scroll.controller} testID="agent-list-sortable">
+          {({ isDragging }) => (
+            <ScrollInteractionBoundary>
+              {(scrollHandlers) => (
+                <>
+                  {canReorderAgents ? (
+                    <Sortable.Group
+                      estimatedItemHeight={AGENT_ROW_ESTIMATED_HEIGHT}
+                      groupId="agents"
+                      itemIds={agentIds}
+                      onReorder={({ fromIndex, toIndex }) => handleReorderAgent(fromIndex, toIndex)}
+                    />
+                  ) : null}
+                  <LegendList
+                    {...scrollHandlers}
+                    alwaysBounceVertical={false}
+                    contentContainerStyle={listContentStyle}
+                    contentInsetAdjustmentBehavior="automatic"
+                    data={listedAgents}
+                    estimatedItemSize={AGENT_ROW_ESTIMATED_HEIGHT}
+                    extraData={listExtraData}
+                    keyExtractor={agentKeyExtractor}
+                    ListEmptyComponent={listEmpty}
+                    maintainVisibleContentPosition={false}
+                    onScroll={scroll.onScroll}
+                    recycleItems
+                    ref={scroll.setRef}
+                    renderItem={renderAgentItem}
+                    scrollEnabled={!isDragging}
+                    showsVerticalScrollIndicator={false}
+                    style={styles.list}
+                  />
+                </>
+              )}
+            </ScrollInteractionBoundary>
+          )}
+        </Sortable.Root>
         <SelectionControls scope={agentSelectionScope} />
       </View>
     </>
@@ -234,29 +351,159 @@ function agentKeyExtractor(agent: Agent) {
   return agent.id;
 }
 
-function renderAgentItem({ extraData, index, item }: LegendListRenderItemProps<Agent>) {
-  const { isEditing, lastId, onEdit, onOpenChat, onStartSelection, onToggle, selectedIds } =
-    extraData as AgentListExtraData;
-  const isFirst = index === 0;
+const AgentSortableListItem = withResourcePolicy(
+  withPolicy(
+    function AgentSortableListItemView({
+      extraData,
+      index,
+      isSelectable = true,
+      item,
+    }: {
+      extraData: AgentListExtraData;
+      index: number;
+      isSelectable?: boolean;
+      item: Agent;
+    }) {
+      const { t } = useTranslation();
+      const {
+        canReorder,
+        groupSize,
+        isDeletionPending,
+        isEditing,
+        lastId,
+        onDelete,
+        onEdit,
+        onMoveToTop,
+        onOpenChat,
+        onStartSelection,
+        onToggle,
+        selectedIds,
+      } = extraData;
+      const isFirst = index === 0;
+      const isSelected = selectedIds.has(item.id);
+      const canMove = canReorder && groupSize > 1;
+      const menuItems: MenuItem[] =
+        isEditing || isDeletionPending
+          ? []
+          : [
+              {
+                id: 'edit',
+                label: t('agent.edit.title'),
+                onPress: () => onEdit(item.id),
+              },
+              ...(canMove && index > 0
+                ? [
+                    {
+                      id: 'move-to-top',
+                      label: t('common.moveToTop'),
+                      onPress: () => onMoveToTop(index),
+                    },
+                  ]
+                : []),
+              ...(isSelectable
+                ? [
+                    {
+                      id: 'select',
+                      label: t('agent.selection.start'),
+                      onPress: () => onStartSelection(item.id),
+                    },
+                    {
+                      destructive: true,
+                      id: 'delete',
+                      label: t('common.delete'),
+                      onPress: () => onDelete(item),
+                    },
+                  ]
+                : []),
+            ];
 
-  // Each row draws its slice of one grouped card, so the list stays virtualized.
+      return (
+        <View className="mx-auto w-full max-w-[720px]">
+          <Sortable.Item
+            accessibilityLabels={{
+              moveDown: t('common.moveDown', { name: item.name }),
+              moveToTop: t('common.moveToTop'),
+              moveUp: t('common.moveUp', { name: item.name }),
+            }}
+            disabled={isEditing || isDeletionPending}
+            estimatedHeight={AGENT_ROW_ESTIMATED_HEIGHT}
+            groupId="agents"
+            groupSize={groupSize}
+            id={item.id}
+            index={index}
+            menuItems={menuItems}
+            movable={canMove}
+            renderOverlay={() => (
+              <AgentListRow
+                agent={item}
+                isEditing={false}
+                isSelected={false}
+                onEdit={onEdit}
+                onOpenChat={onOpenChat}
+                onToggle={onToggle}
+              />
+            )}
+          >
+            <AgentSortableSlice
+              agent={item}
+              isEditing={isEditing}
+              isFirst={isFirst}
+              isLast={item.id === lastId}
+              isSelected={isSelected}
+              onEdit={onEdit}
+              onOpenChat={onOpenChat}
+              onToggle={onToggle}
+            />
+          </Sortable.Item>
+        </View>
+      );
+    },
+    (policy) => ({ isSelectable: policy.canDelete }),
+  ),
+  ({ item }) => agentPolicy(item),
+);
+
+function AgentSortableSlice({
+  accessibilityActions,
+  agent,
+  isEditing,
+  isFirst,
+  isLast,
+  isSelected,
+  onAccessibilityAction,
+  onEdit,
+  onOpenChat,
+  onToggle,
+}: {
+  accessibilityActions?: AccessibilityProps['accessibilityActions'];
+  agent: Agent;
+  isEditing: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  isSelected: boolean;
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
+  onEdit: (agentId: string) => void;
+  onOpenChat: (agentId: string) => void;
+  onToggle: (agentId: string) => void;
+}) {
   return (
     <View
       className={cn(
         'overflow-hidden bg-card',
         isFirst && 'rounded-t-2xl',
-        item.id === lastId && 'rounded-b-2xl',
+        isLast && 'rounded-b-2xl',
       )}
       style={styles.cardSlice}
     >
       {isFirst ? null : <View className="mx-4 h-px bg-border" />}
       <AgentListRow
-        agent={item}
+        accessibilityActions={accessibilityActions}
+        agent={agent}
         isEditing={isEditing}
-        isSelected={selectedIds.has(item.id)}
+        isSelected={isSelected}
+        onAccessibilityAction={onAccessibilityAction}
         onEdit={onEdit}
         onOpenChat={onOpenChat}
-        onStartSelection={onStartSelection}
         onToggle={onToggle}
       />
     </View>
@@ -264,50 +511,41 @@ function renderAgentItem({ extraData, index, item }: LegendListRenderItemProps<A
 }
 
 type AgentListRowProps = {
+  accessibilityActions?: AccessibilityProps['accessibilityActions'];
   agent: Agent;
   isEditing: boolean;
   isSelected: boolean;
   /** Selection deletes, so only a deletable Agent joins it. */
   isSelectable?: boolean;
+  onAccessibilityAction?: ViewProps['onAccessibilityAction'];
   onEdit: (agentId: string) => void;
   onOpenChat: (agentId: string) => void;
-  onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
 };
 
 const AgentListRowView = memo(function AgentListRow({
+  accessibilityActions,
   agent,
   isEditing,
   isSelectable = true,
   isSelected,
+  onAccessibilityAction,
   onEdit,
   onOpenChat,
-  onStartSelection,
   onToggle,
 }: AgentListRowProps) {
   const { t } = useTranslation();
   const accessibilityLabel = useManagedLabel(agent.name);
 
-  // Keep the press target and long-press handler mounted when selection starts,
-  // so releasing that same touch cannot also toggle the row or open the editor.
   return (
     <Pressable
-      accessibilityActions={
-        isEditing || !isSelectable
-          ? undefined
-          : [{ name: 'longpress', label: t('agent.selection.start') }]
-      }
+      accessibilityActions={isEditing ? undefined : accessibilityActions}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={isEditing ? 'checkbox' : 'button'}
       accessibilityState={isEditing ? { checked: isSelected, disabled: !isSelectable } : undefined}
       className="w-full active:bg-foreground/5"
       disabled={isEditing && !isSelectable}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'longpress') {
-          onStartSelection(agent.id);
-        }
-      }}
-      onLongPress={isSelectable ? () => onStartSelection(agent.id) : undefined}
+      onAccessibilityAction={isEditing ? undefined : onAccessibilityAction}
       onPress={() => {
         if (isEditing) {
           onToggle(agent.id);
@@ -333,19 +571,21 @@ const AgentListRowView = memo(function AgentListRow({
         {isEditing ? (
           <SelectionIndicator locked={!isSelectable} selected={isSelected} />
         ) : (
-          <Pressable
-            accessibilityLabel={t('common.edit')}
-            accessibilityRole="button"
-            className="h-9 w-9 items-center justify-center rounded-full active:bg-foreground/10"
-            hitSlop={8}
-            onPress={(event) => {
-              event.stopPropagation();
-              onEdit(agent.id);
-            }}
-            testID={`agent-edit-${agent.id}`}
-          >
-            <PencilIcon className="size-4 text-muted-foreground" />
-          </Pressable>
+          <Sortable.Exclusion>
+            <Pressable
+              accessibilityLabel={t('common.edit')}
+              accessibilityRole="button"
+              className="h-9 w-9 items-center justify-center rounded-full active:bg-foreground/10"
+              hitSlop={8}
+              onPress={(event) => {
+                event.stopPropagation();
+                onEdit(agent.id);
+              }}
+              testID={`agent-edit-${agent.id}`}
+            >
+              <PencilIcon className="size-4 text-muted-foreground" />
+            </Pressable>
+          </Sortable.Exclusion>
         )}
       </View>
     </Pressable>
@@ -359,6 +599,6 @@ const AgentListRow = withResourcePolicy(
 );
 
 const styles = StyleSheet.create({
-  cardSlice: { alignSelf: 'center', borderCurve: 'continuous', maxWidth: 720, width: '100%' },
+  cardSlice: { borderCurve: 'continuous' },
   list: { flex: 1 },
 });

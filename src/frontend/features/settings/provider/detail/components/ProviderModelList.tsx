@@ -2,11 +2,15 @@ import {
   ContentState,
   OptionPickerBottomSheet,
   type OptionPickerOption,
+  useToast,
 } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useReorder } from '@/frontend/data';
+import { dataApiCollectionFilters } from '@/frontend/data/utils/optimisticQueryUpdate';
+import { applySublistOrderToList } from '@/frontend/data/utils/reorder';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -24,9 +28,11 @@ type ProviderModelListProps = {
   isEndpointSelectionDisabled?: boolean;
   isFiltered?: boolean;
   isLoading: boolean;
+  isSearchActive?: boolean;
   supportedModelIds?: ReadonlySet<string>;
   management?: ReturnType<typeof useProviderModelManagement>;
   models: Model[];
+  visibleModels?: Model[];
   onAddModelManually?: () => void;
   onPullModels?: () => void;
   provider: Provider | undefined;
@@ -37,17 +43,39 @@ export function ProviderModelList({
   isEndpointSelectionDisabled = false,
   isFiltered = false,
   isLoading,
+  isSearchActive = false,
   management,
   supportedModelIds,
   models,
+  visibleModels = models,
   onAddModelManually,
   onPullModels,
   provider,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [selectedModel, setSelectedModel] = useState<Model>();
   const { updateEndpoint, updatingModelId } = useProviderModelEndpointUpdate(provider?.id ?? '');
-  const hasNoVisibleModels = !isLoading && models.length === 0;
+  const { reorder } = useReorder<Model>({
+    getId: (model) => model.id,
+    onError: () => toast.show({ label: t('common.reorderFailed'), variant: 'danger' }),
+    queryFilters: [dataApiCollectionFilters('/models')],
+    resource: '/models',
+  });
+  const reorderVisibleModels = useCallback(
+    (ordered: readonly Model[]) => {
+      const next = applySublistOrderToList(
+        models,
+        ordered.map((model) => model.id),
+        (model) => model.id,
+      );
+      return reorder(models, next);
+    },
+    [models, reorder],
+  );
+  const canReorder =
+    Boolean(management) && !isSearchActive && !management?.isSelecting && !management?.isDeleting;
+  const hasNoVisibleModels = !isLoading && visibleModels.length === 0;
   const closeEndpointPicker = useCallback(() => setSelectedModel(undefined), []);
   const openEndpointPicker = useCallback((model: Model) => setSelectedModel(model), []);
   const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(
@@ -66,8 +94,10 @@ export function ProviderModelList({
   return (
     <>
       <ProviderModelListContent
+        canReorder={canReorder}
         groupByPurpose={groupByPurpose}
         management={management}
+        onReorderModels={reorderVisibleModels}
         supportedModelIds={supportedModelIds}
         isEndpointSelectionDisabled={isEndpointSelectionDisabled}
         ListEmptyComponent={
@@ -105,7 +135,7 @@ export function ProviderModelList({
             </ProviderModelStateCard>
           )
         }
-        models={models}
+        models={visibleModels}
         onEndpointPress={openEndpointPicker}
         provider={provider}
         updatingModelId={updatingModelId}

@@ -104,7 +104,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
-| Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
+| Inline within-group drag reordering & long-press menu | CherryUI `Sortable` (`Sortable.Root`, `Sortable.Group`, `Sortable.Item`, `Sortable.Chrome`, `Sortable.Exclusion`); paired with `useReorder` (`src/frontend/data/hooks/useReorder.ts`) and `computeMinimalMoves` (`src/frontend/data/utils/reorder.ts`) for persistent collections |
 | Window size classes and the docked-sidebar rule | `useWindowClass` and `useCanDockSidebar` in `src/frontend/appShell/layout` |
 | Where a foldable display divides a layout | `FoldRegionProvider`, `WindowFoldRegion`, and their hooks in `src/frontend/appShell/layout`, over `react-native-reserved-regions` |
 | Header actions in the iOS native toolbar | `HeaderToolbarAction.nativeIcon` (a template image of the existing glyph) and `renderHeaderToolbarItem` in `src/frontend/appShell/header` |

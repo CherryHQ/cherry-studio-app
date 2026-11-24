@@ -2,12 +2,14 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { createModelHandlers } from '@/backend/data/api/handlers/models';
-import { agentTable } from '@/backend/data/db/schemas/agent';
+import { agentTable } from '@/backend/data/db/schemas';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import {
   installProviderRegistryTestSnapshot,
   providerRegistryTestSnapshot,
 } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { ErrorCode } from '@/shared/data/api/errors';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { PreferenceService } from '../../PreferenceService';
@@ -280,4 +282,78 @@ describe('ModelService legacy MiMo identities', () => {
       });
     },
   );
+});
+
+describe('ModelService reordering (#1757)', () => {
+  let sqlite: DatabaseSync;
+  let db: ReturnType<typeof createTestDb>;
+  let models: ModelService;
+
+  beforeEach(async () => {
+    installProviderRegistryTestSnapshot();
+    sqlite = new DatabaseSync(':memory:');
+    db = createTestDb(sqlite);
+    await installTestHost({
+      DbService: db.dbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+    });
+    const providers = new ProviderService();
+    await providers.create({ name: 'OpenAI Copy', providerId: 'p1', presetProviderId: 'openai' });
+    await providers.create({ name: 'Other Copy', providerId: 'p2', presetProviderId: 'openai' });
+    models = new ModelService();
+  });
+
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+    installProviderRegistryTestSnapshot();
+  });
+
+  it('reorders within a provider, supports slash IDs and batch moves, and preserves order across reconcile refreshes', async () => {
+    await models.createDtos([
+      { modelId: 'gpt-4o', name: 'GPT-4o', providerId: 'p1' },
+      { modelId: 'org/model-b', name: 'Org Model B', providerId: 'p1' },
+      { modelId: 'gpt-4.1', name: 'GPT-4.1', providerId: 'p1' },
+      { modelId: 'gpt-4o', name: 'Other GPT-4o', providerId: 'p2' },
+    ]);
+
+    const idA = createUniqueModelId('p1', 'gpt-4o');
+    const idSlash = createUniqueModelId('p1', 'org/model-b');
+    const idC = createUniqueModelId('p1', 'gpt-4.1');
+    const idOther = createUniqueModelId('p2', 'gpt-4o');
+
+    // Single move with slash-containing uniqueModelId.
+    await models.reorder(idSlash, { position: 'first' });
+    const afterFirstMove = await models.list({ providerId: 'p1' });
+    expect(afterFirstMove.map((item) => item.id)).toEqual([idSlash, idA, idC]);
+
+    // Batch move: [idSlash, idA, idC] -> [idC, idA, idSlash]
+    await models.reorderBatch([
+      { id: idC, anchor: { position: 'first' } },
+      { id: idSlash, anchor: { after: idA } },
+    ]);
+    const reordered = await models.list({ providerId: 'p1' });
+    expect(reordered.map((item) => item.id)).toEqual([idC, idA, idSlash]);
+
+    // Simulate model-list refresh (#1757): remove idA, keep idC & idSlash, add a new model.
+    // Reconcile must retain [idC, idSlash] order and append the newly discovered model.
+    await models.reconcileProviderModels('p1', {
+      toAdd: [{ modelId: 'o3-mini', name: 'o3-mini', providerId: 'p1' }],
+      toRemove: [idA],
+    });
+    const refreshed = await models.list({ providerId: 'p1' });
+    expect(refreshed.map((item) => item.id)).toEqual([
+      idC,
+      idSlash,
+      createUniqueModelId('p1', 'o3-mini'),
+    ]);
+
+    // Reject cross-provider anchor and Cherry Cloud ids.
+    await expect(models.reorder(idC, { after: idOther })).rejects.toMatchObject({
+      code: ErrorCode.NOT_FOUND,
+    });
+    await expect(
+      models.reorder(createUniqueModelId(CLOUD_PROVIDER_ID, 'gpt-4o'), { position: 'first' }),
+    ).rejects.toMatchObject({ code: ErrorCode.INVALID_OPERATION });
+  });
 });

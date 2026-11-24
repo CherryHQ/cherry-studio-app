@@ -25,12 +25,12 @@ its whole frame without pagination space; `compact` keeps the bounded media geom
 Collections use 290-point cards when available, without rotation or overlapping stack layers.
 
 
-`ReorderList` is a controlled ordering list for small collections. It renders the shared Section
-rows with labeled up/down buttons, disables moves at the first and last positions, and returns
-a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
-optional descriptions, translated action labels, and `onReorder`. The component owns neither
-scrolling nor persistence, so it can sit in a screen or a bottom sheet. No drag gesture or
-animation is required to reorder items.
+`Sortable` provides unified long-press direct-manipulation reordering and contextual actions without
+separate sort buttons or explicit drag handles. Holding a movable row lifts it into a sharp floating
+card over a quiet recess while dimming siblings without blur; sliding enters within-group direct
+drag with boundary rubber-banding and swap haptics, and releasing in place opens `MenuContent`.
+Callers own group slices, translated labels, persistence, and excluded child press targets
+(`Sortable.Exclusion`), and accessibility custom actions expose move operations without touch timing.
 
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:

@@ -15,6 +15,15 @@ import {
   UniqueModelIdSchema,
 } from '@/shared/data/types/model';
 
+import {
+  OrderBatchRequestSchema,
+  type OrderBatchRequest,
+  type OrderRequest,
+  OrderRequestSchema,
+} from './endpointHelpers';
+
+export { OrderBatchRequestSchema, OrderRequestSchema };
+
 export const ListModelsQuerySchema = z.object({
   capability: z.enum(objectValues(MODEL_CAPABILITY)).optional(),
   enabled: z.boolean().optional(),
@@ -138,6 +147,19 @@ export type ModelSchemas = {
       body: UpdateModelDto;
       params: { uniqueModelId: UniqueModelId };
       response: Model;
+    };
+  };
+  '/model-orders/:uniqueModelId*': {
+    PATCH: {
+      body: OrderRequest;
+      params: { uniqueModelId: UniqueModelId };
+      response: undefined;
+    };
+  };
+  '/models/order:batch': {
+    PATCH: {
+      body: OrderBatchRequest;
+      response: undefined;
     };
   };
   '/providers/:providerId/models:resolve': {

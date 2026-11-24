@@ -140,6 +140,35 @@ describe('Section', () => {
     expect(received.at(-1)).toEqual(expect.any(Function));
   });
 
+  test.each([
+    { leading: <View />, expectedInset: 'ml-11 mr-3', unexpectedInset: 'mx-3' },
+    { leading: undefined, expectedInset: 'mx-3', unexpectedInset: 'ml-11' },
+  ])(
+    'uses $expectedInset separators for a marked wrapper',
+    ({ leading, expectedInset, unexpectedInset }) => {
+      const Wrapper = Object.assign(
+        function Wrapper({ children }: { children: React.ReactNode }) {
+          return <>{children}</>;
+        },
+        { sectionItem: true as const },
+      );
+      const tree = render(
+        <Section>
+          <Wrapper>
+            <Section.Item label="Wrapped" leading={leading} />
+          </Wrapper>
+          <Section.Item label="Plain" />
+        </Section>,
+      );
+      const separator = tree.root.find(
+        (node) => node.type === View && node.props.testID === 'section-separator',
+      );
+
+      expect(separator.props.className).toContain(expectedInset);
+      expect(separator.props.className).not.toContain(unexpectedInset);
+    },
+  );
+
   test('renders plain rows without a grouped surface or separators', () => {
     const tree = render(
       <Section footer="Choose one option." variant="plain">
