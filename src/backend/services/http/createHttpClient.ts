@@ -354,7 +354,11 @@ const dispatchRejectedResponse = async (error: unknown): Promise<never> => {
     typeof error === 'object' && error !== null && 'config' in error
       ? (error.config as AxiosRequestConfig | undefined)
       : undefined;
-  throw await dispatchError(error, getRequestContext(config));
+  const context = getRequestContext(config);
+  if (!context) {
+    throw error;
+  }
+  throw await dispatchError(error, context);
 };
 
 function createAxiosTransport(adapter?: AxiosAdapter): AxiosInstance {
@@ -440,15 +444,10 @@ function createHttpClientWithTransport(
           ...(truncated === undefined ? {} : { truncated }),
         });
       } catch (error) {
-        throw mapAxiosError(
-          error,
-          routedRequest.errorDecoder ?? route.errorDecoder,
-          routedRequest.logPath,
-          {
-            serviceName: routedRequest.serviceName ?? route.serviceName,
-            operation: routedRequest.operation ?? route.operation,
-          },
-        );
+        if (isHttpError(error)) {
+          throw error;
+        }
+        throw await dispatchError(error, { request: routedRequest, route });
       }
     },
   });

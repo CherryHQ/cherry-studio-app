@@ -5,6 +5,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  ErrorHandling,
   Injectable,
   Phase,
   ServicePhase,
@@ -107,6 +108,7 @@ type BackgroundActivityEnvironmentPort = {
  */
 @Injectable('BackgroundActivityManager')
 @ServicePhase(Phase.Gate)
+@ErrorHandling('graceful')
 @DependsOn(['KeepAliveCoordinator', 'BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
 export class BackgroundActivityManager extends BaseService {

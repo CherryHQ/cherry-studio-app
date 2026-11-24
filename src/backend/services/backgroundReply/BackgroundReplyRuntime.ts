@@ -6,6 +6,7 @@ import {
   AppStatePolicy,
   BaseService,
   DependsOn,
+  ErrorHandling,
   Injectable,
   Phase,
   ServicePhase,
@@ -99,6 +100,7 @@ type EnvironmentPort = {
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.Gate)
+@ErrorHandling('graceful')
 @DependsOn(['BackgroundActivityManager', 'BackgroundActivityEnvironment', 'KeepAliveCoordinator'])
 @AppStatePolicy('background-presentation')
 export class BackgroundReplyRuntime extends BaseService implements BackgroundReplyLifecycle {

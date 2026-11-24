@@ -42,7 +42,7 @@ export type ProvidersModuleDependencies = {
   };
   hasAvailableModels(provider: Provider): Promise<boolean>;
   registryUpdates: {
-    ensureReady(): Promise<void>;
+    ensureReady(options?: { force?: boolean }): Promise<void>;
     apply(): Promise<ProviderRegistryUpdateResult>;
     subscribe(listener: (event: ProviderRegistryUpdateEvent) => void): () => void;
   };

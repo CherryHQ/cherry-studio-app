@@ -452,3 +452,34 @@ test('applies the same release failure cooldown to OPPO GitCode checks', async (
   expect(mockCheckApk).toHaveBeenCalledTimes(1);
   await updates.dispose();
 });
+
+test('allows manual forced checks to bypass failure cooldown and isolates cooldown per source', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  let region: NetworkRegion = 'CN';
+  mockGetRegion.mockImplementation(async () => region);
+  const updates = create();
+  const error = new HttpError('Rate limited', { kind: 'http', status: 429 });
+  mockCheckApk.mockRejectedValueOnce(error);
+
+  await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledWith('1.9.0', 'gitcode', undefined);
+
+  // Passive retry for the same source stays in cooldown, while switching region tries github.
+  await expect(updates.check()).rejects.toBe(error);
+  expect(mockCheckApk).toHaveBeenCalledTimes(1);
+  region = 'GLOBAL';
+  await expect(updates.check()).resolves.toMatchObject({ status: 'available' });
+  expect(mockCheckApk).toHaveBeenCalledTimes(2);
+  expect(mockCheckApk).toHaveBeenLastCalledWith('1.9.0', 'github', undefined);
+
+  // Switching back to CN recovers immediately when triggered manually with { force: true }.
+  region = 'CN';
+  await expect(updates.check()).rejects.toBe(error);
+  await expect(updates.check(undefined, { force: true })).resolves.toMatchObject({
+    status: 'available',
+  });
+  expect(mockCheckApk).toHaveBeenCalledTimes(3);
+  clock.mockRestore();
+  await updates.dispose();
+});

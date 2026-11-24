@@ -735,3 +735,38 @@ it('drops unsafe caller tags before logging a transport error', async () => {
     expect.objectContaining({ serviceName: undefined, operation: undefined }),
   );
 });
+
+it('preserves non-Axios error diagnostics alongside safe caller tags', async () => {
+  const unexpected = new TypeError('Malformed adapter output');
+  const adapter = mockAdapter(async () => {
+    throw unexpected;
+  });
+  const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+  const client = createClient({
+    baseUrl: 'https://example.com',
+    serviceName: 'AppUpdate',
+    operation: 'apk.release',
+  });
+
+  await expect(client.request({ method: 'GET', path: '/' })).rejects.toMatchObject({
+    kind: 'internal',
+    code: 'HTTP_INTERNAL_ERROR',
+  });
+  expect(transportLogger.error).toHaveBeenCalledWith(
+    'HTTP transport failed unexpectedly.',
+    unexpected,
+    { serviceName: 'AppUpdate', operation: 'apk.release' },
+  );
+
+  await expect(
+    client.request({ method: 'GET', path: '/secret-id', logPath: '/redacted' }),
+  ).rejects.toMatchObject({
+    kind: 'internal',
+    code: 'HTTP_INTERNAL_ERROR',
+  });
+  expect(transportLogger.error).toHaveBeenLastCalledWith('HTTP transport failed unexpectedly.', {
+    serviceName: 'AppUpdate',
+    operation: 'apk.release',
+    path: '/redacted',
+  });
+});

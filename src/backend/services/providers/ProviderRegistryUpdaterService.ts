@@ -122,10 +122,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
-  public async ensureReady(): Promise<void> {
+  public async ensureReady(options?: { force?: boolean }): Promise<void> {
     await this.restoreSnapshot();
     if (!providerRegistryService.isReady()) {
-      await this.applyUpdate();
+      await this.applyUpdate(options);
     }
     if (!providerRegistryService.isReady()) {
       throw new Error('No compatible model registry is available');
@@ -140,7 +140,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   /** Download and activate a newer compatible registry snapshot when the remote lane has one. */
-  public applyUpdate(): Promise<ProviderRegistryUpdateResult> {
+  public applyUpdate(options?: { force?: boolean }): Promise<ProviderRegistryUpdateResult> {
+    if (options?.force) {
+      this.failedSources.clear();
+    }
     if (this.applyInFlight) {
       return this.applyInFlight;
     }

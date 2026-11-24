@@ -256,6 +256,8 @@ test('a failed manual check releases its guard so a later attempt can succeed', 
   await act(async () => actions.check());
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
   expect(mockUpdate.check).toHaveBeenCalledTimes(2);
+  expect(mockUpdate.check).toHaveBeenNthCalledWith(1, expect.any(AbortSignal), { force: true });
+  expect(mockUpdate.check).toHaveBeenNthCalledWith(2, expect.any(AbortSignal), { force: true });
 });
 
 test('another trigger preserves the open prompt until it closes', async () => {

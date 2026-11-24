@@ -400,3 +400,22 @@ it('cools down a source whose payload download fails without re-reading its mani
   ).toHaveLength(2);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
+
+it('lets explicit forced retry recover immediately after an offline cold-start cooldown', async () => {
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const failure = new HttpError('Offline', { kind: 'network' });
+  mockRequest.mockRejectedValue(failure);
+
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+
+  await expect(updater.ensureReady()).rejects.toBe(failure);
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+
+  serve(snapshot(1));
+  await updater.ensureReady({ force: true });
+  expect(providerRegistryService.isReady()).toBe(true);
+  expect(mockRequest).toHaveBeenCalledTimes(5);
+  clock.mockRestore();
+});

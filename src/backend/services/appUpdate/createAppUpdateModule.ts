@@ -46,7 +46,7 @@ export function createAppUpdateModule(dependencies: {
     }
   }
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
-  let failedCheck: { error: unknown; retryAt: number } | undefined;
+  const failedChecks = new Map<ApkReleaseSource, { error: unknown; retryAt: number }>();
 
   function requireApk() {
     if (lifetime.signal.aborted || channel !== 'apk')
@@ -61,12 +61,14 @@ export function createAppUpdateModule(dependencies: {
     currentVersion: string,
     source: ApkReleaseSource,
     signal?: AbortSignal,
+    force = false,
   ): Promise<AppUpdateResult> {
     signal?.throwIfAborted();
+    const failedCheck = force ? undefined : failedChecks.get(source);
     if (failedCheck && Date.now() < failedCheck.retryAt) throw failedCheck.error;
     try {
       const result = await checkApkRelease(currentVersion, source, signal);
-      failedCheck = undefined;
+      failedChecks.delete(source);
       return result;
     } catch (error) {
       if (
@@ -74,7 +76,7 @@ export function createAppUpdateModule(dependencies: {
         !lifetime.signal.aborted &&
         !(isHttpError(error) && error.kind === 'cancelled')
       ) {
-        failedCheck = { error, retryAt: Date.now() + CHECK_FAILURE_COOLDOWN_MS };
+        failedChecks.set(source, { error, retryAt: Date.now() + CHECK_FAILURE_COOLDOWN_MS });
       }
       throw error;
     }
@@ -83,7 +85,7 @@ export function createAppUpdateModule(dependencies: {
   return {
     channel,
     isEnabled: channel !== null,
-    async check(signal): Promise<AppUpdateResult> {
+    async check(signal, options): Promise<AppUpdateResult> {
       signal?.throwIfAborted();
       if (lifetime.signal.aborted || !channel)
         return { status: 'unavailable', reason: 'unsupported' };
@@ -101,6 +103,7 @@ export function createAppUpdateModule(dependencies: {
           currentVersion,
           region === 'GLOBAL' ? 'github' : 'gitcode',
           signal,
+          options?.force,
         );
         signal?.throwIfAborted();
         download.clearObsoleteFailure(result.status === 'available' ? result.id : null);
@@ -113,7 +116,12 @@ export function createAppUpdateModule(dependencies: {
         try {
           let result: AppUpdateResult;
           if (store === 'oppo') {
-            const release = await checkApk(currentVersion, 'gitcode', linked.signal);
+            const release = await checkApk(
+              currentVersion,
+              'gitcode',
+              linked.signal,
+              options?.force,
+            );
             result =
               release.status === 'available'
                 ? {

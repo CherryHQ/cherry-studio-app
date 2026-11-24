@@ -2,6 +2,7 @@ import { serviceList, services } from '@/backend/core/application/serviceRegistr
 import {
   getAppStatePolicy,
   getDependencies,
+  getErrorStrategy,
   getPhase,
   getServiceName,
   isInjectable,
@@ -108,6 +109,7 @@ describe('service registry', () => {
       'IosBackgroundExecutionSource',
     ] as const) {
       expect(getPhase(services[name])).toBe(Phase.Gate);
+      expect(getErrorStrategy(services[name])).toBe('graceful');
     }
   });
 

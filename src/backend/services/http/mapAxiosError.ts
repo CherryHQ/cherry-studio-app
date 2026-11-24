@@ -96,10 +96,23 @@ export function mapAxiosError(
   }
 
   if (!isAxiosError(error)) {
-    logger.error('HTTP transport failed unexpectedly.', {
+    const callerContext = {
       serviceName: diagnosticIdentifier(caller?.serviceName),
       operation: diagnosticIdentifier(caller?.operation),
-    });
+    };
+    if (logPath) {
+      logger.error('HTTP transport failed unexpectedly.', {
+        ...callerContext,
+        path: logPath,
+      });
+    } else if (error instanceof Error) {
+      logger.error('HTTP transport failed unexpectedly.', error, callerContext);
+    } else {
+      logger.error('HTTP transport failed unexpectedly.', {
+        ...callerContext,
+        value: String(error),
+      });
+    }
     return new HttpError('HTTP request failed unexpectedly.', {
       code: 'HTTP_INTERNAL_ERROR',
       kind: 'internal',
