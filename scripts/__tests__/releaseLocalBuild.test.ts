@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -14,7 +14,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+
+import { parse } from 'yaml';
 
 import {
   assertDiskSpace,
@@ -1418,4 +1420,134 @@ describe('release hardening & integrity guards', () => {
       verifyArchivedIpa({ ipaPath, expectedSha256: sha256, symbolsDir }),
     ).rejects.toThrow('SHA-256 mismatch');
   });
+
+  it('eas.json configures Google Play submission as production draft via EAS credentials', () => {
+    const repo = resolve(__dirname, '../..');
+    const easConfig = JSON.parse(readFileSync(join(repo, 'eas.json'), 'utf8')) as {
+      submit?: Record<string, { android?: Record<string, unknown> }>;
+    };
+    expect(easConfig.submit?.['production-google-play']?.android).toEqual({
+      applicationId: 'com.cherryai.cherrystudio_app',
+      track: 'production',
+      releaseStatus: 'draft',
+    });
+  });
+
+  it.each(['success', 'tampered-aab', 'submit-failed'] as const)(
+    'submit-google-play verifies archived AAB integrity before eas submit and records receipt (%s)',
+    (scenario) => {
+      const root = makeTempDir('cherry-play-submit-test-');
+      const archiveDir = join(root, 'archive');
+      mkdirSync(archiveDir, { recursive: true });
+      const artifactName = 'cherry-studio-0.6.2-android.aab';
+      const aabPath = join(archiveDir, artifactName);
+      const originalBytes = Buffer.from('verified-aab-bytes');
+      const expectedSha256 = createHash('sha256').update(originalBytes).digest('hex');
+      writeFileSync(aabPath, originalBytes);
+      writeFileSync(join(archiveDir, 'SHA256SUMS'), `${expectedSha256}  ${artifactName}\n`);
+      if (scenario === 'tampered-aab') {
+        writeFileSync(aabPath, Buffer.from('tampered-aab-bytes'));
+      }
+
+      const callsPath = join(root, 'calls');
+      const summaryPath = join(root, 'summary');
+      const stubBin = join(root, 'bin');
+      mkdirSync(stubBin, { recursive: true });
+      writeFileSync(
+        join(stubBin, 'pnpm'),
+        `#!/bin/bash
+set -eu
+[[ "$#" -eq 11 ]] || exit 2
+[[ "$1 $2 $3 $4 $5 $6 $7 $8" == "exec eas submit --platform android --profile production-google-play --path" ]] || exit 2
+[[ "$9" == "$GOOGLE_PLAY_ARTIFACT_PATH" ]] || exit 2
+[[ "\${10} \${11}" == "--non-interactive --wait" ]] || exit 2
+echo submit >> "$CALLS"
+if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi
+`,
+        { mode: 0o700 },
+      );
+
+      const repo = resolve(__dirname, '../..');
+      const workflow = parse(readFileSync(join(repo, '.github/workflows/release.yml'), 'utf8')) as {
+        jobs: Record<
+          string,
+          {
+            needs?: string[];
+            environment?: string;
+            'runs-on'?: string[];
+            if?: string;
+            outputs?: Record<string, string>;
+            steps: Array<{ name: string; run?: string }>;
+          }
+        >;
+      };
+
+      expect(workflow.jobs['build-native']?.outputs?.android_google_play_artifact_path).toBe(
+        '${{ steps.build.outputs.android_google_play_artifact_path }}',
+      );
+      const playJob = workflow.jobs['submit-google-play'];
+      expect(playJob).toBeDefined();
+      expect(playJob.needs).toEqual(['validate', 'build-native']);
+      expect(playJob.environment).toBe('local-release');
+      expect(playJob['runs-on']).toEqual(['self-hosted', 'macOS', 'ARM64', 'release']);
+      expect(playJob.if).toContain("needs.validate.outputs.is_prerelease != 'true'");
+      expect(playJob.if).toContain(
+        "needs.build-native.outputs.android_google_play_ready == 'true'",
+      );
+
+      const stepNames = playJob.steps.map((step) => step.name);
+      const checkIdx = stepNames.indexOf('Check existing Google Play submit receipt');
+      const verifyIdx = stepNames.indexOf('Verify archived Google Play AAB integrity');
+      const submitIdx = stepNames.indexOf('Submit AAB as Google Play production draft');
+      expect(checkIdx).toBeGreaterThan(-1);
+      expect(verifyIdx).toBeGreaterThan(checkIdx);
+      expect(submitIdx).toBeGreaterThan(verifyIdx);
+
+      const verifyRun = playJob.steps[verifyIdx]!.run!;
+      const submitRun = playJob.steps[submitIdx]!.run!;
+      const buildId = 'cherry-studio-app-999-android-google-play-attempt1';
+
+      const result = spawnSync('bash', ['-eo', 'pipefail', '-c', `${verifyRun}\n${submitRun}`], {
+        cwd: repo,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${stubBin}:${process.env.PATH ?? ''}`,
+          GOOGLE_PLAY_ARCHIVE_DIR: archiveDir,
+          GOOGLE_PLAY_ARTIFACT_NAME: artifactName,
+          GOOGLE_PLAY_ARTIFACT_PATH: aabPath,
+          GOOGLE_PLAY_EXPECTED_SHA256: expectedSha256,
+          GOOGLE_PLAY_BUILD_ID: buildId,
+          NATIVE_BUILD_VERSION: '277',
+          GITHUB_STEP_SUMMARY: summaryPath,
+          CALLS: callsPath,
+          SCENARIO: scenario,
+        },
+      });
+
+      expect(result.status === 0).toBe(scenario === 'success');
+      const calls = existsSync(callsPath)
+        ? readFileSync(callsPath, 'utf8').trim().split('\n').filter(Boolean)
+        : [];
+      const receipt = readSubmitReceipt(archiveDir);
+
+      if (scenario === 'success') {
+        expect(calls).toEqual(['submit']);
+        expect(receipt).toMatchObject({ status: 'succeeded', buildId });
+        expect(readFileSync(summaryPath, 'utf8')).toContain(
+          `Uploaded Google Play build ${buildId} (versionCode 277)`,
+        );
+      } else if (scenario === 'tampered-aab') {
+        expect(calls).toEqual([]);
+        expect(receipt).toBeNull();
+      } else {
+        expect(calls).toEqual(['submit']);
+        expect(receipt).toMatchObject({
+          status: 'failed',
+          buildId,
+          message: 'eas submit exited nonzero',
+        });
+      }
+    },
+  );
 });

@@ -68,6 +68,7 @@ jobs:
       android_google_play_build_id: ${{ steps.build.outputs.android_google_play_build_id }}
       android_google_play_archive_dir: ${{ steps.build.outputs.android_google_play_archive_dir }}
       android_google_play_artifact_name: ${{ steps.build.outputs.android_google_play_artifact_name }}
+      android_google_play_artifact_path: ${{ steps.build.outputs.android_google_play_artifact_path }}
       android_google_play_native_build_version: ${{ steps.build.outputs.android_google_play_native_build_version }}
       android_google_play_sha256: ${{ steps.build.outputs.android_google_play_sha256 }}
       ios_production_ready: ${{ steps.build.outputs.ios_production_ready }}
@@ -251,6 +252,90 @@ jobs:
             --build-id "$LOCAL_BUILD_ID" \
             --native-build-version "$NATIVE_BUILD_VERSION" \
             --summary "$GITHUB_STEP_SUMMARY"
+
+  submit-google-play:
+    name: Submit Google Play AAB draft
+    needs: [validate, build-native]
+    if: ${{ !cancelled() && needs.validate.outputs.is_prerelease != 'true' && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.android_google_play_ready == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, release]
+    environment: local-release
+    concurrency:
+      group: cherry-studio-app-submit-google-play-${{ github.ref_name }}
+      cancel-in-progress: false
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Verify submission toolchain
+        run: |
+          node -p 'process.version' | grep -Eq '^v24\.'
+          test "$(pnpm -v)" = "12.2.1"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check existing Google Play submit receipt
+        id: receipt
+        env:
+          GOOGLE_PLAY_ARCHIVE_DIR: ${{ needs.build-native.outputs.android_google_play_archive_dir }}
+          GOOGLE_PLAY_BUILD_ID: ${{ needs.build-native.outputs.android_google_play_build_id }}
+        run: |
+          node --import tsx scripts/releaseLocalBuild.ts check-submit \
+            --build-dir "$GOOGLE_PLAY_ARCHIVE_DIR" \
+            --build-id "$GOOGLE_PLAY_BUILD_ID" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Note already submitted Google Play build
+        if: ${{ steps.receipt.outputs.already_submitted == 'true' }}
+        env:
+          GOOGLE_PLAY_BUILD_ID: ${{ needs.build-native.outputs.android_google_play_build_id }}
+          GOOGLE_PLAY_ARCHIVE_DIR: ${{ needs.build-native.outputs.android_google_play_archive_dir }}
+        run: |
+          echo "Google Play build $GOOGLE_PLAY_BUILD_ID at $GOOGLE_PLAY_ARCHIVE_DIR already has a succeeded submit receipt; skipping duplicate Play Console upload." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify archived Google Play AAB integrity
+        if: ${{ steps.receipt.outputs.already_submitted != 'true' }}
+        env:
+          GOOGLE_PLAY_ARCHIVE_DIR: ${{ needs.build-native.outputs.android_google_play_archive_dir }}
+          GOOGLE_PLAY_ARTIFACT_NAME: ${{ needs.build-native.outputs.android_google_play_artifact_name }}
+          GOOGLE_PLAY_ARTIFACT_PATH: ${{ needs.build-native.outputs.android_google_play_artifact_path }}
+          GOOGLE_PLAY_EXPECTED_SHA256: ${{ needs.build-native.outputs.android_google_play_sha256 }}
+        run: |
+          test -f "$GOOGLE_PLAY_ARTIFACT_PATH"
+          test "$GOOGLE_PLAY_ARTIFACT_PATH" = "$GOOGLE_PLAY_ARCHIVE_DIR/$GOOGLE_PLAY_ARTIFACT_NAME"
+          (cd "$GOOGLE_PLAY_ARCHIVE_DIR" && shasum -a 256 -c SHA256SUMS)
+          actual_sha256="$(shasum -a 256 "$GOOGLE_PLAY_ARTIFACT_PATH" | awk '{print $1}')"
+          test "$actual_sha256" = "$GOOGLE_PLAY_EXPECTED_SHA256"
+
+      - name: Submit AAB as Google Play production draft
+        if: ${{ steps.receipt.outputs.already_submitted != 'true' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_PLAY_BUILD_ID: ${{ needs.build-native.outputs.android_google_play_build_id }}
+          GOOGLE_PLAY_ARCHIVE_DIR: ${{ needs.build-native.outputs.android_google_play_archive_dir }}
+          GOOGLE_PLAY_ARTIFACT_PATH: ${{ needs.build-native.outputs.android_google_play_artifact_path }}
+          NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_google_play_native_build_version }}
+          PROFILE: production
+        run: |
+          if pnpm exec eas submit --platform android --profile production-google-play \
+            --path "$GOOGLE_PLAY_ARTIFACT_PATH" \
+            --non-interactive --wait; then
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$GOOGLE_PLAY_ARCHIVE_DIR" \
+              --build-id "$GOOGLE_PLAY_BUILD_ID" \
+              --status succeeded
+            echo "Uploaded Google Play build $GOOGLE_PLAY_BUILD_ID (versionCode $NATIVE_BUILD_VERSION) from $GOOGLE_PLAY_ARTIFACT_PATH as a production draft. Release notes, review submission, and rollout remain in Google Play Console." >> "$GITHUB_STEP_SUMMARY"
+          else
+            node --import tsx scripts/releaseLocalBuild.ts record-submit \
+              --build-dir "$GOOGLE_PLAY_ARCHIVE_DIR" \
+              --build-id "$GOOGLE_PLAY_BUILD_ID" \
+              --status failed \
+              --message "eas submit exited nonzero" || true
+            exit 1
+          fi
 
   submit-ios:
     name: Submit iOS IPA to TestFlight
