@@ -72,6 +72,46 @@ describe('createMinimaxProvider', () => {
     expect(result.images).toEqual([imageUrl]);
   });
 
+  it('keeps successful H3 URLs and reports failed batch items', async () => {
+    const url = 'https://example.com/result.jpg';
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ url }, { error: { code: '1027', message: 'Image withheld' } }],
+        }),
+      ),
+    );
+    const model = createMinimaxProvider({ apiKey: 'test', fetch }).imageModel('MiniMax-H3-Image');
+    const options = {
+      prompt: 'Paint a tree',
+      n: 2,
+      size: undefined,
+      aspectRatio: undefined,
+      seed: undefined,
+      files: undefined,
+      mask: undefined,
+      providerOptions: {},
+    };
+    expect(model.maxImagesPerCall).toBe(10);
+    const result = await model.doGenerate(options);
+    expect(result.images).toEqual([url]);
+    expect(result.warnings).toEqual([{ type: 'other', message: 'Image withheld' }]);
+    fetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          type: 'error',
+          error: { type: 'server_error', message: 'Generation failed' },
+        }),
+        { status: 500 },
+      ),
+    );
+    await expect(model.doGenerate(options)).rejects.toMatchObject({
+      message: 'Generation failed',
+      statusCode: 500,
+      isRetryable: false,
+    });
+  });
+
   it('uploads image inputs as MiniMax character subject references', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(
