@@ -3228,6 +3228,49 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     },
   );
 
+  test('marks resumed retry submissions with hasRetainedOutput when retaining prior tool output', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.store.finalizeAssistantMessage({
+      assistantMessageId: original.assistantMessageId,
+      status: 'error',
+      parts: [
+        {
+          id: 'tool-1',
+          type: 'dynamic-tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+          toolName: 'load_workflow',
+          title: 'Load workflow',
+          state: 'output-available',
+          input: { workflow_id: 'plugin:feishu-1' },
+          output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+        },
+      ],
+      usage: null,
+      error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const submit = jest.spyOn(state.conversations, 'submit');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      expect(submit).toHaveBeenCalledWith(
+        { sessionId: state.sessionId, slot: 0 },
+        expect.objectContaining({
+          assistantMessageId: original.assistantMessageId,
+          hasRetainedOutput: true,
+        }),
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('regenerating a completed answer adds a selected sibling in the same Session', async () => {
     const state = fixture();
     const original = await state.reserve('completed');

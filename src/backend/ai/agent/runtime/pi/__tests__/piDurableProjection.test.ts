@@ -10,6 +10,7 @@ import { DURABLE_IMAGE_TOOL_NAME } from '../../durableTypes';
 import type { RuntimeError } from '../../types';
 import {
   PiConfigurationSchema,
+  piSubmissionMetadata,
   piToolBlueprint,
   projectPiTurn,
   serializePiConfiguration,
@@ -150,6 +151,52 @@ describe('Pi turn projection', () => {
       });
       expect(message.stopReason).toBe('stop');
     }
+  });
+
+  test('keeps coalesced input placeholders without an answer entry completed', () => {
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      metadata,
+      continued: true,
+      record: { id: 1, type: 'input', status: 'done', entry: 1, answer: 4 } as SubmissionRecord,
+      entries: [{ id: 1, conversationId: 1, kind: 'pi.user' }] as unknown as EntryRecord[],
+    });
+    expect(turn).toMatchObject({ status: 'completed', hasAssistant: true, parts: [], error: null });
+  });
+
+  test('keeps a resumed retry completed when the host retained prior output', () => {
+    const retained = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        hasRetainedOutput: true,
+        metadata: {
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: retained },
+    );
+    expect(turn).toMatchObject({ status: 'completed', parts: [], error: null });
   });
 
   test.each<{ content: AssistantMessage['content'] }>([

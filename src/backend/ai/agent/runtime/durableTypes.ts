@@ -180,6 +180,8 @@ export type RuntimeDurableSubmission = {
   input: RuntimeInputPart[];
   /** Completed tool prefix imported into a replacement working copy; never execute it again. */
   resume?: RuntimeMessagePart[];
+  /** Host retained prior non-empty reply parts that are merged back at display projection. */
+  readonly hasRetainedOutput?: boolean;
   /** Original display parts and inference facts. Assistant/model/tool bodies belong to the engine. */
   metadata: { [key: string]: RuntimeJsonValue };
 };

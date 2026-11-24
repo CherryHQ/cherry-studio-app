@@ -1083,6 +1083,7 @@ export class DurableAgentHost implements AgentProtocol {
                 resume: toRuntimeHistory([{ ...assistant, parts: plan.retry.resumeParts }]).flatMap(
                   (turn) => turn.messages.flatMap((message) => message.parts),
                 ),
+                hasRetainedOutput: true,
               }
             : {}),
           metadata: {

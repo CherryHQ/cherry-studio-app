@@ -118,6 +118,7 @@ const PiSubmissionSchema = z.object({
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   createdAt: z.number().finite().nonnegative(),
+  hasRetainedOutput: z.boolean().optional(),
   metadata: z.record(z.string(), RuntimeJsonValueSchema),
   tools: z.array(PiToolBlueprintSchema),
 });
@@ -639,10 +640,11 @@ export function projectPiTurn(options: {
       origin: 'runtime',
     };
   } else status = hasAssistant ? 'interrupted' : 'completed';
-  // Validate the whole turn: a model may legitimately stop empty after tools or file generation.
+  // Validate completed turns that own an actual model answer; coalesced placeholders and retained retry prefixes stay valid.
   if (
     status === 'completed' &&
-    hasAssistant &&
+    answerVisible &&
+    !stored.hasRetainedOutput &&
     !parts.some((part) =>
       part.type === 'text' || part.type === 'reasoning'
         ? Boolean(part.text.trim() || part.hasText)
