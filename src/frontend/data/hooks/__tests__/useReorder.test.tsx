@@ -219,4 +219,32 @@ describe('useReorder', () => {
       ])?.items,
     ).toEqual(initial);
   });
+
+  it('updates matching caches before an idle reorder returns and restores them if the write fails', async () => {
+    const [a, b] = ['a', 'b'].map((id) => ({ id, name: id }));
+    const initial = [a, b];
+    const next = [b, a];
+    const counted = { items: initial, page: 1, total: 2 };
+    const flatKey = ['/agents'];
+    const countedKey = ['/agents', { limit: 100 }];
+    queryClient.setQueryData(flatKey, initial);
+    queryClient.setQueryData(countedKey, counted);
+    dataApi.patch.mockRejectedValueOnce(new Error('write failed'));
+    const getHook = renderHookHarness<Row>({
+      getId: (item) => item.id,
+      queryFilters: [dataApiCollectionFilters('/agents'), { exact: true, queryKey: countedKey }],
+      resource: '/agents',
+    });
+
+    let immediate: unknown[] = [];
+    await act(async () => {
+      const result = getHook().reorder(initial, next);
+      immediate = [queryClient.getQueryData(flatKey), queryClient.getQueryData(countedKey)];
+      await expect(result).resolves.toBe(false);
+    });
+
+    expect(immediate).toEqual([next, { ...counted, items: next }]);
+    expect(queryClient.getQueryData(flatKey)).toEqual(initial);
+    expect(queryClient.getQueryData(countedKey)).toEqual(counted);
+  });
 });

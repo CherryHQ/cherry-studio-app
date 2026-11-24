@@ -42,7 +42,9 @@ export type SortableContextValue = {
   finishGesture: (success: boolean) => void;
   getGroupItemCount: (groupId: string) => number;
   hoverIndexSV: SharedValue<number>;
+  lastSettledIdSV: SharedValue<string | null>;
   liftProgressSV: SharedValue<number>;
+  notifyItemCommitted: (groupId: string, id: string, index: number) => void;
   registerGroup: (registration: SortableGroupRegistration) => void;
   reportItemHeight: (groupId: string, id: string, height: number) => void;
   unregisterGroup: (groupId: string, token: symbol) => void;
