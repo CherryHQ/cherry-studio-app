@@ -73,9 +73,19 @@ function Portal({ children }: { children: ReactNode }) {
   return null;
 }
 
-function Owner({ rewrite, sheet }: { rewrite?: (text: string) => string; sheet: boolean }) {
-  const [value, setValue] = useState('12');
-  const field = <Field onChangeText={(text) => setValue(rewrite?.(text) ?? text)} value={value} />;
+function Owner({
+  initialValue = '12',
+  input: Input = Field,
+  rewrite,
+  sheet,
+}: {
+  initialValue?: string;
+  input?: typeof Field | typeof NativeInput;
+  rewrite?: (text: string) => string;
+  sheet: boolean;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const field = <Input onChangeText={(text) => setValue(rewrite?.(text) ?? text)} value={value} />;
 
   return sheet ? (
     <>
@@ -92,6 +102,41 @@ async function type(text: string) {
 }
 
 describe('useFieldText', () => {
+  test('reproduces stale native writes when a raw field deletes through a portal', async () => {
+    act(() => {
+      renderer = create(<Owner input={NativeInput} sheet />);
+    });
+
+    await type('1');
+
+    expect(nativeWrites).toEqual(['12', '1']);
+  });
+
+  test.each([false, true])('leaves native text alone while deleting (sheet: %s)', async (sheet) => {
+    act(() => {
+      renderer = create(<Owner initialValue={'123\n456'} sheet={sheet} />);
+    });
+
+    // Backspace and forward delete in a line, then remove a newline, a range and all text.
+    for (const text of ['123\n46', '123\n4', '1234', '14', '']) {
+      await type(text);
+      expect(nativeWrites).toEqual([]);
+    }
+  });
+
+  test('keeps consecutive deletions while the portal still holds the previous value', async () => {
+    act(() => {
+      renderer = create(<Owner initialValue="1234" sheet />);
+    });
+
+    await act(async () => {
+      harness.typeNative('123');
+      harness.typeNative('12');
+    });
+
+    expect(nativeWrites).toEqual([]);
+  });
+
   test.each([false, true])('leaves native text alone while typing (sheet: %s)', async (sheet) => {
     act(() => {
       renderer = create(<Owner sheet={sheet} />);
