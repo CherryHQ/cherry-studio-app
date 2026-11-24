@@ -1985,10 +1985,10 @@ function formatBatchSummary(
   if (playOutcome.status === 'built' || playOutcome.status === 'reused') {
     lines.push(
       '',
-      '### Google Play AAB (Manual Upload)',
+      '### Google Play AAB',
       '',
-      `Signed AAB and \`SHA256SUMS\` are archived on the build machine at: \`${playOutcome.archiveDir}\``,
-      'Verify with `shasum -a 256 -c SHA256SUMS` before uploading `.aab` in Google Play Console.',
+      `\`submit-google-play\` uploads the archived AAB to Google Play as a production draft. Signed AAB and \`SHA256SUMS\` remain archived at: \`${playOutcome.archiveDir}\``,
+      'Verify with `shasum -a 256 -c SHA256SUMS` if manually recovering or uploading `.aab` in Google Play Console.',
     );
   }
 

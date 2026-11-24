@@ -93,6 +93,13 @@
       "ios": {
         "ascAppId": "6809783714"
       }
+    },
+    "production-google-play": {
+      "android": {
+        "applicationId": "com.cherryai.cherrystudio_app",
+        "track": "production",
+        "releaseStatus": "draft"
+      }
     }
   }
 }
