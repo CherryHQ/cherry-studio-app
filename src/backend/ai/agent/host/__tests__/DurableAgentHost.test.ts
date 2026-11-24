@@ -4494,7 +4494,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('continued processing revocation cancels its execution owner independently of reply presentation', async () => {
+  test('continued processing expiry suspends parallel replies and foreground recovery completes them', async () => {
     const protection = executionProtection();
     const state = fixture({ executionLease: protection.acquire });
     await state.reserve('completed');
@@ -4503,17 +4503,44 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await askTwoModels(state);
       await settle();
       const running = runningTurns(state);
-      const before = [...state.steps];
       await protection.acquire.mock.calls[0]![0](
         new KeepAliveInterruptionError('continued-processing-expired'),
       );
       await settle();
-      expect(state.conversations.abort).toHaveBeenCalledTimes(running.length);
-      expect(runningTurns(state)).toHaveLength(0);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.close).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledTimes(1);
+      expect(protection.lease.release).toHaveBeenCalledWith();
+      expect(runningTurns(state)).toEqual(running);
+      expect(await state.conversations.unfinishedLanes()).toHaveLength(running.length);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('pending');
+
       await state.host.resumeSuspended();
-      expect(state.steps.filter((step) => step === 'close' || step === 'open')).toEqual(
-        before.filter((step) => step === 'close' || step === 'open'),
-      );
+      expect(state.steps.filter((step) => ['close', 'open', 'resume'].includes(step))).toEqual([
+        'open',
+        'resume',
+        'close',
+        'open',
+        'resume',
+      ]);
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      expect(observation.snapshot.activeTurn).toMatchObject({
+        id: running[0]!.identity.turnId,
+        status: 'running',
+      });
+      observation.unsubscribe();
+      for (const turn of running)
+        state.emit({ ...turn, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(await state.conversations.unfinishedLanes()).toEqual([]);
+      for (const turn of running)
+        expect(
+          (await state.store.getMessage(state.sessionId, turn.assistantMessageId))?.status,
+        ).toBe('success');
     } finally {
       await state.host.close();
     }

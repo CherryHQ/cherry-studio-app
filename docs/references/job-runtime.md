@@ -157,12 +157,13 @@ and may be retried explicitly.
   with the actual job. The source uses consented audio only when official processing is unavailable.
   Loss of available protection interrupts work
   without renewing the exhausted window or restarting audio in the same background stay. Painting
-  jobs abort/cancel execution; ordinary finite-window loss suspends the Agent Harness for foreground
+  jobs abort/cancel execution; loss of background protection suspends the Agent Harness for foreground
   recovery. Android uses the `dataSync` foreground service in
   [Android Background Generation](./android-background-generation.md). Neither guarantees continuous
   execution, an exact scheduler, or continuation after force quit.
-- Continued-processing revocation also represents system-UI cancellation. It stops the owning
-  conversation/job without automatic replay or audio fallback for that task.
+- Continued-processing expiry cannot distinguish system revocation from system-UI cancellation.
+  Agent conversations suspend for foreground recovery; jobs retain their interruption policy.
+  The expired owner cannot use audio fallback before settling and releasing its lease.
 - No Expo background task, system-transfer adapter, schedule runtime, or
   server executor is installed.
 - Progress callbacks update an admitted native continued task; app UI still observes ledger state and domain output.

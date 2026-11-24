@@ -448,8 +448,9 @@ and only then resume scheduling.
 
 Ordinary shutdown closes invocations without abort marks. Finite UIKit window expiry does the same
 only when no continued-processing or audio protection remains. Foreground startup reopens retained
-tasks. Revocation of an iOS continued-processing task stops its owning work rather than suspending
-it for restart; see
+tasks. Expiry of an iOS continued-processing task also suspends the Host and preserves unfinished
+work for foreground recovery: the native signal cannot distinguish system revocation from
+system-UI cancellation. See
 [Background Activity Presentation](../background-activity-presentation.md). Explicit user stop invokes
 Pi abort. Unsafe tools do not automatically re-execute after interruption. Current accounts, tool
 implementations and approval policy are reconstructed; credentials are resolved at request time and
