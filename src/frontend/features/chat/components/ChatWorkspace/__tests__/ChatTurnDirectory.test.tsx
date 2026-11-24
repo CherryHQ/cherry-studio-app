@@ -4,7 +4,12 @@ import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ChatTurnNavigator } from '../chatTurns';
-import { ChatTurnDirectory, getFisheyeTickMetrics } from '../components/ChatTurnDirectory';
+import {
+  ChatTurnDirectory,
+  getFisheyeTickMetrics,
+  MAX_TRIGGER_TICKS,
+  resolveTurnDirectoryTickCount,
+} from '../components/ChatTurnDirectory';
 
 const mockToastShow = jest.fn();
 
@@ -141,6 +146,23 @@ describe('getFisheyeTickMetrics', () => {
   });
 });
 
+describe('resolveTurnDirectoryTickCount', () => {
+  test.each([
+    [undefined, MAX_TRIGGER_TICKS],
+    [Number.NaN, MAX_TRIGGER_TICKS],
+    [Number.POSITIVE_INFINITY, MAX_TRIGGER_TICKS],
+    [-1, 2],
+    [0, 2],
+    [1, 2],
+    [2, 2],
+    [4.9, 4],
+    [7, 7],
+    [10, 7],
+  ])('resolves %s turns to %s ticks', (turnCount, expected) => {
+    expect(resolveTurnDirectoryTickCount(turnCount)).toBe(expected);
+  });
+});
+
 describe('ChatTurnDirectory', () => {
   let queryClient: QueryClient;
   let renderer: ReactTestRenderer | undefined;
@@ -156,6 +178,54 @@ describe('ChatTurnDirectory', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     queryClient.clear();
+  });
+
+  test('tracks scroll progress across the tick count as the number of turns changes', () => {
+    const navigator = createNavigator('local:s1');
+    const scrollProgress = createMockSharedValue(1);
+    const scrollToMessage = jest.fn(async () => true);
+    const renderDirectory = (turnCount: number) => (
+      <QueryClientProvider client={queryClient}>
+        <ChatTurnDirectory
+          bottomAccessoryHeight={zeroAccessoryHeight}
+          contentBottomInset={16}
+          contentTopInset={110}
+          keyboardOffset={0}
+          navigator={navigator}
+          scrollProgress={scrollProgress}
+          scrollToMessage={scrollToMessage}
+          turnCount={turnCount}
+        />
+      </QueryClientProvider>
+    );
+
+    act(() => {
+      renderer = create(renderDirectory(2));
+    });
+    const bottomWidths = getTickWidths(renderer!);
+    expect(bottomWidths).toHaveLength(2);
+    expect(bottomWidths[1]).toBeCloseTo(13);
+    expect(bottomWidths[0]).toBeLessThan(bottomWidths[1]);
+
+    act(() => {
+      scrollProgress.set(0);
+      renderer!.update(renderDirectory(2));
+    });
+    expect(getTickWidths(renderer!)).toEqual(bottomWidths.toReversed());
+
+    act(() => {
+      scrollProgress.set(1);
+      renderer!.update(renderDirectory(4));
+    });
+    const intermediateWidths = getTickWidths(renderer!);
+    expect(intermediateWidths).toHaveLength(4);
+    expect(intermediateWidths[3]).toBeCloseTo(13);
+    expect(intermediateWidths[1]).toBeCloseTo(5.5);
+
+    act(() => renderer!.update(renderDirectory(10)));
+    const cappedWidths = getTickWidths(renderer!);
+    expect(cappedWidths).toHaveLength(7);
+    expect(cappedWidths[6]).toBeCloseTo(13);
   });
 
   test('renders 7 fisheye ticks that track scrollProgress and opens panel with tight scrollbar insets', async () => {
