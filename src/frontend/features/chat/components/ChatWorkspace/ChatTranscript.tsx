@@ -22,6 +22,7 @@ type ChatTranscriptProps = Omit<
   'bottomAccessoryHeight' | 'contentTopInset'
 > & {
   hasOlderMessages?: boolean;
+  hiddenUserTurnCount?: number;
   isLoadingMore: boolean;
   requiresInitialLayout: boolean;
   turnNavigator?: ChatTurnNavigator;
@@ -31,6 +32,7 @@ const SELECTION_ROW_INSETS = { horizontal: 8, user: 0, assistant: 0 };
 
 export function ChatTranscript({
   hasOlderMessages = false,
+  hiddenUserTurnCount = 0,
   requiresInitialLayout,
   isLoadingMore,
   onReady,
@@ -62,13 +64,13 @@ export function ChatTranscript({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,
   });
-  let userTurnCount = 0;
+  let userTurnCount = hiddenUserTurnCount;
   for (const message of list.messages) {
     if (message.role === 'user') userTurnCount += 1;
   }
   const showTurnDirectory = Boolean(
     turnNavigator &&
-    (userTurnCount >= 2 || list.hasNewerMessages) &&
+    (userTurnCount >= 2 || hasOlderMessages || list.hasNewerMessages) &&
     !isSelecting &&
     !isCoverVisible &&
     !composer?.state.isPresented,

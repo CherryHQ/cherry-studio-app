@@ -16,6 +16,8 @@ export type AgentMessageHistoryWindow = {
   error?: Error;
   hasNewerMessages: boolean;
   hasOlderMessages: boolean;
+  hasUnfetchedOlderMessages: boolean;
+  hiddenUserTurnCount: number;
   initialScrollTarget?: 'end' | { messageId: string };
   isLoadingInitial: boolean;
   isRefreshing: boolean;
@@ -195,12 +197,22 @@ export function useAgentMessageHistoryWindow(
     await refetch();
   }, [refetch]);
 
+  const visibleStartIndex = isAroundMessage
+    ? 0
+    : Math.max(0, allMessages.length - visibleMessages.length);
+  let hiddenUserTurnCount = 0;
+  for (let index = 0; index < visibleStartIndex; index += 1) {
+    if (allMessages[index]?.role === 'user') hiddenUserTurnCount += 1;
+  }
+
   return {
     dataKey,
     error: query.error ?? undefined,
     // An initial target query has not established continuity with the live edge yet.
     hasNewerMessages: isAroundMessage && (!query.data || Boolean(hasPreviousPage)),
     hasOlderMessages: Boolean(hasNextPage || (!isAroundMessage && hasHiddenMessages)),
+    hasUnfetchedOlderMessages: Boolean(hasNextPage),
+    hiddenUserTurnCount,
     initialScrollTarget: aroundMessageId
       ? { messageId: aroundMessageId }
       : isReturningToLatest

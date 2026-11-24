@@ -153,6 +153,42 @@ describe('ChatTranscript', () => {
 
     expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(7);
   });
+
+  test('combines hidden loaded user turns with visible user turns when older pages are absent', () => {
+    const turnNavigator: ChatTurnNavigator = {
+      scope: 'local:s1',
+      queryKey: ['turns', 'local:s1'],
+      read: jest.fn(async () => ({ items: [] })),
+      jump: jest.fn(),
+    };
+
+    act(() => {
+      renderer = create(
+        transcript({
+          hasOlderMessages: false,
+          hiddenUserTurnCount: 1,
+          messages: [{ id: 'u2', role: 'user', status: 'success', data: { parts: [] } }] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(2);
+
+    act(() => {
+      renderer!.update(
+        transcript({
+          hasOlderMessages: false,
+          hiddenUserTurnCount: 1,
+          messages: [
+            { id: 'u2', role: 'user', status: 'success', data: { parts: [] } },
+            { id: 'u3', role: 'user', status: 'success', data: { parts: [] } },
+          ] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory.mock.lastCall?.[0].turnCount).toBe(3);
+  });
 });
 
 function transcript(overrides: Partial<Parameters<typeof ChatTranscript>[0]> = {}) {
