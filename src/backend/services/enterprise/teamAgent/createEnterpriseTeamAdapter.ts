@@ -141,8 +141,13 @@ export function createEnterpriseTeamAdapter(
           return rows.map((session) => sessionValue(id, session));
         });
       const metadata = async (target: TeamSessionRef, signal: AbortSignal) => {
-        if (!sessions.has(target.agentId)) await listSessions(target.agentId, signal);
-        const session = sessions.get(target.agentId)?.find((row) => row.id === target.sessionId);
+        const findSession = () =>
+          sessions.get(target.agentId)?.find((row) => row.id === target.sessionId);
+        let session = findSession();
+        if (!session) {
+          await listSessions(target.agentId, signal);
+          session = findSession();
+        }
         if (!session) throw new TeamAgentError('not-visible');
         return { ...employeeFor(target.agentId), session };
       };
@@ -158,12 +163,13 @@ export function createEnterpriseTeamAdapter(
           const view = chatViewSchema.parse(response.data);
           return { view, meta };
         });
-      const postRun = (target: TeamSessionRef, submission: TeamSubmission) =>
+      const postRun = (target: TeamSessionRef, submission: TeamSubmission, signal: AbortSignal) =>
         read(async () => {
           const response = await request<unknown>({
             method: 'POST',
             path: `${path(target)}/inputs`,
             body: submission,
+            signal,
             maxResponseBytes: MAX_RESPONSE_BYTES,
           });
           return runSchema.parse(response.data);
@@ -198,7 +204,7 @@ export function createEnterpriseTeamAdapter(
             return result;
           }),
         listSessions,
-        createSession: (id) =>
+        createSession: (id, signal) =>
           read(async () => {
             const { employee, agentId } = employeeFor(id);
             if (!isReady(employee, agentId)) throw new TeamAgentError('unavailable');
@@ -206,16 +212,18 @@ export function createEnterpriseTeamAdapter(
               method: 'POST',
               path: `${base(id)}/sessions`,
               body: { id: uuid() },
+              signal,
               maxResponseBytes: MAX_RESPONSE_BYTES,
             });
             sessions.delete(id);
             return sessionValue(id, sessionSchema.parse(response.data));
           }),
-        deleteSession: (target) =>
+        deleteSession: (target, signal) =>
           read(async () => {
             await request({
               method: 'DELETE',
               path: path(target),
+              signal,
               maxResponseBytes: MAX_RESPONSE_BYTES,
             });
             sessions.delete(target.agentId);
@@ -327,56 +335,68 @@ export function createEnterpriseTeamAdapter(
               }
             } finally {
               clearTimeout(timer!);
+              idle.abort();
               await reader?.cancel().catch(() => {});
             }
           }),
-        submit: async (target, submission): Promise<TeamSubmitResult> => {
+        submit: async (target, submission, signal): Promise<TeamSubmitResult> => {
+          const assertSubmitting = () => {
+            if (signal.aborted) throw new TeamAgentError('retired');
+            assertCurrent();
+          };
+          assertSubmitting();
           if (!inputSchema.safeParse(submission.input).success) return 'rejected';
-          const signal = new AbortController().signal;
-          const { view, meta } = await loadView(target, signal);
+          const { view, meta } = await loadView(target, signal).catch((error: unknown) => {
+            assertSubmitting();
+            throw error;
+          });
+          assertSubmitting();
           if (!employeeView(view, meta.employee, meta.agentId, meta.session).canSend)
             return 'rejected';
           let run;
           try {
-            run = await postRun(target, submission);
+            run = await postRun(target, submission, signal);
           } catch (error) {
-            assertCurrent();
+            assertSubmitting();
             if (explicitRejection(error)) return 'rejected';
             try {
               const response = await request<unknown>({
                 method: 'GET',
                 path: `${path(target)}/inputs/${submission.requestId}`,
+                signal,
                 maxResponseBytes: MAX_RESPONSE_BYTES,
               });
+              assertSubmitting();
               run = runSchema.parse(response.data);
               if (
                 run.state === 'missing' &&
                 meta.employee.runtimeKind === 'astra' &&
                 view.idempotentSubmit
               )
-                run = await postRun(target, submission);
+                run = await postRun(target, submission, signal);
             } catch {
-              assertCurrent();
+              assertSubmitting();
               return 'unknown';
             }
           }
-          assertCurrent();
+          assertSubmitting();
           return run.state === 'missing' || run.state === 'unknown'
             ? 'unknown'
             : run.state === 'busy'
               ? 'rejected'
               : 'accepted';
         },
-        stop: (target, runId) =>
+        stop: (target, runId, signal) =>
           read(async () => {
             const response = await request<unknown>({
               method: 'POST',
               path: `${path(target)}/inputs/${encodeURIComponent(runId)}/cancel`,
+              signal,
               maxResponseBytes: MAX_RESPONSE_BYTES,
             });
             runSchema.parse(response.data);
           }),
-        respond: (target, pendingId, requestId, reply) =>
+        respond: (target, pendingId, requestId, reply, signal) =>
           read(async () => {
             if (
               !pendingId ||
@@ -390,6 +410,7 @@ export function createEnterpriseTeamAdapter(
               method: 'POST',
               path: `${path(target)}/responses`,
               body: { pendingId, requestId, ...reply },
+              signal,
               maxResponseBytes: MAX_RESPONSE_BYTES,
             });
           }),

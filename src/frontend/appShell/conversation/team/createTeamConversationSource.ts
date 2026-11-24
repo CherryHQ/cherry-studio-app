@@ -27,14 +27,17 @@ export function createTeamConversationSource(
   const sessions = new Map<string, TeamSession>();
   let disposed = false;
   const current = () => !disposed && module.getState().context?.key === context.key;
-  const state = createConversationState<{ availability: Availability }>({
-    availability: { state: 'enabled' },
-  });
-  const unstate = module.subscribe(() =>
-    state.set({
-      availability: current() ? { state: 'enabled' } : { state: 'disabled', reason: 'retired' },
-    }),
-  );
+  const availability = (): Availability => {
+    if (!current()) return { state: 'disabled', reason: 'retired' };
+    const directory = module.getState();
+    if (directory.phase === 'error' && directory.failure === 'not-visible') {
+      sessions.clear();
+      return { state: 'disabled', reason: 'not-authorized' };
+    }
+    return { state: 'enabled' };
+  };
+  const state = createConversationState({ availability: availability() });
+  const unstate = module.subscribe(() => state.set({ availability: availability() }));
   const read = async <T>(signal: AbortSignal, work: () => Promise<T>) => {
     if (!current()) throw new ConversationReadError({ code: 'retired', retry: 'none' });
     signal.throwIfAborted();
@@ -45,7 +48,7 @@ export function createTeamConversationSource(
   };
   const summary = (session: TeamSession): ConversationSummary => {
     const id = teamSessionId(session);
-    sessions.set(id, session);
+    if (state.getSnapshot().availability.state === 'enabled') sessions.set(id, session);
     return {
       ref: { source: ref, sessionId: id },
       agentId: session.agentId,
@@ -64,14 +67,20 @@ export function createTeamConversationSource(
       cacheScope: scope,
       subscribe: (listener) => {
         let previous = module.getState();
-        return module.subscribe(() => {
+        const unsubscribeDirectory = module.subscribe(() => {
           const next = module.getState();
-          if (next.agents !== previous.agents) {
+          const changed = JSON.stringify(next.agents) !== JSON.stringify(previous.agents);
+          previous = next;
+          if (changed) {
             listener('agents');
             listener('sessions');
-          } else if (next === previous) listener('sessions');
-          previous = next;
+          }
         });
+        const unsubscribeSessions = module.subscribeSessions(() => listener('sessions'));
+        return () => {
+          unsubscribeDirectory();
+          unsubscribeSessions();
+        };
       },
       listAgents: (_cursor, signal) =>
         read(signal, async () => {

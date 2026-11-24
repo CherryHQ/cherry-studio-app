@@ -26,6 +26,7 @@ export function TeamComposer({
   module,
   contextKey,
   draftKey,
+  hasSessionTarget,
   conversation,
   state,
   agent,
@@ -34,6 +35,7 @@ export function TeamComposer({
   module: TeamAgentModule;
   contextKey: string;
   draftKey: string;
+  hasSessionTarget: boolean;
   conversation?: TeamConversation;
   state: TeamConversationState;
   agent?: TeamAgent;
@@ -54,7 +56,7 @@ export function TeamComposer({
   const tooLong = agent?.maxInputLength !== undefined && draft.length > agent.maxInputLength;
   const ready = conversation
     ? state.phase === 'current' && Boolean(state.view?.canSend) && !state.submitting && !tooLong
-    : Boolean(agent?.canCreateSession) && !tooLong;
+    : !hasSessionTarget && Boolean(agent?.canCreateSession) && !tooLong;
   const resend = () =>
     alert.confirm({
       title: t('teamAgent.unknownTitle'),
@@ -105,6 +107,7 @@ export function TeamComposer({
             : t('remoteAgent.sendFailed')
         }
         onSend={async ({ text }) => {
+          if (hasSessionTarget && !conversation) throw new TeamAgentError('unavailable');
           if (conversation) {
             try {
               const result = await conversation.send(text);

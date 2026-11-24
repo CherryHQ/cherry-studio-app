@@ -1,7 +1,11 @@
 import {
   TeamAgentError,
+  teamAgentDraftKey,
   teamDraftKey,
+  type TeamAgent,
   type TeamChatView,
+  type TeamReply,
+  type TeamSession,
   type TeamSessionRef,
   type TeamSubmission,
   type TeamSubmitResult,
@@ -21,22 +25,46 @@ const idle: TeamChatView = {
 };
 function fixture(view = idle) {
   const submit = jest.fn(
-    async (_target: TeamSessionRef, _submission: TeamSubmission): Promise<TeamSubmitResult> =>
-      'accepted',
+    async (
+      _target: TeamSessionRef,
+      _submission: TeamSubmission,
+      _signal: AbortSignal,
+    ): Promise<TeamSubmitResult> => 'accepted',
   );
   const connection = {
     context: { bindingId: 'enterprise', key: 'a' },
-    listAgents: async () => [{ id: 'agent', name: 'Agent', canCreateSession: true }],
+    listAgents: async (): Promise<readonly TeamAgent[]> => [
+      { id: 'agent', name: 'Agent', canCreateSession: true },
+    ],
     listSessions: async () => [{ ...target, canDelete: true }],
-    createSession: async () => ({ ...target, canDelete: true }),
-    deleteSession: jest.fn(async () => {}),
+    createSession: jest.fn(
+      async (_id: string, _signal: AbortSignal): Promise<TeamSession> => ({
+        ...target,
+        canDelete: true,
+      }),
+    ),
+    deleteSession: jest.fn(async (_target: TeamSessionRef, _signal: AbortSignal) => {}),
     readDetail: async () => ({ skills: [], mcp: [] }),
     readPortrait: async () => undefined,
     readView: jest.fn(async () => view),
-    watch: jest.fn(async () => {}),
+    watch: jest.fn(
+      async (
+        _target: TeamSessionRef,
+        _signal: AbortSignal,
+        _snapshot: (view: TeamChatView) => void,
+      ) => {},
+    ),
     submit,
-    stop: jest.fn(async () => {}),
-    respond: jest.fn(async () => {}),
+    stop: jest.fn(async (_target: TeamSessionRef, _runId: string, _signal: AbortSignal) => {}),
+    respond: jest.fn(
+      async (
+        _target: TeamSessionRef,
+        _pendingId: string,
+        _requestId: string,
+        _reply: TeamReply,
+        _signal: AbortSignal,
+      ) => {},
+    ),
   } satisfies TeamAgentConnection;
   let current: TeamAgentConnection | null = connection;
   let changed = () => {};
@@ -93,12 +121,72 @@ it('settles admitted submission after the page releases observation', async () =
   const conversation = runtime.observe(target);
   await conversation.refresh();
   const pending = conversation.send('hello');
+  expect(conversation.getState()).toMatchObject({ submitting: true });
+  expect(conversation.getState().unknown).toBeUndefined();
   conversation.dispose();
+  expect(submit.mock.calls[0][2].aborted).toBe(false);
   finish('accepted');
   await expect(pending).resolves.toBe('accepted');
   expect(runtime.readDraft(draftKey)).toBe('');
   runtime.dispose();
 });
+
+it('leaves the draft retryable when submission preflight throws', async () => {
+  const { runtime, submit } = fixture();
+  const draftKey = teamDraftKey('a', target);
+  runtime.writeDraft(draftKey, 'hello');
+  submit.mockRejectedValueOnce(new TeamAgentError('offline'));
+  const conversation = runtime.observe(target);
+  await conversation.refresh();
+
+  await expect(conversation.send('hello')).rejects.toMatchObject({ code: 'offline' });
+  expect(conversation.getState().unknown).toBeUndefined();
+  expect(conversation.getState().submitting).toBe(false);
+  expect(runtime.readDraft(draftKey)).toBe('hello');
+  runtime.dispose();
+});
+
+it('keeps the original unknown submission if a confirmed retry is rejected or throws', async () => {
+  const { runtime, submit } = fixture();
+  submit.mockResolvedValueOnce('unknown').mockResolvedValueOnce('rejected');
+  const conversation = runtime.observe(target);
+  await conversation.refresh();
+  await expect(conversation.send('hello')).resolves.toBe('unknown');
+  const original = submit.mock.calls[0][1];
+  await expect(conversation.send('retry', true)).resolves.toBe('rejected');
+  expect(conversation.getState().unknown).toEqual(original);
+
+  submit.mockRejectedValueOnce(new TeamAgentError('offline'));
+  await expect(conversation.send('retry', true)).rejects.toMatchObject({ code: 'offline' });
+  expect(conversation.getState().unknown).toEqual(original);
+  runtime.dispose();
+});
+
+it.each(['offline', 'not-visible'] as const)(
+  'handles a late %s read failure after a stream snapshot',
+  async (code) => {
+    const { runtime, connection } = fixture({ ...idle, run: { id: 'run', state: 'running' } });
+    const stream = Promise.withResolvers<void>();
+    connection.watch.mockReturnValueOnce(stream.promise);
+    const conversation = runtime.observe(target);
+    conversation.setActive(true);
+    await conversation.refresh();
+    const read = Promise.withResolvers<TeamChatView>();
+    connection.readView.mockReturnValueOnce(read.promise);
+    const pending = conversation.refresh();
+    const latest: TeamChatView = { ...idle, run: { id: 'run', state: 'done' } };
+    connection.watch.mock.calls[0][2](latest);
+    read.reject(new TeamAgentError(code));
+    await expect(pending).rejects.toMatchObject({ code });
+    expect(conversation.getState()).toMatchObject(
+      code === 'not-visible'
+        ? { phase: 'error', failure: 'not-visible', view: null }
+        : { phase: 'current', view: latest },
+    );
+    runtime.dispose();
+    stream.resolve();
+  },
+);
 
 it('keeps uncertain text and requires an explicit duplicate decision before another submit', async () => {
   const { runtime, submit } = fixture();
@@ -126,12 +214,25 @@ it('does not restore an old account draft from a departing page cleanup', () => 
   runtime.dispose();
 });
 
-it('clears a visible transcript when directory refresh withdraws its Agent', async () => {
+it('clears a withdrawn Agent transcript and its drafts, including unobserved sessions', async () => {
   const { runtime, connection } = fixture();
+  const other = { id: 'other', name: 'Other', canCreateSession: true };
+  const listAgents = connection.listAgents;
+  connection.listAgents = async () => [...(await listAgents()), other];
   await runtime.refresh();
   const conversation = runtime.observe(target);
   await conversation.refresh();
-  connection.listAgents = async () => [];
+  const withdrawn = [
+    teamAgentDraftKey('a', target.agentId),
+    teamDraftKey('a', target),
+    teamDraftKey('a', { ...target, sessionId: 'unobserved' }),
+  ];
+  const retained = [
+    teamAgentDraftKey('a', other.id),
+    teamDraftKey('a', { ...target, agentId: other.id }),
+  ];
+  for (const key of [...withdrawn, ...retained]) runtime.writeDraft(key, 'draft');
+  connection.listAgents = async () => [other];
   await runtime.refresh();
   expect(conversation.getState()).toMatchObject({
     phase: 'error',
@@ -140,6 +241,96 @@ it('clears a visible transcript when directory refresh withdraws its Agent', asy
   });
   await expect(conversation.send('late input')).rejects.toBeDefined();
   expect(connection.submit).not.toHaveBeenCalled();
+  for (const key of withdrawn) expect(runtime.readDraft(key)).toBe('');
+  for (const key of retained) expect(runtime.readDraft(key)).toBe('draft');
+  runtime.dispose();
+});
+
+it('clears only the deleted session draft', async () => {
+  const { runtime } = fixture();
+  const deleted = teamDraftKey('a', target);
+  const retained = teamDraftKey('a', { ...target, sessionId: 'other' });
+  runtime.writeDraft(deleted, 'delete');
+  runtime.writeDraft(retained, 'keep');
+  await runtime.deleteSession(target);
+  expect(runtime.readDraft(deleted)).toBe('');
+  expect(runtime.readDraft(retained)).toBe('keep');
+  runtime.dispose();
+});
+
+it('notifies session subscribers only for create, delete and accepted or unknown submits', async () => {
+  const { runtime, submit } = fixture();
+  const directoryChanged = jest.fn();
+  const sessionsChanged = jest.fn();
+  runtime.subscribe(directoryChanged);
+  runtime.subscribeSessions(sessionsChanged);
+  await runtime.refresh();
+  expect(directoryChanged).toHaveBeenCalledTimes(1);
+  expect(sessionsChanged).not.toHaveBeenCalled();
+
+  await runtime.createSession(target.agentId);
+  expect(sessionsChanged).toHaveBeenCalledTimes(1);
+  await runtime.deleteSession(target);
+  expect(sessionsChanged).toHaveBeenCalledTimes(2);
+  const conversation = runtime.observe(target);
+  await conversation.refresh();
+  await conversation.send('accepted');
+  expect(sessionsChanged).toHaveBeenCalledTimes(3);
+  submit.mockResolvedValueOnce('unknown');
+  await conversation.send('unknown');
+  expect(sessionsChanged).toHaveBeenCalledTimes(4);
+  submit.mockResolvedValueOnce('rejected');
+  await conversation.send('rejected', true);
+  submit.mockRejectedValueOnce(new TeamAgentError('offline'));
+  await expect(conversation.send('offline', true)).rejects.toMatchObject({ code: 'offline' });
+  expect(sessionsChanged).toHaveBeenCalledTimes(4);
+  expect(directoryChanged).toHaveBeenCalledTimes(1);
+  runtime.dispose();
+});
+
+it.each(['replace', 'dispose'] as const)('aborts all in-flight commands on %s', async (mode) => {
+  const { runtime, connection, replace, submit } = fixture({
+    ...idle,
+    run: { id: 'run', state: 'running' },
+    pending: [{ id: 'pending', requestId: 'run', kind: 'approval', text: 'Allow?' }],
+    canStop: true,
+    canRespond: true,
+  });
+  const signals: AbortSignal[] = [];
+  const waitForAbort = <T>(signal: AbortSignal) => {
+    signals.push(signal);
+    return new Promise<T>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+  };
+  const deleting = Promise.withResolvers<void>();
+  connection.createSession.mockImplementation((_id, signal) => waitForAbort(signal));
+  connection.deleteSession.mockImplementation((_target, signal) => {
+    deleting.resolve();
+    return waitForAbort(signal);
+  });
+  submit.mockImplementation((_target, _submission, signal) => waitForAbort(signal));
+  connection.stop.mockImplementation((_target, _run, signal) => waitForAbort(signal));
+  connection.respond.mockImplementation((_target, _id, _run, _reply, signal) =>
+    waitForAbort(signal),
+  );
+  await runtime.refresh();
+  const conversation = runtime.observe(target);
+  await conversation.refresh();
+  const settled = Promise.allSettled([
+    runtime.createSession(target.agentId),
+    runtime.deleteSession(target),
+    conversation.send('hello'),
+    conversation.stop(),
+    conversation.respond('pending', 'run', { decision: 'allow' }),
+  ]);
+  await deleting.promise;
+  expect(signals).toHaveLength(5);
+  expect(signals.every((signal) => !signal.aborted)).toBe(true);
+  if (mode === 'replace') replace({ ...connection, context: { ...connection.context, key: 'b' } });
+  else runtime.dispose();
+  expect(signals.every((signal) => signal.aborted)).toBe(true);
+  expect((await settled).map(({ status }) => status)).toEqual(Array(5).fill('rejected'));
   runtime.dispose();
 });
 

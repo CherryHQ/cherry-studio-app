@@ -29,12 +29,9 @@ export function useTeamConversation(
     if (!agentId || !sessionId || module.getState().context?.key !== contextKey) return;
     const conversation = module.observe({ agentId, sessionId });
     let live = true;
-    void (module.getState().phase === 'ready' ? Promise.resolve() : module.refresh())
-      .then(() => conversation.refresh())
-      .catch(() => {})
-      .then(() => {
-        if (live) setOwned({ key, conversation });
-      });
+    queueMicrotask(() => {
+      if (live) setOwned({ key, conversation });
+    });
     return () => {
       live = false;
       conversation.dispose();
@@ -44,18 +41,23 @@ export function useTeamConversation(
   useEffect(() => {
     if (!conversation) return;
     let live = true;
-    const active = () => {
-      if (!focused || AppState.currentState !== 'active') conversation.setActive(false);
-      else
-        void module
-          .refresh()
-          .catch(() => {})
-          .then(() => {
-            if (live && AppState.currentState === 'active') conversation.setActive(true);
-          });
+    const activate = () => {
+      if (live && AppState.currentState === 'active') conversation.setActive(true);
     };
-    active();
-    const subscription = AppState.addEventListener('change', active);
+    const refreshAndActivate = () => {
+      void module
+        .refresh()
+        .catch(() => {})
+        .then(activate);
+    };
+    if (focused && AppState.currentState === 'active') {
+      if (module.getState().phase === 'ready') activate();
+      else refreshAndActivate();
+    }
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (focused && next === 'active') refreshAndActivate();
+      else conversation.setActive(false);
+    });
     return () => {
       live = false;
       subscription.remove();

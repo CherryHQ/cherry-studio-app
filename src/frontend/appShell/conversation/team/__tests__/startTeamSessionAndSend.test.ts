@@ -1,5 +1,6 @@
 import {
   TeamAgentError,
+  teamAgentDraftKey,
   teamDraftKey,
   type TeamAgentModule,
   type TeamConversation,
@@ -27,7 +28,7 @@ function createFakeModule({
   send?: (input: string) => Promise<TeamSubmitResult>;
 } = {}) {
   const drafts = new Map<string, string>();
-  const draftKey = JSON.stringify([contextKey ?? 'ctx-1', 'agent-1']);
+  const draftKey = teamAgentDraftKey(contextKey ?? 'ctx-1', 'agent-1');
   if (initialDraft) drafts.set(draftKey, initialDraft);
   const dispose = jest.fn();
   const conversation: TeamConversation = {
@@ -55,6 +56,7 @@ function createFakeModule({
       agents: [],
     }),
     subscribe: () => () => {},
+    subscribeSessions: () => () => {},
     refresh: jest.fn(async () => {}),
     listSessions: jest.fn(async () => []),
     createSession: jest.fn(createSession),
@@ -157,6 +159,30 @@ describe('startTeamSessionAndSend', () => {
       fake.module.readDraft(teamDraftKey('ctx-1', { agentId: 'agent-1', sessionId: 'session-1' })),
     ).toBe('ambiguous prompt');
     expect(fake.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves the submitted text and keeps edits made while creating the session', async () => {
+    const created = Promise.withResolvers<TeamSession>();
+    const fake = createFakeModule({
+      initialDraft: 'A',
+      createSession: () => created.promise,
+      send: async () => 'unknown',
+    });
+    const pending = startTeamSessionAndSend({
+      module: fake.module,
+      contextKey: 'ctx-1',
+      agentId: 'agent-1',
+      text: 'A',
+      draftKey: fake.draftKey,
+      onSessionCreated: jest.fn(),
+    });
+    fake.module.writeDraft(fake.draftKey, 'B');
+    const session = { agentId: 'agent-1', sessionId: 'session-1', canDelete: true };
+    created.resolve(session);
+    await pending;
+
+    expect(fake.module.readDraft(teamDraftKey('ctx-1', session))).toBe('A');
+    expect(fake.module.readDraft(fake.draftKey)).toBe('B');
   });
 
   it('switches to the created session and preserves the draft when refresh fails after session creation', async () => {

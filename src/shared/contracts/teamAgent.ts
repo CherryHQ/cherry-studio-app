@@ -32,6 +32,8 @@ export type TeamAgent = {
 export type TeamSessionRef = { agentId: string; sessionId: string };
 export const teamDraftKey = (contextKey: string, target: TeamSessionRef) =>
   JSON.stringify([contextKey, JSON.stringify([target.agentId, target.sessionId])]);
+export const teamAgentDraftKey = (contextKey: string, agentId: string) =>
+  JSON.stringify([contextKey, 'agent', agentId]);
 export type TeamSession = TeamSessionRef & {
   title?: string;
   createdAt?: string;
@@ -101,6 +103,7 @@ export interface TeamConversation {
 export interface TeamAgentModule {
   getState(): TeamDirectoryState;
   subscribe(listener: () => void): () => void;
+  subscribeSessions(listener: () => void): () => void;
   refresh(): Promise<void>;
   listSessions(agentId: string, signal: AbortSignal): Promise<readonly TeamSession[]>;
   createSession(agentId: string): Promise<TeamSession>;

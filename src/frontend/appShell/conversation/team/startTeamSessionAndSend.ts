@@ -35,9 +35,8 @@ export async function startTeamSessionAndSend({
   if (module.getState().context?.key !== contextKey) throw new TeamAgentError('retired');
 
   const nextDraftKey = teamDraftKey(contextKey, created);
-  const existingDraft = module.readDraft(draftKey);
-  module.writeDraft(nextDraftKey, existingDraft || text);
-  if (existingDraft) module.writeDraft(draftKey, '');
+  module.writeDraft(nextDraftKey, text);
+  if (module.readDraft(draftKey).trim() === text.trim()) module.writeDraft(draftKey, '');
 
   const conversation = module.observe(created);
   try {

@@ -50,7 +50,13 @@ import {
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
 import type { MessageListItem } from '@/frontend/components/Message';
-import type { TeamAgentContext, TeamSession, TeamSessionRef } from '@/shared/contracts/teamAgent';
+import {
+  teamAgentDraftKey,
+  teamDraftKey,
+  type TeamAgentContext,
+  type TeamSession,
+  type TeamSessionRef,
+} from '@/shared/contracts/teamAgent';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import {
@@ -179,7 +185,11 @@ function TeamChatContent({
   }
   const agentId = session?.agentId ?? target.agentId ?? directory.agents[0]?.id;
   const agent = directory.agents.find((item) => item.id === agentId);
-  const key = JSON.stringify([context.key, target.sessionId ?? agentId ?? 'catalog']);
+  const key = session
+    ? teamDraftKey(context.key, session)
+    : agentId
+      ? teamAgentDraftKey(context.key, agentId)
+      : JSON.stringify([context.key, 'catalog']);
   const navigationKey = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
     navigationKey.current = key;
@@ -346,6 +356,7 @@ function TeamChatContent({
                   module={module}
                   contextKey={context.key}
                   draftKey={key}
+                  hasSessionTarget={Boolean(session)}
                   conversation={conversation}
                   state={state}
                   agent={agent}

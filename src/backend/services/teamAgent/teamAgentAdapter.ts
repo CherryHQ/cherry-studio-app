@@ -15,8 +15,8 @@ export interface TeamAgentConnection {
   readonly context: TeamAgentContext;
   listAgents(signal: AbortSignal): Promise<readonly TeamAgent[]>;
   listSessions(agentId: string, signal: AbortSignal): Promise<readonly TeamSession[]>;
-  createSession(agentId: string): Promise<TeamSession>;
-  deleteSession(target: TeamSessionRef): Promise<void>;
+  createSession(agentId: string, signal: AbortSignal): Promise<TeamSession>;
+  deleteSession(target: TeamSessionRef, signal: AbortSignal): Promise<void>;
   readDetail(agentId: string, signal: AbortSignal): Promise<TeamAgentDetail>;
   readPortrait(agentId: string, signal: AbortSignal): Promise<string | undefined>;
   readView(target: TeamSessionRef, signal: AbortSignal): Promise<TeamChatView>;
@@ -25,13 +25,18 @@ export interface TeamAgentConnection {
     signal: AbortSignal,
     snapshot: (view: TeamChatView) => void,
   ): Promise<void>;
-  submit(target: TeamSessionRef, input: TeamSubmission): Promise<TeamSubmitResult>;
-  stop(target: TeamSessionRef, runId: string): Promise<void>;
+  submit(
+    target: TeamSessionRef,
+    input: TeamSubmission,
+    signal: AbortSignal,
+  ): Promise<TeamSubmitResult>;
+  stop(target: TeamSessionRef, runId: string, signal: AbortSignal): Promise<void>;
   respond(
     target: TeamSessionRef,
     pendingId: string,
     requestId: string,
     reply: TeamReply,
+    signal: AbortSignal,
   ): Promise<void>;
 }
 export interface TeamAgentAdapter {

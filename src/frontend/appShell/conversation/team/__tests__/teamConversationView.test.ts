@@ -1,4 +1,8 @@
-import type { TeamConversation, TeamMessage } from '@/shared/contracts/teamAgent';
+import type {
+  TeamConversation,
+  TeamConversationState,
+  TeamMessage,
+} from '@/shared/contracts/teamAgent';
 
 import { createTeamConversationProjector } from '../teamConversationView';
 
@@ -55,3 +59,48 @@ it('namespaces server IDs and keeps file-like remote tools inside the readonly p
   ]);
   expect(first.liveMessages[0].actions).toEqual({});
 });
+
+it.each([
+  ['approval', 'awaiting-approval', 'decision'],
+  ['clarify', 'awaiting-input', 'question'],
+] as const)(
+  'surfaces pending %s to respond only when authorized',
+  async (kind, execution, interaction) => {
+    const state: TeamConversationState = {
+      phase: 'current',
+      submitting: false,
+      view: {
+        messages: [],
+        run: { id: 'run', state: 'running' },
+        pending: [{ id: 'pending', requestId: 'run', kind, text: 'Reply' }],
+        canSend: false,
+        canStop: false,
+        canRespond: false,
+      },
+    };
+    const respond = jest.fn(async () => {});
+    const conversation = { respond } as unknown as TeamConversation;
+    const project = createTeamConversationProjector('session');
+    const readonly = project(state, conversation, 'agent', '');
+    expect(readonly.executions[0].state).toBe(execution);
+    expect(readonly.interactions).toEqual([]);
+
+    const writable = project(
+      { ...state, view: { ...state.view!, canRespond: true } },
+      conversation,
+      'agent',
+      '',
+    );
+    expect(writable.interactions).toMatchObject([{ id: 'pending', kind: interaction }]);
+    await writable.interactions[0].respond!.execute(
+      kind === 'approval'
+        ? { kind: 'approve' }
+        : { kind: 'answer', answers: { question: 'answer' } },
+    );
+    expect(respond).toHaveBeenCalledWith(
+      'pending',
+      'run',
+      kind === 'approval' ? { decision: 'allow' } : { text: 'answer' },
+    );
+  },
+);

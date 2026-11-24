@@ -4,6 +4,7 @@ import { Emitter } from '@/backend/core/lifecycle/event';
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import {
   TeamAgentError,
+  teamAgentDraftKey,
   teamDraftKey,
   type TeamAgentModule,
   type TeamConversation,
@@ -36,6 +37,7 @@ type Entry = {
 export class TeamAgentRuntime implements TeamAgentModule {
   private state: TeamDirectoryState = EMPTY;
   private readonly changes = new Emitter<void>();
+  private readonly sessionChanges = new Emitter<void>();
   private readonly entries = new Map<string, Entry>();
   private readonly drafts = new Map<string, string>();
   private readonly slots = createConcurrencySlots(4);
@@ -52,6 +54,10 @@ export class TeamAgentRuntime implements TeamAgentModule {
   readonly getState = () => this.state;
   readonly subscribe = (listener: () => void) => {
     const subscription = this.changes.event(listener);
+    return () => subscription.dispose();
+  };
+  readonly subscribeSessions = (listener: () => void) => {
+    const subscription = this.sessionChanges.event(listener);
     return () => subscription.dispose();
   };
   private selectContext() {
@@ -91,6 +97,10 @@ export class TeamAgentRuntime implements TeamAgentModule {
           (agents) => {
             this.current(connection);
             const visible = new Set(agents.map((agent) => agent.id));
+            const withdrawn = new Set(
+              this.state.agents.map((agent) => agent.id).filter((id) => !visible.has(id)),
+            );
+            if (withdrawn.size) this.clearAgentDrafts(connection.context.key, withdrawn);
             for (const [key, entry] of this.entries) {
               if (visible.has(entry.target.agentId)) continue;
               entry.stream?.abort();
@@ -155,9 +165,9 @@ export class TeamAgentRuntime implements TeamAgentModule {
     const connection = this.current();
     if (!this.state.agents.find((agent) => agent.id === agentId)?.canCreateSession)
       throw new TeamAgentError('unavailable');
-    const session = await connection.createSession(agentId);
+    const session = await connection.createSession(agentId, this.lifetime.signal);
     this.current(connection);
-    this.changes.fire();
+    this.sessionChanges.fire();
     return session;
   };
   readonly deleteSession = async (target: TeamSessionRef) => {
@@ -165,8 +175,9 @@ export class TeamAgentRuntime implements TeamAgentModule {
     const sessions = await this.listSessions(target.agentId, this.lifetime.signal);
     if (!sessions.find((session) => session.sessionId === target.sessionId)?.canDelete)
       throw new TeamAgentError('unsupported');
-    await connection.deleteSession(target);
+    await connection.deleteSession(target, this.lifetime.signal);
     this.current(connection);
+    this.drafts.delete(teamDraftKey(connection.context.key, target));
     const key = sessionKey(target);
     const entry = this.entries.get(key);
     if (entry) {
@@ -176,7 +187,7 @@ export class TeamAgentRuntime implements TeamAgentModule {
       entry.changes.fire();
       this.entries.delete(key);
     }
-    this.changes.fire();
+    this.sessionChanges.fire();
   };
   readonly readDetail = async (agentId: string, signal: AbortSignal) => {
     const connection = this.current();
@@ -208,6 +219,20 @@ export class TeamAgentRuntime implements TeamAgentModule {
       return !!this.state.context && Array.isArray(value) && value[0] === this.state.context.key;
     } catch {
       return false;
+    }
+  }
+  private clearAgentDrafts(contextKey: string, agentIds: ReadonlySet<string>) {
+    for (const id of agentIds) this.drafts.delete(teamAgentDraftKey(contextKey, id));
+    for (const key of this.drafts.keys()) {
+      const value: unknown = JSON.parse(key);
+      if (!Array.isArray(value) || value.length !== 2 || typeof value[1] !== 'string') continue;
+      try {
+        const session: unknown = JSON.parse(value[1]);
+        if (Array.isArray(session) && session.length === 2 && agentIds.has(session[0]))
+          this.drafts.delete(key);
+      } catch {
+        // Other context-owned draft keys do not encode a session.
+      }
     }
   }
   private assertEntry(entry: Entry) {
@@ -266,11 +291,15 @@ export class TeamAgentRuntime implements TeamAgentModule {
             if (entry.revision === revision) this.installView(entry, view);
           },
           (error: unknown) => {
-            if (!entry.lifetime.signal.aborted)
+            const code = failure(error);
+            if (
+              !entry.lifetime.signal.aborted &&
+              (code === 'not-visible' || entry.revision === revision)
+            )
               this.publish(entry, {
                 phase: 'error',
-                failure: failure(error),
-                ...(failure(error) === 'not-visible' ? { view: null } : {}),
+                failure: code,
+                ...(code === 'not-visible' ? { view: null } : {}),
               });
             throw error;
           },
@@ -387,22 +416,23 @@ export class TeamAgentRuntime implements TeamAgentModule {
           throw new TeamAgentError('busy');
         if (own.state.unknown && !confirmDuplicate) return 'unknown';
         const submission = { requestId: uuid(), input };
-        this.publish(own, { submitting: true, unknown: submission });
+        this.publish(own, { submitting: true });
         try {
-          const result = await connection.submit(target, submission);
+          const result = await connection.submit(target, submission, own.lifetime.signal);
           this.assertEntry(own);
-          if (result === 'accepted') this.clearAcceptedDraft(own, input);
-          this.publish(own, {
-            unknown: result === 'unknown' ? submission : undefined,
-            ...(result === 'accepted' ? { accepted: submission } : {}),
-          });
+          if (result === 'accepted') {
+            this.clearAcceptedDraft(own, input);
+            this.publish(own, { unknown: undefined, accepted: submission });
+          } else if (result === 'unknown') {
+            this.publish(own, { unknown: submission });
+          }
+          if (result === 'accepted' || result === 'unknown') this.sessionChanges.fire();
           return result;
         } finally {
           if (!own.lifetime.signal.aborted) {
             this.publish(own, { submitting: false });
             this.releaseEntry(own);
             if (!own.lifetime.signal.aborted) void this.read(own).catch(() => {});
-            this.changes.fire();
           }
         }
       },
@@ -411,7 +441,7 @@ export class TeamAgentRuntime implements TeamAgentModule {
         const view = own.state.view;
         if (own.state.phase !== 'current' || !view?.canStop || !view.run)
           throw new TeamAgentError('unavailable');
-        await connection.stop(target, view.run.id);
+        await connection.stop(target, view.run.id, this.lifetime.signal);
         assertCurrent();
         await this.read(own);
       },
@@ -425,7 +455,7 @@ export class TeamAgentRuntime implements TeamAgentModule {
           )
         )
           throw new TeamAgentError('not-visible');
-        await connection.respond(target, pendingId, requestId, reply);
+        await connection.respond(target, pendingId, requestId, reply, this.lifetime.signal);
         assertCurrent();
         await this.read(own);
       },
@@ -459,5 +489,6 @@ export class TeamAgentRuntime implements TeamAgentModule {
     this.state = EMPTY;
     this.changes.fire();
     this.changes.dispose();
+    this.sessionChanges.dispose();
   }
 }
