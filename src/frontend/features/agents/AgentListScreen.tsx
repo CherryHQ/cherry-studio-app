@@ -1,5 +1,5 @@
-import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
+import SparkPenIcon from '@cherrystudio/app-icons/icons/spark-pen';
 import {
   ContentState,
   type MenuItem,
@@ -583,7 +583,7 @@ const AgentListRowView = memo(function AgentListRow({
               }}
               testID={`agent-edit-${agent.id}`}
             >
-              <PencilIcon className="size-4 text-muted-foreground" />
+              <SparkPenIcon className="text-muted-foreground" size={20} strokeWidth={1.8} />
             </Pressable>
           </Sortable.Exclusion>
         )}
