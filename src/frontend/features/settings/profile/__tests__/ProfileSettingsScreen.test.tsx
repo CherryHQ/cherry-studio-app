@@ -60,6 +60,7 @@ const base: AccountState = {
   isSignedIn: false,
   isEnterprise: false,
   isRestoringSession: false,
+  isRestoringCommunitySession: false,
   needsSignIn: false,
   hasPrompted: true,
   isBusy: false,

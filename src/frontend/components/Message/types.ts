@@ -98,6 +98,7 @@ export type MessageListHandle = {
   beginInteraction(): void;
   scrollBy(distance: number): void;
   endInteraction(): void;
+  scrollToMessage(messageId: string): Promise<boolean>;
 };
 
 export type MessageRenderer = (message: MessageListItem) => ReactNode;

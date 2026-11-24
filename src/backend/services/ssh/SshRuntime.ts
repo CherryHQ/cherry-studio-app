@@ -28,6 +28,9 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import type { SshHostProbe, SshModule } from '@/shared/contracts/ssh';
 import {
   SaveSshProfileSchema,
+  grantedSshReadPath,
+  SshReadScopeSchema,
+  type SshGrantScope,
   SshCommandInputSchema,
   SshFileRequestSchema,
   SshFilePathSchema,
@@ -155,6 +158,7 @@ export class SshRuntime extends BaseService implements SshModule {
   }
 
   isAvailable = () => !!getSshNative();
+  supportsFileReadGrants = () => getSshNative()?.supportsPinnedReadPaths === true;
   hasPendingStorageWork = () => this.queued > 0 || this.active.size > 0 || this.transfers.size > 0;
   getAuthenticationRequests = () => this.authenticationRequests;
   subscribeAuthentication = (listener: () => void) => {
@@ -408,39 +412,82 @@ export class SshRuntime extends BaseService implements SshModule {
         : null;
       if (row && !row.fingerprint) throw new SshError('host-key');
       if (row && !row.isEnabled) throw new SshError('disabled');
+      const profile = row ? toSshProfile(row) : null;
+      if (profile) this.assertTargetCapacity(sessionId);
+      if (!sessionId.startsWith('draft:')) this.profiles.rememberTarget(sessionId, profile);
       for (const run of [...this.active, ...this.transfers])
         if (run.sessionId === sessionId) run.cancel();
       this.targets.delete(sessionId);
       this.clearGrantTimer(sessionId);
-      if (row) {
-        if (this.targets.size >= 64) throw new SshError('busy');
-        const target: SshTarget = {
-          selectionId: randomUUID(),
-          profile: toSshProfile(row),
-          grant: null,
-        };
-        this.targets.set(sessionId, target);
-        this.scheduleGrantExpiry(sessionId, target);
-      }
+      if (profile) this.targets.set(sessionId, this.newTarget(profile));
       this.notifyTargets();
     });
 
-  setCommandGrant = (sessionId: string, expected: SshTarget, allowCommands: boolean) =>
+  getRememberedTarget = async (sessionId: string) => {
+    if (this.targets.has(sessionId)) return null;
+    const reference = this.profiles.getRememberedTarget(sessionId);
+    if (!reference) return null;
+    try {
+      const row = await this.profiles.getRow(reference);
+      return row.isEnabled && row.fingerprint ? toSshProfile(row) : null;
+    } catch (error) {
+      if (error instanceof SshError && error.code === 'changed') return null;
+      throw error;
+    }
+  };
+
+  decideRememberedTarget = (
+    sessionId: string,
+    reference: SshReference,
+    decision: 'restore' | 'forget',
+  ) =>
     this.serialize(async () => {
-      this.assertAgentTarget(sessionId, expected);
+      const remembered = this.profiles.getRememberedTarget(sessionId);
+      if (this.targets.has(sessionId) || !remembered || !sameReference(remembered, reference))
+        throw new SshError('changed');
+      if (decision === 'forget') {
+        this.profiles.rememberTarget(sessionId, null);
+        return;
+      }
+      const row = await this.profiles.getRow(remembered);
+      if (!row.fingerprint) throw new SshError('host-key');
+      if (!row.isEnabled) throw new SshError('disabled');
+      this.assertTargetCapacity(sessionId);
+      const profile = toSshProfile(row);
+      this.profiles.rememberTarget(sessionId, profile);
+      this.targets.set(sessionId, this.newTarget(profile));
+      this.notifyTargets();
+    });
+
+  private assertTargetCapacity(sessionId: string) {
+    if (!this.targets.has(sessionId) && this.targets.size >= 64) throw new SshError('busy');
+  }
+
+  private newTarget(profile: SshProfile): SshTarget {
+    return { selectionId: randomUUID(), profile, grant: null };
+  }
+
+  setGrant = (sessionId: string, expected: SshTarget, scope: SshGrantScope | null) =>
+    this.serialize(async () => {
+      this.assertGrantTarget(sessionId, expected);
+      if (scope && scope !== 'diagnostics') {
+        if (!this.supportsFileReadGrants()) throw new SshError('unavailable');
+        scope = SshReadScopeSchema.parse(scope);
+      }
       // Revocation must remain possible even if profile storage is unavailable.
-      if (allowCommands) await this.profiles.getRow(expected.profile);
+      if (scope) await this.profiles.getRow(expected.profile);
       this.assertActive();
-      this.assertAgentTarget(sessionId, expected);
-      if (!allowCommands)
+      this.assertGrantTarget(sessionId, expected);
+      if (!scope || expected.grant)
         for (const run of [...this.active, ...this.transfers])
           if (run.sessionId === sessionId) run.cancel();
       const target: SshTarget = {
         ...expected,
         // Enabling future diagnostics must not invalidate the command being approved.
         // Revocation still retires every captured authorization, including in-flight work.
-        selectionId: allowCommands ? expected.selectionId : randomUUID(),
-        grant: allowCommands ? { id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
+        selectionId:
+          scope === 'diagnostics' && !expected.grant ? expected.selectionId : randomUUID(),
+        grant: scope ? { scope, id: randomUUID(), expiresAt: Date.now() + 3600000 } : null,
       };
       this.targets.set(sessionId, target);
       this.scheduleGrantExpiry(sessionId, target);
@@ -455,11 +502,12 @@ export class SshRuntime extends BaseService implements SshModule {
       const target = this.targets.get(`draft:${draftId}`);
       if (!target) return;
       await this.profiles.getRow(target.profile);
-      if (this.targets.size >= 64) throw new SshError('busy');
+      this.assertTargetCapacity(sessionId);
       const attached: SshTarget = {
         ...target,
         grant: target.grant && target.grant.expiresAt > Date.now() ? target.grant : null,
       };
+      this.profiles.rememberTarget(sessionId, attached.profile);
       this.targets.set(sessionId, attached);
       this.scheduleGrantExpiry(sessionId, attached);
       this.notifyTargets();
@@ -516,9 +564,23 @@ export class SshRuntime extends BaseService implements SshModule {
   ): Promise<SshFileResult> {
     const parsed = SshFileRequestSchema.safeParse(input);
     if (!parsed.success) throw new SshError('invalid-input');
-    return this.fileResult(
-      await this.runOperation(reference, parsed.data, signal, undefined, agent),
+    const expectedPath =
+      agent && grantedSshReadPath(agent.target, parsed.data.operation, parsed.data.path);
+    const result = this.fileResult(
+      await this.runOperation(
+        reference,
+        expectedPath ? { ...parsed.data, expectedPath } : parsed.data,
+        signal,
+        undefined,
+        agent,
+      ),
     );
+    if (agent && expectedPath) {
+      this.assertAgentTarget(agent.sessionId, agent.target);
+      if (result.state !== 'completed') throw new SshError(result.error ?? 'sftp');
+      if (result.path !== expectedPath) throw new SshError('path');
+    }
+    return result;
   }
 
   private fileResult(result: NativeResult): SshFileResult {
@@ -738,6 +800,17 @@ export class SshRuntime extends BaseService implements SshModule {
       throw new SshError('changed');
   }
 
+  private assertGrantTarget(sessionId: string, expected: SshTarget) {
+    const current = this.targets.get(sessionId);
+    if (
+      !current ||
+      current.selectionId !== expected.selectionId ||
+      !sameReference(current.profile, expected.profile) ||
+      current.grant?.id !== expected.grant?.id
+    )
+      throw new SshError('changed');
+  }
+
   private async runCommand(
     reference: SshReference,
     input: SshCommandInput,
@@ -783,6 +856,7 @@ export class SshRuntime extends BaseService implements SshModule {
         | 'cwd'
         | 'stdin'
         | 'path'
+        | 'expectedPath'
         | 'localPath'
         | 'content'
         | 'overwrite'
@@ -1036,7 +1110,7 @@ export class SshRuntime extends BaseService implements SshModule {
     return pending;
   }
 
-  protected async onStop() {
+  protected override async onStop() {
     this.lifetime.abort();
     this.targets.clear();
     this.probes.clear();
@@ -1060,7 +1134,7 @@ export class SshRuntime extends BaseService implements SshModule {
     this.targets.clear();
     this.probes.clear();
   }
-  protected onDestroy() {
+  protected override onDestroy() {
     return this.onStop();
   }
 }

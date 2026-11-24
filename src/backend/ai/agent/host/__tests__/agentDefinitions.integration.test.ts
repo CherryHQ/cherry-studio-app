@@ -65,6 +65,7 @@ describe('agent-table definition source', () => {
   });
 
   test('reports an unconfigured model separately from a missing agent', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
     const source = createAgentTableDefinitionSource();
     const agent = await agentService.create({ model: null, name: 'No Model' });
 
@@ -72,6 +73,21 @@ describe('agent-table definition source', () => {
       name: 'AgentProtocolError',
       view: { code: 'AGENT_MODEL_NOT_CONFIGURED', retryable: false },
     });
+    await expect(source.getAgent(agent.id, 'openai::gpt-4')).resolves.toMatchObject({
+      model: { providerId: 'openai', modelId: 'gpt-4' },
+    });
+  });
+
+  test('reads Agent owner identity without requiring a configured model and hides soft-deleted Agents', async () => {
+    const source = createAgentTableDefinitionSource();
+    const agent = await agentService.create({ model: null, name: 'Identity Only' });
+
+    await expect(source.getAgentOwner?.(agent.id)).resolves.toEqual({
+      id: agent.id,
+      name: 'Identity Only',
+    });
+    await agentService.delete(agent.id);
+    await expect(source.getAgentOwner?.(agent.id)).resolves.toBeNull();
   });
 });
 

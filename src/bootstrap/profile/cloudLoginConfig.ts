@@ -1,7 +1,14 @@
 import * as z from 'zod';
 
-import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { isHttpError } from '@/backend/services/http';
+import {
+  configOrigin,
+  NetworkRegionSchema,
+  requestConfigServiceResolve,
+} from '@/backend/services/region';
 import { AccountError } from '@/shared/contracts/account';
+
+export { configOrigin };
 
 // These scopes are always requested by Accounts Portal 0.2.1.
 export const sdkScopes = ['openid', 'profile', 'offline_access'];
@@ -18,17 +25,10 @@ const endpoint = z
   })
   .transform((value) => value.replace(/\/+$/, ''));
 
-export function configOrigin(value: unknown): string | undefined {
-  const parsed = endpoint.safeParse(value);
-  if (!parsed.success) return undefined;
-  const url = new URL(parsed.data);
-  return url.pathname === '/' ? url.origin : undefined;
-}
-
 const registration = z.object({
   schema_version: z.literal(1),
   requires_region_selection: z.literal(false),
-  region: z.enum(['CN', 'GLOBAL']),
+  region: NetworkRegionSchema,
   endpoints: z.object({
     issuer: endpoint,
     portal_url: endpoint,
@@ -58,19 +58,9 @@ export async function resolveCloudLogin(
   options?: { region: CloudLoginConfig['region']; signal: AbortSignal },
 ): Promise<CloudLoginConfig> {
   if (platform !== 'ios' && platform !== 'android') throw new AccountError('unavailable');
-  const http = createHttpClient({ baseUrl: origin, timeoutMs: 15_000 });
   try {
     const query = async (selected?: CloudLoginConfig['region']) => {
-      const { data, status } = await http.request({
-        method: 'POST',
-        path: '/v1/resolve',
-        body: { client: 'mobile', platform, ...(selected && { selected_region: selected }) },
-        signal: options?.signal,
-        credentials: 'omit',
-        redirect: 'error',
-        maxResponseBytes: 32 * 1024,
-      });
-      if (status !== 200) throw new AccountError('response');
+      const data = await readRegistration(origin, platform, selected, options?.signal);
       const result = parseCloudLogin(data, redirectUri);
       if (selected && result.region !== selected) throw new AccountError('response');
       return result;
@@ -104,4 +94,38 @@ export async function resolveCloudLogin(
       { cause: error },
     );
   }
+}
+
+async function readRegistration(
+  origin: string,
+  platform: string,
+  region?: CloudLoginConfig['region'],
+  signal?: AbortSignal,
+) {
+  const { data, status } = await requestConfigServiceResolve(origin, platform, { region, signal });
+  if (status !== 200) throw new AccountError('response');
+  return data;
+}
+
+/** Resolves the regional Cloud catalog origin without creating a login session. */
+export async function resolvePublicCatalogOrigin(
+  origin: unknown,
+  platform: string,
+  signal: AbortSignal,
+) {
+  const service = configOrigin(origin);
+  if (!service || (platform !== 'ios' && platform !== 'android'))
+    throw new AccountError('unavailable');
+  const data = await readRegistration(service, platform, undefined, signal);
+  const registration = z
+    .object({
+      schema_version: z.literal(1),
+      requires_region_selection: z.literal(false),
+      region: NetworkRegionSchema,
+      endpoints: z.object({ cloud_api_origin: endpoint }),
+    })
+    .parse(data);
+  const apiOrigin = configOrigin(registration.endpoints.cloud_api_origin);
+  if (!apiOrigin) throw new AccountError('unavailable');
+  return apiOrigin;
 }

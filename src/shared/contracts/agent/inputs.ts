@@ -46,11 +46,13 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   parts: AgentInputPartsSchema,
-  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  /** The model selected for this submission, independent of pending preference writes. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  /** The model whose controls supplied the effort, if it was selected by the composer. */
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -66,15 +68,18 @@ export const AgentStartSessionInputSchema = z.strictObject({
   agentId: z.string().min(1),
   /** Optional workspace chosen before sending the first message. */
   workspaceFolderId: z.uuid().optional(),
+  /** A single-model choice made in the draft, saved with the new Session. */
+  sessionModelId: UniqueModelIdSchema.optional(),
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   parts: AgentInputPartsSchema,
-  /** Snapshots the draft composer's selected model while its Agent mutation settles. */
+  /** First reply's model, which can differ from the Session's own choice. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
@@ -133,11 +138,12 @@ export const AgentEditUserMessageInputSchema = z.strictObject({
    * the edited text and carried file parts stay attached.
    */
   text: z.string().min(1),
-  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  /** Optional override for this edit while a conversation model selection is being saved. */
   modelId: UniqueModelIdSchema.optional(),
   additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  reasoningEffortModelId: UniqueModelIdSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,

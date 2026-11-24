@@ -7,6 +7,7 @@ import type {
   ApkUpdateRelease,
   AppUpdateDownload,
   AppUpdateModule,
+  AppUpdateRelease,
   AppUpdateResult,
 } from '@/shared/contracts/appUpdate';
 
@@ -19,7 +20,7 @@ type AppUpdateDialogProps = Parameters<typeof AppUpdateDialog>[0];
 let mockAlert = { confirm: jest.fn((_options: AlertConfirmOptions) => {}) };
 const mockToast = { show: jest.fn((_options: ToastShowOptions) => 'update') };
 const mockUpdate = {
-  channel: 'apk',
+  channel: 'apk' as AppUpdateModule['channel'],
   isEnabled: true,
   check: jest.fn<Promise<AppUpdateResult>, [AbortSignal?]>(),
   getDownload: jest.fn((): AppUpdateDownload => ({ status: 'idle' })),
@@ -89,7 +90,7 @@ const tree = () => (
     </AppUpdateProvider>
   </QueryClientProvider>
 );
-const recordAvailable = (release: ApkUpdateRelease) =>
+const recordAvailable = (release: AppUpdateRelease) =>
   queryClient.setQueryData(appUpdateQueryOptions(mockUpdate).queryKey, {
     status: 'available',
     ...release,
@@ -97,6 +98,7 @@ const recordAvailable = (release: ApkUpdateRelease) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUpdate.channel = 'apk';
   mockUpdate.check.mockReset().mockResolvedValue({ status: 'available', ...latestRelease });
   mockUpdate.getDownload.mockReturnValue({ status: 'idle' });
   mockUpdate.install.mockResolvedValue('opened');
@@ -122,6 +124,25 @@ test('a recorded release opens the dialog without another request and counts as 
     releaseId: latestRelease.id,
     remindedAt: expect.any(Number),
   });
+});
+
+test('a manual App Store check does not reopen an offer from a previous storefront', async () => {
+  mockUpdate.channel = 'app-store';
+  recordAvailable({
+    channel: 'app-store',
+    id: 'app-store:123:2.0',
+    currentVersion: '1.0',
+    latestVersion: '2.0',
+    notes: null,
+    storeUrl: 'https://apps.apple.com/jp/app/id123',
+  });
+  mockUpdate.check.mockResolvedValue({ status: 'unavailable', reason: 'storefrontUnavailable' });
+
+  await act(async () => actions.check());
+
+  expect(mockUpdate.check).toHaveBeenCalledTimes(1);
+  expect(mockDialog.release).toBeNull();
+  expect(mockToast.show).toHaveBeenLastCalledWith({ label: 'appUpdate.failed' });
 });
 
 test('an unknown result is checked, and an up-to-date result is reported without a dialog', async () => {

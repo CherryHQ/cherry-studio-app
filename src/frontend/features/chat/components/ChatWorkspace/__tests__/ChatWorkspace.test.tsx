@@ -13,6 +13,17 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [
+    jest.requireActual('@/shared/data/types/assistantMessageToolbar')
+      .DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+    jest.fn(),
+  ],
+}));
+jest.mock('../components/AssistantToolbarManageSheet', () => ({
+  AssistantToolbarManageSheet: () => null,
+}));
+
 jest.mock('../../../hooks/useMessageCitationSources', () => ({
   useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
 }));
@@ -86,10 +97,6 @@ jest.mock('../components/ExpandedAnswer', () => ({
   ExpandedAnswerProvider: ({ children }: { children: unknown }) => children,
 }));
 
-jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
-  useIsScreenReaderEnabled: () => false,
-}));
-
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
@@ -98,6 +105,7 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (callback: () => (() => void) | void) =>
     jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
@@ -115,6 +123,8 @@ jest.mock('@/frontend/appShell/header', () => ({
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/pencil', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/share', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -126,7 +136,6 @@ jest.mock('@cherrystudio/ui/components', () => {
       Empty: (props: object) => createElement('ContentState.Empty', props),
       Error: (props: object) => createElement('ContentState.Error', props),
     },
-    ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
     useComposerExpansion: () => null,
     useAlert: () => ({ alert: { confirm: jest.fn() } }),
@@ -355,6 +364,7 @@ function createWorkspaceElement(
   sessionId = 'session-1',
   isLoadingInitial = false,
   fork?: { boundaryMessageId: string; sourceSessionId: string },
+  hasNewerMessages = false,
 ) {
   return (
     <ChatWorkspace
@@ -365,7 +375,7 @@ function createWorkspaceElement(
       isAssistantToolbarEnabled={!isPreview}
       keyboardOffset={isPreview ? 0 : 26}
       messageWindow={{
-        hasNewerMessages: false,
+        hasNewerMessages,
         isLoadingInitial,
         isRefreshing: false,
         isLoadingNewer: false,
@@ -805,5 +815,56 @@ describe('ChatWorkspace message rendering integration', () => {
       'assistant-1',
     ]);
     expect(mockCoverVisible).toBe(false);
+  });
+
+  test('composes the user toolbar for settled user messages and hides it in preview', () => {
+    renderer = renderWorkspace(false, [createMessage('user-1', 'user')]);
+    expect(renderer.root.findAllByProps({ testID: 'user-message-toolbar' }).length).toBeGreaterThan(
+      0,
+    );
+
+    act(() => renderer?.update(createWorkspaceElement(true, [createMessage('user-1', 'user')])));
+    expect(renderer.root.findAllByProps({ testID: 'user-message-toolbar' })).toHaveLength(0);
+  });
+
+  test('renders disclaimer only under the latest completed assistant message in the live tail', () => {
+    const findDisclaimers = (node: ReactTestRenderer['root']) =>
+      node.findAll(
+        (item) => item.type === 'Text' && item.props.testID === 'assistant-message-disclaimer',
+      );
+
+    const u1 = createMessage('user-1', 'user');
+    const a1 = createMessage('assistant-1', 'assistant');
+    const u2 = createMessage('user-2', 'user');
+    const a2Pending = createMessage('assistant-2', 'assistant', 'streaming');
+    const a2Done = createMessage('assistant-2', 'assistant', 'success');
+
+    renderer = renderWorkspace(false, [u1, a1]);
+    expect(findDisclaimers(renderer.root)).toHaveLength(1);
+    expect(
+      findDisclaimers(renderer.root.findByProps({ testID: 'chat-message-assistant-1' })),
+    ).toHaveLength(1);
+
+    act(() => renderer?.update(createWorkspaceElement(false, [u1, a1, u2])));
+    expect(findDisclaimers(renderer.root)).toHaveLength(0);
+
+    act(() => renderer?.update(createWorkspaceElement(false, [u1, a1, u2, a2Pending])));
+    expect(findDisclaimers(renderer.root)).toHaveLength(0);
+
+    act(() => renderer?.update(createWorkspaceElement(false, [u1, a1, u2, a2Done])));
+    expect(findDisclaimers(renderer.root)).toHaveLength(1);
+    expect(
+      findDisclaimers(renderer.root.findByProps({ testID: 'chat-message-assistant-1' })),
+    ).toHaveLength(0);
+    expect(
+      findDisclaimers(renderer.root.findByProps({ testID: 'chat-message-assistant-2' })),
+    ).toHaveLength(1);
+
+    act(() =>
+      renderer?.update(
+        createWorkspaceElement(false, [u1, a1, u2, a2Done], 'session-1', false, undefined, true),
+      ),
+    );
+    expect(findDisclaimers(renderer.root)).toHaveLength(0);
   });
 });

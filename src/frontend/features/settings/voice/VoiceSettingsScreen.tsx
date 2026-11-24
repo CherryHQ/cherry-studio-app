@@ -1,7 +1,9 @@
+import { Section, useToast } from '@cherrystudio/ui/components';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 
 import { useBackendModule, usePreference } from '@/frontend/data';
 import { VOICE_ENGINE_PREFERENCE, type VoiceCapability } from '@/shared/contracts/voice';
@@ -21,6 +23,25 @@ function useEffectiveEngine(capability: VoiceCapability) {
     // Keep the current engine's controls until the new choice resolves instead of blanking them.
     placeholderData: keepPreviousData,
   }).data;
+}
+
+function BackgroundReadingSetting() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const voice = useBackendModule('voice');
+  const [enabled, setEnabled] = usePreference('app.background_audio.consent');
+  return (
+    <Section.SwitchItem
+      label={t('settings.voice.speech.background')}
+      value={enabled === true}
+      onValueChange={(value) => {
+        if (!value) voice.stopSpeaking();
+        void setEnabled(value, { optimistic: false }).catch(() => {
+          toast.show({ label: t('settings.voice.saveFailed'), variant: 'danger' });
+        });
+      }}
+    />
+  );
 }
 
 /** Keep each engine's controls beside its corresponding capability. */
@@ -54,6 +75,7 @@ export default function VoiceSettingsScreen() {
       </VoiceEngineSection>
       <VoiceEngineSection capability="speech" effectiveEngine={speechEngine ?? null}>
         {speechEngine ? <SpeechVoiceSetting engine={speechEngine} key={speechEngine} /> : null}
+        {Platform.OS === 'android' ? <BackgroundReadingSetting /> : null}
       </VoiceEngineSection>
     </SettingsScrollPage>
   );

@@ -25,7 +25,6 @@ import { parseDeepseekExportUrl } from '@/shared/utils/deepseekExportUrl';
 
 import {
   type DeepseekArchiveConversation,
-  deepseekArchiveFile,
   readDeepseekImageMediaType,
   readDeepseekJson,
   unpackDeepseekArchive,
@@ -55,6 +54,7 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
 
   importFromUrl: DeepseekImportModule['importFromUrl'] = (input, options) => {
     if (this.pending || this.stopped || storageMutationGate.isFrozen) {
+      logger.warn('DeepSeek import failed', { phase: 'admission', code: 'busy' });
       return Promise.reject(new DeepseekImportError('busy'));
     }
     this.controller = new AbortController();
@@ -80,8 +80,10 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
     report: Parameters<DeepseekImportModule['importFromUrl']>[1]['onProgress'],
   ): Promise<DeepseekImportResult> {
     const root = new Directory(Paths.cache, `deepseek-import-${randomUUID()}`);
-    const createdFiles: FileEntry[] = [];
+    const importedFiles = new Map<string, FileEntry>();
+    const usedFileIds = new Set<string>();
     let committed = false;
+    let phase: 'link' | 'download' | 'archive' | 'conversation' | 'write' = 'link';
     const progress: typeof report = (value) => {
       try {
         report(value);
@@ -92,6 +94,7 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
     try {
       signal.throwIfAborted();
       const url = parseDeepseekExportUrl(input);
+      phase = 'download';
       root.create({ intermediates: true });
       const archive = new File(root, 'export.zip');
       progress({ phase: 'downloading', completed: 0, total: null });
@@ -112,10 +115,11 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
         },
       });
       signal.throwIfAborted();
+      phase = 'archive';
       progress({ phase: 'reading', completed: 0, total: archive.size });
       let percentage = -1;
       const contents = new Directory(root, 'contents');
-      const { conversations, names } = await unpackDeepseekArchive(
+      const { conversations, files } = await unpackDeepseekArchive(
         archive,
         contents,
         signal,
@@ -127,49 +131,57 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
           }
         },
       );
+      phase = 'conversation';
       const slice = createTimeSlice(signal);
-      const importedFiles = new Map<string, FileEntry>();
       const readable: DeepseekArchiveConversation[] = [];
-      let messageCount = 0;
+      let hasReadableConversation = false;
+      let hasMessages = false;
       for (const item of conversations) {
         await slice();
-        const conversation = await this.readConversation(contents, item.id);
+        const conversation = await this.readConversation(
+          files.get(`chat_sessions/${item.id}.json`),
+        );
         if (!conversation) continue;
+        hasReadableConversation = true;
+        // A nonempty tree needs a question to keep any answers. A truly empty list is valid.
+        if (conversation.messages.length > 0) {
+          if (!conversation.messages.some((message) => message.role === 'USER')) continue;
+          hasMessages = true;
+        }
         readable.push(item);
-        messageCount += conversation.messages.length;
         for (const message of conversation.messages) {
           for (const fragment of message.fragments) {
             if (fragment.type !== 'FILE') continue;
             for (const file of fragment.files) {
+              if (!file.is_image || !file.export_path) continue;
+              const sourceUri = files.get(file.export_path);
+              if (sourceUri === undefined) continue;
               const key = deepseekFileKey(item.id, file);
-              if (importedFiles.has(key) || !file.is_image || !file.export_path) continue;
-              if (!names.has(file.export_path)) continue;
+              if (importedFiles.has(key)) continue;
               await slice();
               storageMutationGate.assertWritable();
               try {
-                const source = deepseekArchiveFile(contents, file.export_path);
                 const entry = await importManagedFile(
                   this.files,
                   {
-                    uri: source.uri,
+                    uri: sourceUri,
                     name: attachmentName(file.file_name, file.export_path),
-                    mediaType: readDeepseekImageMediaType(source),
+                    mediaType: readDeepseekImageMediaType(new File(sourceUri), file.export_path),
                   },
                   signal,
                 );
-                createdFiles.push(entry);
                 importedFiles.set(key, entry);
-              } catch (error) {
+              } catch {
                 signal.throwIfAborted();
                 // The message keeps the attachment's name as text, like a file absent from the export.
-                logger.warn('Skipped an unreadable DeepSeek attachment', error as Error);
               }
             }
           }
         }
       }
-      if (readable.length === 0) throw new DeepseekImportError('invalid');
-      if (messageCount === 0) throw new DeepseekImportError('empty');
+      if (!hasReadableConversation) throw new DeepseekImportError('invalid');
+      if (!hasMessages) throw new DeepseekImportError('empty');
+      phase = 'write';
       progress({ phase: 'importing', completed: 0, total: readable.length });
       const now = Date.now();
       // One transaction keeps the import atomic. Other writes wait for it but are not blocked
@@ -183,10 +195,13 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
         });
         let missingAttachments = 0;
         let sessions = 0;
+        let messages = 0;
         let completed = 0;
         for (const item of readable) {
           await slice();
-          const conversation = await this.readConversation(contents, item.id);
+          const conversation = await this.readConversation(
+            files.get(`chat_sessions/${item.id}.json`),
+          );
           progress({ phase: 'importing', completed: ++completed, total: readable.length });
           if (!conversation) continue;
           const converted = convertDeepseekConversation(conversation, {
@@ -198,37 +213,63 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
             files: importedFiles,
             createId: createOrderedUuid,
           });
+          if (conversation.messages.length > 0 && converted.messages.length === 0) continue;
+          signal.throwIfAborted();
           await tx.insert(agentSessionTable).values(converted.session);
           // Stay under SQLite's historical bound on statement parameters.
           for (let offset = 0; offset < converted.messages.length; offset += 40) {
             await slice();
-            await tx
-              .insert(agentSessionMessageTable)
-              .values(converted.messages.slice(offset, offset + 40));
+            const batch = converted.messages.slice(offset, offset + 40);
+            await tx.insert(agentSessionMessageTable).values(batch);
+            if (importedFiles.size > 0) {
+              for (const { data } of batch)
+                for (const part of data.parts)
+                  if (part.type === 'file') usedFileIds.add(part.fileEntryId);
+            }
           }
           missingAttachments += converted.missingAttachments;
+          messages += converted.messages.length;
           sessions += 1;
         }
         signal.throwIfAborted();
+        if (messages === 0) throw new DeepseekImportError('empty');
         return {
           agentId: agent.id,
           sessions,
-          messages: messageCount,
+          messages,
           missingAttachments,
           skippedConversations: conversations.length - sessions,
         };
       });
       committed = true;
       publishDataApiChanges(['/agents', `/agents/${result.agentId}`, '/agent-sessions']);
+      if (result.skippedConversations > 0 || result.missingAttachments > 0)
+        logger.warn('DeepSeek import completed with skips', {
+          importedConversations: result.sessions,
+          skippedConversations: result.skippedConversations,
+          missingAttachments: result.missingAttachments,
+        });
       return result;
     } catch (cause) {
       if (signal.aborted) throw signal.reason;
-      if (cause instanceof DeepseekImportError) throw cause;
-      if (cause instanceof FileDownloadError) throw new DeepseekImportError('download');
-      logger.warn('DeepSeek import failed', cause as Error);
-      throw new DeepseekImportError('failed', { cause });
+      const error =
+        cause instanceof DeepseekImportError
+          ? cause
+          : new DeepseekImportError(cause instanceof FileDownloadError ? 'download' : 'failed', {
+              cause,
+            });
+      logger.warn('DeepSeek import failed', {
+        phase: error.code === 'empty' ? 'conversation' : phase,
+        code: error.code,
+        reasonCode: error.reasonCode,
+        statusCode: cause instanceof FileDownloadError ? cause.statusCode : undefined,
+      });
+      throw error;
     } finally {
-      if (!committed) await discardInternalEntries(this.files, createdFiles);
+      const discardedFiles = [...importedFiles.values()].filter(
+        (entry) => !committed || !usedFileIds.has(entry.id),
+      );
+      if (discardedFiles.length > 0) await discardInternalEntries(this.files, discardedFiles);
       try {
         if (root.exists) root.delete();
       } catch (error) {
@@ -238,16 +279,14 @@ export class DeepseekImportRuntime implements DeepseekImportModule {
   }
 
   /** An unreadable conversation is skipped rather than failing the whole import. */
-  private async readConversation(root: Directory, id: string) {
+  private async readConversation(uri: string | undefined) {
+    if (uri === undefined) return undefined;
     try {
-      const parsed = deepseekConversationSchema.safeParse(
-        await readDeepseekJson(deepseekArchiveFile(root, `chat_sessions/${id}.json`)),
-      );
+      const parsed = deepseekConversationSchema.safeParse(await readDeepseekJson(new File(uri)));
       if (parsed.success) return parsed.data;
     } catch (error) {
       if (!(error instanceof DeepseekImportError)) throw error;
     }
-    logger.warn('Skipped an unreadable DeepSeek conversation');
     return undefined;
   }
 }

@@ -1,6 +1,7 @@
 import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { NavigationShellContext } from '@/frontend/appShell/navigationShell/state';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import type { Agent } from '@/shared/data/types/agent';
 
@@ -92,7 +93,9 @@ jest.mock('../MainHeaderView/MainHeaderView', () => ({
     return agent ? (
       <>
         <MainHeaderAgentLabel agent={agent} onPress={onAgentPress} />
-        <Pressable testID="main-header-agent-switch" onPress={onAgentSwitch} />
+        {onAgentSwitch ? (
+          <Pressable testID="main-header-agent-switch" onPress={onAgentSwitch} />
+        ) : null}
       </>
     ) : null;
   },
@@ -191,9 +194,13 @@ describe('MainHeaderAgentLabel', () => {
   it.each([
     ['agent-1', 'Peanut'],
     ['agent-2', 'Cherry'],
-  ])('selects %s through the separate switch button', async (agentId, name) => {
+  ])('selects %s through the separate switch button in wide-rail mode', async (agentId, name) => {
     await act(async () => {
-      renderer = create(<MainHeader blurTarget={{ current: null }} />);
+      renderer = create(
+        <NavigationShellContext value={{ shellMode: 'wide-rail' } as never}>
+          <MainHeader blurTarget={{ current: null }} />
+        </NavigationShellContext>,
+      );
     });
     await act(async () =>
       renderer!.root.findByProps({ testID: 'main-header-agent-switch' }).props.onPress(),
@@ -206,6 +213,18 @@ describe('MainHeaderAgentLabel', () => {
     if (agentId === 'agent-1') expect(mockSetParams).not.toHaveBeenCalled();
     else expect(mockSetParams).toHaveBeenCalledWith({ agentId, sessionId: undefined });
     expect(renderer!.root.findAllByProps({ accessibilityRole: 'radio' })).toHaveLength(0);
+  });
+
+  it('omits the agent switch trigger outside wide-rail mode', async () => {
+    await act(async () => {
+      renderer = create(
+        <NavigationShellContext value={{ shellMode: 'compact-dock' } as never}>
+          <MainHeader blurTarget={{ current: null }} />
+        </NavigationShellContext>,
+      );
+    });
+    const switchNodes = renderer!.root.findAllByProps({ testID: 'main-header-agent-switch' });
+    expect(switchNodes).toHaveLength(0);
   });
 
   it('selects from a remote catalog without local edit/create actions or a false missing-model label', async () => {

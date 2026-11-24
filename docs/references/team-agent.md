@@ -11,8 +11,8 @@ that service directly; it does not run these Agents through the local Host or th
 | `shared/contracts/teamAgent.ts` | Credential-free directory, session, message, capability and action values |
 | `backend/services/teamAgent` | App-owned `TeamAgentRuntime`, memory drafts, submission state and observation lifetimes |
 | `backend/services/enterprise/teamAgent` | Enterprise authorization, `/ai-employees` protocol, capability derivation and submission recovery |
-| `frontend/appShell/conversation/team` | Catalog source, opaque session references and display-only message projection |
-| `frontend/features/chat/team` | `/team`, readonly details, composer and focused foreground observation |
+| `frontend/appShell/conversation/team` | Catalog source, opaque session references, foreground observation/resource hooks and display-only message projection |
+| `frontend/features/chat/team` | `/team`, readonly details and composer |
 | `bootstrap/runtime/createAppBootstrapRuntime` | Inject adapters and dispose the team runtime with the app owner |
 
 The common runtime receives `TeamAgentAdapter` implementations. Each connection represents one

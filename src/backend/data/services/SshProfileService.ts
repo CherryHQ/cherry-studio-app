@@ -15,6 +15,14 @@ import {
 
 export const SSH_PROFILE_BACKUP_PATH = 'ssh/profiles.json';
 const PROFILES_KEY = 'profiles';
+const TARGETS_KEY = 'conversation-targets';
+const MAX_REMEMBERED_TARGETS = 64;
+const RememberedTargetsSchema = z.strictObject({
+  version: z.literal(1),
+  targets: z
+    .array(z.strictObject({ sessionId: z.string().min(1).max(200), reference: SshReferenceSchema }))
+    .max(MAX_REMEMBERED_TARGETS),
+});
 export const SSH_PROFILE_SNAPSHOT_MAX_BYTES = 1024 * 1024;
 const ProfileRecordSchema = z.strictObject({
   ...SshProfileFieldsSchema.shape,
@@ -134,6 +142,42 @@ export class SshProfileService {
     const row = this.readRecords().find(({ id }) => id === reference.id);
     if (!row || row.revision !== reference.revision) throw new SshError('changed');
     return row;
+  }
+
+  getRememberedTarget(sessionId: string): SshReference | undefined {
+    return this.readRememberedTargets().find((target) => target.sessionId === sessionId)?.reference;
+  }
+
+  rememberTarget(sessionId: string, reference: SshReference | null): void {
+    storageMutationGate.assertWritable();
+    const previous = this.readRememberedTargets();
+    const targets = previous.filter((target) => target.sessionId !== sessionId);
+    if (reference) targets.push({ sessionId, reference: SshReferenceSchema.parse(reference) });
+    else if (targets.length === previous.length) return;
+    try {
+      this.getStorage().set(
+        TARGETS_KEY,
+        JSON.stringify({ version: 1, targets: targets.slice(-MAX_REMEMBERED_TARGETS) }),
+      );
+    } catch {
+      throw new SshError('storage');
+    }
+  }
+
+  private readRememberedTargets() {
+    let raw: string | undefined;
+    try {
+      raw = this.getStorage().getString(TARGETS_KEY);
+    } catch {
+      throw new SshError('storage');
+    }
+    // These references are optional recovery hints. Invalid data cannot restore a live binding.
+    if (raw === undefined || raw.length > 128 * 1024) return [];
+    try {
+      return RememberedTargetsSchema.safeParse(JSON.parse(raw)).data?.targets ?? [];
+    } catch {
+      return [];
+    }
   }
 
   async save(

@@ -1,0 +1,9 @@
+appId: ${APP_ID}
+name: Shared helper - decline the iOS notification prompt
+---
+- runFlow:
+    when:
+      platform: iOS
+      visible: "Don't Allow|Don’t Allow|不允许"
+    commands:
+      - tapOn: "Don't Allow|Don’t Allow|不允许"

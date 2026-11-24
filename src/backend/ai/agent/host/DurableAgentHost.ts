@@ -54,6 +54,7 @@ import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isHealthToolRef } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
 import type { SkillTextReference } from '@/shared/data/types/skill';
@@ -195,6 +196,8 @@ export class DurableAgentHost implements AgentProtocol {
   private suspension: Promise<void> | undefined;
   private resuming: Promise<void> | undefined;
   private suspended = false;
+  /** A failing stored turn can only trigger one automatic reopen until new input is admitted. */
+  private storageRecovery: 'idle' | 'scheduled' | 'attempted' = 'idle';
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: KeepAliveLease | undefined;
   /** One stable lease per user-started Session, independent of reply presentation. */
@@ -307,14 +310,7 @@ export class DurableAgentHost implements AgentProtocol {
             );
           }
         : undefined,
-      onFailure: (error) => {
-        logger.error('Durable Agent storage failed', new Error(error.message));
-        for (const sessionId of this.listeners.keys())
-          this.publish(sessionId, { type: 'runtime.failed' });
-        void this.suspend(new Error(error.message)).catch((failure) =>
-          logger.warn('Failed to suspend the Agent after storage failure', failure),
-        );
-      },
+      onFailure: (error) => void this.recoverStorageFailure(error),
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
@@ -340,15 +336,16 @@ export class DurableAgentHost implements AgentProtocol {
         const session = await this.store.getSession(identity.sessionId);
         if (!session || !(await this.isCurrentConversation(identity)))
           fail('SESSION_NOT_FOUND', 'The execution no longer has a current Cherry owner.');
-        if (session && !(await this.ports.agents.getAgent(session.agentId)))
+        if (identity.requestId) await this.waitForOwner(identity, identity.requestId, signal);
+        const prepared = identity.requestId
+          ? this.prepared.get(executionKey(identity, identity.requestId))
+          : undefined;
+        const model = prepared?.plan.inferenceSnapshot.model.uniqueModelId ?? session.model;
+        if (!(await this.getAgentOwner(session.agentId, model)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
-        if (identity.requestId) {
-          await this.waitForOwner(identity, identity.requestId, signal);
-          const prepared = this.prepared.get(executionKey(identity, identity.requestId));
-          if (prepared)
-            for (const id of await this.conversations.resourceFileEntryIds(identity))
-              prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
-        }
+        if (prepared)
+          for (const id of await this.conversations.resourceFileEntryIds(identity))
+            prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
         signal.throwIfAborted();
       },
       resolveTool: (identity, ref, signal) => this.resolveTool(identity, ref, signal),
@@ -448,10 +445,13 @@ export class DurableAgentHost implements AgentProtocol {
       this.controller.signal.throwIfAborted();
       await this.conversations.drainUsage();
       this.controller.signal.throwIfAborted();
-      const work = await this.conversations.watchWork((active) => this.protectWork(active));
-      if (this.controller.signal.aborted) {
+      const work = await this.conversations.watchWork((active) => {
+        if (!this.suspended) this.protectWork(active);
+      });
+      if (this.controller.signal.aborted || this.suspended) {
         await work.unsubscribe();
         this.controller.signal.throwIfAborted();
+        throw new Error('The Agent was suspended while opening storage.');
       }
       this.workWatch = work;
       this.protectWork(work.active);
@@ -464,7 +464,16 @@ export class DurableAgentHost implements AgentProtocol {
       recovery?.end('error', traceErrorAttributes(error));
       if (!this.controller.signal.aborted) {
         logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
-        await this.suspend(error instanceof Error ? error : new Error(String(error)));
+        if (this.suspension) {
+          // An interruption can finish tearing down the old copy while a reopen is still
+          // waiting for storage. Close any copy opened after that teardown as well.
+          await this.suspension.catch((cause: unknown) =>
+            logger.warn('Previous runtime cleanup failed', cause as Error),
+          );
+          await this.conversations.close();
+        } else {
+          await this.suspend(error instanceof Error ? error : new Error(String(error)));
+        }
       }
       throw error;
     }
@@ -572,6 +581,7 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
   suspend(reason = new Error('Background execution expired.')): Promise<void> {
+    if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
@@ -598,7 +608,62 @@ export class DurableAgentHost implements AgentProtocol {
     }));
   }
 
+  private async recoverStorageFailure(error: { code: string; message: string }) {
+    if (this.controller.signal.aborted || this.storageRecovery === 'scheduled') return;
+    const isForegroundStorageFailure =
+      error.code === 'runtime_storage_failed' &&
+      Boolean(this.ports.shouldRecoverStorage?.()) &&
+      !storageMutationGate.isFrozen;
+    const canRecover =
+      isForegroundStorageFailure &&
+      this.accepting &&
+      !this.resuming &&
+      this.storageRecovery === 'idle';
+    const failure = new Error(error.message);
+    logger.error('Durable Agent storage failed', failure);
+    const suspension = this.suspend(failure).catch((cause: unknown) =>
+      logger.warn('Failed to suspend the Agent after storage failure', cause as Error),
+    );
+    let attemptedRecovery = false;
+    if (canRecover) {
+      this.storageRecovery = 'scheduled';
+      await suspension;
+      try {
+        if (
+          this.storageRecovery === 'scheduled' &&
+          !this.controller.signal.aborted &&
+          this.ports.shouldRecoverStorage?.() &&
+          !storageMutationGate.isFrozen
+        ) {
+          this.storageRecovery = 'attempted';
+          attemptedRecovery = true;
+          await this.reopenSuspended(false);
+          if (this.accepting) {
+            for (const sessionId of this.listeners.keys())
+              this.publish(sessionId, { type: 'runtime.recovered' });
+            return;
+          }
+        }
+      } catch (cause) {
+        logger.error('Agent operation failed', { error: cause, operation: 'ai.storage_recovery' });
+      }
+      if (this.storageRecovery === 'scheduled') this.storageRecovery = 'idle';
+    }
+    if (!this.controller.signal.aborted) {
+      const recoveryExhausted =
+        attemptedRecovery || (isForegroundStorageFailure && this.storageRecovery === 'attempted');
+      const event: AgentEvent = recoveryExhausted
+        ? { type: 'runtime.failed', retryable: false }
+        : { type: 'runtime.failed' };
+      for (const sessionId of this.listeners.keys()) this.publish(sessionId, event);
+    }
+  }
+
   async resumeSuspended() {
+    return this.reopenSuspended(true);
+  }
+
+  private async reopenSuspended(resetStorageRecovery: boolean) {
     if (this.resuming) return this.resuming;
     if (!this.suspended || this.controller.signal.aborted) return;
     this.resuming = (async () => {
@@ -610,6 +675,7 @@ export class DurableAgentHost implements AgentProtocol {
       this.suspension = undefined;
       try {
         await this.initialize();
+        if (resetStorageRecovery && this.accepting) this.storageRecovery = 'idle';
       } catch (error) {
         this.suspended = true;
         throw error;
@@ -668,6 +734,7 @@ export class DurableAgentHost implements AgentProtocol {
       );
       await this.submitTargets(parsed, null, targets, signal, {
         agentId: parsed.agentId,
+        sessionModelId: parsed.sessionModelId,
         workspaceFolderId: parsed.workspaceFolderId,
       });
       return this.requireSession(parsed.sessionId);
@@ -826,7 +893,10 @@ export class DurableAgentHost implements AgentProtocol {
         inference.snapshot.imageGeneration
       )
         return;
-      const agent = await this.ports.agents.getAgent(session.agentId);
+      const agent = await this.ports.agents.getAgent(
+        session.agentId,
+        inference.snapshot.model.uniqueModelId,
+      );
       if (!agent) return;
       const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
         this.preparation,
@@ -887,7 +957,7 @@ export class DurableAgentHost implements AgentProtocol {
     parent: string | null,
     targets: readonly ReplyTarget[],
     signal: AbortSignal,
-    initial?: { agentId: string; workspaceFolderId?: string },
+    initial?: Pick<AgentStartSessionInput, 'agentId' | 'sessionModelId' | 'workspaceFolderId'>,
     /** Replaces the new-question reservation: a sibling answer or an in-place retry. */
     reserve?: () => Promise<ReserveSubmissionResult>,
   ) {
@@ -932,15 +1002,22 @@ export class DurableAgentHost implements AgentProtocol {
           }
         : {}),
     };
-    const reserved = reserve
-      ? await reserve()
-      : initial
-        ? await this.store.reserveInitialSubmission({
-            ...reservation,
-            agentId: initial.agentId,
-            ...(initial.workspaceFolderId ? { workspaceFolderId: initial.workspaceFolderId } : {}),
-          })
-        : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    let reserved: ReserveSubmissionResult;
+    try {
+      reserved = reserve
+        ? await reserve()
+        : initial
+          ? await this.store.reserveInitialSubmission({
+              ...reservation,
+              ...initial,
+            })
+          : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    } catch (error) {
+      if (initial) {
+        await this.detachConversation(sessionId).catch(() => undefined);
+      }
+      throw error;
+    }
     const renameFork = !reserve && !initial && this.forksToName.get(sessionId) === null;
     if (renameFork) {
       this.forksToName.set(sessionId, reserved.assistantMessage.id);
@@ -1180,6 +1257,34 @@ export class DurableAgentHost implements AgentProtocol {
     return result.session;
   }
 
+  async compactContext(input: Parameters<AgentProtocol['compactContext']>[0]) {
+    const { sessionId, messageId } = AgentSelectMessageInputSchema.parse(input);
+    this.assertIdle(sessionId);
+    return this.admit(sessionId, async (signal) => {
+      const lanes = await this.syncSession(sessionId, true);
+      const session = await this.requireSession(sessionId);
+      if (session.activeNodeId !== messageId) return 'unavailable' as const;
+      for (const lane of lanes) {
+        signal.throwIfAborted();
+        const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
+        if (!latest || latest.assistantMessageId !== messageId) continue;
+        if ((await this.conversations.configuration(lane)).kind !== 'language')
+          return 'unavailable' as const;
+        const outcome = await this.conversations.compactContext(lane, signal);
+        if (outcome === 'busy') fail('SESSION_BUSY', 'The conversation is already compacting.');
+        if (outcome === 'compacted' && latest.status === 'completed') {
+          await this.captureCheckpoint(lane, latest).catch((error: unknown) => {
+            logger.warn('Could not save the compacted Agent checkpoint', error as Error, {
+              sessionId,
+            });
+          });
+        }
+        return outcome;
+      }
+      return 'unavailable' as const;
+    });
+  }
+
   async retryMessage(
     input: Parameters<AgentProtocol['retryMessage']>[0],
   ): Promise<AgentSessionView | void> {
@@ -1317,8 +1422,7 @@ export class DurableAgentHost implements AgentProtocol {
         fail('MESSAGE_NOT_FOUND', 'The edited question is unavailable.');
       const parts = editedUserInput(edited.parts, parsed.text);
       // Question editing is a normal new submission from an explicit parent.
-      // Omitted composer overrides use the Agent's current defaults, never a
-      // historical answer's inference snapshot.
+      // Omitted composer overrides follow the current conversation model.
       const edit: AgentSubmitMessageInput = {
         sessionId: session.id,
         userMessageId: uuidv7(),
@@ -1328,6 +1432,9 @@ export class DurableAgentHost implements AgentProtocol {
         ...(parsed.additionalReplies ? { additionalReplies: parsed.additionalReplies } : {}),
         ...(parsed.reasoningEffort !== undefined
           ? { reasoningEffort: parsed.reasoningEffort }
+          : {}),
+        ...(parsed.reasoningEffortModelId
+          ? { reasoningEffortModelId: parsed.reasoningEffortModelId }
           : {}),
         ...(parsed.imageGeneration ? { imageGeneration: parsed.imageGeneration } : {}),
         ...(parsed.skillIds !== undefined || parsed.skillAction !== undefined
@@ -1568,6 +1675,13 @@ export class DurableAgentHost implements AgentProtocol {
       }
       // A multi-model answer can be stopped alone; without a message the whole question stops.
       if (parsed.messageId && state.active.assistantMessageId !== parsed.messageId) continue;
+      logger.info('Agent cancellation requested', {
+        operation: 'ai.cancel',
+        reasonCode: 'user',
+        sessionId: parsed.sessionId,
+        turnId: parsed.turnId,
+        requestId: state.active.identity.requestId,
+      });
       this.publish(parsed.sessionId, {
         type: 'turn.updated',
         turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
@@ -1712,7 +1826,7 @@ export class DurableAgentHost implements AgentProtocol {
   ): Promise<AgentSessionObservation> {
     await this.resumeSuspended();
     const initialSession = await this.requireSession(sessionId);
-    const agent = await this.ports.agents.getAgent(initialSession.agentId);
+    const agent = await this.getAgentOwner(initialSession.agentId, initialSession.model);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
     const states = this.accepting ? await this.attachedLanes(sessionId) : [];
     const session = await this.requireSession(sessionId);
@@ -2195,20 +2309,24 @@ export class DurableAgentHost implements AgentProtocol {
       if (!(await this.isCurrentConversation(lane))) continue;
       const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
-      await this.traceOperation('ai.checkpoint', latest.identity, async () => {
-        const { contextCheckpoint } = await this.conversations.exportTurn(
-          lane,
-          latest.identity.requestId,
-          { currentContext: true },
-        );
-        if (contextCheckpoint)
-          await this.store.saveContextCheckpoint(
-            latest.assistantMessageId,
-            latest.identity.turnId,
-            contextCheckpoint,
-          );
-      });
+      await this.captureCheckpoint(lane, latest);
     }
+  }
+
+  private captureCheckpoint(lane: RuntimeLane, turn: RuntimeDurableTurn) {
+    return this.traceOperation('ai.checkpoint', turn.identity, async () => {
+      const { contextCheckpoint } = await this.conversations.exportTurn(
+        lane,
+        turn.identity.requestId,
+        { currentContext: true },
+      );
+      if (contextCheckpoint)
+        await this.store.saveContextCheckpoint(
+          turn.assistantMessageId,
+          turn.identity.turnId,
+          contextCheckpoint,
+        );
+    });
   }
 
   private async persistTurn(turn: RuntimeDurableTurn, signal?: AbortSignal) {
@@ -2494,7 +2612,7 @@ export class DurableAgentHost implements AgentProtocol {
             const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
             const agent =
               prepared?.plan.agent ??
-              (session ? await this.ports.agents.getAgent(session.agentId) : null);
+              (session ? await this.getAgentOwner(session.agentId, session.model) : null);
             // The awaited lookups may outlive isolation or removal of this observed copy.
             if (
               !agent ||
@@ -2841,6 +2959,10 @@ export class DurableAgentHost implements AgentProtocol {
           controller.signal,
         ),
       )
+      .then((result) => {
+        if (this.accepting) this.storageRecovery = 'idle';
+        return result;
+      })
       .catch((error: unknown) => {
         cancelPreparation();
         if (controller.signal.reason instanceof AgentProtocolError) throw controller.signal.reason;
@@ -3013,6 +3135,12 @@ export class DurableAgentHost implements AgentProtocol {
         });
       throw error;
     }
+  }
+
+  private getAgentOwner(agentId: string, fallbackModelId?: UniqueModelId | null) {
+    return this.ports.agents.getAgentOwner
+      ? this.ports.agents.getAgentOwner(agentId)
+      : this.ports.agents.getAgent(agentId, fallbackModelId);
   }
 }
 

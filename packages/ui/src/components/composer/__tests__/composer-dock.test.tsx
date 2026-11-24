@@ -1,5 +1,5 @@
 import { Profiler, useEffect } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -8,6 +8,7 @@ import type { useComposerExpansion } from '../components/composer-expansion';
 import { useComposerDockLayout } from '../hooks/use-composer-dock-layout';
 
 let mockBottomInset = 34;
+let mockKeyboardProgress = 1;
 let mockExpansion: ReturnType<typeof useComposerExpansion> = null;
 
 jest.mock('../components/composer-expansion', () => ({
@@ -25,8 +26,8 @@ jest.mock('react-native-safe-area-context', () => ({
 // An open keyboard 300pt tall.
 jest.mock('react-native-keyboard-controller', () => ({
   useReanimatedKeyboardAnimation: () => ({
-    height: { get: () => -300 },
-    progress: { get: () => 1 },
+    height: { get: () => -300 * mockKeyboardProgress },
+    progress: { get: () => mockKeyboardProgress },
   }),
 }));
 
@@ -80,6 +81,7 @@ describe('Composer.Dock', () => {
 
   beforeEach(() => {
     mockBottomInset = 34;
+    mockKeyboardProgress = 1;
     mockExpansion = null;
     dockLayout = undefined;
   });
@@ -255,5 +257,49 @@ describe('Composer.Dock', () => {
     act(() => renderer!.unmount());
     renderer = undefined;
     expect(contentInset.get()).toBe(0);
+  });
+
+  it('adds extraBottomOffset when resting and collapses it on keyboard or expansion', () => {
+    const progress = cell(0);
+    mockExpansion = {
+      actions: { collapse: jest.fn(), expand: jest.fn(), resizeContent: jest.fn() },
+      meta: {
+        compactDockHeight: cell(0),
+        contentInset: cell(0),
+        extraHeight: cell(0),
+        keyboardTrackingEnabled: cell(true),
+        progress,
+      },
+      state: { isExpanded: false, isPresented: false },
+    };
+    mockKeyboardProgress = 0;
+
+    const extraDockStyle = () =>
+      StyleSheet.flatten(
+        renderer!.root
+          .findAllByProps({ pointerEvents: 'box-none' })
+          .find((node) =>
+            node.children.some((c) => typeof c !== 'string' && c?.props?.testID === 'dock-child'),
+          )?.props.style,
+      );
+
+    act(() => {
+      renderer = create(
+        <ComposerDock extraBottomOffset={64} keyboardTracking={cell(true)} layoutMode="expandable">
+          <View testID="dock-child" />
+        </ComposerDock>,
+      );
+    });
+    expect(extraDockStyle().paddingBottom).toBeGreaterThanOrEqual(64);
+
+    mockKeyboardProgress = 1;
+    act(() =>
+      renderer!.update(
+        <ComposerDock extraBottomOffset={64} keyboardTracking={cell(true)} layoutMode="expandable">
+          <View testID="dock-child" />
+        </ComposerDock>,
+      ),
+    );
+    expect(extraDockStyle().paddingBottom).toBeLessThan(64);
   });
 });

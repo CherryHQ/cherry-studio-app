@@ -28,6 +28,8 @@ const dismissals = jest.mocked(dismissNotificationAsync);
 const permissions = jest.mocked(getPermissionsAsync);
 const permissionRequest = jest.mocked(requestPermissionsAsync);
 const enabled = jest.fn(() => true);
+const hasProgressActivity = jest.fn(() => false);
+const environment = { hasProgressActivity, isReplyCompletionNotificationEnabled: enabled };
 
 function setAppState(state: AppStateStatus): void {
   Object.defineProperty(AppState, 'currentState', { configurable: true, value: state });
@@ -50,6 +52,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   setAppState('background');
   enabled.mockReturnValue(true);
+  hasProgressActivity.mockReturnValue(false);
   notices.mockImplementation(async ({ identifier }) => identifier ?? '');
   permissions.mockResolvedValue({ granted: true } as NotificationPermissionsStatus);
   permissionRequest.mockResolvedValue({ granted: true } as NotificationPermissionsStatus);
@@ -62,9 +65,7 @@ afterEach(() => {
 
 describe('createReplyCompletionNotifier', () => {
   it('keeps notices that arrive in the foreground out of the open app', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     await notifier.notifyTurnFinished(event());
 
     const handler = jest.mocked(setNotificationHandler).mock.lastCall?.[0];
@@ -76,9 +77,7 @@ describe('createReplyCompletionNotifier', () => {
     });
   });
   it('registers background approval and text reply controls with their request token', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     const actions = {
       token: 'request-token',
       prompt: 'Which topic?',
@@ -117,9 +116,7 @@ describe('createReplyCompletionNotifier', () => {
     );
   });
   it('delivers one notification for a background completion', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     await expect(notifier.notifyTurnFinished(event())).resolves.toBe(true);
     expect(notices).toHaveBeenCalledTimes(1);
@@ -139,10 +136,30 @@ describe('createReplyCompletionNotifier', () => {
     );
   });
 
-  it('awaits retirement of the activity before delivering its replacement', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
+  it('delivers completions and decisions passively while progress is visible, then alerts when the area is free', async () => {
+    const notifier = createReplyCompletionNotifier(environment);
+    hasProgressActivity.mockReturnValue(true);
+    await notifier.notifyTurnFinished(event());
+    await notifier.notifyAttention({
+      deepLinkUrl: event().deepLinkUrl,
+      title: 'Second session',
+      detail: 'Approval needed',
+      phase: 'awaiting-approval',
+      isCurrent: () => true,
     });
+    expect(notices.mock.calls.map(([request]) => request.content.interruptionLevel)).toEqual([
+      'passive',
+      'passive',
+    ]);
+    expect(notices.mock.calls.every(([request]) => request.content.sound === undefined)).toBe(true);
+    hasProgressActivity.mockReturnValue(false);
+    await notifier.notifyTurnFinished(event());
+    expect(notices.mock.lastCall?.[0].content).toMatchObject({ sound: 'default' });
+    expect(notices.mock.lastCall?.[0].content.interruptionLevel).toBeUndefined();
+  });
+
+  it('awaits retirement of the activity before delivering its replacement', async () => {
+    const notifier = createReplyCompletionNotifier(environment);
     let retired!: () => void;
     let entered!: () => void;
     const started = new Promise<void>((resolve) => {
@@ -166,9 +183,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('does not deliver a predecessor after a new turn takes over during retirement', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     let current = true;
     await expect(
       notifier.notifyTurnFinished(
@@ -184,9 +199,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('stays silent for cancellations, foreground endings, and a disabled preference', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     await expect(notifier.notifyTurnFinished(event({ outcome: 'cancelled' }))).resolves.toBe(false);
     await expect(notifier.notifyTurnFinished(event({ occurredInBackground: false }))).resolves.toBe(
@@ -201,7 +214,7 @@ describe('createReplyCompletionNotifier', () => {
   it('alerts a failure regardless of the completion preference, and in the open app', async () => {
     const onForegroundAttention = jest.fn();
     const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
+      ...environment,
       onForegroundAttention,
     });
     enabled.mockReturnValue(false);
@@ -227,9 +240,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('stays silent once the user is back at delivery time', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     setAppState('active');
 
     await expect(notifier.notifyTurnFinished(event())).resolves.toBe(false);
@@ -237,9 +248,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('honors provisional and ephemeral iOS authorization, not bare denial', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     permissions.mockResolvedValue({
       canAskAgain: true,
@@ -257,9 +266,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('replaces the previous notice for one destination', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     await notifier.notifyTurnFinished(event());
     await notifier.notifyTurnFinished(event({ title: 'Second round' }));
@@ -272,9 +279,7 @@ describe('createReplyCompletionNotifier', () => {
   });
 
   it('retires a delivered notice when its destination opens or a new reply starts', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     await notifier.notifyTurnFinished(event());
     notifier.dismissDestination('cherrystudio:///?sessionId=session-1');
@@ -291,9 +296,7 @@ describe('createReplyCompletionNotifier', () => {
       status: 'undetermined',
       granted: false,
     } as NotificationPermissionsStatus);
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
 
     setAppState('background');
     notifier.requestPermissionOnce();
@@ -318,9 +321,7 @@ describe('createReplyCompletionNotifier', () => {
         status,
         granted: status === 'granted',
       } as NotificationPermissionsStatus);
-      const notifier = createReplyCompletionNotifier({
-        isReplyCompletionNotificationEnabled: enabled,
-      });
+      const notifier = createReplyCompletionNotifier(environment);
       setAppState('active');
       notifier.requestPermissionOnce();
       await Promise.resolve();
@@ -340,9 +341,7 @@ describe('session attention delivery', () => {
 
   it('delivers decisions with completion alerts disabled and preserves the session destination', async () => {
     enabled.mockReturnValue(false);
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     await expect(notifier.notifyAttention(attention())).resolves.toBe(true);
     expect(notices).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -362,7 +361,7 @@ describe('session attention delivery', () => {
   it('uses foreground attention without a system alert and honors denied permission in background', async () => {
     const onForegroundAttention = jest.fn();
     const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
+      ...environment,
       onForegroundAttention,
     });
     setAppState('active');
@@ -377,9 +376,7 @@ describe('session attention delivery', () => {
   });
 
   it('suppresses resolved requests while permission is loading', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     let current = true;
     permissions.mockImplementationOnce(async () => {
       current = false;
@@ -392,9 +389,7 @@ describe('session attention delivery', () => {
   });
 
   it('retires a notification that becomes obsolete during native delivery', async () => {
-    const notifier = createReplyCompletionNotifier({
-      isReplyCompletionNotificationEnabled: enabled,
-    });
+    const notifier = createReplyCompletionNotifier(environment);
     let current = true;
     notices.mockImplementationOnce(async ({ identifier }) => {
       current = false;

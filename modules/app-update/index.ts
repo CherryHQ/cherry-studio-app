@@ -29,3 +29,9 @@ export type NativeAppUpdate = {
 export function getNativeAppUpdate(): NativeAppUpdate | null {
   return requireOptionalNativeModule<NativeAppUpdate>('AppUpdate');
 }
+
+export function getNativeAppStoreUpdate() {
+  return requireOptionalNativeModule<{ getStorefrontCountry(): Promise<string | null> }>(
+    'AppStoreUpdate',
+  );
+}

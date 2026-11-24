@@ -1,6 +1,7 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { Database, DbService } from '@/backend/data/db/DbService';
+import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 import { AccountError } from '@/shared/contracts/account';
 import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
@@ -15,6 +16,7 @@ jest.mock('uuid', () => ({
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
 jest.mock('../utils/orderKey', () => ({
+  applyScopedMoves: jest.fn(),
   insertManyWithOrderKey: jest.fn(),
   insertWithOrderKey: jest.fn(),
 }));
@@ -236,9 +238,9 @@ describe('ProviderService', () => {
 
     await service.delete('custom-provider');
 
-    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.calls).toEqual([[agentSessionTable], [agentTable]]);
     expect(tx.delete).toHaveBeenCalledTimes(1);
-    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(tx.update.mock.invocationCallOrder[1]).toBeLessThan(
       tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
   });
@@ -494,7 +496,7 @@ function createDeleteTransaction(input: { providerId: string }) {
         where: jest.fn(() => ({})),
       })),
     })),
-    update: jest.fn(() => ({
+    update: jest.fn((_table: typeof agentSessionTable | typeof agentTable) => ({
       set: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
     })),
   };

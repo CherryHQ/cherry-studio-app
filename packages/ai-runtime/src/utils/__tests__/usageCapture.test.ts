@@ -44,7 +44,7 @@ describe('AI usage capture context', () => {
       ],
     };
     const snapshot = createAiUsagePricingSnapshot(pricing);
-    pricing.inputTokenTiers[0].input.perMillionTokens = 99;
+    pricing.inputTokenTiers[0]!.input.perMillionTokens = 99;
     expect(snapshot?.inputTokenTiers).toEqual([
       { minInputTokens: 200, inputPerMillionTokens: 4, outputPerMillionTokens: 8 },
     ]);
@@ -52,14 +52,14 @@ describe('AI usage capture context', () => {
     expect(
       createAiUsagePricingSnapshot({
         ...pricing,
-        inputTokenTiers: [pricing.inputTokenTiers[0], pricing.inputTokenTiers[0]],
+        inputTokenTiers: [pricing.inputTokenTiers[0]!, pricing.inputTokenTiers[0]!],
       }),
     ).toBeNull();
     expect(
       createAiUsagePricingSnapshot({
         ...pricing,
         inputTokenTiers: [
-          { ...pricing.inputTokenTiers[0], output: { currency: 'CNY', perMillionTokens: 8 } },
+          { ...pricing.inputTokenTiers[0]!, output: { currency: 'CNY', perMillionTokens: 8 } },
         ],
       }),
     ).toBeNull();

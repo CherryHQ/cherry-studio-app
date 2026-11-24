@@ -113,8 +113,8 @@ and queued submissions; the Host reconstructs capabilities before scheduling res
 The app-shell `ConversationProvider` owns the local catalog and retained remote sources shared by
 the sidebar and Agent picker. Local chat observation belongs to the feature `ChatProvider`, which
 creates and disposes `AgentSessionChatClient`, manages composer navigation, refreshes observed
-Sessions on foreground and invalidates their queries. The client observes only Sessions with React
-subscribers and composes snapshots/deltas into live state. Removing an observation does not cancel
+Sessions on foreground and invalidates their queries. A screen subscriber or an unfinished admission keeps its Session entry alive.
+The client composes snapshots and deltas into live state. Removing an observation does not cancel
 the Host's turn; reopening the route installs a fresh snapshot.
 
 `features/chat/runtime` reads persisted transcripts through
@@ -272,15 +272,15 @@ user-owned verification policy.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
-- `RegionService` owns the IPinfo Lite egress-country lookup, ten-minute success cache
-  and explicit unknown-country result; detection is independent of data-collection consent, and
-  the host aborts and joins it. `ProviderCatalogRuntime` owns
-  post-ready provider seeding. Discovery and initial recommendations share `getProviderCatalogEdition`: all distributions
-  use detected CN/overseas countries to select domestic/global entries, falling back to the device
-  region when detection is unavailable. Only a missing device region retains the
-  domestic default. Domestic-store builds also permit a detected overseas VPN exit.
-  Provider list queries join that initialization; existing seeded installations do not wait for country detection. Backup admission
-  includes pending seeding.
+- `RegionService` owns the Config Service `POST /v1/resolve` egress-region lookup (`CN` or
+  `GLOBAL`), ten-minute success cache and explicit unknown-region result; detection is independent
+  of data-collection consent, and the host aborts and joins it. `ProviderCatalogRuntime` owns
+  post-ready provider seeding. Discovery and initial recommendations share
+  `getProviderCatalogEdition`: all distributions use detected `CN`/`GLOBAL` regions to select
+  domestic/global entries, falling back to the device region when detection is unavailable. Only a
+  missing device region retains the domestic default. Domestic-store builds also permit a detected
+  overseas VPN exit. Provider list queries join that initialization; existing seeded installations
+  do not wait for region detection. Backup admission includes pending seeding.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, shared first downloads and request cancellation; the host stops it.
   Model workflows require a compatible saved or downloaded snapshot and expose retry when none is available.

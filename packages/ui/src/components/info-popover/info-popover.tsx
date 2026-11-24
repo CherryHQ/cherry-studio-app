@@ -41,6 +41,7 @@ export function AnchoredInfoPopover({
   anchor,
   caption,
   children,
+  footer,
   onClose,
   placement,
   text,
@@ -51,6 +52,8 @@ export function AnchoredInfoPopover({
   caption?: string;
   /** Optional visual readout; `text` remains its accessible description. */
   children?: ReactNode;
+  /** Interactive actions rendered below the informational readout, outside its accessible node. */
+  footer?: ReactNode;
   onClose: () => void;
   placement?: 'above' | 'below';
   text: string;
@@ -58,7 +61,7 @@ export function AnchoredInfoPopover({
   width?: number;
 }) {
   const [retained, setRetained] = useState(
-    anchor ? { anchor, text, caption, children, width, placement } : undefined,
+    anchor ? { anchor, text, caption, children, footer, width, placement } : undefined,
   );
   if (
     anchor &&
@@ -66,11 +69,12 @@ export function AnchoredInfoPopover({
       text !== retained?.text ||
       caption !== retained?.caption ||
       children !== retained?.children ||
+      footer !== retained?.footer ||
       width !== retained?.width ||
       placement !== retained?.placement)
   )
-    setRetained({ anchor, text, caption, children, width, placement });
-  const content = anchor ? { anchor, text, caption, children, width, placement } : retained;
+    setRetained({ anchor, text, caption, children, footer, width, placement });
+  const content = anchor ? { anchor, text, caption, children, footer, width, placement } : retained;
   useEffect(() => {
     if (!anchor) return;
     const subscription = Dimensions.addEventListener('change', onClose);
@@ -80,6 +84,7 @@ export function AnchoredInfoPopover({
     <InfoPopoverPanel
       anchor={content.anchor}
       caption={content.caption}
+      footer={content.footer}
       isOpen={Boolean(anchor)}
       onClose={onClose}
       onClosed={() => setRetained(undefined)}
@@ -127,6 +132,7 @@ function InfoPopoverPanel({
   anchor,
   caption,
   children,
+  footer,
   isOpen,
   onClose,
   onClosed,
@@ -139,6 +145,7 @@ function InfoPopoverPanel({
   anchor: MenuAnchor;
   caption?: string;
   children?: ReactNode;
+  footer?: ReactNode;
   isOpen: boolean;
   onClose: () => void;
   onClosed: () => void;
@@ -189,9 +196,18 @@ function InfoPopoverPanel({
             keyboardShouldPersistTaps="handled"
             style={{ maxHeight: layout.maxHeight }}
           >
-            <InfoPopoverText text={text} caption={caption}>
-              {children}
-            </InfoPopoverText>
+            {footer ? (
+              <View className="gap-2">
+                <InfoPopoverText text={text} caption={caption}>
+                  {children}
+                </InfoPopoverText>
+                {footer}
+              </View>
+            ) : (
+              <InfoPopoverText text={text} caption={caption}>
+                {children}
+              </InfoPopoverText>
+            )}
           </ScrollView>
         </MenuSurface>
       </Animated.View>

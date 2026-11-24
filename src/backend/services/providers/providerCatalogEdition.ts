@@ -1,8 +1,10 @@
 import type { ProviderEdition } from '@cherrystudio/provider-registry';
 import { getLocales } from 'expo-localization';
 
-/** Prefer detected egress country, then device region, retaining CN if neither is available. */
-export function getProviderCatalogEdition(country: string | null): ProviderEdition {
-  const region = country ?? getLocales()[0]?.regionCode ?? 'CN';
-  return region === 'CN' ? 'cn' : 'global';
+import type { NetworkRegion } from '@/backend/services/region';
+
+/** Prefer detected egress region, then device region, retaining CN if neither is available. */
+export function getProviderCatalogEdition(region: NetworkRegion | null): ProviderEdition {
+  if (region) return region === 'CN' ? 'cn' : 'global';
+  return (getLocales()[0]?.regionCode?.toUpperCase() ?? 'CN') === 'CN' ? 'cn' : 'global';
 }

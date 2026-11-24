@@ -2,6 +2,7 @@ export type {
   ConversationDraft,
   ConversationInput,
   DraftId,
+  HistoryPosition,
   HistoryVersion,
   MessageRef,
   RemoteConversationExecution,

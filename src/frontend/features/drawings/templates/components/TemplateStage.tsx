@@ -103,9 +103,12 @@ export function TemplateStage({
   const cardTop = tabsTop + 56;
   // Title, summary, and the action sit right under the card; the card takes the rest.
   const footerHeight = 180 + Math.max(insets.bottom, 16);
+  const isWideLandscape = screenWidth >= 800 && screenWidth > screenHeight;
+  const maxStageCardHeight = isWideLandscape ? 460 : screenHeight;
   const cardHeight = Math.min(
     screenWidth * 0.7 * cardAspect,
     screenHeight - cardTop - footerHeight,
+    maxStageCardHeight,
   );
   const cardWidth = cardHeight / cardAspect;
   const snap = cardWidth + cardGap;

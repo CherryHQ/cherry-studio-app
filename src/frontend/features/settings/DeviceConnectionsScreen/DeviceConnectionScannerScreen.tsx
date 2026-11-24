@@ -25,6 +25,7 @@ export function DeviceConnectionScannerScreen() {
   const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
   const insets = useSafeAreaInsets();
   const { setInput } = useDesktopPairingInput();
+  const { baseRoute, cancel } = usePairingNavigation({ connectionId });
   const { submitted, scanInvalid, scan, paste, retryScan } = usePairingInvitationInput({
     canSubmit,
     onInvitation: (invitation) => {
@@ -33,7 +34,7 @@ export function DeviceConnectionScannerScreen() {
         capabilities: ['configuration', 'agent'],
         ...(connectionId ? { connectionId } : {}),
       });
-      router.replace('/settings/device-connections/pair');
+      router.replace(`${baseRoute}/pair`);
     },
     onInvalidPaste: () =>
       toast.show({
@@ -43,8 +44,6 @@ export function DeviceConnectionScannerScreen() {
   });
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanInvalid && camera?.state === 'granted';
-
-  const { cancel } = usePairingNavigation({ connectionId });
 
   const openSystemSettings = () => {
     void permissions.openSystemSettings().catch(() => {

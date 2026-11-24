@@ -165,11 +165,33 @@ export type SshCommandResult = {
 };
 export type SshOutput = { stream: 'stdout' | 'stderr'; text: string };
 
+/** The user selects regular files from one SFTP directory listing on the device. */
+export const SshReadScopeSchema = z.object({
+  directory: SshFilePathSchema.refine((path) => path.startsWith('/')),
+  files: z
+    .array(SshFilePathSchema.refine((name) => name !== '.' && name !== '..' && !name.includes('/')))
+    .max(500),
+});
+export type SshGrantScope = 'diagnostics' | z.infer<typeof SshReadScopeSchema>;
+
 /** Local, ephemeral conversation binding. It does not survive process restarts. */
 export type SshTarget = {
   /** A fresh identity for each selection or authorization revocation. */
   selectionId: string;
   profile: SshProfile;
-  /** null means every command requires approval. */
-  grant: { id: string; expiresAt: number } | null;
+  grant: { id: string; expiresAt: number; scope: SshGrantScope } | null;
 };
+
+/** The grant only names the listed directory and the exact leaf names selected by the user. */
+export function grantedSshReadPath(
+  target: SshTarget,
+  operation: string,
+  path: string,
+): string | undefined {
+  const grant = target.grant;
+  if (!grant || grant.expiresAt <= Date.now() || grant.scope === 'diagnostics') return;
+  const { directory, files } = grant.scope;
+  if (operation === 'list' && path === '.') return directory;
+  if (operation === 'read' && files.includes(path))
+    return directory.replace(/\/$/, '') + '/' + path;
+}

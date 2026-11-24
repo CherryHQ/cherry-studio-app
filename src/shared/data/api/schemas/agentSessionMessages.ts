@@ -90,11 +90,22 @@ export type AgentTranscriptSelection = {
   messages: AgentMessageView[];
 };
 
+export type AgentSessionTurns = {
+  activeNodeId: string | null;
+  items: { id: string; preview: string }[];
+};
+
 export type AgentSessionMessageSchemas = {
   '/agent-sessions/:sessionId/messages/transcript': {
     GET: {
       params: { sessionId: string };
       response: AgentTranscriptSelection;
+    };
+  };
+  '/agent-sessions/:sessionId/messages/turns': {
+    GET: {
+      params: { sessionId: string };
+      response: AgentSessionTurns;
     };
   };
   '/agent-sessions/:sessionId/messages/:messageId/translations': {

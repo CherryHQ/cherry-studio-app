@@ -81,7 +81,7 @@ export interface JobHandler<TPayload = unknown> {
   /** Mobile-only: which execution window may run this job. */
   executionClass: JobExecutionClass;
   /** Explicit user work only; used for new immediate enqueues, never recovery or retries. */
-  continuedProcessing?(input: TPayload): Pick<KeepAliveTask, 'title' | 'subtitle'>;
+  continuedProcessing?(input: TPayload): Pick<KeepAliveTask, 'title' | 'subtitle' | 'deepLinkUrl'>;
   recovery: RecoveryStrategy;
   /** Defaults to the job type string. */
   defaultQueue?: (input: TPayload) => string;

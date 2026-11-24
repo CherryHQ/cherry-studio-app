@@ -1,4 +1,8 @@
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import {
+  OrderBatchRequestSchema,
+  OrderRequestSchema,
+} from '@/shared/data/api/schemas/endpointHelpers';
 import type { ProviderSchemas } from '@/shared/data/api/schemas/providers';
 import type { HandlersFor } from '@/shared/data/api/types';
 
@@ -33,6 +37,12 @@ export function createProviderHandlers(
     },
     '/providers/:id/auth': {
       GET: ({ params }) => service.getAuthConfig(params.id),
+    },
+    '/providers/:id/order': {
+      PATCH: async ({ body, params }) => service.reorder(params.id, OrderRequestSchema.parse(body)),
+    },
+    '/providers/order:batch': {
+      PATCH: async ({ body }) => service.reorderBatch(OrderBatchRequestSchema.parse(body).moves),
     },
   };
 }

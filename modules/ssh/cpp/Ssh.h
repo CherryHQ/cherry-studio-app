@@ -6,7 +6,7 @@
 namespace cherry::ssh {
 struct Options {
   std::string host, username, fingerprint, password, privateKey, passphrase, command;
-  std::string cwd, input, directory, poolKey, path, localPath, content;
+  std::string cwd, input, directory, poolKey, path, localPath, content, expectedPath;
   std::string operation = "exec";
   int port = 22;
   int timeoutMs = 60000;

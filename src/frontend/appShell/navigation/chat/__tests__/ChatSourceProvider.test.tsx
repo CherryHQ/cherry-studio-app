@@ -86,4 +86,19 @@ describe('ChatSourceProvider', () => {
     expect(snapshot.remoteTarget).toMatchObject({ connectionId: 'pc', sessionId: 'r1' });
     expect(snapshot.localChat).toBeUndefined();
   });
+
+  test('keeps a team source while settings fill the content region', () => {
+    navigate('/team', { bindingId: 'ent-1', agentId: 'a1', sessionId: 't1' });
+    render();
+    navigate('/settings', {});
+    rerender();
+
+    expect(snapshot.source).toBe('team');
+    expect(snapshot.teamTarget).toMatchObject({
+      bindingId: 'ent-1',
+      agentId: 'a1',
+      sessionId: 't1',
+    });
+    expect(snapshot.localChat).toBeUndefined();
+  });
 });

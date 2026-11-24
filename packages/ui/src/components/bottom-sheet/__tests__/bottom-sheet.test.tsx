@@ -3,7 +3,7 @@ import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Dimensions, Keyboard, ScrollView, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { BottomSheet } from '..';
+import { BottomSheet, BottomSheetBoundsProvider } from '..';
 import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/overlay-navigation';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
@@ -638,5 +638,30 @@ describe('BottomSheet', () => {
     });
     expect(cardStyle.borderBottomLeftRadius ?? cardStyle.borderRadius ?? 0).toBe(0);
     expect(cardStyle.borderBottomRightRadius ?? cardStyle.borderRadius ?? 0).toBe(0);
+  });
+
+  test('centers BottomSheet inside bounds provided by BottomSheetBoundsProvider', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheetBoundsProvider insetLeft={340} insetRight={0}>
+          <BottomSheet
+            onClose={jest.fn()}
+            open
+            size="medium"
+            testID="bounded-sheet"
+            title="Pick Agent"
+          >
+            <Text>Agents</Text>
+          </BottomSheet>
+        </BottomSheetBoundsProvider>,
+      );
+    });
+
+    const card = renderer?.root
+      .findAllByProps({ testID: 'bounded-sheet' })
+      .find((node) => typeof node.type === 'string');
+    const cardStyle = StyleSheet.flatten(card?.props.style);
+    const availableWidth = Math.max(0, Dimensions.get('window').width - 340);
+    expect(cardStyle.width).toBe(Math.min(720, availableWidth));
   });
 });

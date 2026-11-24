@@ -1,0 +1,50 @@
+appId: ${APP_ID}
+name: Offline dev-mock chat streaming round-trip
+---
+# Requires a dev client started with EXPO_PUBLIC_DEV_MOCK_PROVIDER=1
+- clearState
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setPermissions:
+          permissions:
+            notifications: deny
+- openLink:
+    link: ${DEV_CLIENT_URL}
+- runFlow:
+    when:
+      visible: "Open|打开"
+    commands:
+      - tapOn: "Open|打开"
+- runFlow: _dismiss-ios-notification-prompt.yaml
+- extendedWaitUntil:
+    visible:
+      id: privacy-consent-decline
+    timeout: 90000
+- waitForAnimationToEnd
+- repeat:
+    times: 3
+    while:
+      visible:
+        id: privacy-consent-decline
+    commands:
+      - tapOn:
+          id: privacy-consent-decline
+- assertNotVisible:
+    id: privacy-consent-decline
+- extendedWaitUntil:
+    visible:
+      id: chat-composer
+    timeout: 30000
+- tapOn:
+    id: chat-composer
+- inputText: "hello offline maestro"
+- tapOn:
+    id: chat-composer-send
+- runFlow: _dismiss-ios-notification-prompt.yaml
+- extendedWaitUntil:
+    visible: '\[dev-mock\] Echo: hello offline maestro'
+    timeout: 15000
+- assertVisible:
+    id: assistant-message-toolbar

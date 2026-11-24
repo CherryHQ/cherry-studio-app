@@ -27,13 +27,13 @@ export class JinaProvider extends RemoteWebSearchProvider {
   ) {
     options?.signal?.throwIfAborted();
     const configuredHost = resolveProviderApiHost(this.provider, capability).replace(/\/+$/, '');
-    const country = Object.hasOwn(JINA_MIRROR_HOSTS, configuredHost)
-      ? ((await application.get('RegionService').getCountry()) ?? 'CN')
+    const region = Object.hasOwn(JINA_MIRROR_HOSTS, configuredHost)
+      ? ((await application.get('RegionService').getRegion()) ?? 'CN')
       : undefined;
     options?.signal?.throwIfAborted();
     const [apiHost, alternateHost] = getJinaHostCandidates(
       configuredHost,
-      country === 'CN' ? 'mainland-china' : 'global',
+      region === 'CN' ? 'mainland-china' : 'global',
     );
     const credentials = this.credentials(capability);
     try {

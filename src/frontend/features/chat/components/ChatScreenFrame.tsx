@@ -5,6 +5,7 @@ import { Platform, View, type ViewInstance } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 
 import { ReadingContentFrame } from '@/frontend/appShell/layout';
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
 
 import { ChatShareSelectionScope, useChatShareHeaderSelection } from '../share/chatShareSelection';
 import {
@@ -42,6 +43,10 @@ function ChatScreenContent({
   const blurTarget = useRef<ViewInstance>(null);
   const expansion = useComposerExpansion();
   const isLayerPresented = useIsFullScreenLayerPresented();
+  const isShareSelecting = useChatShareHeaderSelection() !== undefined;
+  useHideFloatingDock(
+    Boolean(expansion?.state.isPresented || isLayerPresented || isShareSelecting),
+  );
   const layerProgress = useFullScreenLayerProgress();
   const headerFadeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(

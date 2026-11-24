@@ -11,9 +11,9 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 
 import { JinaProvider } from '../JinaProvider';
 
-const mockGetCountry = jest.fn(async () => 'US');
+const mockGetRegion = jest.fn(async () => 'GLOBAL');
 jest.mock('@/backend/core/application/Application', () => ({
-  application: { get: () => ({ getCountry: mockGetCountry }) },
+  application: { get: () => ({ getRegion: mockGetRegion }) },
 }));
 
 const config: WebSearchExecutionConfig = {
@@ -23,7 +23,7 @@ const config: WebSearchExecutionConfig = {
 const request = jest.fn<Promise<WebSearchHttpResponse>, [WebSearchHttpRequest]>();
 
 beforeEach(() => {
-  mockGetCountry.mockReset().mockResolvedValue('US');
+  mockGetRegion.mockReset().mockResolvedValue('GLOBAL');
   request.mockReset().mockResolvedValue({
     bodyText: JSON.stringify({ data: { content: 'Page' } }),
     headers: {},
@@ -32,9 +32,9 @@ beforeEach(() => {
 });
 
 test.each([false, true])(
-  'selects built-in hosts using IP country (mainland=%s)',
+  'selects built-in hosts using IP region (mainland=%s)',
   async (mainland) => {
-    mockGetCountry.mockResolvedValue(mainland ? 'CN' : 'US');
+    mockGetRegion.mockResolvedValue(mainland ? 'CN' : 'GLOBAL');
     const provider = createProvider(['key']);
     request.mockResolvedValueOnce({ bodyText: '{"data":[]}', headers: {}, status: 200 });
     await provider.searchKeywords('Cherry Studio', config);
@@ -112,7 +112,7 @@ test.each(['searchKeywords', 'fetchUrls'] as const)(
       'https://search.internal/',
     );
     await expect(provider[capability](input, config)).resolves.toMatchObject({ capability });
-    expect(mockGetCountry).not.toHaveBeenCalled();
+    expect(mockGetRegion).not.toHaveBeenCalled();
     expect(request.mock.calls.map(([call]) => call.url)).toEqual([
       search
         ? 'https://search.internal/Cherry%20Studio'
@@ -122,7 +122,7 @@ test.each(['searchKeywords', 'fetchUrls'] as const)(
 );
 
 test('does not retry a custom host', async () => {
-  mockGetCountry.mockResolvedValue('CN');
+  mockGetRegion.mockResolvedValue('CN');
   request.mockRejectedValue(new WebSearchTransportError('network', 'offline'));
   await expect(
     createProvider([], 'https://reader.internal/').fetchUrls('https://example.com', config),

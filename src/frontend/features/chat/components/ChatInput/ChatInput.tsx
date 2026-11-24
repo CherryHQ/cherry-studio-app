@@ -1,14 +1,18 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Button } from '@cherrystudio/ui/components';
+import { Button, Dialog } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
-import { useRouter } from 'expo-router';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
-import { chatReturnToHref } from '@/frontend/appShell/navigation/chat';
+import {
+  chatReturnToHref,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 import {
   ComposerAttachments,
   type ComposerSendPayload,
@@ -30,8 +34,9 @@ import {
   type PaintingInputSubmission,
   PaintingInputProvider,
 } from '@/frontend/components/PaintingInput';
+import { useModelChoice } from '@/frontend/components/Policy';
 import { useBackendModule } from '@/frontend/data';
-import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { useAgentApiById, useAgentSession, useAgentSessionMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { sshErrorLabel } from '@/frontend/hooks/ssh';
 import { AgentProtocolError } from '@/shared/contracts/agent';
@@ -57,12 +62,13 @@ import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputModelPill } from './components/ChatInputModelPill';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { type ChatEditDraft, useChatEditDraft } from './hooks/useChatEditDraft';
-import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputModelPicker } from './hooks/useChatInputModelPicker';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { useChatInputSessionModelSelection } from './hooks/useChatInputSessionModelSelection';
 import { useChatSelectionHandoff } from './hooks/useChatSelectionHandoff';
+import { useSshTargetRestore } from './hooks/useSshTargetRestore';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
@@ -70,7 +76,7 @@ import { deriveContextUsage } from './utils/contextUsage';
 import { buildEditUserMessageInput } from './utils/editSubmission';
 import { readPluginMentions } from './utils/pluginMentions';
 import { readSelectionMentions } from './utils/selectionMentions';
-import { getSendErrorLabelKey } from './utils/sendErrorLabel';
+import { getSendErrorLabelKey, ParallelSshSendError } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 import { readSshMentions } from './utils/sshMentions';
 
@@ -134,37 +140,120 @@ export function ChatInput({
   const { agent } = useAgentApiById(agentId);
   const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
   const skillAction = mode === 'standard' ? readSkillMentions(draft).skillAction : undefined;
-  const { updateAgent } = useAgentMutations();
+  const { data: session } = useAgentSession(sessionId);
+  const { updateAgentSession } = useAgentSessionMutations(sessionId);
+  const { allowedModelIds } = useModelChoice();
+  const [draftModel, setDraftModel] = useState<{
+    agentId: string;
+    modelId: UniqueModelId;
+    followsDefault: boolean;
+  }>();
+  const submittedDraft = useRef<{ agentId: string; selection: typeof draftModel }>(undefined);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
+  const isModelAvailable = useCallback(
+    (modelId: UniqueModelId | undefined) =>
+      Boolean(
+        modelId &&
+        (!allowedModelIds || allowedModelIds.has(modelId)) &&
+        (!modelPickerData.hasLoadedCatalog || modelPickerData.getModelItem(modelId)),
+      ),
+    [allowedModelIds, modelPickerData],
+  );
+  const draftModelId =
+    draftModel &&
+    draftModel.agentId === agentId &&
+    !draftModel.followsDefault &&
+    isModelAvailable(draftModel.modelId)
+      ? draftModel.modelId
+      : undefined;
   const providerSetupReturnTo = sessionId
     ? chatReturnToHref({ kind: 'session', sessionId })
     : agentId
       ? chatReturnToHref({ agentId, kind: 'draft' })
       : '/';
   const persistModel = useCallback(
-    (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
-      updateAgent(targetAgentId, { model: modelId }),
-    [updateAgent],
+    (targetSessionId: string, modelId: UniqueModelId) =>
+      updateAgentSession(targetSessionId, { model: modelId }),
+    [updateAgentSession],
   );
   const handleModelPersistenceError = useCallback(
-    (error: unknown, { agentId: targetAgentId, modelId }: { agentId: string; modelId: string }) => {
-      logger.warn('Failed to persist Agent model selection', error as Error, {
-        agentId: targetAgentId,
-        modelId,
-      });
+    (error: unknown, selection: { sessionId: string; modelId: UniqueModelId }) => {
+      logger.warn('Failed to persist Session model selection', error as Error, selection);
     },
     [],
   );
-  const { selectModel, selectedModelId } = useChatInputAgentModelSelection(
-    agentId,
-    agent,
+  const {
+    selectModel: selectSessionModel,
+    pendingModelId,
+    selectedModelId: storedSessionModelId,
+  } = useChatInputSessionModelSelection(
+    sessionId,
+    session,
     persistModel,
     handleModelPersistenceError,
   );
-  // Several models keep answering until the user returns to the Agent's model, which stays
-  // unchanged. The composer session remounts this input, so another conversation starts without
-  // them.
-  const [replyModels, setReplyModels] = useState<readonly UniqueModelId[] | null>(null);
+  const sessionModelId =
+    storedSessionModelId && (allowedModelIds?.has(storedSessionModelId) ?? true)
+      ? storedSessionModelId
+      : undefined;
+  // The first-send handoff keeps this composer mounted before the saved Session loads.
+  const selectedModelId =
+    (session ? sessionModelId : (sessionModelId ?? draftModelId)) ?? agent?.model ?? null;
+  const modelOverrideId = pendingModelId === sessionModelId ? pendingModelId : undefined;
+  const selectModel = useCallback(
+    (modelId: UniqueModelId) => {
+      if (modelId === selectedModelId) return;
+      if (sessionId) selectSessionModel(modelId);
+      else if (agentId)
+        setDraftModel({ agentId, modelId, followsDefault: modelId === agent?.model });
+    },
+    [agent?.model, agentId, selectedModelId, selectSessionModel, sessionId],
+  );
+  const submitMessage = useCallback<typeof sendMessage>(
+    async (input) => {
+      if (sessionId || !agentId) return sendMessage(input);
+      const submitted = { agentId, selection: draftModel };
+      submittedDraft.current = submitted;
+      try {
+        return await sendMessage(input);
+      } catch (error) {
+        if (submittedDraft.current === submitted) submittedDraft.current = undefined;
+        throw error;
+      }
+    },
+    [agentId, draftModel, sendMessage, sessionId],
+  );
+  useEffect(() => {
+    const submitted = submittedDraft.current;
+    if (!sessionId || !submitted) return;
+    submittedDraft.current = undefined;
+    // The first reply has its own snapshot. Save a later pick on the Session it created.
+    if (
+      draftModel &&
+      draftModel.agentId === submitted.agentId &&
+      draftModel.agentId === agentId &&
+      draftModel !== submitted.selection &&
+      isModelAvailable(draftModel.modelId)
+    ) {
+      selectSessionModel(draftModel.modelId);
+    }
+  }, [agentId, draftModel, isModelAvailable, selectSessionModel, sessionId]);
+  // Parallel replies are a temporary composer choice, scoped to the mounted conversation.
+  const [replySelection, setReplySelection] = useState<{
+    agentId: string | undefined;
+    models: readonly UniqueModelId[];
+  } | null>(null);
+  const replyModels = useMemo(() => {
+    if (!replySelection || replySelection.agentId !== agentId) return null;
+    const available = replySelection.models.filter((id) => isModelAvailable(id));
+    return available.length >= 2 ? available : null;
+  }, [agentId, isModelAvailable, replySelection]);
+  const setReplyModels = useCallback(
+    (models: readonly UniqueModelId[] | null) => {
+      setReplySelection(models ? { agentId, models } : null);
+    },
+    [agentId],
+  );
   const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
   const agentModel = modelPickerData.getModelItem(selectedModelId)?.model;
   // Effort levels differ per model, so several models answer at their own defaults.
@@ -172,8 +261,9 @@ export function ChatInput({
     replyModels ? undefined : selectedModelItem?.model,
   );
   const reasoningSelection = useChatInputReasoningEffortSelection(
-    selectedModelItem ? reasoningEfforts : undefined,
+    selectedModelItem && !replyModels ? reasoningEfforts : undefined,
     agentId,
+    sessionId,
   );
   const modelSelection = useMemo(
     () => ({
@@ -220,12 +310,13 @@ export function ChatInput({
       }
       const attempt = imageAttempt.current;
       try {
-        const result = await sendMessage({
+        const result = await submitMessage({
           parts: attachMessageQuote(
             toAgentInputParts({ attachments: input.attachments, text: input.prompt }),
             attempt?.fields ?? {},
           ),
           modelId: input.modelId,
+          ...(!sessionId && draftModelId ? { sessionModelId: draftModelId } : {}),
           imageGeneration: { mode: input.mode, paramValues: input.paramValues },
         });
         attempt?.finish(true);
@@ -238,15 +329,16 @@ export function ChatInput({
     [
       beginEditSend,
       commitEdit,
+      draftModelId,
       editMessage,
       editing,
       isBusy,
       mode,
       reasoningEfforts,
       reasoningSelection,
-      sendMessage,
       sessionId,
       settleEditSend,
+      submitMessage,
     ],
   );
   const cancelGeneration = useCallback(() => {
@@ -309,6 +401,7 @@ export function ChatInput({
         ) : (
           <TextChatInput
             sessionId={sessionId}
+            draftModelId={draftModelId}
             sshDraftId={sshDraftId}
             mode={mode}
             contextUsage={contextUsage}
@@ -316,7 +409,7 @@ export function ChatInput({
             edit={edit}
             agentId={agentId}
             skillAction={skillAction}
-            controls={controls}
+            controls={{ ...controls, sendMessage: submitMessage }}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             placeholder={placeholder}
             providerSetupReturnTo={providerSetupReturnTo}
@@ -324,6 +417,7 @@ export function ChatInput({
             reasoningSelection={reasoningSelection}
             replyModels={replyModels}
             agentModelAnswersInParallel={Boolean(agentModel && isTextGenerationModel(agentModel))}
+            modelOverrideId={modelOverrideId}
             selectedModelId={selectedModelId}
             selectedModelItem={selectedModelItem}
             selectModel={selectModel}
@@ -337,6 +431,7 @@ export function ChatInput({
 
 function TextChatInput({
   sessionId,
+  draftModelId,
   mode,
   agentId,
   contextUsage,
@@ -352,11 +447,13 @@ function TextChatInput({
   reasoningEfforts,
   reasoningSelection,
   replyModels,
+  modelOverrideId,
   selectedModelId,
   selectedModelItem,
   selectModel,
   setReplyModels,
 }: ChatInputProps & {
+  draftModelId?: UniqueModelId;
   mode: AgentMode;
   canSendEdit: boolean;
   /** Edit-session ownership lifted above the text/image presentation switch. */
@@ -365,13 +462,14 @@ function TextChatInput({
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
-  /** Models answering the next send in parallel, in pick order; null asks the Agent's model. */
+  /** Models answering the next send in parallel, in pick order. */
   replyModels: readonly UniqueModelId[] | null;
-  /** Parallel answers refuse image generation, so an image Agent model starts no multi-select. */
+  /** Whether the current single model can also answer alongside others. */
   agentModelAnswersInParallel: boolean;
-  /** The Agent's model. */
+  modelOverrideId?: UniqueModelId;
+  /** The current conversation's single model. */
   selectedModelId: UniqueModelId | null;
-  /** The model the composer shows: the first parallel model, else the Agent's. */
+  /** The model the composer shows, including the first parallel model when applicable. */
   selectedModelItem?: ModelPickerModelItem;
   selectModel: (modelId: UniqueModelId) => void;
   setReplyModels: (models: readonly UniqueModelId[] | null) => void;
@@ -428,7 +526,26 @@ function TextChatInput({
     setReplyModels,
   });
   const clearReplyModels = useCallback(() => setReplyModels(null), [setReplyModels]);
-  const { close: closeModelPicker } = modelPicker;
+  const { close: closeModelPicker, open: openModelPicker } = modelPicker;
+  const routeParams = useLocalSearchParams<
+    ChatRouteParamsInput & { cloudModel?: string; cloudAnswerMessage?: string }
+  >();
+  const { cloudModel, cloudAnswerMessage } = routeParams;
+  const route = parseChatRoute(routeParams);
+  const cloudReturnTo =
+    route.status === 'ready' ? chatReturnToHref(route.target) : providerSetupReturnTo;
+  const focused = useIsFocused();
+  const { prepare: prepareSshTarget, prompt: restoreSshTarget } = useSshTargetRestore(
+    sessionId,
+    isSshAvailable && focused && !isParallel,
+  );
+  useEffect(() => {
+    if (focused && cloudModel && !cloudAnswerMessage) openModelPicker();
+  }, [cloudAnswerMessage, cloudModel, focused, openModelPicker]);
+  const dismissPicker = () => {
+    if (cloudModel && !cloudAnswerMessage) router.setParams({ cloudModel: undefined });
+    closeModelPicker();
+  };
   const handleAddProvider = useCallback(() => {
     closeModelPicker();
     openProviderSetup();
@@ -452,6 +569,7 @@ function TextChatInput({
               attachmentCount: attachments.length,
               mode,
               replyModels,
+              modelOverrideId,
               selectedModelId,
               reasoningEfforts,
               reasoningSelection,
@@ -480,6 +598,10 @@ function TextChatInput({
           ? readSkillMentions(plugins.text, plugins.pluginReferences)
           : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
         const sshMentions = readSshMentions(prompt);
+        if (isParallel && sshMentions.references.length > 0)
+          throw new ParallelSshSendError('SSH requires a single reply model.');
+        const sshPreparation = prepareSshTarget(sshMentions.references);
+        if (sshPreparation) await sshPreparation;
         const selectedSsh = ssh.getTarget(sshContextId ?? sshPickerContext ?? '');
         if (
           sshMentions.references.some(
@@ -520,15 +642,17 @@ function TextChatInput({
         const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
         for (const context of appContexts)
           parts.push({ type: 'text', text: toMcpAppContextText(context) });
-        const modelId = replyModels?.[0] ?? selectedModelId;
+        const modelId = replyModels?.[0] ?? modelOverrideId;
         const result = await sendMessage({
           parts,
+          ...(!sessionId && draftModelId ? { sessionModelId: draftModelId } : {}),
           ...(skillAction ? { skillAction } : {}),
           ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
           ...(modelId ? { modelId } : {}),
           ...(replyModels ? { additionalModelIds: replyModels.slice(1) } : {}),
-          ...(reasoningEfforts.length > 0
+          ...(reasoningEfforts.length > 0 && selectedModelId
             ? {
+                reasoningEffortModelId: selectedModelId,
                 reasoningEffort: getChatInputReasoningEffortSnapshot(
                   reasoningEffort,
                   isReasoningEffortSelected,
@@ -546,9 +670,11 @@ function TextChatInput({
     },
     [
       beginEditSend,
+      draftModelId,
       editMessage,
       editing,
       isBusy,
+      isParallel,
       commitEdit,
       settleEditSend,
       quoteActions,
@@ -557,6 +683,8 @@ function TextChatInput({
       isReasoningEffortSelected,
       mcpApps,
       mode,
+      modelOverrideId,
+      prepareSshTarget,
       reasoningEffort,
       reasoningEfforts,
       replyModels,
@@ -615,6 +743,12 @@ function TextChatInput({
                 contextUsage={compatibleUsage}
                 contextUsageSessionId={sessionId}
                 contextUsageMessageId={contextUsage?.messageId}
+                onCompactContext={
+                  sessionId && contextUsage?.canCompact && !editing
+                    ? () => controls.compactContext(contextUsage.messageId)
+                    : undefined
+                }
+                compactDisabled={isBusy || controls.canSend === false}
                 onLinkPress={quoteActions?.previewQuote}
                 streaming={isBusy}
                 placeholder={
@@ -653,6 +787,37 @@ function TextChatInput({
           )}
         </ChatInputEffortOverlay>
       </View>
+      {restoreSshTarget ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) restoreSshTarget.decide('cancel');
+          }}
+          title={t('ssh.restoreTarget.title')}
+        >
+          <View className="gap-1">
+            <Text className="text-sm text-muted-foreground">
+              {t('ssh.restoreTarget.description', { name: restoreSshTarget.profile.name })}
+            </Text>
+            <Text className="font-mono text-sm text-foreground">
+              {`${restoreSshTarget.profile.username}@${restoreSshTarget.profile.host}:${restoreSshTarget.profile.port}`}
+            </Text>
+          </View>
+          <View className="gap-2">
+            <Button onPress={() => restoreSshTarget.decide('restore')}>
+              {t('ssh.restoreTarget.confirm')}
+            </Button>
+            {restoreSshTarget.canForget ? (
+              <Button variant="secondary" onPress={() => restoreSshTarget.decide('forget')}>
+                {t('ssh.restoreTarget.forget')}
+              </Button>
+            ) : null}
+            <Button variant="ghost" onPress={() => restoreSshTarget.decide('cancel')}>
+              {t('common.cancel')}
+            </Button>
+          </View>
+        </Dialog>
+      ) : null}
       {modelPicker.isOpen ? (
         <ModelPickerDrawer
           // Parallel answers refuse image generation, so several models are chosen among text ones.
@@ -660,9 +825,10 @@ function TextChatInput({
           multiSelect={modelPicker.multiSelect}
           open
           onAddProvider={handleAddProvider}
-          onClose={closeModelPicker}
+          onClose={dismissPicker}
           onSelect={modelPicker.select}
           selectedModelId={selectedModelId}
+          loginReturnTo={cloudReturnTo}
           variant="chat"
         />
       ) : null}

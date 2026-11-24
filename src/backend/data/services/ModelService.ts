@@ -1,12 +1,14 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
-import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
+import { agentSessionTable, agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type {
   CreateModelDto,
   ModelListQuery,
@@ -29,7 +31,7 @@ import {
   mergePresetModel,
   providerRegistryService,
 } from './ProviderRegistryService';
-import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+import { applyScopedMoves, insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 const sqliteBatchSize = 500;
 const sqliteMaxVariables = 999;
@@ -636,6 +638,10 @@ export class ModelService {
 
     await this.dbService.withWriteTx(async (tx) => {
       await tx
+        .update(agentSessionTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(eq(agentSessionTable.model, id));
+      await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
         .where(eq(agentTable.model, id));
@@ -680,7 +686,12 @@ export class ModelService {
       }
 
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's model -> null cascade.
+        // Keep Agent and Session row versions ahead of the FK's model -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentSessionTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+          .where(inArray(agentSessionTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
@@ -705,6 +716,25 @@ export class ModelService {
       added: await this.enrichModels(result.inserted),
       removedIds: result.removedIds,
     };
+  }
+
+  async reorder(id: UniqueModelId, anchor: OrderRequest): Promise<void> {
+    await this.reorderBatch([{ anchor, id }]);
+  }
+
+  async reorderBatch(moves: { anchor: OrderRequest; id: UniqueModelId }[]): Promise<void> {
+    if (moves.length === 0) {
+      return;
+    }
+
+    await this.dbService.withWriteTx((tx) =>
+      applyScopedMoves(tx, userModelTable, moves, {
+        pkColumn: userModelTable.id,
+        scopeColumn: userModelTable.providerId,
+      }),
+    );
+
+    publishDataApiChanges(['/models']);
   }
 
   async createFromRegistry(
@@ -842,7 +872,12 @@ export class ModelService {
       );
       const removedIds: string[] = [];
       for (const idChunk of chunks(removableIds, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's model -> null cascade.
+        // Keep Agent and Session row versions ahead of the FK's model -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentSessionTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+          .where(inArray(agentSessionTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
@@ -891,6 +926,14 @@ export class ModelService {
   }
 }
 
+function assertAnchorUserOwnedProvider(anchor: OrderRequest): void {
+  if ('before' in anchor) {
+    assertUserOwnedProvider(anchor.before);
+  } else if ('after' in anchor) {
+    assertUserOwnedProvider(anchor.after);
+  }
+}
+
 // The organization supplies an enterprise profile's models.
 guardMethods(
   ModelService,
@@ -904,6 +947,8 @@ guardMethods(
     'deleteByKey',
     'bulkDelete',
     'reconcileProviderModels',
+    'reorder',
+    'reorderBatch',
     'createFromRegistry',
   ]),
 );
@@ -918,6 +963,15 @@ guardMethods(ModelService, {
   deleteByKey: (id) => assertUserOwnedProvider(id),
   bulkDelete: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
   reconcileProviderModels: (id) => assertUserOwnedProvider(id),
+  reorder: (id, anchor) => {
+    assertUserOwnedProvider(id);
+    assertAnchorUserOwnedProvider(anchor);
+  },
+  reorderBatch: (moves) =>
+    moves.forEach((move) => {
+      assertUserOwnedProvider(move.id);
+      assertAnchorUserOwnedProvider(move.anchor);
+    }),
   createFromRegistry: (input) => assertUserOwnedProvider(input.providerId),
 });
 

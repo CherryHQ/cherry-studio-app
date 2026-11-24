@@ -56,6 +56,7 @@ async function fixture(runtimeKind: string, idempotentSubmit: boolean, messages:
       key: 'context',
       profileId: 'profile',
       address: 'https://example.com',
+      name: undefined,
     }),
     createEnterpriseSession: () => ({
       getProductToken: async () => 'token',

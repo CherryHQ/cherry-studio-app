@@ -11,8 +11,15 @@ import {
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
-import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionMessageTable,
+  agentSessionTable,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { agentRowPolicy } from '@/backend/data/services/managedResources';
 import {
   messagePathIdsSql,
   messageTreeDepthsSql,
@@ -32,6 +39,7 @@ import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRo
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import {
   AgentMessageSiblingSchema,
+  AgentProtocolError,
   type AgentMessageSibling,
   type AgentMessageView,
   type AgentSessionView,
@@ -139,7 +147,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Renames deliberately do not touch lastActivityAt.
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ name, isNameManuallyEdited: true })
+        .set({
+          name,
+          isNameManuallyEdited: true,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.id, sessionId))
         .returning();
       return row ? toAgentSessionView(row) : null;
@@ -154,7 +166,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const session = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ name, isNameManuallyEdited: false })
+        .set({
+          name,
+          isNameManuallyEdited: false,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(
           and(
             eq(agentSessionTable.id, sessionId),
@@ -177,7 +193,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // FK's ON DELETE SET NULL fallback can clear the lineage invisibly.
       await tx
         .update(agentSessionTable)
-        .set({ forkBoundaryMessageId: null, forkedFromSessionId: null })
+        .set({
+          forkBoundaryMessageId: null,
+          forkedFromSessionId: null,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+        })
         .where(eq(agentSessionTable.forkedFromSessionId, sessionId));
       // Break the tree first: a deep self-FK cascade can exceed SQLite's trigger depth.
       await tx
@@ -198,11 +218,22 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   ): Promise<ReserveInitialSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       if (input.workspaceFolderId) await requireActiveFolder(tx, input.workspaceFolderId);
+      await assertReservationModelsAllowed(tx, input);
+      let sessionModelId = input.sessionModelId;
+      if (sessionModelId) {
+        const [registered] = await tx
+          .select({ id: userModelTable.id })
+          .from(userModelTable)
+          .where(eq(userModelTable.id, sessionModelId))
+          .limit(1);
+        if (!registered) sessionModelId = undefined;
+      }
       const [sessionRow] = await tx
         .insert(agentSessionTable)
         .values({
           id: input.sessionId,
           agentId: input.agentId,
+          model: sessionModelId,
           workspaceFolderId: input.workspaceFolderId,
         })
         .returning();
@@ -246,12 +277,14 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         if (!parent)
           throw new Error('The submission continues from a message that no longer exists.');
       }
+      await assertReservationModelsAllowed(tx, input);
       const { reservedAt, ...reserved } = await insertSubmission(tx, { ...input, parentMessageId });
       await tx
         .update(agentSessionTable)
         .set({
           lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})`,
           activeNodeId: reserved.assistantMessage.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return reserved;
@@ -272,6 +305,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .limit(1);
       if (!user || user.role !== 'user' || !user.turnId)
         throw new Error('The question to answer no longer exists.');
+      await assertReservationModelsAllowed(tx, input);
       const [assistantRow] = await tx
         .insert(agentSessionMessageTable)
         .values({
@@ -291,6 +325,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${assistantRow.createdAt})`,
           activeNodeId: assistantRow.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
@@ -315,7 +350,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [row] = leaf
         ? await tx
             .update(agentSessionTable)
-            .set({ activeNodeId: leaf.id })
+            .set({
+              activeNodeId: leaf.id,
+              updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+            })
             .where(eq(agentSessionTable.id, sessionId))
             .returning()
         : await tx.select().from(agentSessionTable).where(eq(agentSessionTable.id, sessionId));
@@ -363,6 +401,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .insert(agentSessionTable)
         .values({
           agentId: source.agentId,
+          model: source.model,
           workspaceFolderId: source.workspaceFolderId,
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its
@@ -552,7 +591,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (selection)
         await tx
           .update(agentSessionTable)
-          .set({ activeNodeId: selection.to })
+          .set({
+            activeNodeId: selection.to,
+            updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+          })
           .where(
             and(
               eq(agentSessionTable.id, sessionId),
@@ -651,6 +693,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           runtimeRevision: input.expectedRevision + 1,
           lastActivityAt: Date.now(),
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, session.id));
       return { status: 'edited', message: toAgentMessageView(row) };
@@ -740,6 +783,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionTable)
         .set({
           runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
           ...(session.forkBoundaryMessageId && deletedIds.has(session.forkBoundaryMessageId)
             ? { forkBoundaryMessageId: null }
             : {}),
@@ -776,7 +820,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           );
           await tx
             .update(agentSessionTable)
-            .set({ activeNodeId: leaf?.id ?? null })
+            .set({
+              activeNodeId: leaf?.id ?? null,
+              updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+            })
             .where(eq(agentSessionTable.id, input.sessionId));
         }
       } else {
@@ -799,7 +846,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (remaining && remaining.lastActivityAt !== null) {
         await tx
           .update(agentSessionTable)
-          .set({ lastActivityAt: remaining.lastActivityAt })
+          .set({
+            lastActivityAt: remaining.lastActivityAt,
+            updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+          })
           .where(eq(agentSessionTable.id, input.sessionId));
       }
 
@@ -853,6 +903,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       ) {
         throw new Error('The retry source is not a settled leaf answer of this session.');
       }
+      await assertReservationModelsAllowed(tx, input);
       const turnId = createOrderedUuid();
       const [userRow] = await tx
         .update(agentSessionMessageTable)
@@ -906,6 +957,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           lastActivityAt: Date.now(),
           runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
           activeNodeId: source.id,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
@@ -1241,6 +1293,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
             ${agentSessionTable.lastActivityAt},
             ${input.runtimeStats.runtimeTiming.completedAt}
           )`,
+          updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
         })
         .where(eq(agentSessionTable.id, existing.sessionId));
       return toAgentMessageView(row);
@@ -1297,6 +1350,53 @@ async function clearCheckpointsFrom(
             AND message_order.message_order_depth < (SELECT message_order_depth FROM message_order WHERE message_order_id = ${firstRow.id}))`,
       ),
     );
+}
+
+/** Sync and reservation share the write queue, so a prepared model must still be allowed here. */
+async function assertReservationModelsAllowed(
+  tx: Database,
+  input: Pick<ReserveSubmissionInput, 'sessionId' | 'modelId' | 'additionalReplies'> &
+    Pick<Partial<ReserveInitialSubmissionInput>, 'agentId' | 'sessionModelId'>,
+): Promise<void> {
+  const owner = input.agentId
+    ? eq(agentTable.id, input.agentId)
+    : inArray(
+        agentTable.id,
+        tx
+          .select({ id: agentSessionTable.agentId })
+          .from(agentSessionTable)
+          .where(eq(agentSessionTable.id, input.sessionId)),
+      );
+  const [agent] = await tx
+    .select({
+      managedRemoteId: agentTable.managedRemoteId,
+      allowedModelIds: agentTable.allowedModelIds,
+    })
+    .from(agentTable)
+    .where(and(owner, isNull(agentTable.deletedAt)))
+    .limit(1);
+  if (!agent) {
+    throw new AgentProtocolError({
+      code: 'AGENT_NOT_FOUND',
+      message: 'The Agent no longer exists.',
+      retryable: false,
+    });
+  }
+  const { allowedModelIds } = agentRowPolicy(agent);
+  if (allowedModelIds === null) return;
+  const models = [
+    input.sessionModelId,
+    input.modelId,
+    ...(input.additionalReplies ?? []).map(({ modelId }) => modelId),
+  ];
+  const withdrawn = models.find((modelId) => modelId && !allowedModelIds.includes(modelId));
+  if (withdrawn) {
+    throw new AgentProtocolError({
+      code: 'CAPABILITY_UNSUPPORTED',
+      message: `Model is not in the Agent's allowed pool: ${withdrawn}`,
+      retryable: false,
+    });
+  }
 }
 
 async function insertSubmission(
@@ -1400,6 +1500,9 @@ async function removeTurnRows(
   );
   await tx
     .update(agentSessionTable)
-    .set({ activeNodeId: leaf?.id ?? null })
+    .set({
+      activeNodeId: leaf?.id ?? null,
+      updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt),
+    })
     .where(eq(agentSessionTable.id, sessionId));
 }

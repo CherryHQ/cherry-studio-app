@@ -1,9 +1,9 @@
 import { BottomSheet, ContentState } from '@cherrystudio/ui/components';
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import type { TeamAgentDetail, TeamAgentModule } from '@/shared/contracts/teamAgent';
+import { useTeamAgentDetail } from '@/frontend/appShell/conversation/team';
+import type { TeamAgentModule } from '@/shared/contracts/teamAgent';
 
 export function TeamAgentDetailSheet({
   module,
@@ -15,30 +15,10 @@ export function TeamAgentDetailSheet({
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const [result, setResult] = useState<{
-    key: string;
-    detail?: TeamAgentDetail;
-    error?: boolean;
-  }>();
-  const [attempt, setAttempt] = useState(0);
-  const requestKey = JSON.stringify([agentId, attempt]);
-  useEffect(() => {
-    const lifetime = new AbortController();
-    void module.readDetail(agentId, lifetime.signal).then(
-      (detail) => {
-        if (!lifetime.signal.aborted) setResult({ key: requestKey, detail });
-      },
-      () => {
-        if (!lifetime.signal.aborted) setResult({ key: requestKey, error: true });
-      },
-    );
-    return () => lifetime.abort();
-  }, [module, agentId, requestKey]);
-  const current = result?.key === requestKey ? result : undefined;
-  const detail = current?.detail;
+  const { detail, error, retry } = useTeamAgentDetail(module, agentId);
   return (
-    <BottomSheet open onClose={onClose} title={t('teamAgent.details')}>
-      <ScrollView className="max-h-96" contentContainerClassName="gap-5 px-5 py-4">
+    <BottomSheet open onClose={onClose} size="content" title={t('teamAgent.details')}>
+      <View className="gap-5 px-5 py-4">
         {detail ? (
           <>
             {detail.model ? (
@@ -74,18 +54,18 @@ export function TeamAgentDetailSheet({
               </View>
             ) : null}
           </>
-        ) : current?.error ? (
+        ) : error ? (
           <ContentState.Error
             title={t('teamAgent.unavailable')}
             primaryAction={{
               children: t('common.retry'),
-              onPress: () => setAttempt((value) => value + 1),
+              onPress: retry,
             }}
           />
         ) : (
           <ContentState.Loading title={t('remoteAgent.loading')} />
         )}
-      </ScrollView>
+      </View>
     </BottomSheet>
   );
 }

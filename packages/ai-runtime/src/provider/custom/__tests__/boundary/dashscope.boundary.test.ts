@@ -217,14 +217,14 @@ describe('DashScope request boundary', () => {
         },
       });
       expect(result).toEqual({ imageUrls: ['https://images.example.com/result.png'] });
-      expect(fetch.mock.calls[0][0]).toBe(
+      expect(fetch.mock.calls[0]![0]).toBe(
         'https://proxy.example.com/qwen/api/v1/services/aigc/multimodal-generation/generation',
       );
-      expect(fetch.mock.calls[0][1]?.headers).toMatchObject({
+      expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({
         Authorization: 'Bearer regional-key',
         'X-Provider': 'custom',
       });
-      expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+      expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body))).toMatchObject({
         model: modelId,
         input: { messages: [{ role: 'user', content: [{ text: 'a fox' }] }] },
         parameters: { size: '2048*2048', n: 2 },

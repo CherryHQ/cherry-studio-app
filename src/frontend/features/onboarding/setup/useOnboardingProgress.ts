@@ -1,7 +1,7 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data';
@@ -21,6 +21,13 @@ export function useOnboardingProgress() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const busy = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const isFocused = useIsFocused();
   const focused = useRef(isFocused);
   useFocusEffect(
@@ -32,7 +39,7 @@ export function useOnboardingProgress() {
     }, []),
   );
   const advance = async (next: OnboardingStatus) => {
-    if (busy.current || !focused.current) return false;
+    if (busy.current || !mounted.current) return false;
     busy.current = true;
     setIsSaving(true);
     setSaveFailed(false);
@@ -41,20 +48,22 @@ export function useOnboardingProgress() {
         { status: next, ...(next === 'login' ? { guidanceSeen: true } : {}) },
         { optimistic: false },
       );
-      return focused.current;
+      return true;
     } catch {
-      setSaveFailed(true);
-      if (focused.current) toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
+      if (mounted.current) {
+        setSaveFailed(true);
+        toast.show({ label: t('onboarding.saveFailed'), variant: 'danger' });
+      }
       return false;
     } finally {
       busy.current = false;
-      setIsSaving(false);
+      if (mounted.current) setIsSaving(false);
     }
   };
   const skip = async () => {
-    if (await advance('skipped')) router.replace('/');
+    if ((await advance('skipped')) && mounted.current && focused.current) router.replace('/');
   };
-  return { advance, skip, isSaving, saveFailed, status };
+  return { advance, skip, isFocused, isSaving, saveFailed, status };
 }
 
 export type OnboardingProgress = ReturnType<typeof useOnboardingProgress>;

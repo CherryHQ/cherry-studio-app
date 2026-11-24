@@ -12,9 +12,10 @@ it already exists.
 
 | Need | Owner |
 | --- | --- |
+| Pure within-array reordering | `reorderLocally` in `src/shared/utils/reorder.ts`; the frontend `data/utils/reorder.ts` entry re-exports it alongside query-cache ordering helpers |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
-| IP country for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; IPinfo Lite lookup independent of data-collection consent, ten-minute success cache and explicit unknown-country result |
-| Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress country, then device region, retaining the domestic default only when both are unavailable |
+| Egress region for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; Config Service `POST /v1/resolve` lookup independent of data-collection consent, ten-minute success cache and explicit unknown-region result |
+| Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress region, then device region, retaining the domestic default only when both are unavailable |
 | Non-streaming HTTP requests | `createHttpClient` in `src/backend/services/http`, the only transport; its README lists the streaming exceptions |
 | Remote file downloads | `downloadFile` in `src/backend/services/download`; bounded native transfer, progress and cancellation; mandatory SHA-256 for APK/models and explicit caller validation for private archives |
 | Fetch-shaped adapter for a protocol SDK | `createFetchBridge` in `src/backend/services/http` |
@@ -23,6 +24,7 @@ it already exists.
 | Combining abort signals | `linkAbortSignals` in `src/backend/utils/linkAbortSignals.ts` |
 | Cancelling a caller's wait without cancelling shared work | `raceAbort` in `src/backend/utils/raceAbort.ts` |
 | Cancellable FIFO concurrency limit | `createConcurrencySlots` in `src/backend/utils/concurrencySlots.ts` |
+| Cooperative event-loop yield in chunked loops | `yieldToRuntime` in `src/shared/utils/yieldToRuntime.ts` |
 | System authorization prompts, including health record selection | `devicePermissions.request` in `src/backend/services/permissions`, which serializes every system prompt; a new native authorization becomes another method on `DevicePermissions` that holds that queue until the native operation settles |
 | OAuth `state`, PKCE S256, native callback URL | `randomOauthValue`, `createPkceChallenge`, `nativeCallbackUrl` in `src/backend/utils/oauth.ts` |
 | Community service metadata for the current login | Backend-only `AccountRuntime.refreshCommunityServices`, backed by `bootstrap/profile/installationAccount`; refreshes only the saved region's product routing without replacing authentication |
@@ -44,6 +46,7 @@ it already exists.
 | Recorded AI invocation speed | `getAiUsageRecordTokensPerSecond` in `src/shared/utils/aiUsage.ts`, shared by usage pagination and record presentation |
 | Model purpose (text, image, embedding, rerank, audio) | `src/shared/utils/modelPurpose.ts` |
 | Provider connection facts for language and image serving, and credential-free service addresses | `resolveProviderConnection` and `resolveProviderServiceUrl` in `src/backend/ai/provider/providerConnection.ts`; service URLs reuse the serving path's Vertex project/location resolver without materializing credentials |
+| Development-only offline deterministic mock model provider (opt-in via `EXPO_PUBLIC_DEV_MOCK_PROVIDER=1`) | `isDevMockProviderEnabled` in `src/shared/utils/devMockProvider.ts`, `createDevMockFetch` in `src/backend/ai/provider/devMockProviderFetch.ts`, and `DevMockProviderSeeder` in `src/backend/data/db/seeding/seeders/DevMockProviderSeeder.ts` |
 | Whether a Provider is ready to use, and why not | `getProviderConfigurationIssue` in `src/backend/services/providers/providerConfiguration.ts` |
 | Whether a Provider may send requests without a key | `resolveAuthOptional` in `src/shared/utils/providerAuth.ts` |
 | Provider API key selection and rotation | `ProviderService.resolveApiKey` and `getRotatedApiKey` in `src/backend/data/services/ProviderService.ts` |
@@ -97,15 +100,17 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Small ordered preview stacks | CherryUI `CardStack`; caller-owned content, index and translated controls |
 | Bounded local text reading | `readFileText` in `src/frontend/utils/readFileText.ts`, shared by file viewing and authored HTML conversion |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Shared motion vocabulary | `@cherrystudio/ui/motion` in `packages/ui/src/motion.ts` (4-tier curves, springs, durations, `pressMotion`, `ambientMotion`) |
+| Semantic haptic feedback | `@cherrystudio/ui/haptics` in `packages/ui/src/haptics.ts` (`triggerHaptic`, `haptics`, `HapticIntent`) |
 | File/folder row presentation and path navigation | CherryUI `FileBrowserRow` and `Breadcrumbs`, shared by library folders and SSH files; callers own local or remote identities and file operations |
 | Preserving reading position before expanding message content or switching answers | `useMessageListDisclosureToggle` from `src/frontend/components/Message` |
 | Controlled calendar range selection | CherryUI `DateRangePicker`; caller-owned drafts, presets and calendar-day boundaries |
-| Ordering a small collection with up/down controls | CherryUI `ReorderList`; controlled items and caller-owned persistence/scrolling |
+| Inline within-group drag reordering & long-press menu | CherryUI `Sortable` (`Sortable.Root`, `Sortable.Group`, `Sortable.Item`, `Sortable.Chrome`, `Sortable.Exclusion`); paired with `useReorder` (`src/frontend/data/hooks/useReorder.ts`) and `computeMinimalMoves` (`src/frontend/data/utils/reorder.ts`) for persistent collections |
 | Window size classes and the docked-sidebar rule | `useWindowClass` and `useCanDockSidebar` in `src/frontend/appShell/layout` |
 | Where a foldable display divides a layout | `FoldRegionProvider`, `WindowFoldRegion`, and their hooks in `src/frontend/appShell/layout`, over `react-native-reserved-regions` |
 | Header actions in the iOS native toolbar | `HeaderToolbarAction.nativeIcon` (a template image of the existing glyph) and `renderHeaderToolbarItem` in `src/frontend/appShell/header` |
 | Android back for a layer inside a route | `useFocusedBackPress` in `src/frontend/appShell/navigation`, held only while the route is focused |
-| Pages rendered in a side pane, and the file pane beside chat | `PaneChromeProvider` in `src/frontend/appShell/layout`; `FilePaneProvider`, `FilePaneHost`, and `useFilePane` in `src/frontend/appShell/pane` |
+| Inline pane headers/toolbars and Files Master-Detail layout | `PaneChromeProvider` in `src/frontend/appShell/layout`; `LibraryMasterDetailHost` and `useLibraryMasterDetail` in `src/frontend/appShell/pane` |
 | Mermaid diagrams in Markdown | `MermaidBlock`, `MermaidSvgView`, and the shared hidden renderer in `src/frontend/components/MermaidDiagram`; the offline page is `packages/mermaid-webview` |
 | Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI `MessagePart.TextBody` and the full-source `CodeBlock` |
 | Message and individual-call usage details | `AiUsageDetail` in `src/frontend/components/AiUsageDetail`; callers own measurement/query semantics, and `src/frontend/utils/aiUsage` owns precise cost formatting |
@@ -139,3 +144,5 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |
 | Applying what the user may change (organization-owned resources, profile capabilities) to UI: locked groups, locked controls and the organization mark | `PolicyScope`, `PolicyGroup`, `withPolicy` and the gates in `src/frontend/components/Policy`, over CherryUI `LockedGroup` and the components' `locked` variants |
+| Frontend debounced actions, fixed-window flushes, and frame loops | `createDebouncedAction`, `createScheduledFlush`, and `createFrameLoop` in `src/frontend/utils/scheduling.ts` |
+| Page-level debounced values, transient UI feedback, elapsed clocks, and next-frame scheduling | `useDebouncedValue`, `useTransientValue`, `useElapsedTime`, and `useNextFrame` / `useAfterNextFrame` in `src/frontend/hooks/`; ESLint forbids raw `setTimeout`, `setInterval`, `requestAnimationFrame`, and new raw `useEffect` in `src/app` and `src/frontend/features` (existing page `useEffect` files are ratcheted in `eslint.config.js`) |

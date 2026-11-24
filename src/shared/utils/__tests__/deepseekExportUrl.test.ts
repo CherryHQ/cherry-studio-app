@@ -27,6 +27,12 @@ test.each([
   expect(() => parseDeepseekExportUrl(input, 0)).toThrow('DeepSeek import: invalid-link');
 });
 
+test.each(['/share', '/share/example'])('recognizes the DeepSeek chat share route %s', (path) => {
+  expect(() => parseDeepseekExportUrl(`https://chat.deepseek.com${path}`, 0)).toThrow(
+    'DeepSeek import: share-link',
+  );
+});
+
 test('rejects expiration at the boundary and ignores a non-numeric expiry', () => {
   expect(() => parseDeepseekExportUrl(url, 4102444800 * 1000)).toThrow(
     'DeepSeek import: expired-link',

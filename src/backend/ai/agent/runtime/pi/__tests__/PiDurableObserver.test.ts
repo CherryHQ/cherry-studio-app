@@ -208,7 +208,7 @@ test('refreshes an idle context after background compaction and restores it on a
     await fixture.advance(compacted);
     expect(fixture.events).toContainEqual({
       type: 'context.usage.updated',
-      usage: { messageId: 'assistant-1', tokens: 12_000, estimated: true },
+      usage: { messageId: 'assistant-1', tokens: 12_000, estimated: true, canCompact: true },
     });
     // A live-document-only frame must not reread the full retained context.
     await fixture.advance(compacted);
@@ -230,7 +230,7 @@ test('reanchors usage when a coalesced run commits before its submission notific
     await terminal;
     expect(fixture.events).toContainEqual({
       type: 'context.usage.updated',
-      usage: { messageId: 'assistant-3', tokens: 100 },
+      usage: { messageId: 'assistant-3', tokens: 100, canCompact: true },
     });
   } finally {
     await fixture.observer.stop();
@@ -250,7 +250,7 @@ test('retains the context anchor when a terminal notification precedes its watch
     await fixture.advance(view({}, [entry(4, 'New answer')]));
     expect(fixture.events).toContainEqual({
       type: 'context.usage.updated',
-      usage: { messageId: 'assistant-3', tokens: 100 },
+      usage: { messageId: 'assistant-3', tokens: 100, canCompact: true },
     });
   } finally {
     await fixture.observer.stop();

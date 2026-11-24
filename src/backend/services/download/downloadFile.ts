@@ -9,7 +9,10 @@ export type FileDownloadProgress =
   | { status: 'verifying' };
 
 export class FileDownloadError extends Error {
-  constructor(readonly code: 'download' | 'verification' | 'invalid-request' | 'busy') {
+  constructor(
+    readonly code: 'download' | 'verification' | 'invalid-request' | 'busy',
+    readonly statusCode?: number,
+  ) {
     super(`File download failed: ${code}`);
     this.name = 'FileDownloadError';
   }
@@ -121,7 +124,7 @@ export async function downloadFile(options: FileDownloadOptions): Promise<string
     const response = await task.downloadAsync();
     signal.throwIfAborted();
     if (!response || response.status < 200 || response.status >= 300)
-      throw new FileDownloadError('download');
+      throw new FileDownloadError('download', response?.status);
     const file = await FileSystem.getInfoAsync(partial);
     if (!file.exists || file.isDirectory || file.size <= 0 || file.size > maxBytes)
       throw new FileDownloadError('download');

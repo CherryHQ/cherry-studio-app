@@ -11,11 +11,10 @@ import {
   type RefObject,
   use,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
-  useState,
   useRef,
+  useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View, type ViewInstance } from 'react-native';
@@ -32,7 +31,10 @@ import {
   createTeamConversationProjector,
   teamSessionId,
   teamSessionRef,
+  useTeamAgentPortrait,
   useTeamAgentState,
+  useTeamConversation,
+  useTeamDirectorySync,
 } from '@/frontend/appShell/conversation/team';
 import { MainHeaderView } from '@/frontend/appShell/header';
 import {
@@ -55,7 +57,6 @@ import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWo
 import { ChatShareSelectionProvider } from '../share/ChatShareSelectionProvider';
 import { TeamAgentDetailSheet } from './TeamAgentDetailSheet';
 import { TeamComposer } from './TeamComposer';
-import { useTeamConversation } from './useTeamConversation';
 
 const ignore = () => {};
 const noPage = async () => {};
@@ -102,9 +103,7 @@ export function TeamChatScreen() {
   const { module, state } = useTeamAgentState();
   const { t } = useTranslation();
   const router = useRouter();
-  useEffect(() => {
-    void module.refresh().catch(() => {});
-  }, [module, state.context?.key]);
+  useTeamDirectorySync(module, state.context?.key);
   if (!state.context || (target.bindingId && target.bindingId !== state.context.bindingId))
     return (
       <ChatScreenFrame header={TeamHeader}>
@@ -112,7 +111,10 @@ export function TeamChatScreen() {
           <ContentState.Empty
             title={t('teamAgent.title')}
             description={t('teamAgent.accountRequired')}
-            primaryAction={{ children: t('account.signIn'), onPress: () => router.push('/login') }}
+            primaryAction={{
+              children: t('account.login.signIn'),
+              onPress: () => router.push('/login'),
+            }}
           />
         </View>
       </ChatScreenFrame>
@@ -169,19 +171,7 @@ function TeamChatContent({
   const [creating, setCreating] = useState(false);
   const [picker, setPicker] = useState(false);
   const [details, setDetails] = useState(false);
-  const [portraitResult, setPortraitResult] = useState<{ id: string; uri?: string }>();
-  const portrait = portraitResult?.id === agentId ? portraitResult?.uri : undefined;
-  useEffect(() => {
-    const controller = new AbortController();
-    if (agentId)
-      void module
-        .readPortrait(agentId, controller.signal)
-        .then((value) => {
-          if (!controller.signal.aborted) setPortraitResult({ id: agentId, uri: value });
-        })
-        .catch(() => {});
-    return () => controller.abort();
-  }, [module, agentId]);
+  const portrait = useTeamAgentPortrait(module, agentId);
   const { bottom } = useSafeAreaInsets();
   const composerHeight = useSharedValue(0);
   const project = useMemo(() => createTeamConversationProjector(key), [key]);

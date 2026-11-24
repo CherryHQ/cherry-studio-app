@@ -5,7 +5,6 @@ import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import MicIcon from '@cherrystudio/app-icons/icons/mic';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import ShieldIcon from '@cherrystudio/app-icons/icons/shield';
@@ -120,11 +119,6 @@ export default function SettingsScreen() {
               label={t('settings.items.permissions')}
               leading={<LockIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
-            />
-            <Section.Item
-              label={t('settings.items.deviceConnections')}
-              leading={<NetworkIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/device-connections')}
             />
           </Section>
           <Section>

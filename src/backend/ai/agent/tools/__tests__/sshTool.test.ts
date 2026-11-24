@@ -57,8 +57,10 @@ test('requires explicit approval by default even under global automatic approval
   expect(tool.approval).toBe('ask');
   expect(tool.autoApprovalEligible).toBe(false);
   expect(
-    createSshTool(ssh, 'conversation', { ...target, grant: { id: 'grant', expiresAt: 123 } })
-      .approval,
+    createSshTool(ssh, 'conversation', {
+      ...target,
+      grant: { scope: 'diagnostics' as const, id: 'grant', expiresAt: 123 },
+    }).approval,
   ).toBe('auto');
 });
 
@@ -114,7 +116,7 @@ test.each([
 ])('asks for approval under a grant for %s', (command) => {
   const tool = createSshTool(ssh, 'conversation', {
     ...target,
-    grant: { id: 'grant', expiresAt: Date.now() + 3600000 },
+    grant: { scope: 'diagnostics' as const, id: 'grant', expiresAt: Date.now() + 3600000 },
   });
   expect(tool.requiresApproval!({ command })).toBe(true);
 });
@@ -122,7 +124,7 @@ test.each([
 test('limits the grant to fixed diagnostics without stdin or a different directory', () => {
   const tool = createSshTool(ssh, 'conversation', {
     ...target,
-    grant: { id: 'grant', expiresAt: Date.now() + 3600000 },
+    grant: { scope: 'diagnostics' as const, id: 'grant', expiresAt: Date.now() + 3600000 },
   });
   expect(tool.requiresApproval!({ command: 'uname -a' })).toBe(false);
   expect(tool.requiresApproval!({ command: 'uname -a', stdin: 'rm x' })).toBe(true);

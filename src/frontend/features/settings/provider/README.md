@@ -36,6 +36,15 @@ addresses in a locked group, the connection check still available, and the model
 group without sync, add or endpoint actions. A model opens the same details page with its settings
 locked and without its delete action.
 
+Community profiles install CherryAI enabled by default. Its list switch moves it between the
+enabled and disabled groups. The choice persists across account and catalog refreshes.
+Opening it opens the CherryAI model page directly, showing the signed guest or account catalog
+with the standard free and vision badges. Tapping a login-required row while signed out pushes
+the app login route; success returns to the CherryAI model page and resumes that row, while cancel
+returns without resuming. An AMD model that needs activation has a lock and opens the confirmation
+dialog when pressed. Available AMD model rows link to their web account and usage actions.
+The app refreshes the catalog and status on browser return.
+
 ## Provider List Motion
 
 The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows
@@ -53,6 +62,10 @@ current opacity. Only this small status subtree is keyed to the provider so recy
 the new provider's state without replaying an entrance. System Reduce Motion skips both the row
 movement and label crossfade, leaving the final switch, text, and group state intact. Colors use
 the shared theme tokens in both light and dark themes.
+
+The list supports within-group long-press reordering (`Sortable`) for enabled and disabled
+providers while keeping CherryAI pinned first and disabling moves during active search. Reordered
+providers drive `ModelPicker` section order immediately with optimistic rollback on error.
 
 ## Provider Catalog
 
@@ -113,11 +126,12 @@ written once on Save, and Delete removes it. Empty, duplicate or multi-key input
 the sheet and blocks saving it. Short keys are fully masked; longer keys expose only their last
 four characters.
 
-Multiple keys expose an ordering sheet with CherryUI `ReorderList`. Moves save immediately (or
-update the creation draft), preserve each entry's identity and metadata, and roll back on failure.
+Multiple keys support long-press `Sortable` drag within the card and a contextual `Move to top`
+action without a separate ordering sheet. Moves save immediately (or update the creation draft),
+preserve each entry's identity and metadata, and roll back on failure.
 Moves made while a write is in flight show at once and queue only the latest list for the next write.
-Labels and masked suffixes appear in management, ordering and connection-test selection; unnamed
-keys use a stable fallback rather than a position-based name.
+Labels and masked suffixes appear in management and connection-test selection; unnamed keys use a
+stable fallback rather than a position-based name.
 
 ## Connectivity And Models
 
@@ -134,8 +148,10 @@ tasks that must complete activation. Saving models and enabling a provider have 
 so an activation failure can be retried without adding the same models again.
 
 The model tab has separate synchronization and manual-add icon actions. It lists all installed
-provider models for management, labels unavailable models, and supports detail, edit, contextual
-menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
+provider models for management, labels unavailable models, supports detail, edit, scoped
+multi-selection, and within-group long-press `Sortable` reordering (`Move to top` or direct drag),
+and preserves user-defined model order across model-list refreshes while appending newly discovered
+models. The detail page's `model/` branch owns model inspection and its
 `edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
 `models/`.
 
@@ -179,15 +195,14 @@ development and preview builds cannot complete provider sign-in.
 
 ## Regional Discovery
 
-The shared IP country selects the new-provider catalog and recommendations from the
-bundled registry's upstream edition labels. Successful detections are cached for ten minutes.
-All distributions, including domestic-store builds, use this policy: an overseas VPN exit allows
-international discovery once detected. Discovery and first-install recommendations share
-`getProviderCatalogEdition`; when detection is unavailable, they use the device region
-from `getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select
-global entries; only a missing device region retains the domestic default. The detection result
-remains unknown. Mobile capability exclusions and the
-recommended-provider subset remain locally owned; model metadata is shared across editions. Saved providers keep their
-settings, visibility and runtime availability across region changes. Chat setup also lists saved
-presets absent from the current regional catalog beside custom connections, so travelling does not
-remove their setup path.
+The shared network region (`CN` or `GLOBAL`) selects the new-provider catalog and recommendations
+from the bundled registry's upstream edition labels. Successful detections are cached for ten
+minutes. All distributions, including domestic-store builds, use this policy: an overseas VPN exit
+allows international discovery once detected. Discovery and first-install recommendations share
+`getProviderCatalogEdition`; when detection is unavailable, they use the device region from
+`getLocales()[0]?.regionCode` instead. CN selects domestic entries and other regions select global
+entries; only a missing device region retains the domestic default. The detection result remains
+unknown. Mobile capability exclusions and the recommended-provider subset remain locally owned;
+model metadata is shared across editions. Saved providers keep their settings, visibility and
+runtime availability across region changes. Chat setup also lists saved presets absent from the
+current regional catalog beside custom connections, so travelling does not remove their setup path.

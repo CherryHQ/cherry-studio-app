@@ -1,6 +1,6 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   createContext,
   type PropsWithChildren,
@@ -23,13 +23,20 @@ import type {
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { useModelChoice } from '@/frontend/components/Policy';
+import { usePreference } from '@/frontend/data/hooks';
+import { useTransientValue } from '@/frontend/hooks/useTransientValue';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import {
+  type AssistantMessageToolbarConfig,
+  normalizeAssistantMessageToolbarConfig,
+} from '@/shared/data/types/assistantMessageToolbar';
 
 import { useChatEditing } from '../../../context/ChatEditingProvider';
 import { editReplyHref } from '../../../editReply/editReplyRoute';
 import { useIsChatShareSelecting } from '../../../share/chatShareSelection';
 import type { ChatShareTranslations } from '../../../share/chatShareTarget';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
+import { AssistantToolbarManageSheet } from '../components/AssistantToolbarManageSheet';
 import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
@@ -46,7 +53,16 @@ function editInitialText(message: ConversationMessage): string {
     : copyAssistantMessageText(message.display.data.parts ?? []);
 }
 
+function isRetryModelWithdrawn(
+  message: ConversationMessage,
+  allowedModelIds: ReadonlySet<string> | null,
+): boolean {
+  const modelId = message.actions.retry?.modelId;
+  return Boolean(modelId && allowedModelIds && !allowedModelIds.has(modelId));
+}
+
 type AssistantMessageActionsState = {
+  toolbarConfig: AssistantMessageToolbarConfig;
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
@@ -55,8 +71,9 @@ type AssistantMessageActionsState = {
   isEditAnswerDisabled: boolean;
   isEditQuestionDisabled: boolean;
   isRetryDisabled: boolean;
-  /** Answers that can be regenerated, retried, or answered again with another model. */
+  /** Answers that can be regenerated or retried with the model previously used. */
   retryableMessageIds: ReadonlySet<string>;
+  answerableMessageIds: ReadonlySet<string>;
   /** Successful answers that can be edited in place. */
   editableAnswerIds: ReadonlySet<string>;
   /** Sent questions the reader can branch and send again with edited text. */
@@ -64,10 +81,15 @@ type AssistantMessageActionsState = {
 };
 
 type AssistantMessageActions = {
+  openToolbarManager: () => void;
   editAnswer?: (input: { messageId: string }) => void;
   retryAssistantMessage?: (input: { messageId: string }) => void;
   shareAssistantMessage: (input: { messageId: string }) => void;
-  copyAssistantMessage: (input: { messageId: string; text: string }) => void;
+  copyAssistantMessage: (input: {
+    messageId: string;
+    text: string;
+    notifySuccess?: boolean;
+  }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
   deleteMessageTurn?: (input: { turnId: string; messageId: string }) => void;
@@ -113,8 +135,10 @@ export function AssistantMessageActionsProvider({
   const inFlight = useRef(new Set<string>());
   const isSelecting = useIsChatShareSelecting();
   // The answer whose question the model picker adds an answer to.
-  const [answeringMessageId, setAnsweringMessageId] = useState<string>();
-  const { isLocked: isModelLocked } = useModelChoice();
+  const [pickedMessageId, setAnsweringMessageId] = useState<string>();
+  const { cloudAnswerMessage } = useLocalSearchParams<{ cloudAnswerMessage?: string }>();
+  const answeringMessageId = cloudAnswerMessage || pickedMessageId;
+  const { allowedModelIds, isLocked: isModelLocked } = useModelChoice();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -123,11 +147,28 @@ export function AssistantMessageActionsProvider({
   }, []);
   // Keyed by content so streamed transcript updates keep the rows' state context stable.
   const retryableKey = messages
-    .flatMap((message) => (message.actions.retry ? [message.key] : []))
+    .flatMap((message) =>
+      message.actions.retry && !isRetryModelWithdrawn(message, allowedModelIds)
+        ? [message.key]
+        : [],
+    )
     .join('\n');
   const retryableMessageIds = useMemo(
     () => new Set(retryableKey ? retryableKey.split('\n') : []),
     [retryableKey],
+  );
+  const answerableKey = messages
+    .flatMap((message) =>
+      message.actions.answerWith &&
+      (!isModelLocked ||
+        (allowedModelIds?.size === 1 && isRetryModelWithdrawn(message, allowedModelIds)))
+        ? [message.key]
+        : [],
+    )
+    .join('\n');
+  const answerableMessageIds = useMemo(
+    () => new Set(answerableKey ? answerableKey.split('\n') : []),
+    [answerableKey],
   );
   const editableAnswerKey = messages
     .flatMap((message) => (message.actions.editAnswer ? [message.key] : []))
@@ -307,18 +348,22 @@ export function AssistantMessageActionsProvider({
   const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
     if (!latest.current.isBusy) setAnsweringMessageId(messageId);
   }, []);
-  const closeAnswerModelPicker = useCallback(() => setAnsweringMessageId(undefined), []);
+  const closeAnswerModelPicker = useCallback(() => {
+    setAnsweringMessageId(undefined);
+    if (cloudAnswerMessage)
+      router.setParams({ cloudAnswerMessage: undefined, cloudModel: undefined });
+  }, [cloudAnswerMessage]);
   const answerWith = useCallback(
     (item: ModelPickerModelItem) => {
       const messageId = answeringMessageId;
-      setAnsweringMessageId(undefined);
+      closeAnswerModelPicker();
       const current = latest.current;
       if (!messageId || current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions
         .answerWith;
       void run(`answer:${messageId}`, action, { modelId: item.modelId }, 'retryFailed');
     },
-    [answeringMessageId, run],
+    [answeringMessageId, closeAnswerModelPicker, run],
   );
   const answeringMessage = answeringMessageId
     ? messages.find((message) => message.key === answeringMessageId)
@@ -367,25 +412,30 @@ export function AssistantMessageActionsProvider({
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
       onRetry={retryableMessageIds.size ? retry : undefined}
       onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
-      onAnswerWithModel={
-        // A model scope with one model leaves no other model to answer with.
-        !isModelLocked && messages.some((message) => message.actions.answerWith)
-          ? answerWithModel
-          : undefined
-      }
+      onAnswerWithModel={answerableMessageIds.size ? answerWithModel : undefined}
       onEditQuestion={editableQuestionIds.size ? editQuestion : undefined}
       isDeleteDisabled={isBusy}
       isRetryDisabled={isBusy}
       retryableMessageIds={retryableMessageIds}
+      answerableMessageIds={answerableMessageIds}
     >
       {children}
       {answeringMessage ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType={isRetryModelWithdrawn(answeringMessage, allowedModelIds) ? 'all' : 'text'}
           onClose={closeAnswerModelPicker}
           onSelect={answerWith}
           open
           selectedModelId={answeringMessage.display.model?.id ?? null}
+          loginReturnTo={
+            sessionId
+              ? '/?' +
+                new URLSearchParams({
+                  sessionId,
+                  cloudAnswerMessage: answeringMessage.key,
+                }).toString()
+              : undefined
+          }
           title={t('chat.messageActions.answerWith')}
           variant="chat"
         />
@@ -409,6 +459,7 @@ export function ChatMessageActionsProvider({
   isDeleteDisabled = true,
   isRetryDisabled = true,
   retryableMessageIds = EMPTY_MESSAGE_IDS,
+  answerableMessageIds = EMPTY_MESSAGE_IDS,
   editableAnswerIds = EMPTY_MESSAGE_IDS,
   editableQuestionIds = EMPTY_MESSAGE_IDS,
   isEditAnswerDisabled = true,
@@ -428,18 +479,46 @@ export function ChatMessageActionsProvider({
   isEditQuestionDisabled?: boolean;
   isRetryDisabled?: boolean;
   retryableMessageIds?: ReadonlySet<string>;
+  answerableMessageIds?: ReadonlySet<string>;
   editableAnswerIds?: ReadonlySet<string>;
   editableQuestionIds?: ReadonlySet<string>;
 }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [copiedMessageId, setCopiedMessageId] = useState<string>();
-  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rawToolbarConfig, setToolbarConfig] = usePreference('ui.chat.assistant_toolbar_actions');
+  const toolbarConfig = useMemo(
+    () => normalizeAssistantMessageToolbarConfig(rawToolbarConfig),
+    [rawToolbarConfig],
+  );
+  const [isToolbarManagerMounted, setIsToolbarManagerMounted] = useState(false);
+  const [isToolbarManagerOpen, setIsToolbarManagerOpen] = useState(false);
+  const openToolbarManager = useCallback(() => {
+    Keyboard.dismiss();
+    setIsToolbarManagerMounted(true);
+    setIsToolbarManagerOpen(true);
+  }, []);
+  const closeToolbarManager = useCallback(() => setIsToolbarManagerOpen(false), []);
+  const handleToolbarManagerClosed = useCallback(() => setIsToolbarManagerMounted(false), []);
+  const changeToolbarConfig = useCallback(
+    (next: AssistantMessageToolbarConfig) => {
+      void setToolbarConfig(next, { optimistic: true }).catch(() => {
+        toast.show({ label: t('common.reorderFailed'), variant: 'danger' });
+      });
+    },
+    [setToolbarConfig, t, toast],
+  );
+  const { value: copiedMessageId, show: showCopiedMessageId } = useTransientValue<string>(
+    COPIED_FEEDBACK_DURATION_MS,
+  );
   const copyOperationIdRef = useRef(0);
   const isMountedRef = useRef(true);
 
   const copyAssistantMessage = useCallback(
-    ({ messageId, text }: { messageId: string; text: string }) => {
+    ({
+      messageId,
+      text,
+      notifySuccess,
+    }: Parameters<AssistantMessageActions['copyAssistantMessage']>[0]) => {
       const copyOperationId = ++copyOperationIdRef.current;
       void Clipboard.setStringAsync(text)
         .then(() => {
@@ -447,19 +526,10 @@ export function ChatMessageActionsProvider({
             return;
           }
 
-          if (copiedFeedbackTimerRef.current !== null) {
-            clearTimeout(copiedFeedbackTimerRef.current);
+          showCopiedMessageId(messageId);
+          if (notifySuccess) {
+            toast.show({ label: t('chat.messageActions.copied'), variant: 'success' });
           }
-
-          setCopiedMessageId(messageId);
-          copiedFeedbackTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            copiedFeedbackTimerRef.current = null;
-            setCopiedMessageId(undefined);
-          }, COPIED_FEEDBACK_DURATION_MS);
         })
         .catch((error) => {
           logger.error('Copy assistant message failed', error as Error);
@@ -471,11 +541,12 @@ export function ChatMessageActionsProvider({
           toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
         });
     },
-    [t, toast],
+    [showCopiedMessageId, t, toast],
   );
 
   const stateValue = useMemo(
     () => ({
+      answerableMessageIds,
       copiedMessageId,
       editableAnswerIds,
       editableQuestionIds,
@@ -485,8 +556,10 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      toolbarConfig,
     }),
     [
+      answerableMessageIds,
       copiedMessageId,
       editableAnswerIds,
       editableQuestionIds,
@@ -496,6 +569,7 @@ export function ChatMessageActionsProvider({
       isEditQuestionDisabled,
       isRetryDisabled,
       retryableMessageIds,
+      toolbarConfig,
     ],
   );
   const actionsValue = useMemo(
@@ -509,6 +583,7 @@ export function ChatMessageActionsProvider({
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
+      openToolbarManager,
     }),
     [
       answerWithModel,
@@ -520,6 +595,7 @@ export function ChatMessageActionsProvider({
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
+      openToolbarManager,
     ],
   );
 
@@ -529,10 +605,6 @@ export function ChatMessageActionsProvider({
     return () => {
       isMountedRef.current = false;
       copyOperationIdRef.current += 1;
-      if (copiedFeedbackTimerRef.current !== null) {
-        clearTimeout(copiedFeedbackTimerRef.current);
-        copiedFeedbackTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -540,6 +612,15 @@ export function ChatMessageActionsProvider({
     <AssistantMessageActionsStateContext value={stateValue}>
       <AssistantMessageActionsContext value={actionsValue}>
         {children}
+        {isToolbarManagerMounted ? (
+          <AssistantToolbarManageSheet
+            config={toolbarConfig}
+            onChange={changeToolbarConfig}
+            onClose={closeToolbarManager}
+            onClosed={handleToolbarManagerClosed}
+            open={isAssistantToolbarEnabled && isToolbarManagerOpen}
+          />
+        ) : null}
       </AssistantMessageActionsContext>
     </AssistantMessageActionsStateContext>
   );

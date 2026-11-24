@@ -68,6 +68,12 @@
       "import": "./src/motion.ts",
       "default": "./src/motion.ts"
     },
+    "./haptics": {
+      "types": "./src/haptics.ts",
+      "react-native": "./src/haptics.ts",
+      "import": "./src/haptics.ts",
+      "default": "./src/haptics.ts"
+    },
     "./icons": {
       "types": "./src/icons/index.ts",
       "react-native": "./src/icons/index.ts",

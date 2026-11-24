@@ -8,6 +8,9 @@ It is the *business* composer, built on top of the presentational `Composer` in
 `@cherrystudio/ui`. The package knows nothing about attachments, models, or
 sending; this module is where those live.
 
+The `ComposerDraft` sub-entry exposes the in-memory editor buffer to local chat. Both the mounted
+editor and outstanding file imports or sends update the same buffer when its conversation reopens.
+
 ## Assembled by the caller
 
 There is no all-in-one component. `ComposerSurface` is the root, and the parts

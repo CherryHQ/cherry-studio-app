@@ -4,8 +4,14 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, or, type SQL }
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
-import { agentTable, monotonicUpdateTimestamp, userModelTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionTable,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import type {
   InsertUserProviderRow,
   UserProviderRow,
@@ -13,6 +19,7 @@ import type {
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { ProviderListPageQuery } from '@/shared/data/api/schemas/providers';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { EndpointType } from '@/shared/data/types/model';
@@ -43,7 +50,7 @@ import {
   getRemovedConfiguredChatEndpoints,
 } from './providerModelEndpointIntegrity';
 import { providerRegistryService } from './ProviderRegistryService';
-import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+import { applyScopedMoves, insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 const logger = loggerService.withContext('ProviderService');
 const DEFAULT_PROVIDER_PAGE_LIMIT = 20;
@@ -327,29 +334,20 @@ function decodeProviderCursor(raw: string | undefined): ProviderCursor | null {
 }
 
 function afterProviderCursor(cursor: ProviderCursor): SQL {
-  const notPlan = ne(userProviderTable.providerId, CLOUD_PROVIDER_ID);
-  // Plan is pinned independently of its saved order key, so its cursor precedes every other row.
-  if (cursor.providerId === CLOUD_PROVIDER_ID) return notPlan;
-
-  const afterWithinSection = or(
+  const afterOrderKey = or(
     gt(userProviderTable.orderKey, cursor.orderKey),
     and(
       eq(userProviderTable.orderKey, cursor.orderKey),
       gt(userProviderTable.providerId, cursor.providerId),
     ),
+  );
+  // CherryAI precedes every ordinary row in its enabled/disabled group.
+  const sameGroup = and(
+    eq(userProviderTable.isEnabled, cursor.isEnabled),
+    ne(userProviderTable.providerId, CLOUD_PROVIDER_ID),
+    cursor.providerId === CLOUD_PROVIDER_ID ? undefined : afterOrderKey,
   )!;
-
-  if (cursor.isEnabled) {
-    return and(
-      notPlan,
-      or(
-        eq(userProviderTable.isEnabled, false),
-        and(eq(userProviderTable.isEnabled, true), afterWithinSection),
-      ),
-    )!;
-  }
-
-  return and(notPlan, eq(userProviderTable.isEnabled, false), afterWithinSection)!;
+  return cursor.isEnabled ? or(sameGroup, eq(userProviderTable.isEnabled, false))! : sameGroup;
 }
 
 function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
@@ -455,6 +453,7 @@ export class ProviderService {
             .orderBy(
               desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
               asc(userProviderTable.orderKey),
+              asc(userProviderTable.providerId),
             )
         : await this.db
             .select()
@@ -463,6 +462,7 @@ export class ProviderService {
             .orderBy(
               desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
               asc(userProviderTable.orderKey),
+              asc(userProviderTable.providerId),
             );
 
     return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
@@ -495,8 +495,8 @@ export class ProviderService {
       .from(userProviderTable)
       .where(and(...conditions))
       .orderBy(
-        desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
         desc(userProviderTable.isEnabled),
+        desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
         asc(userProviderTable.orderKey),
         asc(userProviderTable.providerId),
       )
@@ -798,6 +798,10 @@ export class ProviderService {
         .from(userModelTable)
         .where(eq(userModelTable.providerId, providerId));
       await tx
+        .update(agentSessionTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentSessionTable.updatedAt) })
+        .where(inArray(agentSessionTable.model, providerModelIds));
+      await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
         .where(inArray(agentTable.model, providerModelIds));
@@ -822,6 +826,34 @@ export class ProviderService {
 
     await this.dbService.withWriteTx((tx) => batchUpsertProviders(tx, inputs));
   }
+
+  async reorder(providerId: string, anchor: OrderRequest): Promise<void> {
+    await this.reorderBatch([{ anchor, id: providerId }]);
+  }
+
+  async reorderBatch(moves: { anchor: OrderRequest; id: string }[]): Promise<void> {
+    if (moves.length === 0) {
+      return;
+    }
+
+    await this.dbService.withWriteTx((tx) =>
+      applyScopedMoves(tx, userProviderTable, moves, {
+        baseScope: ne(userProviderTable.providerId, CLOUD_PROVIDER_ID),
+        pkColumn: userProviderTable.providerId,
+        scopeColumn: userProviderTable.isEnabled,
+      }),
+    );
+
+    publishDataApiChanges(['/providers', '/providers/page']);
+  }
+}
+
+function assertProviderOrderAnchorAllowed(anchor: OrderRequest): void {
+  if ('before' in anchor) {
+    assertUserOwnedProvider(anchor.before);
+  } else if ('after' in anchor) {
+    assertUserOwnedProvider(anchor.after);
+  }
 }
 
 // The organization supplies an enterprise profile's providers.
@@ -834,16 +866,35 @@ guardMethods(
     'updateApiKey',
     'delete',
     'batchUpsert',
+    'reorder',
+    'reorderBatch',
   ]),
 );
 
 guardMethods(ProviderService, {
   create: (input) => assertUserOwnedProvider(input.providerId),
-  update: (id) => assertUserOwnedProvider(id),
+  update: (id, input) => {
+    if (
+      id === CLOUD_PROVIDER_ID &&
+      typeof input.isEnabled === 'boolean' &&
+      Object.keys(input).length === 1
+    )
+      return;
+    assertUserOwnedProvider(id);
+  },
   replaceApiKeys: (id) => assertUserOwnedProvider(id),
   updateApiKey: (id) => assertUserOwnedProvider(id),
   delete: (id) => assertUserOwnedProvider(id),
   batchUpsert: (inputs) => inputs.forEach((input) => assertUserOwnedProvider(input.providerId)),
+  reorder: (id, anchor) => {
+    assertUserOwnedProvider(id);
+    assertProviderOrderAnchorAllowed(anchor);
+  },
+  reorderBatch: (moves) =>
+    moves.forEach((move) => {
+      assertUserOwnedProvider(move.id);
+      assertProviderOrderAnchorAllowed(move.anchor);
+    }),
 });
 
 export const providerService = new ProviderService();

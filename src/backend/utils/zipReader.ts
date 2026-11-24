@@ -1,9 +1,11 @@
-import { Inflate } from 'fflate';
+import { type FlateError, FlateErrorCode, Inflate } from 'fflate';
+
+import { yieldToRuntime } from '@/shared/utils/yieldToRuntime';
 
 /**
  * Restricted reader for untrusted single-disk ZIP32 archives: the central directory is validated
  * before any byte is inflated, and extraction streams bounded chunks while yielding to the app.
- * Encryption, ZIP64, links and compression other than stored/deflate are rejected.
+ * Encrypted, ZIP64, linked and unsupported compression entries are never extracted.
  */
 
 /** Random-access archive bytes; a read returns fewer bytes only past the end of the archive. */
@@ -49,6 +51,8 @@ export type ZipDirectoryOptions = ZipFormatOptions & {
   allowDirectories?: boolean;
   /** Path, collision and per-entry rules in directory order. Throw to reject the archive. */
   checkRecord(record: ZipRecord): void;
+  /** Skip a malformed record with readable boundaries, even if its name cannot be decoded. */
+  onInvalidEntry?(name?: string): void;
 };
 
 export type ZipExtractOptions = ZipFormatOptions & {
@@ -60,6 +64,8 @@ export type ZipExtractOptions = ZipFormatOptions & {
   onRead?(position: number): void;
   /** Receives one entry's expanded bytes; `close` runs whether or not the entry is valid. */
   open(entry: ZipEntry): { write(chunk: Uint8Array): void; close?(): void };
+  /** Skip a malformed entry after closing its sink. Contiguous extraction stays strict. */
+  onInvalidEntry?(name: string): void;
 };
 
 const END_RECORD_MAX_BYTES = 22 + 0xffff;
@@ -75,7 +81,6 @@ const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
 
 const viewOf = (bytes: Uint8Array) =>
   new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-const yieldToRuntime = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function readExact(source: ZipSource, offset: number, length: number, invalid: () => Error) {
   const bytes = source.read(offset, length);
@@ -85,6 +90,10 @@ function readExact(source: ZipSource, offset: number, length: number, invalid: (
 
 export function readZipDirectory(source: ZipSource, options: ZipDirectoryOptions): ZipDirectory {
   const invalid = () => options.invalid('malformed');
+  const skipInvalid = (name?: string) => {
+    if (!options.onInvalidEntry) throw invalid();
+    options.onInvalidEntry(name);
+  };
   const tail = source.read(
     Math.max(0, source.size - END_RECORD_MAX_BYTES),
     Math.min(source.size, END_RECORD_MAX_BYTES),
@@ -124,16 +133,18 @@ export function readZipDirectory(source: ZipSource, options: ZipDirectoryOptions
     if (position + 46 > directoryEnd) throw invalid();
     const header = viewOf(readExact(source, position, 46, invalid));
     const nameLength = header.getUint16(28, true);
-    const next =
-      position + 46 + nameLength + header.getUint16(30, true) + header.getUint16(32, true);
-    if (
-      header.getUint32(0, true) !== 0x02014b50 ||
-      next > directoryEnd ||
-      (options.maxNameBytes !== undefined && nameLength > options.maxNameBytes)
-    )
-      throw invalid();
-    const name = options.decodeName(readExact(source, position + 46, nameLength, invalid));
-    if (name === null) throw invalid();
+    const nameOffset = position + 46;
+    position = nameOffset + nameLength + header.getUint16(30, true) + header.getUint16(32, true);
+    if (header.getUint32(0, true) !== 0x02014b50 || position > directoryEnd) throw invalid();
+    if (options.maxNameBytes !== undefined && nameLength > options.maxNameBytes) {
+      skipInvalid();
+      continue;
+    }
+    const name = options.decodeName(readExact(source, nameOffset, nameLength, invalid));
+    if (name === null) {
+      skipInvalid();
+      continue;
+    }
     const directory = options.allowDirectories === true && name.endsWith('/');
     const flags = header.getUint16(8, true);
     const compression = header.getUint16(10, true);
@@ -149,8 +160,10 @@ export function readZipDirectory(source: ZipSource, options: ZipDirectoryOptions
       compressedSize === 0xffffffff ||
       (unixType !== 0 && unixType !== (directory ? UNIX_DIRECTORY : UNIX_FILE)) ||
       (!directory && offset + 30 > start)
-    )
-      throw invalid();
+    ) {
+      skipInvalid(name);
+      continue;
+    }
     options.checkRecord({
       name,
       path: directory ? name.slice(0, -1) : name,
@@ -158,7 +171,10 @@ export function readZipDirectory(source: ZipSource, options: ZipDirectoryOptions
       size: entrySize,
     });
     if (!directory) {
-      if (entries.has(name)) throw invalid();
+      if (entries.has(name)) {
+        skipInvalid(name);
+        continue;
+      }
       entries.set(name, {
         name,
         size: entrySize,
@@ -171,7 +187,6 @@ export function readZipDirectory(source: ZipSource, options: ZipDirectoryOptions
       expanded += entrySize;
       if (expanded > options.maxExpandedBytes) throw options.tooLarge();
     }
-    position = next;
   }
   if (position !== directoryEnd) throw invalid();
   return { entries: [...entries.values()].sort((a, b) => a.offset - b.offset), start };
@@ -184,84 +199,30 @@ export async function extractZipEntries(
   options: ZipExtractOptions,
 ): Promise<void> {
   const invalid = () => options.invalid('malformed');
+  const onInvalidEntry = options.contiguous ? undefined : options.onInvalidEntry;
+  const invalidEntry = onInvalidEntry ? new Error('Malformed ZIP entry') : undefined;
+  const rejectEntry = () => invalidEntry ?? invalid();
   let cursor = 0;
   for (const [index, entry] of entries.entries()) {
     options.signal?.throwIfAborted();
-    if (options.contiguous ? entry.offset !== cursor : entry.offset < cursor) throw invalid();
-    const header = viewOf(readExact(source, entry.offset, 30, invalid));
-    const nameLength = header.getUint16(26, true);
-    if (
-      header.getUint32(0, true) !== 0x04034b50 ||
-      header.getUint16(6, true) !== entry.flags ||
-      header.getUint16(8, true) !== entry.compression ||
-      (options.maxNameBytes !== undefined && nameLength > options.maxNameBytes) ||
-      options.decodeName(readExact(source, entry.offset + 30, nameLength, invalid)) !== entry.name
-    )
-      throw invalid();
-    const dataStart = entry.offset + 30 + nameLength + header.getUint16(28, true);
-    const dataEnd = dataStart + entry.compressedSize;
-    if (
-      dataEnd > start ||
-      (!(entry.flags & 8) &&
-        (header.getUint32(14, true) !== entry.crc32 ||
-          header.getUint32(18, true) !== entry.compressedSize ||
-          header.getUint32(22, true) !== entry.size)) ||
-      (entry.compression === 0 && entry.compressedSize !== entry.size)
-    )
-      throw invalid();
-
-    const sink = options.open(entry);
-    let written = 0;
-    let crc = 0xffffffff;
-    let complete = entry.compression === 0;
     try {
-      const write = (chunk: Uint8Array) => {
-        options.signal?.throwIfAborted();
-        written += chunk.byteLength;
-        if (written > entry.size) throw invalid();
-        if (options.verifyCrc)
-          for (const byte of chunk) crc = CRC_TABLE[(crc ^ byte) & 255]! ^ (crc >>> 8);
-        sink.write(chunk);
-      };
-      const inflate =
-        entry.compression === 8
-          ? new Inflate((chunk, final) => {
-              write(chunk);
-              if (final) complete = true;
-            })
-          : undefined;
-      for (let position = dataStart; position < dataEnd;) {
-        options.signal?.throwIfAborted();
-        const chunk = readExact(
-          source,
-          position,
-          Math.min(dataEnd - position, CHUNK_BYTES),
-          invalid,
-        );
-        position += chunk.byteLength;
-        if (inflate) inflate.push(chunk, position === dataEnd);
-        else write(chunk);
-        options.onRead?.(position);
-        await yieldToRuntime();
-      }
-      if (inflate && entry.compressedSize === 0) inflate.push(new Uint8Array(), true);
-    } finally {
-      sink.close?.();
+      if (options.contiguous ? entry.offset !== cursor : entry.offset < cursor) throw rejectEntry();
+      const range = readZipEntryRange(source, entry, start, options, rejectEntry);
+      // Reserve the range even if its payload is corrupt, so later entries cannot reread it.
+      cursor = range.end;
+      await extractZipEntry(source, entry, range, options, rejectEntry);
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      if (!onInvalidEntry || error !== invalidEntry) throw error;
+      onInvalidEntry(entry.name);
+      continue;
     }
-    if (
-      !complete ||
-      written !== entry.size ||
-      (options.verifyCrc && (crc ^ 0xffffffff) >>> 0 !== entry.crc32)
-    )
-      throw invalid();
-
-    cursor = dataEnd;
     if (!options.contiguous) continue;
     const nextOffset = entries[index + 1]?.offset ?? start;
     if (entry.flags & 8) {
-      const length = nextOffset - dataEnd;
+      const length = nextOffset - cursor;
       if (length !== 12 && length !== 16) throw invalid();
-      const descriptor = viewOf(readExact(source, dataEnd, length, invalid));
+      const descriptor = viewOf(readExact(source, cursor, length, invalid));
       const prefix = length === 16 ? 4 : 0;
       if (
         (prefix && descriptor.getUint32(0, true) !== 0x08074b50) ||
@@ -275,4 +236,112 @@ export async function extractZipEntries(
     if (cursor !== nextOffset) throw invalid();
   }
   if (options.contiguous && cursor !== start) throw invalid();
+}
+
+function readZipEntryRange(
+  source: ZipSource,
+  entry: ZipEntry,
+  directoryStart: number,
+  options: ZipFormatOptions,
+  invalid: () => Error,
+) {
+  const header = viewOf(readExact(source, entry.offset, 30, invalid));
+  const nameLength = header.getUint16(26, true);
+  if (
+    header.getUint32(0, true) !== 0x04034b50 ||
+    header.getUint16(6, true) !== entry.flags ||
+    header.getUint16(8, true) !== entry.compression ||
+    (options.maxNameBytes !== undefined && nameLength > options.maxNameBytes) ||
+    options.decodeName(readExact(source, entry.offset + 30, nameLength, invalid)) !== entry.name
+  )
+    throw invalid();
+  const dataStart = entry.offset + 30 + nameLength + header.getUint16(28, true);
+  const dataEnd = dataStart + entry.compressedSize;
+  if (
+    dataEnd > directoryStart ||
+    (!(entry.flags & 8) &&
+      (header.getUint32(14, true) !== entry.crc32 ||
+        header.getUint32(18, true) !== entry.compressedSize ||
+        header.getUint32(22, true) !== entry.size)) ||
+    (entry.compression === 0 && entry.compressedSize !== entry.size)
+  )
+    throw invalid();
+  return { start: dataStart, end: dataEnd };
+}
+
+async function extractZipEntry(
+  source: ZipSource,
+  entry: ZipEntry,
+  range: { start: number; end: number },
+  options: ZipExtractOptions,
+  invalid: () => Error,
+): Promise<void> {
+  const sink = options.open(entry);
+  let written = 0;
+  let crc = 0xffffffff;
+  let complete = entry.compression === 0;
+  try {
+    const write = (chunk: Uint8Array) => {
+      options.signal?.throwIfAborted();
+      written += chunk.byteLength;
+      if (written > entry.size) throw invalid();
+      if (options.verifyCrc)
+        for (const byte of chunk) crc = CRC_TABLE[(crc ^ byte) & 255]! ^ (crc >>> 8);
+      sink.write(chunk);
+    };
+    // Keep sink errors outside the decoder catch. In particular, disk errors must abort.
+    let output: Uint8Array | undefined;
+    const inflate =
+      entry.compression === 8
+        ? new Inflate((chunk, final) => {
+            output = chunk;
+            complete = final;
+          })
+        : undefined;
+    const push = (chunk: Uint8Array, final: boolean) => {
+      if (!inflate) {
+        write(chunk);
+        return;
+      }
+      try {
+        inflate.push(chunk, final);
+      } catch (error) {
+        const code = (error as Partial<FlateError> | null)?.code;
+        if (
+          options.onInvalidEntry &&
+          !options.contiguous &&
+          (code === FlateErrorCode.UnexpectedEOF ||
+            code === FlateErrorCode.InvalidBlockType ||
+            code === FlateErrorCode.InvalidLengthLiteral ||
+            code === FlateErrorCode.InvalidDistance)
+        )
+          throw invalid();
+        throw error;
+      }
+      if (output) write(output);
+      output = undefined;
+    };
+    for (let position = range.start; position < range.end;) {
+      options.signal?.throwIfAborted();
+      const chunk = readExact(
+        source,
+        position,
+        Math.min(range.end - position, CHUNK_BYTES),
+        invalid,
+      );
+      position += chunk.byteLength;
+      push(chunk, position === range.end);
+      options.onRead?.(position);
+      await yieldToRuntime();
+    }
+    if (inflate && entry.compressedSize === 0) push(new Uint8Array(), true);
+  } finally {
+    sink.close?.();
+  }
+  if (
+    !complete ||
+    written !== entry.size ||
+    (options.verifyCrc && (crc ^ 0xffffffff) >>> 0 !== entry.crc32)
+  )
+    throw invalid();
 }

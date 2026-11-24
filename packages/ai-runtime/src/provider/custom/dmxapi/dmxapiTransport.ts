@@ -70,7 +70,10 @@ const PLAIN_URL_RE = /https?:\/\/[^\s,'"<>)]+/g;
 function extractUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   let match: RegExpExecArray | null;
-  while ((match = MARKDOWN_IMAGE_RE.exec(text)) !== null) urls.add(match[1]);
+  while ((match = MARKDOWN_IMAGE_RE.exec(text)) !== null) {
+    const url = match[1];
+    if (url) urls.add(url);
+  }
   if (urls.size === 0) {
     while ((match = PLAIN_URL_RE.exec(text)) !== null) urls.add(match[0]);
   }

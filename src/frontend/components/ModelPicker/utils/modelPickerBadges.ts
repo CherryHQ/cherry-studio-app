@@ -7,13 +7,20 @@ import type { Model } from '@/shared/data/types/model';
 export const MODEL_PICKER_BADGES = ['free', 'vision'] as const;
 
 export type ModelPickerBadge = (typeof MODEL_PICKER_BADGES)[number];
+export type ModelBadgeSource = Pick<
+  Model,
+  'apiModelId' | 'modelId' | 'name' | 'presetModelId' | 'providerId'
+> & { capabilities: readonly string[] };
 
 const FREE_MARKER_PATTERN = /(?:^|[^a-z0-9])free(?:$|[^a-z0-9])/i;
 
-export function getModelPickerBadges(model: Model): ModelPickerBadge[] {
+export function getModelPickerBadges(
+  model: ModelBadgeSource,
+  isCloudFree = false,
+): ModelPickerBadge[] {
   const badges: ModelPickerBadge[] = [];
 
-  if (model.providerId !== CLOUD_PROVIDER_ID && isFreeModel(model)) {
+  if (model.providerId === CLOUD_PROVIDER_ID ? isCloudFree : isFreeModel(model)) {
     badges.push('free');
   }
   if (model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION)) {
@@ -25,13 +32,14 @@ export function getModelPickerBadges(model: Model): ModelPickerBadge[] {
 
 /** All selected badges must be present; this makes Free + Vision useful together. */
 export function matchesModelPickerBadges(
-  model: Model,
+  model: ModelBadgeSource,
   badges: readonly ModelPickerBadge[],
+  isCloudFree = false,
 ): boolean {
-  return badges.every((badge) => getModelPickerBadges(model).includes(badge));
+  return badges.every((badge) => getModelPickerBadges(model, isCloudFree).includes(badge));
 }
 
-function isFreeModel(model: Model): boolean {
+function isFreeModel(model: ModelBadgeSource): boolean {
   if (model.providerId.toLocaleLowerCase() === 'cherryai') {
     return true;
   }

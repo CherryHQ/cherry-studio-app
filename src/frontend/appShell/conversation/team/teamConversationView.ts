@@ -24,12 +24,15 @@ export function createTeamConversationProjector(scope: string) {
       key: id(tool.id),
       title: tool.name,
       state: tool.state,
-      input: { kind: 'inline' as const, value: { kind: 'json' as const, value: tool.input } },
+      input: {
+        kind: 'inline' as const,
+        value: { kind: 'json' as const, value: tool.input, complete: true as const },
+      },
       ...(tool.output !== undefined
         ? {
             output: {
               kind: 'inline' as const,
-              value: { kind: 'json' as const, value: tool.output },
+              value: { kind: 'json' as const, value: tool.output, complete: true as const },
             },
           }
         : {}),
@@ -143,7 +146,7 @@ export function createTeamConversationProjector(scope: string) {
           state: 'pending' as const,
           input:
             pending.kind === 'approval'
-              ? { kind: 'inline', value: { kind: 'json', value: pending.text } }
+              ? { kind: 'inline', value: { kind: 'json', value: pending.text, complete: true } }
               : {
                   kind: 'inline',
                   value: {

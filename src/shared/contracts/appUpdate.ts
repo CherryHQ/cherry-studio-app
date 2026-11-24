@@ -27,7 +27,12 @@ export type AppUpdateResult =
   | { status: 'upToDate'; currentVersion: string }
   | {
       status: 'unavailable';
-      reason: 'unsupported' | 'unknownVersion' | 'noRelease' | 'nativeUnavailable';
+      reason:
+        | 'unsupported'
+        | 'unknownVersion'
+        | 'noRelease'
+        | 'nativeUnavailable'
+        | 'storefrontUnavailable';
     };
 
 export type AppUpdateDownload =

@@ -70,7 +70,7 @@ export function createLocalConversationProjector(input: {
     | 'selectMessage'
   >;
   sessionId: string;
-  ssh?: Pick<SshModule, 'getTarget' | 'setCommandGrant'>;
+  ssh?: Pick<SshModule, 'getTarget' | 'setGrant'>;
   onSessionChanged?: (sessionId: string) => void;
 }) {
   const { client, sessionId } = input;
@@ -164,13 +164,16 @@ export function createLocalConversationProjector(input: {
             : {}),
           ...(canModify && message.role === 'assistant'
             ? {
-                retry: action<void, ConversationRef | void>(state, true, async () => {
-                  const next = await client.retryMessage({ sessionId, messageId: message.id });
-                  if (next) {
-                    input.onSessionChanged?.(next.id);
-                    return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
-                  }
-                }),
+                retry: {
+                  ...action<void, ConversationRef | void>(state, true, async () => {
+                    const next = await client.retryMessage({ sessionId, messageId: message.id });
+                    if (next) {
+                      input.onSessionChanged?.(next.id);
+                      return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
+                    }
+                  }),
+                  modelId: message.modelId,
+                },
                 answerWith: action<{ modelId: UniqueModelId }, void>(
                   state,
                   true,
@@ -283,14 +286,12 @@ export function createLocalConversationProjector(input: {
             ) {
               if (!canGrantSshDiagnostics || !sshTarget || !input.ssh)
                 throw new ConversationReadError({ code: 'conflict', retry: 'read-again' });
-              const grantedTarget = await input.ssh.setCommandGrant(sessionId, sshTarget, true);
+              const grantedTarget = await input.ssh.setGrant(sessionId, sshTarget, 'diagnostics');
               try {
                 await client.respondApproval(sessionId, approval.id, decision.kind);
               } catch (error) {
                 // A concurrent selection or grant replacement must not be revoked here.
-                await input.ssh
-                  .setCommandGrant(sessionId, grantedTarget, false)
-                  .catch(() => undefined);
+                await input.ssh.setGrant(sessionId, grantedTarget, null).catch(() => undefined);
                 throw error;
               }
               return;

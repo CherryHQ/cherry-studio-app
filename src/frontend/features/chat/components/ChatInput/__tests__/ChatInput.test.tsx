@@ -3,7 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ComposerSendPayload } from '@/frontend/components/Composer';
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
+import { PolicyScope } from '@/frontend/components/Policy';
 import type { QuoteFields } from '@/shared/contracts/agent';
+import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
+import { agentPolicy } from '@/shared/data/managedPolicy';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { createQuoteMention, readQuoteMentions } from '../../../quotes/quoteMentions';
 import { ChatInput } from '../ChatInput';
@@ -19,6 +23,7 @@ const mockSettleEditSend = jest.fn(() => true);
 const mockEditMessage = jest.fn();
 jest.mock('@cherrystudio/ui/components', () => ({
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
+  Dialog: (props: object) => jest.requireActual('react').createElement('Dialog', props),
 }));
 jest.mock('../hooks/useChatEditDraft', () => ({
   useChatEditDraft: () => ({
@@ -32,17 +37,35 @@ jest.mock('../hooks/useChatEditDraft', () => ({
 
 let mockImageMode = false;
 let mockFields: QuoteFields;
+let mockAgentModel: UniqueModelId | null | undefined;
+let mockHasLoadedCatalog = false;
+let mockCatalogModels = new Set<string>(['p::m']);
+let mockSession: Pick<AgentSessionEntity, 'model' | 'updatedAt'>;
+const mockUpdateAgentSession = jest.fn(
+  async (_id: string, patch: Pick<AgentSessionEntity, 'model'>) => ({
+    ...mockSession,
+    ...patch,
+    updatedAt: '2026-11-18T00:00:00.001Z',
+  }),
+);
+let mockPickerApi: {
+  replyModels: readonly UniqueModelId[] | null;
+  selectedModelId: UniqueModelId | null;
+  selectModel: (modelId: UniqueModelId) => void;
+  setReplyModels: (models: readonly UniqueModelId[] | null) => void;
+};
 const mockFinish = jest.fn();
 const mockCapture = jest.fn(() => ({ fields: mockFields, finish: mockFinish }));
 const mockQuoteActions = { capture: mockCapture };
 const mockSend = jest.fn();
 const mockNoop = jest.fn();
 const mockControls = {
-  editMessage: mockEditMessage,
-  sendMessage: mockSend,
-  canSend: true,
-  isBusy: false,
   cancel: mockNoop,
+  canSend: true,
+  compactContext: mockNoop,
+  editMessage: mockEditMessage,
+  isBusy: false,
+  sendMessage: mockSend,
 };
 const mockModelItem = { modelId: 'p::m', model: { id: 'p::m' } };
 const mockSshProfile = {
@@ -50,6 +73,15 @@ const mockSshProfile = {
   revision: '22222222-2222-4222-8222-222222222222',
 };
 let mockSshTarget: { profile: typeof mockSshProfile } | null = null;
+let mockSshAvailable = false;
+const mockGetRememberedTarget = jest.fn();
+const mockDecideRememberedTarget = jest.fn();
+const mockSsh = {
+  isAvailable: () => mockSshAvailable,
+  getTarget: () => mockSshTarget,
+  getRememberedTarget: mockGetRememberedTarget,
+  decideRememberedTarget: mockDecideRememberedTarget,
+};
 
 jest.mock('../../../quotes/ChatQuoteContext', () => ({
   useChatQuoteActions: () => mockQuoteActions,
@@ -57,14 +89,28 @@ jest.mock('../../../quotes/ChatQuoteContext', () => ({
 jest.mock('../../../runtime', () => ({ useAgentChatImageResult: () => undefined }));
 jest.mock('@/frontend/data', () => ({
   useApiClient: () => ({}),
-  useBackendModule: () => ({ isAvailable: () => false, getTarget: () => mockSshTarget }),
+  useBackendModule: () => mockSsh,
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ setParams: mockNoop }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ setParams: mockNoop }),
+  useLocalSearchParams: () => ({}),
+  useIsFocused: () => true,
+}));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => mockNoop }));
-jest.mock('@/frontend/appShell/navigation/chat', () => ({ chatReturnToHref: () => '/chat' }));
+jest.mock('@/frontend/appShell/navigation/chat', () => ({
+  chatReturnToHref: () => '/chat',
+  parseChatRoute: () => ({ status: 'empty' }),
+}));
 jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentApiById: () => ({ agent: { id: 'a', mode: 'standard' } }),
-  useAgentMutations: () => ({ updateAgent: mockNoop }),
+  useAgentApiById: (id?: string) => ({
+    agent: {
+      id: id ?? 'a',
+      mode: 'standard',
+      ...(mockAgentModel !== undefined ? { model: mockAgentModel } : {}),
+    },
+  }),
+  useAgentSession: (id?: string) => ({ data: id ? mockSession : undefined }),
+  useAgentSessionMutations: () => ({ updateAgentSession: mockUpdateAgentSession }),
 }));
 jest.mock('@/frontend/hooks/plugin', () => ({
   usePluginCatalog: () => ({}),
@@ -82,7 +128,13 @@ jest.mock('@/frontend/components/McpApp', () => ({
   McpAppContextNotice: () => null,
 }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
-  useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
+  useModelPickerData: () => ({
+    hasLoadedCatalog: mockHasLoadedCatalog,
+    getModelItem: (id: string | null) =>
+      id && (!mockHasLoadedCatalog || mockCatalogModels.has(id))
+        ? { ...mockModelItem, modelId: id, model: { id } }
+        : undefined,
+  }),
   ModelPickerDrawer: () => null,
 }));
 jest.mock('@/shared/utils/modelPurpose', () => ({
@@ -111,9 +163,6 @@ jest.mock('../components/ChatInputEffortOverlay', () => ({
 jest.mock('../components/ChatInputMenu', () => ({ ChatInputMenu: () => null }));
 jest.mock('../components/ChatInputModelPill', () => ({ ChatInputModelPill: () => null }));
 jest.mock('../components/ChatInputQueue', () => ({ ChatInputQueue: () => null }));
-jest.mock('../hooks/useChatInputAgentModelSelection', () => ({
-  useChatInputAgentModelSelection: () => ({ selectModel: mockNoop, selectedModelId: 'p::m' }),
-}));
 jest.mock('../hooks/useChatInputMcpPrompts', () => ({ useChatInputMcpPrompts: () => [] }));
 jest.mock('../hooks/useChatInputReasoningEfforts', () => ({
   useChatInputReasoningEfforts: () => [],
@@ -122,7 +171,10 @@ jest.mock('../hooks/useChatInputReasoningEffortSelection', () => ({
   useChatInputReasoningEffortSelection: () => ({ selectReasoningEffort: mockNoop }),
 }));
 jest.mock('../hooks/useChatInputModelPicker', () => ({
-  useChatInputModelPicker: () => ({ close: mockNoop, open: mockNoop, isOpen: false }),
+  useChatInputModelPicker: (props: typeof mockPickerApi) => {
+    mockPickerApi = props;
+    return { close: mockNoop, open: mockNoop, isOpen: false };
+  },
 }));
 jest.mock('../hooks/useChatSelectionHandoff', () => ({ useChatSelectionHandoff: () => undefined }));
 jest.mock('../utils/chatInputPlugins', () => ({ getConnectedChatInputPlugins: () => [] }));
@@ -141,9 +193,17 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   jest.clearAllMocks();
   mockImageMode = false;
+  mockAgentModel = undefined;
+  mockSession = { model: 'p::m', updatedAt: '2026-11-18T00:00:00.000Z' };
+  mockHasLoadedCatalog = false;
+  mockCatalogModels = new Set(['p::m']);
   mockEditing = null;
   mockSshTarget = null;
+  mockSshAvailable = false;
+  mockGetRememberedTarget.mockReset();
+  mockDecideRememberedTarget.mockReset();
   mockDraft = '';
+  mockControls.canSend = true;
   mockControls.isBusy = false;
   mockEditMessage.mockResolvedValue(undefined);
   mockFields = fields;
@@ -172,6 +232,8 @@ test('text send captures one attempt, sends the primary quote, and clears only a
     } satisfies ComposerSendPayload);
   });
   expect(mockCapture).toHaveBeenCalledTimes(1);
+  // A cached Session model must not be sent as a per-turn override.
+  expect(mockSend.mock.calls[0][0]).not.toHaveProperty('modelId');
   expect(mockSend.mock.calls[0][0].parts).toEqual([
     {
       type: 'text',
@@ -242,6 +304,87 @@ test('a stale SSH mention is rejected before sending its display snapshot', asyn
     }),
   ).rejects.toThrow();
   expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('one SSH restore confirmation lets the original message use the selected target', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValueOnce(mockSshProfile);
+  mockDecideRememberedTarget.mockImplementationOnce(async () => {
+    mockSshTarget = { profile: mockSshProfile };
+  });
+  await mount();
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: `${createSshMention('SSH · router', mockSshProfile)} Check status`,
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  expect(mockSend).not.toHaveBeenCalled();
+  const dialog = renderer.root.findByType('Dialog' as never);
+  expect(dialog.findAllByType('Button' as never)).toHaveLength(2);
+  const confirm = dialog.findByProps({ children: 'ssh.restoreTarget.confirm' });
+  await act(async () => {
+    confirm.props.onPress();
+    await pending;
+  });
+  expect(mockDecideRememberedTarget).toHaveBeenCalledWith('s', mockSshProfile, 'restore');
+  expect(mockSend).toHaveBeenCalledTimes(1);
+  expect(mockSend.mock.calls[0][0].parts).toEqual([
+    {
+      type: 'text',
+      text: 'SSH · router Check status',
+      sshReferences: [{ type: 'ssh', label: 'SSH · router', offset: 0 }],
+    },
+  ]);
+});
+
+test('dismissing SSH restoration cancels admission so the composer can keep the draft', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValueOnce(mockSshProfile);
+  await mount();
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: 'Check status',
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  await act(async () => {
+    renderer.root.findByType('Dialog' as never).props.onOpenChange(false);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+  expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).not.toHaveBeenCalled();
+});
+
+test('parallel sends skip SSH restoration and reject drafts that explicitly mention SSH', async () => {
+  mockSshAvailable = true;
+  mockGetRememberedTarget.mockResolvedValue(mockSshProfile);
+  await mount();
+  await act(async () => mockPickerApi.setReplyModels(['p::m', 'p::other']));
+  const composer = renderer.root.findByType('TextComposer' as never);
+  let ordinarySend!: Promise<void>;
+  await act(async () => {
+    ordinarySend = composer.props.onSend({ text: 'Summarize this chat', attachments: [] });
+    void ordinarySend.catch(() => {});
+  });
+  expect(mockGetRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledWith(
+    expect.objectContaining({ additionalModelIds: ['p::other'] }),
+  );
+  await ordinarySend;
+
+  const sshSend: Promise<void> = composer.props.onSend({
+    text: `${createSshMention('SSH · router', mockSshProfile)} Check status`,
+    attachments: [],
+  });
+  await expect(sshSend).rejects.toThrow('SSH requires a single reply model.');
+  await expect(
+    sshSend.catch((error: unknown) => composer.props.getSendErrorLabel(error)),
+  ).resolves.toBe('chat.input.sendError.sshParallelUnsupported');
+  expect(mockDecideRememberedTarget).not.toHaveBeenCalled();
+  expect(mockSend).toHaveBeenCalledTimes(1);
 });
 
 test('image send captures before attachment preparation and consumes that attempt after an await', async () => {
@@ -353,4 +496,142 @@ test('entering question edit removes the tools menu and restores it on cancel', 
     renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />),
   );
   expect(surface().props.leadingAction).not.toBeNull();
+});
+
+test('keeps the first reply model and saves a later draft pick after the Session handoff', async () => {
+  mockAgentModel = 'p::default';
+  mockFields = {};
+  let finish!: () => void;
+  mockSend.mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)));
+  await act(async () => {
+    renderer = create(<ChatInput agentId="a" controls={mockControls as never} />);
+  });
+  await act(async () => mockPickerApi.selectModel('p::m'));
+  let sending!: Promise<unknown>;
+  act(() => {
+    sending = renderer.root.findByType('TextComposer' as never).props.onSend({
+      text: 'First question',
+      attachments: [],
+    } satisfies ComposerSendPayload);
+  });
+  expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ sessionModelId: 'p::m' }));
+
+  await act(async () => mockPickerApi.selectModel('p::next'));
+  expect(mockUpdateAgentSession).not.toHaveBeenCalled();
+  await act(async () => {
+    renderer.update(<ChatInput agentId="a" sessionId="s" controls={mockControls as never} />);
+    finish();
+    await sending;
+  });
+
+  expect(mockUpdateAgentSession).toHaveBeenCalledTimes(1);
+  expect(mockUpdateAgentSession).toHaveBeenCalledWith('s', { model: 'p::next' });
+  expect(mockPickerApi.selectedModelId).toBe('p::next');
+});
+
+test('falls back from removed or disallowed draftModel to agent.model and clears replyModels on Agent switch', async () => {
+  const defaultModel = 'p::default' as UniqueModelId;
+  const customModel = 'p::custom' as UniqueModelId;
+  const thirdModel = 'p::third' as UniqueModelId;
+  mockAgentModel = defaultModel;
+  mockHasLoadedCatalog = true;
+  mockCatalogModels = new Set([defaultModel, customModel, thirdModel]);
+  const renderDraft = (agentId: string, allowedModelIds: UniqueModelId[] | null = null) => (
+    <PolicyScope
+      policy={agentPolicy(
+        allowedModelIds ? { isManaged: true, allowedModelIds } : { isManaged: false },
+      )}
+    >
+      <ChatInput agentId={agentId} controls={mockControls as never} />
+    </PolicyScope>
+  );
+
+  await act(async () => {
+    renderer = create(renderDraft('agent-a', [defaultModel, customModel, thirdModel]));
+  });
+  await act(async () => {
+    mockPickerApi.selectModel(customModel);
+    mockPickerApi.setReplyModels([customModel, thirdModel]);
+  });
+  expect(mockPickerApi.selectedModelId).toBe(customModel);
+  expect(mockPickerApi.replyModels).toEqual([customModel, thirdModel]);
+
+  // Deleting customModel from the catalog returns the draft to agent.model and clears parallel mode.
+  mockCatalogModels = new Set([defaultModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  expect(mockPickerApi.selectedModelId).toBe(defaultModel);
+  expect(mockPickerApi.replyModels).toBeNull();
+
+  // Withdrawing customModel from allowedModelIds also returns the draft to agent.model.
+  mockCatalogModels = new Set([defaultModel, customModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  await act(async () => {
+    mockPickerApi.selectModel(customModel);
+    mockPickerApi.setReplyModels([customModel, thirdModel]);
+  });
+  await act(async () => renderer.update(renderDraft('agent-a', [defaultModel])));
+  expect(mockPickerApi.selectedModelId).toBe(defaultModel);
+  expect(mockPickerApi.replyModels).toBeNull();
+
+  // Switching Agents inside a draft clears parallel replyModels from the previous Agent.
+  await act(async () =>
+    renderer.update(renderDraft('agent-a', [defaultModel, customModel, thirdModel])),
+  );
+  await act(async () => mockPickerApi.setReplyModels([customModel, thirdModel]));
+  expect(mockPickerApi.replyModels).toEqual([customModel, thirdModel]);
+  await act(async () =>
+    renderer.update(renderDraft('agent-b', [defaultModel, customModel, thirdModel])),
+  );
+  expect(mockPickerApi.replyModels).toBeNull();
+});
+
+test('disables manual compaction on ChatInputSurface when canSend is false even while idle', async () => {
+  mockControls.isBusy = false;
+  mockControls.canSend = false;
+  await act(async () => {
+    renderer = create(
+      <ChatInput
+        agentId="a"
+        sessionId="s"
+        contextUsage={{
+          sessionId: 's',
+          messageId: 'answer-1',
+          modelId: 'p::m' as UniqueModelId,
+          providerId: 'p',
+          providerModelId: 'm',
+          tokens: 1000,
+          canCompact: true,
+        }}
+        controls={mockControls as never}
+      />,
+    );
+  });
+  const surface = renderer.root.findByType('TextSurface' as never);
+  expect(surface.props.compactDisabled).toBe(true);
+  expect(surface.props.onCompactContext).toEqual(expect.any(Function));
+
+  mockControls.canSend = true;
+  await act(async () => {
+    renderer.update(
+      <ChatInput
+        agentId="a"
+        sessionId="s"
+        contextUsage={{
+          sessionId: 's',
+          messageId: 'answer-1',
+          modelId: 'p::m' as UniqueModelId,
+          providerId: 'p',
+          providerModelId: 'm',
+          tokens: 1000,
+          canCompact: true,
+        }}
+        controls={mockControls as never}
+      />,
+    );
+  });
+  expect(renderer.root.findByType('TextSurface' as never).props.compactDisabled).toBe(false);
 });

@@ -162,6 +162,7 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelSubmission: jest.fn(),
+    compactContext: jest.fn(),
     steerQueuedInput: jest.fn(),
     cancelTurn: jest.fn(),
     cancelQueuedInput: jest.fn<
@@ -274,6 +275,70 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').error).toBeUndefined();
     release();
     client.dispose();
+  });
+
+  test('reconciles the mounted transcript after storage recovers automatically', async () => {
+    let publish!: (event: AgentEvent) => void;
+    let current: AgentSessionSnapshot = { ...snapshot(), streamingMessage: assistantMessage() };
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: current, unsubscribe() {} };
+    });
+    const refreshed = deferred<void>();
+    const onTranscriptChanged = jest.fn().mockImplementationOnce(() => {});
+    onTranscriptChanged.mockImplementation(() => refreshed.resolve());
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    const unsubscribe = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      expect(client.getState('session-1').liveMessages).toEqual([assistantMessage()]);
+      current = snapshot();
+      publish({ type: 'runtime.recovered' });
+      await refreshed.promise;
+      expect(client.getState('session-1')).toMatchObject({
+        liveMessages: [],
+        status: 'ready',
+      });
+      expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    } finally {
+      unsubscribe();
+      client.dispose();
+    }
+  });
+
+  test('clears stale observation on runtime.failed so submitting a message reobserves and recovers state', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe() {} };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      publish({ type: 'runtime.failed', retryable: false });
+      expect(client.getState('session-1')).toMatchObject({
+        status: 'error',
+        error: { view: { code: 'EXECUTION_UNAVAILABLE', retryable: false } },
+      });
+
+      await client.submitMessage({
+        sessionId: 'session-1',
+        userMessageId: 'user-2',
+        assistantMessageId: 'assistant-2',
+        parts: [{ type: 'text', text: 'Retry after failure' }],
+      });
+
+      expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+      expect(protocol.submitMessage).toHaveBeenCalledTimes(1);
+      expect(client.getState('session-1')).toMatchObject({
+        status: 'ready',
+      });
+      expect(client.getState('session-1').error).toBeUndefined();
+    } finally {
+      unsubscribe();
+      client.dispose();
+    }
   });
 
   test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
@@ -895,7 +960,7 @@ describe('AgentSessionChatClient', () => {
     },
   );
 
-  test('stops a submission the Host is still admitting and releases the composer', async () => {
+  test('stops a submission after leaving and reopening the session during admission', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -922,6 +987,9 @@ describe('AgentSessionChatClient', () => {
     });
     const rejected = expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
     await waitForCall(protocol.submitMessage);
+    unsubscribe();
+    const release = client.subscribe('session-1', jest.fn());
+    expect(client.getState('session-1').isSubmitting).toBe(true);
 
     await client.cancelTurn('session-1');
     await client.cancelTurn('session-1');
@@ -933,7 +1001,7 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').isSubmitting).toBe(false);
     await client.cancelTurn('session-1');
     expect(protocol.cancelSubmission).toHaveBeenCalledTimes(1);
-    unsubscribe();
+    release();
   });
 
   test('never submits when stopped before the Host receives the submission', async () => {

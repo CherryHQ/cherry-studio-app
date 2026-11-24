@@ -4,5 +4,6 @@ export {
   getModelPickerBadges,
   matchesModelPickerBadges,
   MODEL_PICKER_BADGES,
+  type ModelBadgeSource,
   type ModelPickerBadge as ModelPickerBadgeValue,
 } from './utils/modelPickerBadges';

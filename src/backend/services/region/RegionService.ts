@@ -1,4 +1,6 @@
 import { loggerService } from '@logger';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { application } from '@/backend/core/application/Application';
@@ -10,67 +12,74 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import { createHttpClient } from '@/backend/services/http';
+
+import {
+  configOrigin,
+  NetworkRegionSchema,
+  requestConfigServiceResolve,
+  type NetworkRegion,
+} from './configServiceResolve';
 
 const logger = loggerService.withContext('RegionService');
-const CACHE_KEY = 'region.egress_country';
+const CACHE_KEY = 'region.egress_region';
 const CACHE_TTL = 10 * 60 * 1_000;
-// Public project credential shared with Cherry Desktop's Lite integration.
-const IPINFO_TOKEN = '5aa4105b40adbc';
-const CountrySchema = z.string().regex(/^[A-Z]{2}$/);
-const IpRegionSchema = z.object({ country_code: CountrySchema });
-const ipinfo = createHttpClient({ baseUrl: 'https://api.ipinfo.io', timeoutMs: 5_000 });
+const ResolveRegionSchema = z.object({ region: NetworkRegionSchema });
 
-/** Shared egress detection independent of data-collection consent. */
+/** Shared egress detection via Config Service, independent of data-collection consent. */
 @Injectable('RegionService')
 @DependsOn(['CacheService'])
 @ServicePhase(Phase.Gate)
 @AppStatePolicy('not-applicable')
 export class RegionService extends BaseService {
-  private inflight: Promise<string | null> | undefined;
+  private inflight: Promise<NetworkRegion | null> | undefined;
   private readonly controller = new AbortController();
 
-  protected onInit(signal?: AbortSignal): void {
+  protected override onInit(signal?: AbortSignal): void {
     const abort = () => this.controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     this.registerDisposable(() => signal?.removeEventListener('abort', abort));
     if (signal?.aborted) abort();
   }
 
-  getCountry(): Promise<string | null> {
+  /** Resolves the cached or freshly detected egress region (`CN` or `GLOBAL`), or `null` when unavailable. */
+  getRegion(): Promise<NetworkRegion | null> {
     this.controller.signal.throwIfAborted();
     const cached = application.get('CacheService').get(CACHE_KEY);
     if (cached) return Promise.resolve(cached);
 
-    this.inflight ??= this.detectCountry().finally(() => {
+    this.inflight ??= this.detectRegion().finally(() => {
       this.inflight = undefined;
     });
     return this.inflight;
   }
 
-  private async detectCountry(): Promise<string | null> {
+  private async detectRegion(): Promise<NetworkRegion | null> {
+    const origin = configOrigin(Constants.expoConfig?.extra?.configServiceOrigin);
+    const platform = Platform.OS;
+    if (!origin || (platform !== 'ios' && platform !== 'android')) return null;
+
     const cache = application.get('CacheService');
     const { signal } = this.controller;
     try {
-      const { data } = await ipinfo.request<unknown>({
-        method: 'GET',
-        path: '/lite/me',
-        query: { token: IPINFO_TOKEN },
-        maxResponseBytes: 4_096,
+      const { data, status } = await requestConfigServiceResolve(origin, platform, {
         signal,
+        timeoutMs: 5_000,
       });
+      if (status !== 200) {
+        throw new Error(`Unexpected Config Service status: ${status}`);
+      }
       signal.throwIfAborted();
-      const { country_code: country } = IpRegionSchema.parse(data);
-      cache.set(CACHE_KEY, country, CACHE_TTL);
-      return country;
+      const { region } = ResolveRegionSchema.parse(data);
+      cache.set(CACHE_KEY, region, CACHE_TTL);
+      return region;
     } catch (error) {
       signal.throwIfAborted();
-      logger.warn('IP region unavailable; keeping the country unknown', { error });
+      logger.warn('Config Service region unavailable; keeping the region unknown', { error });
       return null;
     }
   }
 
-  protected async onStop(): Promise<void> {
+  protected override async onStop(): Promise<void> {
     this.controller.abort();
     await this.inflight?.catch(() => {});
   }

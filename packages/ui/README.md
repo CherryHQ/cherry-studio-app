@@ -25,12 +25,12 @@ its whole frame without pagination space; `compact` keeps the bounded media geom
 Collections use 290-point cards when available, without rotation or overlapping stack layers.
 
 
-`ReorderList` is a controlled ordering list for small collections. It renders the shared Section
-rows with labeled up/down buttons, disables moves at the first and last positions, and returns
-a reordered copy without changing item identities or metadata. Callers supply item keys, labels,
-optional descriptions, translated action labels, and `onReorder`. The component owns neither
-scrolling nor persistence, so it can sit in a screen or a bottom sheet. No drag gesture or
-animation is required to reorder items.
+`Sortable` provides unified long-press direct-manipulation reordering and contextual actions without
+separate sort buttons or explicit drag handles. Holding a movable row lifts it into a sharp floating
+card over a quiet recess while dimming siblings without blur; sliding enters within-group direct
+drag with boundary rubber-banding and swap haptics, and releasing in place opens `MenuContent`.
+Callers own group slices, translated labels, persistence, and excluded child press targets
+(`Sortable.Exclusion`), and accessibility custom actions expose move operations without touch timing.
 
 `OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
 read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
@@ -429,10 +429,15 @@ and supports circular and rounded-square faces:
 Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallback`, and
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
-`Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, `ghost`, `link`, and `text` variants, along with loading and disabled
-behavior. `text` uses the link color without an underline for standalone text actions; `link` retains
-its underline. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`Button` keeps React Native's `Pressable` outermost (preserving Android `hitSlop` and accessibility
+semantics) around an `Animated.View` visual surface that drives UI-thread press-in scaling
+(`pressMotion.scale`, exempting trigger-only buttons without press handlers, inline `link`/`text`
+variants, and Reduce Motion). It supports `default`,
+`destructive`, `outline`, `secondary`, `ghost`, `link`, `text`, and `tonal` variants, along with
+loading and disabled states. The optional `haptic` prop accepts `selection`, `light`, or `medium`
+to acknowledge a committed press. Buttons are silent by default. The operation owner triggers
+outcome feedback after it confirms the result. Standalone `text` actions use the link color.
+The `link` variant also adds an underline. `shape="pill"` selects a capsule. The `xs`, `sm`,
 `inline`, `default`, `field`, `footer`, and `lg` sizes use content-driven typography and padding; `field` has a
 minimum height that aligns with form controls while still growing for large text, and `inline` is a
 compact zero-horizontal-padding action for headings or prose. `footer` adapts Android bottom actions
@@ -701,9 +706,10 @@ taps, system back, and viewport changes dismiss it without changing the underlyi
 wrapping a trigger. Native editor links and inline transcript text use it when they measure their
 own text ranges. Passing no anchor closes it; it retains the last text and position through exit.
 Its keyboard-preserving overlay shares the existing menu surface and bounded text reader. Optional
-children compose a visual readout while `text` supplies its accessible description; `width` requests
-a compact panel within the usual safe-area bounds, and `placement="above"` prefers the space above
-the anchor. The composed presentation remains stable through dismissal.
+children compose a visual readout while `text` supplies its accessible description; optional
+`footer` renders interactive actions below the readout outside its `accessible` node, `width`
+requests a compact panel within the usual safe-area bounds, and `placement="above"` prefers the
+space above the anchor. The composed presentation remains stable through dismissal.
 
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
@@ -1014,25 +1020,38 @@ content scrolls. `useComposerMenu().close(afterClose)` can defer a composed acti
 
 ## Motion
 
-Curves and durations are two axes, exported separately from `@cherrystudio/ui/motion`:
+Curves, springs, durations, and tier presets are exported from `@cherrystudio/ui/motion`:
 
 ```tsx
-import { duration, easing } from '@cherrystudio/ui/motion';
+import { duration, easing, pressMotion, spring } from '@cherrystudio/ui/motion';
 
 translateX.set(withTiming(next, { duration: duration.base, easing: easing.settle }));
 ```
 
-A curve is a design token — it means the same thing however far the thing travels — so components
-share it. A duration is tuned to the distance, so components pick one. `easing.settle` is pure
-deceleration and the right default for anything that moves or resizes something already on screen;
-`easing.overshoot` is for something arriving out of nothing, where the overshoot *is* the arrival.
+- **Curves (`easing`)**: `linear`, `overshoot`, `settle`, `inOut` (smooth on-screen morphs), and
+  `sheet` (soft deceleration for sheets, drawers, and capsules).
+- **Springs (`spring`)**: `tactile` (fast soft-landing press/icon recovery, zeta ~0.91), `morph`
+  (warm, gently lively in-place state transitions, zeta ~0.73), `settle` (critically damped snap
+  targets with zero overshoot), and `gentle` (unhurried spatial entrance).
+- **Durations (`duration`)**: `instant` (120ms tactile feedback), `fast` (200ms cross-fades),
+  `base` (250ms size/position changes), and `slow` (350ms overshoot arrivals).
+- **Tier presets**: `pressMotion` (`scale`, `subtleScale`, `pressIn`, `pressOut`) and
+  `ambientMotion` (`pulseDuration`, `shimmerDuration`).
 
-Components pair the two and name the pairing after the gesture rather than exporting a curve of their
-own, which is what `composer.motion.ts` does. This vocabulary covers package components; app-local
-easings remain outside it.
+Components pair curves and durations and name the pairing after the gesture rather than exporting
+a private curve, which is what `composer-motion.ts` does. This vocabulary covers package
+components; app-local easings remain outside it.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
+
+## Haptics
+
+`@cherrystudio/ui/haptics` exposes semantic haptic triggers (`triggerHaptic`, `haptics`, and the
+`HapticIntent` type covering `'selection' | 'light' | 'medium' | 'success' | 'warning' | 'error'`)
+backed by `expo-haptics`. Android uses the system's touch-feedback settings and available effects.
+On Android versions below API 30, outcome cues are visual and accessible only. Pair every haptic
+with an independent visual and accessible cue.
 
 ## Background Activities
 

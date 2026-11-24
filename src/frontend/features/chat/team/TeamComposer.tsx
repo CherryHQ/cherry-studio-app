@@ -1,8 +1,8 @@
 import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { useTeamComposerDraft } from '@/frontend/appShell/conversation/team';
 import {
   ComposerSurface,
   useComposerActions,
@@ -36,20 +36,13 @@ export function TeamComposer({
   const { toast } = useToast();
   const { draft } = useComposerState();
   const { setDraft } = useComposerActions();
-  const lifetime = useRef(false);
-  useEffect(() => {
-    lifetime.current = true;
-    return () => {
-      lifetime.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    module.writeDraft(draftKey, draft);
-  }, [module, draftKey, draft]);
-  useEffect(() => {
-    if (state.accepted)
-      setDraft((current) => (current.trim() === state.accepted!.input ? '' : current));
-  }, [state.accepted, setDraft]);
+  const lifetime = useTeamComposerDraft({
+    module,
+    draftKey,
+    draft,
+    setDraft,
+    accepted: state.accepted,
+  });
   const tooLong = agent?.maxInputLength !== undefined && draft.length > agent.maxInputLength;
   const ready =
     !!conversation &&

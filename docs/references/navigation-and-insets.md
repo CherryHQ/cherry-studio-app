@@ -104,10 +104,9 @@ Before enabling it, verify:
   management and detail pages use back navigation. Pairing and import preserve their source pages;
   only their transient steps replace each other. Opening desktop chat from device details switches
   the chat destination rather than creating another detail level.
-- The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
-  nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
-  provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes
-  the frontend observation but does not cancel the Host's active turn.
+- The chat surface is the drawer's initial scene. Its nested native Stack hosts the toolbar.
+  The main stack owns `ChatProvider` so local drafts and in-flight submissions survive replacing
+  a chat route. Each chat page subscribes to its Session while mounted.
 - Route files stay thin and re-export exact page boundaries from `src/frontend/features`.
 
 ## Window Sizes
@@ -118,8 +117,9 @@ size. Device identity never decides layout, so iPad Split View, Android tablets,
 displays follow the width they actually have. An iPad 11" or 13" is wide in both orientations; an
 iPad mini and an iPhone Duo's inner display are compact upright and wide on their side.
 
-Compact windows keep the overlay drawer. It leaves at least 64 points of chat visible and is capped
-at 400 points. A wide window has one structure: a left column beside one content region. The
+Compact windows keep the overlay drawer. It spans the full available window width inside any
+trailing safe area (with a 280-point minimum) and is dismissed via the header close button or swipe
+gesture. A wide window has one structure: a left column beside one content region. The
 left column is the 280-point sidebar, or in its place the file pane or conversation search, at the
 file pane width. The content region holds the chat or one first-level destination. The chat and
 first-level destinations lead with the sidebar button (`RouteHeaderProvider rootAction="drawer"`),

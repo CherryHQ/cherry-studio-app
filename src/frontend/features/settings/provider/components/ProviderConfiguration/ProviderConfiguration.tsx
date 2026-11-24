@@ -1,8 +1,16 @@
-import { Spinner } from '@cherrystudio/ui/components';
+import {
+  ScrollInteractionBoundary,
+  Sortable,
+  Spinner,
+  useSortableScrollController,
+} from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import {
+  KeyboardAwareScrollView,
+  type KeyboardAwareScrollViewRef,
+} from 'react-native-keyboard-controller';
 
 import { PolicyEditable, PolicyGroup } from '@/frontend/components/Policy';
 import type { ProviderConfigurationValue } from '@/frontend/types/providerConfiguration';
@@ -38,32 +46,45 @@ export function ProviderConfiguration({
   value: ProviderConfigurationValue | undefined;
 }) {
   const { t } = useTranslation();
+  const scroll = useSortableScrollController<KeyboardAwareScrollViewRef>();
 
   return (
     <View className="flex-1" testID={testID}>
-      <KeyboardAwareScrollView
-        alwaysBounceVertical={false}
-        bottomOffset={keyboardBottomOffset}
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-        disableScrollOnKeyboardHide
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        mode="layout"
-        showsVerticalScrollIndicator={false}
-        style={styles.screen}
-      >
-        {header}
-        {value ? (
-          <View className="gap-6 px-4 pt-3 pb-8">
-            <ProviderSections footer={footer} value={value} />
-          </View>
-        ) : (
-          <View className="items-center py-10">
-            <Spinner accessibilityLabel={t('settings.provider.loading')} />
-          </View>
+      <Sortable.Root scrollController={scroll.controller}>
+        {({ isDragging }) => (
+          <ScrollInteractionBoundary>
+            {(scrollHandlers) => (
+              <KeyboardAwareScrollView
+                {...scrollHandlers}
+                alwaysBounceVertical={false}
+                bottomOffset={keyboardBottomOffset}
+                contentContainerStyle={styles.content}
+                contentInsetAdjustmentBehavior="automatic"
+                disableScrollOnKeyboardHide
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                mode="layout"
+                onScroll={scroll.onScroll}
+                ref={scroll.setRef}
+                scrollEnabled={!isDragging}
+                showsVerticalScrollIndicator={false}
+                style={styles.screen}
+              >
+                {header}
+                {value ? (
+                  <View className="gap-6 px-4 pt-3 pb-8">
+                    <ProviderSections footer={footer} value={value} />
+                  </View>
+                ) : (
+                  <View className="items-center py-10">
+                    <Spinner accessibilityLabel={t('settings.provider.loading')} />
+                  </View>
+                )}
+              </KeyboardAwareScrollView>
+            )}
+          </ScrollInteractionBoundary>
         )}
-      </KeyboardAwareScrollView>
+      </Sortable.Root>
       {bottomAction}
     </View>
   );

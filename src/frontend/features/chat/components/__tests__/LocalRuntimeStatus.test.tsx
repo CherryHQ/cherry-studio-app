@@ -118,6 +118,20 @@ test('explains isolated session data without offering an ineffective refresh loo
   expect(mockPrimaryAction).toBeUndefined();
 });
 
+test('shows existing inline status without a retry action after automatic recovery fails', async () => {
+  mockState.status = 'error';
+  mockState.error = new AgentProtocolError({
+    code: 'EXECUTION_UNAVAILABLE',
+    message: 'private storage details',
+    retryable: false,
+  });
+
+  await render();
+
+  expect(text()).toContain('chat.runtime.sessionUnavailable');
+  expect(mockPrimaryAction).toBeUndefined();
+});
+
 test('a paused execution takes precedence over retry and compaction until it resumes', async () => {
   mockState.activeTurn = { ...activeTurn(true)!, isPaused: true };
   mockState.contextStatus = 'compacting';

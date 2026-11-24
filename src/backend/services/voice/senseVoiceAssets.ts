@@ -1,3 +1,5 @@
+import type { NetworkRegion } from '@/backend/services/region';
+
 /** SenseVoiceSmall INT8; immutable revision and byte hashes, shared by iOS and Android. */
 const MODEL_ORIGIN =
   'https://www.modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue/resolve/73eca47697f980daa3d16112404174b6b950b514';
@@ -23,9 +25,9 @@ export const SENSE_VOICE_ASSETS = [
 export const SENSE_VOICE_BYTES = SENSE_VOICE_ASSETS.reduce((sum, asset) => sum + asset.bytes, 0);
 
 /** Both immutable mirrors contain identical bytes, so installed models are region-independent. */
-export function getSenseVoiceAssets(country: string) {
+export function getSenseVoiceAssets(region: NetworkRegion) {
   return SENSE_VOICE_ASSETS.map((asset) => ({
     ...asset,
-    url: country === 'CN' ? asset.url : `${GLOBAL_MODEL_ORIGIN}/${asset.name}`,
+    url: region === 'CN' ? asset.url : `${GLOBAL_MODEL_ORIGIN}/${asset.name}`,
   }));
 }

@@ -42,7 +42,9 @@ function MarkdownBody({ bottomInset, text }: TextBodyProps) {
 
   return (
     <ScrollView className="flex-1" contentContainerStyle={contentContainerStyle}>
-      <MarkdownText markdown={text} selectable={false} />
+      <View className="mx-auto w-full max-w-[720px]">
+        <MarkdownText markdown={text} selectable={false} />
+      </View>
     </ScrollView>
   );
 }
@@ -59,7 +61,7 @@ function PlainTextBody({ bottomInset, text }: TextBodyProps) {
       keyExtractor={blockKeyExtractor}
       recycleItems
       renderItem={renderPlainTextBlock}
-      style={styles.list}
+      style={[styles.list, styles.readableColumn]}
     />
   );
 }
@@ -140,5 +142,6 @@ function renderSourceBlock({ item }: LegendListRenderItemProps<string>) {
 
 const styles = StyleSheet.create({
   list: { flex: 1 },
+  readableColumn: { alignSelf: 'center', maxWidth: 720, width: '100%' },
   ruler: { height: 0, opacity: 0, overflow: 'hidden' },
 });

@@ -12,9 +12,9 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
   const { client } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const failed = state.status === 'error';
-  const recoveryFailed =
-    state.error instanceof AgentProtocolError &&
-    state.error.view.code === 'SESSION_RECOVERY_FAILED';
+  const error = state.error instanceof AgentProtocolError ? state.error.view : undefined;
+  const recoveryFailed = error?.code === 'SESSION_RECOVERY_FAILED';
+  const storageUnavailable = error?.code === 'EXECUTION_UNAVAILABLE' && error.retryable === false;
   const retrying = state.activeTurn?.status === 'running' && state.activeTurn.isRetrying === true;
   const paused = state.activeTurn?.status === 'running' && state.activeTurn.isPaused === true;
   const notice = paused
@@ -31,9 +31,15 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
     <View className="px-4 py-2">
       {failed ? (
         <ContentState.Error
-          title={t(recoveryFailed ? 'chat.runtime.sessionRecoveryFailed' : 'chat.runtime.failed')}
-          primaryAction={
+          title={t(
             recoveryFailed
+              ? 'chat.runtime.sessionRecoveryFailed'
+              : storageUnavailable
+                ? 'chat.runtime.sessionUnavailable'
+                : 'chat.runtime.failed',
+          )}
+          primaryAction={
+            recoveryFailed || storageUnavailable
               ? undefined
               : {
                   children: t('common.retry'),

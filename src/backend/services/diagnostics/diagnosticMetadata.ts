@@ -16,10 +16,14 @@ const LOG_MESSAGES = new Set([
   'Promise rejection handled',
   'HTTP request failed.',
   'HTTP transport failed unexpectedly.',
+  'DeepSeek import failed',
+  'DeepSeek import skipped archive entries',
+  'DeepSeek import completed with skips',
   'MCP tools() failed, reconnecting once',
   'Trace storage operation failed',
   'Device tool failed',
   'Agent operation failed',
+  'Agent cancellation requested',
   'Agent listener failed',
   'Agent status listener failed',
   'Agent projection failed',
@@ -60,6 +64,10 @@ const LOG_STRING_FIELDS = new Set([
 const LOG_NUMBER_FIELDS = new Set([
   'status',
   'statusCode',
+  'skippedEntries',
+  'importedConversations',
+  'skippedConversations',
+  'missingAttachments',
   'durationMs',
   'totalTokens',
   'writeFailures',
@@ -186,7 +194,8 @@ export function projectDiagnosticLog(record: Record<string, unknown>) {
   const isLifecycle =
     (record.module === 'Startup' && record.message === 'Startup stage') ||
     (record.module === 'Office' && record.message === 'Office stage') ||
-    (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction');
+    (record.module === 'PiDurableObserver' && record.message === 'Pi durable context compaction') ||
+    (record.module === 'DurableAgentHost' && record.message === 'Agent cancellation requested');
   if (
     record.level !== 'warn' &&
     record.level !== 'error' &&

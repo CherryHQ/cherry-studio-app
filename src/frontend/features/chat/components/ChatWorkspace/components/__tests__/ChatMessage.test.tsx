@@ -1,17 +1,12 @@
-import type { ContextMenuProps } from '@cherrystudio/ui/components';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { ChatMessage } from '../ChatMessage';
 
-const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
-const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
-const mockEditMessage = jest.fn();
 const mockSelectBranch = jest.fn();
-const mockShareMessage = jest.fn();
 const mockPreserveReadingPosition = jest.fn();
 jest.mock('../../../../quotes/MessageQuoteHighlight', () => ({
   MessageQuoteHighlight: () => null,
@@ -22,32 +17,31 @@ const mockLocalUsage = jest.fn(() => null);
 jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
-  ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
   ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
   InfoPopover: ({ children, ...props }: { children: ReactNode }) =>
     jest.requireActual('react').createElement('InfoPopover', props, children),
 }));
 
 let mockCanSelectBranch = false;
-let mockEditableMessageIds: ReadonlySet<string> = new Set();
-let mockIsEditDisabled = false;
 let mockAreCardsEnabled = true;
+let mockIsShareSelecting = false;
 
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockAreCardsEnabled],
 }));
 
+jest.mock('../../../../share/ChatShareControls', () => ({
+  ChatShareSelectionRow: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('../../../../share/chatShareSelection', () => ({
+  useIsChatShareSelecting: () => mockIsShareSelecting,
+}));
+
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
-    copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
-    editQuestion: mockEditMessage,
-    shareAssistantMessage: mockShareMessage,
     ...(mockCanSelectBranch ? { selectBranch: mockSelectBranch } : {}),
-  }),
-  useAssistantMessageActionsState: () => ({
-    editableQuestionIds: mockEditableMessageIds,
-    isEditQuestionDisabled: mockIsEditDisabled,
   }),
 }));
 
@@ -81,6 +75,13 @@ jest.mock('../../translation/MessageTranslation', () => ({
 jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));
+
+jest.mock('../UserMessageToolbar', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    UserMessageToolbar: (props: object) => createElement('UserMessageToolbar', props),
+  };
+});
 
 jest.mock('../MessageAnswerCards', () => {
   const { createElement } = jest.requireActual('react');
@@ -124,9 +125,8 @@ describe('ChatMessage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanSelectBranch = false;
-    mockEditableMessageIds = new Set();
-    mockIsEditDisabled = false;
     mockAreCardsEnabled = true;
+    mockIsShareSelecting = false;
     mockSelectBranch.mockResolvedValue(true);
   });
 
@@ -155,42 +155,42 @@ describe('ChatMessage', () => {
     expect(mockLocalUsage).not.toHaveBeenCalled();
   });
 
-  test('enables copy and share only after an assistant answer settles', () => {
+  test('renders UserMessageToolbar beside question branch controls for settled user messages', () => {
+    mockCanSelectBranch = true;
+    const message: MessageListItem = {
+      ...createMessage('success'),
+      data: { parts: [{ type: 'text', text: 'Edited question' }] },
+      id: 'user-1',
+      questionBranch: { siblings: ['user-0', 'user-1'] },
+      role: 'user',
+    };
     act(() => {
-      renderer = create(renderMessage(createMessage('pending')));
+      renderer = create(renderMessage(message));
     });
 
-    expect(mockContextMenu.mock.lastCall?.[0].items).toEqual([]);
-
-    act(() => {
-      renderer?.update(renderMessage(createMessage('success')));
-    });
-
-    const menu = mockContextMenu.mock.lastCall![0];
-    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'share']);
-    act(() => menu.items[0].onPress());
-    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });
-    act(() => menu.items[1].onPress());
-    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
+    const toolbar = renderer!.root.findByType('UserMessageToolbar' as never);
+    expect(toolbar.props.message).toBe(message);
+    expect(renderer!.root.findByProps({ testID: 'question-version-previous' })).toBeTruthy();
+    expect(renderer!.root.findByProps({ testID: 'question-version-next' })).toBeTruthy();
   });
 
-  test('copies user text and shares the selected user message through the existing actions', () => {
+  test('hides UserMessageToolbar and branch controls during share selection', () => {
+    mockCanSelectBranch = true;
+    mockIsShareSelecting = true;
     act(() => {
       renderer = create(
         renderMessage({
           ...createMessage('success'),
-          data: { parts: [{ type: 'text', text: 'My question' }] },
+          data: { parts: [{ type: 'text', text: 'Edited question' }] },
           id: 'user-1',
+          questionBranch: { siblings: ['user-0', 'user-1'] },
           role: 'user',
         }),
       );
     });
 
-    const menu = mockContextMenu.mock.lastCall![0];
-    act(() => menu.items[0].onPress());
-    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'My question' });
-    act(() => menu.items[1].onPress());
-    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
+    expect(renderer!.root.findAllByType('UserMessageToolbar' as never)).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({ testID: 'question-version-previous' })).toHaveLength(0);
   });
 
   test('labels the original continuation without dimming message content', () => {
@@ -215,43 +215,6 @@ describe('ChatMessage', () => {
     expect(
       renderer!.root.findByProps({ testID: 'chat-message-assistant-1' }).props.style,
     ).toBeUndefined();
-  });
-
-  test('offers Edit on a settled question the transcript can edit', () => {
-    mockEditableMessageIds = new Set(['user-1']);
-    act(() => {
-      renderer = create(
-        renderMessage({
-          ...createMessage('success'),
-          data: { parts: [{ type: 'text', text: 'My question' }] },
-          id: 'user-1',
-          role: 'user',
-        }),
-      );
-    });
-
-    const menu = mockContextMenu.mock.lastCall![0];
-    expect(menu.items.map((item) => item.id)).toEqual(['copy', 'edit', 'share']);
-    act(() => menu.items[1].onPress());
-    expect(mockEditMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
-  });
-
-  test('disables Edit while the Session cannot accept it', () => {
-    mockEditableMessageIds = new Set(['user-1']);
-    mockIsEditDisabled = true;
-    act(() => {
-      renderer = create(
-        renderMessage({
-          ...createMessage('success'),
-          data: { parts: [{ type: 'text', text: 'My question' }] },
-          id: 'user-1',
-          role: 'user',
-        }),
-      );
-    });
-
-    const edit = mockContextMenu.mock.lastCall![0].items.find((item) => item.id === 'edit');
-    expect(edit?.disabled).toBe(true);
   });
 
   test('switches between sibling questions from the question pager', () => {
@@ -281,104 +244,20 @@ describe('ChatMessage', () => {
     expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'user-1', targetId: 'user-0' });
   });
 
-  test('never offers Edit on an assistant answer', () => {
-    mockEditableMessageIds = new Set(['assistant-1']);
-    act(() => {
-      renderer = create(renderMessage(createMessage('success')));
-    });
-
-    expect(mockContextMenu.mock.lastCall![0].items.map((item) => item.id)).toEqual([
-      'copy',
-      'share',
-    ]);
-  });
-
-  test('disables copy when the message has no copyable text but still allows sharing', () => {
-    act(() => {
-      renderer = create(renderMessage({ ...createMessage('success'), data: { parts: [] } }));
-    });
-
-    const menu = mockContextMenu.mock.lastCall![0];
-    expect(menu.items[0].disabled).toBe(true);
-    act(() => menu.items[1].onPress());
-    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-  });
-
-  test('offers independently operable user actions when a screen reader is enabled', () => {
-    const message: MessageListItem = { ...createMessage('success'), id: 'user-1', role: 'user' };
-    act(() => {
-      renderer = create(renderMessage(message, true, true));
-    });
-
-    const copy = renderer!.root.findByProps({ testID: 'user-message-copy' });
-    const share = renderer!.root.findByProps({ testID: 'user-message-share' });
-    act(() => copy.props.onPress());
-    act(() => share.props.onPress());
-    expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'user-1', text: 'Answer' });
-    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-1' });
-    // Grouping the complete row would hide its attachment controls from VoiceOver.
-    const menuContent = mockContextMenu.mock.lastCall![0].children as ReactElement<{
-      accessible: boolean;
-    }>;
-    expect(menuContent.props.accessible).toBe(false);
-
-    act(() => renderer?.update(renderMessage(message, true, false)));
-    expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
-  });
-
-  test('keeps attachment-only user messages shareable without an empty copy action', () => {
-    act(() => {
-      renderer = create(
-        renderMessage(
-          {
-            ...createMessage('success'),
-            id: 'user-attachment',
-            role: 'user',
-            data: { parts: [{ type: 'file', mediaType: 'image/png', url: 'file:///image.png' }] },
-          },
-          true,
-          true,
-        ),
-      );
-    });
-
-    expect(renderer!.root.findAllByProps({ testID: 'user-message-copy' })).toHaveLength(0);
-    act(() => renderer!.root.findByProps({ testID: 'user-message-share' }).props.onPress());
-    expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'user-attachment' });
-  });
-
   test.each([
     ['pending', 'user', true],
     ['success', 'user', false],
     ['success', 'assistant', true],
-  ] as const)('does not add a user toolbar for %s / %s / actions=%s', (status, role, enabled) => {
-    act(() => {
-      renderer = create(renderMessage({ ...createMessage(status), role }, enabled, true));
-    });
-    expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
-  });
-
-  test('keeps the long-press menu free of destructive actions', () => {
-    act(() => {
-      renderer = create(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
-    });
-
-    // Deleting a turn lives on the assistant toolbar. A long press competes
-    // with native text selection and lands wherever the finger reaches, so it
-    // must not be able to remove anything.
-    const items = mockContextMenu.mock.lastCall![0].items;
-    expect(items.map((item) => item.id)).toEqual(['copy', 'share']);
-    expect(items.some((item) => item.destructive)).toBe(false);
-    expect(mockDeleteMessageTurn).not.toHaveBeenCalled();
-  });
-
-  test('keeps native text selection available when message actions are disabled', () => {
-    act(() => {
-      renderer = create(renderMessage(createMessage('success'), false));
-    });
-
-    expect(mockContextMenu).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    'does not add UserMessageToolbar for %s / %s / actions=%s',
+    (status, role, enabled) => {
+      act(() => {
+        renderer = create(renderMessage({ ...createMessage(status), role }, enabled));
+      });
+      expect(renderer!.root.findAllByType('UserMessageToolbar' as never)).toHaveLength(0);
+      expect(mockDeleteMessageTurn).not.toHaveBeenCalled();
+    },
+  );
 
   test('shows the local creation time separately from the model identity', () => {
     act(() => {
@@ -478,19 +357,50 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(0);
     expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(1);
   });
+
+  test('shows disclaimer only when shouldShowDisclaimer is true on a settled reply outside selection', () => {
+    const findDisclaimers = () =>
+      renderer!.root
+        .findAllByType('Text' as never)
+        .filter((node) => node.props.testID === 'assistant-message-disclaimer');
+
+    act(() => {
+      renderer = create(renderMessage(createMessage('success'), true, false));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    act(() => {
+      renderer!.update(renderMessage(createMessage('pending'), true, true));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    mockIsShareSelecting = true;
+    act(() => {
+      renderer!.update(renderMessage(createMessage('success'), true, true));
+    });
+    expect(findDisclaimers()).toHaveLength(0);
+
+    mockIsShareSelecting = false;
+    act(() => {
+      renderer!.update(renderMessage(createMessage('success'), true, true));
+    });
+    const disclaimers = findDisclaimers();
+    expect(disclaimers).toHaveLength(1);
+    expect(disclaimers[0].props.children).toBe('chat.input.disclaimer');
+  });
 });
 
 function renderMessage(
   message: MessageListItem,
   isMessageActionsEnabled = true,
-  isScreenReaderEnabled = false,
+  shouldShowDisclaimer = false,
 ) {
   return (
     <ChatMessage
       assistantPresentation={{ name: 'Assistant' }}
       isMessageActionsEnabled={isMessageActionsEnabled}
-      isScreenReaderEnabled={isScreenReaderEnabled}
       message={message}
+      shouldShowDisclaimer={shouldShowDisclaimer}
       shouldShowTimestamp
     />
   );

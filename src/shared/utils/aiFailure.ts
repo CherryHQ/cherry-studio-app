@@ -58,9 +58,27 @@ export function readKnownAiFinishReason(value: unknown): string | undefined {
 
 const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   cloud_signed_out: 'auth',
+  cloud_subscription_required: 'permission',
+  entitlement_inactive: 'permission',
+  cloud_activation_required: 'permission',
+  cloud_account_disabled: 'permission',
+  account_disabled: 'permission',
+  cloud_reauth_required: 'auth',
+  concurrency_limited: 'rate_limit',
+  upstream_unavailable: 'provider_unavailable',
+  cloud_service_unavailable: 'provider_unavailable',
   cloud_unavailable: 'provider_unavailable',
   cloud_not_entitled: 'permission',
   cloud_quota_exhausted: 'quota',
+  cloud_amd_activation_required: 'permission',
+  amd_activation_required: 'permission',
+  amd_credential_invalid: 'permission',
+  amd_access_denied: 'permission',
+  auth_required: 'auth',
+  session_expired: 'auth',
+  reauth_required: 'auth',
+  model_unavailable: 'model_not_found',
+  rate_limited: 'rate_limit',
   quota_exhausted: 'quota',
   authentication_error: 'auth',
   content_filter: 'content_filter',
@@ -157,9 +175,10 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
     .filter((value): value is string => Boolean(value))
     .join('\n')
     .toLowerCase();
-  const cloudCode = /\bcloud_(?:signed_out|unavailable|not_entitled|quota_exhausted)\b/.exec(
-    text,
-  )?.[0];
+  const cloudCode =
+    /\b(?:cloud_(?:signed_out|unavailable|not_entitled|subscription_required|activation_required|account_disabled|reauth_required|quota_exhausted|amd_activation_required)|amd_(?:activation_required|credential_invalid|access_denied))\b/.exec(
+      text,
+    )?.[0];
   if (cloudCode && CODE_REASONS[cloudCode]) return CODE_REASONS[cloudCode];
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,

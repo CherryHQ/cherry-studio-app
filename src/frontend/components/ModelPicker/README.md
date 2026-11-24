@@ -24,10 +24,11 @@ This module owns the model selection surface, model metadata UI, and model setti
   surface 152 points wide and at least 144 points tall, with a rounded 48-point provider avatar
   and a two-line name. It reuses provider identity and uploaded-avatar resolution. The preview
   remains next to the index and may temporarily cover list content or selection marks; it fades
-  out on release and respects reduced motion. A completed tap jumps to its group. Native
-  scrolling cancels the preview and navigation candidate, and a touch that stops momentum does
-  not navigate. The immediate native press excludes the sheet pan while recognizing simultaneously
-  with the navigation scroller; dragging the index scrolls its contents instead of the sheet.
+  out on release and respects reduced motion. A completed tap jumps to its group. When a long
+  press takes over, sliding across the visible markers updates the preview and highlight, and
+  releasing closes the preview. Dragging before the long press scrolls the index, clears the
+  preview, and cancels the tap. A touch that stops momentum does not navigate. The immediate
+  native press keeps the interaction inside the provider index.
   The preview never intercepts touches. Scrolling the model list reveals its current provider in
   the index without interrupting a navigation drag or momentum scroll.
   Model names stay on one line with middle truncation, retaining their identifying prefix and
@@ -51,9 +52,9 @@ This module owns the model selection surface, model metadata UI, and model setti
   embedded flows; the standard picker retains its default row size.
 - `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
-  embedded in the Android controls frame. The drawer's `chat` variant adds the two high-value
-  model traits (`Free` and `Vision`) as row badges and a compact filter menu; other workflows keep
-  the picker neutral rather than exposing the provider capability taxonomy.
+  embedded in the Android controls frame. The drawer's `chat` and `usage` variants add the two
+  high-value model traits (`Free` and `Vision`) as row badges and a compact filter menu. The
+  default variant keeps the picker neutral.
 - `useModelSettingSelections` reads model selection preferences and saves partial updates. The
   settings screen persists each selection immediately.
 - Model setting and model type helpers are exported from `index.ts`.
@@ -71,8 +72,17 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 ## Community Cloud availability
 
-The picker observes `Backend.cloud` through `useCloud`. Plan rows require effective paid model
-entitlements and receive unavailability reasons; exhausted or unauthorized rows cannot be selected.
+The community `chat` drawer shows AMD models that the current account's catalog offers for chat
+but requires activation to use. These rows support search and the capability filters. Their lock
+opens the shared activation prompt and never changes the current selection. They are read directly
+from the catalog alongside the selectable models projected to local storage.
+
+When CherryAI is enabled, browsing or searching can reveal its built-in group and guest sign-in
+action even with no matching model rows. Disabling the provider also hides its locked offers.
+The `usage` filter keeps the trait badges and uses selectable models only.
+
+The picker observes `Backend.cloud` through `useCloud`. Models receive unavailability reasons when
+the current account cannot use them. Exhausted or unauthorized rows cannot be selected.
 The `cloudUse` input defaults to `agent`; non-conversation text entry points select `general` (both
 chat and translation rights). Selection is only a presentation check: the Cloud request boundary
 rechecks entitlement, expiry and quota before every send.

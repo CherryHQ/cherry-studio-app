@@ -10,6 +10,7 @@ export type ContextUsageSource = Readonly<{
   providerModelId: string;
   tokens: number;
   estimated?: boolean;
+  canCompact?: boolean;
 }>;
 
 /** Use only the working context belonging to the newest answer on the selected branch. */
@@ -36,6 +37,7 @@ export function selectContextUsageSource(input: {
       providerModelId: model.modelId,
       tokens: usage.tokens,
       ...(usage.estimated ? { estimated: true } : {}),
+      ...(usage.canCompact ? { canCompact: true } : {}),
     };
   }
   return undefined;

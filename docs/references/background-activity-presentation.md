@@ -24,16 +24,22 @@ an ongoing task does not dismiss its execution notification or cancel its work.
 | `requiresPredecessorRetirement` | `true`: await deletion of the ended native identity before a new card | Not required: numeric identity is reused |
 | `shouldHoldLeaseUntilDelivery` | `true` | `true` |
 
-A Live Activity is created when foreground preparation starts and retained across app visibility
+A Cherry Live Activity can be created during foreground preparation and retained across app visibility
 changes. If work is first observed while hidden, its card waits for foreground admission. The
 manager checks native identity before updates and retirement: a card removed by the person or the
 system stays dismissed for that round. Removal does not cancel execution. ActivityKit remains a
 presentation mechanism, not an execution guarantee.
 
-The iOS **Live Activities** preference controls chat and painting cards only. Turning it off
-retires presentation without releasing execution. The persisted `chat.background_reply.enabled`
-key is retained for compatibility. Android's mandatory service notification remains independent of
-that preference. Completion preferences control completion alerts; they do not turn protection off.
+On iOS, **Settings → Notifications → Cherry progress cards** controls Cherry's fallback Live
+Activities on the Dynamic Island and Lock Screen. A new system long-task request reserves the
+matching task destination before presentation starts. While admission is pending, Cherry waits.
+On admission, iOS supplies progress and cancellation and Cherry retires its fallback cards across
+tasks. While a request is pending, only its destination is reserved. After the final system card
+retires, eligible tasks can show their current content on the next foreground opportunity if the
+preference is on. With only Cherry fallback activities, iOS chooses which one occupies the Dynamic
+Island. Turning the preference off retires Cherry cards while
+iOS continues managing admitted tasks. The persisted key remains `chat.background_reply.enabled`.
+Completion alerts have their own preference. Android retains its foreground-service notification.
 
 ## Execution And Attention
 
@@ -62,7 +68,11 @@ the same island.
 
 iOS completion delivery checks permission and current generation, retires its settled Live Activity,
 then posts a deterministic completion notice for that destination. Local execution awaits this
-replacement; remote sessions retain their existing delivery lease. A superseded round cannot retire
+replacement. At delivery time, a system task or a remaining Cherry progress activity makes
+completion and decision notices passive. They remain in Notification Center with their actions,
+keeping the Dynamic Island as the only Cherry surface over the Home Screen or another app.
+When the area is free, an eligible notification can show its usual banner.
+Remote sessions retain their existing delivery lease. A superseded round cannot retire
 or post over its successor.
 
 Local and observed desktop sessions distinguish waiting for approval from waiting for an answer.
@@ -190,27 +200,18 @@ Only explicit confirmation stores `app.background_audio.consent: true`; showing 
 leaves audio unauthorized. Prior guidance exposure is not consent, and restoring a backup keeps the
 target device's decision. No settings row or switch is added.
 
-Explicit foreground user work first requests iOS 26+ `BGContinuedProcessingTask`. The native
-launch callback, not submission success, confirms protection. iOS 27 uses asynchronous submission;
-iOS 26 retains its original API. Each request has a unique native identifier and real progress.
-The execution owner reports preparation/reply milestones on its stable Session lease. Official
-processing stays attached to that lease across questions and approvals until the Session settles
-or the system revokes the task. Answering does not release or reacquire protection. Observation,
-restoration, and foreground return alone never create official-task intent. Painting's immediate
-local enqueue carries process-local intent through dispatch, and forwards actual handler milestones. Recovery and retries
-do not inherit that intent. System-UI cancellation or expiration stops the owning conversation/job
-without silently restarting it through audio; ordinary finite-window loss still suspends the Agent
-Harness for later foreground recovery.
+Explicitly started local conversations and immediate painting jobs request iOS 26+
+`BGContinuedProcessingTask` with progress milestones. The native launch callback confirms
+admission. System cancellation or revocation stops the owning session or job. Questions and
+approvals retain the conversation lease until settlement. Restored or automatically retried work
+uses the existing finite UIKit allowance and consented audio fallback. The app preference governs
+fallback presentation independently of execution.
 
-If continued processing is unavailable, consenting unfinished work shares a task-owned silent audio
-loop alongside the finite window.
-Pending or running official tasks suppress silent playback. Admission failure or a five-second
-missing-launch deadline enables fallback; a stale launch cannot adopt a released request.
 Real speech/capture takes priority over the loop; capture still stops on background entry. Finite
 expiry alone does not interrupt work while audio protects it. Audio failure uses the remaining
 finite allowance; when neither mechanism protects background work, each held consumer is interrupted
 once and audio cannot restart that work in the same background stay. The last consumer's release
-immediately stops finite/audio protection. Official requests complete when their owning work settles.
+immediately stops finite/audio protection.
 Foreground return allows a fresh finite window only while execution demand remains. Late native
 events cannot affect replacement owners. Suspension may delay JavaScript cleanup; cold startup reconciles
 unfinished work. This does not promise a fixed duration or automatic replay.
@@ -229,6 +230,13 @@ denial; disabled presentation; user-dismissed cards; process restart; power rest
 multilingual payloads. Native acceptance must also confirm retirement of an ended Live Activity before its replacement,
 including completion-notice handoff. Native delivery and OS behavior require a rebuilt client; lint
 and source guards are insufficient.
+
+On an iPhone 17 Pro simulator running iOS 26.5, one chat completed over Settings while a second
+chat and a painting continued. The left capture shows the previous completion banner below the
+island. The right capture shows the same event after passive delivery. The simulator exercised
+Cherry fallback activities; system long-task admission requires a physical device.
+
+![Settings during a chat completion, before and after keeping the Dynamic Island as the only top surface](../../.github/images/background-activity/ios-completion-dynamic-island.png)
 
 The following examples show an Android connection notice and a notice list (expanded from
 Android's own app bundle) from an Android 16 emulator, and an iOS single-question Live Activity on

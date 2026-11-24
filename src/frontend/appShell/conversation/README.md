@@ -105,8 +105,9 @@ for backend lifetimes and remaining migration work.
 
 ## Team
 
-`team/index.ts` is the public boundary for the Team directory hook, opaque session references and
-display projector. Its catalog is scoped to the authenticated context and never opens transcripts
+`team/index.ts` is the public boundary for the Team directory/resource hooks, focused foreground
+observation, opaque session references and display projector. Its catalog is scoped to the
+authenticated context and never opens transcripts
 for sidebar reads. Team chat uses full server snapshots and its own admission/recovery contract;
 it does not adopt desktop history cursors, commands or persisted drafts. The common projector
 always supplies display-only tools and binds replies to the current pending request.

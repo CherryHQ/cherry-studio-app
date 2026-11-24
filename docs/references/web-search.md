@@ -26,17 +26,30 @@ Native tools run inside the Pi Durable conversation loop for every provider endp
 adapter table below. Scripted-transport regression cases cover these adapters; the Qwen additions
 have not yet been run. Live-provider acceptance remains separate.
 
-`chat.web_search.model_tools_preferred` defaults to true on new installs. Seeding preserves the
-external-first behavior of existing installations and never overwrites a saved choice. The setting
-is global across keyword search and page reading; it does not enable a disabled Agent capability
-or force the model to search on every message.
+`chat.web_search.model_tools` is one shared setting for keyword search and page reading,
+editable on either built-in tool page:
+
+- `preferred` uses provider-native tools first, then available external services. This is the
+  default for new installs.
+- `fallback` uses available external services first, then provider-native tools.
+- `disabled` uses only available external services; an unavailable capability has no web tool.
+  Newly configured turns never attach provider-native web tools or fall back to them, including
+  when tool references are missing in minimal mode.
+
+Seeding migrates exact legacy `true` to `preferred` and `false` to `fallback`. Without a valid
+legacy boolean, an existing search-provider preference selects `fallback`; otherwise it selects
+`preferred`. An existing new setting always wins, even if malformed. Missing values read as
+`preferred`; malformed values (including stored null) read as `disabled` without rewriting storage.
+The legacy row stays stored but is no longer a recognized preference. The setting does not enable
+a denied capability or force the model to search on every message. Provider-inherent search, such
+as Perplexity Sonar's built-in search, is untouched.
 
 The Host freezes external configuration readiness and the preference in `TurnPlan.webTools` and
 passes them in the conversation configuration. Pi resolves the model, trusted Provider identity
 (including copied presets), endpoint, and authentication method, then selects one route per
-capability: the preferred available path, then the other path, then no tool. The route is stored
-with the configuration, so a queued input, a retried request, and a request recovered after a
-restart all use it; like the tool set, it cannot change while the conversation is busy. A capability
+capability according to the three-state policy above. The route is stored with the configuration,
+so a queued input, a retried request, and a request recovered after a restart all use it; like the tool set, it cannot change while the conversation is busy.
+Choosing `disabled` does not revoke the frozen routes of already-queued turns. A capability
 reaches the model through one route only: its external function is withheld when the native tool is
 selected. Each request intersects the stored route with the credentials it actually resolved.
 
@@ -116,12 +129,15 @@ request. Pi's history does not model those parts, so they are stored with the me
 to their place in later payloads for the same model. See the official
 [tool combination contract](https://ai.google.dev/gemini-api/docs/generate-content/tool-combination).
 
-Anthropic responses retain their complete content blocks, including signed thinking, streamed
+Stored Anthropic responses retain their complete content blocks, including signed thinking, streamed
 tool inputs, encrypted search results and fetched documents. Later requests to the same provider
 and model restore the original assistant content before sending client tool results, so a server
 tool deferred behind a parallel function call can run. A deferred call that can no longer run,
 because web tools were withdrawn or the turn moved on without it, is omitted from the restored
-content. A response cut off inside a tool call is not restored; later requests carry its answer
+content. On requests to the official Anthropic endpoint, signed and redacted thinking from
+completed turns is omitted after this reconstruction because a changed prompt can invalidate
+its signature. The current tool loop keeps the original thinking and tool results. A response
+cut off inside a tool call is not restored; later requests carry its answer
 text and source facts. A `pause_turn` response is continued as-is with the same tools, at most
 five times per model invocation. Continued text keeps its streaming offsets, citations and
 accumulated usage; exceeding the limit ends with an error and preserves the partial answer. The
@@ -243,12 +259,12 @@ one hosted service, not a general MCP client: it accepts MCP JSON and SSE respon
 both `Highlights` and `Text` search content, and treats protocol/tool errors as failures rather
 than empty successful searches.
 
-Jina's built-in addresses use the shared IP country. When detection is unavailable,
-the client retains its mainland-host preference without selecting a provider edition.
-CN uses the mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and other countries use the global hosts.
+Jina's built-in addresses use the shared network region (`CN` or `GLOBAL`). When detection is
+unavailable, the client retains its mainland-host preference without selecting a provider edition.
+CN uses the mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and `GLOBAL` uses the global hosts.
 When the chosen host cannot be connected to, the request is sent once to the other. A timeout or an
 answer from the service is not retried, and an address the user entered is used as is without
-triggering country detection.
+triggering region detection.
 
 SearXNG returns the instance's result snippets and sends the configured engine list only when one
 is stored; it does not read each result page. Several API keys rotate per provider across lookups,

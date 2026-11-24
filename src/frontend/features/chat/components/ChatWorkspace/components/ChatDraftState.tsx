@@ -1,10 +1,12 @@
-import { BackgroundPressExclusion, ContentState } from '@cherrystudio/ui/components';
-import type { ReactNode } from 'react';
+import MonitorIcon from '@cherrystudio/app-icons/icons/monitor';
+import PlusIcon from '@cherrystudio/app-icons/icons/plus';
+import { BackgroundPressExclusion, Button } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
-import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { type ModelTypeFilter, useModelPickerData } from '@/frontend/components/ModelPicker';
 import { useModelChoice } from '@/frontend/components/Policy';
 import { capabilityPolicy } from '@/shared/data/managedPolicy';
@@ -18,11 +20,14 @@ export type ChatDraftModelSetup = {
   returnTo: string;
 };
 
-type ChatDraftStateProps = {
+type ChatDraftAvatarProps = {
   assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
   assistantEmoji?: string;
   assistantName?: string;
+};
+
+type ChatDraftStateProps = ChatDraftAvatarProps & {
   contentBottomInset: number;
   modelSetup?: ChatDraftModelSetup;
 };
@@ -36,66 +41,121 @@ export function ChatDraftState({
   contentBottomInset,
   modelSetup,
 }: ChatDraftStateProps) {
-  const { t } = useTranslation();
-  const greeting = (
-    <ContentState.Empty
-      icon={
-        <EmptyIllustration scene="conversation">
-          {assistantName ? (
-            <AgentAvatar
-              avatar={assistantAvatar}
-              emoji={assistantEmoji}
-              name={assistantName}
-              size={48}
-              uri={assistantAvatarUri}
-            />
-          ) : null}
-        </EmptyIllustration>
-      }
-      prominence="prominent"
-      title={t('chat.draft.greeting')}
-    />
-  );
+  const avatarProps: ChatDraftAvatarProps = {
+    assistantAvatar,
+    assistantAvatarUri,
+    assistantEmoji,
+    assistantName,
+  };
 
   return (
     <ChatComposerClearance
-      className="flex-1 items-center justify-center px-8"
+      className="flex-1 items-center justify-center px-6"
       contentBottomInset={contentBottomInset}
     >
-      {modelSetup ? <LocalDraftContent {...modelSetup}>{greeting}</LocalDraftContent> : greeting}
+      {modelSetup ? (
+        <LocalDraftContent {...modelSetup} {...avatarProps} />
+      ) : (
+        <DraftGreeting {...avatarProps} />
+      )}
     </ChatComposerClearance>
   );
 }
 
+function DraftGreeting({
+  assistantAvatar,
+  assistantAvatarUri,
+  assistantEmoji,
+  assistantName,
+}: ChatDraftAvatarProps) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="w-full max-w-xs items-center gap-6">
+      {assistantName ? (
+        <AgentAvatar
+          avatar={assistantAvatar}
+          emoji={assistantEmoji}
+          name={assistantName}
+          size={48}
+          uri={assistantAvatarUri}
+        />
+      ) : null}
+      <Text className="text-center font-medium text-foreground text-xl" numberOfLines={2}>
+        {t('chat.draft.greeting')}
+      </Text>
+    </View>
+  );
+}
+
 function LocalDraftContent({
-  children,
   modelId,
   modelType,
   returnTo,
-}: ChatDraftModelSetup & { children: ReactNode }) {
+  ...avatarProps
+}: ChatDraftModelSetup & ChatDraftAvatarProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const { allowedModelIds } = useModelChoice();
   const { getModelItem, hasLoadedCatalog, modelItems } = useModelPickerData({ modelType });
   const openProviderSetup = useOpenProviderSetup(returnTo);
 
   // A managed Agent takes its model choices from the organization.
-  if (allowedModelIds || !hasLoadedCatalog || modelItems.length > 0 || getModelItem(modelId)) {
-    return children;
+  const hasAvailableModel = Boolean(
+    allowedModelIds || !hasLoadedCatalog || modelItems.length > 0 || getModelItem(modelId),
+  );
+  const canAddProvider = capabilityPolicy('providerSettings').canEdit('providerSettings');
+
+  if (hasAvailableModel) {
+    return <DraftGreeting {...avatarProps} />;
   }
 
-  const canAddProvider = capabilityPolicy('providerSettings').canEdit('providerSettings');
+  if (!canAddProvider) {
+    return (
+      <View className="w-full max-w-xs items-center gap-2">
+        <Text className="text-center font-semibold text-foreground text-xl" numberOfLines={2}>
+          {t('chat.draft.noAvailableModel')}
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <BackgroundPressExclusion>
-      <ContentState.Empty
-        icon={<EmptyIllustration scene="connection" />}
-        primaryAction={
-          canAddProvider
-            ? { children: t('modelPicker.addProvider'), onPress: openProviderSetup }
-            : undefined
-        }
-        prominence="prominent"
-        title={t('modelPicker.empty')}
-      />
-    </BackgroundPressExclusion>
+    <View className="w-full max-w-xs items-center gap-5">
+      <Text className="text-center font-semibold text-foreground text-xl" numberOfLines={2}>
+        {t('chat.draft.noProviderTitle')}
+      </Text>
+      <BackgroundPressExclusion>
+        <View className="flex-row flex-wrap items-center justify-center gap-2.5">
+          <Button
+            haptic="light"
+            icon={<PlusIcon />}
+            onPress={openProviderSetup}
+            shape="pill"
+            size="sm"
+            testID="chat-draft-add-provider"
+            variant="tonal"
+          >
+            {t('modelPicker.addProvider')}
+          </Button>
+          <Button
+            haptic="light"
+            icon={<MonitorIcon />}
+            onPress={() =>
+              router.push({
+                pathname: '/settings/provider/desktop-sync',
+                params: { returnTo },
+              })
+            }
+            shape="pill"
+            size="sm"
+            testID="chat-draft-desktop-sync"
+            variant="tonal"
+          >
+            {t('settings.provider.desktopSync.title')}
+          </Button>
+        </View>
+      </BackgroundPressExclusion>
+    </View>
   );
 }

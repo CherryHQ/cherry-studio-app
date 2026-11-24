@@ -3,17 +3,28 @@ import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PolicyScope } from '@/frontend/components/Policy';
+import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME, type CloudState } from '@/shared/contracts/cloud';
 import { agentPolicy } from '@/shared/data/managedPolicy';
 
 import type { ModelPickerGroup } from '../../utils/modelPickerData';
 import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
 
+let mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
 let mockGroups: ModelPickerGroup[] = [];
+const signedOutCloud: CloudState = {
+  account: null,
+  isRefreshing: false,
+  models: [],
+  phase: 'signed_out',
+  plans: null,
+};
+let mockCloudState = signedOutCloud;
 let mockListProps:
   | {
       emptyText?: string;
       emptyAction?: { label: string; onPress: () => void };
+      cherryAiEntry?: ReactNode;
       listItems: readonly ModelPickerListItem[];
       maxSelectedCount?: number;
       selectedModelIds?: readonly string[];
@@ -22,6 +33,11 @@ let mockListProps:
 let mockOnSizeChange: ((size: BottomSheetSize) => void) | undefined;
 let mockFilterItems: { id: string; onPress: () => void }[] = [];
 const chosenModelId = 'provider::chosen';
+
+jest.mock('expo-router', () => ({
+  ...jest.requireActual('expo-router'),
+  useGlobalSearchParams: () => ({}),
+}));
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
   ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
@@ -90,9 +106,25 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/frontend/appShell/cloud', () => ({
+  ...jest.requireActual('@/frontend/appShell/cloud'),
+  useCloudModelBrowser: (_enabled: boolean, use: 'agent' | 'general') => ({
+    state: mockCloudState,
+    accountState: { isRestoringSession: false },
+    offers: jest
+      .requireActual('@/frontend/appShell/cloud/cloudModelOffers')
+      .getCloudModelOffers(mockCloudState, use),
+    press: jest.fn(),
+    refresh: jest.fn(),
+  }),
+  useReturnedCloudModel: () => {},
+}));
+
 jest.mock('../../hooks/useModelPickerData', () => ({
   useModelPickerData: () => ({
+    cloudState: mockCloudState,
     groups: mockGroups,
+    providers: mockEnabledProviders,
     hasLoadedCatalog: true,
     isLoading: false,
   }),
@@ -109,11 +141,15 @@ jest.mock('../ModelPickerList', () => {
   };
 });
 
+jest.mock('../ModelPickerCherryAiEntry', () => ({ ModelPickerCherryAiEntry: () => null }));
+
 describe('ModelPickerDrawer', () => {
   let renderer: ReactTestRenderer;
 
   beforeEach(() => {
+    mockCloudState = signedOutCloud;
     mockGroups = [];
+    mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
     mockListProps = undefined;
     mockOnSizeChange = undefined;
     mockFilterItems = [];
@@ -132,6 +168,109 @@ describe('ModelPickerDrawer', () => {
 
   afterEach(() => {
     act(() => renderer.unmount());
+  });
+
+  test('shows the empty CherryAI group only while the provider is enabled', () => {
+    expect(mockListProps?.listItems).toEqual([]);
+
+    const renderChat = () =>
+      act(() => {
+        renderer.update(
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant="chat"
+          />,
+        );
+      });
+
+    renderChat();
+    expect(mockListProps?.listItems).toEqual([
+      expect.objectContaining({
+        provider: expect.objectContaining({ id: CLOUD_PROVIDER_ID }),
+        title: CLOUD_PROVIDER_NAME,
+        type: 'groupHeader',
+      }),
+    ]);
+    mockEnabledProviders = [];
+    renderChat();
+    expect(mockListProps?.listItems).toEqual([]);
+    expect(mockListProps?.cherryAiEntry).toBeUndefined();
+  });
+
+  test('finds the locked AMD row by name and by the free badge without a local projection', () => {
+    mockCloudState = {
+      ...signedOutCloud,
+      account: {
+        account: { id: 'account', status: 'active' },
+        device: { id: 'device' },
+        entitlements: [],
+        measured_at: '2026-01-01T00:00:00Z',
+        quota_pools: [],
+      },
+      models: [
+        {
+          requires_login: true,
+          requires_plan: false,
+          standalone: false,
+          is_free: true,
+          activation_endpoint: '/api/v1/amd/desktop/entry',
+          activation_required: true,
+          available_features: ['agent'],
+          capabilities: [],
+          context_window: 4096,
+          display_name: 'GPT-OSS',
+          endpoint_type: 'openai-chat-completions',
+          id: 'amd/gpt-oss',
+          max_output_tokens: 1024,
+          provider: 'amd',
+        },
+      ],
+      phase: 'ready',
+    };
+    const render = (variant: 'chat' | 'usage') =>
+      act(() => {
+        renderer.update(
+          <ModelPickerDrawer
+            modelType="text"
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+            variant={variant}
+          />,
+        );
+      });
+
+    render('chat');
+    act(() => {
+      renderer.root
+        .findByProps({ testID: 'model-picker-search-input' })
+        .props.onChangeText('gpt-oss');
+      mockFilterItems.find((item) => item.id === 'free')?.onPress();
+    });
+
+    expect(mockListProps?.cherryAiEntry).toBeUndefined();
+    expect(mockListProps?.listItems).toMatchObject([
+      { type: 'groupHeader', title: CLOUD_PROVIDER_NAME },
+      {
+        type: 'model',
+        item: {
+          model: { name: 'GPT-OSS' },
+          isCloudFree: true,
+          offer: { reason: 'activation_required' },
+        },
+      },
+    ]);
+
+    render('usage');
+    expect(mockListProps?.listItems).toEqual([]);
+    mockEnabledProviders = [];
+    render('chat');
+    expect(mockListProps?.listItems).toEqual([]);
   });
 
   test('retains full height after blur and clearing, and preserves search on manual collapse', () => {

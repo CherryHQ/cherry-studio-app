@@ -47,7 +47,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_ssh_SshNative_run(JNIE
   options.host = get(0); options.username = get(1); options.fingerprint = get(2);
   options.password = get(3); options.privateKey = get(4); options.passphrase = get(5); options.command = get(6);
   options.cwd = get(7); options.input = get(8); options.directory = get(9); options.poolKey = get(10);
-  options.operation = get(11); options.path = get(12); options.localPath = get(13); options.content = get(14);
+  options.operation = get(11); options.path = get(12); options.localPath = get(13); options.content = get(14); options.expectedPath = get(15);
   options.port = port; options.timeoutMs = timeout; options.probe = probe;
   options.overwrite = overwrite;
   auto sinkClass = env->GetObjectClass(output);

@@ -18,6 +18,7 @@ import { readKnownAiFinishReason } from '@/shared/utils/aiFailure';
 
 import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
+import { resolvePiCompactionPolicy } from './piCompaction';
 import { imageModelStream } from './piDurableImageModel';
 import { piDurableUsage, withPiContinuationUsage } from './piDurableProjection';
 import { piDurableSetupError, protectPiDurableStream } from './piDurableStream';
@@ -28,7 +29,7 @@ import {
   type PiModelFailureStage,
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
-import { resolvePiOutputReservation } from './piOutputReservation';
+import { resolvePiConversationOutputBudget } from './piOutputReservation';
 import { providerErrorEvent } from './piStreamEvents';
 import { applyPiWebReplay, PiWebResponse } from './PiWebResponse';
 import { applyPiWebTools, type PiWebToolRoutes } from './piWebTools';
@@ -101,18 +102,8 @@ export function createPiDurableModels(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     });
     providers.set(reference.providerId, registered);
-    // Preserve Pi's defaults for large contexts; smaller models need room for both summary and reply.
     compactionOverrides[`${reference.providerId}/${piDurableModelKey(reference, kind)}`] =
-      kind === 'image'
-        ? { enabled: false }
-        : {
-            reserveTokens: Math.max(
-              1,
-              Math.min(16_384, preflight.maxOutputTokens, Math.floor(contextWindow / 8)),
-            ),
-            keepRecentTokens: Math.min(20_000, Math.floor(contextWindow / 4)),
-            backgroundTokens: Math.min(32_768, Math.floor(contextWindow / 4)),
-          };
+      kind === 'image' ? { enabled: false } : resolvePiCompactionPolicy(preflight);
 
     const streamSimple = (
       model: Model<Api>,
@@ -192,9 +183,10 @@ export function createPiDurableModels(
               options?.maxTokens === undefined && selected.maxOutputTokens === undefined
                 ? undefined
                 : Math.min(options?.maxTokens ?? ceiling, selected.maxOutputTokens ?? ceiling);
-            const maxTokens = Math.min(
+            const maxTokens = resolvePiConversationOutputBudget(
               ceiling,
-              resolvePiOutputReservation(ceiling, resolved.model.contextWindow, explicitMaxTokens),
+              resolved.model.contextWindow,
+              explicitMaxTokens,
             );
             trace?.setAttributes(piModelRequestAttributes(resolved, context, maxTokens));
             const stream = await resolved.streamFn(resolved.model, context, {
