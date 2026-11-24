@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FloatingNavDock } from '../FloatingNavDock';
+import { NavIcon } from '../NavIcon';
 import type { NavDragState } from '../state';
 
 const createMockSharedValue = <T,>(initialValue: T) => {
@@ -155,6 +157,35 @@ describe('FloatingNavDock drag preview', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('shows a filled active tab without a capsule background and keeps the dashed drag preview', () => {
+    mockShellState.dragState = {
+      draggingOut: false,
+      id: 'drawings',
+      insertIndex: 0,
+      overDock: true,
+      source: 'more',
+    };
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+
+    const activeTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-more' });
+    expect(activeTab.findByType(NavIcon).props.filled).toBe(true);
+    const activeCapsule = activeTab
+      .findAllByType(View)
+      .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(activeCapsule).toBeDefined();
+    expect(activeCapsule!.props.className).not.toMatch(/bg-secondary|border-border-subtle/);
+
+    const preview = renderer!.root.findByProps({ testID: 'floating-nav-preview-drawings' });
+    const previewCapsule = preview
+      .findAllByType(View)
+      .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(previewCapsule?.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['bg-secondary-active', 'border-border-selected', 'border-dashed']),
+    );
   });
 
   test('inserts live dashed preview slot inside the middle band and shows drop banner when dragging from More', () => {

@@ -185,10 +185,8 @@ function NavTabCapsule({
     : 'h-11 w-11 items-center justify-center rounded-full';
   const stateClassName = isDragPreview
     ? 'bg-secondary-active border-border-selected border border-dashed'
-    : isActive
-      ? isHorizontal
-        ? 'bg-secondary border border-border-subtle'
-        : 'bg-secondary-active'
+    : isActive && !isHorizontal
+      ? 'bg-secondary-active'
       : '';
 
   return (
