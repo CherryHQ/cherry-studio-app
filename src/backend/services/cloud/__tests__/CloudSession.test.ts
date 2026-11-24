@@ -53,6 +53,43 @@ const entry = (expiresIn = 3600) => ({
 });
 beforeEach(() => mockRequest.mockReset());
 
+test.each([
+  { retryAfter: undefined, cooldownMs: 30_000 },
+  { retryAfter: 'invalid', cooldownMs: 30_000 },
+  { retryAfter: '5', cooldownMs: 5_000 },
+  { retryAfter: 'Thu, 01 Jan 2026 00:01:00 GMT', cooldownMs: 60_000 },
+])('honors a bounded per-path 429 cooldown for $retryAfter', async ({ retryAfter, cooldownMs }) => {
+  const now = Date.parse('2026-01-01T00:00:00Z');
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  try {
+    const { session } = setup();
+    const path = '/api/v1/account';
+    const failure = Object.assign(new Error('Rate limited'), {
+      name: 'HttpError',
+      status: 429,
+      retryAfter,
+    });
+    mockRequest
+      .mockResolvedValueOnce(entry())
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValue({ data: {} });
+    await expect(session.get(path)).rejects.toBe(failure);
+    clock.mockReturnValue(now + cooldownMs - 1);
+    await expect(session.get(path)).rejects.toMatchObject({
+      statusCode: 429,
+      code: 'RATE_LIMITED',
+      retryable: false,
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    await expect(session.get('/api/v1/account/plans')).resolves.toEqual({});
+    clock.mockReturnValue(now + cooldownMs);
+    await expect(session.get(path)).resolves.toEqual({});
+    expect(mockRequest).toHaveBeenCalledTimes(4);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 test('concurrent reads share device-bound product entry and never send IdP credentials to model routes', async () => {
   const { session } = setup();
   mockRequest.mockImplementation(async ({ path }) =>

@@ -1,5 +1,6 @@
 import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
@@ -345,6 +346,40 @@ describe('Pi stream idle timeout', () => {
     });
     expect(jest.getTimerCount()).toBe(0);
   });
+
+  test.each([true, false])(
+    'preserves explicit fetch retryability and timeout facts through an SDK wrapper: %s',
+    async (retryable) => {
+      const failure = Object.assign(
+        new Error('Cloud response headers timed out after 60 seconds.'),
+        {
+          name: 'TimeoutError',
+          code: 'cloud_response_headers_timeout',
+          retryable,
+        },
+      );
+      const stream = await withPiStreamIdleTimeout((_model, _context, options) => {
+        options?.reportFetchFailure?.(failure);
+        const source = new AssistantMessageEventStream();
+        source.push({
+          type: 'error',
+          reason: 'error',
+          error: { ...message('', 'error'), errorMessage: 'Connection error.' },
+        });
+        source.end();
+        return source;
+      })(MODEL, normalizeContext({ messages: [] }));
+
+      const result = await stream.result();
+      expect(result).toMatchObject({ stopReason: 'error', errorMessage: failure.message });
+      expect(result.diagnostics?.at(-1)).toMatchObject({
+        error: { name: 'TimeoutError', code: 'cloud_response_headers_timeout' },
+        details: { retryable },
+      });
+      expect(isRetryableAssistantError(result)).toBe(retryable);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
 
   test('terminalizes an iterator failure instead of leaving an unhandled rejection', async () => {
     const source = new AssistantMessageEventStream();
