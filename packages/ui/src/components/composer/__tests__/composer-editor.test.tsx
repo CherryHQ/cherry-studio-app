@@ -1,8 +1,8 @@
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ComposerEditor } from '../components/composer-editor';
+import { ComposerEditor, useComposerEditorInput } from '../components/composer-editor';
 
 const mockTiming = jest.fn((target: number, _motion: object) => target);
 
@@ -39,6 +39,10 @@ jest.mock('../components/composer-expansion', () => ({
   useComposerExpansion: () => null,
 }));
 
+function Field() {
+  return <TextInput style={useComposerEditorInput()?.style} />;
+}
+
 describe('Composer.Editor', () => {
   let renderer: ReactTestRenderer;
   let visible: boolean;
@@ -48,7 +52,7 @@ describe('Composer.Editor', () => {
       active={active}
       activeSignal={keyboard}
       expandLabel="Expand"
-      field={<View />}
+      field={<Field />}
       restingTrailingActionCount={restingTrailingActionCount}
     />
   );
@@ -65,6 +69,15 @@ describe('Composer.Editor', () => {
     });
   });
   afterEach(() => act(() => renderer.unmount()));
+
+  it('bounds the native text field to a single row only while compact', () => {
+    const nativeHeightLimit = () => renderer.root.findByType(TextInput).props.style?.maxHeight;
+    expect(nativeHeightLimit()).toBe(24);
+    act(() => renderer.update(renderEditor(true)));
+    expect(nativeHeightLimit()).toBeUndefined();
+    act(() => renderer.update(renderEditor(false)));
+    expect(nativeHeightLimit()).toBe(24);
+  });
 
   it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {
     expect(fieldFrame()).toMatchObject({ left: 40, right: 40 });

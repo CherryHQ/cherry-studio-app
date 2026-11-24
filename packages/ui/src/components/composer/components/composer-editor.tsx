@@ -24,7 +24,11 @@ import Animated, {
 
 import { easing } from '../../../motion';
 import type { ComposerInputProps } from '../composer.types';
-import { composerActionSize, COMPOSER_MAX_TEXT_HEIGHT } from '../utils/composer-layout';
+import {
+  compactTextInputBoxStyle,
+  composerActionSize,
+  COMPOSER_MAX_TEXT_HEIGHT,
+} from '../utils/composer-layout';
 import { ComposerExpansionMeasure, useComposerExpansion } from './composer-expansion';
 
 const restingInputHeight = composerActionSize;
@@ -213,9 +217,10 @@ export function useComposerEditorInput(): Pick<ComposerInputProps, 'layout' | 's
   const context = use(EditorContext);
   if (!context) return null;
   const { active, isExpanded, canExpand } = context.state;
+  if (!active) return { layout: 'content', style: compactTextInputBoxStyle };
   return {
     layout: isExpanded ? 'fill' : 'content',
-    style: !isExpanded && active && canExpand ? fieldActionInsetStyle : undefined,
+    style: !isExpanded && canExpand ? fieldActionInsetStyle : undefined,
   };
 }
 
