@@ -1,5 +1,5 @@
 appId: ${APP_ID}
-name: Appearance selection persists after restart
+name: Appearance mode and palette persist after restart
 ---
 - clearState
 - openLink:
@@ -13,11 +13,23 @@ name: Appearance selection persists after restart
 - runFlow: _open-appearance-settings.yaml
 - extendedWaitUntil:
     visible:
-      id: theme-preview-dark
+      id: theme-preview-light
     timeout: 10000
 - tapOn:
+    id: theme-preview-light
+- tapOn:
+    id: theme-palette-purple
+- runFlow:
+    file: _assert-appearance.yaml
+    env:
+      THEME_MODE: light
+- takeScreenshot: theme-palette-purple-light
+- tapOn:
     id: theme-preview-dark
-- runFlow: _assert-dark-theme.yaml
+- runFlow:
+    file: _assert-appearance.yaml
+    env:
+      THEME_MODE: dark
 - stopApp
 - openLink:
     link: ${DEV_CLIENT_URL}
@@ -26,4 +38,8 @@ name: Appearance selection persists after restart
       id: chat-composer
     timeout: 90000
 - runFlow: _open-appearance-settings.yaml
-- runFlow: _assert-dark-theme.yaml
+- runFlow:
+    file: _assert-appearance.yaml
+    env:
+      THEME_MODE: dark
+- takeScreenshot: theme-palette-purple-dark

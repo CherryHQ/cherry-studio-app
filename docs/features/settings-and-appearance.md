@@ -1,6 +1,6 @@
 # Settings And Appearance
 
-Settings hub controlling appearance (light/dark/system theme), language, chat display toggles,
+Settings hub controlling appearance (light/dark/system mode and theme color), language, chat display toggles,
 AI usage, voice, data management, privacy, and diagnostics.
 
 ## User Entry
@@ -9,7 +9,8 @@ AI usage, voice, data management, privacy, and diagnostics.
   accessibility label. Tap `testID:sidebar-settings`.
 - Settings sections:
   - General & Appearance (`testID:settings-general`): theme selector (`testID:theme-preview-section-item`,
-    `testID:theme-preview-dark`), language picker (`testID:language-picker`), watermark
+    `testID:theme-preview-dark`), six color swatches (e.g. `testID:theme-palette-purple`),
+    language picker (`testID:language-picker`), watermark
     (`testID:settings-export-watermark`), keep screen on (`testID:settings-keep-screen-on`),
     chat toggles (`testID:settings-multi-model-cards`, `testID:settings-auto-collapse-process`,
     `testID:settings-session-branch-tree`, `testID:settings-enter-to-send`).
@@ -25,7 +26,8 @@ AI usage, voice, data management, privacy, and diagnostics.
 
 ## Observable Acceptance
 
-- Selecting `testID:theme-preview-dark` marks it checked before and after a full app relaunch.
+- Select purple in light mode, then switch to dark. Both `testID:theme-preview-dark` and
+  `testID:theme-palette-purple` are checked before and after a full app relaunch.
   Maestro reads the native accessibility value on iOS and the checked attribute on Android.
 - Switching language in `testID:language-picker` updates UI copy consistently across screens using
   the shared `resolveAppLanguage` resolver.

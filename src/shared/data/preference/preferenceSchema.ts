@@ -226,6 +226,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'ui.sidebar.collapsed',
   'ui.sidebar.recent_view_mode',
   'ui.theme_mode',
+  'ui.theme_palette',
 ] as const satisfies readonly PreferenceKeyType[];
 
 /**
