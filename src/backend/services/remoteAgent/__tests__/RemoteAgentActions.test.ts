@@ -459,18 +459,20 @@ it('restores the exact answer payload and target after process restart', async (
   expect(restored.get()[0].status).toBe('applied');
 });
 
-it('retains system workspace selection and create command identity through a lost create response', async () => {
+it('retains the workspace, model and create command identity through a lost create response', async () => {
   const { port } = journal();
   const request = jest.fn().mockRejectedValue(new RemoteAgentError('CONNECTION_LOST', true));
   const original = new RemoteAgentActions('binding', port, request, () => {});
+  const model = { providerId: 'desktop-provider', modelId: 'chat' };
   await original.start({
+    model,
     draftId: 'system-draft',
     agentId: 'agent',
     workspace: { kind: 'system' },
     text: 'hello',
   });
   const create = request.mock.calls[0][1];
-  expect(create).toMatchObject({ workspace: { kind: 'system' } });
+  expect(create).toMatchObject({ workspace: { kind: 'system' }, model });
   expect(create).not.toHaveProperty('workspaceId');
   original.stop();
   const retry = jest.fn(async (name: string, body: any) => {
@@ -484,6 +486,7 @@ it('retains system workspace selection and create command identity through a los
     ['agent.sessions.create', create],
   ]);
   expect(restored.getStarts()[0]).toMatchObject({
+    model,
     status: 'applied',
     sessionId: 's',
     workspace: { kind: 'system' },

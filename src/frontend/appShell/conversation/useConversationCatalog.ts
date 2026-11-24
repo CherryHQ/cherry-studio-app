@@ -129,6 +129,18 @@ export function useConversationSessionPath(sessionId?: string) {
     Boolean(sessionId && source.catalog.readSessionPath),
   );
 }
+export function useConversationModels(agent: AgentRef, search: string) {
+  const { catalog } = useConversationSource();
+  return useCatalog(
+    ['models', agent, search],
+    (cursor, signal) =>
+      catalog.listModels
+        ? catalog.listModels(agent, search, cursor, signal)
+        : Promise.resolve({ items: [] }),
+    Boolean(catalog.listModels),
+  );
+}
+
 export function useConversationWorkspaces(agent?: AgentRef) {
   const { catalog } = useConversationSource();
   return useCatalog(

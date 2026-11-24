@@ -1,5 +1,6 @@
 import type {
   RemoteAgentSource,
+  RemoteModelSelection,
   RemoteStartOperation,
   RemoteWorkspaceSelection,
 } from '@/shared/contracts/remoteAgent';
@@ -185,6 +186,21 @@ export function createRemoteConversationSource(
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('agents', page.next) } : {}),
           };
         }),
+      listModels: (agent, search, cursor, signal) =>
+        read(signal, async () => {
+          const id = catalogRefs.resolve(agent, 'agent').id;
+          const kind = JSON.stringify(['models', id, search]);
+          const page = await remote.listModels(
+            id,
+            search,
+            cursor ? catalogRefs.resolve(cursor, kind).id : undefined,
+            signal,
+          );
+          return {
+            items: page.items,
+            ...(page.next ? { next: catalogRefs.issue<CatalogCursor>(kind, page.next) } : {}),
+          };
+        }),
       listWorkspaces: (agent, cursor, signal) =>
         read(signal, async () => {
           const id = catalogRefs.resolve(agent, 'agent').id;
@@ -249,7 +265,11 @@ export function createRemoteConversationSource(
         let retired = false;
         let pending = false;
         const submit = async (
-          target: { agentId: string; workspace?: RemoteWorkspaceSelection },
+          target: {
+            agentId: string;
+            workspace?: RemoteWorkspaceSelection;
+            model?: RemoteModelSelection;
+          },
           value: ConversationInput,
         ): Promise<OperationOutcome<Submission>> => {
           try {
@@ -265,6 +285,11 @@ export function createRemoteConversationSource(
                 draftId: input.draftId,
                 agentId: target.agentId,
                 workspace: target.workspace,
+                ...(target.model
+                  ? {
+                      model: { providerId: target.model.providerId, modelId: target.model.modelId },
+                    }
+                  : {}),
                 ...preparedInput,
               }),
             );
@@ -296,7 +321,7 @@ export function createRemoteConversationSource(
               ready.state === 'enabled' && !workspace
                 ? { state: 'disabled', reason: 'workspace-required' }
                 : ready,
-            execute: (value) => submit({ agentId, workspace }, value),
+            execute: (value) => submit({ agentId, workspace, model: input.model }, value),
           };
           // A start that failed after its route left surfaces on the next draft instead of vanishing.
           const failed =
@@ -326,6 +351,7 @@ export function createRemoteConversationSource(
                   const result = await submit(
                     {
                       agentId: failed.agentId,
+                      model: failed.model,
                       workspace: failed.workspace ?? {
                         kind: 'registered',
                         id: failed.workspaceId!,
@@ -350,6 +376,7 @@ export function createRemoteConversationSource(
           return {
             inputPolicy: {
               ...REMOTE_INPUT_POLICY,
+              modelSelection: remote.getState().sessionModelSelection === true,
               attachments: remote.getState().attachments === true,
             },
             attachmentPreparation:

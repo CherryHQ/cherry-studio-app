@@ -32,10 +32,12 @@ import {
   useComposerActions,
 } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
+import type { RemoteModelOption } from '@/shared/contracts/remoteAgent';
 
 import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { RemoteModelPicker } from './RemoteModelPicker';
 import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
@@ -63,6 +65,9 @@ export function RemoteComposer({
   const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
     useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
+  const [selection, setSelection] = useState<{ draftKey: string; model: RemoteModelOption }>();
+  const selectedModel = selection?.draftKey === draftKey ? selection.model : undefined;
+  const [choosingModel, setChoosingModel] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
@@ -82,7 +87,8 @@ export function RemoteComposer({
     )
       void workspaces.fetchNextPage();
   }, [snapshot.workspaceId, snapshot.workspaceKind, selectedWorkspace, workspaces]);
-  const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
+  const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId, selectedModel);
+  const canSelectModel = !existing && draft.state?.inputPolicy.modelSelection === true;
   const created = draft.state?.created;
   useEffect(() => {
     if (!session && created && onSessionCreated(created.conversation)) created.release();
@@ -183,6 +189,10 @@ export function RemoteComposer({
         message={undelivered}
         onEdit={async (input) => {
           const restored = await restoreRemoteInput(input, (id) => files.getUri(id));
+          if (undelivered?.failure?.code === 'model-unavailable') {
+            setSelection(undefined);
+            setChoosingModel(true);
+          }
           addAttachments(restored.attachments);
           setDraft((current) => [restored.text, current].filter(Boolean).join('\n'));
           if (restored.missing.length)
@@ -278,26 +288,54 @@ export function RemoteComposer({
           streaming={canStop}
           leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
           secondaryAction={
-            <Composer.Pill
-              accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || starting || attachments.length > 0}
-              onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
-              icon={<FolderIcon className="size-5 text-foreground" />}
-              testID="composer-workspace-button"
-            >
-              <Text
-                className="min-w-0 shrink font-semibold text-sm text-foreground"
-                numberOfLines={1}
+            <View className="min-w-0 shrink flex-row items-center gap-1">
+              {canSelectModel ? (
+                <Composer.Pill
+                  accessibilityLabel={t('chat.model.select')}
+                  disabled={starting}
+                  onPress={() => void runInputReplacement(() => setChoosingModel(true))}
+                  testID="remote-composer-model-button"
+                >
+                  <Text
+                    className="min-w-0 shrink text-sm font-semibold text-foreground"
+                    numberOfLines={1}
+                  >
+                    {selectedModel?.name ?? agent?.modelName ?? t('remoteAgent.followAgentModel')}
+                  </Text>
+                </Composer.Pill>
+              ) : null}
+              <Composer.Pill
+                accessibilityLabel={t('remoteAgent.workspace')}
+                disabled={existing || starting || attachments.length > 0}
+                onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
+                icon={<FolderIcon className="size-5 text-foreground" />}
+                testID="composer-workspace-button"
               >
-                {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
-                  ? t('remoteAgent.systemWorkspace')
-                  : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
-              </Text>
-            </Composer.Pill>
+                <Text
+                  className="min-w-0 shrink font-semibold text-sm text-foreground"
+                  numberOfLines={1}
+                >
+                  {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
+                    ? t('remoteAgent.systemWorkspace')
+                    : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
+                </Text>
+              </Composer.Pill>
+            </View>
           }
         />
       </ComposerSurface>
       {draft.error ? <ContentState.Error title={t('remoteAgent.loadFailed')} /> : null}
+      {choosingModel && canSelectModel && agent ? (
+        <RemoteModelPicker
+          agent={agent}
+          selected={selectedModel}
+          onClose={() => setChoosingModel(false)}
+          onSelect={(model) => {
+            setSelection(model ? { draftKey, model } : undefined);
+            setChoosingModel(false);
+          }}
+        />
+      ) : null}
       {choosingWorkspace && !existing ? (
         <BottomSheet
           open

@@ -1752,6 +1752,7 @@
   "remoteAgent.downloading": "正在下載 {{progress}}%",
   "remoteAgent.expand": "展開完整內容與詳情",
   "remoteAgent.finalizing": "PC 正在儲存結果…",
+  "remoteAgent.followAgentModel": "使用智慧體的預設模型",
   "remoteAgent.identityChanged": "PC 身分已變更，請重新掃碼確認。",
   "remoteAgent.idle": "目前沒有前景執行",
   "remoteAgent.input": "輸入",

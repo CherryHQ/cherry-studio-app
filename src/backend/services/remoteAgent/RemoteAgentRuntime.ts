@@ -140,6 +140,10 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         return scope.listAgents(...args);
       },
+      listModels: (...args) => {
+        assertActive();
+        return scope.listModels(...args);
+      },
       listWorkspaces: (...args) => {
         assertActive();
         return scope.listWorkspaces(...args);

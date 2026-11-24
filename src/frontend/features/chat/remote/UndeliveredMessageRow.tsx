@@ -18,6 +18,7 @@ const DELIVERED_MS = 2000;
 const REASON_KEYS = {
   changed: 'remoteAgent.undelivered.reason.changed',
   agentUnavailable: 'remoteAgent.undelivered.reason.agentUnavailable',
+  modelUnavailable: 'settings.model.unavailable',
   interrupted: 'remoteAgent.undelivered.reason.interrupted',
   connection: 'remoteAgent.undelivered.reason.connection',
   invalid: 'remoteAgent.undelivered.reason.invalid',
@@ -35,6 +36,8 @@ function describe(message: UndeliveredMessage): {
     case 'conflict':
     case 'version-expired':
       return { reason: 'changed', edit: false };
+    case 'model-unavailable':
+      return { reason: 'modelUnavailable', edit: true };
     case 'target-unavailable':
       return { reason: 'agentUnavailable', edit: false };
     case 'offline':

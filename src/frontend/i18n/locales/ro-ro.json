@@ -1784,6 +1784,7 @@
   "remoteAgent.downloading": "Se descarcă {{progress}}%",
   "remoteAgent.expand": "Afișați conținutul complet și detaliile",
   "remoteAgent.finalizing": "PC salvează rezultatul…",
+  "remoteAgent.followAgentModel": "Folosește modelul implicit al agentului",
   "remoteAgent.identityChanged": "Identitatea PC s-a schimbat. Scanați din nou codul QR.",
   "remoteAgent.idle": "Nicio execuție activă în prim-plan",
   "remoteAgent.input": "Intrare",

@@ -239,6 +239,12 @@ execution and input digest, then passes the original input plus answers to its e
 The mobile adapter materializes the form into the common interaction resource and reuses the
 question sheet. Exact response parameters and command IDs survive receipt recovery.
 
+When the desktop advertises `agentSessionModelSelection`, a new conversation's composer can
+search `agent.models.list` by Agent and provider or model name. An explicit selection accompanies
+`agent.sessions.create` and survives a lost reply through the start journal. Leaving the draft on
+the Agent default omits the model. A rejected model choice can be edited before resubmitting the
+original content. Older desktops keep the existing creation flow.
+
 `agent.workspaces.list` advertises `systemWorkspace: true` when supported. Creation accepts
 `workspace: { kind: 'system' }` or `{ kind: 'registered', id }`; only the desktop resolves the
 physical directory. The returned session includes the real `workspaceId` and `workspaceKind`.

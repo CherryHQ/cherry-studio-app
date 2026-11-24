@@ -23,9 +23,12 @@ export type RemoteAttachmentDraftView = {
     error?: string;
   })[];
 };
+export type RemoteModelSelection = Pick<RemoteModelSummary, 'modelId' | 'providerId'>;
+export type RemoteModelOption = RemoteModelSummary & { providerName: string };
 export type RemoteStartInput = {
   draftId: string;
   agentId: string;
+  model?: RemoteModelSelection;
   text: string;
   attachments?: RemoteAttachment[];
 } & (
@@ -52,6 +55,7 @@ export type RemoteStartOperation = Readonly<{
   id: string;
   draftId: string;
   agentId: string;
+  model?: RemoteModelSelection;
   workspaceId?: string;
   workspace?: RemoteWorkspaceSelection;
   text: string;
@@ -67,6 +71,7 @@ export type RemoteSourceState = Readonly<{
   reason?: string;
   attachments?: boolean;
   preupload?: boolean;
+  sessionModelSelection?: boolean;
   attachmentDrafts?: readonly RemoteAttachmentDraftView[];
   upload?: { id: string; sent: number; total: number; sessionId?: string; draftId?: string };
 }>;

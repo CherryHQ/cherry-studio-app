@@ -1,5 +1,9 @@
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
-import type { RemoteAttachment, RemoteAttachmentDraftView } from '@/shared/contracts/remoteAgent';
+import type {
+  RemoteAttachment,
+  RemoteAttachmentDraftView,
+  RemoteModelSelection,
+} from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
@@ -150,7 +154,12 @@ export interface ConversationDraft {
 }
 export interface RemoteConversationCatalog extends ConversationCatalog {
   prepareDraft(
-    input: { agent: AgentRef; workspace?: WorkspaceRef; draftId: DraftId },
+    input: {
+      agent: AgentRef;
+      workspace?: WorkspaceRef;
+      model?: RemoteModelSelection;
+      draftId: DraftId;
+    },
     signal: AbortSignal,
   ): Promise<ConversationDraft>;
 }

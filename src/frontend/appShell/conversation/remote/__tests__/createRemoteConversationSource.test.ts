@@ -50,6 +50,7 @@ function fixture(scope = 'scope', binding = 'binding') {
       };
     },
     listAgents: jest.fn(async () => ({ items: [{ id: 'a', name: 'Agent', emoji: '🧑🏽‍💻' }] })),
+    listModels: jest.fn(async () => ({ items: [] })),
     listWorkspaces: jest.fn(async () => ({ items: [{ id: 'w', name: 'Workspace' }] })),
     listSessions: jest.fn(async () => ({ items: [session] })),
     tasks: {

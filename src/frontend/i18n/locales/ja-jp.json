@@ -1752,6 +1752,7 @@
   "remoteAgent.downloading": "ダウンロード中 {{progress}}%",
   "remoteAgent.expand": "全文と詳細を表示",
   "remoteAgent.finalizing": "PC が結果を保存中…",
+  "remoteAgent.followAgentModel": "エージェントの既定モデルを使用",
   "remoteAgent.identityChanged": "PC の識別情報が変わりました。QR コードを再度読み取って確認してください。",
   "remoteAgent.idle": "フォアグラウンドの実行はありません",
   "remoteAgent.input": "入力",

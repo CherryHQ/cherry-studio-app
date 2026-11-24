@@ -2,6 +2,7 @@ import {
   agentMethods,
   commandReceiptSchema,
   workspaceSelectionSchema,
+  modelSelectionSchema,
   uploadReferencesSchema,
   attachmentDraftSubmissionSchema,
   type AgentUploadReference,
@@ -54,6 +55,7 @@ const StartSchema = z
     agentId: z.string(),
     workspaceId: z.string().optional(),
     workspace: workspaceSelectionSchema.optional(),
+    model: modelSelectionSchema.optional(),
     text: z.string(),
     attachments: z.array(AttachmentSchema).optional(),
     createId: z.string(),
@@ -354,6 +356,8 @@ export class RemoteAgentActions {
     if (
       entry &&
       (entry.agentId !== input.agentId ||
+        entry.model?.providerId !== input.model?.providerId ||
+        entry.model?.modelId !== input.model?.modelId ||
         entry.workspaceId !== input.workspaceId ||
         entry.workspace?.kind !== input.workspace?.kind ||
         (entry.workspace?.kind === 'registered' &&
@@ -457,6 +461,7 @@ export class RemoteAgentActions {
       if (!entry.sessionId) {
         const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
           agentId: entry.agentId,
+          ...(entry.model ? { model: entry.model } : {}),
           ...(entry.workspace?.kind === 'system'
             ? { workspace: entry.workspace }
             : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),

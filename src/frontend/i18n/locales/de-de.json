@@ -1768,6 +1768,7 @@
   "remoteAgent.downloading": "Download {{progress}} %",
   "remoteAgent.expand": "Vollständigen Inhalt und Details öffnen",
   "remoteAgent.finalizing": "PC speichert das Ergebnis…",
+  "remoteAgent.followAgentModel": "Standardmodell des Agenten verwenden",
   "remoteAgent.identityChanged": "PC-Identität geändert. QR-Code erneut scannen.",
   "remoteAgent.idle": "Keine aktive Vordergrundausführung",
   "remoteAgent.input": "Eingabe",
