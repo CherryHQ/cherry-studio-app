@@ -25,7 +25,7 @@ export type UseReorderOptions<TItem> = {
 
 /**
  * Optimistic list reordering backed by fractional-indexing Data API endpoints.
- * Emits minimal LIS moves (`/:id/order` or `/order:batch`), updates every matching
+ * Emits minimal anchor moves, updates every matching
  * TanStack Query cache immediately, serializes queued drags, and rolls back on failure.
  */
 export function useReorder<TItem>({
@@ -40,6 +40,7 @@ export function useReorder<TItem>({
   const [inFlightCount, setInFlightCount] = useState(0);
   const queueTailRef = useRef<Promise<void>>(Promise.resolve());
   const generationRef = useRef(0);
+  const cancelledThroughRef = useRef(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -88,21 +89,27 @@ export function useReorder<TItem>({
 
       const task = queueTailRef.current.then(async (): Promise<boolean> => {
         const snapshots: QuerySnapshot<unknown>[] = [];
-        for (const filter of filtersToUpdate) {
-          // Wait sequentially so query cancellations & snapshots stay deterministic across filters.
-          const snapshot = await updateQueriesOptimistically<unknown>(
-            queryClient,
-            filter,
-            (current) =>
-              applySublistOrderToCacheData<TItem>(current, orderedIds, currentOptions.getId),
-          );
-          snapshots.push(snapshot);
-        }
-
         try {
+          // Queued drags were planned against the optimistic order of the failed write.
+          if (generation <= cancelledThroughRef.current) return false;
+          for (const filter of filtersToUpdate) {
+            // Wait sequentially so query cancellations & snapshots stay deterministic across filters.
+            const snapshot = await updateQueriesOptimistically<unknown>(
+              queryClient,
+              filter,
+              (current) =>
+                applySublistOrderToCacheData<TItem>(current, orderedIds, currentOptions.getId),
+            );
+            snapshots.push(snapshot);
+          }
+
           if (moves.length === 1) {
             const [move] = moves;
-            const path = `${currentOptions.resource}/${encodeURIComponent(move.id)}/order`;
+            const id = encodeURIComponent(move.id);
+            const path =
+              currentOptions.resource === '/models'
+                ? `/model-orders/${id}`
+                : `${currentOptions.resource}/${id}/order`;
             await dataApi.patch(path as never, { body: move.anchor as never });
           } else {
             const path = `${currentOptions.resource}/order:batch`;
@@ -114,6 +121,7 @@ export function useReorder<TItem>({
           }
           return true;
         } catch (error) {
+          cancelledThroughRef.current = generationRef.current;
           for (const snapshot of snapshots) {
             restoreQuerySnapshot(queryClient, snapshot);
           }

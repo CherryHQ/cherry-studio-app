@@ -194,6 +194,25 @@ describe('ProviderService integration', () => {
     });
   });
 
+  it('can insert between providers whose keys coincide after enabling one of them', async () => {
+    insertProvider('a', true, 'a0');
+    insertProvider('b', false, 'a1');
+    insertProvider('c', true, 'a2');
+    insertProvider('d', true, 'a3');
+    await service.reorder('d', { before: 'c' });
+    await service.update('b', { isEnabled: true });
+    // The new group has b and d at a1, in provider ID order.
+    await service.reorder('c', { after: 'b' });
+    const page = await service.listPage();
+    expect(page.items.map((row) => row.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect((await service.list({ enabled: true })).map((row) => row.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
+  });
+
   function insertProvider(
     providerId: string,
     isEnabled: boolean,

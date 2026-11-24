@@ -6,7 +6,9 @@ import {
   eq,
   getTableName,
   gt,
+  gte,
   lt,
+  lte,
   ne,
   type SQL,
 } from 'drizzle-orm';
@@ -58,6 +60,7 @@ interface ResetOrderOptions {
 
 interface ComputeOptions {
   excludePkValue?: string;
+  monotonicUpdatedAtColumn?: AnyColumn;
   pkColumn: AnyColumn;
   scope?: SQL;
 }
@@ -162,13 +165,10 @@ export async function applyMoves(
 
     const newKey = await computeNewOrderKey(tx, table, move.anchor, {
       excludePkValue: move.id,
+      monotonicUpdatedAtColumn: options.monotonicUpdatedAtColumn,
       pkColumn,
       scope,
     });
-
-    if (newKey === current.orderKey) {
-      continue;
-    }
 
     await tx
       .update(table)
@@ -180,7 +180,7 @@ export async function applyMoves(
             }
           : {}),
       })
-      .where(scope ? and(eq(pkColumn, move.id), scope) : eq(pkColumn, move.id));
+      .where(and(eq(pkColumn, move.id), scope, ne(table.orderKey, newKey)));
   }
 }
 
@@ -214,10 +214,10 @@ export async function applyScopedMoves(
     const targetWhere = baseScope ? and(eq(pkColumn, move.id), baseScope) : eq(pkColumn, move.id);
     // react-doctor-disable-next-line async-await-in-loop -- 每次 move 的 scope 和新 orderKey 依赖前一次写入，必须串行
     const [current] = (await tx
-      .select({ orderKey: table.orderKey, scopeValue: scopeColumn })
+      .select({ scopeValue: scopeColumn })
       .from(table)
       .where(targetWhere)
-      .limit(1)) as { orderKey: string; scopeValue: unknown }[];
+      .limit(1)) as { scopeValue: unknown }[];
 
     if (!current) {
       throw DataApiErrorFactory.notFound(getTableName(table), move.id);
@@ -228,13 +228,10 @@ export async function applyScopedMoves(
 
     const newKey = await computeNewOrderKey(tx, table, move.anchor, {
       excludePkValue: move.id,
+      monotonicUpdatedAtColumn,
       pkColumn,
       scope: moveScope,
     });
-
-    if (newKey === current.orderKey) {
-      continue;
-    }
 
     await tx
       .update(table)
@@ -246,7 +243,7 @@ export async function applyScopedMoves(
             }
           : {}),
       })
-      .where(and(eq(pkColumn, move.id), moveScope));
+      .where(and(eq(pkColumn, move.id), moveScope, ne(table.orderKey, newKey)));
   }
 }
 
@@ -298,25 +295,21 @@ export async function computeNewOrderKey(
   try {
     return await computeNewOrderKeyOnce(tx, table, request, options);
   } catch (error) {
-    if (!isInvalidOrderKeyError(error)) {
+    if (!isRepairableOrderKeyError(error)) {
       throw error;
     }
 
-    logger.warn('computeNewOrderKey: repairing malformed order keys before retrying move', {
+    logger.warn('computeNewOrderKey: repairing tied or malformed order keys before retrying move', {
       error: error instanceof Error ? error.message : String(error),
       table: getTableName(table),
     });
 
-    await resetOrder(tx, table, {
-      orderBy: [asc(table.orderKey), asc(options.pkColumn)],
-      pkColumn: options.pkColumn,
-      scope: options.scope,
-    });
+    await resetOrder(tx, table, options);
 
     try {
       return await computeNewOrderKeyOnce(tx, table, request, options);
     } catch (retryError) {
-      if (isInvalidOrderKeyError(retryError)) {
+      if (isRepairableOrderKeyError(retryError)) {
         const reason = retryError instanceof Error ? retryError.message : String(retryError);
         throw new Error(
           `Cannot compute order key in "${getTableName(table)}" after repair: ${reason}`,
@@ -348,15 +341,24 @@ async function computeNewOrderKeyOnce(
     return generateOrderKeyBetween(largest, null);
   }
 
-  if ('before' in request) {
-    const anchorKey = await requireOrderKey(tx, table, pkColumn, request.before, scope);
-    const predecessor = await selectAdjacentKey(tx, table, 'predecessor', anchorKey, exclusion);
-    return generateOrderKeyBetween(predecessor, anchorKey);
-  }
-
-  const anchorKey = await requireOrderKey(tx, table, pkColumn, request.after, scope);
-  const successor = await selectAdjacentKey(tx, table, 'successor', anchorKey, exclusion);
-  return generateOrderKeyBetween(anchorKey, successor);
+  const before = 'before' in request;
+  const anchorId = before ? request.before : request.after;
+  const anchorKey = await requireOrderKey(tx, table, pkColumn, anchorId, scope);
+  const neighbor = await selectBoundaryKey(
+    tx,
+    table,
+    before ? 'last' : 'first',
+    and(
+      exclusion,
+      ne(pkColumn, anchorId),
+      before ? lte(table.orderKey, anchorKey) : gte(table.orderKey, anchorKey),
+    ),
+  );
+  // A provider can bring a matching key into this group when enabled or disabled.
+  if (neighbor === anchorKey) throw new DuplicateOrderKeyError(`Duplicate order key: ${anchorKey}`);
+  return before
+    ? generateOrderKeyBetween(neighbor, anchorKey)
+    : generateOrderKeyBetween(anchorKey, neighbor);
 }
 
 /**
@@ -406,8 +408,13 @@ function isValidOrderKey(key: string): boolean {
   }
 }
 
-function isInvalidOrderKeyError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('invalid order key');
+class DuplicateOrderKeyError extends Error {}
+
+function isRepairableOrderKeyError(error: unknown): boolean {
+  return (
+    error instanceof DuplicateOrderKeyError ||
+    (error instanceof Error && error.message.includes('invalid order key'))
+  );
 }
 
 async function collectInvalidBoundaryKeys(

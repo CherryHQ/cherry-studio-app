@@ -47,7 +47,7 @@ import type { SortableChromeProps, SortableGroupProps, SortableRootProps } from 
 
 type ActiveSession = {
   activeIndex: number;
-  baseMetrics: SortableSlotMetrics;
+  metrics: SortableSlotMetrics;
   frameHeight: number;
   groupId: string;
   hasMovedPastSlop: boolean;
@@ -254,12 +254,12 @@ export function SortableRoot({
         (scrollControllerRef.current?.getOffset() ?? session.initialScrollOffset) -
         session.initialScrollOffset;
       const rawContentDelta = translationY + scrollDelta;
-      const activeOffset = session.baseMetrics.offsets[session.activeIndex] ?? 0;
+      const groupHeights = getGroupHeightMap(heightsRef.current, session.groupId, group.itemIds);
+      const metrics = computeSlotMetrics(group.itemIds, groupHeights, group.estimatedItemHeight);
+      session.metrics = metrics;
+      const activeOffset = metrics.offsets[session.activeIndex] ?? 0;
       const minContentDelta = -activeOffset;
-      const maxContentDelta = Math.max(
-        0,
-        session.baseMetrics.totalHeight - activeOffset - session.frameHeight,
-      );
+      const maxContentDelta = Math.max(0, metrics.totalHeight - activeOffset - session.frameHeight);
       const clampedContentDelta = computeRubberBandOffset(
         rawContentDelta,
         minContentDelta,
@@ -267,14 +267,7 @@ export function SortableRoot({
       );
       dragOffsetYSV.value = clampedContentDelta - scrollDelta;
 
-      const groupHeights = getGroupHeightMap(heightsRef.current, session.groupId, group.itemIds);
-      const nextHover = computeTargetIndex(
-        session.activeIndex,
-        clampedContentDelta,
-        group.itemIds,
-        groupHeights,
-        group.estimatedItemHeight,
-      );
+      const nextHover = computeTargetIndex(session.activeIndex, clampedContentDelta, metrics);
       if (nextHover !== session.hoverIndex) {
         session.hoverIndex = nextHover;
         hoverIndexSV.value = nextHover;
@@ -334,8 +327,8 @@ export function SortableRoot({
       const itemIds = group?.itemIds ?? [payload.id];
       const groupHeights = getGroupHeightMap(heightsRef.current, payload.groupId, itemIds);
       const fallbackHeight = Math.max(1, payload.measuredHeight || estimatedItemHeight);
-      const baseMetrics = computeSlotMetrics(itemIds, groupHeights, fallbackHeight);
-      const frameHeight = baseMetrics.heights[payload.index] ?? fallbackHeight;
+      const metrics = computeSlotMetrics(itemIds, groupHeights, fallbackHeight);
+      const frameHeight = metrics.heights[payload.index] ?? fallbackHeight;
 
       const token = ++activationTokenRef.current;
       focusedItemRef.current = payload.view;
@@ -344,7 +337,7 @@ export function SortableRoot({
       // pan or quick release still routes through Fork A / Fork B reliably.
       const provisionalSession: ActiveSession = {
         activeIndex: payload.index,
-        baseMetrics,
+        metrics,
         frameHeight,
         groupId: payload.groupId,
         hasMovedPastSlop: false,
@@ -361,7 +354,7 @@ export function SortableRoot({
         windowAnchor: {
           height: frameHeight,
           pageX: 0,
-          pageY: baseMetrics.offsets[payload.index] ?? 0,
+          pageY: metrics.offsets[payload.index] ?? 0,
           width: payload.measuredWidth,
         },
       };
@@ -468,7 +461,7 @@ export function SortableRoot({
         (scrollControllerRef.current?.getOffset() ?? session.initialScrollOffset) -
         session.initialScrollOffset;
       const targetVisualDelta =
-        computeDropSlotDelta(session.activeIndex, finalHover, session.baseMetrics) - scrollDelta;
+        computeDropSlotDelta(session.activeIndex, finalHover, session.metrics) - scrollDelta;
       const didReorder = commitReorder && finalHover !== session.activeIndex;
 
       if (commitReorder) {
@@ -534,12 +527,15 @@ export function SortableRoot({
     [liftProgressSV, menu, settleDropAndCommit],
   );
 
-  const handleMenuClose = useCallback(() => {
-    menu.close();
-    if (activeSessionRef.current?.phase === 'menu') {
-      clearSpotlightState();
-    }
-  }, [clearSpotlightState, menu]);
+  const handleMenuClose = useCallback(
+    (afterClose?: () => void) => {
+      menu.close(afterClose);
+      if (activeSessionRef.current?.phase === 'menu') {
+        clearSpotlightState();
+      }
+    },
+    [clearSpotlightState, menu],
+  );
 
   const handleMenuClosed = useCallback(() => {
     menu.finishClose();

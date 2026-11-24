@@ -1,6 +1,9 @@
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { Model } from '@/shared/data/types/model';
+
+import { ProviderModelListContent } from '../../../models/components/ProviderModelListContent';
 import type { useProviderModelManagement } from '../../../models/hooks/useProviderModelManagement';
 import { ProviderModelList } from '../ProviderModelList';
 
@@ -115,6 +118,39 @@ describe('ProviderModelList empty state', () => {
     expect(renderer?.root.findByType('Text').props.children).toBe(
       'settings.provider.models.search.empty',
     );
+  });
+
+  it('persists a purpose-tab drag in the full provider order, keeping other models in place', () => {
+    const [a, image, b] = ['a', 'image', 'b'].map(
+      (name): Model => ({
+        capabilities: [],
+        id: `provider::${name}`,
+        isDeprecated: false,
+        isEnabled: true,
+        isHidden: false,
+        modelId: name,
+        name,
+        providerId: 'provider',
+        supportsStreaming: true,
+      }),
+    );
+    const full = [a, image, b];
+    act(() => {
+      renderer = create(
+        <ProviderModelList
+          models={full}
+          visibleModels={[a, b]}
+          provider={undefined}
+          isLoading={false}
+        />,
+      );
+    });
+    const content = renderer!.root.findByType(ProviderModelListContent);
+    expect(content.props.models).toEqual([a, b]);
+    act(() => {
+      content.props.onReorderModels([b, a]);
+    });
+    expect(mockReorder).toHaveBeenCalledWith(full, [b, image, a]);
   });
 
   it('keeps reordering active on purpose tabs and disables it only while searching', () => {

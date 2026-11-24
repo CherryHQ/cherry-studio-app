@@ -40,15 +40,15 @@ describe('sortable geometry helpers', () => {
     });
 
     // Drag 'a' (50px) down past 'b' (80px, midpoint at 40px -> moved 40+): hovers at index 1.
-    expect(computeTargetIndex(0, 20, ids, heights, 44)).toBe(0);
-    expect(computeTargetIndex(0, 45, ids, heights, 44)).toBe(1);
-    expect(computeTargetIndex(0, -10, ids, heights, 44)).toBe(0);
+    expect(computeTargetIndex(0, 20, metrics)).toBe(0);
+    expect(computeTargetIndex(0, 45, metrics)).toBe(1);
+    expect(computeTargetIndex(0, -10, metrics)).toBe(0);
     // Drag 'a' all the way past 'c': index 2.
-    expect(computeTargetIndex(0, 130, ids, heights, 44)).toBe(2);
+    expect(computeTargetIndex(0, 130, metrics)).toBe(2);
     // Symmetric upward drag of 'c' (50px, offset 130): crosses 'b' at 40+ and 'a' past midpoint of slot 0.
-    expect(computeTargetIndex(2, -30, ids, heights, 44)).toBe(2);
-    expect(computeTargetIndex(2, -45, ids, heights, 44)).toBe(1);
-    expect(computeTargetIndex(2, -125, ids, heights, 44)).toBe(0);
+    expect(computeTargetIndex(2, -30, metrics)).toBe(2);
+    expect(computeTargetIndex(2, -45, metrics)).toBe(1);
+    expect(computeTargetIndex(2, -125, metrics)).toBe(0);
 
     // Variable height slot delta when moving 'a' (50px) to index 1 ('b' = 80px shifts up by 50 -> gap starts at 80).
     expect(computeDropSlotDelta(0, 1, metrics)).toBe(80);

@@ -90,7 +90,7 @@ export function createModelHandlers(
         return service.update(providerId, modelId, UpdateModelSchema.parse(body));
       },
     },
-    '/models/:uniqueModelId*/order': {
+    '/model-orders/:uniqueModelId*': {
       PATCH: async ({ body, params }) => {
         parseUniqueId(params.uniqueModelId);
         const anchor = OrderRequestSchema.parse(body);

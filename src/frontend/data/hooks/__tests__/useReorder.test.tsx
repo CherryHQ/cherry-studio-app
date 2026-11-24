@@ -150,8 +150,43 @@ describe('useReorder', () => {
       await expect(getHook().reorderIndex(items, 1, 0)).resolves.toBe(true);
     });
 
-    expect(dataApi.patch).toHaveBeenCalledWith('/models/openai%3A%3Aorg%2Fmodel/order', {
+    expect(dataApi.patch).toHaveBeenCalledWith('/model-orders/openai%3A%3Aorg%2Fmodel', {
       body: { before: 'openai::gpt-4o' },
+    });
+  });
+
+  it('cancels drags based on a rolled-back order and accepts the next fresh drag', async () => {
+    const [a, b, c] = ['a', 'b', 'c'].map((id) => ({ id, name: id }));
+    const initial = [a, b, c];
+    queryClient.setQueryData(['/agents'], initial);
+    const onError = jest.fn();
+    const getHook = renderHookHarness<Row>({
+      getId: (item) => item.id,
+      onError,
+      queryFilters: [dataApiCollectionFilters('/agents')],
+      resource: '/agents',
+    });
+    const started = Promise.withResolvers<void>();
+    const write = Promise.withResolvers<never>();
+    dataApi.patch.mockImplementationOnce(() => {
+      started.resolve();
+      return write.promise;
+    });
+
+    await act(async () => {
+      const first = getHook().reorder(initial, [c, a, b]);
+      await started.promise;
+      const displayed = queryClient.getQueryData<Row[]>(['/agents'])!;
+      expect(displayed).toEqual([c, a, b]);
+      const second = getHook().reorderIndex(displayed, 2, 0);
+      write.reject(new Error('write failed'));
+      expect(await Promise.all([first, second])).toEqual([false, false]);
+    });
+    expect(dataApi.patch).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(['/agents'])).toEqual(initial);
+    await act(async () => {
+      expect(await getHook().reorder(initial, [b, a, c])).toBe(true);
     });
   });
 

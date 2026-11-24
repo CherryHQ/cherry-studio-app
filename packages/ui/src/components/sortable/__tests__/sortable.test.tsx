@@ -256,6 +256,33 @@ describe('Sortable', () => {
     expect(renderer!.root.findAllByProps({ testID: 'sortable-root-overlay' })).toHaveLength(0);
   });
 
+  it('can drop into a page appended to the group during the drag', async () => {
+    const onReorder = jest.fn();
+    const list = (ids: string[]) => (
+      <Sortable.Root>
+        <Sortable.Group estimatedItemHeight={50} groupId="g1" itemIds={ids} onReorder={onReorder}>
+          <Sortable.Item id="a" groupId="g1" index={0} estimatedHeight={50}>
+            <View />
+          </Sortable.Item>
+        </Sortable.Group>
+      </Sortable.Root>
+    );
+    act(() => {
+      renderer = create(list(['a', 'b']));
+    });
+    const gesture = panGesturesByOrder.at(-1)!;
+    act(() => gesture.onStart?.());
+    await flushMicrotasks();
+    act(() => gesture.onUpdate?.({ translationX: 0, translationY: 50, absoluteY: 80 }));
+    act(() => {
+      renderer!.update(list(['a', 'b', 'c', 'd']));
+    });
+    act(() => gesture.onUpdate?.({ translationX: 0, translationY: 150, absoluteY: 180 }));
+    act(() => gesture.onEnd?.({}, true));
+    await flushMicrotasks();
+    expect(onReorder).toHaveBeenCalledWith({ id: 'a', groupId: 'g1', fromIndex: 0, toIndex: 3 });
+  });
+
   it('Fork B: long-press lift and release within slop opens MenuContent without committing reorder', async () => {
     const onReorder = jest.fn();
     const onMoveToTop = jest.fn();
@@ -276,7 +303,9 @@ describe('Sortable', () => {
       'delete',
     ]);
 
-    act(() => menu.props.items[0].onPress());
+    act(() => menu.props.onClose(menu.props.items[0].onPress));
+    expect(onMoveToTop).not.toHaveBeenCalled();
+    act(() => menu.props.onClosed());
     expect(onMoveToTop).toHaveBeenCalledWith(1);
   });
 

@@ -19,7 +19,7 @@ function compileTimeContract(client: ApiClient, sessionId: string) {
   );
   const painting: Promise<Painting> = client.get('/paintings/painting-1');
   const removed: Promise<void> = client.delete('/models/provider::org/model');
-  const modelReordered: Promise<void> = client.patch('/models/provider::org/model/order', {
+  const modelReordered: Promise<void> = client.patch('/model-orders/provider::org/model', {
     body: { position: 'first' },
   });
   const modelsBatchReordered: Promise<void> = client.patch('/models/order:batch', {

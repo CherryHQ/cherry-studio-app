@@ -46,7 +46,7 @@ export type ProviderModelListContentProps = {
   locked?: boolean;
   models: readonly Model[];
   onEndpointPress?: (model: Model) => void;
-  onReorderModels?: (oldItems: readonly Model[], newItems: readonly Model[]) => Promise<boolean>;
+  onReorderModels?: (newItems: readonly Model[]) => Promise<boolean>;
   provider: Provider | undefined;
   updatingModelId?: string;
 };
@@ -135,7 +135,7 @@ export function ProviderModelListContent({
       if (!canReorder || !onReorderModels) return;
       const groupModels = groupById.get(groupId);
       if (!groupModels) return;
-      void onReorderModels(groupModels, reorderLocally(groupModels, fromIndex, toIndex));
+      void onReorderModels(reorderLocally(groupModels, fromIndex, toIndex));
     },
     [canReorder, groupById, onReorderModels],
   );

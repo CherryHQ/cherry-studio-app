@@ -24,7 +24,7 @@ describe('model Data API handlers', () => {
       filter: async (models) => [...models],
     });
 
-    await handlers['/models/:uniqueModelId*/order'].PATCH({
+    await handlers['/model-orders/:uniqueModelId*'].PATCH({
       body: { position: 'first' },
       params: { uniqueModelId: 'openai::org/gpt-4o' },
     });
@@ -40,13 +40,13 @@ describe('model Data API handlers', () => {
     ]);
 
     await expect(
-      handlers['/models/:uniqueModelId*/order'].PATCH({
+      handlers['/model-orders/:uniqueModelId*'].PATCH({
         body: { after: 'not-a-unique-id' },
         params: { uniqueModelId: 'openai::gpt-4o' },
       }),
     ).rejects.toThrow();
     await expect(
-      handlers['/models/:uniqueModelId*/order'].PATCH({
+      handlers['/model-orders/:uniqueModelId*'].PATCH({
         body: { position: 'first' },
         params: { uniqueModelId: 'bad-id' as never },
       }),

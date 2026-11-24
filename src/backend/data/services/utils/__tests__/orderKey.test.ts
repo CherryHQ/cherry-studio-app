@@ -182,6 +182,23 @@ describe('orderKey helpers', () => {
     expect(enabledRows.map((r) => r.id)).toEqual(['anthropic', 'openai']);
   });
 
+  test('writes the move even if a repair changed the target away from its original key', async () => {
+    insertProvider('legacy');
+    insertModel('legacy', 'a', 'a3');
+    insertModel('legacy', 'b', 'a4');
+    insertModel('legacy', 'c', 'c4');
+
+    await testDb.dbService.withWriteTx((tx) =>
+      applyScopedMoves(tx, userModelTable, [{ id: 'legacy::a', anchor: { after: 'legacy::c' } }], {
+        pkColumn: userModelTable.id,
+        scopeColumn: userModelTable.providerId,
+      }),
+    );
+
+    const rows = sqlite.prepare('SELECT model_id FROM user_model ORDER BY order_key').all();
+    expect(rows.map((row) => row.model_id)).toEqual(['b', 'c', 'a']);
+  });
+
   test('repairs malformed legacy boundary keys during insert and reorder', async () => {
     insertProvider('legacy');
     // 'zz' is an invalid trailing key rejected by fractional-indexing.

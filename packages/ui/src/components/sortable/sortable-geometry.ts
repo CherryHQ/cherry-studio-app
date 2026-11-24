@@ -63,16 +63,13 @@ export function computeSlotMetrics(
 export function computeTargetIndex(
   activeIndex: number,
   dragDeltaY: number,
-  itemIds: readonly string[],
-  heightsById: ReadonlyMap<string, number>,
-  fallbackHeight: number,
+  { heights, offsets }: SortableSlotMetrics,
 ): number {
-  const count = itemIds.length;
+  const count = heights.length;
   if (count <= 1 || activeIndex < 0 || activeIndex >= count) {
     return Math.max(0, Math.min(count - 1, activeIndex));
   }
 
-  const { heights, offsets } = computeSlotMetrics(itemIds, heightsById, fallbackHeight);
   const activeHeight = heights[activeIndex];
   const activeCenter = offsets[activeIndex] + activeHeight / 2 + dragDeltaY;
 

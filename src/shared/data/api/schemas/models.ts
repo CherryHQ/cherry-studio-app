@@ -149,7 +149,7 @@ export type ModelSchemas = {
       response: Model;
     };
   };
-  '/models/:uniqueModelId*/order': {
+  '/model-orders/:uniqueModelId*': {
     PATCH: {
       body: OrderRequest;
       params: { uniqueModelId: UniqueModelId };

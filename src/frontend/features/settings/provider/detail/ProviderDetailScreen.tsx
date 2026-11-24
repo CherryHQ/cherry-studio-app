@@ -308,7 +308,8 @@ function ProviderDetailSettings({
                 isFiltered={isModelListFiltered}
                 isLoading={allProviderModelsQuery.isPending}
                 isSearchActive={isModelSearchActive}
-                models={listedModels}
+                models={allProviderModels}
+                visibleModels={listedModels}
                 onAddModelManually={openModelAddSettings}
                 onPullModels={startModelSync}
                 provider={provider}

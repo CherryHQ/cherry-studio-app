@@ -10,6 +10,7 @@ import { View } from 'react-native';
 
 import { useReorder } from '@/frontend/data';
 import { dataApiCollectionFilters } from '@/frontend/data/utils/optimisticQueryUpdate';
+import { applySublistOrderToList } from '@/frontend/data/utils/reorder';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -31,6 +32,7 @@ type ProviderModelListProps = {
   supportedModelIds?: ReadonlySet<string>;
   management?: ReturnType<typeof useProviderModelManagement>;
   models: Model[];
+  visibleModels?: Model[];
   onAddModelManually?: () => void;
   onPullModels?: () => void;
   provider: Provider | undefined;
@@ -45,6 +47,7 @@ export function ProviderModelList({
   management,
   supportedModelIds,
   models,
+  visibleModels = models,
   onAddModelManually,
   onPullModels,
   provider,
@@ -59,9 +62,20 @@ export function ProviderModelList({
     queryFilters: [dataApiCollectionFilters('/models')],
     resource: '/models',
   });
+  const reorderVisibleModels = useCallback(
+    (ordered: readonly Model[]) => {
+      const next = applySublistOrderToList(
+        models,
+        ordered.map((model) => model.id),
+        (model) => model.id,
+      );
+      return reorder(models, next);
+    },
+    [models, reorder],
+  );
   const canReorder =
     Boolean(management) && !isSearchActive && !management?.isSelecting && !management?.isDeleting;
-  const hasNoVisibleModels = !isLoading && models.length === 0;
+  const hasNoVisibleModels = !isLoading && visibleModels.length === 0;
   const closeEndpointPicker = useCallback(() => setSelectedModel(undefined), []);
   const openEndpointPicker = useCallback((model: Model) => setSelectedModel(model), []);
   const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(
@@ -83,7 +97,7 @@ export function ProviderModelList({
         canReorder={canReorder}
         groupByPurpose={groupByPurpose}
         management={management}
-        onReorderModels={reorder}
+        onReorderModels={reorderVisibleModels}
         supportedModelIds={supportedModelIds}
         isEndpointSelectionDisabled={isEndpointSelectionDisabled}
         ListEmptyComponent={
@@ -121,7 +135,7 @@ export function ProviderModelList({
             </ProviderModelStateCard>
           )
         }
-        models={models}
+        models={visibleModels}
         onEndpointPress={openEndpointPicker}
         provider={provider}
         updatingModelId={updatingModelId}

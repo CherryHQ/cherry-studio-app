@@ -1,5 +1,7 @@
+import type { ModelService } from '@/backend/data/services/ModelService';
 import { ErrorCode } from '@/shared/data/api/errors';
 
+import { createModelHandlers } from '../api/handlers/models';
 import { publishDataApiChanges } from '../dataApiChanges';
 import { DataApiService } from '../DataApiService';
 
@@ -93,27 +95,20 @@ describe('DataApiService', () => {
     ).resolves.toEqual({ modelId: 'Kwai-Kolors/Kolors', providerId: 'silicon' });
   });
 
-  it('routes model order endpoints ahead of the greedy uniqueModelId wildcard', async () => {
-    const reorderSingle = jest.fn(async ({ params }) => params.uniqueModelId);
-    const reorderBatch = jest.fn(async ({ body }) => body);
-    const updateModel = jest.fn(async () => ({}));
-    const service = createService({
-      '/models/:uniqueModelId*': { PATCH: updateModel },
-      '/models/:uniqueModelId*/order': { PATCH: reorderSingle },
-      '/models/order:batch': { PATCH: reorderBatch },
+  it('keeps model updates ending in /order distinct from single and batch reorders', async () => {
+    const models = { update: jest.fn(), reorder: jest.fn(), reorderBatch: jest.fn() };
+    const handlers = createModelHandlers(models as unknown as ModelService, {
+      filter: async (items) => [...items],
     });
+    const service = new DataApiService(handlers as ConstructorParameters<typeof DataApiService>[0]);
 
-    await expect(
-      service.patch('/models/cherryin::openai/gpt-4o/order', { body: { position: 'first' } }),
-    ).resolves.toBe('cherryin::openai/gpt-4o');
-    expect(reorderSingle).toHaveBeenCalledTimes(1);
-    expect(updateModel).not.toHaveBeenCalled();
-
-    await service.patch('/models/order:batch', {
-      body: { moves: [{ id: 'cherryin::a', anchor: { position: 'last' } }] },
-    });
-    expect(reorderBatch).toHaveBeenCalledTimes(1);
-    expect(updateModel).not.toHaveBeenCalled();
+    await service.patch('/models/cherryin::team/order', { body: { name: 'Renamed' } });
+    expect(models.update).toHaveBeenCalledWith('cherryin', 'team/order', { name: 'Renamed' });
+    await service.patch('/model-orders/cherryin::team/order', { body: { position: 'first' } });
+    expect(models.reorder).toHaveBeenCalledWith('cherryin::team/order', { position: 'first' });
+    const moves = [{ id: 'cherryin::a', anchor: { position: 'last' as const } }];
+    await service.patch('/models/order:batch', { body: { moves } });
+    expect(models.reorderBatch).toHaveBeenCalledWith(moves);
   });
 
   it('distinguishes an unsupported method from an unknown route', async () => {

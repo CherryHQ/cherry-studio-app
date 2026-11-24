@@ -453,6 +453,7 @@ export class ProviderService {
             .orderBy(
               desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
               asc(userProviderTable.orderKey),
+              asc(userProviderTable.providerId),
             )
         : await this.db
             .select()
@@ -461,6 +462,7 @@ export class ProviderService {
             .orderBy(
               desc(eq(userProviderTable.providerId, CLOUD_PROVIDER_ID)),
               asc(userProviderTable.orderKey),
+              asc(userProviderTable.providerId),
             );
 
     return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
