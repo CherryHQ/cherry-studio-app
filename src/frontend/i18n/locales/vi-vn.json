@@ -834,6 +834,7 @@
   "cloud.remainingPercentShort": "Còn {{percent}}",
   "cloud.rollingDays_other": "Cửa sổ trượt {{days}} ngày",
   "cloud.rollingHours_other": "Cửa sổ trượt {{hours}} giờ",
+  "cloud.sessionExpired": "Phiên đăng nhập đã hết hạn",
   "cloud.subscription": "Đăng ký gói",
   "cloud.subscriptionMonth": "Hạn mức theo tháng đăng ký",
   "cloud.title": "Gói đăng ký và hạn mức",

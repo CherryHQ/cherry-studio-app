@@ -856,6 +856,7 @@
   "cloud.rollingHours_many": "Janela móvel de {{hours}} horas",
   "cloud.rollingHours_one": "Janela móvel de {{hours}} hora",
   "cloud.rollingHours_other": "Janela móvel de {{hours}} horas",
+  "cloud.sessionExpired": "Sessão expirada",
   "cloud.subscription": "Subscrição",
   "cloud.subscriptionMonth": "Quota do mês de subscrição",
   "cloud.title": "Subscrição e quota",

@@ -867,6 +867,7 @@
   "cloud.rollingHours_many": "Скользящее окно: {{hours}} ч",
   "cloud.rollingHours_one": "Скользящее окно: {{hours}} ч",
   "cloud.rollingHours_other": "Скользящее окно: {{hours}} ч",
+  "cloud.sessionExpired": "Сеанс истёк",
   "cloud.subscription": "Подписка",
   "cloud.subscriptionMonth": "Лимит на месяц подписки",
   "cloud.title": "Подписка и квота",
