@@ -1,20 +1,13 @@
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ComposerEditor } from '../components/composer-editor';
+import { ComposerEditor, useComposerEditorInput } from '../components/composer-editor';
 
-const mockTransitions: { duration: number; target: number }[] = [];
-const mockReactions: {
-  prepare: () => unknown;
-  react: (current: unknown, previous: unknown) => void;
-  last: unknown;
-  deps: unknown[];
-}[] = [];
+const mockTiming = jest.fn((target: number, _motion: object) => target);
 
 jest.mock('@cherrystudio/app-icons/icons/maximize-2', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/minimize-2', () => () => null);
-
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual('react-native');
@@ -24,34 +17,20 @@ jest.mock('react-native-reanimated', () => {
     Easing: { bezier: () => 'settle' },
     Extrapolation: { CLAMP: 'clamp' },
     ReduceMotion: { System: 'system' },
-    interpolate: (value: number, _input: number[], output: number[]) =>
-      output[0]! + (output[1]! - output[0]!) * value,
-    useAnimatedReaction: (
-      prepare: () => unknown,
-      react: (current: unknown, previous: unknown) => void,
-      deps: unknown[] = [],
-    ) => {
-      const entry = React.useRef({ prepare, react, last: null as unknown, deps }).current;
-      // Changed dependencies recreate the reaction, which then sees no previous value.
-      if (deps.some((dep, index) => dep !== entry.deps[index])) entry.last = null;
-      Object.assign(entry, { prepare, react, deps });
-      if (!mockReactions.includes(entry)) mockReactions.push(entry);
-    },
-    useAnimatedStyle: (factory: () => object) => factory(),
-    useSharedValue: (initial: unknown) =>
-      React.useRef({
-        current: initial,
-        get() {
-          return this.current;
+    interpolate: (value: number, _input: number[], [from, to]: [number, number]) =>
+      from + (to - from) * value,
+    useDerivedValue: (read: () => unknown) => ({ get: read }),
+    useAnimatedStyle: (read: () => object) => ({ read }),
+    useSharedValue: (initial: number) => {
+      const cell = React.useRef(initial);
+      return {
+        get: () => cell.current,
+        set: (next: number) => {
+          cell.current = next;
         },
-        set(next: unknown) {
-          this.current = next;
-        },
-      }).current,
-    withTiming: (target: number, config: { duration: number }) => {
-      mockTransitions.push({ duration: config.duration, target });
-      return target;
+      };
     },
+    withTiming: (target: number, motion: object) => mockTiming(target, motion),
   };
 });
 
@@ -60,101 +39,80 @@ jest.mock('../components/composer-expansion', () => ({
   useComposerExpansion: () => null,
 }));
 
-function signal(value: boolean) {
-  const cell = { current: value };
-  return Object.assign(cell, {
-    get: () => cell.current,
-    set: (next: boolean) => {
-      cell.current = next;
-    },
-  }) as unknown as SharedValue<boolean> & { current: boolean };
-}
-
-function flushReactions() {
-  for (const reaction of mockReactions) {
-    const current = reaction.prepare();
-    if (current !== reaction.last) {
-      reaction.react(current, reaction.last);
-      reaction.last = current;
-    }
-  }
-}
-
-function activeTargets() {
-  // Each shape change animates progress first, then the field frame.
-  return mockTransitions.filter((_, index) => index % 2 === 0).map(({ target }) => target);
+function Field() {
+  return <TextInput style={useComposerEditorInput()?.style} />;
 }
 
 describe('Composer.Editor', () => {
   let renderer: ReactTestRenderer;
-  const activeSignal = signal(false);
+  let visible: boolean;
+  const keyboard = { get: () => visible } as SharedValue<boolean>;
   const renderEditor = (active: boolean, restingTrailingActionCount = 1) => (
     <ComposerEditor
       active={active}
-      activeSignal={activeSignal}
+      activeSignal={keyboard}
       expandLabel="Expand"
-      field={<View />}
+      field={<Field />}
       restingTrailingActionCount={restingTrailingActionCount}
     />
   );
-
+  const fieldFrame = () =>
+    renderer.root
+      .findAllByType(View)
+      .map((view) => view.props.style?.read?.())
+      .find((style) => style?.left !== undefined && style?.right !== undefined);
   beforeEach(() => {
-    mockTransitions.length = 0;
-    mockReactions.length = 0;
-    activeSignal.current = false;
+    visible = false;
+    mockTiming.mockClear();
     act(() => {
       renderer = create(renderEditor(false));
     });
-    flushReactions();
   });
-
   afterEach(() => act(() => renderer.unmount()));
 
+  it('bounds the native text field to a single row only while compact', () => {
+    const nativeHeightLimit = () => renderer.root.findByType(TextInput).props.style?.maxHeight;
+    expect(nativeHeightLimit()).toBe(24);
+    act(() => renderer.update(renderEditor(true)));
+    expect(nativeHeightLimit()).toBeUndefined();
+    act(() => renderer.update(renderEditor(false)));
+    expect(nativeHeightLimit()).toBe(24);
+  });
+
   it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {
-    const fieldInsets = () =>
-      renderer.root
-        .findAllByType(View)
-        .map((view) => view.props.style)
-        .find((style) => typeof style?.left === 'number' && typeof style?.right === 'number');
-    expect(fieldInsets()).toMatchObject({ left: 40, right: 40 });
+    expect(fieldFrame()).toMatchObject({ left: 40, right: 40 });
     act(() => renderer.update(renderEditor(false, 2)));
-    expect(fieldInsets()).toMatchObject({ left: 40, right: 80 });
-    act(() => renderer.update(renderEditor(false)));
-    expect(fieldInsets()).toMatchObject({ left: 40, right: 40 });
+    expect(fieldFrame()).toMatchObject({ left: 40, right: 80 });
   });
 
-  it('starts the short shape change from the signal and ignores the later commit', () => {
-    activeSignal.set(true);
-    flushReactions();
-    expect(activeTargets()).toEqual([1]);
-    expect(mockTransitions[0]!.duration).toBe(90);
-
+  it('opens and closes from the keyboard even while React still renders the previous state', () => {
+    visible = true;
+    expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
     act(() => renderer.update(renderEditor(true)));
-    flushReactions();
-    expect(activeTargets()).toEqual([1]);
-
-    // The committed close collapses it while the keyboard signal is still raised.
-    act(() => renderer.update(renderEditor(false)));
-    flushReactions();
-    expect(activeTargets()).toEqual([1, 0]);
+    visible = false;
+    expect(fieldFrame()).toMatchObject({ left: 40, right: 40 });
+    visible = true;
+    expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
   });
 
-  it('keeps an editor that is still active when the signal drops', () => {
-    activeSignal.set(true);
-    flushReactions();
-    act(() => renderer.update(renderEditor(true)));
-    flushReactions();
-
-    activeSignal.set(false);
-    flushReactions();
-    expect(activeTargets()).toEqual([1]);
-  });
-
-  it('hands an uncommitted raise back to the inactive state', () => {
-    activeSignal.set(true);
-    flushReactions();
-    activeSignal.set(false);
-    flushReactions();
-    expect(activeTargets()).toEqual([1, 0]);
+  it('retargets wrapped text height on the settle curve and keeps a long draft one row when closed', () => {
+    const measure = (height: number) => {
+      const field = renderer.root.findAllByType(View).find((view) => view.props.onLayout);
+      act(() => field!.props.onLayout({ nativeEvent: { layout: { height } } }));
+    };
+    measure(130);
+    expect(fieldFrame().height).toBe(32);
+    visible = true;
+    expect(fieldFrame().height).toBe(130);
+    measure(80);
+    expect(fieldFrame().height).toBe(80);
+    expect(mockTiming).toHaveBeenCalledWith(80, {
+      duration: 90,
+      easing: 'settle',
+      reduceMotion: 'system',
+    });
+    visible = false;
+    measure(130);
+    expect(fieldFrame().height).toBe(32);
   });
 });

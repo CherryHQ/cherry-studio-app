@@ -960,8 +960,8 @@ while editing changes. The existing leading `compactAccessory` remains independe
 `Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
 The isolated frame changes shape on a 90ms settle, deliberately shorter than the keyboard: it
 finishes early in the keyboard's travel, so content behind the dock moves once with a small early
-growth instead of following two overlapping motions. An optional `activeSignal` raises `active` on
-the UI thread, letting the shape start inside the keyboard's first frame. The motion stays
+growth instead of following two overlapping motions. An optional `activeSignal` supplies both animation targets on
+the UI thread. The `active` prop then mirrors that signal for hit testing and accessibility. The motion stays
 interruptible, respects system Reduce Motion, and never fades ancestors of native glass controls.
 
 For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height

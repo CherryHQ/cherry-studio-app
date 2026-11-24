@@ -20,7 +20,8 @@ export function ComposerEditor({
   submitOnReturn,
   testID,
 }: PropsWithChildren<{
-  active: boolean;
+  /** Overrides the field keyboard policy for the painting workspace. */
+  active?: boolean;
   attachmentMode?: 'images' | 'text-only';
   compactAccessory?: ReactNode;
   fieldStyle?: StyleProp<TextStyle>;
@@ -32,12 +33,11 @@ export function ComposerEditor({
   testID: string;
 }>) {
   const { t } = useTranslation();
-  // Set inside this field's keyboard start, so the editor changes shape with the keyboard.
-  const { keyboardTracking } = useComposerPresentationState();
+  const { isEditing, keyboardVisible } = useComposerPresentationState();
   return (
     <Composer.Editor
-      active={active}
-      activeSignal={keyboardTracking}
+      active={active ?? isEditing}
+      activeSignal={active === undefined ? keyboardVisible : undefined}
       compactAccessory={compactAccessory}
       expandLabel={t('chat.input.action.expandEditor')}
       field={

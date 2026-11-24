@@ -1,9 +1,5 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import {
-  Composer,
-  type ComposerInputProps,
-  useComposerExpansion,
-} from '@cherrystudio/ui/components';
+import { Composer, type ComposerInputProps } from '@cherrystudio/ui/components';
 import { type ComponentProps, type PropsWithChildren, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type StyleProp, type TextStyle, View } from 'react-native';
@@ -126,8 +122,6 @@ function ChatInputLayout({
   const submit = useComposerSubmit();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
-  const isExpanded = useComposerExpansion()?.state.isExpanded ?? false;
-  const active = isEditing || isExpanded || draft.length > 0 || attachments.length > 0;
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   const send = (
     <Composer.Send
@@ -146,7 +140,6 @@ function ChatInputLayout({
   return (
     <ComposerEditor
       restingTrailingActionCount={1}
-      active={active}
       attachmentMode={attachmentMode}
       fieldStyle={fieldStyle}
       onLinkPress={onLinkPress}

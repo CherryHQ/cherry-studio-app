@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
 } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, {
@@ -15,15 +16,19 @@ import Animated, {
   interpolate,
   ReduceMotion,
   type SharedValue,
-  useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
 import { easing } from '../../../motion';
 import type { ComposerInputProps } from '../composer.types';
-import { composerActionSize, COMPOSER_MAX_TEXT_HEIGHT } from '../utils/composer-layout';
+import {
+  compactTextInputBoxStyle,
+  composerActionSize,
+  COMPOSER_MAX_TEXT_HEIGHT,
+} from '../utils/composer-layout';
 import { ComposerExpansionMeasure, useComposerExpansion } from './composer-expansion';
 
 const restingInputHeight = composerActionSize;
@@ -64,8 +69,8 @@ export function ComposerEditor({
 }: PropsWithChildren<{
   active: boolean;
   /**
-   * Raises `active` on the UI thread before React commits, so the shape change starts with the
-   * keyboard rather than a render later. Deactivation still follows `active`.
+   * UI-thread source of the same state as `active`. When supplied, it drives both
+   * directions while React uses `active` for controls and accessibility.
    */
   activeSignal?: SharedValue<boolean>;
   /** One action-sized preview beside the resting field; its presence never activates editing. */
@@ -79,10 +84,22 @@ export function ComposerEditor({
   const expansion = useComposerExpansion();
   const isExpanded = expansion?.state.isExpanded ?? false;
   const isInputActive = active || isExpanded;
+  const lastMeasuredHeight = useRef(restingInputHeight);
   const naturalFieldHeight = useSharedValue(restingInputHeight);
-  const morphTarget = useSharedValue(isInputActive);
-  const activeProgress = useSharedValue(isInputActive ? 1 : 0);
-  const fieldFrameHeight = useSharedValue(restingInputHeight);
+  const activation = activeSignal ?? active;
+  const editingTarget = useDerivedValue(
+    () => isExpanded || (typeof activation === 'boolean' ? activation : activation.get()),
+  );
+  const activeProgress = useDerivedValue<number>(() =>
+    withTiming(editingTarget.get() ? 1 : 0, activeTransitionMotion),
+  );
+  // A rewrap during the width morph retargets the current height animation.
+  const fieldFrameHeight = useDerivedValue(() =>
+    withTiming(
+      editingTarget.get() ? naturalFieldHeight.get() : restingInputHeight,
+      activeTransitionMotion,
+    ),
+  );
   const expansionHeight = expansion?.meta.extraHeight;
   const collapseEditor = expansion?.actions.collapse;
   const canExpand = expansion !== null;
@@ -96,31 +113,6 @@ export function ComposerEditor({
   );
 
   useEffect(() => () => collapseEditor?.(), [collapseEditor]);
-
-  // The top grows away from the anchored toolbar. Whichever of the signal and the
-  // committed state arrives first starts the motion; the other finds it running.
-  const morphTo = useCallback(
-    (target: boolean) => {
-      'worklet';
-      if (morphTarget.get() === target) return;
-      morphTarget.set(target);
-      activeProgress.set(withTiming(target ? 1 : 0, activeTransitionMotion));
-      fieldFrameHeight.set(
-        withTiming(target ? naturalFieldHeight.get() : restingInputHeight, activeTransitionMotion),
-      );
-    },
-    [activeProgress, fieldFrameHeight, morphTarget, naturalFieldHeight],
-  );
-  useEffect(() => morphTo(isInputActive), [isInputActive, morphTo]);
-  useAnimatedReaction(
-    () => activeSignal?.get() ?? false,
-    (raised, previous) => {
-      // Only the signal's own changes move the shape: a commit that recreates this
-      // reaction must not re-expand an editor the committed state just closed.
-      if (previous !== null && raised !== previous) morphTo(raised || isInputActive);
-    },
-    [activeSignal, isInputActive, morphTo],
-  );
 
   const morphFrameStyle = useAnimatedStyle(() => ({
     height:
@@ -159,15 +151,15 @@ export function ComposerEditor({
         restingInputHeight,
         Math.min(COMPOSER_MAX_TEXT_HEIGHT, Math.ceil(event.nativeEvent.layout.height)),
       );
-      const previousHeight = naturalFieldHeight.get();
+      const previousHeight = lastMeasuredHeight.current;
       if (previousHeight === nextHeight) return;
       if (expansion?.state.isPresented) {
         expansion.actions.resizeContent(nextHeight - previousHeight);
       }
+      lastMeasuredHeight.current = nextHeight;
       naturalFieldHeight.set(nextHeight);
-      if (isInputActive) fieldFrameHeight.set(nextHeight);
     },
-    [expansion, fieldFrameHeight, isInputActive, naturalFieldHeight],
+    [expansion, naturalFieldHeight],
   );
 
   return (
@@ -225,9 +217,10 @@ export function useComposerEditorInput(): Pick<ComposerInputProps, 'layout' | 's
   const context = use(EditorContext);
   if (!context) return null;
   const { active, isExpanded, canExpand } = context.state;
+  if (!active) return { layout: 'content', style: compactTextInputBoxStyle };
   return {
     layout: isExpanded ? 'fill' : 'content',
-    style: !isExpanded && active && canExpand ? fieldActionInsetStyle : undefined,
+    style: !isExpanded && canExpand ? fieldActionInsetStyle : undefined,
   };
 }
 
