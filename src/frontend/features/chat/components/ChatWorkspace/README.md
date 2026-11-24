@@ -149,3 +149,18 @@ Selecting a previously translated language restores a matching result without an
 Reopening the Session displays the most recently generated language in a folded state. The current
 language and disclosure state belong to the open screen. Translation never adds a turn or changes
 original-message copy, usage statistics or model history.
+
+### Assistant toolbar customization
+
+`ChatMessageActionsProvider` reads `ui.chat.assistant_toolbar_actions` once for both local and
+remote conversations and shares the normalized configuration through its state context. The
+preference is included in backups and inherited by new profiles. Message rows render configured
+pinned and overflow actions in order, preserving message-specific availability and disabled states;
+unavailable pinned actions leave their slot unused rather than promoting overflow actions.
+
+The overflow menu always ends with a separate **Manage** action. It opens the provider's single
+`AssistantToolbarManageSheet`, which previews the toolbar and uses CherryUI `Sortable` for
+within-section ordering. Pin/unpin and reorder changes persist immediately with optimistic
+preference updates; failed writes use the preference client's rollback and show a danger toast.
+There is no Save button. At most five actions can be pinned, and Delete stays locked at the end
+of the overflow actions, before Manage.

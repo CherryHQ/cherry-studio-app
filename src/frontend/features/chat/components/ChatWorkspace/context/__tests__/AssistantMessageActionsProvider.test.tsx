@@ -1,9 +1,14 @@
 import { createRef, type Ref, useImperativeHandle } from 'react';
+import { Keyboard } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { OperationOutcome } from '@/frontend/appShell/conversation';
 import { localConversationFailure } from '@/frontend/appShell/conversation/local/localConversationFailure';
 import { AgentProtocolError, type AgentErrorView } from '@/shared/contracts/agent';
+import {
+  DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+  type AssistantMessageToolbarConfig,
+} from '@/shared/data/types/assistantMessageToolbar';
 
 import {
   ChatShareSelectionStoreContext,
@@ -196,6 +201,8 @@ describe('AssistantMessageActionsProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockToolbarConfig = DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG;
+    mockSetToolbarConfig.mockResolvedValue(undefined);
     jest.useFakeTimers();
     mockSourceTitle = 'Arithmetic drills';
     mockQuestionEnabled = true;
@@ -216,6 +223,59 @@ describe('AssistantMessageActionsProvider', () => {
     });
   }
 
+  test('reads toolbar preferences once per provider and shares normalized state', () => {
+    mockToolbarConfig = { pinned: ['share'], overflow: ['copy', 'delete'] };
+    renderProvider();
+    expect(mockUsePreference).toHaveBeenCalledTimes(1);
+    expect(mockUsePreference).toHaveBeenCalledWith('ui.chat.assistant_toolbar_actions');
+    expect(probeRef.current!.state.toolbarConfig.pinned).toEqual(['share']);
+    expect(probeRef.current!.state.toolbarConfig.overflow).toEqual([
+      'copy',
+      'readAloud',
+      'retry',
+      'answerWith',
+      'fork',
+      'edit',
+      'translate',
+      'delete',
+    ]);
+  });
+
+  test('mounts the manager on demand and unmounts only after it finishes closing', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    renderProvider();
+    expect(renderer!.root.findAllByType('AssistantToolbarManageSheet')).toHaveLength(0);
+    act(() => probeRef.current!.actions.openToolbarManager());
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByType('AssistantToolbarManageSheet').props.open).toBe(true);
+    act(() => renderer!.root.findByType('AssistantToolbarManageSheet').props.onClose());
+    expect(renderer!.root.findByType('AssistantToolbarManageSheet').props.open).toBe(false);
+    act(() => renderer!.root.findByType('AssistantToolbarManageSheet').props.onClosed());
+    expect(renderer!.root.findAllByType('AssistantToolbarManageSheet')).toHaveLength(0);
+    act(() => probeRef.current!.actions.openToolbarManager());
+    expect(renderer!.root.findByType('AssistantToolbarManageSheet').props.open).toBe(true);
+    dismiss.mockRestore();
+  });
+
+  test('persists manager changes immediately and reports rejected writes', async () => {
+    renderProvider();
+    act(() => probeRef.current!.actions.openToolbarManager());
+    const next = {
+      pinned: ['share'],
+      overflow: ['copy', 'readAloud', 'retry', 'answerWith', 'fork', 'edit', 'translate', 'delete'],
+    } satisfies AssistantMessageToolbarConfig;
+    const sheet = renderer!.root.findByType('AssistantToolbarManageSheet');
+    await act(async () => sheet.props.onChange(next));
+    expect(mockSetToolbarConfig).toHaveBeenCalledWith(next, { optimistic: true });
+    expect(mockToastShow).not.toHaveBeenCalled();
+    mockSetToolbarConfig.mockRejectedValueOnce(new Error('write failed'));
+    await act(async () => sheet.props.onChange(next));
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'common.reorderFailed',
+      variant: 'danger',
+    });
+  });
+
   it('keeps question and answer editability separate', () => {
     mockQuestionEnabled = false;
     renderProvider();
@@ -230,13 +290,13 @@ describe('AssistantMessageActionsProvider', () => {
     expect(probeRef.current!.state.isEditAnswerDisabled).toBe(true);
   });
 
-  function startCopy(messageId: string, text: string) {
-    act(() => probeRef.current?.actions.copyAssistantMessage({ messageId, text }));
+  function startCopy(messageId: string, text: string, notifySuccess?: boolean) {
+    act(() => probeRef.current?.actions.copyAssistantMessage({ messageId, text, notifySuccess }));
   }
 
-  async function copyAndFlush(messageId: string, text: string) {
+  async function copyAndFlush(messageId: string, text: string, notifySuccess?: boolean) {
     await act(async () => {
-      probeRef.current?.actions.copyAssistantMessage({ messageId, text });
+      probeRef.current?.actions.copyAssistantMessage({ messageId, text, notifySuccess });
       await Promise.resolve();
     });
   }
@@ -361,8 +421,13 @@ describe('AssistantMessageActionsProvider', () => {
       );
     });
     expect(probeRef.current!.state.isAssistantToolbarEnabled).toBe(true);
+    act(() => probeRef.current!.actions.openToolbarManager());
+    expect(renderer!.root.findByType('AssistantToolbarManageSheet').props.open).toBe(true);
 
     act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-1' }));
+    expect(renderer!.root.findByType('AssistantToolbarManageSheet').props.open).toBe(false);
+    act(() => renderer!.root.findByType('AssistantToolbarManageSheet').props.onClosed());
+    expect(renderer!.root.findAllByType('AssistantToolbarManageSheet')).toHaveLength(0);
     expect(probeRef.current!.state).toMatchObject({
       isAssistantToolbarEnabled: false,
       isDeleteDisabled: true,
@@ -379,6 +444,7 @@ describe('AssistantMessageActionsProvider', () => {
       isDeleteDisabled: false,
       isRetryDisabled: false,
     });
+    expect(renderer!.root.findAllByType('AssistantToolbarManageSheet')).toHaveLength(0);
 
     act(() => probeRef.current!.actions.shareAssistantMessage({ messageId: 'answer-2' }));
     expect(mockShare).toHaveBeenCalledTimes(2);
@@ -393,25 +459,61 @@ describe('AssistantMessageActionsProvider', () => {
 
     expect(mockSetStringAsync).toHaveBeenCalledWith('Answer');
     expect(probeRef.current?.state.copiedMessageId).toBe('assistant-1');
+    expect(mockToastShow).not.toHaveBeenCalled();
 
     act(() => jest.advanceTimersByTime(1_200));
 
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
   });
 
-  test('routes copy failures to logging and user feedback', async () => {
-    const error = new Error('copy failed');
-    mockSetStringAsync.mockRejectedValueOnce(error);
+  test('confirms overflow copy only after the clipboard write succeeds', async () => {
+    const clipboardWrite = createDeferred<void>();
+    mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
     renderProvider();
 
-    await copyAndFlush('assistant-1', 'Answer');
+    startCopy('assistant-1', 'Answer', true);
+    expect(mockToastShow).not.toHaveBeenCalled();
+    expect(probeRef.current!.state.copiedMessageId).toBeUndefined();
+    await act(async () => clipboardWrite.resolve());
 
-    expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
+    expect(probeRef.current!.state.copiedMessageId).toBe('assistant-1');
+    expect(mockToastShow).toHaveBeenCalledTimes(1);
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'chat.messageActions.copyFailed',
-      variant: 'danger',
+      label: 'chat.messageActions.copied',
+      variant: 'success',
     });
   });
+
+  test('ignores stale overflow copy success after a newer copy completes', async () => {
+    const clipboardWrite = createDeferred<void>();
+    mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
+    renderProvider();
+
+    startCopy('assistant-1', 'First', true);
+    await copyAndFlush('assistant-2', 'Second');
+    await act(async () => clipboardWrite.resolve());
+
+    expect(probeRef.current!.state.copiedMessageId).toBe('assistant-2');
+    expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  test.each([undefined, true])(
+    'routes copy failures to logging and user feedback (notifySuccess=%p)',
+    async (notifySuccess) => {
+      const error = new Error('copy failed');
+      mockSetStringAsync.mockRejectedValueOnce(error);
+      renderProvider();
+
+      await copyAndFlush('assistant-1', 'Answer', notifySuccess);
+
+      expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
+      expect(mockToastShow).toHaveBeenCalledWith({
+        label: 'chat.messageActions.copyFailed',
+        variant: 'danger',
+      });
+      expect(mockToastShow).toHaveBeenCalledTimes(1);
+    },
+  );
 
   test('routes fork failures to logging and user feedback', async () => {
     const error = new Error('fork failed');
@@ -505,7 +607,7 @@ describe('AssistantMessageActionsProvider', () => {
     mockSetStringAsync.mockReturnValueOnce(firstClipboardWrite.promise);
     renderProvider();
 
-    startCopy('assistant-1', 'First');
+    startCopy('assistant-1', 'First', true);
     await copyAndFlush('assistant-2', 'Second');
     await act(async () => firstClipboardWrite.reject(error));
 
@@ -518,7 +620,7 @@ describe('AssistantMessageActionsProvider', () => {
     mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
     renderProvider();
 
-    startCopy('assistant-1', 'Answer');
+    startCopy('assistant-1', 'Answer', true);
     unmountProvider();
     const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
     setTimeoutSpy.mockClear();
@@ -555,3 +657,17 @@ describe('AssistantMessageActionsProvider', () => {
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
   });
 });
+
+let mockToolbarConfig: AssistantMessageToolbarConfig;
+const mockSetToolbarConfig = jest.fn(
+  async (_value: AssistantMessageToolbarConfig, _options: unknown) => undefined,
+);
+const mockUsePreference = jest.fn((_key: string) => [mockToolbarConfig, mockSetToolbarConfig]);
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: (key: string) => mockUsePreference(key),
+}));
+
+jest.mock('../../components/AssistantToolbarManageSheet', () => ({
+  AssistantToolbarManageSheet: (props: object) =>
+    jest.requireActual('react').createElement('AssistantToolbarManageSheet', props),
+}));

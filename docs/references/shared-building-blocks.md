@@ -12,6 +12,7 @@ it already exists.
 
 | Need | Owner |
 | --- | --- |
+| Pure within-array reordering | `reorderLocally` in `src/shared/utils/reorder.ts`; the frontend `data/utils/reorder.ts` entry re-exports it alongside query-cache ordering helpers |
 | Installed-package updates | `appUpdate` in `src/backend/services/appUpdate`; app-shell `appUpdate` owns the update dialog, cold-start offer and entry state |
 | Egress region for provider discovery, recommendations and distribution | `RegionService` in `src/backend/services/region`; Config Service `POST /v1/resolve` lookup independent of data-collection consent, ten-minute success cache and explicit unknown-region result |
 | Provider discovery and first-install recommendation edition | `getProviderCatalogEdition` in `src/backend/services/providers/providerCatalogEdition.ts`; all distributions prefer detected egress region, then device region, retaining the domestic default only when both are unavailable |

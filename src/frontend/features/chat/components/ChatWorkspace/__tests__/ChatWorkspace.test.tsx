@@ -13,6 +13,17 @@ import {
 import type { PendingChatSend } from '../../../runtime/ChatProvider';
 import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [
+    jest.requireActual('@/shared/data/types/assistantMessageToolbar')
+      .DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+    jest.fn(),
+  ],
+}));
+jest.mock('../components/AssistantToolbarManageSheet', () => ({
+  AssistantToolbarManageSheet: () => null,
+}));
+
 jest.mock('../../../hooks/useMessageCitationSources', () => ({
   useMessageCitationSources: (messages: readonly ConversationMessage[]) => messages,
 }));

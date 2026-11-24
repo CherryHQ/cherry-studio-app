@@ -2,6 +2,10 @@ import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
 import { LOCAL_PROFILE, setActiveProfile } from '@/shared/data/activeProfile';
 import { ENTERPRISE_DEFAULT_MODEL_KEYS, PreferenceDefaults } from '@/shared/data/preference';
+import {
+  DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG as toolbarDefaults,
+  unpinAssistantToolbarAction,
+} from '@/shared/data/types/assistantMessageToolbar';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   DEFAULT_PREFERENCE_SCOPE: 'default',
@@ -353,4 +357,61 @@ test('rolls the model-tools subscription back after a failed save', async () => 
   expect(observed).toEqual(['disabled', 'fallback']);
   expect(service.readCached(key)).toBe('fallback');
   expect(db.rows.get(key)?.value).toBe('fallback');
+});
+
+test('normalizes stored toolbar configuration into a stable cached snapshot without rewriting storage', async () => {
+  const key = 'ui.chat.assistant_toolbar_actions';
+  const raw = { pinned: ['delete', 'copy', 'copy'], overflow: ['share', 'delete'] };
+  const db = createFakeDbService([{ key, value: raw }]);
+  const service = new PreferenceService(db);
+  await service._doInit();
+  expect(service.getAll()[key]).toEqual({
+    pinned: ['copy'],
+    overflow: ['share', 'readAloud', 'retry', 'answerWith', 'fork', 'edit', 'translate', 'delete'],
+  });
+  const normalized = service.getCachedValue(key);
+  expect(normalized).toEqual({
+    pinned: ['copy'],
+    overflow: ['share', 'readAloud', 'retry', 'answerWith', 'fork', 'edit', 'translate', 'delete'],
+  });
+  expect(service.getCachedValue(key)).toBe(normalized);
+  expect(await service.get(key)).toBe(normalized);
+  expect(db.rows.get(key)?.value).toEqual(raw);
+  expect(db.writeCount).toBe(0);
+});
+
+test('compares nested toolbar arrays by value and persists order changes across initialization', async () => {
+  const key = 'ui.chat.assistant_toolbar_actions';
+  const db = createFakeDbService();
+  const service = new PreferenceService(db);
+  await service._doInit();
+  const listener = jest.fn();
+  service.subscribeChange(key)(listener);
+  await service.setMultiple({
+    [key]: { pinned: [...toolbarDefaults.pinned], overflow: [...toolbarDefaults.overflow] },
+  });
+  expect(db.writeCount).toBe(0);
+  expect(listener).not.toHaveBeenCalled();
+  const changed = unpinAssistantToolbarAction(toolbarDefaults, 'copy');
+  await service.setMultiple({ [key]: changed });
+  expect(db.writeCount).toBe(1);
+  expect(listener).toHaveBeenCalledTimes(1);
+  const reloaded = new PreferenceService(db);
+  await reloaded._doInit();
+  expect(reloaded.readCached(key)).toEqual(changed);
+});
+
+test('rolls optimistic toolbar edits back after a failed write', async () => {
+  const key = 'ui.chat.assistant_toolbar_actions';
+  const db = createFakeDbService();
+  const service = new PreferenceService(db);
+  await service._doInit();
+  const observed: unknown[] = [];
+  service.subscribeChange(key)(() => observed.push(service.readCached(key)));
+  db.failNextWrite = true;
+  const changed = unpinAssistantToolbarAction(toolbarDefaults, 'copy');
+  await expect(service.set(key, changed, { optimistic: true })).rejects.toThrow('write failed');
+  expect(observed).toEqual([changed, toolbarDefaults]);
+  expect(service.readCached(key)).toBe(toolbarDefaults);
+  expect(db.rows.has(key)).toBe(false);
 });
