@@ -1650,7 +1650,7 @@ export async function recoverPendingIosBuild({
   const updatedManifest = {
     ...manifest,
     sentry: {
-      ...(manifest.sentry ?? {}),
+      ...manifest.sentry,
       autoUpload: true,
       verified: true,
       symbolPackageComplete: true,
