@@ -9,6 +9,7 @@ import {
 } from 'axios';
 
 import type {
+  HttpCallerMetadata,
   HttpClient,
   HttpErrorDecoder,
   HttpHeaders,
@@ -42,7 +43,7 @@ const HTTP_METHODS = new Set<HttpMethod>([
 ]);
 const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'arraybuffer']);
 
-export interface CreateHttpClientOptions {
+export interface CreateHttpClientOptions extends HttpCallerMetadata {
   baseUrl: string;
   errorDecoder?: HttpErrorDecoder;
   headers?: HttpHeaders;
@@ -52,7 +53,7 @@ export interface CreateHttpClientOptions {
   timeoutMs?: number;
 }
 
-interface HttpRoute {
+interface HttpRoute extends HttpCallerMetadata {
   readonly baseUrl: string;
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers: HttpHeaders;
@@ -214,6 +215,10 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
     error,
     context?.request.errorDecoder ?? context?.route.errorDecoder,
     context?.request.logPath,
+    context && {
+      serviceName: context.request.serviceName ?? context.route.serviceName,
+      operation: context.request.operation ?? context.route.operation,
+    },
   );
 
   if (!context) {
@@ -234,7 +239,10 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
             kind: 'internal',
           });
     } catch (interceptorError) {
-      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath);
+      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath, {
+        serviceName: context.request.serviceName ?? context.route.serviceName,
+        operation: context.request.operation ?? context.route.operation,
+      });
     }
   }
 
@@ -389,6 +397,8 @@ function createHttpClientWithTransport(
 
   const route: HttpRoute = Object.freeze({
     baseUrl: options.baseUrl,
+    serviceName: options.serviceName,
+    operation: options.operation,
     errorDecoder: options.errorDecoder,
     headers: Object.freeze({ ...options.headers }),
     interceptors: Object.freeze([...(options.interceptors ?? [])]),
@@ -434,6 +444,10 @@ function createHttpClientWithTransport(
           error,
           routedRequest.errorDecoder ?? route.errorDecoder,
           routedRequest.logPath,
+          {
+            serviceName: routedRequest.serviceName ?? route.serviceName,
+            operation: routedRequest.operation ?? route.operation,
+          },
         );
       }
     },

@@ -198,7 +198,12 @@ export class CloudRuntime extends BaseService implements CloudModule {
       const headers = await cloudClientSignatureHeaders('GET', path, '');
       signal.throwIfAborted();
       if (!headers['X-Signature']) throw new CloudAccessError('unavailable');
-      const http = createHttpClient({ baseUrl: origin, timeoutMs: 20_000 });
+      const http = createHttpClient({
+        serviceName: 'CloudRuntime',
+        operation: 'cloud.guestCatalog',
+        baseUrl: origin,
+        timeoutMs: 20_000,
+      });
       const { data } = await http.request({
         method: 'GET',
         path,

@@ -62,7 +62,7 @@ const noSubscription = () => () => {};
  * tests. The defaults make unsupported platforms a no-op capability.
  */
 @Injectable('BackgroundActivityEnvironment')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 export class BackgroundActivityEnvironment extends BaseService {
   private config: BackgroundActivityEnvironmentConfig = defaultConfig();
   private readonly actionListeners = new Set<

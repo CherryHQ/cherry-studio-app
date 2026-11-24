@@ -3,6 +3,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 
+import { isHttpError } from '@/backend/services/http';
 import type { NetworkRegion } from '@/backend/services/region';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
@@ -12,7 +13,7 @@ import type {
 } from '@/shared/contracts/appUpdate';
 
 import { getNativeAppStoreUpdate, getNativeAppUpdate } from '../../../../modules/app-update';
-import { assertApkRelease, checkApkRelease } from './apkRelease';
+import { type ApkReleaseSource, assertApkRelease, checkApkRelease } from './apkRelease';
 import { checkAppStoreRelease } from './appStoreRelease';
 import { resolveAppUpdateChannel } from './appUpdateChannel';
 import { createApkDownload } from './createApkDownload';
@@ -20,6 +21,8 @@ import { checkNativeDomesticStoreRelease } from './nativeDomesticStoreRelease';
 import { readReleaseNotes } from './releaseNotes';
 import { parseReleaseVersion } from './releaseVersion';
 import { runningUpdate } from './runningUpdate';
+
+const CHECK_FAILURE_COOLDOWN_MS = 15 * 60 * 1000;
 
 export function createAppUpdateModule(dependencies: {
   getRegion(): Promise<NetworkRegion | null>;
@@ -43,6 +46,7 @@ export function createAppUpdateModule(dependencies: {
     }
   }
   let installation: ReturnType<AppUpdateModule['install']> | undefined;
+  let failedCheck: { error: unknown; retryAt: number } | undefined;
 
   function requireApk() {
     if (lifetime.signal.aborted || channel !== 'apk')
@@ -51,6 +55,29 @@ export function createAppUpdateModule(dependencies: {
     if (!native?.isApkInstallationEnabled())
       throw new Error('APK installation native module is unavailable');
     return native;
+  }
+
+  async function checkApk(
+    currentVersion: string,
+    source: ApkReleaseSource,
+    signal?: AbortSignal,
+  ): Promise<AppUpdateResult> {
+    signal?.throwIfAborted();
+    if (failedCheck && Date.now() < failedCheck.retryAt) throw failedCheck.error;
+    try {
+      const result = await checkApkRelease(currentVersion, source, signal);
+      failedCheck = undefined;
+      return result;
+    } catch (error) {
+      if (
+        !signal?.aborted &&
+        !lifetime.signal.aborted &&
+        !(isHttpError(error) && error.kind === 'cancelled')
+      ) {
+        failedCheck = { error, retryAt: Date.now() + CHECK_FAILURE_COOLDOWN_MS };
+      }
+      throw error;
+    }
   }
 
   return {
@@ -70,7 +97,7 @@ export function createAppUpdateModule(dependencies: {
         const region = await dependencies.getRegion();
         signal?.throwIfAborted();
         if (lifetime.signal.aborted) return { status: 'unavailable', reason: 'unsupported' };
-        const result = await checkApkRelease(
+        const result = await checkApk(
           currentVersion,
           region === 'GLOBAL' ? 'github' : 'gitcode',
           signal,
@@ -86,7 +113,7 @@ export function createAppUpdateModule(dependencies: {
         try {
           let result: AppUpdateResult;
           if (store === 'oppo') {
-            const release = await checkApkRelease(currentVersion, 'gitcode', linked.signal);
+            const release = await checkApk(currentVersion, 'gitcode', linked.signal);
             result =
               release.status === 'available'
                 ? {

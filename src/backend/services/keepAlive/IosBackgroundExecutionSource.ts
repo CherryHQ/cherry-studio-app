@@ -41,7 +41,7 @@ let nextTaskId = 0;
 
 /** Foreground user tasks prefer continued processing; consented audio is fallback only. */
 @Injectable('IosBackgroundExecutionSource')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 @DependsOn(['PreferenceService'])
 @AppStatePolicy('background-presentation')
 export class IosBackgroundExecutionSource extends BaseService implements KeepAliveSource {

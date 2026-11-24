@@ -64,7 +64,7 @@ export type KeepAliveSource = {
  * when staying alive is warranted.
  */
 @Injectable('KeepAliveCoordinator')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 @DependsOn(['IosBackgroundExecutionSource', 'AndroidBackgroundActivityRuntime'])
 @AppStatePolicy('not-applicable')
 export class KeepAliveCoordinator extends BaseService implements BackgroundExecutionModule {

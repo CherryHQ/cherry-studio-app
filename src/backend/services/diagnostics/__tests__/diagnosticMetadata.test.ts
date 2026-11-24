@@ -678,3 +678,31 @@ test('projects repetition counts and times without accepting payload fields or i
     })?.repetition,
   ).toBeUndefined();
 });
+
+test('retains static HTTP caller facts through persistence and export while dropping request data', () => {
+  const persisted = projectDiagnosticLog(
+    createLogRecord('warn', 'HTTP request failed.', 'HttpTransport', {}, [
+      {
+        status: 429,
+        code: 'ERR_BAD_REQUEST',
+        serviceName: 'ProviderRegistryUpdaterService',
+        operation: 'registry.manifest',
+        method: 'GET',
+        url: 'https://example.com?token=secret',
+        message: 'private upstream response',
+        headers: { authorization: 'Bearer secret' },
+      },
+    ]),
+  );
+  expect(persisted?.facts).toEqual({
+    status: 429,
+    code: 'ERR_BAD_REQUEST',
+    'error.code': 'ERR_BAD_REQUEST',
+    'http.status_code': 429,
+    serviceName: 'ProviderRegistryUpdaterService',
+    operation: 'registry.manifest',
+  });
+  const exported = projectDiagnosticLog(JSON.parse(JSON.stringify(persisted)));
+  expect(exported).toEqual(persisted);
+  expect(JSON.stringify(exported)).not.toMatch(/secret|private|https|authorization|method/);
+});

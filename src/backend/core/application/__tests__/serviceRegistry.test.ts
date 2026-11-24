@@ -91,6 +91,26 @@ describe('service registry', () => {
     },
   );
 
+  test('declares the complete startup gate without phase promotions', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const nodes = [
+      ...container.buildDependencyGraph(Phase.Gate),
+      ...container.buildDependencyGraph(Phase.PostReady),
+    ];
+    expect(new DependencyResolver().hoistGateDependencies(nodes)).toEqual([]);
+    for (const name of [
+      'BackgroundReplyRuntime',
+      'KeepAliveCoordinator',
+      'BackgroundActivityEnvironment',
+      'AndroidBackgroundActivityRuntime',
+      'BackgroundActivityManager',
+      'IosBackgroundExecutionSource',
+    ] as const) {
+      expect(getPhase(services[name])).toBe(Phase.Gate);
+    }
+  });
+
   test('initializes conversation protection before desktop routes can recover active execution', () => {
     const container = new ServiceContainer();
     container.registerAll(serviceList);

@@ -102,8 +102,7 @@ beforeEach(() => {
   mockUpdate.check.mockReset().mockResolvedValue({ status: 'available', ...latestRelease });
   mockUpdate.getDownload.mockReturnValue({ status: 'idle' });
   mockUpdate.install.mockResolvedValue('opened');
-  // Keep the app's query/deduplication behavior while making error retries immediate.
-  queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+  queryClient = new QueryClient();
   act(() => {
     renderer = create(tree());
   });
@@ -248,10 +247,7 @@ test('concurrent manual checks share one request and one dialog even across prov
 });
 
 test('a failed manual check releases its guard so a later attempt can succeed', async () => {
-  // App update queries retry once, so fail both attempts.
-  mockUpdate.check
-    .mockRejectedValueOnce(new Error('Offline'))
-    .mockRejectedValueOnce(new Error('Offline'));
+  mockUpdate.check.mockRejectedValueOnce(new Error('Offline'));
 
   await act(async () => actions.check());
 
@@ -259,6 +255,7 @@ test('a failed manual check releases its guard so a later attempt can succeed', 
   expect(mockToast.show).toHaveBeenLastCalledWith({ label: 'appUpdate.failed', variant: 'danger' });
   await act(async () => actions.check());
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
+  expect(mockUpdate.check).toHaveBeenCalledTimes(2);
 });
 
 test('another trigger preserves the open prompt until it closes', async () => {

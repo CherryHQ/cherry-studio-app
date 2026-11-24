@@ -98,7 +98,7 @@ type EnvironmentPort = {
  * and lease-source concern; this runtime never branches on it.
  */
 @Injectable('BackgroundReplyRuntime')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 @DependsOn(['BackgroundActivityManager', 'BackgroundActivityEnvironment', 'KeepAliveCoordinator'])
 @AppStatePolicy('background-presentation')
 export class BackgroundReplyRuntime extends BaseService implements BackgroundReplyLifecycle {

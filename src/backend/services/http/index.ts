@@ -2,6 +2,7 @@ export type {
   DecodedHttpError,
   HttpBodylessMethod,
   HttpBodyMethod,
+  HttpCallerMetadata,
   HttpClient,
   HttpErrorDecoder,
   HttpErrorResponse,

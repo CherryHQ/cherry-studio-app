@@ -106,7 +106,7 @@ type BackgroundActivityEnvironmentPort = {
  * alive) belongs to the feature services driving the sessions.
  */
 @Injectable('BackgroundActivityManager')
-@ServicePhase(Phase.PostReady)
+@ServicePhase(Phase.Gate)
 @DependsOn(['KeepAliveCoordinator', 'BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
 export class BackgroundActivityManager extends BaseService {
