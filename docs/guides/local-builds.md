@@ -291,7 +291,7 @@ pnpm exec eas env:exec production --non-interactive \
   ./gradlew :app:uploadSentryProguardMappingsRelease --rerun \
   :app:sentryUploadSourceBundleRelease --rerun \
   :app:uploadSentryNativeSymbolsForRelease --rerun \
-  -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
+  -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx8192m"
 ```
 
 These native upload task names apply to both APK and AAB Release builds. If the JavaScript upload
@@ -337,12 +337,17 @@ Android extracts those libraries during installation, so a smaller APK does not 
 or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
 so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
 libraries in an AAB only slow installation and double on-device storage. Development builds keep
-uncompressed native libraries. The EAS Release commands pass `-Xmx4096m` as the Gradle JVM
-arguments, which also drops the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on
-local production builds. Production Android commands also use `--max-workers=2 --no-parallel`,
-including the inherited domestic APK command, so local and cloud builds retain the bounded Gradle
-concurrency used for 0.5.5. This mitigates resource pressure; the earlier daemon exit did not include
-proof of an out-of-memory failure. Development and preview concurrency remain unchanged.
+uncompressed native libraries. Preview builds pass `-Xmx4096m` as Gradle JVM arguments, while
+production Android commands (`production`, inherited `production-domestic-stores`, and
+`production-google-play`) pass `-Dorg.gradle.jvmargs=-Xmx8192m` on the Gradle CLI (owning the heap
+ceiling and dropping the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on local
+production builds) and omit the cloud-worker `--max-workers=2 --no-parallel` cap. Automated release
+builds on the self-hosted macOS runner (`scripts/releaseLocalBuild.ts`) default `GRADLE_OPTS`
+(`DEFAULT_ANDROID_GRADLE_OPTS`) to `-Dorg.gradle.parallel=true -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=12`
+to target concurrency headroom alongside parallel iOS compilation and resident host workloads on the
+release Mac (pending runtime measurement on a live release tag). Setting `GRADLE_OPTS` replaces
+this entire default string and does not override `-Dorg.gradle.jvmargs` from `eas.json`.
+Development and preview concurrency remain unchanged.
 After changing native dependencies or packaging options, verify that a Release build starts and
 completes desktop QR pairing. Compare APK sizes using the same profile and architecture.
 
