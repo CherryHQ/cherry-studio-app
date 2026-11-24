@@ -35,4 +35,4 @@ ALTER TABLE `agent_session` ADD `workspace_folder_id` text REFERENCES file_folde
 INSERT INTO library_file (id, folder_id, name, name_key, current_entry_id, created_at, updated_at, deleted_at)
 SELECT id, NULL, filename, lower(filename), id, created_at, updated_at, deleted_at FROM file_entry;
 --> statement-breakpoint
-UPDATE file_entry SET library_file_id = id, trashed_with = CASE WHEN deleted_at IS NOT NULL THEN id ELSE NULL END WHERE library_file_id IS NULL;
+UPDATE file_entry SET library_file_id = id, trashed_with = CASE WHEN deleted_at IS NOT NULL THEN id ELSE NULL END;
