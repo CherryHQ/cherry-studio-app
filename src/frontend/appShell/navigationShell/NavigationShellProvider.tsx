@@ -11,8 +11,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, useWindowDimensions } from 'react-native';
-import { useKeyboardState } from 'react-native-keyboard-controller';
+import { Keyboard, Platform, useWindowDimensions } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -112,7 +111,6 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
   const windowClass = useWindowClass();
   const fold = useFoldRegionLayout('window')?.fold ?? null;
-  const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -179,10 +177,8 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   });
 
   const platform = Platform?.OS ?? 'ios';
-  const isDockVisible =
-    shellMode === 'compact-dock' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
-  const isVerticalRailVisible =
-    shellMode === 'vertical-rail' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
+  const isDockVisible = shellMode === 'compact-dock' && isAtRoot && hideDockCount === 0;
+  const isVerticalRailVisible = shellMode === 'vertical-rail' && isAtRoot && hideDockCount === 0;
   const restingDockClearance =
     shellMode === 'compact-dock'
       ? resolveFloatingDockClearance(restingDockHeight, insets.bottom, platform)
@@ -190,11 +186,22 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
   const dockClearance = isAtRoot ? restingDockClearance : 0;
 
   useEffect(() => {
-    if ((!isAtRoot || isKeyboardVisible || shellMode === 'wide-rail') && dragStateRef.current) {
+    if ((!isAtRoot || shellMode === 'wide-rail') && dragStateRef.current) {
       dragStateRef.current = null;
       setDragState(null);
     }
-  }, [isAtRoot, isKeyboardVisible, shellMode]);
+  }, [isAtRoot, shellMode]);
+
+  useEffect(() => {
+    if (!dragState) return;
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+        setDragState(null);
+      }
+    });
+    return () => subscription.remove();
+  }, [dragState]);
 
   const middleColumnWidth =
     shellMode !== 'wide-rail'

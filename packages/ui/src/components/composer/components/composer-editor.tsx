@@ -29,7 +29,7 @@ import { ComposerExpansionMeasure, useComposerExpansion } from './composer-expan
 const restingInputHeight = composerActionSize;
 const fieldContentStyle = { minHeight: restingInputHeight };
 const restingActionSlotWidth = restingInputHeight + 8;
-const activeToolbarGap = 16;
+const activeToolbarGap = 10;
 const fieldActionInsetStyle = { paddingRight: restingActionSlotWidth };
 // Shorter than the keyboard on purpose: the editor finishes its shape early in the keyboard's
 // travel, so the transcript reads one motion with a small early growth instead of two
@@ -205,7 +205,7 @@ export function ComposerEditor({
             onPress={expansion.actions.expand}
             testID={testID}
           >
-            <Maximize2Icon className="size-5 text-muted-foreground" />
+            <Maximize2Icon className="size-4 text-muted-foreground" />
           </Pressable>
         ) : null}
         <Animated.View

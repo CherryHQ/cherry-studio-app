@@ -1,14 +1,19 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatTranscript } from '../ChatTranscript';
+import type { ChatTurnNavigator } from '../chatTurns';
 
 let mockHeaderHeight = 0;
 const mockList = jest.fn((_props: { contentTopInset: number }) => null);
+const mockTurnDirectory = jest.fn(
+  (_props: { navigator: ChatTurnNavigator; scrollProgress: unknown }) => null,
+);
 
 jest.mock('expo-router/react-navigation', () => ({ useHeaderHeight: () => mockHeaderHeight }));
 
 jest.mock('react-native-reanimated', () => ({
   useDerivedValue: (read: () => unknown) => ({ get: read }),
+  useSharedValue: <T,>(initial: T) => ({ get: () => initial, set: jest.fn(), value: initial }),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({ useComposerExpansion: () => null }));
@@ -27,6 +32,11 @@ jest.mock('@/frontend/components/Message', () => ({
   MessageList: (props: { contentTopInset: number }) => mockList(props),
 }));
 
+jest.mock('../components/ChatTurnDirectory', () => ({
+  ChatTurnDirectory: (props: { navigator: ChatTurnNavigator; scrollProgress: unknown }) =>
+    mockTurnDirectory(props),
+}));
+
 jest.mock('../components/ChatInitialRenderCover', () => ({ ChatInitialRenderCover: () => null }));
 
 jest.mock('../components/ChatOlderMessagesIndicator', () => ({
@@ -39,6 +49,11 @@ jest.mock('../hooks/useMessageListInitialRenderGate', () => ({
 
 describe('ChatTranscript', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockList.mockClear();
+    mockTurnDirectory.mockClear();
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -60,9 +75,60 @@ describe('ChatTranscript', () => {
     act(() => renderer!.update(transcript()));
     expect(mockList.mock.lastCall?.[0].contentTopInset).toBe(100);
   });
+
+  test('hides turn directory for fewer than two turns and shows it once two user turns exist', () => {
+    const turnNavigator: ChatTurnNavigator = {
+      scope: 'local:s1',
+      queryKey: ['turns', 'local:s1'],
+      read: jest.fn(async () => ({ items: [] })),
+      jump: jest.fn(),
+    };
+
+    act(() => {
+      renderer = create(
+        transcript({
+          messages: [],
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory).not.toHaveBeenCalled();
+
+    act(() => {
+      renderer!.update(
+        transcript({
+          messages: [
+            { id: 'u1', role: 'user', status: 'success', data: { parts: [] } },
+            { id: 'a1', role: 'assistant', status: 'success', data: { parts: [] } },
+          ] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory).not.toHaveBeenCalled();
+
+    act(() => {
+      renderer!.update(
+        transcript({
+          messages: [
+            { id: 'u1', role: 'user', status: 'success', data: { parts: [] } },
+            { id: 'a1', role: 'assistant', status: 'success', data: { parts: [] } },
+            { id: 'u2', role: 'user', status: 'success', data: { parts: [] } },
+          ] as never,
+          turnNavigator,
+        }),
+      );
+    });
+    expect(mockTurnDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        navigator: turnNavigator,
+        scrollProgress: expect.objectContaining({ value: 1 }),
+      }),
+    );
+  });
 });
 
-function transcript() {
+function transcript(overrides: Partial<Parameters<typeof ChatTranscript>[0]> = {}) {
   return (
     <ChatTranscript
       contentBottomInset={0}
@@ -72,6 +138,7 @@ function transcript() {
       messages={[]}
       renderMessage={() => null}
       requiresInitialLayout={false}
+      {...overrides}
     />
   );
 }

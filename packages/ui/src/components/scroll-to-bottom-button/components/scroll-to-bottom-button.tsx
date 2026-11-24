@@ -7,8 +7,8 @@ import { duration, easing } from '../../../motion';
 import { BackgroundPressExclusion } from '../../background-press/background-press';
 import { SurfaceFrame } from '../../surface/surface-frame/surface-frame';
 
-export const scrollToBottomButtonSize = 40;
-const SURFACE_CLASS_NAME = 'border border-border bg-background';
+export const scrollToBottomButtonSize = 36;
+const SURFACE_CLASS_NAME = 'border border-border bg-card';
 const visibilityMotion = { duration: duration.fast, easing: easing.settle } as const;
 
 export type ScrollToBottomButtonProps = {
@@ -61,7 +61,7 @@ export function ScrollToBottomButton({
               interactive
               style={surfaceStyle}
             >
-              <ArrowDownIcon className="size-5 text-foreground" />
+              <ArrowDownIcon className="size-4.5 text-foreground" />
             </SurfaceFrame>
           </Pressable>
         </BackgroundPressExclusion>

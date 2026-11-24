@@ -72,21 +72,28 @@ describe('ChatInputSurface', () => {
     />
   );
   const ring = () => renderer.root.findByType('Ring' as never);
+  const hasRingInsideSecondary = () =>
+    renderer.root
+      .findAllByType('Secondary' as never)
+      .some((node) => node.findAllByType('Ring' as never).length === 1);
   beforeEach(() => {
     mockEditing = false;
     mockDraft = '';
   });
   afterEach(() => act(() => renderer.unmount()));
-  test('keeps one right-side trigger and its open state while editing changes', () => {
+  test('keeps one right-side trigger inside secondary actions and preserves its open state while editing changes', () => {
     act(() => {
       renderer = create(render());
     });
+    expect(renderer.root.findByType('Editor' as never).props.restingTrailingActionCount).toBe(1);
+    expect(hasRingInsideSecondary()).toBe(true);
     expect(ring().props.testID).toBe('chat-context-usage-compact');
     act(() => ring().props.onPress());
     expect(ring().props.open).toBe(true);
     mockEditing = true;
     mockDraft = 'draft';
     act(() => renderer.update(render()));
+    expect(hasRingInsideSecondary()).toBe(true);
     expect(ring().props.testID).toBe('chat-context-usage-editing');
     expect(renderer.root.findAllByType('Ring' as never)).toHaveLength(1);
     expect(ring().props.open).toBe(true);

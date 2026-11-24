@@ -1,5 +1,11 @@
 import type { MessageListItem } from '../../types';
-import { isMessageListLiveTailInView, messageKeyExtractor } from '../messageListLayout';
+import {
+  getMessageListScrollProgress,
+  isMessageListLiveTailInView,
+  isScrollToBottomButtonHidden,
+  messageKeyExtractor,
+  SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD,
+} from '../messageListLayout';
 
 describe('isMessageListLiveTailInView', () => {
   const viewport = 800;
@@ -34,4 +40,43 @@ test('keeps one row for the answers to a question, so switching updates it in pl
   });
   expect(messageKeyExtractor(answer('a1'))).toBe(messageKeyExtractor(answer('a2')));
   expect(messageKeyExtractor({ data: {}, id: 'q1', role: 'user', status: 'success' })).toBe('q1');
+});
+
+describe('isScrollToBottomButtonHidden', () => {
+  test('hides the button within the threshold of the live edge and reveals it beyond that', () => {
+    const viewport = 800;
+    const content = 2000;
+    const atEnd = content - viewport;
+
+    expect(isScrollToBottomButtonHidden(atEnd, content, viewport)).toBe(true);
+    expect(
+      isScrollToBottomButtonHidden(
+        atEnd - SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD,
+        content,
+        viewport,
+      ),
+    ).toBe(true);
+    expect(
+      isScrollToBottomButtonHidden(
+        atEnd - SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD - 1,
+        content,
+        viewport,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('getMessageListScrollProgress', () => {
+  test('maps scroll offset to [0, 1] and reserves room when newer messages exist', () => {
+    expect(getMessageListScrollProgress(0, 600, 800, false)).toBe(1);
+    expect(getMessageListScrollProgress(0, 600, 800, true)).toBe(0.5);
+
+    expect(getMessageListScrollProgress(0, 2000, 800)).toBe(0);
+    expect(getMessageListScrollProgress(-40, 2000, 800)).toBe(0);
+    expect(getMessageListScrollProgress(600, 2000, 800)).toBe(0.5);
+    expect(getMessageListScrollProgress(1200, 2000, 800)).toBe(1);
+    expect(getMessageListScrollProgress(1400, 2000, 800)).toBe(1);
+
+    expect(getMessageListScrollProgress(1200, 2000, 800, true)).toBeCloseTo(0.82);
+  });
 });
