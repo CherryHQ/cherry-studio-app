@@ -174,6 +174,7 @@ test('retrying a failed download refreshes discovery and downloads the latest re
   await act(async () => mockDialog.actions.retry());
 
   expect(mockUpdate.check).toHaveBeenCalledTimes(1);
+  expect(mockUpdate.check).toHaveBeenCalledWith(expect.any(AbortSignal), { force: true });
   expect(mockDialog.release).toMatchObject({ id: latestRelease.id });
   expect(mockUpdate.download).toHaveBeenCalledWith({ status: 'available', ...latestRelease });
 });

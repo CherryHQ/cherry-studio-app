@@ -106,6 +106,7 @@ export function AppUpdateProvider({ children }: PropsWithChildren) {
       try {
         const result = await queryClient.fetchQuery({
           ...appUpdateQueryOptions(appUpdate),
+          queryFn: ({ signal }) => appUpdate.check(signal, { force: true }),
           staleTime: 0,
         });
         if (result.status === 'available') {

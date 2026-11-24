@@ -30,8 +30,7 @@ import { serializeHttpQuery } from './serializeHttpQuery';
 import { toHttpHeaders } from './toHttpHeaders';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const HTTP_ROUTE = Symbol('httpRoute');
-const HTTP_REQUEST = Symbol('httpRequest');
+const HTTP_CONTEXT = Symbol('httpContext');
 const HTTP_METHODS = new Set<HttpMethod>([
   'DELETE',
   'GET',
@@ -66,17 +65,26 @@ const acceptSuccessfulStatus = (status: number) => status >= 200 && status < 300
 const acceptAllStatuses = () => true;
 
 interface RoutedAxiosConfig {
-  [HTTP_REQUEST]?: HttpRequest<unknown>;
-  [HTTP_ROUTE]?: HttpRoute;
+  [HTTP_CONTEXT]?: HttpRequestContext;
 }
 
 type RoutedAxiosRequestConfig = AxiosRequestConfig & RoutedAxiosConfig;
-type RoutedInternalAxiosRequestConfig = InternalAxiosRequestConfig & RoutedAxiosConfig;
 type RoutedAxiosResponse = AxiosResponse & { truncated?: boolean };
 
 interface HttpRequestContext {
-  readonly request: HttpRequest<unknown>;
+  request: HttpRequest<unknown>;
   readonly route: HttpRoute;
+}
+
+// Non-plain class instance so Axios mergeConfig preserves object identity across request interceptors.
+class AxiosRequestContext implements HttpRequestContext {
+  request: HttpRequest<unknown>;
+  readonly route: HttpRoute;
+
+  constructor(request: HttpRequest<unknown>, route: HttpRoute) {
+    this.request = request;
+    this.route = route;
+  }
 }
 
 function assertValidBaseUrl(baseUrl: string): void {
@@ -203,11 +211,7 @@ function mergeHeaders(defaults: HttpHeaders, requestHeaders?: HttpHeaders): Http
 }
 
 function getRequestContext(config?: AxiosRequestConfig): HttpRequestContext | undefined {
-  const routedConfig = config as RoutedAxiosRequestConfig | undefined;
-  const request = routedConfig?.[HTTP_REQUEST];
-  const route = routedConfig?.[HTTP_ROUTE];
-
-  return request && route ? { request, route } : undefined;
+  return (config as RoutedAxiosRequestConfig | undefined)?.[HTTP_CONTEXT];
 }
 
 async function dispatchError(error: unknown, context?: HttpRequestContext): Promise<HttpError> {
@@ -252,7 +256,6 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
 const dispatchRequestInterceptors = async (
   config: InternalAxiosRequestConfig,
 ): Promise<InternalAxiosRequestConfig> => {
-  const routedConfig = config as RoutedInternalAxiosRequestConfig;
   const context = getRequestContext(config);
 
   if (!context) {
@@ -271,7 +274,7 @@ const dispatchRequestInterceptors = async (
 
     assertValidRequest(request);
 
-    routedConfig[HTTP_REQUEST] = request;
+    context.request = request;
     config.baseURL = context.route.baseUrl;
     config.data = request.body;
     config.headers = AxiosHeaders.from(request.headers);
@@ -419,11 +422,11 @@ function createHttpClientWithTransport(
         headers: mergeHeaders(route.headers, request.headers),
       };
       assertValidRequest(routedRequest);
+      const context: HttpRequestContext = new AxiosRequestContext(routedRequest, route);
 
       try {
         const response = await transport.request<TResponse>({
-          [HTTP_REQUEST]: routedRequest,
-          [HTTP_ROUTE]: route,
+          [HTTP_CONTEXT]: context,
           baseURL: route.baseUrl,
           data: routedRequest.body,
           headers: routedRequest.headers,
@@ -447,7 +450,7 @@ function createHttpClientWithTransport(
         if (isHttpError(error)) {
           throw error;
         }
-        throw await dispatchError(error, { request: routedRequest, route });
+        throw await dispatchError(error, context);
       }
     },
   });

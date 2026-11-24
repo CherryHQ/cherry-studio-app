@@ -770,3 +770,42 @@ it('preserves non-Axios error diagnostics alongside safe caller tags', async () 
     path: '/redacted',
   });
 });
+
+it('preserves onRequest rewrites when an adapter throws a non-Axios error without config', async () => {
+  const unexpected = new TypeError('Malformed adapter output');
+  const adapter = mockAdapter(async () => {
+    throw unexpected;
+  });
+  const onError = jest.fn((error: HttpError, _request: HttpRequest<unknown>) => error);
+  const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+  const client = createClient({
+    baseUrl: 'https://example.com',
+    serviceName: 'AppUpdate',
+    operation: 'apk.release',
+    interceptors: [
+      {
+        onRequest: (request) => ({
+          ...request,
+          operation: 'apk.release.rewritten',
+          logPath: '/redacted-by-interceptor',
+        }),
+        onError,
+      },
+    ],
+  });
+
+  await expect(client.request({ method: 'GET', path: '/secret-id' })).rejects.toMatchObject({
+    kind: 'internal',
+    code: 'HTTP_INTERNAL_ERROR',
+  });
+  expect(transportLogger.error).toHaveBeenCalledWith('HTTP transport failed unexpectedly.', {
+    serviceName: 'AppUpdate',
+    operation: 'apk.release.rewritten',
+    path: '/redacted-by-interceptor',
+  });
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(onError.mock.calls[0]?.[1]).toMatchObject({
+    operation: 'apk.release.rewritten',
+    logPath: '/redacted-by-interceptor',
+  });
+});
