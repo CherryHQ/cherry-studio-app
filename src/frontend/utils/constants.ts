@@ -56,8 +56,6 @@ export const aiUsageCalendar = {
 } as const;
 
 export const appSidebar = {
-  maxWidth: 400,
-  sceneRevealWidth: 64, // chat strip left visible beside the open drawer (as in ChatGPT); tap to close
   // Finger travel before the open/close swipe commits. Chat content holds native
   // horizontal scroll surfaces (markdown tables, code blocks, math) that claim a
   // touch once it passes the platform scroll threshold: Android touch slop (8dp)
