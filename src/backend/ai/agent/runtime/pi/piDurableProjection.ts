@@ -337,6 +337,8 @@ export function projectPiTurn(options: {
         usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
     const terminalError = readPiTerminalError(message);
+    // A later provider attempt owns the final outcome, including recovery after an error.
+    error = terminalError ?? null;
     if (terminalError) {
       const imageTool =
         message.api === 'cherry-image'
@@ -619,8 +621,7 @@ export function projectPiTurn(options: {
     error = null;
   } else if (record.status === 'queued') status = 'queued';
   else if (answerVisible) {
-    status = 'completed';
-    error = null;
+    status = error ? 'failed' : 'completed';
   } else if (record.status === 'unanswered') {
     status =
       record.reason === 'aborted'
@@ -638,6 +639,24 @@ export function projectPiTurn(options: {
       origin: 'runtime',
     };
   } else status = hasAssistant ? 'interrupted' : 'completed';
+  // Validate the whole turn: a model may legitimately stop empty after tools or file generation.
+  if (
+    status === 'completed' &&
+    hasAssistant &&
+    !parts.some((part) =>
+      part.type === 'text' || part.type === 'reasoning'
+        ? Boolean(part.text.trim() || part.hasText)
+        : part.type !== 'error',
+    )
+  ) {
+    status = 'failed';
+    error = {
+      code: 'invalid_response',
+      message: 'The model returned an invalid response with no content.',
+      retryable: true,
+      origin: 'provider',
+    };
+  }
   // Recovery can read a terminal input whose last tool never produced a result entry. Persist a
   // terminal pair, never a tool that appears to keep running in the Cherry transcript forever.
   if (status !== 'running' && status !== 'queued')
