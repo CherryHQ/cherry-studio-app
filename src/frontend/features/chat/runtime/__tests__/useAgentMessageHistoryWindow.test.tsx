@@ -7,7 +7,7 @@ import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import { useAgentMessageHistoryWindow } from '../useAgentMessageHistoryWindow';
 
-const mockGet = jest.fn(async () => ({ items: [] }));
+const mockGet = jest.fn(async (): Promise<{ items: AgentMessageView[] }> => ({ items: [] }));
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data'),
   useApiClient: () => ({ get: mockGet }),
