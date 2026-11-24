@@ -60,6 +60,7 @@ test('a new profile inherits application and onboarding settings without copying
     initialPreferences: {
       'app.language': 'zh-CN',
       'ui.theme_mode': ThemeMode.dark,
+      'ui.theme_palette': 'purple',
       'ui.font_size_step': 2,
       'chat.completion_notifications.enabled': false,
       'app.feedback.shake_enabled': true,
@@ -79,6 +80,7 @@ test('a new profile inherits application and onboarding settings without copying
     ...PreferenceDefaults,
     'app.language': 'zh-CN',
     'ui.theme_mode': ThemeMode.dark,
+    'ui.theme_palette': 'purple',
     'ui.font_size_step': 2,
     'chat.completion_notifications.enabled': false,
     'app.feedback.shake_enabled': true,
@@ -88,8 +90,10 @@ test('a new profile inherits application and onboarding settings without copying
   });
 
   db.values.set('ui.theme_mode', ThemeMode.light);
+  db.values.set('ui.theme_palette', 'blue');
   await new PreferenceSeeder().run(db.service);
   expect(db.values.get('ui.theme_mode')).toBe(ThemeMode.light);
+  expect(db.values.get('ui.theme_palette')).toBe('blue');
 });
 
 test('an existing database never inherits settings, including missing preferences on upgrade', async () => {

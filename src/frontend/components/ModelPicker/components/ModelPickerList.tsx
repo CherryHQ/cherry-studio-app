@@ -450,7 +450,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
       ) : (
         <View className="size-6 shrink-0 items-center justify-center">
           {multiple || isSelected ? (
-            <SelectionIndicator className="size-5" selected={isSelected} />
+            <SelectionIndicator className="size-5" selected={isSelected} variant="primary" />
           ) : null}
         </View>
       )}

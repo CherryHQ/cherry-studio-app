@@ -43,6 +43,7 @@ function createServices(message?: {
         fontSizeStep: 1,
         language: 'en-US',
         themeMode: 'system',
+        themePalette: 'purple',
       }),
     },
   } as unknown as BackendServices;
@@ -66,6 +67,16 @@ describe('initializeAppRuntime', () => {
     const variables = expect.objectContaining({ '--ui-text-base': 18 });
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', variables);
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(
+      1,
+      'dark',
+      expect.objectContaining({ '--primary': '#c084fc', '--primary-foreground': '#000000' }),
+    );
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(
+      2,
+      'light',
+      expect.objectContaining({ '--primary': '#7e22ce', '--primary-foreground': '#ffffff' }),
+    );
     expect(mockInitI18n).toHaveBeenCalledWith('en-US');
     expect(mockCreateInitialAgent).toHaveBeenCalledWith({ name: 'Cherry Agent' });
     expect(mockInitI18n.mock.invocationCallOrder[0]).toBeLessThan(

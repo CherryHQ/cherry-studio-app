@@ -43,6 +43,7 @@ This module owns the model selection surface, model metadata UI, and model setti
   rows. While the index is visible, the list reserves its 48-point touch area plus an 8-point gap
   inside each row's content; short lists keep their existing insets. A fixed trailing slot holds
   the compact selection mark in single and multiple selection clear of the permanent index.
+  The selected mark follows the theme palette in both modes and shares the same shape and size.
   Tapping the floating index navigates providers rather than selecting the row beneath.
   The diagnostic panel also embeds this public list and `useModelPickerData` so model selection
   stays inside its existing full-height sheet.

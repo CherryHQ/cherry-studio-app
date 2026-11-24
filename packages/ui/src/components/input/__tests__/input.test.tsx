@@ -20,7 +20,7 @@ jest.mock('heroui-native/utils', () => ({
 
 jest.mock('uniwind', () => {
   const variables: Record<string, number | string> = {
-    '--color-muted-foreground': '#666666',
+    '--color-primary': '#107d32',
     '--color-secondary': 'rgba(0, 0, 0, 0.05)',
     '--ui-text-base--line-height': 24,
   };
@@ -107,7 +107,7 @@ describe('Input', () => {
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
     expect(input.props.className).toBe(
-      'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-border',
+      'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none focus:border-primary ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:[elevation:0] android:focus:border-primary',
     );
     expect(input.props.className).not.toContain('text-[16px]');
 

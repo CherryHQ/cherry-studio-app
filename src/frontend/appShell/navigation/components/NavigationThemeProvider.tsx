@@ -1,20 +1,29 @@
 import { DefaultTheme, ThemeProvider } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useUniwind } from 'uniwind';
 
+import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { applyThemePalettePreference } from '@/frontend/utils/theme';
 
 type NavigationThemeProviderProps = {
   children: React.ReactNode;
 };
 
 export function NavigationThemeProvider({ children }: NavigationThemeProviderProps) {
+  const [themePalette] = usePreference('ui.theme_palette');
   const { theme } = useUniwind();
   const [background, foreground, separator] = useThemeColor([
     'background',
     'foreground',
     'border-strong',
   ]);
+
+  // The preference service publishes optimistic writes and their rollback through the same
+  // subscription. Keeping the bridge here also applies changes made outside the settings page.
+  useEffect(() => {
+    applyThemePalettePreference(themePalette);
+  }, [themePalette]);
 
   const navigationTheme = useMemo(
     () => ({

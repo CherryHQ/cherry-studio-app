@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import { cn } from '../../utils';
 import { LockedMark } from '../locked/locked-mark';
 
-export type SelectionIndicatorVariant = 'default' | 'overlay';
+export type SelectionIndicatorVariant = 'default' | 'overlay' | 'primary';
 /** Omitted for a list selection mark; a form picks the shape that tells single from multiple. */
 export type SelectionIndicatorControl = 'checkbox' | 'radio';
 
@@ -46,6 +46,8 @@ export function SelectionIndicator({
       </View>
     );
   }
+  const isPrimary = variant === 'primary';
+
   return (
     <View
       {...props}
@@ -53,7 +55,8 @@ export function SelectionIndicator({
       className={cn(
         'size-6 shrink-0 items-center justify-center',
         control === 'checkbox' ? 'rounded-md' : 'rounded-full',
-        selected ? 'bg-foreground' : 'border-2 border-border-strong',
+        selected && (isPrimary ? 'bg-primary' : 'bg-foreground'),
+        !selected && 'border-2 border-border-strong',
         !selected && variant === 'overlay' && 'bg-constant-black/30',
         disabled && 'opacity-40',
         className,
@@ -62,9 +65,16 @@ export function SelectionIndicator({
       ref={ref}
     >
       {!selected ? null : control === 'radio' ? (
-        <View className="size-2.5 rounded-full bg-background" />
+        <View
+          className={cn(
+            'size-2.5 rounded-full',
+            isPrimary ? 'bg-primary-foreground' : 'bg-background',
+          )}
+        />
       ) : (
-        <CheckIcon className="size-4 text-background" />
+        <CheckIcon
+          className={cn('size-4', isPrimary ? 'text-primary-foreground' : 'text-background')}
+        />
       )}
     </View>
   );

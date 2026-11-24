@@ -1,0 +1,31 @@
+appId: ${APP_ID}
+name: Verify the selected appearance mode and purple palette
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: theme-preview-${THEME_MODE}
+            text: '^radio button, checked$'
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: theme-palette-purple
+            text: '^radio button, checked$'
+          timeout: 10000
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: theme-preview-${THEME_MODE}
+            checked: true
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: theme-palette-purple
+            checked: true
+          timeout: 10000

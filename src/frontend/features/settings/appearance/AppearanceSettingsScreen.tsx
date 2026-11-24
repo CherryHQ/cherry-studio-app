@@ -15,6 +15,7 @@ import { AutoCollapseProcessSetting } from './components/AutoCollapseProcessSett
 import { EnterToSendSetting } from './components/EnterToSendSetting';
 import { MultiModelCardsSetting } from './components/MultiModelCardsSetting';
 import { SessionBranchTreeSetting } from './components/SessionBranchTreeSetting';
+import { ThemePaletteSetting } from './components/ThemePaletteSetting';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 
 export default function AppearanceSettingsScreen() {
@@ -53,7 +54,7 @@ export default function AppearanceSettingsScreen() {
         contentClassName="gap-6"
         headerProps={{ title: t('settings.general.title') }}
       >
-        <Section title={t('settings.items.theme')}>
+        <Section>
           <Section.Item testID="theme-preview-section-item">
             <ThemePreviewSelector
               onThemeChange={settingPreferences.theme.onValueChange}
@@ -61,6 +62,8 @@ export default function AppearanceSettingsScreen() {
             />
           </Section.Item>
         </Section>
+
+        <ThemePaletteSetting />
 
         <Section>
           <Section.SelectItem

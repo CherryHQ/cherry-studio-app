@@ -16,9 +16,12 @@ jest.mock('@expo/ui/swift-ui', () => {
 jest.mock('@expo/ui/swift-ui/modifiers', () => ({
   accessibilityLabel: (label: string) => ({ accessibilityLabel: label }),
   disabled: (disabled: boolean) => ({ disabled }),
+  tint: (color: string) => ({ tint: color }),
 }));
 
 jest.mock('uniwind', () => ({
+  useResolveClassNames: (className: string) =>
+    className === 'bg-primary' ? { backgroundColor: 'primary-color' } : {},
   useUniwind: () => ({ theme: 'dark' }),
 }));
 
@@ -59,7 +62,11 @@ describe('SliderControl (iOS)', () => {
       testID: 'volume',
       value: 40,
     });
-    expect(slider.props.modifiers).toEqual([{ accessibilityLabel: 'Volume' }, { disabled: false }]);
+    expect(slider.props.modifiers).toEqual([
+      { accessibilityLabel: 'Volume' },
+      { tint: 'primary-color' },
+      { disabled: false },
+    ]);
 
     act(() => slider.props.onValueChange(45));
     expect(onValueChange).toHaveBeenCalledWith(45);

@@ -11,6 +11,8 @@
  * shape is asserted in `__tests__/preferenceUtils.test.ts` instead.
  */
 
+import { DEFAULT_THEME_PALETTE, type ThemePaletteId } from '@cherrystudio/design-tokens/palettes';
+
 import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
@@ -143,6 +145,7 @@ export interface PreferenceSchema {
   'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.sidebar.session_tree_enabled': boolean;
   'ui.theme_mode': ThemeMode;
+  'ui.theme_palette': ThemePaletteId;
 }
 
 export const PreferenceDefaults = {
@@ -205,6 +208,7 @@ export const PreferenceDefaults = {
   'ui.sidebar.recent_view_mode': 'sessions',
   'ui.sidebar.session_tree_enabled': true,
   'ui.theme_mode': ThemeMode.system,
+  'ui.theme_palette': DEFAULT_THEME_PALETTE,
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
@@ -229,6 +233,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'ui.sidebar.collapsed',
   'ui.sidebar.recent_view_mode',
   'ui.theme_mode',
+  'ui.theme_palette',
 ] as const satisfies readonly PreferenceKeyType[];
 
 /**

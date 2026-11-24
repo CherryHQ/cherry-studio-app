@@ -2,8 +2,9 @@ import { Host, Slider as ExpoSlider } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel as accessibilityLabelModifier,
   disabled as disabledModifier,
+  tint,
 } from '@expo/ui/swift-ui/modifiers';
-import { useUniwind } from 'uniwind';
+import { useResolveClassNames, useUniwind } from 'uniwind';
 
 import type { SliderControlProps } from './slider-control.types';
 
@@ -19,6 +20,7 @@ export function SliderControl({
   value,
 }: SliderControlProps) {
   const { theme } = useUniwind();
+  const { backgroundColor: primaryColor } = useResolveClassNames('bg-primary');
 
   return (
     <Host
@@ -30,7 +32,11 @@ export function SliderControl({
       <ExpoSlider
         max={max}
         min={min}
-        modifiers={[accessibilityLabelModifier(accessibilityLabel), disabledModifier(disabled)]}
+        modifiers={[
+          accessibilityLabelModifier(accessibilityLabel),
+          ...(typeof primaryColor === 'string' ? [tint(primaryColor)] : []),
+          disabledModifier(disabled),
+        ]}
         onValueChange={onValueChange}
         step={step}
         testID={testID}
