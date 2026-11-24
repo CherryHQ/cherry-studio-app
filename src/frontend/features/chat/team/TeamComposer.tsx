@@ -2,7 +2,10 @@ import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { useTeamComposerDraft } from '@/frontend/appShell/conversation/team';
+import {
+  startTeamSessionAndSend,
+  useTeamComposerDraft,
+} from '@/frontend/appShell/conversation/team';
 import {
   ComposerSurface,
   useComposerActions,
@@ -14,22 +17,27 @@ import {
   type TeamAgentModule,
   type TeamConversation,
   type TeamConversationState,
+  type TeamSession,
 } from '@/shared/contracts/teamAgent';
 
 import { ChatInputSurface } from '../components/ChatInput';
 
 export function TeamComposer({
   module,
+  contextKey,
   draftKey,
   conversation,
   state,
   agent,
+  onSessionCreated,
 }: {
   module: TeamAgentModule;
+  contextKey: string;
   draftKey: string;
   conversation?: TeamConversation;
   state: TeamConversationState;
   agent?: TeamAgent;
+  onSessionCreated(session: TeamSession): void;
 }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
@@ -44,12 +52,9 @@ export function TeamComposer({
     accepted: state.accepted,
   });
   const tooLong = agent?.maxInputLength !== undefined && draft.length > agent.maxInputLength;
-  const ready =
-    !!conversation &&
-    state.phase === 'current' &&
-    state.view?.canSend &&
-    !state.submitting &&
-    !tooLong;
+  const ready = conversation
+    ? state.phase === 'current' && Boolean(state.view?.canSend) && !state.submitting && !tooLong
+    : Boolean(agent?.canCreateSession) && !tooLong;
   const resend = () =>
     alert.confirm({
       title: t('teamAgent.unknownTitle'),
@@ -93,19 +98,38 @@ export function TeamComposer({
       <ComposerSurface
         sendPolicy="confirmed"
         canSend={Boolean(ready && !state.unknown && draft.trim())}
-        streaming={state.phase === 'current' && state.view?.canStop === true}
+        streaming={Boolean(conversation && state.phase === 'current' && state.view?.canStop)}
         getSendErrorLabel={(error) =>
           error instanceof TeamAgentError && error.code === 'busy'
             ? t('teamAgent.unknownTitle')
             : t('remoteAgent.sendFailed')
         }
         onSend={async ({ text }) => {
-          if (!conversation) throw new TeamAgentError('unavailable');
+          if (conversation) {
+            try {
+              const result = await conversation.send(text);
+              if (!lifetime.current) throw new DOMException('Observation ended', 'AbortError');
+              if (result !== 'accepted')
+                throw new TeamAgentError(result === 'unknown' ? 'busy' : 'unavailable');
+            } catch (error) {
+              if (!lifetime.current) throw new DOMException('Observation ended', 'AbortError');
+              throw error;
+            }
+            return;
+          }
+          if (!agent?.canCreateSession) throw new TeamAgentError('unavailable');
           try {
-            const result = await conversation.send(text);
+            const { status } = await startTeamSessionAndSend({
+              module,
+              contextKey,
+              agentId: agent.id,
+              text,
+              draftKey,
+              onSessionCreated,
+            });
+            if (status === 'accepted') return;
             if (!lifetime.current) throw new DOMException('Observation ended', 'AbortError');
-            if (result !== 'accepted')
-              throw new TeamAgentError(result === 'unknown' ? 'busy' : 'unavailable');
+            throw new TeamAgentError(status === 'unknown' ? 'busy' : 'unavailable');
           } catch (error) {
             if (!lifetime.current) throw new DOMException('Observation ended', 'AbortError');
             throw error;
@@ -118,11 +142,11 @@ export function TeamComposer({
           })
         }
       >
-        <ChatInputSurface attachmentMode="text-only" streaming={state.view?.canStop === true} />
+        <ChatInputSurface
+          attachmentMode="text-only"
+          streaming={Boolean(conversation && state.view?.canStop)}
+        />
       </ComposerSurface>
-      <Text className="px-4 py-1 text-center text-xs text-muted-foreground">
-        {t('teamAgent.memoryNotice')}
-      </Text>
     </View>
   );
 }

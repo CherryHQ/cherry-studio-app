@@ -8,6 +8,8 @@ surfaces.
 
 - `AgentListScreen` is the root page. `edit/AgentEditScreen` adapts the edit and create routes to the shared
   `AgentEditor` component. The chat header uses its sheet presentation.
+- When an authenticated enterprise Team context is available, `AgentListScreen` exposes a Team
+  Agents pill tab alongside My Agents; selecting a Team Agent opens `/team` for that Agent.
 - The list header's plus action opens the create-Agent route.
 - Creating from the management list returns to that list. The chat header edits the current Agent
   from its name and switches Agents from the adjacent circle-user button.

@@ -1,9 +1,8 @@
+import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import {
-  Button,
   composerContentGap,
   ContentState,
   getComposerKeyboardStickyOffset,
-  useToast,
 } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -36,13 +35,14 @@ import {
   useTeamConversation,
   useTeamDirectorySync,
 } from '@/frontend/appShell/conversation/team';
-import { MainHeaderView } from '@/frontend/appShell/header';
+import { type HeaderToolbarAction, MainHeaderView } from '@/frontend/appShell/header';
 import {
   parseTeamChatRoute,
   type TeamChatRouteParams,
   type TeamChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { AgentPickerSheet } from '@/frontend/components/AgentPicker';
 import {
   ComposerDismissArea,
@@ -50,10 +50,14 @@ import {
   ComposerSessionProvider,
 } from '@/frontend/components/Composer';
 import type { MessageListItem } from '@/frontend/components/Message';
-import type { TeamAgentContext, TeamSessionRef } from '@/shared/contracts/teamAgent';
+import type { TeamAgentContext, TeamSession, TeamSessionRef } from '@/shared/contracts/teamAgent';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
-import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
+import {
+  ChatComposerClearance,
+  ChatWorkspace,
+  RemoteAssistantMessageUsage,
+} from '../components/ChatWorkspace';
 import { ChatShareSelectionProvider } from '../share/ChatShareSelectionProvider';
 import { TeamAgentDetailSheet } from './TeamAgentDetailSheet';
 import { TeamComposer } from './TeamComposer';
@@ -69,7 +73,7 @@ const EMPTY: ConversationSnapshot = {
 };
 type Header = {
   agent?: { name: string; avatarUri?: string };
-  create(): void;
+  newChat(): void;
   detail(): void;
   pick(): void;
 };
@@ -85,15 +89,33 @@ function TeamHeader({
   blurTarget: RefObject<ViewInstance | null>;
   hidden?: boolean;
 }) {
+  const { t } = useTranslation();
   const header = use(HeaderContext);
+  const actions = useMemo<readonly HeaderToolbarAction[]>(
+    () =>
+      header?.agent
+        ? [
+            {
+              accessibilityLabel: t('teamAgent.details'),
+              icon: InfoIcon,
+              key: 'team-agent-details',
+              nativeIcon: require('@/assets/header-toolbar/info.png'),
+              onPress: header.detail,
+              testID: 'team-header-agent-details',
+              type: 'icon',
+            },
+          ]
+        : [],
+    [header, t],
+  );
   return (
     <MainHeaderView
       blurTarget={blurTarget}
       hidden={hidden}
       agent={header?.agent}
-      onNewChat={() => header?.create()}
-      onAgentPress={header?.detail}
-      onAgentSwitch={header?.pick}
+      actions={actions}
+      onNewChat={header?.newChat}
+      onAgentPress={header?.pick}
     />
   );
 }
@@ -103,11 +125,16 @@ export function TeamChatScreen() {
   const { module, state } = useTeamAgentState();
   const { t } = useTranslation();
   const router = useRouter();
+  const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
   useTeamDirectorySync(module, state.context?.key);
   if (!state.context || (target.bindingId && target.bindingId !== state.context.bindingId))
     return (
       <ChatScreenFrame header={TeamHeader}>
-        <View className="flex-1 justify-center px-8">
+        <View
+          className="flex-1 justify-center px-8"
+          style={{ paddingBottom: bottom + dockClearance }}
+        >
           <ContentState.Empty
             title={t('teamAgent.title')}
             description={t('teamAgent.accountRequired')}
@@ -139,7 +166,6 @@ function TeamChatContent({
 }) {
   const { module, state: directory } = useTeamAgentState();
   const { t } = useTranslation();
-  const { toast } = useToast();
   const { openTeam } = useChatSource();
   const catalog = useConversationAgents();
   let session: TeamSessionRef | undefined;
@@ -168,11 +194,11 @@ function TeamChatContent({
     context.key,
     agent ? session : undefined,
   );
-  const [creating, setCreating] = useState(false);
   const [picker, setPicker] = useState(false);
   const [details, setDetails] = useState(false);
   const portrait = useTeamAgentPortrait(module, agentId);
   const { bottom } = useSafeAreaInsets();
+  const dockClearance = useRootNavigationDockClearance();
   const composerHeight = useSharedValue(0);
   const project = useMemo(() => createTeamConversationProjector(key), [key]);
   const snapshot = useMemo(
@@ -194,47 +220,18 @@ function TeamChatContent({
     loadNewer: noPage,
     retry: () => conversation?.refresh() ?? Promise.resolve(),
   };
-  const create = useCallback(async () => {
-    if (creating) return;
-    if (!agent?.canCreateSession) {
-      toast.show({ label: t('teamAgent.unavailable'), variant: 'danger' });
-      return;
-    }
-    setCreating(true);
-    try {
-      const created = await module.createSession(agent.id);
+  const onSessionCreated = useCallback(
+    (created: TeamSession) => {
       if (module.getState().context?.key !== context.key || navigationKey.current !== key) return;
-      if (!target.sessionId) {
-        module.writeDraft(
-          JSON.stringify([context.key, teamSessionId(created)]),
-          module.readDraft(key),
-        );
-        module.writeDraft(key, '');
-      }
       openTeam({ bindingId: context.bindingId, sessionId: teamSessionId(created) });
-    } catch {
-      if (navigationKey.current === key)
-        toast.show({ label: t('teamAgent.unavailable'), variant: 'danger' });
-    } finally {
-      setCreating(false);
-    }
-  }, [
-    agent,
-    creating,
-    module,
-    context.key,
-    context.bindingId,
-    openTeam,
-    t,
-    toast,
-    key,
-    target.sessionId,
-  ]);
+    },
+    [module, context.key, context.bindingId, key, openTeam],
+  );
   const header = useMemo<Header>(
     () => ({
       agent: agent ? { name: agent.name, avatarUri: portrait } : undefined,
-      create: () => {
-        if (agent) void create();
+      newChat: () => {
+        if (agent) openTeam({ bindingId: context.bindingId, agentId: agent.id });
         else setPicker(true);
       },
       detail: () => {
@@ -248,7 +245,7 @@ function TeamChatContent({
         setPicker(true);
       },
     }),
-    [agent, portrait, create],
+    [agent, portrait, context.bindingId, openTeam],
   );
   const renderUsage = useCallback(
     (item: MessageListItem) => {
@@ -272,12 +269,13 @@ function TeamChatContent({
     state.phase === 'retired' ||
     directory.phase === 'error' ||
     (directory.phase === 'ready' && !!agentId && !agent);
+  const hasComposer = Boolean(agent && !unavailable);
   return (
     <HeaderContext value={header}>
       <ChatScreenFrame header={TeamHeader}>
         <ChatShareSelectionProvider messages={snapshot.liveMessages}>
           <ComposerSessionProvider key={observationKey} initialDraft={() => module.readDraft(key)}>
-            <ComposerDismissArea>
+            <ComposerDismissArea disabled={!hasComposer}>
               {unavailable ? (
                 <View className="px-5 py-2">
                   <ContentState.Error
@@ -311,24 +309,26 @@ function TeamChatContent({
                   renderUsage={renderUsage}
                 />
               ) : (
-                <View className="flex-1 justify-center gap-4 px-8">
+                <ChatComposerClearance
+                  className="flex-1 justify-center gap-3 px-8"
+                  contentBottomInset={hasComposer ? composerContentGap : bottom + dockClearance}
+                >
                   {directory.phase === 'loading' ? (
                     <ContentState.Loading title={t('remoteAgent.loading')} />
                   ) : !unavailable ? (
-                    <ContentState.Empty
-                      title={agent?.name ?? t('teamAgent.noAgents')}
-                      description={agent?.description ?? t('remoteAgent.noSessions')}
-                    />
+                    <>
+                      <ContentState.Empty
+                        title={agent?.name ?? t('teamAgent.noAgents')}
+                        description={agent?.description ?? t('teamAgent.memoryNotice')}
+                      />
+                      {agent?.description ? (
+                        <Text className="text-center text-xs text-muted-foreground">
+                          {t('teamAgent.memoryNotice')}
+                        </Text>
+                      ) : null}
+                    </>
                   ) : null}
-                  {agent && !unavailable ? (
-                    <Button
-                      disabled={!agent.canCreateSession || creating}
-                      onPress={() => void create()}
-                    >
-                      {t('remoteAgent.newSession')}
-                    </Button>
-                  ) : null}
-                </View>
+                </ChatComposerClearance>
               )}
               {state.view?.run?.state === 'failed' ? (
                 <Text accessibilityRole="alert" className="px-5 py-2 text-danger">
@@ -336,7 +336,7 @@ function TeamChatContent({
                 </Text>
               ) : null}
             </ComposerDismissArea>
-            {agent ? (
+            {hasComposer && agent ? (
               <ComposerDock
                 onHeightChange={(height) => composerHeight.set(height)}
                 backgroundClassName="bg-chat-background"
@@ -344,10 +344,12 @@ function TeamChatContent({
               >
                 <TeamComposer
                   module={module}
+                  contextKey={context.key}
                   draftKey={key}
                   conversation={conversation}
                   state={state}
                   agent={agent}
+                  onSessionCreated={onSessionCreated}
                 />
               </ComposerDock>
             ) : null}

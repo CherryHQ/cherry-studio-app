@@ -29,9 +29,9 @@ Team conversations or grant access to Team execution.
 
 | Feature | Current behavior |
 | --- | --- |
-| Entry | Sidebar source menu for an authenticated enterprise account; `/team` also handles sign-in and empty states |
+| Entry | Sidebar source menu and the `Agents` tab (`/agents`) Team Agents view for an authenticated enterprise account; `/team` also handles sign-in and empty states |
 | Directory | Employee groups and main/assistant Agents; partial list reads retain healthy sessions, with concurrency four |
-| Personal sessions | List and explicitly create; selecting an Agent never creates a session automatically |
+| Personal sessions | List and create on the user's first send (or header new-chat draft); selecting an Agent never creates a session automatically |
 | Chat | Text, reasoning, tool progress/results, cancellation and failed-run state in the shared workspace |
 | Live updates | Full snapshots over SSE while the selected session runs; foreground/reentry reads the server again |
 | Send | Text only, enterprise limit 16,000 UTF-16 code units; one submission per session at a time |
@@ -39,7 +39,7 @@ Team conversations or grant access to Team execution.
 | Stop | Send a cancellation signal; only a subsequent server snapshot establishes terminal state |
 | Approval / clarification | Hermes plus server authorization; match the current pending ID and request ID |
 | Delete | Single-session deletion for ready Astra targets with explicit `canDelete`; other delete actions are absent |
-| Details | Model, Skills and MCP status are readonly; optional WebP portrait falls back to the existing avatar |
+| Details | Model, Skills and MCP status are readonly (header info action, with memory notice); optional WebP portrait falls back to the existing avatar |
 | Usage | Render model, tokens and timing only when the server supplies them |
 | Community Team | Adapter boundary available; no speculative endpoints or credentials |
 

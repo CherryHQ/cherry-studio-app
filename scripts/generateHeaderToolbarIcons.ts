@@ -30,6 +30,7 @@ const GLYPHS: Record<string, string> = {
   'file-text': `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" ${stroke} stroke-width="2"/><path d="M14 2v4a2 2 0 0 0 2 2h4" ${stroke} stroke-width="2"/><path d="M10 9H8" ${stroke} stroke-width="2"/><path d="M16 13H8" ${stroke} stroke-width="2"/><path d="M16 17H8" ${stroke} stroke-width="2"/>`,
   languages: `<path d="m5 8 6 6" ${stroke} stroke-width="2"/><path d="m4 14 6-6 2-3" ${stroke} stroke-width="2"/><path d="M2 5h12" ${stroke} stroke-width="2"/><path d="M7 2h1" ${stroke} stroke-width="2"/><path d="m22 22-5-10-5 10" ${stroke} stroke-width="2"/><path d="M14 18h6" ${stroke} stroke-width="2"/>`,
   camera: `<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" ${stroke} stroke-width="2"/><circle cx="12" cy="13" r="3" ${stroke} stroke-width="2"/>`,
+  info: `<circle cx="12" cy="12" r="10" ${stroke} stroke-width="2"/><path d="M12 16v-4" ${stroke} stroke-width="2"/><path d="M12 8h.01" ${stroke} stroke-width="2"/>`,
 };
 
 /** Template images for the native header buttons and menus; the toolbar tints them. */

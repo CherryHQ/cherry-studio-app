@@ -30,7 +30,7 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   const { state: team } = useTeamAgentState();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
-  const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
+  const loadingKey = `${source}:${source === 'team' ? (teamTarget.bindingId ?? '') : (remoteTarget.connectionId ?? '')}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
     const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);

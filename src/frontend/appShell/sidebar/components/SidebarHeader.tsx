@@ -180,14 +180,18 @@ function SidebarDeviceTitle() {
           },
         ]
       : []),
-    {
-      id: 'manage-devices',
-      label: t('navigation.manageDevices'),
-      onPress: () => {
-        closeDrawer();
-        router.push('/devices');
-      },
-    },
+    ...(connections.length
+      ? [
+          {
+            id: 'manage-devices',
+            label: t('navigation.manageDevices'),
+            onPress: () => {
+              closeDrawer();
+              router.push('/devices');
+            },
+          },
+        ]
+      : []),
   ];
   return frame(
     <ActionMenu items={disabled ? [] : items}>
