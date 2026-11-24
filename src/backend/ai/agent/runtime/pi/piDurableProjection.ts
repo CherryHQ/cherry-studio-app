@@ -294,6 +294,20 @@ function toolInputPreview(
   };
 }
 
+function hasLegacyRetainedParts(retainedParts: unknown): boolean {
+  if (!Array.isArray(retainedParts)) return false;
+  return retainedParts.some((part) => {
+    if (typeof part !== 'object' || part === null || Array.isArray(part)) return false;
+    const record = part as Record<string, unknown>;
+    if (record.type === 'text' || record.type === 'reasoning') {
+      return typeof record.text === 'string' && Boolean(record.text.trim());
+    }
+    return (
+      typeof record.type === 'string' && record.type !== 'data-error' && record.type !== 'error'
+    );
+  });
+}
+
 export function projectPiTurn(options: {
   lane: RuntimeLane;
   record: SubmissionRecord;
@@ -641,10 +655,12 @@ export function projectPiTurn(options: {
     };
   } else status = hasAssistant ? 'interrupted' : 'completed';
   // Validate completed turns that own an actual model answer; coalesced placeholders and retained retry prefixes stay valid.
+  const hasRetainedOutput =
+    stored.hasRetainedOutput ?? hasLegacyRetainedParts(stored.metadata.retainedParts);
   if (
     status === 'completed' &&
     answerVisible &&
-    !stored.hasRetainedOutput &&
+    !hasRetainedOutput &&
     !parts.some((part) =>
       part.type === 'text' || part.type === 'reasoning'
         ? Boolean(part.text.trim() || part.hasText)

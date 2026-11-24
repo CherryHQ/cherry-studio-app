@@ -199,6 +199,95 @@ describe('Pi turn projection', () => {
     expect(turn).toMatchObject({ status: 'completed', parts: [], error: null });
   });
 
+  test('keeps a legacy resumed retry completed when metadata.retainedParts is present', () => {
+    const legacy = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        metadata: {
+          retainedParts: [
+            {
+              id: 'tool-1',
+              type: 'dynamic-tool',
+              toolCallId: 'call-1',
+              toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+              toolName: 'load_workflow',
+              title: 'Load workflow',
+              state: 'output-available',
+              input: { workflow_id: 'plugin:feishu-1' },
+              output: { value: { status: 'ok' }, artifacts: [] },
+            },
+          ],
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: legacy },
+    );
+    expect(turn).toMatchObject({ status: 'completed', parts: [], error: null });
+  });
+
+  test('still fails legacy submissions when metadata.retainedParts only contains errors or blank text', () => {
+    const errorOnly = piSubmissionMetadata(
+      {
+        requestId: 'request-1',
+        turnId: 'turn-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        createdAt: 1_000,
+        input: [{ type: 'text', text: 'Question' }],
+        metadata: {
+          retainedParts: [
+            { id: 'err-1', type: 'data-error', errorText: 'Previous error' },
+            { id: 'blank-1', type: 'text', text: '   ', state: 'done' },
+          ],
+          userParts: [{ id: 'part-1', type: 'text', text: 'Question', state: 'done' }],
+          inferenceSnapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: 'provider::model',
+              providerId: 'provider',
+              modelId: 'model',
+              name: 'Model',
+            },
+            parameters: {},
+            tools: [],
+          },
+          referencedFileEntryIds: [],
+        },
+      },
+      [],
+    );
+    const turn = projectTerminal(
+      { ...call('', 2_000), content: [], stopReason: 'stop' },
+      { metadata: errorOnly },
+    );
+    expect(turn).toMatchObject({
+      status: 'failed',
+      parts: [],
+      error: { code: 'invalid_response', retryable: true },
+    });
+  });
+
   test.each<{ content: AssistantMessage['content'] }>([
     { content: [{ type: 'text', text: 'Answer' }] },
     { content: [{ type: 'thinking', thinking: 'Reasoning' }] },
