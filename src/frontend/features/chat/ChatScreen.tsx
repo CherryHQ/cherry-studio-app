@@ -6,12 +6,11 @@ import {
 import { useFocusEffect, useIsFocused, useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v7 as uuidv7 } from 'uuid';
 
-import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   type ChatRouteParamsInput,
   type ChatTarget,
@@ -413,11 +412,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                             sshDraftId={target.kind === 'draft' ? target.sshDraftId : undefined}
                             selectionHandoff={target.selectionHandoff}
                           />
-                          <ChatDockFooter>
-                            <Text className="text-center text-xs text-muted-foreground">
-                              {t('chat.input.disclaimer')}
-                            </Text>
-                          </ChatDockFooter>
                         </View>
                       </ComposerDock>
                     </ChatShareComposerGuard>

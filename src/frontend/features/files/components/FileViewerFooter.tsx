@@ -7,8 +7,8 @@ export function FileViewerFooter({ children }: PropsWithChildren) {
   const { bottom } = useSafeAreaInsets();
 
   return (
-    <View className="gap-3 bg-background px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-      {children}
+    <View className="bg-background px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
+      <View className="mx-auto w-full max-w-[720px] gap-3">{children}</View>
     </View>
   );
 }

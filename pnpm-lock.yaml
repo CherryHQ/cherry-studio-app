@@ -159,7 +159,7 @@ patchedDependencies:
   nitrogen@0.36.4: 726c542231c318e0436836729e464a13bbfbbd4215340f589af09ea40eef42be
   react-native-anydoc@0.4.1: 2cfc6ca60d6e0a51a169135e3ea1cd8d43ec9be6b773248ccc443ea9ee364b36
   react-native-background-actions@4.1.0: 6b855694da3eacff44db557c5e1c4c1c9e6fa932abc7af1c542dcb52afb38970
-  react-native-drawer-layout@4.2.12: 54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2
+  react-native-drawer-layout@4.2.12: 724eb45444eedd318c909ddb3001bb805fb7419ccb1991ad4aa5b743a07a2307
   react-native-enriched-markdown@1.1.1: a80821d6b9b9a66e3f105a20dfd3318c3367dedde6f47f902d2a89c20b7cb743
   react-native-gesture-handler@3.3.0: abb5e60a0a1da478e56771aaec1a5c029331ad04e5fff2e647672694f1b17c86
   react-native-keyboard-controller@1.22.9: fcefd856c7edcf8595c96f35f13fea7ba2abf3ab6d88ad68161b81f5492da5a4
@@ -19421,7 +19421,7 @@ snapshots:
       react-fast-compare: 3.2.2
       react-is: 19.3.1
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
-      react-native-drawer-layout: 4.2.12(patch_hash=54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2)(ed8b562215db9499aad2abaa0af31578)
+      react-native-drawer-layout: 4.2.12(patch_hash=724eb45444eedd318c909ddb3001bb805fb7419ccb1991ad4aa5b743a07a2307)(ed8b562215db9499aad2abaa0af31578)
       react-native-safe-area-context: 5.10.1(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       react-native-screens: 4.30.1(patch_hash=48847e93400db50be49d89ff317468368d36e0d533b8de58d89930aea910bbdf)(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       server-only: 0.0.1
@@ -22429,7 +22429,7 @@ snapshots:
       react-native: 0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)
       react-native-svg: 15.16.0(react-native@0.88.1(patch_hash=d90df58511c01aab1e2ce4fa2e939afe917e558dd9803b888f5ebc2f692f6ff4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
 
-  react-native-drawer-layout@4.2.12(patch_hash=54e51ac742c1f6c04271d72b99f35ef356244455ecab0ea84b88eea4cf3291a2)(ed8b562215db9499aad2abaa0af31578):
+  react-native-drawer-layout@4.2.12(patch_hash=724eb45444eedd318c909ddb3001bb805fb7419ccb1991ad4aa5b743a07a2307)(ed8b562215db9499aad2abaa0af31578):
     dependencies:
       color: 4.2.3
       react: 19.3.0

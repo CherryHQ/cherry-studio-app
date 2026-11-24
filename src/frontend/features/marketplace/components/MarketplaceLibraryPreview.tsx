@@ -109,7 +109,7 @@ function LibraryPreview({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-2 px-4" testID={testID}>
+    <View className="mx-auto w-full max-w-[880px] gap-2 px-4" testID={testID}>
       <Pressable
         accessibilityLabel={title}
         accessibilityRole="link"

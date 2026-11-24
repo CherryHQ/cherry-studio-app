@@ -5,9 +5,10 @@ exporting or sharing conversations as Markdown or stitched long PNG images.
 
 ## User Entry
 
-- File Library: open sidebar (`testID:main-header-open-sidebar`) -> tap `testID:sidebar-library`
-  (`testID:file-library-list`, `testID:file-library-empty`, `testID:file-library-skeleton`,
-  `testID:file-library-browse`).
+- File Library: on compact phones open the More tab in `testID:floating-nav-dock` and tap
+  `testID:more-module-card-files` (or the pinned Files tab); on wide screens tap
+  `testID:wide-rail-tab-files` in `testID:wide-nav-rail` (`testID:file-library-list`,
+  `testID:file-library-empty`, `testID:file-library-skeleton`, `testID:file-library-browse`).
 - Attaching files in chat: open composer menu (`testID:composer-menu`) -> file picker
   (`testID:file-picker`, `testID:file-picker-list`, `testID:file-picker-upload`,
   `testID:file-picker-create-folder`, `testID:file-picker-add`).

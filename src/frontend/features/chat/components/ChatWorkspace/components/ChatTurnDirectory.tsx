@@ -11,6 +11,7 @@ import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reani
 import type { HistoryPosition } from '@/frontend/appShell/conversation/remote';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
 import type { MessageListHandle } from '@/frontend/components/Message';
+import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
 import type { ChatTurn, ChatTurnNavigator } from '../chatTurns';
 
@@ -40,7 +41,10 @@ export function ChatTurnDirectory({
   const [isOpen, setIsOpen] = useState(false);
   const close = useCallback(() => setIsOpen(false), []);
   useFocusedBackPress(close, isOpen);
+  const { onLayout, width: containerWidth } = useLayoutWidth();
   const { height, progress } = useReanimatedKeyboardAnimation();
+  const wideRightInset =
+    containerWidth >= 832 ? Math.max(12, Math.floor((containerWidth - 720) / 2) - 56) : 12;
   const position = useAnimatedStyle(() => ({
     top: contentTopInset,
     bottom:
@@ -58,16 +62,16 @@ export function ChatTurnDirectory({
   }
 
   return (
-    <View className="absolute inset-0" pointerEvents="box-none">
+    <View className="absolute inset-0" onLayout={onLayout} pointerEvents="box-none">
       {isOpen ? (
         <BackgroundPressExclusion className="absolute inset-0">
           <Pressable accessible={false} className="absolute inset-0" onPress={close} />
         </BackgroundPressExclusion>
       ) : null}
       <Animated.View
-        className="absolute inset-x-3 flex-row-reverse items-end gap-2"
+        className="absolute flex-row-reverse items-end gap-2"
         pointerEvents="box-none"
-        style={position}
+        style={[{ left: 12, right: wideRightInset }, position]}
       >
         <BackgroundPressExclusion className="size-11 items-center justify-center">
           <Button

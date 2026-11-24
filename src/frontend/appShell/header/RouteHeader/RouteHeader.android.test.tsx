@@ -243,6 +243,19 @@ describe('RouteHeader.android', () => {
     expect(getInlineActions()).toEqual([paneExit, expand, share]);
   });
 
+  it('hides the leading action when rootAction is none at route root and restores back for stack children', async () => {
+    mockNavigationIndex = 0;
+    await renderRouteHeader(<RouteHeader title="Devices" />, 'none');
+    expect(
+      (getOptions().headerLeft as () => ReactElement<{ actions: unknown[] }>)().props.actions,
+    ).toEqual([]);
+
+    mockNavigationIndex = 1;
+    await renderRouteHeader(<RouteHeader title="Device Details" />, 'none');
+    expect(getLeadingAction().accessibilityLabel).toBe('navigation.back');
+    mockNavigationIndex = 0;
+  });
+
   function getInlineActions() {
     return renderer!.root
       .findAllByType('HeaderAction' as never)
@@ -254,7 +267,7 @@ describe('RouteHeader.android', () => {
 
   async function renderRouteHeader(
     element: ReactElement,
-    rootAction: 'back' | 'close' | 'drawer' = 'back',
+    rootAction: 'back' | 'close' | 'drawer' | 'none' = 'back',
     sidebar: SidebarToggle | null = { action: 'open', setCollapsed: jest.fn() },
   ) {
     await act(async () => {

@@ -22,6 +22,7 @@ export type ChatMessageRowState = Readonly<
     /** Tool status follows the source message, which can settle without new display parts. */
     messageState?: ConversationMessage['state'];
     showsTimestamp: boolean;
+    showsDisclaimer: boolean;
     /** Editing highlights a question and quiets its visible original continuation. */
     editingContext?: 'question' | 'continuation';
     startsEditingContinuation?: boolean;
@@ -33,8 +34,8 @@ export type ChatMessageRowState = Readonly<
 
 type ChatMessageRows = ReadonlyMap<string, ChatMessageRowState>;
 
-const EMPTY_ROW: ChatMessageRowState = { showsTimestamp: false };
-const TIMESTAMP_ONLY_ROW: ChatMessageRowState = { showsTimestamp: true };
+const EMPTY_ROW: ChatMessageRowState = { showsDisclaimer: false, showsTimestamp: false };
+const TIMESTAMP_ONLY_ROW: ChatMessageRowState = { showsDisclaimer: false, showsTimestamp: true };
 
 function isSameRow(left: ChatMessageRowState, right: ChatMessageRowState) {
   return (
@@ -43,6 +44,7 @@ function isSameRow(left: ChatMessageRowState, right: ChatMessageRowState) {
     left.completeness === right.completeness &&
     left.attachments === right.attachments &&
     left.messageState === right.messageState &&
+    left.showsDisclaimer === right.showsDisclaimer &&
     left.showsTimestamp === right.showsTimestamp &&
     left.previousMessageId === right.previousMessageId &&
     left.nextMessageId === right.nextMessageId &&
@@ -58,6 +60,7 @@ function reconcileRows(
   timestampMessageIds: ReadonlySet<string>,
   breakAfterMessageId?: string,
   editingMessageId?: string,
+  disclaimerMessageId?: string,
 ): ChatMessageRows {
   const next = new Map<string, ChatMessageRowState>();
   const visibleMessages = messages.filter((message) => message.display.role !== 'system');
@@ -76,6 +79,7 @@ function reconcileRows(
       completeness: message.completeness,
       attachments: message.attachments,
       messageState: message.state,
+      showsDisclaimer: message.key === disclaimerMessageId,
       showsTimestamp: timestampMessageIds.has(message.key),
       tools: message.tools,
       previousMessageId:
@@ -111,6 +115,7 @@ type ChatMessageRowSource = Readonly<{
     timestampMessageIds: ReadonlySet<string>,
     breakAfterMessageId?: string,
     editingMessageId?: string,
+    disclaimerMessageId?: string,
   ) => void;
   /** Wakes only rows whose state changed since the last publish. */
   publish: () => void;
@@ -123,13 +128,20 @@ function createChatMessageRowSource(): ChatMessageRowSource {
   const listenersById = new Map<string, Set<() => void>>();
   return {
     get: (messageId) => rows.get(messageId) ?? EMPTY_ROW,
-    record: (messages, timestampMessageIds, breakAfterMessageId, editingMessageId) => {
+    record: (
+      messages,
+      timestampMessageIds,
+      breakAfterMessageId,
+      editingMessageId,
+      disclaimerMessageId,
+    ) => {
       rows = reconcileRows(
         rows,
         messages,
         timestampMessageIds,
         breakAfterMessageId,
         editingMessageId,
+        disclaimerMessageId,
       );
     },
     publish: () => {
@@ -165,19 +177,34 @@ export function ChatMessageRowProvider({
   timestampMessageIds,
   breakAfterMessageId,
   editingMessageId,
+  disclaimerMessageId,
 }: PropsWithChildren<{
   messages: readonly ConversationMessage[];
   timestampMessageIds: ReadonlySet<string>;
   breakAfterMessageId?: string;
   editingMessageId?: string;
+  disclaimerMessageId?: string;
 }>) {
   const [source] = useState(createChatMessageRowSource);
   // Rows whose items changed in this commit render with the new state directly;
   // the publish reaches the remaining rows whose own state changed.
-  source.record(messages, timestampMessageIds, breakAfterMessageId, editingMessageId);
+  source.record(
+    messages,
+    timestampMessageIds,
+    breakAfterMessageId,
+    editingMessageId,
+    disclaimerMessageId,
+  );
   useLayoutEffect(() => {
     source.publish();
-  }, [breakAfterMessageId, editingMessageId, messages, source, timestampMessageIds]);
+  }, [
+    breakAfterMessageId,
+    disclaimerMessageId,
+    editingMessageId,
+    messages,
+    source,
+    timestampMessageIds,
+  ]);
 
   return <ChatMessageRowContext value={source}>{children}</ChatMessageRowContext>;
 }
