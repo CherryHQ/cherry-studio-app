@@ -73,7 +73,7 @@ export function withPiStreamIdleTimeout(
             const facts = errorRecord(error);
             terminalFetchError =
               error instanceof Error &&
-              facts?.retryable === false &&
+              typeof facts?.retryable === 'boolean' &&
               (typeof (facts.statusCode ?? facts.status) === 'number' ||
                 typeof facts.code === 'string')
                 ? error
