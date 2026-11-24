@@ -3,8 +3,9 @@
 This App Shell module owns the drawer navigation surface, recent Agent Sessions, and bottom dock.
 It is app-wide navigation infrastructure rather than a route page.
 
-In compact windows the drawer is a temporary overlay, with its width capped at 400 logical points
-and at least 64 points of chat left visible. Wide windows (see [layout](../layout/README.md)) make
+In compact windows the drawer is a temporary overlay spanning the full available window width
+inside any trailing safe area (with a 280-point minimum), and is dismissed via the header close
+button or swipe gesture. Wide windows (see [layout](../layout/README.md)) make
 it a permanent column beside the content region, divided by a hairline. `useSidebarColumn` resolves
 that column through the pure `resolveSidebarColumn`: 280 points for the sidebar, the file pane width
 for search, the leading half of the window when an iPhone Duo is partly folded, yielded entirely

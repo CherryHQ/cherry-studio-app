@@ -23,6 +23,7 @@ import {
 } from '@/frontend/appShell/navigationShell';
 import {
   resolveSidebarDrawer,
+  resolveSidebarOverlayWidth,
   Sidebar,
   SidebarColumnProvider,
   SidebarToggleProvider,
@@ -113,10 +114,7 @@ function SidebarDrawer() {
     'sidebar-border',
     'scrim',
   ]);
-  const overlayWidth = Math.min(
-    appSidebar.maxWidth,
-    Math.max(280, width - Math.max(appSidebar.sceneRevealWidth, outerInsets.right)),
-  );
+  const overlayWidth = resolveSidebarOverlayWidth(width, outerInsets.right);
   const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth, canDock);
   const swipeEnabled =
     shellMode !== 'wide-rail' &&
