@@ -856,6 +856,7 @@
   "cloud.rollingHours_many": "Fenêtre glissante de {{hours}} heures",
   "cloud.rollingHours_one": "Fenêtre glissante de {{hours}} heure",
   "cloud.rollingHours_other": "Fenêtre glissante de {{hours}} heures",
+  "cloud.sessionExpired": "Connexion expirée",
   "cloud.subscription": "Abonnement",
   "cloud.subscriptionMonth": "Quota du mois d’abonnement",
   "cloud.title": "Abonnement et quota",

@@ -77,7 +77,9 @@ export function CloudProviderDetail() {
           title={t(
             state.accountIssue === 'account_disabled'
               ? 'cloud.accountDisabled'
-              : 'settings.provider.models.management.loadFailed',
+              : state.accountIssue === 'reauth_required'
+                ? 'cloud.sessionExpired'
+                : 'settings.provider.models.management.loadFailed',
           )}
           primaryAction={{
             children: t(

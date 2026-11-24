@@ -1,6 +1,7 @@
 import {
   resolveSidebarColumn,
   resolveSidebarDrawer,
+  resolveSidebarOverlayWidth,
   resolveSidebarToggleAction,
 } from '../resolveSidebarColumn';
 
@@ -115,6 +116,26 @@ describe('resolveSidebarDrawer', () => {
       drawerType: 'slide',
       drawerStyle: { pointerEvents: 'auto', width: 320 },
     });
+  });
+});
+
+describe('resolveSidebarOverlayWidth', () => {
+  test('spans the full window width on portrait phones without leaving a reveal strip', () => {
+    expect(resolveSidebarOverlayWidth(393, 0)).toBe(393);
+  });
+
+  test('does not cap wider compact windows at 400 points', () => {
+    expect(resolveSidebarOverlayWidth(440, 0)).toBe(440);
+    expect(resolveSidebarOverlayWidth(744, 0)).toBe(744);
+  });
+
+  test('subtracts the trailing safe area inset', () => {
+    expect(resolveSidebarOverlayWidth(430, 64)).toBe(366);
+  });
+
+  test('enforces the 280-point minimum floor', () => {
+    expect(resolveSidebarOverlayWidth(0, 0)).toBe(280);
+    expect(resolveSidebarOverlayWidth(300, 64)).toBe(280);
   });
 });
 

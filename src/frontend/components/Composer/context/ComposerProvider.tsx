@@ -102,6 +102,7 @@ const ComposerPresentationActionsContext =
 type ComposerProviderProps = PropsWithChildren<{
   attachmentStore: ComposerAttachmentStore;
   draftStore: ComposerDraft;
+  retainEditing?: boolean;
   failedSend?: ComposerDraft['failedSend'];
   isFocused?: boolean;
 }>;
@@ -116,6 +117,7 @@ export function ComposerProvider({
   attachmentStore,
   children,
   draftStore: buffer,
+  retainEditing,
   failedSend,
   isFocused = true,
 }: ComposerProviderProps) {
@@ -147,7 +149,7 @@ export function ComposerProvider({
     return attempt;
   }, [buffer]);
   const endSendAttempt = buffer.endSend;
-  const presentation = useComposerPresentation(inputRef);
+  const presentation = useComposerPresentation(inputRef, retainEditing);
   const {
     addAttachments,
     attachments,

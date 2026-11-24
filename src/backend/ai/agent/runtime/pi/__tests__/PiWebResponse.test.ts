@@ -550,55 +550,113 @@ test('restores streamed Anthropic tool input and signed thinking only for its or
   expect(applyPiWebReplay(payload, { ...wire, id: 'other-model' }, [settled])).toEqual(payload);
 });
 
-test('official Claude omits completed-turn thinking after native web replay and preserves active tool calls', () => {
-  const { settled, wire, payload } = deferredAnthropicFetch();
-  const oldThought = { type: 'redacted_thinking', data: 'old-ciphertext' };
-  const question = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
-  const activeCall = {
-    role: 'assistant',
-    content: [
-      { type: 'thinking', thinking: 'active', signature: 'keep' },
-      { type: 'tool_use', id: 'toolu_active', name: 'lookup', input: {} },
-    ],
-  };
-  const activeResult = {
-    role: 'user',
-    content: [{ type: 'tool_result', tool_use_id: 'toolu_active', content: 'ok' }],
-  };
-  const messages = [
-    ...payload.messages,
-    { role: 'assistant', content: [oldThought] },
-    question,
-    activeCall,
-    activeResult,
-  ];
-  const original = structuredClone(messages);
-  const official = applyPiWebReplay(
-    { messages },
-    { ...wire, baseUrl: 'https://api.anthropic.com' },
-    [settled],
-  );
-  expect(official).toEqual({
-    messages: [
-      {
-        role: 'assistant',
-        content: [{ type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} }],
-      },
-      payload.messages[1],
+test.each([
+  { provider: 'anthropic', id: 'test', baseUrl: 'https://api.anthropic.com' },
+  {
+    provider: 'cherryin',
+    id: 'anthropic/claude-sonnet-5.5',
+    baseUrl: 'https://open.cherryin.net',
+  },
+  { provider: 'custom', id: 'claude-sonnet-5-5', baseUrl: 'https://relay.example/anthropic' },
+  {
+    provider: 'openrouter',
+    id: 'anthropic/claude-sonnet-5.5',
+    baseUrl: 'https://openrouter.ai/api',
+  },
+  { provider: 'aihubmix', id: 'claude-sonnet-5-5', baseUrl: 'https://aihubmix.com' },
+  { provider: 'new-api', id: 'claude-sonnet-5-5', baseUrl: 'https://newapi.example' },
+])(
+  '$provider omits completed-turn thinking after native web replay and preserves active tool calls',
+  ({ provider, id, baseUrl }) => {
+    const { settled, wire, payload } = deferredAnthropicFetch();
+    const oldThought = { type: 'redacted_thinking', data: 'old-ciphertext' };
+    const question = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
+    const activeCall = {
+      role: 'assistant',
+      content: [
+        { type: 'thinking', thinking: 'active', signature: 'keep' },
+        { type: 'redacted_thinking', data: 'active-ciphertext' },
+        { type: 'tool_use', id: 'toolu_active', name: 'lookup', input: {} },
+      ],
+    };
+    const activeResult = {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'toolu_active', content: 'ok' }],
+    };
+    const messages = [
+      ...payload.messages,
+      { role: 'assistant', content: [oldThought] },
       question,
       activeCall,
       activeResult,
-    ],
-  });
-  const compatible = applyPiWebReplay(
-    { messages },
-    { ...wire, baseUrl: 'https://api.deepseek.com/anthropic' },
-    [settled],
-  );
-  expect(JSON.stringify(compatible)).toContain('signed-thinking');
-  expect(JSON.stringify(compatible)).toContain('old-ciphertext');
-  expect(messages).toEqual(original);
-});
+    ];
+    const original = structuredClone(messages);
+    const replayed = applyPiWebReplay({ messages }, { ...wire, provider, id, baseUrl }, [
+      { ...settled, provider, model: id },
+    ]);
+    expect(replayed).toEqual({
+      messages: [
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} }],
+        },
+        payload.messages[1],
+        question,
+        activeCall,
+        activeResult,
+      ],
+    });
+    expect(messages).toEqual(original);
+  },
+);
+
+test.each([
+  {
+    provider: 'deepseek',
+    id: 'deepseek-flash',
+    baseUrl: 'https://api.deepseek.com/anthropic',
+  },
+  {
+    provider: 'dashscope',
+    id: 'qwen3.8-max',
+    baseUrl: 'https://maas.qianwenaiapi.com/apps/anthropic',
+  },
+  {
+    provider: 'qwencloud',
+    id: 'qwen3.8-max',
+    baseUrl: 'https://maas.qwencloudapi.com/apps/anthropic',
+  },
+])(
+  '$provider preserves completed-turn thinking on Messages-compatible endpoints',
+  ({ provider, id, baseUrl }) => {
+    const { settled, wire, payload } = deferredAnthropicFetch();
+    const oldThought = {
+      role: 'assistant',
+      content: [{ type: 'redacted_thinking', data: 'old-ciphertext' }],
+    };
+    const question = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
+    expect(
+      applyPiWebReplay(
+        { messages: [...payload.messages, oldThought, question] },
+        { ...wire, provider, id, baseUrl },
+        [{ ...settled, provider, model: id }],
+      ),
+    ).toEqual({
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'Read the page.', signature: 'signed-thinking' },
+            { type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} },
+          ],
+        },
+        payload.messages[1],
+        oldThought,
+        question,
+      ],
+    });
+  },
+);
 
 test('omits a deferred Anthropic call that can no longer run and keeps one answered later', () => {
   const { settled, wire, payload } = deferredAnthropicFetch();

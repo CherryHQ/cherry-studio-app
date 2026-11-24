@@ -845,6 +845,7 @@
   "cloud.rollingDays_other": "Rolling {{days}} days",
   "cloud.rollingHours_one": "Rolling {{hours}} hour",
   "cloud.rollingHours_other": "Rolling {{hours}} hours",
+  "cloud.sessionExpired": "Sign-in expired",
   "cloud.subscription": "Subscription",
   "cloud.subscriptionMonth": "Subscription month allowance",
   "cloud.title": "Subscription and quota",

@@ -6,9 +6,9 @@ export const WIDE_RAIL_WIDTH = 60;
 export const VERTICAL_RAIL_WIDTH = 64;
 export const FILES_MASTER_WIDTH = 288;
 export const DEFAULT_FLOATING_DOCK_ROW_HEIGHT = 44;
-export const FLOATING_DOCK_CLEARANCE_GAP = 8;
-export const FLOATING_DOCK_SAFE_AREA_OFFSET = 10;
-export const FLOATING_DOCK_ANDROID_BOTTOM_GAP = 10;
+export const FLOATING_DOCK_CLEARANCE_GAP = 10;
+export const FLOATING_DOCK_SAFE_AREA_OFFSET = 16;
+export const FLOATING_DOCK_ANDROID_BOTTOM_GAP = 6;
 export const FLOATING_DOCK_MIN_BOTTOM_PADDING = 12;
 
 export function resolveFloatingDockBottomPadding(

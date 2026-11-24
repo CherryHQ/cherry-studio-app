@@ -856,6 +856,7 @@
   "cloud.rollingHours_few": "Interval mobil de {{hours}} ore",
   "cloud.rollingHours_one": "Interval mobil de {{hours}} oră",
   "cloud.rollingHours_other": "Interval mobil de {{hours}} de ore",
+  "cloud.sessionExpired": "Sesiunea a expirat",
   "cloud.subscription": "Abonament",
   "cloud.subscriptionMonth": "Cotă pe luna de abonament",
   "cloud.title": "Abonament și cotă",

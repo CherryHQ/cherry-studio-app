@@ -81,6 +81,16 @@ export function resolveSidebarColumn({
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
 }
 
+const MIN_OVERLAY_WIDTH = 280;
+
+/**
+ * Compact overlay drawers span the full available window width inside the trailing safe area
+ * (such as a foldable display's trailing OS bar), without leaving a reveal strip or width cap.
+ */
+export function resolveSidebarOverlayWidth(windowWidth: number, trailingInset = 0): number {
+  return Math.max(MIN_OVERLAY_WIDTH, windowWidth - trailingInset);
+}
+
 /** Keep an inactive sidebar mounted without flashing or flipping drawer modes on push/pop. */
 export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number, isWide = true) {
   if (column.kind === 'overlay') {

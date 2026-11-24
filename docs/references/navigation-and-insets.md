@@ -117,8 +117,9 @@ size. Device identity never decides layout, so iPad Split View, Android tablets,
 displays follow the width they actually have. An iPad 11" or 13" is wide in both orientations; an
 iPad mini and an iPhone Duo's inner display are compact upright and wide on their side.
 
-Compact windows keep the overlay drawer. It leaves at least 64 points of chat visible and is capped
-at 400 points. A wide window has one structure: a left column beside one content region. The
+Compact windows keep the overlay drawer. It spans the full available window width inside any
+trailing safe area (with a 280-point minimum) and is dismissed via the header close button or swipe
+gesture. A wide window has one structure: a left column beside one content region. The
 left column is the 280-point sidebar, or in its place the file pane or conversation search, at the
 file pane width. The content region holds the chat or one first-level destination. The chat and
 first-level destinations lead with the sidebar button (`RouteHeaderProvider rootAction="drawer"`),

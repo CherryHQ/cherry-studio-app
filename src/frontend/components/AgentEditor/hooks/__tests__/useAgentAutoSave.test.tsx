@@ -53,7 +53,31 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
+  jest.useRealTimers();
 });
+
+it.each(['name', 'instructions'] as const)(
+  'flushes the latest %s deletion before the text debounce expires',
+  async (field) => {
+    jest.useFakeTimers();
+    mockUpdateAgent.mockClear();
+    await render([]);
+
+    await act(async () => {
+      snapshot.saveField(field, '1234');
+      snapshot.saveField(field, '123');
+      snapshot.saveField(field, '12');
+    });
+    expect(mockUpdateAgent).not.toHaveBeenCalled();
+
+    await act(async () => snapshot.flush());
+    expect(mockUpdateAgent).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', { [field]: '12' });
+
+    await act(async () => jest.advanceTimersByTime(600));
+    expect(mockUpdateAgent).toHaveBeenCalledTimes(1);
+  },
+);
 
 it('follows installations, external binding changes and removals while the editor stays mounted', async () => {
   await render([skill('existing', false)]);

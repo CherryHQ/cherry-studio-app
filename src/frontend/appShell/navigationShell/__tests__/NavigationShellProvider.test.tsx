@@ -1,4 +1,6 @@
-import { useLayoutEffect } from 'react';
+import { NavigationContext } from 'expo-router/react-navigation';
+import { type ContextType, useLayoutEffect } from 'react';
+import { Keyboard, type KeyboardEvent } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { NavigationShellProvider } from '../NavigationShellProvider';
@@ -18,7 +20,6 @@ let mockDimensions = { height: 852, width: 393 };
 let mockInsets = { bottom: 34, left: 0, right: 0, top: 59 };
 let mockWindowClass: 'compact' | 'wide' = 'compact';
 let mockFold: { height: number; width: number; x: number; y: number } | null = null;
-let mockKeyboardVisible = false;
 let mockPlatformOS: 'ios' | 'android' = 'ios';
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -68,18 +69,23 @@ jest.mock('expo-router', () => ({
     replace: jest.fn(),
   }),
 }));
-jest.mock('react-native', () => ({
-  Platform: {
-    get OS() {
-      return mockPlatformOS;
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return Object.defineProperties(Object.create(actual), {
+    Platform: {
+      enumerable: true,
+      value: Object.defineProperties(Object.create(actual.Platform), {
+        OS: { enumerable: true, get: () => mockPlatformOS },
+        select: {
+          enumerable: true,
+          value: <T,>(spec: Partial<Record<'ios' | 'android' | 'default', T>>) =>
+            spec[mockPlatformOS] ?? spec.default,
+        },
+      }),
     },
-  },
-  useWindowDimensions: () => mockDimensions,
-}));
-jest.mock('react-native-keyboard-controller', () => ({
-  useKeyboardState: (selector: (s: { isVisible: boolean }) => boolean) =>
-    selector({ isVisible: mockKeyboardVisible }),
-}));
+    useWindowDimensions: { enumerable: true, value: () => mockDimensions },
+  });
+});
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockInsets,
 }));
@@ -104,6 +110,32 @@ jest.mock('react-i18next', () => ({
 let latest: ReturnType<typeof useNavigationShell>;
 let latestInteraction: ReturnType<typeof useNavigationShellInteraction>;
 let renderer: ReactTestRenderer;
+
+function createFocusableNavigation(initialFocused = true) {
+  let focused = initialFocused;
+  const listeners: Record<'blur' | 'focus', Set<() => void>> = {
+    blur: new Set(),
+    focus: new Set(),
+  };
+  const navigation = {
+    addListener: (event: 'blur' | 'focus', listener: () => void) => {
+      listeners[event].add(listener);
+      return () => {
+        listeners[event].delete(listener);
+      };
+    },
+    isFocused: () => focused,
+  } as unknown as ContextType<typeof NavigationContext>;
+
+  const emit = (event: 'blur' | 'focus') => {
+    focused = event === 'focus';
+    for (const listener of listeners[event]) {
+      listener();
+    }
+  };
+
+  return { emit, navigation };
+}
 
 function Probe({
   hideDock = false,
@@ -132,7 +164,6 @@ describe('NavigationShellProvider', () => {
     mockInsets = { bottom: 34, left: 0, right: 0, top: 59 };
     mockWindowClass = 'compact';
     mockFold = null;
-    mockKeyboardVisible = false;
     mockPlatformOS = 'ios';
   });
 
@@ -151,7 +182,7 @@ describe('NavigationShellProvider', () => {
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isDockVisible).toBe(true);
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(42);
+    expect(latest.dockClearance).toBe(38);
 
     mockInsets = { bottom: 0, left: 0, right: 0, top: 20 };
     act(() => {
@@ -163,7 +194,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(64);
+    expect(latest.dockClearance).toBe(66);
 
     mockWindowClass = 'wide';
     mockDimensions = { height: 834, width: 1194 };
@@ -195,47 +226,104 @@ describe('NavigationShellProvider', () => {
     expect(latest.isVerticalRailVisible).toBe(true);
   });
 
-  it('hides dock when keyboard is open, overlay hides it, or route is a detail page', () => {
+  it('keeps dock visible when keyboard opens, cancels active drag on keyboardDidShow, and hides dock for overlays or detail routes', () => {
+    const keyboardListeners: Record<string, (event: KeyboardEvent) => void> = {};
+    const addListenerSpy = jest
+      .spyOn(Keyboard, 'addListener')
+      .mockImplementation((event, listener) => {
+        keyboardListeners[event] = listener as (keyboardEvent: KeyboardEvent) => void;
+        return { remove: jest.fn() } as unknown as ReturnType<typeof Keyboard.addListener>;
+      });
+
+    try {
+      act(() => {
+        renderer = create(
+          <NavigationShellProvider>
+            <Probe />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(true);
+      expect(addListenerSpy).not.toHaveBeenCalled();
+
+      act(() => {
+        latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
+        latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 700 });
+      });
+      expect(latestInteraction.dragState).not.toBeNull();
+      expect(keyboardListeners.keyboardDidShow).toBeDefined();
+
+      act(() => {
+        keyboardListeners.keyboardDidShow?.({} as KeyboardEvent);
+      });
+      expect(latestInteraction.dragState).toBeNull();
+      expect(latest.isDockVisible).toBe(true);
+
+      act(() => {
+        renderer.update(
+          <NavigationShellProvider>
+            <Probe hideDock />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(false);
+
+      mockPathname = '/files/123';
+      act(() => {
+        renderer.update(
+          <NavigationShellProvider>
+            <Probe />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(false);
+      expect(latest.dockClearance).toBe(0);
+      expect(latest.restingDockClearance).toBe(38);
+    } finally {
+      addListenerSpy.mockRestore();
+    }
+  });
+
+  it('scopes useHideFloatingDock registration to screen focus and blur transitions', () => {
+    const focusedScreen = createFocusableNavigation(true);
+    const blurredScreen = createFocusableNavigation(false);
+
     act(() => {
       renderer = create(
         <NavigationShellProvider>
-          <Probe />
+          <NavigationContext value={focusedScreen.navigation}>
+            <Probe hideDock />
+          </NavigationContext>
+        </NavigationShellProvider>,
+      );
+    });
+    expect(latest.isDockVisible).toBe(false);
+
+    act(() => {
+      focusedScreen.emit('blur');
+    });
+    expect(latest.isDockVisible).toBe(true);
+
+    act(() => {
+      focusedScreen.emit('focus');
+    });
+    expect(latest.isDockVisible).toBe(false);
+
+    act(() => {
+      renderer.update(
+        <NavigationShellProvider>
+          <NavigationContext value={blurredScreen.navigation}>
+            <Probe hideDock />
+          </NavigationContext>
         </NavigationShellProvider>,
       );
     });
     expect(latest.isDockVisible).toBe(true);
 
     act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe hideDock />
-        </NavigationShellProvider>,
-      );
+      blurredScreen.emit('focus');
     });
     expect(latest.isDockVisible).toBe(false);
-
-    mockKeyboardVisible = true;
-    act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(false);
-
-    mockKeyboardVisible = false;
-    mockPathname = '/files/123';
-    act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(false);
-    expect(latest.dockClearance).toBe(0);
-    expect(latest.restingDockClearance).toBe(42);
   });
 
   it('keeps Android floating dock clear of system bar and auto-cancels active drag when leaving root', () => {
@@ -249,8 +337,8 @@ describe('NavigationShellProvider', () => {
       );
     });
 
-    expect(latest.dockClearance).toBe(62);
-    expect(latest.restingDockClearance).toBe(62);
+    expect(latest.dockClearance).toBe(60);
+    expect(latest.restingDockClearance).toBe(60);
 
     act(() => {
       latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
@@ -267,7 +355,7 @@ describe('NavigationShellProvider', () => {
       );
     });
     expect(latest.dockClearance).toBe(0);
-    expect(latest.restingDockClearance).toBe(62);
+    expect(latest.restingDockClearance).toBe(60);
     expect(latestInteraction.dragState).toBeNull();
   });
 

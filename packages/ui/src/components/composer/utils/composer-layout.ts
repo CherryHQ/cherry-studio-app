@@ -5,14 +5,14 @@
 const actionIconSize = 24;
 /** The toolbar buttons: a circle sized to its icon rather than to its reach. */
 export const composerActionSize = actionIconSize + 8;
-// A 32pt radius keeps the 56pt resting surface on the shared radius scale and
-// gives its corners a continuous capsule silhouette without enlarging actions.
-export const surfaceRadius = 32;
+// A 26pt radius keeps the 50pt resting surface as a true pill while preserving a
+// refined silhouette when expanded to multi-row editing.
+export const surfaceRadius = 26;
 // The toolbar's buttons carry their own surface, so the padding is measured to
 // their edge rather than to their icons' ink.
-const surfacePaddingHorizontal = 12;
-const surfacePaddingTop = 12;
-const surfacePaddingBottom = 12;
+const surfacePaddingHorizontal = 10;
+const surfacePaddingTop = 9;
+const surfacePaddingBottom = 9;
 const toolbarGap = 12;
 // Between the tools themselves. Narrower than the gap above the row: they are
 // one band, and the row is a separate thing from the field.
@@ -70,6 +70,10 @@ export const pillStyle = {
 export const textInputBoxStyle = {
   maxHeight: COMPOSER_MAX_TEXT_HEIGHT,
   paddingVertical: textPaddingVertical,
+} as const;
+// Leave the row's breathing room outside the native field when it shows one line.
+export const compactTextInputBoxStyle = {
+  maxHeight: composerActionSize - 2 * textPaddingVertical,
 } as const;
 // The paste wrapper shrink-wraps its child by default, which would pull the
 // field in from the surface's right edge and leave the caret short of it.

@@ -46,7 +46,7 @@ function DrawingsScreenBody() {
   const { isEditing } = useSelectionState();
   const expansion = useComposerExpansion();
   const isExpanded = Boolean(expansion?.state.isPresented);
-  useHideFloatingDock(isEditing || isExpanded);
+  useHideFloatingDock(isExpanded);
   const handleGenerate = useCallback(
     async (input: PaintingInputSubmission) => {
       const started = await startGeneration(paintingGenerationInput(input));

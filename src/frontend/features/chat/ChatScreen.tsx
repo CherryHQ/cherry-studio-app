@@ -168,26 +168,31 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const api = useApiClient();
   const { openTurn } = quoteNavigation;
-  const turnNavigator: ChatTurnNavigator | undefined =
-    sessionId && !isPreview
-      ? {
-          scope: `local:${sessionId}`,
-          queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
-          async read(_, signal) {
-            const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, { signal });
-            return {
-              items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
-            };
-          },
-          async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
-            const result = await openTurn(
-              { sourceMessageId, requestId: uuidv7() },
-              activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
-            );
-            return result.state;
-          },
-        }
-      : undefined;
+  const turnNavigator = useMemo<ChatTurnNavigator | undefined>(
+    () =>
+      sessionId && !isPreview
+        ? {
+            scope: `local:${sessionId}`,
+            queryKey: [...queryKeys.agentSessions.messages(sessionId), 'turns'],
+            async read(_, signal) {
+              const turns = await api.get(`/agent-sessions/${sessionId}/messages/turns`, {
+                signal,
+              });
+              return {
+                items: turns.items.map((turn) => ({ ...turn, activeNodeId: turns.activeNodeId })),
+              };
+            },
+            async jump({ id: sourceMessageId, activeNodeId }, scrollToMessage) {
+              const result = await openTurn(
+                { sourceMessageId, requestId: uuidv7() },
+                activeNodeId ? { activeNodeId, scrollToMessage } : undefined,
+              );
+              return result.state;
+            },
+          }
+        : undefined,
+    [api, isPreview, openTurn, sessionId],
+  );
   const readCitations = messageWindow.readCitations;
   const readCitationsRef = useRef(readCitations);
   useEffect(() => {

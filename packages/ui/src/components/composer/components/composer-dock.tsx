@@ -1,12 +1,20 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   type PropsWithChildren,
   type RefObject,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
-import { type LayoutChangeEvent, Pressable, View, type ViewInstance } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
   type SharedValue,
@@ -14,6 +22,7 @@ import Animated, {
   useAnimatedStyle,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResolveClassNames } from 'uniwind';
 
 import {
   composerHorizontalScreenInset,
@@ -21,6 +30,34 @@ import {
   getComposerKeyboardStickyOffset,
 } from '../utils/composer-dock-layout';
 import { useComposerExpansion } from './composer-expansion';
+
+const COMPOSER_DOCK_FADE_OVERHANG = 28;
+const FADE_START = { x: 0.5, y: 0 } as const;
+const FADE_END = { x: 0.5, y: 1 } as const;
+const FADE_LOCATIONS = [0, 0.58, 1] as const;
+const FADE_OVERHANG_STYLE = {
+  bottom: 0,
+  left: 0,
+  position: 'absolute',
+  right: 0,
+  top: -COMPOSER_DOCK_FADE_OVERHANG,
+} as const;
+
+function getCollapsedExtraOffset(
+  extraBottomOffset: number,
+  keyboardHeight: number,
+  keyboardProgress: number,
+  keyboardOffset: number,
+  expandProgress: number,
+  isTracking: boolean,
+): number {
+  'worklet';
+  if (!isTracking || extraBottomOffset <= 0) {
+    return 0;
+  }
+  const baseLift = -(keyboardHeight + keyboardProgress * keyboardOffset);
+  return Math.min(extraBottomOffset, Math.max(0, baseLift)) * (1 - expandProgress);
+}
 
 export type ComposerDockProps = PropsWithChildren<{
   /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
@@ -108,16 +145,56 @@ export function ComposerDock({
     [isExpandable, keyboardTracking, tracking],
   );
 
-  const stickyStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY:
-          (keyboardTracking?.get() ?? true)
-            ? keyboardHeight.get() + keyboardProgress.get() * keyboardOffset
-            : 0,
-      },
-    ],
-  }));
+  useAnimatedReaction(
+    () => {
+      if (!isExpandable || !compactDockHeight || !contentInset || extraBottomOffset <= 0) {
+        return -1;
+      }
+      const measured = compactDockHeight.get();
+      if (measured <= 0) {
+        return -1;
+      }
+      const expandProgress = progress?.get() ?? 0;
+      const collapsedExtraOffset = getCollapsedExtraOffset(
+        extraBottomOffset,
+        keyboardHeight.get(),
+        keyboardProgress.get(),
+        keyboardOffset,
+        expandProgress,
+        keyboardTracking?.get() ?? true,
+      );
+      return Math.max(0, measured - collapsedExtraOffset);
+    },
+    (nextInset, previousInset) => {
+      if (contentInset && nextInset >= 0 && nextInset !== previousInset) {
+        contentInset.set(nextInset);
+      }
+    },
+  );
+
+  const stickyStyle = useAnimatedStyle(() => {
+    const isTracking = keyboardTracking?.get() ?? true;
+    if (!isTracking) {
+      return { transform: [{ translateY: 0 }] };
+    }
+    const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
+    const collapsedExtraOffset = getCollapsedExtraOffset(
+      extraBottomOffset,
+      keyboardHeight.get(),
+      keyboardProgress.get(),
+      keyboardOffset,
+      expandProgress,
+      true,
+    );
+    return {
+      transform: [
+        {
+          translateY:
+            keyboardHeight.get() + keyboardProgress.get() * keyboardOffset + collapsedExtraOffset,
+        },
+      ],
+    };
+  });
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: isExpandable ? (progress?.get() ?? 0) : 0,
@@ -127,10 +204,7 @@ export function ComposerDock({
   }));
   const dockStyle = useAnimatedStyle(() => {
     const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
-    const restingOffset =
-      extraBottomOffset > 0
-        ? extraBottomOffset * Math.max(0, 1 - keyboardProgress.get()) * (1 - expandProgress)
-        : 0;
+    const restingOffset = extraBottomOffset > 0 ? extraBottomOffset * (1 - expandProgress) : 0;
     return {
       paddingBottom: bottomPadding + restingOffset,
       paddingHorizontal: composerHorizontalScreenInset * (1 - expandProgress),
@@ -165,10 +239,9 @@ export function ComposerDock({
       {isExpandable ? (
         <Animated.View pointerEvents="box-none" style={dockStyle}>
           {backgroundClassName ? (
-            <Animated.View
-              className={`absolute inset-0 ${backgroundClassName}`}
-              pointerEvents="none"
-              style={restingBackgroundStyle}
+            <ComposerDockFade
+              backgroundClassName={backgroundClassName}
+              restingBackgroundStyle={restingBackgroundStyle}
             />
           ) : null}
           <Animated.View
@@ -204,5 +277,51 @@ export function ComposerDock({
       </Animated.View>
       {dock}
     </>
+  );
+}
+
+function ComposerDockFade({
+  backgroundClassName,
+  restingBackgroundStyle,
+}: {
+  backgroundClassName: string;
+  restingBackgroundStyle: ReturnType<typeof useAnimatedStyle>;
+}) {
+  const transparentClassName = backgroundClassName.includes(' ') ? '' : `${backgroundClassName}/0`;
+  const resolvedSolid = useResolveClassNames(backgroundClassName);
+  const resolvedTransparent = useResolveClassNames(transparentClassName);
+  const fadeSolidColor =
+    typeof resolvedSolid.backgroundColor === 'string' ? resolvedSolid.backgroundColor : undefined;
+  const fadeStartColor =
+    typeof resolvedTransparent.backgroundColor === 'string'
+      ? resolvedTransparent.backgroundColor
+      : undefined;
+  const fadeColors = useMemo(
+    () =>
+      fadeStartColor && fadeSolidColor
+        ? ([fadeStartColor, fadeSolidColor, fadeSolidColor] as const)
+        : null,
+    [fadeSolidColor, fadeStartColor],
+  );
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[fadeColors ? FADE_OVERHANG_STYLE : StyleSheet.absoluteFill, restingBackgroundStyle]}
+      testID="composer-dock-fade"
+    >
+      {fadeColors ? (
+        <LinearGradient
+          colors={fadeColors}
+          end={FADE_END}
+          locations={FADE_LOCATIONS}
+          pointerEvents="none"
+          start={FADE_START}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View className={`absolute inset-0 ${backgroundClassName}`} pointerEvents="none" />
+      )}
+    </Animated.View>
   );
 }

@@ -834,6 +834,7 @@
   "cloud.remainingPercentShort": "剩余{{percent}}",
   "cloud.rollingDays_other": "{{days}} 天滚动窗口",
   "cloud.rollingHours_other": "滚动 {{hours}} 小时",
+  "cloud.sessionExpired": "登录已失效",
   "cloud.subscription": "订阅",
   "cloud.subscriptionMonth": "订阅月额度",
   "cloud.title": "订阅与额度",

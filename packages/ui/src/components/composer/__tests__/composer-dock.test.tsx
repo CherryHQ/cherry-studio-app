@@ -8,6 +8,7 @@ import type { useComposerExpansion } from '../components/composer-expansion';
 import { useComposerDockLayout } from '../hooks/use-composer-dock-layout';
 
 let mockBottomInset = 34;
+let mockKeyboardMaxHeight = 300;
 let mockKeyboardProgress = 1;
 let mockExpansion: ReturnType<typeof useComposerExpansion> = null;
 
@@ -15,7 +16,20 @@ jest.mock('../components/composer-expansion', () => ({
   useComposerExpansion: () => mockExpansion,
 }));
 
+jest.mock('expo-linear-gradient', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    LinearGradient: (props: object) => createElement('LinearGradient', props),
+  };
+});
+
 jest.mock('uniwind', () => ({
+  useResolveClassNames: (className: string) =>
+    className.endsWith('/0')
+      ? { backgroundColor: 'rgba(249, 249, 249, 0)' }
+      : className
+        ? { backgroundColor: '#f9f9f9' }
+        : {},
   withUniwind: (component: unknown) => component,
 }));
 
@@ -23,10 +37,10 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: mockBottomInset, left: 0, right: 0, top: 0 }),
 }));
 
-// An open keyboard 300pt tall.
+// An open keyboard whose height can vary by test case.
 jest.mock('react-native-keyboard-controller', () => ({
   useReanimatedKeyboardAnimation: () => ({
-    height: { get: () => -300 * mockKeyboardProgress },
+    height: { get: () => -mockKeyboardMaxHeight * mockKeyboardProgress },
     progress: { get: () => mockKeyboardProgress },
   }),
 }));
@@ -81,6 +95,7 @@ describe('Composer.Dock', () => {
 
   beforeEach(() => {
     mockBottomInset = 34;
+    mockKeyboardMaxHeight = 300;
     mockKeyboardProgress = 1;
     mockExpansion = null;
     dockLayout = undefined;
@@ -119,13 +134,24 @@ describe('Composer.Dock', () => {
     expect(onLayout).toHaveBeenCalledWith(layoutEvent);
   });
 
+  it('keeps the navigation clearance while another input owns an open keyboard', () => {
+    act(() => {
+      renderer = create(<ComposerDock keyboardTracking={cell(false)} extraBottomOffset={42} />);
+    });
+    const dock = renderer!.root.findByProps({ pointerEvents: 'box-none' });
+    expect(StyleSheet.flatten(dock.props.style)).toMatchObject({
+      paddingBottom: 80,
+      transform: [{ translateY: 0 }],
+    });
+  });
+
   it('reserves the minimum dock height and tracks live height updates', () => {
     act(() => {
       renderer = create(<DockLayoutProbe />);
     });
 
     expect(dockLayout).toMatchObject({
-      contentBottomInset: 134,
+      contentBottomInset: 150,
       inputHeight: 126,
       keyboardOffset: 26,
     });
@@ -133,12 +159,12 @@ describe('Composer.Dock', () => {
 
     act(() => dockLayout?.handleInputHeightChange(140.2));
 
-    expect(dockLayout).toMatchObject({ contentBottomInset: 149, inputHeight: 141 });
+    expect(dockLayout).toMatchObject({ contentBottomInset: 165, inputHeight: 141 });
     expect(dockLayout?.inputHeightShared.value).toBe(140.2);
 
     act(() => dockLayout?.handleInputHeightChange(20));
 
-    expect(dockLayout).toMatchObject({ contentBottomInset: 134, inputHeight: 126 });
+    expect(dockLayout).toMatchObject({ contentBottomInset: 150, inputHeight: 126 });
     expect(dockLayout?.inputHeightShared.value).toBe(20);
   });
 
@@ -237,15 +263,18 @@ describe('Composer.Dock', () => {
     }
     expect(contentInset.get()).toBe(148);
     expect(onRender).not.toHaveBeenCalled();
-    const restingBackground = () =>
-      renderer!.root.findByProps({ className: 'absolute inset-0 bg-chat-background' });
-    // The compact dock hides the transcript it overlays.
-    expect(restingBackground().props.style).toEqual({ opacity: 1 });
+    const restingBackground = () => renderer!.root.findByProps({ testID: 'composer-dock-fade' });
+    // The compact dock fades the transcript gently into the composer surface.
+    expect(StyleSheet.flatten(restingBackground().props.style)).toMatchObject({
+      opacity: 1,
+      top: -28,
+    });
+    expect(restingBackground().findByType('LinearGradient' as never)).toBeTruthy();
 
     mockExpansion.state = { isExpanded: true, isPresented: true };
     progress.set(1);
     act(() => renderer!.update(renderDock()));
-    expect(restingBackground().props.style).toEqual({ opacity: 0 });
+    expect(StyleSheet.flatten(restingBackground().props.style)).toMatchObject({ opacity: 0 });
     act(() =>
       renderer!.root.findAllByProps({ pointerEvents: 'box-none' })[0].props.onLayout({
         nativeEvent: { layout: { height: 600 } },
@@ -259,22 +288,25 @@ describe('Composer.Dock', () => {
     expect(contentInset.get()).toBe(0);
   });
 
-  it('adds extraBottomOffset when resting and collapses it on keyboard or expansion', () => {
+  it('keeps paddingBottom steady on keyboard open while collapsing extraBottomOffset via GPU translateY and UI contentInset', () => {
+    const compactDockHeight = cell(0);
+    const contentInset = cell(0);
     const progress = cell(0);
     mockExpansion = {
       actions: { collapse: jest.fn(), expand: jest.fn(), resizeContent: jest.fn() },
       meta: {
-        compactDockHeight: cell(0),
-        contentInset: cell(0),
+        compactDockHeight,
+        contentInset,
         extraHeight: cell(0),
         keyboardTrackingEnabled: cell(true),
         progress,
       },
       state: { isExpanded: false, isPresented: false },
     };
+    mockKeyboardMaxHeight = 300;
     mockKeyboardProgress = 0;
 
-    const extraDockStyle = () =>
+    const innerDockStyle = () =>
       StyleSheet.flatten(
         renderer!.root
           .findAllByProps({ pointerEvents: 'box-none' })
@@ -282,24 +314,49 @@ describe('Composer.Dock', () => {
             node.children.some((c) => typeof c !== 'string' && c?.props?.testID === 'dock-child'),
           )?.props.style,
       );
+    const outerStickyStyle = () =>
+      StyleSheet.flatten(
+        renderer!.root
+          .findAllByProps({ pointerEvents: 'box-none' })
+          .find((node) => typeof node.props.onLayout === 'function')?.props.style,
+      );
+
+    const renderExtraDock = () => (
+      <ComposerDock extraBottomOffset={64} keyboardTracking={cell(true)} layoutMode="expandable">
+        <View testID="dock-child" />
+      </ComposerDock>
+    );
 
     act(() => {
-      renderer = create(
-        <ComposerDock extraBottomOffset={64} keyboardTracking={cell(true)} layoutMode="expandable">
-          <View testID="dock-child" />
-        </ComposerDock>,
-      );
+      renderer = create(renderExtraDock());
     });
-    expect(extraDockStyle().paddingBottom).toBeGreaterThanOrEqual(64);
+    const restingPaddingBottom = innerDockStyle().paddingBottom as number;
+    expect(restingPaddingBottom).toBeGreaterThanOrEqual(64);
+    expect(outerStickyStyle().transform).toEqual([{ translateY: 0 }]);
+
+    act(() => {
+      renderer!.root
+        .findAllByProps({ pointerEvents: 'box-none' })
+        .find((node) => typeof node.props.onLayout === 'function')
+        ?.props.onLayout({ nativeEvent: { layout: { height: 148 } } });
+    });
+    expect(contentInset.get()).toBe(148);
 
     mockKeyboardProgress = 1;
-    act(() =>
-      renderer!.update(
-        <ComposerDock extraBottomOffset={64} keyboardTracking={cell(true)} layoutMode="expandable">
-          <View testID="dock-child" />
-        </ComposerDock>,
-      ),
-    );
-    expect(extraDockStyle().paddingBottom).toBeLessThan(64);
+    act(() => renderer!.update(renderExtraDock()));
+    expect(innerDockStyle().paddingBottom).toBe(restingPaddingBottom);
+    expect(outerStickyStyle().transform).toEqual([{ translateY: -300 + 26 + 64 }]);
+    expect(contentInset.get()).toBe(148 - 64);
+
+    // Small hardware-keyboard accessory bar clamps collapse so composer never dips below bottom dock.
+    mockKeyboardMaxHeight = 55;
+    act(() => renderer!.update(renderExtraDock()));
+    expect(outerStickyStyle().transform).toEqual([{ translateY: 0 }]);
+
+    // Full-screen expansion reclaims extraBottomOffset from paddingBottom.
+    mockKeyboardMaxHeight = 300;
+    progress.set(1);
+    act(() => renderer!.update(renderExtraDock()));
+    expect(innerDockStyle().paddingBottom).toBeLessThan(64);
   });
 });

@@ -856,6 +856,7 @@
   "cloud.rollingHours_many": "Ventana móvil de {{hours}} horas",
   "cloud.rollingHours_one": "Ventana móvil de {{hours}} hora",
   "cloud.rollingHours_other": "Ventana móvil de {{hours}} horas",
+  "cloud.sessionExpired": "La sesión ha caducado",
   "cloud.subscription": "Suscripción",
   "cloud.subscriptionMonth": "Cuota del mes de suscripción",
   "cloud.title": "Suscripción y cuota",

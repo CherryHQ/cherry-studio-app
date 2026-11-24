@@ -134,12 +134,13 @@ tool inputs, encrypted search results and fetched documents. Later requests to t
 and model restore the original assistant content before sending client tool results, so a server
 tool deferred behind a parallel function call can run. A deferred call that can no longer run,
 because web tools were withdrawn or the turn moved on without it, is omitted from the restored
-content. On requests to the official Anthropic endpoint, signed and redacted thinking from
-completed turns is omitted after this reconstruction because a changed prompt can invalidate
-its signature. The current tool loop keeps the original thinking and tool results. A response
-cut off inside a tool call is not restored; later requests carry its answer
-text and source facts. A `pause_turn` response is continued as-is with the same tools, at most
-five times per model invocation. Continued text keeps its streaming offsets, citations and
+content. On Messages requests to the official Anthropic endpoint or to Claude models through
+compatible relays, signed and redacted thinking from completed turns is omitted after this
+reconstruction because a changed prompt can invalidate its signature. Non-Claude models on other
+Messages-compatible endpoints retain their original thinking. The current tool loop keeps the
+original thinking and tool results. A response cut off inside a tool call is not restored; later
+requests carry its answer text and source facts. A `pause_turn` response is continued as-is with the
+same tools, at most five times per model invocation. Continued text keeps its streaming offsets, citations and
 accumulated usage; exceeding the limit ends with an error and preserves the partial answer. The
 five-use tool cap limits each provider request but does not prevent pauses. Each natively fetched
 page is limited to 4,000 tokens, the external reader's per-page allowance, because restored

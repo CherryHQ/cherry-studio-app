@@ -90,6 +90,8 @@ export type MessageListProps = {
   onReturnToLatest?: () => void;
   onReady?: () => void;
   onTargetRestored?: (target: { dataKey: string; messageId: string }) => void;
+  /** UI-thread reading progress in [0, 1] updated without React re-renders. */
+  scrollProgress?: SharedValue<number>;
   renderMessage: MessageRenderer;
 };
 

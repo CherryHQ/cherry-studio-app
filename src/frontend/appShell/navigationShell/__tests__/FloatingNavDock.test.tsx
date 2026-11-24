@@ -258,7 +258,7 @@ describe('FloatingNavDock drag preview', () => {
     expect(detached.findByProps({ testID: 'floating-nav-tab-drawings' })).toBeTruthy();
 
     const row = renderer!.root.findByProps({
-      className: 'flex-row items-center justify-center gap-2.5 px-4',
+      testID: 'floating-nav-row',
     });
     act(() => {
       row.props.onLayout({ nativeEvent: { layout: { height: 44 } } });
