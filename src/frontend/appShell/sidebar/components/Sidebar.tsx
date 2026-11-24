@@ -6,12 +6,7 @@ import { Keyboard, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useCanDockSidebar } from '@/frontend/appShell/layout';
-import {
-  chatRouteParams,
-  useChatSource,
-  useConversationTarget,
-} from '@/frontend/appShell/navigation/chat';
-import { useFilePane } from '@/frontend/appShell/pane/state';
+import { useChatSource, useConversationTarget } from '@/frontend/appShell/navigation/chat';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -56,16 +51,10 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       .filter((segment) => !segment.startsWith('('))
       .join('/');
   const params = useGlobalSearchParams();
-  const { source, remoteTarget, viewMode, localChat } = useChatSource();
-  // Destinations act for the chat beside the sidebar, or the one a page currently covers.
-  const agentId = localChat?.kind === 'draft' ? localChat.agentId : undefined;
-  const sessionId = localChat?.kind === 'session' ? localChat.sessionId : undefined;
-  // Serialized so the actions below change only when the chat does.
-  const sourceChat = localChat ? JSON.stringify(chatRouteParams(localChat)) : undefined;
+  const { source, remoteTarget, viewMode } = useChatSource();
   const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
   const canDock = useCanDockSidebar();
-  const pane = useFilePane();
   const { column, setContent } = useSidebarColumn();
   const { cancelPending, waitForClose } = useCloseDrawerForNavigation(navigation, canDock);
   const currentConversation = useConversationTarget({ kind: 'local' });
@@ -93,7 +82,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   // From the chat a destination opens above it; from another destination it takes that one's place,
   // so moving between sidebar entries never builds a back history.
   const openDestination = useCallback(
-    (href: Href, history: 'swap' | 'push' = 'swap') => {
+    (href: Href) => {
       cancelPending();
       if (isOverlay) navigation.closeDrawer();
       const pathname = typeof href === 'string' ? href : href.pathname;
@@ -104,7 +93,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       )
         return;
       const stack = getContentStack(navigation);
-      if (history === 'swap' && stack && stack.index > 0) router.replace(href);
+      if (stack && stack.index > 0) router.replace(href);
       else router.push(href);
     },
     [cancelPending, isOverlay, navigation, page, params, router],
@@ -128,21 +117,6 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
               else openSessionSearch();
             }
           : undefined,
-      navigateAgents: () => openDestination('/agents'),
-      openLibrary: () => {
-        // Files open beside the current chat when the window has room for both. A library page
-        // remembers that chat, so a file can still be added to it.
-        if (pane?.isAvailable) {
-          navigation.closeDrawer();
-          returnToChat();
-          pane.open();
-        } else {
-          return openDestination({ pathname: '/library', params: { sourceChat } }, 'push');
-        }
-      },
-      openPaintings: () => openDestination('/drawings'),
-      openPlugins: () => openDestination({ pathname: '/plugins', params: { agentId, sessionId } }),
-      openSkills: () => openDestination({ pathname: '/skills', params: { agentId, sessionId } }),
       openScheduledTasks: () => {
         if (remoteTarget.connectionId)
           openDestination({
@@ -153,16 +127,12 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       openSettings: () => openDestination('/settings'),
     }),
     [
-      agentId,
-      sessionId,
-      sourceChat,
       navigation,
       cancelPending,
       waitForClose,
       canDock,
       openDestination,
       openSessionSearch,
-      pane,
       returnToChat,
       SearchPanel,
       setContent,
@@ -196,7 +166,7 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   return (
     <SidebarActionsContext value={actions}>
       <SidebarSelectionProvider scope={`${source}:${remoteTarget.connectionId ?? ''}:${viewMode}`}>
-        {/* A fold at the column's trailing edge stays empty, as it does beside the file pane. */}
+        {/* A fold at the column's trailing edge stays empty. */}
         <View
           accessibilityElementsHidden={isColumnHidden}
           className="flex-1"

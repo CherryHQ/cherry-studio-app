@@ -19,7 +19,6 @@ import {
   type ChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
-import type { FilePaneFile } from '@/frontend/appShell/pane/state';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -84,8 +83,10 @@ export function FileViewerScreen() {
   );
 }
 
-/** The same viewer beside the chat or inside Files Master-Detail; Office references use the active chat. */
-export function FileViewerPane({ entryId, imageEditRequestId }: FilePaneFile) {
+type FileViewerPaneProps = { entryId: FileEntryId; imageEditRequestId?: string };
+
+/** The same viewer inside Files Master-Detail; Office references use the active chat. */
+export function FileViewerPane({ entryId, imageEditRequestId }: FileViewerPaneProps) {
   const chatRoute = parseChatRoute(useGlobalSearchParams<ChatRouteParamsInput>());
   const { localChat } = useChatSource();
 

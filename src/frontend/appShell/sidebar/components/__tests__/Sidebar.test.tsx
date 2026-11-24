@@ -1,8 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ChatTarget } from '@/frontend/appShell/navigation/chat';
-
 import type { SidebarActions } from '../../context';
 import { Sidebar } from '../Sidebar';
 
@@ -12,10 +10,10 @@ const mockCloseDrawer = jest.fn();
 const mockCancelPending = jest.fn();
 const mockWaitForClose = jest.fn(async () => true);
 const mockDispatch = jest.fn();
-const mockPaneOpen = jest.fn();
-let mockLocalChat: ChatTarget | undefined;
+const mockOpenSessionSearch = jest.fn();
+const mockSetContent = jest.fn();
+let mockConnectionId: string | undefined;
 let mockSource: 'local' | 'remote' = 'local';
-let mockPaneAvailable = false;
 let mockCanDock = false;
 let mockPage = ['(chat)'];
 let mockParams: Record<string, string> = {};
@@ -36,30 +34,24 @@ jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
 jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => '#fff' }));
 
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
-  ...jest.requireActual('@/frontend/appShell/navigation/chat/chatRoute'),
   useConversationTarget: () => ({}),
   useChatSource: () => ({
-    localChat: mockLocalChat,
     source: mockSource,
-    remoteTarget: {},
+    remoteTarget: { connectionId: mockConnectionId },
     viewMode: 'sessions',
-    startRemoteChat: jest.fn(),
   }),
 }));
 
-jest.mock('@/frontend/appShell/pane/state', () => ({
-  useFilePane: () => ({ isAvailable: mockPaneAvailable, open: mockPaneOpen }),
-}));
 jest.mock('@/frontend/appShell/layout', () => ({ useCanDockSidebar: () => mockCanDock }));
 jest.mock('../../SidebarColumn', () => ({
   useSidebarColumn: () => ({
     column: { kind: mockCanDock ? 'permanent' : 'overlay' },
-    setContent: jest.fn(),
+    setContent: mockSetContent,
   }),
 }));
 jest.mock('../../hooks/useSessionSearch', () => ({
   sessionSearchResultHref: jest.fn(),
-  useSessionSearch: () => jest.fn(),
+  useSessionSearch: () => mockOpenSessionSearch,
   useSessionSearchRequest: () => ({}),
 }));
 jest.mock('../../hooks/useCloseDrawerForNavigation', () => ({
@@ -95,8 +87,7 @@ describe('Sidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSource = 'local';
-    mockLocalChat = undefined;
-    mockPaneAvailable = false;
+    mockConnectionId = undefined;
     mockCanDock = false;
     mockPage = ['(chat)'];
     mockParams = {};
@@ -107,49 +98,58 @@ describe('Sidebar', () => {
     act(() => renderer?.unmount());
   });
 
-  function render() {
+  function render(searchPanel?: ComponentProps<typeof Sidebar>['searchPanel']) {
     act(() => {
-      renderer = create(<Sidebar navigation={navigation} />);
+      renderer = create(<Sidebar navigation={navigation} searchPanel={searchPanel} />);
     });
   }
 
-  test.each([
-    [{ agentId: 'selected-agent', kind: 'draft' }, { agentId: 'selected-agent' }],
-    [{ kind: 'session', sessionId: 'selected-session' }, { sessionId: 'selected-session' }],
-  ] as const)('carries the chat identity to Skills: %j', async (chat, params) => {
-    mockLocalChat = chat;
-    render();
-
-    await act(async () => mockActions.openSkills());
-
-    expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/skills',
-      params: { agentId: undefined, sessionId: undefined, ...params },
-    });
-  });
-
   test('opens a destination above the chat and swaps it for another destination', async () => {
+    mockConnectionId = 'desktop';
     render();
-    await act(async () => mockActions.openPaintings());
-    expect(mockPush).toHaveBeenCalledWith('/drawings');
+    await act(async () => mockActions.openSettings());
+    expect(mockPush).toHaveBeenCalledWith('/settings');
 
     mockContentStack = { index: 1, key: 'main' };
-    await act(async () => mockActions.navigateAgents());
-    expect(mockReplace).toHaveBeenCalledWith('/agents');
+    await act(async () => mockActions.openScheduledTasks());
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/scheduled-tasks/[connectionId]',
+      params: { connectionId: 'desktop' },
+    });
+
+    await act(async () => mockActions.openSettings());
+    expect(mockReplace).toHaveBeenLastCalledWith('/settings');
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
   test.each([true, false])(
-    'reselecting the visible drawing page keeps its screen (wide=%s)',
+    'reselecting the visible Settings page keeps its screen (wide=%s)',
     async (wide) => {
       mockCanDock = wide;
-      mockPage = ['drawings'];
+      mockPage = ['settings'];
       mockContentStack = { index: 1, key: 'main' };
       render();
 
-      await act(async () => mockActions.openPaintings());
-      await act(async () => mockActions.openPaintings());
+      await act(async () => mockActions.openSettings());
+      await act(async () => mockActions.openSettings());
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([true, false])(
+    'reselecting scheduled tasks for the same connection keeps its screen (wide=%s)',
+    async (wide) => {
+      mockCanDock = wide;
+      mockConnectionId = 'desktop';
+      mockPage = ['scheduled-tasks', '[connectionId]'];
+      mockParams = { connectionId: 'desktop' };
+      mockContentStack = { index: 1, key: 'main' };
+      render();
+
+      await act(async () => mockActions.openScheduledTasks());
+      await act(async () => mockActions.openScheduledTasks());
+
       expect(mockReplace).not.toHaveBeenCalled();
       expect(mockPush).not.toHaveBeenCalled();
     },
@@ -165,19 +165,29 @@ describe('Sidebar', () => {
     expect(mockReplace).toHaveBeenCalledWith('/settings');
   });
 
-  test('opens Skills for a changed chat context on the same route', async () => {
+  test('opens scheduled tasks for a changed connection on the same route', async () => {
     mockCanDock = true;
-    mockLocalChat = { kind: 'session', sessionId: 'new-session' };
-    mockPage = ['skills'];
-    mockParams = { sessionId: 'previous-session' };
+    mockConnectionId = 'new-connection';
+    mockPage = ['scheduled-tasks', '[connectionId]'];
+    mockParams = { connectionId: 'previous-connection' };
     mockContentStack = { index: 1, key: 'main' };
     render();
 
-    await act(async () => mockActions.openSkills());
+    await act(async () => mockActions.openScheduledTasks());
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/skills',
-      params: { agentId: undefined, sessionId: 'new-session' },
+      pathname: '/scheduled-tasks/[connectionId]',
+      params: { connectionId: 'new-connection' },
     });
+  });
+
+  test('keeps the current page when no scheduled-task connection is selected', () => {
+    render();
+
+    act(() => mockActions.openScheduledTasks());
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockCloseDrawer).not.toHaveBeenCalled();
   });
 
   test('opens Settings immediately when dismissing a compact drawer', () => {
@@ -199,7 +209,44 @@ describe('Sidebar', () => {
 
     act(() => mockActions.closeDrawer());
 
+    expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
     expect(mockDispatch).toHaveBeenCalledWith({ target: 'main', type: 'POP_TO_TOP' });
+  });
+
+  test('returns to the chat while leaving the overlay open', () => {
+    mockContentStack = { index: 2, key: 'main' };
+    render();
+
+    act(() => mockActions.returnToChat());
+
+    expect(mockCancelPending).toHaveBeenCalledTimes(1);
+    expect(mockDispatch).toHaveBeenCalledWith({ target: 'main', type: 'POP_TO_TOP' });
+    expect(mockCloseDrawer).not.toHaveBeenCalled();
+  });
+
+  test.each([true, false])('opens local search in the expected region (wide=%s)', (wide) => {
+    mockCanDock = wide;
+    render(() => null);
+    mockCloseDrawer.mockClear();
+
+    act(() => mockActions.openSearch?.());
+
+    expect(mockCancelPending).toHaveBeenCalledTimes(1);
+    expect(mockCloseDrawer).toHaveBeenCalledTimes(1);
+    if (wide) {
+      expect(mockSetContent).toHaveBeenCalledWith('search');
+      expect(mockOpenSessionSearch).not.toHaveBeenCalled();
+    } else {
+      expect(mockOpenSessionSearch).toHaveBeenCalledTimes(1);
+      expect(mockSetContent).not.toHaveBeenCalled();
+    }
+  });
+
+  test('does not offer local search for a remote source', () => {
+    mockSource = 'remote';
+    render();
+
+    expect(mockActions.openSearch).toBeUndefined();
   });
 
   test.each(['recent conversation', 'search', 'incoming link'])(
@@ -229,36 +276,4 @@ describe('Sidebar', () => {
     act(() => mockActions.closeDrawer());
     expect(mockDispatch).not.toHaveBeenCalled();
   });
-
-  test('opens files beside the chat a destination covered', () => {
-    mockPaneAvailable = true;
-    mockContentStack = { index: 1, key: 'main' };
-    render();
-
-    act(() => mockActions.openLibrary());
-
-    expect(mockDispatch).toHaveBeenCalledWith({ target: 'main', type: 'POP_TO_TOP' });
-    expect(mockPaneOpen).toHaveBeenCalledTimes(1);
-    expect(mockPush).not.toHaveBeenCalled();
-  });
-
-  test.each([
-    [
-      'local',
-      { kind: 'session', sessionId: 'selected-session' },
-      { sourceChat: '{"sessionId":"selected-session"}' },
-    ],
-    ['remote', undefined, {}],
-  ] as const)(
-    'lets a %s chat receive files from the library page',
-    async (source, chat, params) => {
-      mockSource = source;
-      mockLocalChat = chat;
-      render();
-
-      await act(async () => mockActions.openLibrary());
-
-      expect(mockPush).toHaveBeenCalledWith({ pathname: '/library', params });
-    },
-  );
 });

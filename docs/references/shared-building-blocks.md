@@ -109,7 +109,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Where a foldable display divides a layout | `FoldRegionProvider`, `WindowFoldRegion`, and their hooks in `src/frontend/appShell/layout`, over `react-native-reserved-regions` |
 | Header actions in the iOS native toolbar | `HeaderToolbarAction.nativeIcon` (a template image of the existing glyph) and `renderHeaderToolbarItem` in `src/frontend/appShell/header` |
 | Android back for a layer inside a route | `useFocusedBackPress` in `src/frontend/appShell/navigation`, held only while the route is focused |
-| Pages rendered in a side pane, and the file pane beside chat | `PaneChromeProvider` in `src/frontend/appShell/layout`; `FilePaneProvider`, `FilePaneHost`, and `useFilePane` in `src/frontend/appShell/pane` |
+| Inline pane headers/toolbars and Files Master-Detail layout | `PaneChromeProvider` in `src/frontend/appShell/layout`; `LibraryMasterDetailHost` and `useLibraryMasterDetail` in `src/frontend/appShell/pane` |
 | Mermaid diagrams in Markdown | `MermaidBlock`, `MermaidSvgView`, and the shared hidden renderer in `src/frontend/components/MermaidDiagram`; the offline page is `packages/mermaid-webview` |
 | Readable message detail content and full-text copy | `MessageDetail` in `src/frontend/components/MessageDetail`, composing CherryUI `MessagePart.TextBody` and the full-source `CodeBlock` |
 | Message and individual-call usage details | `AiUsageDetail` in `src/frontend/components/AiUsageDetail`; callers own measurement/query semantics, and `src/frontend/utils/aiUsage` owns precise cost formatting |

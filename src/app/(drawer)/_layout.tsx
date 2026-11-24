@@ -21,7 +21,6 @@ import {
   WIDE_RAIL_WIDTH,
   WideNavRail,
 } from '@/frontend/appShell/navigationShell';
-import { FilePaneProvider } from '@/frontend/appShell/pane';
 import {
   resolveSidebarDrawer,
   Sidebar,
@@ -85,15 +84,13 @@ function DrawerShell() {
       <View className="min-w-0 flex-1">
         <SafeAreaInsetsContext value={contentInsets}>
           <BottomSheetBoundsProvider insetLeft={sheetInsetLeft} insetRight={sheetInsetRight}>
-            <FilePaneProvider>
-              <SidebarColumnProvider>
-                <ChatDockLayoutProvider>
-                  <SidebarToggleProvider>
-                    <SidebarDrawer />
-                  </SidebarToggleProvider>
-                </ChatDockLayoutProvider>
-              </SidebarColumnProvider>
-            </FilePaneProvider>
+            <SidebarColumnProvider>
+              <ChatDockLayoutProvider>
+                <SidebarToggleProvider>
+                  <SidebarDrawer />
+                </SidebarToggleProvider>
+              </ChatDockLayoutProvider>
+            </SidebarColumnProvider>
           </BottomSheetBoundsProvider>
         </SafeAreaInsetsContext>
       </View>
