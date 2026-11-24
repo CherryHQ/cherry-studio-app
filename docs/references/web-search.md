@@ -66,7 +66,7 @@ Adapters, by the endpoint the model is actually requested on:
 | Grok / Responses | `web_search` and `x_search` | External service | URL annotations | |
 | Anthropic / Messages | `web_search_20250305` | `web_fetch_20250910` | Result blocks and citations | Five uses per request |
 | Other DeepSeek models / Anthropic Messages | `web_search_20250305` | External service | Result blocks and citations | Existing declaration for other model IDs |
-| DeepSeek Provider's `deepseek-flash` / Messages, Responses, Chat Completions | `deepseek_web_search` | `deepseek_read_url` | Result blocks or URL annotations | Existing web routing and permissions apply; live acceptance pending |
+| DeepSeek Provider's `deepseek-flash` / Messages, Responses, Chat Completions | `deepseek_web_search` | `deepseek_read_url` | Result blocks or URL annotations | Cannot mix with client function tools; existing web routing and permissions apply; live acceptance pending |
 | Gemini / Generate Content | `googleSearch` | `urlContext` | Grounding metadata | Beside functions from Gemini 3 only |
 | Zhipu / Chat Completions | `web_search` tool entry | External service | Result list, no inline markers | |
 | Qwen AI Platform / Chat Completions | `enable_search` | External service | Result list when returned, no inline markers | |
@@ -100,7 +100,16 @@ the Responses endpoint, which conflicts with that contract; Mobile declares the 
 The 2026-11-13 suite adds different tool types on all three protocols. Mobile's DeepSeek Flash
 adapter handles those types locally without changing the published registry or web-search package.
 It captures original server-call state/signatures, converts citation indices, and clears late
-refusals. External Search/Fetch uses the DeepSeek model Provider's current keys and address once
+refusals. DeepSeek's [Web Tools contract](https://api-docs.deepseek.com/zh-cn/guides/web_tools/)
+rejects combining these native tools or `safety_check` with other tools. Flash therefore declares
+`functionToolMixing: false`: when a standard Agent turn declares other client functions, routing
+selects configured external Search/Fetch, or no web route when those services are unavailable.
+Without other functions, the selector can replace external web functions with native tools under
+the same preference and permissions, including in tool-free minimal mode. This selection happens
+before sending; an HTTP failure never triggers a switch to another provider. Enhanced content
+checks follow the outgoing tool list as described in [DeepSeek Services](./deepseek-services.md#voice-and-conversation-protocols).
+
+External Search/Fetch uses the DeepSeek model Provider's current keys and address once
 that Provider is enabled with an API key. Until then, released search-only DeepSeek keys and
 address remain the fallback. The built-in tool page links directly to that Provider's
 configuration; it does not offer another key field or service binding. Other search providers retain their existing
