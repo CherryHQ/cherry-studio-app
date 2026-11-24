@@ -1,5 +1,6 @@
 import type { Href } from 'expo-router';
-import { createContext, use, useEffect, useMemo } from 'react';
+import { NavigationContext } from 'expo-router/react-navigation';
+import { type ContextType, createContext, use, useEffect, useMemo } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { NavigationPinTabId } from '@/shared/data/preference/preferenceSchema';
@@ -187,14 +188,53 @@ export function useNavigationShell(): NavigationShellContextValue {
   return useMemo(() => ({ ...state, ...actions }), [actions, state]);
 }
 
-/** Hides the compact floating dock while temporary overlays/composers own the bottom edge. */
+const FALLBACK_NAVIGATION_CONTEXT = createContext<
+  ContextType<typeof NavigationContext> | undefined
+>(undefined);
+
+/**
+ * Hides the compact floating dock while temporary overlays/composers own the bottom edge of a
+ * focused screen, releasing the registration if another route covers it in the stack.
+ */
 export function useHideFloatingDock(hidden: boolean): void {
   const register = useOptionalNavigationShellActions()?.registerHideDock;
+  const navigation = use(NavigationContext ?? FALLBACK_NAVIGATION_CONTEXT);
 
   useEffect(() => {
     if (!hidden || !register) return;
-    return register();
-  }, [hidden, register]);
+    if (
+      !navigation ||
+      typeof navigation.isFocused !== 'function' ||
+      typeof navigation.addListener !== 'function'
+    ) {
+      return register();
+    }
+
+    let unregister: (() => void) | undefined;
+    const acquire = () => {
+      if (!unregister) {
+        unregister = register();
+      }
+    };
+    const release = () => {
+      if (!unregister) return;
+      const cleanup = unregister;
+      unregister = undefined;
+      cleanup();
+    };
+
+    if (navigation.isFocused()) {
+      acquire();
+    }
+    const unsubscribeFocus = navigation.addListener('focus', acquire);
+    const unsubscribeBlur = navigation.addListener('blur', release);
+
+    return () => {
+      unsubscribeFocus();
+      unsubscribeBlur();
+      release();
+    };
+  }, [hidden, navigation, register]);
 }
 
 /** Reports a permanent middle column width so BottomSheets center inside the open pane. */

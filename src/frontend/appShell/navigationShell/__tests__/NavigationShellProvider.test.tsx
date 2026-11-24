@@ -1,4 +1,5 @@
-import { useLayoutEffect } from 'react';
+import { NavigationContext } from 'expo-router/react-navigation';
+import { type ContextType, useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { NavigationShellProvider } from '../NavigationShellProvider';
@@ -68,14 +69,23 @@ jest.mock('expo-router', () => ({
     replace: jest.fn(),
   }),
 }));
-jest.mock('react-native', () => ({
-  Platform: {
-    get OS() {
-      return mockPlatformOS;
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return Object.defineProperties(Object.create(actual), {
+    Platform: {
+      enumerable: true,
+      value: Object.defineProperties(Object.create(actual.Platform), {
+        OS: { enumerable: true, get: () => mockPlatformOS },
+        select: {
+          enumerable: true,
+          value: <T,>(spec: Partial<Record<'ios' | 'android' | 'default', T>>) =>
+            spec[mockPlatformOS] ?? spec.default,
+        },
+      }),
     },
-  },
-  useWindowDimensions: () => mockDimensions,
-}));
+    useWindowDimensions: { enumerable: true, value: () => mockDimensions },
+  });
+});
 jest.mock('react-native-keyboard-controller', () => ({
   useKeyboardState: (selector: (s: { isVisible: boolean }) => boolean) =>
     selector({ isVisible: mockKeyboardVisible }),
@@ -104,6 +114,32 @@ jest.mock('react-i18next', () => ({
 let latest: ReturnType<typeof useNavigationShell>;
 let latestInteraction: ReturnType<typeof useNavigationShellInteraction>;
 let renderer: ReactTestRenderer;
+
+function createFocusableNavigation(initialFocused = true) {
+  let focused = initialFocused;
+  const listeners: Record<'blur' | 'focus', Set<() => void>> = {
+    blur: new Set(),
+    focus: new Set(),
+  };
+  const navigation = {
+    addListener: (event: 'blur' | 'focus', listener: () => void) => {
+      listeners[event].add(listener);
+      return () => {
+        listeners[event].delete(listener);
+      };
+    },
+    isFocused: () => focused,
+  } as unknown as ContextType<typeof NavigationContext>;
+
+  const emit = (event: 'blur' | 'focus') => {
+    focused = event === 'focus';
+    for (const listener of listeners[event]) {
+      listener();
+    }
+  };
+
+  return { emit, navigation };
+}
 
 function Probe({
   hideDock = false,
@@ -236,6 +272,48 @@ describe('NavigationShellProvider', () => {
     expect(latest.isDockVisible).toBe(false);
     expect(latest.dockClearance).toBe(0);
     expect(latest.restingDockClearance).toBe(42);
+  });
+
+  it('scopes useHideFloatingDock registration to screen focus and blur transitions', () => {
+    const focusedScreen = createFocusableNavigation(true);
+    const blurredScreen = createFocusableNavigation(false);
+
+    act(() => {
+      renderer = create(
+        <NavigationShellProvider>
+          <NavigationContext value={focusedScreen.navigation}>
+            <Probe hideDock />
+          </NavigationContext>
+        </NavigationShellProvider>,
+      );
+    });
+    expect(latest.isDockVisible).toBe(false);
+
+    act(() => {
+      focusedScreen.emit('blur');
+    });
+    expect(latest.isDockVisible).toBe(true);
+
+    act(() => {
+      focusedScreen.emit('focus');
+    });
+    expect(latest.isDockVisible).toBe(false);
+
+    act(() => {
+      renderer.update(
+        <NavigationShellProvider>
+          <NavigationContext value={blurredScreen.navigation}>
+            <Probe hideDock />
+          </NavigationContext>
+        </NavigationShellProvider>,
+      );
+    });
+    expect(latest.isDockVisible).toBe(true);
+
+    act(() => {
+      blurredScreen.emit('focus');
+    });
+    expect(latest.isDockVisible).toBe(false);
   });
 
   it('keeps Android floating dock clear of system bar and auto-cancels active drag when leaving root', () => {
