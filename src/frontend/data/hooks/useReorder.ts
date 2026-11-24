@@ -144,8 +144,8 @@ export function useReorder<TItem>({
           return true;
         } catch (error) {
           cancelledThroughRef.current = generationRef.current;
-          // Unwind idle writes newest first if two filters matched the same cache entry.
-          for (const snapshot of preAppliedSnapshots ? snapshots.toReversed() : snapshots) {
+          // Unwind writes newest first so overlapping filters restore the original cache state.
+          for (const snapshot of snapshots.toReversed()) {
             restoreQuerySnapshot(queryClient, snapshot);
           }
           await runInvalidations(filtersToInvalidate);
