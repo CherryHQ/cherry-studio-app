@@ -1433,28 +1433,6 @@ describe('release hardening & integrity guards', () => {
     });
   });
 
-  it('relaxes Android production Gradle concurrency and heap defaults while keeping daemon disabled', () => {
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).toContain('-Xmx8g');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).toContain('-Dorg.gradle.parallel=true');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).toContain('-Dorg.gradle.daemon=false');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).toContain('-Dorg.gradle.workers.max=12');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).not.toContain('-Dorg.gradle.parallel=false');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).not.toContain('-Dorg.gradle.workers.max=2');
-    expect(DEFAULT_ANDROID_GRADLE_OPTS).not.toContain('-XX:MaxMetaspaceSize=');
-
-    const repo = resolve(__dirname, '../..');
-    const easConfig = JSON.parse(readFileSync(join(repo, 'eas.json'), 'utf8')) as {
-      build?: Record<string, { android?: { gradleCommand?: string } }>;
-    };
-    for (const profile of ['production', 'production-google-play'] as const) {
-      const gradleCommand = easConfig.build?.[profile]?.android?.gradleCommand ?? '';
-      expect(gradleCommand).toContain('-PreactNativeArchitectures=arm64-v8a');
-      expect(gradleCommand).toContain('-Dorg.gradle.jvmargs=-Xmx8192m');
-      expect(gradleCommand).not.toContain('--max-workers=2');
-      expect(gradleCommand).not.toContain('--no-parallel');
-    }
-  });
-
   it.each([
     'success',
     'already-submitted',

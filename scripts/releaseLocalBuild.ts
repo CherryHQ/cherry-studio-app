@@ -100,7 +100,7 @@ export const REQUIRED_RELEASE_ENV_VARS = [
 ] as const;
 
 export const DEFAULT_ANDROID_GRADLE_OPTS =
-  '-Dorg.gradle.jvmargs="-Xmx8g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" -Dorg.gradle.parallel=true -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=12';
+  '-Dorg.gradle.parallel=true -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=12';
 export const DEFAULT_PNPM_VIRTUAL_STORE_MAX_LENGTH = '40';
 
 const INSTALL_PERMISSION = 'android.permission.REQUEST_INSTALL_PACKAGES';

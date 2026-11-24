@@ -337,15 +337,17 @@ Android extracts those libraries during installation, so a smaller APK does not 
 or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
 so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
 libraries in an AAB only slow installation and double on-device storage. Development builds keep
-uncompressed native libraries. Preview builds pass `-Xmx4096m` as the Gradle JVM arguments, while
+uncompressed native libraries. Preview builds pass `-Xmx4096m` as Gradle JVM arguments, while
 production Android commands (`production`, inherited `production-domestic-stores`, and
-`production-google-play`) pass `-Xmx8192m`, dropping the template Metaspace cap that made
-`lintVitalAnalyzeRelease` fail on local production builds, and omit the cloud-worker
-`--max-workers=2 --no-parallel` cap. Automated release builds on the self-hosted macOS runner
-(`scripts/releaseLocalBuild.ts`) default `GRADLE_OPTS` (`DEFAULT_ANDROID_GRADLE_OPTS`) to `-Xmx8g`,
-`org.gradle.parallel=true`, `org.gradle.daemon=false`, and `org.gradle.workers.max=12` (overridable
-via `GRADLE_OPTS`), leaving CPU and memory headroom for parallel iOS compilation and resident host
-workloads on the release Mac. Development and preview concurrency remain unchanged.
+`production-google-play`) pass `-Dorg.gradle.jvmargs=-Xmx8192m` on the Gradle CLI (owning the heap
+ceiling and dropping the template Metaspace cap that made `lintVitalAnalyzeRelease` fail on local
+production builds) and omit the cloud-worker `--max-workers=2 --no-parallel` cap. Automated release
+builds on the self-hosted macOS runner (`scripts/releaseLocalBuild.ts`) default `GRADLE_OPTS`
+(`DEFAULT_ANDROID_GRADLE_OPTS`) to `-Dorg.gradle.parallel=true -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=12`
+to target concurrency headroom alongside parallel iOS compilation and resident host workloads on the
+release Mac (pending runtime measurement on a live release tag). Setting `GRADLE_OPTS` replaces
+this entire default string and does not override `-Dorg.gradle.jvmargs` from `eas.json`.
+Development and preview concurrency remain unchanged.
 After changing native dependencies or packaging options, verify that a Release build starts and
 completes desktop QR pairing. Compare APK sizes using the same profile and architecture.
 
