@@ -86,7 +86,7 @@ export function ComposerEditor({
   const editingTarget = useDerivedValue(
     () => isExpanded || (typeof activation === 'boolean' ? activation : activation.get()),
   );
-  const activeProgress = useDerivedValue(() =>
+  const activeProgress = useDerivedValue<number>(() =>
     withTiming(editingTarget.get() ? 1 : 0, activeTransitionMotion),
   );
   // A rewrap during the width morph retargets the current height animation.
