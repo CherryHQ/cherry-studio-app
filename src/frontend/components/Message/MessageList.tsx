@@ -14,9 +14,10 @@ import {
 
 import { MessageListDisclosureProvider } from './list/MessageListDisclosureContext';
 import {
+  getMessageListScrollProgress,
   getMessageRowType,
-  isMessageListAtBottom,
   isMessageListLiveTailInView,
+  isScrollToBottomButtonHidden,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
   MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
@@ -26,7 +27,7 @@ import { MessageListRow } from './list/MessageListRow';
 import { useMessageListScrollController } from './list/useMessageListScrollController';
 import type { MessageListItem, MessageListProps } from './types';
 
-const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
+const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 12;
 const FULL_WIDTH = { width: '100%' } as const;
 
 export function MessageList({
@@ -50,6 +51,7 @@ export function MessageList({
   renderMessage,
   ref,
   rowInsets,
+  scrollProgress,
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
@@ -153,7 +155,7 @@ export function MessageList({
         isAtBottom:
           content.dataKey !== dataKey ||
           viewport <= 0 ||
-          isMessageListAtBottom(scrollOffset.get(), content.height + inset, viewport),
+          isScrollToBottomButtonHidden(scrollOffset.get(), content.height + inset, viewport),
       };
     },
     (current, previous) => {
@@ -194,6 +196,31 @@ export function MessageList({
         current.isInView !== previous.isInView
       ) {
         runOnJS(syncLiveTailVisibility)(current.dataKey, current.isInView);
+      }
+    },
+  );
+
+  useAnimatedReaction(
+    () => {
+      if (!scrollProgress) {
+        return -1;
+      }
+      const content = contentHeight.get();
+      const viewport = viewportHeight.get();
+      if (content.dataKey !== dataKey || viewport <= 0) {
+        return -1;
+      }
+      const inset = Math.min(viewport, (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get());
+      return getMessageListScrollProgress(
+        scrollOffset.get(),
+        content.height + inset,
+        viewport,
+        hasNewerMessages,
+      );
+    },
+    (nextProgress, previousProgress) => {
+      if (scrollProgress && nextProgress >= 0 && nextProgress !== previousProgress) {
+        scrollProgress.set(nextProgress);
       }
     },
   );

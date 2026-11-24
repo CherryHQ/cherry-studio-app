@@ -8,6 +8,8 @@ export const MESSAGE_ROW_VERTICAL_PADDING = {
   user: 8,
 } as const satisfies Record<MessageListItem['role'], number>;
 
+export const SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD = 32;
+
 /** Content height includes the current keyboard inset. */
 export function isMessageListAtBottom(
   scrollOffset: number,
@@ -16,6 +18,35 @@ export function isMessageListAtBottom(
 ): boolean {
   'worklet';
   return Math.max(0, contentHeight - viewportHeight) - scrollOffset <= 1;
+}
+
+/** Suppresses scroll-to-bottom button jitter within a small tolerance of the live edge. */
+export function isScrollToBottomButtonHidden(
+  scrollOffset: number,
+  contentHeight: number,
+  viewportHeight: number,
+): boolean {
+  'worklet';
+  return (
+    Math.max(0, contentHeight - viewportHeight) - scrollOffset <=
+    SCROLL_TO_BOTTOM_VISIBILITY_THRESHOLD
+  );
+}
+
+/** Normalized reading progress in [0, 1], reserving the bottom anchor for the live edge. */
+export function getMessageListScrollProgress(
+  scrollOffset: number,
+  contentHeight: number,
+  viewportHeight: number,
+  hasNewerMessages = false,
+): number {
+  'worklet';
+  const maxScroll = contentHeight - viewportHeight;
+  if (maxScroll <= 1) {
+    return hasNewerMessages ? 0.5 : 1;
+  }
+  const clamped = Math.min(1, Math.max(0, scrollOffset / maxScroll));
+  return hasNewerMessages ? clamped * 0.82 : clamped;
 }
 
 // Distance past the bottom inset within which the growing end counts as on screen.

@@ -79,11 +79,11 @@ describe('ScrollToBottomButton', () => {
     });
 
     expect(renderer!.root.findByType('SurfaceFrame').props).toMatchObject({
-      className: 'border border-border bg-background',
-      cornerRadius: 20,
+      className: 'border border-border bg-card',
+      cornerRadius: 18,
       interactive: true,
       style: [
-        { alignItems: 'center', height: 40, justifyContent: 'center', width: 40 },
+        { alignItems: 'center', height: 36, justifyContent: 'center', width: 36 },
         { borderColor: 'rgba(160, 160, 160, 0.3)', borderWidth: 1 },
       ],
     });

@@ -1,0 +1,317 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { FlatList, Keyboard, StyleSheet } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { ChatTurnNavigator } from '../chatTurns';
+import { ChatTurnDirectory, getFisheyeTickMetrics } from '../components/ChatTurnDirectory';
+
+const mockToastShow = jest.fn();
+
+jest.mock('@cherrystudio/app-icons/icons/x', () => {
+  const React = jest.requireActual('react');
+  return function MockXIcon(props: object) {
+    return React.createElement('XIcon', props);
+  };
+});
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { resolvedLanguage: 'en-US' } }),
+}));
+
+jest.mock('@/frontend/appShell/navigation', () => ({
+  useFocusedBackPress: () => undefined,
+}));
+
+jest.mock('@/frontend/hooks/useLayoutWidth', () => ({
+  useLayoutWidth: () => ({ onLayout: jest.fn(), width: 390 }),
+}));
+
+jest.mock('react-native-keyboard-controller', () => ({
+  useReanimatedKeyboardAnimation: () => ({
+    height: { get: () => 0 },
+    progress: { get: () => 0 },
+  }),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    useAnimatedStyle: (read: () => object) => read(),
+  };
+});
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  const { Pressable, View } = jest.requireActual('react-native');
+  return {
+    BackgroundPressExclusion: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(View, null, children),
+    Button: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement(Pressable, props, children),
+    Spinner: (props: object) => React.createElement('Spinner', props),
+    useToast: () => ({ toast: { show: mockToastShow } }),
+  };
+});
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+const zeroAccessoryHeight = { get: () => 0 } as unknown as SharedValue<number>;
+
+function createMockSharedValue(initial: number): SharedValue<number> {
+  let value = initial;
+  return {
+    get: () => value,
+    set: (next: number) => {
+      value = next;
+    },
+    get value() {
+      return value;
+    },
+    set value(next: number) {
+      value = next;
+    },
+  } as unknown as SharedValue<number>;
+}
+
+function createNavigator(
+  scope: string,
+  jump: ChatTurnNavigator['jump'] = jest.fn(async () => 'restored' as const),
+): ChatTurnNavigator {
+  return {
+    scope,
+    queryKey: ['turns', scope],
+    read: jest.fn(async () => ({
+      items: [
+        { id: 'turn-1', preview: 'First question' },
+        { id: 'turn-2', preview: 'Second question' },
+      ],
+    })),
+    jump,
+  };
+}
+
+function getTickWidths(renderer: ReactTestRenderer): number[] {
+  return renderer.root
+    .findAll(
+      (node) => typeof node.type === 'string' && node.props.testID === 'chat-turn-directory-tick',
+    )
+    .map((node) => {
+      const styleEntries = Array.isArray(node.props.style) ? node.props.style : [node.props.style];
+      const animated = styleEntries[1] as
+        | { transform?: { translateX?: number; scaleY?: number }[]; width?: number }
+        | undefined;
+      expect(animated?.width).toBeUndefined();
+      const flattened = StyleSheet.flatten(node.props.style) as {
+        width: number;
+        transform?: { translateX?: number }[];
+      };
+      const translateX =
+        flattened.transform?.find((entry) => typeof entry.translateX === 'number')?.translateX ?? 0;
+      return flattened.width - translateX;
+    });
+}
+
+function findTurnRows(renderer: ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      typeof node.props.onPress === 'function' &&
+      node.props.accessibilityLabel === 'chat.turns.row' &&
+      node.props.accessibilityRole === 'button',
+  );
+}
+
+describe('getFisheyeTickMetrics', () => {
+  test('peaks at focused tick, tapers smoothly across neighbors, and clamps progress', () => {
+    const atBottom = Array.from({ length: 7 }, (_, i) => getFisheyeTickMetrics(1, i, 7));
+    expect(atBottom[6].width).toBeCloseTo(13);
+    expect(atBottom[5].width).toBeGreaterThan(atBottom[4].width);
+    expect(atBottom[5].opacity).toBeGreaterThan(atBottom[0].opacity);
+    expect(atBottom[6].scaleY).toBe(1);
+    expect(atBottom[0].width).toBeCloseTo(5.5);
+
+    const atMid = Array.from({ length: 7 }, (_, i) => getFisheyeTickMetrics(0.5, i, 7));
+    expect(atMid[3].width).toBeCloseTo(13);
+    expect(atMid[2].width).toBeCloseTo(atMid[4].width);
+    expect(atMid[0].width).toBeCloseTo(5.5);
+
+    expect(getFisheyeTickMetrics(-0.5, 0, 7).width).toBeCloseTo(13);
+    expect(getFisheyeTickMetrics(1.5, 6, 7).width).toBeCloseTo(13);
+  });
+});
+
+describe('ChatTurnDirectory', () => {
+  let queryClient: QueryClient;
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { gcTime: 0, retry: false } },
+    });
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    queryClient.clear();
+  });
+
+  test('renders 7 fisheye ticks that track scrollProgress and opens panel with tight scrollbar insets', async () => {
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    const jump = jest.fn(async () => 'restored' as const);
+    const scrollToMessage = jest.fn(async () => true);
+    const scrollProgress = createMockSharedValue(1);
+    const navigator = createNavigator('local:s1', jump);
+
+    const renderDirectory = () => (
+      <QueryClientProvider client={queryClient}>
+        <ChatTurnDirectory
+          bottomAccessoryHeight={zeroAccessoryHeight}
+          contentBottomInset={16}
+          contentTopInset={110}
+          keyboardOffset={0}
+          navigator={navigator}
+          scrollProgress={scrollProgress}
+          scrollToMessage={scrollToMessage}
+        />
+      </QueryClientProvider>
+    );
+
+    act(() => {
+      renderer = create(renderDirectory());
+    });
+
+    let widths = getTickWidths(renderer!);
+    expect(widths).toHaveLength(7);
+    expect(widths[6]).toBeCloseTo(13);
+    expect(widths[0]).toBeCloseTo(5.5);
+
+    act(() => {
+      scrollProgress.set(0.5);
+      renderer!.update(renderDirectory());
+    });
+    widths = getTickWidths(renderer!);
+    expect(widths[3]).toBeCloseTo(13);
+
+    act(() => {
+      scrollProgress.set(0);
+      renderer!.update(renderDirectory());
+    });
+    widths = getTickWidths(renderer!);
+    expect(widths[0]).toBeCloseTo(13);
+    expect(widths[6]).toBeCloseTo(5.5);
+
+    act(() => {
+      scrollProgress.set(1);
+      renderer!.update(renderDirectory());
+    });
+
+    const trigger = renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' });
+    expect(trigger.props.accessibilityState).toEqual({ expanded: false });
+    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory' })).toHaveLength(0);
+
+    act(() => {
+      trigger.props.onPress();
+    });
+    await act(settle);
+
+    expect(dismissSpy).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory-trigger' })).toHaveLength(
+      0,
+    );
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory' })).toBeDefined();
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory-close' })).toBeDefined();
+
+    const list = renderer!.root.findByType(FlatList);
+    expect(list.props.automaticallyAdjustsScrollIndicatorInsets).toBe(false);
+    expect(list.props.contentContainerStyle).toEqual({
+      paddingTop: 6,
+      paddingBottom: 10,
+      paddingLeft: 8,
+      paddingRight: 12,
+    });
+    expect(list.props.scrollIndicatorInsets).toEqual({ top: 4, bottom: 12, right: 0 });
+
+    const rows = findTurnRows(renderer!);
+    expect(rows).toHaveLength(2);
+    await act(async () => {
+      rows[1]!.props.onPress();
+      await settle();
+    });
+
+    expect(scrollProgress.get()).toBe(0);
+    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' })).toBeDefined();
+    expect(jump).toHaveBeenCalledWith(
+      { id: 'turn-2', preview: 'Second question' },
+      scrollToMessage,
+    );
+    dismissSpy.mockRestore();
+  });
+
+  test('restores previous scrollProgress when jump fails and closes via close button or backdrop', async () => {
+    const jump = jest.fn(async () => 'retryable' as const);
+    const scrollProgress = createMockSharedValue(0.8);
+    const navigator = createNavigator('local:s1', jump);
+
+    act(() => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <ChatTurnDirectory
+            bottomAccessoryHeight={zeroAccessoryHeight}
+            contentBottomInset={16}
+            contentTopInset={96}
+            keyboardOffset={0}
+            navigator={navigator}
+            scrollProgress={scrollProgress}
+            scrollToMessage={jest.fn(async () => true)}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' }).props.onPress();
+    });
+    await act(settle);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory' })).toBeDefined();
+
+    const rows = findTurnRows(renderer!);
+    expect(rows).toHaveLength(2);
+    await act(async () => {
+      rows[1]!.props.onPress();
+      await settle();
+    });
+    expect(scrollProgress.get()).toBe(0.8);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.turns.jumpFailed',
+      variant: 'danger',
+    });
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' }).props.onPress();
+    });
+    await act(settle);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory' })).toBeDefined();
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'chat-turn-directory-close' }).props.onPress();
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' })).toBeDefined();
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' }).props.onPress();
+    });
+    await act(settle);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory' })).toBeDefined();
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'chat-turn-directory-backdrop' }).props.onPress();
+    });
+    expect(renderer!.root.findAllByProps({ testID: 'chat-turn-directory' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ testID: 'chat-turn-directory-trigger' })).toBeDefined();
+  });
+});

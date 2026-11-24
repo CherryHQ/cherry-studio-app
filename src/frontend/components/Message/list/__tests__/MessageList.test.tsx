@@ -1502,6 +1502,29 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockScrollButtonProps?.isAtBottom).toBe(true);
   });
 
+  test('updates scrollProgress shared value from scrollOffset, content height, and viewport', async () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const scrollProgress = mockCreateSharedValue(1);
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, { scrollProgress })} />);
+    });
+    await loadList();
+
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 1_200);
+      mockLatestListProps?.sharedValues?.scrollOffset.set(400);
+    });
+    act(flushAnimatedReactions);
+    expect(scrollProgress.get()).toBeCloseTo(0.5);
+
+    act(() => {
+      mockLatestListProps?.sharedValues?.scrollOffset.set(0);
+    });
+    act(flushAnimatedReactions);
+    expect(scrollProgress.get()).toBe(0);
+  });
+
   test('keeps layout, pagination, role dispatch, and Android keyboard semantics', () => {
     const originalPlatformOS = Platform.OS;
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });

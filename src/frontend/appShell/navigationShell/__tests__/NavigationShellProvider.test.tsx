@@ -1,5 +1,6 @@
 import { NavigationContext } from 'expo-router/react-navigation';
 import { type ContextType, useLayoutEffect } from 'react';
+import { Keyboard, type KeyboardEvent } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { NavigationShellProvider } from '../NavigationShellProvider';
@@ -19,7 +20,6 @@ let mockDimensions = { height: 852, width: 393 };
 let mockInsets = { bottom: 34, left: 0, right: 0, top: 59 };
 let mockWindowClass: 'compact' | 'wide' = 'compact';
 let mockFold: { height: number; width: number; x: number; y: number } | null = null;
-let mockKeyboardVisible = false;
 let mockPlatformOS: 'ios' | 'android' = 'ios';
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -86,10 +86,6 @@ jest.mock('react-native', () => {
     useWindowDimensions: { enumerable: true, value: () => mockDimensions },
   });
 });
-jest.mock('react-native-keyboard-controller', () => ({
-  useKeyboardState: (selector: (s: { isVisible: boolean }) => boolean) =>
-    selector({ isVisible: mockKeyboardVisible }),
-}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockInsets,
 }));
@@ -168,7 +164,6 @@ describe('NavigationShellProvider', () => {
     mockInsets = { bottom: 34, left: 0, right: 0, top: 59 };
     mockWindowClass = 'compact';
     mockFold = null;
-    mockKeyboardVisible = false;
     mockPlatformOS = 'ios';
   });
 
@@ -187,7 +182,7 @@ describe('NavigationShellProvider', () => {
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isDockVisible).toBe(true);
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(42);
+    expect(latest.dockClearance).toBe(38);
 
     mockInsets = { bottom: 0, left: 0, right: 0, top: 20 };
     act(() => {
@@ -199,7 +194,7 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.shellMode).toBe('compact-dock');
     expect(latest.isVerticalRailVisible).toBe(false);
-    expect(latest.dockClearance).toBe(64);
+    expect(latest.dockClearance).toBe(66);
 
     mockWindowClass = 'wide';
     mockDimensions = { height: 834, width: 1194 };
@@ -231,47 +226,62 @@ describe('NavigationShellProvider', () => {
     expect(latest.isVerticalRailVisible).toBe(true);
   });
 
-  it('hides dock when keyboard is open, overlay hides it, or route is a detail page', () => {
-    act(() => {
-      renderer = create(
-        <NavigationShellProvider>
-          <Probe />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(true);
+  it('keeps dock visible when keyboard opens, cancels active drag on keyboardDidShow, and hides dock for overlays or detail routes', () => {
+    const keyboardListeners: Record<string, (event: KeyboardEvent) => void> = {};
+    const addListenerSpy = jest
+      .spyOn(Keyboard, 'addListener')
+      .mockImplementation((event, listener) => {
+        keyboardListeners[event] = listener as (keyboardEvent: KeyboardEvent) => void;
+        return { remove: jest.fn() } as unknown as ReturnType<typeof Keyboard.addListener>;
+      });
 
-    act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe hideDock />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(false);
+    try {
+      act(() => {
+        renderer = create(
+          <NavigationShellProvider>
+            <Probe />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(true);
+      expect(addListenerSpy).not.toHaveBeenCalled();
 
-    mockKeyboardVisible = true;
-    act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(false);
+      act(() => {
+        latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
+        latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 700 });
+      });
+      expect(latestInteraction.dragState).not.toBeNull();
+      expect(keyboardListeners.keyboardDidShow).toBeDefined();
 
-    mockKeyboardVisible = false;
-    mockPathname = '/files/123';
-    act(() => {
-      renderer.update(
-        <NavigationShellProvider>
-          <Probe />
-        </NavigationShellProvider>,
-      );
-    });
-    expect(latest.isDockVisible).toBe(false);
-    expect(latest.dockClearance).toBe(0);
-    expect(latest.restingDockClearance).toBe(42);
+      act(() => {
+        keyboardListeners.keyboardDidShow?.({} as KeyboardEvent);
+      });
+      expect(latestInteraction.dragState).toBeNull();
+      expect(latest.isDockVisible).toBe(true);
+
+      act(() => {
+        renderer.update(
+          <NavigationShellProvider>
+            <Probe hideDock />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(false);
+
+      mockPathname = '/files/123';
+      act(() => {
+        renderer.update(
+          <NavigationShellProvider>
+            <Probe />
+          </NavigationShellProvider>,
+        );
+      });
+      expect(latest.isDockVisible).toBe(false);
+      expect(latest.dockClearance).toBe(0);
+      expect(latest.restingDockClearance).toBe(38);
+    } finally {
+      addListenerSpy.mockRestore();
+    }
   });
 
   it('scopes useHideFloatingDock registration to screen focus and blur transitions', () => {
@@ -327,8 +337,8 @@ describe('NavigationShellProvider', () => {
       );
     });
 
-    expect(latest.dockClearance).toBe(62);
-    expect(latest.restingDockClearance).toBe(62);
+    expect(latest.dockClearance).toBe(60);
+    expect(latest.restingDockClearance).toBe(60);
 
     act(() => {
       latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
@@ -345,7 +355,7 @@ describe('NavigationShellProvider', () => {
       );
     });
     expect(latest.dockClearance).toBe(0);
-    expect(latest.restingDockClearance).toBe(62);
+    expect(latest.restingDockClearance).toBe(60);
     expect(latestInteraction.dragState).toBeNull();
   });
 
