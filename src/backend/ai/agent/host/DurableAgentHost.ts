@@ -974,6 +974,7 @@ export class DurableAgentHost implements AgentProtocol {
     );
     await this.prepareLanes(sessionId, targets, attachments, signal);
     signal.throwIfAborted();
+    this.assertSessionRecovered(sessionId);
     const [primary, ...others] = targets;
     const reservation = {
       sessionId,
@@ -2457,9 +2458,10 @@ export class DurableAgentHost implements AgentProtocol {
           if (installed) this.consume(state, event);
           else pending.push(event);
         });
-        if (this.controller.signal.aborted) {
+        if (this.controller.signal.aborted || this.recoveryFailures.has(lane.sessionId)) {
           await observed.unsubscribe();
           this.controller.signal.throwIfAborted();
+          this.assertSessionRecovered(lane.sessionId);
         }
         state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
         state.contextStatus = observed.snapshot.contextStatus ?? null;
@@ -2498,6 +2500,7 @@ export class DurableAgentHost implements AgentProtocol {
     this.controller.signal.throwIfAborted();
     if (!(error instanceof ZodError)) throw error;
     this.recoveryFailures.add(lane.sessionId);
+    this.admissions.get(lane.sessionId)?.controller.abort(recoveryFailureError());
     logger.error('Agent operation failed', {
       error,
       operation,
@@ -2998,11 +3001,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private assertSessionRecovered(sessionId: string) {
-    if (this.recoveryFailures.has(sessionId))
-      fail(
-        'SESSION_RECOVERY_FAILED',
-        'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
-      );
+    if (this.recoveryFailures.has(sessionId)) throw recoveryFailureError();
   }
 
   /** Continued-processing expiry includes a system-UI cancellation; do not auto-resume it. */
@@ -3163,6 +3162,15 @@ export class DurableAgentHost implements AgentProtocol {
       ? this.ports.agents.getAgentOwner(agentId)
       : this.ports.agents.getAgent(agentId, fallbackModelId);
   }
+}
+
+function recoveryFailureError() {
+  return new AgentProtocolError({
+    code: 'SESSION_RECOVERY_FAILED',
+    message:
+      'Stored execution data could not be observed. The Session was preserved; start another conversation or submit diagnostics.',
+    retryable: false,
+  });
 }
 
 function fail(

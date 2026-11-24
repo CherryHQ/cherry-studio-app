@@ -2227,6 +2227,91 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('seals in-flight admission and concurrent sibling attach when observation hits ZodError', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    let releasePreflight!: () => void;
+    let enteredPreflight!: () => void;
+    const preflightGate = new Promise<void>((resolve) => {
+      releasePreflight = resolve;
+    });
+    const preflightStarted = new Promise<void>((resolve) => {
+      enteredPreflight = resolve;
+    });
+    jest.spyOn(state.conversations, 'preflightModel').mockImplementationOnce(async () => {
+      enteredPreflight();
+      await preflightGate;
+      return {
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 4096,
+        inputModalities: ['text'],
+        supportsTools: true,
+      };
+    });
+    const siblingUnsubscribe = jest.fn(async () => {});
+    let releaseSiblingObserve!: () => void;
+    let enteredSiblingObserve!: () => void;
+    const siblingGate = new Promise<void>((resolve) => {
+      releaseSiblingObserve = resolve;
+    });
+    const siblingStarted = new Promise<void>((resolve) => {
+      enteredSiblingObserve = resolve;
+    });
+    jest.spyOn(state.conversations, 'observe').mockImplementation(async (lane) => {
+      if (lane.slot === 1) {
+        enteredSiblingObserve();
+        await siblingGate;
+        return {
+          snapshot: { activeTurn: null, queue: [], contextStatus: null, contextUsage: null },
+          unsubscribe: siblingUnsubscribe,
+        };
+      }
+      throw new ZodError([]);
+    });
+
+    try {
+      const pendingAdmission = state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Must fail safely' }],
+      });
+      await preflightStarted;
+      const messagesBefore = await state.store.listMessages(state.sessionId);
+
+      // Start an in-flight sibling lane attach that settles only after slot 0 isolates the session.
+      const attachHost = state.host as unknown as {
+        attach: (lane: ReturnType<typeof runtimeLane>) => Promise<unknown>;
+        live: Map<string, unknown>;
+      };
+      const pendingSibling = attachHost.attach(runtimeLane(state.sessionId, 1));
+      await siblingStarted;
+
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+
+      releaseSiblingObserve();
+      await expect(pendingSibling).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(siblingUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(attachHost.live.has(laneKey(runtimeLane(state.sessionId, 1)))).toBe(false);
+
+      releasePreflight();
+      await expect(pendingAdmission).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      expect(await state.store.listMessages(state.sessionId)).toEqual(messagesBefore);
+    } finally {
+      releaseSiblingObserve?.();
+      releasePreflight?.();
+      await state.host.close();
+    }
+  });
+
   test('isolates an unreadable observer before resuming unrelated work and denies its execution', async () => {
     const state = fixture();
     const unreadable = await state.reserve('running');

@@ -1061,13 +1061,48 @@ describe('PiDurableRuntime identity and handoff', () => {
         resourceFileEntryIds: [],
       });
       await started;
+      const scanDocuments = jest.spyOn(runtime['storage'], 'scanDocuments');
       await runtime.retireSession(seed.sessionId);
+      expect(scanDocuments).not.toHaveBeenCalled();
+      scanDocuments.mockRestore();
       release();
       await expect(fork).rejects.toThrow('source working copy changed');
       expect(await runtime.conversation('child')).toBeUndefined();
       expect(await runtime.binding(seed.sessionId)).toBeUndefined();
     } finally {
       release();
+      await runtime.close();
+    }
+  });
+
+  test('retireSession scans transactions directly and keeps metadata if a fork commits concurrently', async () => {
+    const storage = new MemoryStorage();
+    const runtime = await PiDurableRuntime.open(storage, options());
+    const metadata = { userMessageId: 'user', assistantMessageId: 'assistant' };
+    try {
+      await runtime.ensureConversation(seed);
+      const submission = await runtime.submit(
+        seed.sessionId,
+        { type: 'input', requestId: 'original', content: 'Synthetic input' },
+        metadata,
+        metadata,
+      );
+      const record = await submission.wait(BACKGROUND_CONTEXT);
+      const scanDocuments = jest.spyOn(storage, 'scanDocuments');
+      await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'child',
+        at: record.entry!,
+        resourceFileEntryIds: [],
+      });
+      scanDocuments.mockClear();
+      await runtime.retireSession(seed.sessionId);
+      expect(scanDocuments).not.toHaveBeenCalled();
+      expect((await runtime.history('child', 256)).submissions).toContainEqual({
+        record,
+        metadata,
+      });
+    } finally {
       await runtime.close();
     }
   });

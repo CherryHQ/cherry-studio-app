@@ -1089,28 +1089,16 @@ export class PiDurableRuntime {
     } while (next);
     await this.harness.commit(async (tx) => {
       // Forks retain their ancestors' entry IDs and read display identities in those origins.
-      // Check bound descendants on the Session line so a concurrent fork cannot lose metadata.
+      // Scan conversations inside tx so staged concurrent forks are visible before retiring metadata.
       let inherited = false;
       let cursor: Cursor | undefined;
       do {
-        const page = await this.storage.scanDocuments(
-          { scope: { kind: 'session' }, at: 'current', kind: SessionBinding.definition.kind },
-          256,
-          cursor,
-          context,
-        );
-        for (const document of page.items) {
-          if (document.key === undefined || document.key === sessionId) continue;
-          const survivor = await tx.doc(SessionBinding, document.key, 0);
-          let origin = survivor.conversationId;
-          while (origin !== null) {
-            if (origin === conversationId) {
-              inherited = true;
-              break;
-            }
-            origin = (await tx.conversation(origin))?.parent?.conversationId ?? null;
+        const page = await tx.scanConversations({}, 256, cursor);
+        for (const conversation of page.items) {
+          if (conversation.parent?.conversationId === conversationId) {
+            inherited = true;
+            break;
           }
-          if (inherited) break;
         }
         cursor = page.next;
       } while (cursor && !inherited);
