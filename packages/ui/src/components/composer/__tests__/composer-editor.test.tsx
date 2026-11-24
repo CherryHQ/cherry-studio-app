@@ -1,8 +1,9 @@
-import { TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ComposerEditor, useComposerEditorInput } from '../components/composer-editor';
+import { textInputBoxStyle } from '../utils/composer-layout';
 
 const mockTiming = jest.fn((target: number, _motion: object) => target);
 
@@ -40,7 +41,8 @@ jest.mock('../components/composer-expansion', () => ({
 }));
 
 function Field() {
-  return <TextInput style={useComposerEditorInput()?.style} />;
+  const editorInput = useComposerEditorInput();
+  return <TextInput style={[textInputBoxStyle, editorInput?.style]} />;
 }
 
 describe('Composer.Editor', () => {
@@ -71,12 +73,12 @@ describe('Composer.Editor', () => {
   afterEach(() => act(() => renderer.unmount()));
 
   it('bounds the native text field to a single row only while compact', () => {
-    const nativeHeightLimit = () => renderer.root.findByType(TextInput).props.style?.maxHeight;
-    expect(nativeHeightLimit()).toBe(24);
+    const nativeStyle = () => StyleSheet.flatten(renderer.root.findByType(TextInput).props.style);
+    expect(nativeStyle()).toMatchObject({ maxHeight: 24, paddingVertical: 0 });
     act(() => renderer.update(renderEditor(true)));
-    expect(nativeHeightLimit()).toBeUndefined();
+    expect(nativeStyle()).toMatchObject({ maxHeight: 132, paddingVertical: 4 });
     act(() => renderer.update(renderEditor(false)));
-    expect(nativeHeightLimit()).toBe(24);
+    expect(nativeStyle()).toMatchObject({ maxHeight: 24, paddingVertical: 0 });
   });
 
   it('keeps the resting field clear of both trailing actions without adding a leading slot', () => {

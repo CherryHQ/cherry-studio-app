@@ -74,6 +74,7 @@ export const textInputBoxStyle = {
 // Leave the row's breathing room outside the native field when it shows one line.
 export const compactTextInputBoxStyle = {
   maxHeight: composerActionSize - 2 * textPaddingVertical,
+  paddingVertical: 0,
 } as const;
 // The paste wrapper shrink-wraps its child by default, which would pull the
 // field in from the surface's right edge and leave the caret short of it.
