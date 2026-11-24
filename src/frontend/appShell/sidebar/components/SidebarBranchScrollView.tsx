@@ -44,7 +44,7 @@ export function SidebarBranchScrollView({
   const registrations = useRef(new Map<string, RowRegistration>());
   const generation = useRef(0);
   const active = useRef(true);
-  const measureFrame = useRef<number | undefined>(undefined);
+  const measureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rows = useSharedValue<SidebarBranchRowLayout[]>([]);
   const scrollY = useSharedValue(0);
   const nearEnd = useSharedValue(false);
@@ -55,19 +55,17 @@ export function SidebarBranchScrollView({
   const refresh = useCallback(() => {
     if (!active.current) return;
     generation.current++;
-    if (measureFrame.current !== undefined) return;
-    measureFrame.current = requestAnimationFrame(() => {
-      measureFrame.current = undefined;
+    clearTimeout(measureTimer.current);
+    if (!registrations.current.size) return;
+    // During a reveal, sibling positions change every frame. Measure once the layout settles.
+    measureTimer.current = setTimeout(() => {
+      measureTimer.current = undefined;
       const content = scrollRef.current?.getInnerViewRef();
       if (!content) return;
       const currentGeneration = generation.current;
       const entries = [...registrations.current.entries()];
       const measured: SidebarBranchRowLayout[] = [];
       let remaining = entries.length;
-      if (!remaining) {
-        rows.set([]);
-        return;
-      }
       const finish = () => {
         remaining--;
         if (!remaining && active.current && generation.current === currentGeneration)
@@ -90,7 +88,7 @@ export function SidebarBranchScrollView({
           finish,
         );
       }
-    });
+    }, 32);
   }, [rows]);
   const register = useCallback(
     (id: string, ref: RefObject<ViewInstance | null>, depth: number) => {
@@ -100,10 +98,11 @@ export function SidebarBranchScrollView({
       return () => {
         if (registrations.current.get(id) !== entry) return;
         registrations.current.delete(id);
+        if (!registrations.current.size) rows.set([]);
         refresh();
       };
     },
-    [refresh],
+    [refresh, rows],
   );
   useLayoutEffect(() => {
     const registeredRows = registrations.current;
@@ -111,8 +110,8 @@ export function SidebarBranchScrollView({
     refresh();
     return () => {
       active.current = false;
-      if (measureFrame.current !== undefined) cancelAnimationFrame(measureFrame.current);
-      measureFrame.current = undefined;
+      clearTimeout(measureTimer.current);
+      measureTimer.current = undefined;
       registeredRows.clear();
     };
   }, [refresh]);

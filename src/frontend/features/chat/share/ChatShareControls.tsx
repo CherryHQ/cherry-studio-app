@@ -8,9 +8,11 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { type PropsWithChildren, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View, type ViewInstance } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
+import { useSidebarChromeStyle } from '@/frontend/appShell/sidebar/motion';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -28,16 +30,17 @@ import {
 /** Preserve the draft and dock measurement while selection owns the bottom controls. */
 export function ChatShareComposerGuard({ children }: PropsWithChildren) {
   const isSelecting = useIsChatShareSelecting();
+  const chromeStyle = useSidebarChromeStyle(isSelecting);
   return (
-    <View
+    <Animated.View
       accessibilityElementsHidden={isSelecting}
       importantForAccessibility={isSelecting ? 'no-hide-descendants' : 'auto'}
       pointerEvents={isSelecting ? 'none' : 'box-none'}
       className="absolute inset-0"
-      style={{ opacity: isSelecting ? 0 : 1 }}
+      style={chromeStyle}
     >
       {children}
-    </View>
+    </Animated.View>
   );
 }
 

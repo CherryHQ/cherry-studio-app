@@ -4,7 +4,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ComposerCollapsible } from '../composer-collapsible';
 
 const mockReducedMotion = { value: false };
-const mockWithTiming = jest.fn((value: number) => value);
+const mockWithTiming = jest.fn(
+  (value: number, _config?: object, _finish?: (completed: boolean) => void) => value,
+);
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback: () => void) => callback() }));
 
 jest.mock('react-native-reanimated', () => {
   const { View } = jest.requireActual('react-native');
@@ -77,6 +80,21 @@ describe('Composer.Collapsible', () => {
     expect(row(tree).props.accessibilityElementsHidden).toBe(true);
     expect(row(tree).props.importantForAccessibility).toBe('no-hide-descendants');
     expect(row(tree).props.pointerEvents).toBe('none');
+  });
+
+  it('releases the closing tree only if that collapse is still current', () => {
+    const tree = render(<Text>First</Text>);
+    update(tree, null);
+    const firstClose = mockWithTiming.mock.calls.at(-1)?.[2];
+    expect(firstClose).toBeDefined();
+    update(tree, <Text>Second</Text>);
+    act(() => firstClose!(true));
+    expect(tree.root.findByType(Text).props.children).toBe('Second');
+
+    update(tree, null);
+    const secondClose = mockWithTiming.mock.calls.at(-1)?.[2];
+    act(() => secondClose!(true));
+    expect(tree.root.findAllByType(Text)).toHaveLength(0);
   });
 
   it('treats a false child as collapsed, not as content', () => {

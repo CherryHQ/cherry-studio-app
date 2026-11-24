@@ -22,13 +22,13 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn({ ...wide, isWide: false })).toEqual({ kind: 'overlay' });
   });
 
-  test('keeps compact inactive drawers in slide mode without flipping to permanent', () => {
+  test('keeps compact inactive drawers in front mode without flipping to permanent', () => {
     const input = { ...wide, isWide: false };
     const inactive = resolveSidebarColumn({ ...input, isChatFocused: false });
     expect(inactive).toEqual({ kind: 'inactive' });
     expect(resolveSidebarToggleAction(inactive)).toBeUndefined();
     expect(resolveSidebarDrawer(inactive, 320, false)).toEqual({
-      drawerType: 'slide',
+      drawerType: 'front',
       drawerStyle: { pointerEvents: 'none', width: 320 },
     });
     expect(resolveSidebarDrawer(inactive, 320)).toMatchObject({
@@ -111,9 +111,9 @@ describe('resolveSidebarDrawer', () => {
     expect(drawer(true).drawerStyle).toEqual({ width: 280 });
   });
 
-  test('a compact window still slides the sidebar alongside the chat', () => {
+  test('a compact window overlays the stationary chat', () => {
     expect(resolveSidebarDrawer({ kind: 'overlay' }, 320, false)).toEqual({
-      drawerType: 'slide',
+      drawerType: 'front',
       drawerStyle: { pointerEvents: 'auto', width: 320 },
     });
   });

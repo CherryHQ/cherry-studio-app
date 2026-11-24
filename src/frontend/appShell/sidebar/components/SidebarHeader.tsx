@@ -15,6 +15,7 @@ import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarDesktopPrewarm } from '../hooks/useSidebarDesktopPrewarm';
 import { useSidebarHeaderTop } from '../hooks/useSidebarHeaderTop';
 import { useSidebarColumn } from '../SidebarColumn';
 import { useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
@@ -114,8 +115,13 @@ function SidebarDeviceTitle() {
   const router = useRouter();
   const { closeDrawer, prepareExternalNavigation, returnToChat } =
     useSidebarActions('SidebarDeviceTitle');
-  const { source, remoteTarget, selectDevice } = useChatSource();
+  const { source, remoteTarget, remoteViewMode, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
+  useSidebarDesktopPrewarm(
+    connections,
+    remoteViewMode,
+    source === 'remote' ? remoteTarget.connectionId : undefined,
+  );
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const current =
     source === 'remote'

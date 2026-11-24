@@ -1773,6 +1773,7 @@
   "remoteAgent.artifact": "Ficheiro gerado",
   "remoteAgent.attachmentsUnavailable": "As conversas do computador ainda não suportam anexos",
   "remoteAgent.awaitingApproval": "À espera da sua resposta",
+  "remoteAgent.cachedCatalog": "A mostrar a última lista sincronizada.",
   "remoteAgent.configured": "Modelo configurado",
   "remoteAgent.connected": "Ligado a {{name}}",
   "remoteAgent.connecting": "A ligar ao PC…",

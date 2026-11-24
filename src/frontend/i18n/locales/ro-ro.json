@@ -1773,6 +1773,7 @@
   "remoteAgent.artifact": "Fișier generat",
   "remoteAgent.attachmentsUnavailable": "Conversațiile desktop nu acceptă încă atașamente",
   "remoteAgent.awaitingApproval": "Se așteaptă răspunsul dvs.",
+  "remoteAgent.cachedCatalog": "Se afișează ultima listă sincronizată.",
   "remoteAgent.configured": "Model configurat",
   "remoteAgent.connected": "Conectat la {{name}}",
   "remoteAgent.connecting": "Se conectează la PC…",

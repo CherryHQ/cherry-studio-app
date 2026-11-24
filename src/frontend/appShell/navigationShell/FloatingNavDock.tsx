@@ -6,6 +6,7 @@ import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
+import { useSidebarChromeStyle } from '@/frontend/appShell/sidebar/motion';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { resolveDockDragPreview } from './dockTabs';
@@ -77,6 +78,7 @@ export function FloatingNavDock() {
   );
   const isChatSurface = activeDestination === 'chat';
 
+  const drawerChromeStyle = useSidebarChromeStyle();
   const animatedContainerStyle = useAnimatedStyle(() => ({
     opacity: withTiming(isDockVisible ? 1 : 0, navChromeTimingConfig),
     transform: [{ translateY: withTiming(isDockVisible ? 0 : 20, navChromeTimingConfig) }],
@@ -121,56 +123,61 @@ export function FloatingNavDock() {
       className="absolute right-0 bottom-0 left-0 z-20"
       importantForAccessibility={isDockVisible ? 'auto' : 'no-hide-descendants'}
       pointerEvents={isDockVisible ? 'box-none' : 'none'}
-      style={[animatedContainerStyle, { paddingBottom: bottomPadding }]}
+      style={animatedContainerStyle}
       testID="floating-nav-dock"
     >
-      {isChatSurface ? (
-        <View className="absolute inset-0 bg-chat-background" pointerEvents="none" />
-      ) : (
-        <LinearGradient
-          colors={defaultFadeColors}
-          end={DOCK_FADE_END}
-          locations={DOCK_FADE_LOCATIONS}
-          pointerEvents="none"
-          start={DOCK_FADE_START}
-          style={DOCK_FADE_STYLE}
-        />
-      )}
-      <NavDragStatusPill
-        containerClassName="items-center"
-        dragState={dragState}
-        pillTestID="floating-dock-status-pill"
-        preview={preview}
-        style={{ bottom: 58 + bottomPadding, left: 16, position: 'absolute', right: 16 }}
-      />
-      <View className="relative" pointerEvents="box-none">
-        {trayClassName ? (
-          <View pointerEvents="none" style={DOCK_TRAY_STYLE}>
-            <Surface shape="pill">
-              <View className={trayClassName} testID="floating-dock-drop-tray" />
-            </Surface>
-          </View>
-        ) : null}
-        <View
-          ref={rowRef}
-          className="flex-row items-center justify-center px-4"
-          onLayout={handleRowLayout}
-          pointerEvents={isDockVisible ? 'auto' : 'none'}
-          testID="floating-nav-row"
-        >
-          <NavTabStrip
-            activeDockTab={activeDockTab}
-            dragState={dragState}
-            foregroundColor={foregroundColor}
-            mutedForegroundColor={mutedForegroundColor}
-            onSelectDestination={navigateToDestination}
-            orientation="horizontal"
-            pinnedTabs={pinnedTabs}
-            preview={preview}
-            testIDPrefix="floating-nav"
+      <Animated.View
+        pointerEvents="box-none"
+        style={[drawerChromeStyle, { paddingBottom: bottomPadding }]}
+      >
+        {isChatSurface ? (
+          <View className="absolute inset-0 bg-chat-background" pointerEvents="none" />
+        ) : (
+          <LinearGradient
+            colors={defaultFadeColors}
+            end={DOCK_FADE_END}
+            locations={DOCK_FADE_LOCATIONS}
+            pointerEvents="none"
+            start={DOCK_FADE_START}
+            style={DOCK_FADE_STYLE}
           />
+        )}
+        <NavDragStatusPill
+          containerClassName="items-center"
+          dragState={dragState}
+          pillTestID="floating-dock-status-pill"
+          preview={preview}
+          style={{ bottom: 58 + bottomPadding, left: 16, position: 'absolute', right: 16 }}
+        />
+        <View className="relative" pointerEvents="box-none">
+          {trayClassName ? (
+            <View pointerEvents="none" style={DOCK_TRAY_STYLE}>
+              <Surface shape="pill">
+                <View className={trayClassName} testID="floating-dock-drop-tray" />
+              </Surface>
+            </View>
+          ) : null}
+          <View
+            ref={rowRef}
+            className="flex-row items-center justify-center px-4"
+            onLayout={handleRowLayout}
+            pointerEvents={isDockVisible ? 'auto' : 'none'}
+            testID="floating-nav-row"
+          >
+            <NavTabStrip
+              activeDockTab={activeDockTab}
+              dragState={dragState}
+              foregroundColor={foregroundColor}
+              mutedForegroundColor={mutedForegroundColor}
+              onSelectDestination={navigateToDestination}
+              orientation="horizontal"
+              pinnedTabs={pinnedTabs}
+              preview={preview}
+              testIDPrefix="floating-nav"
+            />
+          </View>
         </View>
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }

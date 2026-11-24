@@ -1,9 +1,9 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import {
   ContextMenu,
   ContentState,
+  DisclosureChevron,
+  DisclosureContent,
   SelectionIndicator,
   Spinner,
   useAlert,
@@ -12,7 +12,15 @@ import {
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { cn } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -56,6 +64,7 @@ import {
 } from './SidebarSessionBranch';
 
 type RegisterEndReached = (handler?: () => void) => void;
+const AgentGroupExpanded = createContext(true);
 const noSessionPath: readonly ConversationSummary[] = [];
 const noAncestorContinuations: readonly SidebarSessionBranchAncestor[] = [];
 const statusLabelKeys = {
@@ -177,6 +186,9 @@ function SidebarAgentGroups({
     );
   return (
     <View className="gap-2">
+      {!onSelect && query.isCachedCatalog && query.items.length > 0 ? (
+        <Text className="px-5 text-muted-foreground text-sm">{t('remoteAgent.cachedCatalog')}</Text>
+      ) : null}
       {query.items.map((agent) => (
         <SidebarAgentGroup
           key={agent.id}
@@ -216,11 +228,7 @@ function SidebarAgentGroup({
   const [expanded, setExpanded] = useState(false);
   const status = useConversationAgentStatus(agent.ref, !expanded);
   const toggle = () => setExpanded((value) => !value);
-  const disclosure = expanded ? (
-    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-  ) : (
-    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
-  );
+  const disclosure = <DisclosureChevron expanded={expanded} />;
   return (
     <View onLayout={refreshBranchLayout} testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
@@ -287,14 +295,18 @@ function SidebarAgentGroup({
           </Pressable>
         )}
       </View>
-      {expanded ? (
-        <SidebarSessions
-          agentRef={agent.ref}
-          agentId={agent.id}
-          onSelect={onSelect}
-          showLoading={showLoading}
-        />
-      ) : null}
+      <AgentGroupExpanded value={expanded}>
+        <DisclosureContent>
+          {expanded ? (
+            <SidebarSessions
+              agentRef={agent.ref}
+              agentId={agent.id}
+              onSelect={onSelect}
+              showLoading={showLoading}
+            />
+          ) : null}
+        </DisclosureContent>
+      </AgentGroupExpanded>
     </View>
   );
 }
@@ -398,9 +410,14 @@ function SidebarSessionList({
   const refreshBranchLayout = useSidebarBranchLayoutRefresh();
   const source = useConversationSource();
   const navigation = useConversationTarget(source.ref);
-  const query = useConversationSessions(agentRef, source.ref.kind !== 'desktop' || visible, {
-    includeBranches: !isSessionTreeEnabled,
-  });
+  const groupExpanded = use(AgentGroupExpanded);
+  const query = useConversationSessions(
+    agentRef,
+    groupExpanded && (source.ref.kind !== 'desktop' || visible),
+    {
+      includeBranches: !isSessionTreeEnabled,
+    },
+  );
   const [showAll, setShowAll] = useState(false);
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
@@ -447,6 +464,9 @@ function SidebarSessionList({
     );
   return (
     <View className="px-2" onLayout={refreshBranchLayout}>
+      {!agentRef && !onSelect && query.isCachedCatalog && shownSessions.length > 0 ? (
+        <Text className="px-3 text-muted-foreground text-sm">{t('remoteAgent.cachedCatalog')}</Text>
+      ) : null}
       {onSelect ? null : (
         <SidebarSessionSelectionRegistration
           agentRef={agentRef}
@@ -676,12 +696,17 @@ function SidebarSessionSelectionRegistration({
   const source = useConversationSource();
   const { registerList } = useSidebarSelection();
   const key = `${source.scope}:${listKey ?? agentRef ?? ''}`;
+  const groupExpanded = use(AgentGroupExpanded);
   const unregister = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
+    if (!groupExpanded) return;
     unregister.current = registerList(key, source, sessions.slice(0, limit));
-  }, [key, limit, registerList, sessions, source]);
+  }, [groupExpanded, key, limit, registerList, sessions, source]);
   // Content updates retain selected survivors; only the registration owner unregisters its list.
-  useEffect(() => () => unregister.current?.(), [key, registerList]);
+  useEffect(
+    () => (groupExpanded ? () => unregister.current?.() : undefined),
+    [groupExpanded, key, registerList],
+  );
   return null;
 }
 
