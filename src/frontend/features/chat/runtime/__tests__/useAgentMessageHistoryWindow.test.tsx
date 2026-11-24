@@ -7,7 +7,7 @@ import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import { useAgentMessageHistoryWindow } from '../useAgentMessageHistoryWindow';
 
-const mockGet = jest.fn(async () => ({ items: [] }));
+const mockGet = jest.fn(async (): Promise<{ items: AgentMessageView[] }> => ({ items: [] }));
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data'),
   useApiClient: () => ({ get: mockGet }),
@@ -135,5 +135,59 @@ describe('useAgentMessageHistoryWindow', () => {
     });
     expect(prepareAround).toHaveBeenCalledTimes(1);
     expect(mockGet).toHaveBeenCalledTimes(2);
+  });
+
+  test('counts hidden loaded user turns separately from unfetched older pages', async () => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const makeMessage = (index: number): AgentMessageView => ({
+      id: `m-${index}`,
+      sessionId: 'three-turn-session',
+      turnId: `t-${Math.floor(index / 2)}`,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      status: 'success',
+      parts: [],
+      stats: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    // API returns newest-first pages; 6 messages = 3 turns with no older page cursor.
+    mockGet.mockResolvedValueOnce({
+      items: [5, 4, 3, 2, 1, 0].map(makeMessage),
+    });
+
+    let window!: ReturnType<typeof useAgentMessageHistoryWindow>;
+    function Probe() {
+      const current = useAgentMessageHistoryWindow('three-turn-session');
+      useLayoutEffect(() => {
+        window = current;
+      });
+      return null;
+    }
+
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+    await act(settle);
+
+    expect(window.messages).toHaveLength(4);
+    expect(window.hasOlderMessages).toBe(true);
+    expect(window.hasUnfetchedOlderMessages).toBe(false);
+    expect(window.hiddenUserTurnCount).toBe(1);
+
+    await act(async () => {
+      await window.loadOlder();
+    });
+    await act(settle);
+
+    expect(window.messages).toHaveLength(6);
+    expect(window.hasOlderMessages).toBe(false);
+    expect(window.hasUnfetchedOlderMessages).toBe(false);
+    expect(window.hiddenUserTurnCount).toBe(0);
   });
 });

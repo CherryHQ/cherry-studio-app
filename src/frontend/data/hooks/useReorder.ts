@@ -38,6 +38,7 @@ export function useReorder<TItem>({
   const dataApi = useApiClient();
   const queryClient = useQueryClient();
   const [inFlightCount, setInFlightCount] = useState(0);
+  const inFlightCountRef = useRef(0);
   const queueTailRef = useRef<Promise<void>>(Promise.resolve());
   const generationRef = useRef(0);
   const cancelledThroughRef = useRef(0);
@@ -80,27 +81,48 @@ export function useReorder<TItem>({
       const orderedIds = newItems.map(currentOptions.getId);
       const generation = generationRef.current + 1;
       generationRef.current = generation;
+      const preAppliedSnapshots: QuerySnapshot<unknown>[] | undefined =
+        inFlightCountRef.current === 0 ? [] : undefined;
+      inFlightCountRef.current += 1;
       if (mountedRef.current) {
         setInFlightCount((count) => count + 1);
       }
 
       const filtersToUpdate = currentOptions.queryFilters;
       const filtersToInvalidate = currentOptions.invalidateFilters ?? currentOptions.queryFilters;
+      const applyOrder = (current: unknown) =>
+        applySublistOrderToCacheData<TItem>(current, orderedIds, currentOptions.getId);
+
+      // An idle drop publishes the new row order in the same turn as the gesture handoff.
+      let preApplyFailure: { error: unknown } | undefined;
+      if (preAppliedSnapshots) {
+        try {
+          for (const filter of filtersToUpdate) {
+            void queryClient.cancelQueries(filter);
+            preAppliedSnapshots.push(queryClient.getQueriesData<unknown>(filter));
+            queryClient.setQueriesData<unknown>(filter, applyOrder);
+          }
+        } catch (error) {
+          preApplyFailure = { error };
+        }
+      }
 
       const task = queueTailRef.current.then(async (): Promise<boolean> => {
-        const snapshots: QuerySnapshot<unknown>[] = [];
+        const snapshots = preAppliedSnapshots ?? [];
         try {
           // Queued drags were planned against the optimistic order of the failed write.
           if (generation <= cancelledThroughRef.current) return false;
-          for (const filter of filtersToUpdate) {
-            // Wait sequentially so query cancellations & snapshots stay deterministic across filters.
-            const snapshot = await updateQueriesOptimistically<unknown>(
-              queryClient,
-              filter,
-              (current) =>
-                applySublistOrderToCacheData<TItem>(current, orderedIds, currentOptions.getId),
-            );
-            snapshots.push(snapshot);
+          if (preApplyFailure) throw preApplyFailure.error;
+          if (!preAppliedSnapshots) {
+            for (const filter of filtersToUpdate) {
+              // Wait sequentially so query cancellations & snapshots stay deterministic across filters.
+              const snapshot = await updateQueriesOptimistically<unknown>(
+                queryClient,
+                filter,
+                applyOrder,
+              );
+              snapshots.push(snapshot);
+            }
           }
 
           if (moves.length === 1) {
@@ -122,13 +144,15 @@ export function useReorder<TItem>({
           return true;
         } catch (error) {
           cancelledThroughRef.current = generationRef.current;
-          for (const snapshot of snapshots) {
+          // Unwind writes newest first so overlapping filters restore the original cache state.
+          for (const snapshot of snapshots.toReversed()) {
             restoreQuerySnapshot(queryClient, snapshot);
           }
           await runInvalidations(filtersToInvalidate);
           optionsRef.current.onError?.(error);
           return false;
         } finally {
+          inFlightCountRef.current -= 1;
           if (mountedRef.current) {
             setInFlightCount((count) => Math.max(0, count - 1));
           }

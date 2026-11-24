@@ -60,7 +60,7 @@ export function NavPinPopover() {
               <Pressable
                 accessibilityRole="button"
                 className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${
-                  canPin ? 'bg-secondary-active' : 'opacity-60'
+                  canPin ? 'active:opacity-70' : 'opacity-60'
                 }`}
                 onPress={() => {
                   pinTabToDock(popover.id);
@@ -68,8 +68,10 @@ export function NavPinPopover() {
                 }}
                 testID={`nav-popover-pin-${popover.id}`}
               >
-                <PinIcon color={foregroundColor} size={15} />
-                <Text className="text-foreground text-xs font-medium">
+                <PinIcon color={canPin ? foregroundColor : mutedForegroundColor} size={15} />
+                <Text
+                  className={`text-xs font-medium ${canPin ? 'text-foreground' : 'text-muted-foreground'}`}
+                >
                   {t('navigation.pinToDock')}
                 </Text>
               </Pressable>

@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ScrollInteractionBoundary } from '../../scroll-interaction/scroll-interaction-boundary';
@@ -94,7 +94,7 @@ jest.mock('react-native-reanimated', () => {
     withSpring: (toValue: number) => toValue,
     withTiming: (toValue: number, _config?: object, cb?: (finished?: boolean) => void) => {
       cb?.(true);
-      return toValue;
+      return toValue === 1 ? 'animated opacity' : toValue;
     },
   };
 });
@@ -145,67 +145,71 @@ describe('Sortable', () => {
       toIndex: number;
     }) => void;
   }) {
+    const list = (visibleItems = items, registeredItems = visibleItems) => (
+      <ScrollInteractionBoundary>
+        {(scrollHandlers) => (
+          <Sortable.Root onDraggingChange={onDraggingChange} testID="sortable-root">
+            {({ isDragging }) => (
+              <View {...scrollHandlers} data-dragging={isDragging} testID="scroll-surface">
+                <Sortable.Group
+                  estimatedItemHeight={50}
+                  groupId="g1"
+                  itemIds={registeredItems.map((i) => i.id)}
+                  onReorder={onReorder}
+                >
+                  <Section>
+                    {registeredItems.map(
+                      (item, index) =>
+                        visibleItems.includes(item) && (
+                          <Sortable.Item
+                            accessibilityLabels={{
+                              moveDown: `Move ${item.label} down`,
+                              moveToTop: 'Move to top',
+                              moveUp: `Move ${item.label} up`,
+                            }}
+                            estimatedHeight={50}
+                            groupId="g1"
+                            id={item.id}
+                            index={index}
+                            key={item.id}
+                            menuItems={[
+                              ...(movable && index > 0
+                                ? [
+                                    {
+                                      id: 'move-to-top',
+                                      label: 'Move to top',
+                                      onPress: () => onMoveToTop(index),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                destructive: true,
+                                id: 'delete',
+                                label: 'Delete',
+                                onPress: () => onDelete(item.id),
+                              },
+                            ]}
+                            movable={movable}
+                            testID={`item-${item.id}`}
+                          >
+                            <Section.Item
+                              label={item.label}
+                              onPress={() => undefined}
+                              testID={`row-${item.id}`}
+                            />
+                          </Sortable.Item>
+                        ),
+                    )}
+                  </Section>
+                </Sortable.Group>
+              </View>
+            )}
+          </Sortable.Root>
+        )}
+      </ScrollInteractionBoundary>
+    );
     act(() => {
-      renderer = create(
-        <ScrollInteractionBoundary>
-          {(scrollHandlers) => (
-            <Sortable.Root onDraggingChange={onDraggingChange} testID="sortable-root">
-              {({ isDragging }) => (
-                <View {...scrollHandlers} data-dragging={isDragging} testID="scroll-surface">
-                  <Sortable.Group
-                    estimatedItemHeight={50}
-                    groupId="g1"
-                    itemIds={items.map((i) => i.id)}
-                    onReorder={onReorder}
-                  >
-                    <Section>
-                      {items.map((item, index) => (
-                        <Sortable.Item
-                          accessibilityLabels={{
-                            moveDown: `Move ${item.label} down`,
-                            moveToTop: 'Move to top',
-                            moveUp: `Move ${item.label} up`,
-                          }}
-                          estimatedHeight={50}
-                          groupId="g1"
-                          id={item.id}
-                          index={index}
-                          key={item.id}
-                          menuItems={[
-                            ...(movable && index > 0
-                              ? [
-                                  {
-                                    id: 'move-to-top',
-                                    label: 'Move to top',
-                                    onPress: () => onMoveToTop(index),
-                                  },
-                                ]
-                              : []),
-                            {
-                              destructive: true,
-                              id: 'delete',
-                              label: 'Delete',
-                              onPress: () => onDelete(item.id),
-                            },
-                          ]}
-                          movable={movable}
-                          testID={`item-${item.id}`}
-                        >
-                          <Section.Item
-                            label={item.label}
-                            onPress={() => undefined}
-                            testID={`row-${item.id}`}
-                          />
-                        </Sortable.Item>
-                      ))}
-                    </Section>
-                  </Sortable.Group>
-                </View>
-              )}
-            </Sortable.Root>
-          )}
-        </ScrollInteractionBoundary>,
-      );
+      renderer = create(list());
     });
 
     // Layout items with 50pt height so swap thresholds resolve cleanly.
@@ -217,12 +221,20 @@ describe('Sortable', () => {
         node.props.onLayout({ nativeEvent: { layout: { height: 50, width: 320 } } });
       });
     }
+    return list;
   }
 
-  it('Fork A: long-press lift + vertical drag past slop reorders within group with haptics and drop commit', async () => {
+  function itemStyle(id: string) {
+    const item = renderer!.root.find(
+      (node) => node.type === View && node.props.testID === `item-${id}`,
+    );
+    return StyleSheet.flatten(item.props.style);
+  }
+
+  it('Fork A: holds the overlay and sibling shifts until the moved row commits', async () => {
     const onReorder = jest.fn();
     const onDraggingChange = jest.fn();
-    renderList({ onDraggingChange, onReorder });
+    const list = renderList({ onDraggingChange, onReorder });
 
     // Last rendered Pan gesture per item (3 items -> 3 gestures registered on initial mount)
     const thirdItemGesture = panGesturesByOrder.at(-1)!;
@@ -241,11 +253,10 @@ describe('Sortable', () => {
       true,
     );
 
-    // Release -> settles and commits reorder
+    // Release -> settles and requests the reorder while waiting for the list commit.
     act(() => thirdItemGesture.onEnd?.({}, true));
     await flushMicrotasks();
 
-    expect(onDraggingChange).toHaveBeenCalledWith(false);
     expect(mockLightHaptic).toHaveBeenCalledTimes(2);
     expect(onReorder).toHaveBeenCalledWith({
       fromIndex: 2,
@@ -253,7 +264,66 @@ describe('Sortable', () => {
       id: 'c',
       toIndex: 0,
     });
+    expect(onDraggingChange.mock.calls).toEqual([[true]]);
+    expect(renderer!.root.findByProps({ testID: 'sortable-root-overlay' })).toBeDefined();
+    expect(itemStyle('a').transform).toEqual([{ translateY: 50 }]);
+    expect(itemStyle('c').opacity).toBe(0);
+
+    act(() => renderer!.update(list([items[2], items[0], items[1]])));
+
+    expect(onDraggingChange.mock.calls).toEqual([[true], [false]]);
     expect(renderer!.root.findAllByProps({ testID: 'sortable-root-overlay' })).toHaveLength(0);
+    expect(itemStyle('c').opacity).toBe(1);
+    expect(itemStyle('a')).toMatchObject({
+      opacity: 'animated opacity',
+      transform: [{ translateY: 0 }],
+    });
+  });
+
+  it('clears the drop on the next frame when the reordered group commits without the moved row', async () => {
+    jest.useFakeTimers();
+    try {
+      const onDraggingChange = jest.fn();
+      const list = renderList({ onDraggingChange });
+      const gesture = panGesturesByOrder[2];
+      act(() => gesture.onStart?.());
+      await flushMicrotasks();
+      act(() => gesture.onUpdate?.({ absoluteY: 120, translationX: 0, translationY: -95 }));
+      act(() => gesture.onEnd?.({}, true));
+
+      act(() => renderer!.update(list(items.slice(0, 2), [items[2], items[0], items[1]])));
+      expect(renderer!.root.findByProps({ testID: 'sortable-root-overlay' })).toBeDefined();
+      expect(onDraggingChange.mock.calls).toEqual([[true]]);
+
+      act(() => jest.advanceTimersByTime(20));
+      expect(renderer!.root.findAllByProps({ testID: 'sortable-root-overlay' })).toHaveLength(0);
+      expect(onDraggingChange.mock.calls).toEqual([[true], [false]]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('clears the drop after 400ms when the reorder never updates the group', async () => {
+    jest.useFakeTimers();
+    try {
+      const onDraggingChange = jest.fn();
+      renderList({ onDraggingChange });
+      const gesture = panGesturesByOrder[2];
+      act(() => gesture.onStart?.());
+      await flushMicrotasks();
+      act(() => gesture.onUpdate?.({ absoluteY: 120, translationX: 0, translationY: -95 }));
+      act(() => gesture.onEnd?.({}, true));
+
+      act(() => jest.advanceTimersByTime(399));
+      expect(renderer!.root.findByProps({ testID: 'sortable-root-overlay' })).toBeDefined();
+      expect(onDraggingChange.mock.calls).toEqual([[true]]);
+
+      act(() => jest.advanceTimersByTime(1));
+      expect(renderer!.root.findAllByProps({ testID: 'sortable-root-overlay' })).toHaveLength(0);
+      expect(onDraggingChange.mock.calls).toEqual([[true], [false]]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('can drop into a page appended to the group during the drag', async () => {

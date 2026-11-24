@@ -27,6 +27,7 @@ const LIST_CONTENT_STYLE = {
 const LIST_SCROLL_INDICATOR_INSETS = { top: 4, bottom: 12, right: 0 } as const;
 const RAIL_STYLE = { gap: 4.5, width: 14 } as const;
 const TRIGGER_TICKS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] as const;
+export const MAX_TRIGGER_TICKS = TRIGGER_TICKS.length;
 const TICK_MIN_WIDTH = 5.5;
 const TICK_MAX_WIDTH = 13;
 const TICK_MIN_OPACITY = 0.22;
@@ -36,6 +37,11 @@ const TICK_FISHEYE_RADIUS = 1.65;
 const TICK_TRACK_STYLE = { height: 2, width: TICK_MAX_WIDTH } as const;
 const TICK_BAR_STYLE = { width: TICK_MAX_WIDTH } as const;
 const turnKey = (turn: ChatTurn) => turn.id;
+
+export function resolveTurnDirectoryTickCount(turnCount?: number): number {
+  if (turnCount === undefined || !Number.isFinite(turnCount)) return MAX_TRIGGER_TICKS;
+  return Math.min(MAX_TRIGGER_TICKS, Math.max(2, Math.floor(turnCount)));
+}
 
 export function getFisheyeTickMetrics(progress: number, index: number, count: number) {
   'worklet';
@@ -52,23 +58,21 @@ export function getFisheyeTickMetrics(progress: number, index: number, count: nu
 }
 
 function FisheyeTick({
+  count,
   index,
   scrollProgress,
 }: {
+  count: number;
   index: number;
   scrollProgress: SharedValue<number>;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
-    const { opacity, scaleY, width } = getFisheyeTickMetrics(
-      scrollProgress.get(),
-      index,
-      TRIGGER_TICKS.length,
-    );
+    const { opacity, scaleY, width } = getFisheyeTickMetrics(scrollProgress.get(), index, count);
     return {
       opacity,
       transform: [{ translateX: TICK_MAX_WIDTH - width }, { scaleY }],
     };
-  });
+  }, [count, index, scrollProgress]);
 
   return (
     <View className="overflow-hidden rounded-r-full" style={TICK_TRACK_STYLE}>
@@ -89,6 +93,7 @@ export function ChatTurnDirectory({
   keyboardOffset,
   scrollProgress,
   scrollToMessage,
+  turnCount,
 }: {
   navigator: ChatTurnNavigator;
   bottomAccessoryHeight: SharedValue<number>;
@@ -97,10 +102,12 @@ export function ChatTurnDirectory({
   keyboardOffset: number;
   scrollProgress: SharedValue<number>;
   scrollToMessage: MessageListHandle['scrollToMessage'];
+  turnCount?: number;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const tickCount = resolveTurnDirectoryTickCount(turnCount);
   const open = useCallback(() => {
     Keyboard.dismiss();
     setIsOpen(true);
@@ -170,8 +177,13 @@ export function ChatTurnDirectory({
               testID="chat-turn-directory-trigger"
             >
               <View className="items-end" style={RAIL_STYLE}>
-                {TRIGGER_TICKS.map((id, index) => (
-                  <FisheyeTick key={id} index={index} scrollProgress={scrollProgress} />
+                {TRIGGER_TICKS.slice(0, tickCount).map((id, index) => (
+                  <FisheyeTick
+                    count={tickCount}
+                    key={id}
+                    index={index}
+                    scrollProgress={scrollProgress}
+                  />
                 ))}
               </View>
             </Pressable>

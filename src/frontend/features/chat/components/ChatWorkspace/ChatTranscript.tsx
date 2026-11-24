@@ -14,17 +14,25 @@ import { useChatShareFooterHeight, useIsChatShareSelecting } from '../../share/c
 import type { ChatTurnNavigator } from './chatTurns';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
-import { ChatTurnDirectory } from './components/ChatTurnDirectory';
+import { ChatTurnDirectory, MAX_TRIGGER_TICKS } from './components/ChatTurnDirectory';
 import { useMessageListInitialRenderGate } from './hooks/useMessageListInitialRenderGate';
 
 type ChatTranscriptProps = Omit<
   ComponentProps<typeof MessageList>,
   'bottomAccessoryHeight' | 'contentTopInset'
-> & { requiresInitialLayout: boolean; isLoadingMore: boolean; turnNavigator?: ChatTurnNavigator };
+> & {
+  hasOlderMessages?: boolean;
+  hiddenUserTurnCount?: number;
+  isLoadingMore: boolean;
+  requiresInitialLayout: boolean;
+  turnNavigator?: ChatTurnNavigator;
+};
 
 const SELECTION_ROW_INSETS = { horizontal: 8, user: 0, assistant: 0 };
 
 export function ChatTranscript({
+  hasOlderMessages = false,
+  hiddenUserTurnCount = 0,
   requiresInitialLayout,
   isLoadingMore,
   onReady,
@@ -56,13 +64,13 @@ export function ChatTranscript({
     renderGateKey: list.dataKey,
     requiresInitialHistoryLayout: requiresInitialLayout,
   });
-  let userTurnCount = 0;
+  let userTurnCount = hiddenUserTurnCount;
   for (const message of list.messages) {
     if (message.role === 'user') userTurnCount += 1;
   }
   const showTurnDirectory = Boolean(
     turnNavigator &&
-    (userTurnCount >= 2 || list.hasNewerMessages) &&
+    (userTurnCount >= 2 || hasOlderMessages || list.hasNewerMessages) &&
     !isSelecting &&
     !isCoverVisible &&
     !composer?.state.isPresented,
@@ -98,6 +106,7 @@ export function ChatTranscript({
           navigator={turnNavigator}
           scrollProgress={scrollProgress}
           scrollToMessage={scrollToMessage}
+          turnCount={hasOlderMessages || list.hasNewerMessages ? MAX_TRIGGER_TICKS : userTurnCount}
         />
       ) : null}
       <ChatInitialRenderCover isVisible={isCoverVisible} />
