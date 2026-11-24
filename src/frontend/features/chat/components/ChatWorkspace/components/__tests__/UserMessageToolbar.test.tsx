@@ -238,3 +238,12 @@ function createUserMessage(status: MessageListItem['status'], text: string): Mes
     status,
   };
 }
+
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [
+    jest.requireActual('@/shared/data/types/assistantMessageToolbar')
+      .DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+    jest.fn(),
+  ],
+}));
+jest.mock('../AssistantToolbarManageSheet', () => ({ AssistantToolbarManageSheet: () => null }));

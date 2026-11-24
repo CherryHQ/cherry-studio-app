@@ -17,6 +17,10 @@ import {
   type OcrEngine,
 } from '@/shared/contracts/fileAttachment';
 import type { VoiceEngineId } from '@/shared/contracts/voice';
+import {
+  type AssistantMessageToolbarConfig,
+  DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
+} from '@/shared/data/types/assistantMessageToolbar';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -130,6 +134,7 @@ export interface PreferenceSchema {
   'agent.session_naming.model_id': string | null;
   'agent.session_naming.prompt': string;
 
+  'ui.chat.assistant_toolbar_actions': AssistantMessageToolbarConfig;
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
   'ui.navigation.pinned_tabs': NavigationPinTabId[];
@@ -192,6 +197,7 @@ export const PreferenceDefaults = {
   'agent.session_naming.model_id': null,
   'agent.session_naming.prompt': '',
 
+  'ui.chat.assistant_toolbar_actions': DEFAULT_ASSISTANT_MESSAGE_TOOLBAR_CONFIG,
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
   'ui.navigation.pinned_tabs': ['agents'],
@@ -216,6 +222,7 @@ export const INHERITABLE_PREFERENCE_KEYS = [
   'chat.completion_notifications.enabled',
   'file.document_parser.mode',
   'file.export.watermark_enabled',
+  'ui.chat.assistant_toolbar_actions',
   'ui.font_size_step',
   'ui.library.view_mode',
   'ui.navigation.pinned_tabs',
