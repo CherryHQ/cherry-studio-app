@@ -30,6 +30,7 @@ jest.mock('../../../hooks/useMessageCitationSources', () => ({
 
 jest.mock('react-native-reanimated', () => ({
   useDerivedValue: (read: () => unknown) => ({ get: read }),
+  useSharedValue: <T,>(initial: T) => ({ get: () => initial, set: jest.fn(), value: initial }),
 }));
 
 jest.mock('../../../share/chatShareSelection', () => ({
