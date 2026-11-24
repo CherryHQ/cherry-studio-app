@@ -1,12 +1,20 @@
 import { type Href, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { type NavigationState, StackActions } from 'expo-router/react-navigation';
-import { type ComponentType, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
-import { Keyboard, View } from 'react-native';
+import {
+  type ComponentType,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
+import { Keyboard, StyleSheet, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useCanDockSidebar } from '@/frontend/appShell/layout';
 import { useChatSource, useConversationTarget } from '@/frontend/appShell/navigation/chat';
+import { useOptionalNavigationShellActions } from '@/frontend/appShell/navigationShell/state';
 import type { AppSearchPanelProps } from '@/frontend/appShell/search';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -18,6 +26,7 @@ import {
   useSessionSearch,
   useSessionSearchRequest,
 } from '../hooks/useSessionSearch';
+import { OverlaySidebarPresenceProvider } from '../hooks/useSidebarPresence';
 import { useSidebarColumn } from '../SidebarColumn';
 import { SidebarSelectionProvider } from '../SidebarSelectionProvider';
 import { SidebarBody } from './SidebarBody';
@@ -27,7 +36,6 @@ import { SidebarHeader } from './SidebarHeader';
 type SidebarNavigation = DrawerContentComponentProps['navigation'];
 
 type SidebarProps = {
-  navigation: SidebarNavigation;
   /** Renders conversation search in the column of a wide window; supplied by the route layer. */
   searchPanel?: ComponentType<AppSearchPanelProps<SessionSearchResult>>;
 };
@@ -41,8 +49,72 @@ function getContentStack(navigation: SidebarNavigation) {
   return route?.state as NavigationState | undefined;
 }
 
-/** Sidebar whose root owns the drawer-scoped actions, whether it overlays the chat or sits beside it. */
-export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) {
+/** The overlay uses the Drawer navigator for its native animation and close lifecycle. */
+export function Sidebar({
+  navigation,
+  searchPanel,
+}: SidebarProps & { navigation: SidebarNavigation }) {
+  const canDock = useCanDockSidebar();
+  const { cancelPending, waitForClose } = useCloseDrawerForNavigation(navigation, canDock);
+  useEffect(() => {
+    if (canDock) navigation.closeDrawer();
+  }, [canDock, navigation]);
+
+  if (canDock) return null;
+  return (
+    <OverlaySidebarPresenceProvider>
+      <SidebarContent
+        drawer={navigation}
+        cancelPending={cancelPending}
+        waitForClose={waitForClose}
+        searchPanel={searchPanel}
+      />
+    </OverlaySidebarPresenceProvider>
+  );
+}
+
+const cancelNothing = () => {};
+const readyForNavigation = (signal: AbortSignal) => Promise.resolve(!signal.aborted);
+
+/** The permanent column sits beside both stack cards, including Settings. */
+export function DockedSidebar({ searchPanel }: SidebarProps) {
+  const { column } = useSidebarColumn();
+  const isVisible = column.kind === 'permanent';
+  const { theme } = useUniwind();
+  const [backgroundColor, borderColor] = useThemeColor([
+    theme === 'dark' ? 'sidebar' : 'background',
+    'sidebar-border',
+  ]);
+  return (
+    <View
+      className="shrink-0 overflow-hidden"
+      pointerEvents={isVisible ? 'auto' : 'none'}
+      style={{
+        backgroundColor,
+        borderEndColor: borderColor,
+        borderEndWidth: isVisible ? StyleSheet.hairlineWidth : 0,
+        width: isVisible ? column.width : 0,
+      }}
+    >
+      <SidebarContent
+        cancelPending={cancelNothing}
+        waitForClose={readyForNavigation}
+        searchPanel={searchPanel}
+      />
+    </View>
+  );
+}
+
+function SidebarContent({
+  cancelPending,
+  drawer,
+  searchPanel: SearchPanel,
+  waitForClose,
+}: SidebarProps & {
+  cancelPending: () => void;
+  drawer?: SidebarNavigation;
+  waitForClose: SidebarActions['prepareExternalNavigation'];
+}) {
   const router = useRouter();
   // Compare the exact route (including a nested page) and the context carried by its entry.
   const page =
@@ -52,20 +124,32 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
       .join('/');
   const params = useGlobalSearchParams();
   const { source, remoteTarget, viewMode } = useChatSource();
-  const openSessionSearch = useSessionSearch();
   const searchRequest = useSessionSearchRequest();
   const canDock = useCanDockSidebar();
   const { column, setContent } = useSidebarColumn();
-  const { cancelPending, waitForClose } = useCloseDrawerForNavigation(navigation, canDock);
+  const navigateToDestination = useOptionalNavigationShellActions()?.navigateToDestination;
   const currentConversation = useConversationTarget({ kind: 'local' });
   const { theme } = useUniwind();
   const surfaceColor = useThemeColor(theme === 'dark' ? 'sidebar' : 'background');
 
-  // Clear any overlay left open by a window change or a link that navigated away from the chat.
   const isOverlay = column.kind === 'overlay';
-  useEffect(() => {
-    if (!isOverlay) navigation.closeDrawer();
-  }, [isOverlay, navigation]);
+  const isOnSettings = page === '/settings' || page.startsWith('/settings/');
+  const pageIdentity = JSON.stringify([page, Object.entries(params).sort()]);
+  const settingsOrigin = useRef<{ identity: string; covered: boolean } | null>(null);
+  useLayoutEffect(() => {
+    if (!drawer) return;
+    const origin = settingsOrigin.current;
+    if (isOnSettings) {
+      if (origin) origin.covered = true;
+      return;
+    }
+    if (page === '/search') return;
+
+    if (!isOverlay || (origin?.covered && origin.identity !== pageIdentity)) {
+      drawer.closeDrawer();
+    }
+    if (origin?.covered) settingsOrigin.current = null;
+  }, [drawer, isOnSettings, isOverlay, page, pageIdentity]);
 
   // A link or notification may already have navigated while the drawer was closing.
   useLayoutEffect(() => cancelPending, [cancelPending, page, params]);
@@ -74,35 +158,71 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
   // chat first; pages above it are dismissed, as their own back steps would.
   const returnToChat = useCallback(() => {
     cancelPending();
-    const stack = getContentStack(navigation);
+    if (!drawer || isOnSettings) {
+      if (isOnSettings) drawer?.closeDrawer();
+      navigateToDestination?.('chat');
+      return;
+    }
+    const stack = getContentStack(drawer);
     if (stack && stack.index > 0)
-      navigation.dispatch({ ...StackActions.popToTop(), target: stack.key });
-  }, [cancelPending, navigation]);
+      drawer.dispatch({ ...StackActions.popToTop(), target: stack.key });
+  }, [cancelPending, drawer, isOnSettings, navigateToDestination]);
 
   // From the chat a destination opens above it; from another destination it takes that one's place,
   // so moving between sidebar entries never builds a back history.
-  const openDestination = useCallback(
-    (href: Href) => {
-      cancelPending();
-      if (isOverlay) navigation.closeDrawer();
-      const pathname = typeof href === 'string' ? href : href.pathname;
-      if (
-        page === pathname &&
-        (typeof href === 'string' ||
-          Object.entries(href.params ?? {}).every(([key, value]) => params[key] === value))
-      )
-        return;
-      const stack = getContentStack(navigation);
-      if (stack && stack.index > 0) router.replace(href);
-      else router.push(href);
+  const openScheduledTasks = useCallback(() => {
+    const connectionId = remoteTarget.connectionId;
+    if (!connectionId) return;
+    cancelPending();
+    drawer?.closeDrawer();
+    const pathname = '/scheduled-tasks/[connectionId]';
+    if (page === pathname && params.connectionId === connectionId) return;
+    const href: Href = { pathname, params: { connectionId } };
+    const stack = drawer && getContentStack(drawer);
+    if (isOnSettings) router.dismissTo(href);
+    else if (stack && stack.index > 0) router.replace(href);
+    else router.push(href);
+  }, [
+    cancelPending,
+    drawer,
+    isOnSettings,
+    page,
+    params.connectionId,
+    remoteTarget.connectionId,
+    router,
+  ]);
+
+  const openSettings = useCallback(() => {
+    cancelPending();
+    if (page === '/settings') return;
+    if (isOnSettings) {
+      router.dismissTo('/settings');
+      return;
+    }
+    if (drawer && isOverlay) settingsOrigin.current = { identity: pageIdentity, covered: false };
+    router.push('/settings');
+  }, [cancelPending, drawer, isOnSettings, isOverlay, page, pageIdentity, router]);
+
+  const openSearchResult = useCallback(
+    (result: SessionSearchResult) => {
+      Keyboard.dismiss();
+      drawer?.closeDrawer();
+      const href = sessionSearchResultHref(result);
+      if (isOnSettings) {
+        router.dismissTo(href);
+      } else {
+        returnToChat();
+        router.navigate(href);
+      }
     },
-    [cancelPending, isOverlay, navigation, page, params, router],
+    [drawer, isOnSettings, returnToChat, router],
   );
+  const openSessionSearch = useSessionSearch(searchRequest, openSearchResult);
 
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => {
-        navigation.closeDrawer();
+        drawer?.closeDrawer();
         returnToChat();
       },
       prepareExternalNavigation: waitForClose,
@@ -111,46 +231,32 @@ export function Sidebar({ navigation, searchPanel: SearchPanel }: SidebarProps) 
         source === 'local'
           ? () => {
               cancelPending();
-              navigation.closeDrawer();
               // A wide window searches in the column, beside the chat its results open.
-              if (canDock && SearchPanel) setContent('search');
-              else openSessionSearch();
+              if (canDock && SearchPanel) {
+                drawer?.closeDrawer();
+                setContent('search');
+              } else openSessionSearch();
             }
           : undefined,
-      openScheduledTasks: () => {
-        if (remoteTarget.connectionId)
-          openDestination({
-            pathname: '/scheduled-tasks/[connectionId]',
-            params: { connectionId: remoteTarget.connectionId },
-          });
-      },
-      openSettings: () => openDestination('/settings'),
+      openScheduledTasks,
+      openSettings,
     }),
     [
-      navigation,
       cancelPending,
-      waitForClose,
       canDock,
-      openDestination,
+      drawer,
+      openScheduledTasks,
       openSessionSearch,
+      openSettings,
       returnToChat,
       SearchPanel,
       setContent,
       source,
-      remoteTarget.connectionId,
+      waitForClose,
     ],
   );
 
   const closeSearch = useCallback(() => setContent('sidebar'), [setContent]);
-  const openSearchResult = useCallback(
-    (result: SessionSearchResult) => {
-      // The chat it opens is what the user reads next; the keyboard would cover its composer.
-      Keyboard.dismiss();
-      returnToChat();
-      router.navigate(sessionSearchResultHref(result));
-    },
-    [returnToChat, router],
-  );
   // The conversation target exists only while the chat itself is on screen.
   const isOpenResult = useCallback(
     (result: SessionSearchResult) =>

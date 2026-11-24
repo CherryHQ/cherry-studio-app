@@ -25,6 +25,7 @@ export function VerticalNavRail() {
   const {
     activeDockTab,
     isAtRoot,
+    isOnboardingBlocking,
     isVerticalRailVisible,
     navigateToDestination,
     pinnedTabs,
@@ -53,7 +54,7 @@ export function VerticalNavRail() {
     registerDockRect,
   );
 
-  if (shellMode !== 'vertical-rail') {
+  if (isOnboardingBlocking || shellMode !== 'vertical-rail') {
     return null;
   }
 

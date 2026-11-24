@@ -21,6 +21,7 @@ jest.mock('react-native-reanimated', () => {
     interpolate: (value: number, _input: number[], [from, to]: [number, number]) =>
       from + (to - from) * value,
     useDerivedValue: (read: () => unknown) => ({ get: read }),
+    useAnimatedReaction: jest.fn(),
     useAnimatedStyle: (read: () => object) => ({ read }),
     useSharedValue: (initial: number) => {
       const cell = React.useRef(initial);
@@ -65,7 +66,7 @@ describe('Composer.Editor', () => {
       .find((style) => style?.left !== undefined && style?.right !== undefined);
   beforeEach(() => {
     visible = false;
-    mockTiming.mockClear();
+    mockTiming.mockReset().mockImplementation((target) => target);
     act(() => {
       renderer = create(renderEditor(false));
     });
@@ -88,6 +89,7 @@ describe('Composer.Editor', () => {
   });
 
   it('opens and closes from the keyboard even while React still renders the previous state', () => {
+    mockTiming.mockReturnValue(0.5);
     visible = true;
     expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
     act(() => renderer.update(renderEditor(true)));
@@ -97,7 +99,7 @@ describe('Composer.Editor', () => {
     expect(fieldFrame()).toMatchObject({ left: 0, right: 0 });
   });
 
-  it('retargets wrapped text height on the settle curve and keeps a long draft one row when closed', () => {
+  it('commits wrapped input height once per measurement and keeps a long draft one row when closed', () => {
     const measure = (height: number) => {
       const field = renderer.root.findAllByType(View).find((view) => view.props.onLayout);
       act(() => field!.props.onLayout({ nativeEvent: { layout: { height } } }));
@@ -108,11 +110,7 @@ describe('Composer.Editor', () => {
     expect(fieldFrame().height).toBe(130);
     measure(80);
     expect(fieldFrame().height).toBe(80);
-    expect(mockTiming).toHaveBeenCalledWith(80, {
-      duration: 90,
-      easing: 'settle',
-      reduceMotion: 'system',
-    });
+    expect(mockTiming).not.toHaveBeenCalledWith(80, expect.anything());
     visible = false;
     measure(130);
     expect(fieldFrame().height).toBe(32);

@@ -12,8 +12,9 @@ import {
 } from '../navRouteManifest';
 
 const repoRoot = path.resolve(__dirname, '../../../../..');
-const mainRouteDir = path.join(repoRoot, 'src/app/(drawer)/(main)');
-const mainLayoutPath = path.join(mainRouteDir, '_layout.tsx');
+const shellRouteDir = path.join(repoRoot, 'src/app/(drawer)');
+const mainRouteDir = path.join(shellRouteDir, '(content)/(main)');
+const getRouteDir = (id: string) => (id === 'settings' ? shellRouteDir : mainRouteDir);
 
 describe('NAV_ROUTE_MANIFEST contract', () => {
   it('covers chat, more, settings, and every pinnable module with unique stack routes and hrefs', () => {
@@ -27,20 +28,29 @@ describe('NAV_ROUTE_MANIFEST contract', () => {
     expect(new Set(hrefs).size).toBe(NAV_DESTINATION_IDS.length);
   });
 
-  it('points every manifest stackRoute to an existing Expo Router entry under (main)', () => {
+  it('points every manifest stackRoute to an existing entry in its owning Expo Router stack', () => {
     for (const id of NAV_DESTINATION_IDS) {
       const stackRoute = getNavStackRoute(id);
-      const asDirectory = path.join(mainRouteDir, stackRoute);
-      const asFile = path.join(mainRouteDir, `${stackRoute}.tsx`);
+      const asDirectory = path.join(getRouteDir(id), stackRoute);
+      const asFile = path.join(getRouteDir(id), `${stackRoute}.tsx`);
       expect(fs.existsSync(asDirectory) || fs.existsSync(asFile)).toBe(true);
     }
   });
 
-  it('mounts every manifest destination inside (drawer)/(main)/_layout.tsx', () => {
-    const layoutSource = fs.readFileSync(mainLayoutPath, 'utf8');
+  it('mounts every manifest destination in its owning layout', () => {
     for (const id of NAV_DESTINATION_IDS) {
+      const layoutSource = fs.readFileSync(path.join(getRouteDir(id), '_layout.tsx'), 'utf8');
       expect(layoutSource).toContain(`NAV_ROUTE_MANIFEST.${id}.stackRoute`);
     }
+  });
+
+  it('anchors Settings over the existing Drawer content', () => {
+    const shell = fs.readFileSync(path.join(shellRouteDir, '_layout.tsx'), 'utf8');
+    const content = fs.readFileSync(path.join(shellRouteDir, '(content)/_layout.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(mainRouteDir, '_layout.tsx'), 'utf8');
+    expect(shell).toContain("initialRouteName: '(content)'");
+    expect(content).toContain('<Drawer.Screen name="(main)"');
+    expect(main).not.toContain('NAV_ROUTE_MANIFEST.settings.stackRoute');
   });
 
   it('references valid non-empty i18n title keys in en-US', () => {
