@@ -134,6 +134,17 @@ describe('Composer.Dock', () => {
     expect(onLayout).toHaveBeenCalledWith(layoutEvent);
   });
 
+  it('keeps the navigation clearance while another input owns an open keyboard', () => {
+    act(() => {
+      renderer = create(<ComposerDock keyboardTracking={cell(false)} extraBottomOffset={42} />);
+    });
+    const dock = renderer!.root.findByProps({ pointerEvents: 'box-none' });
+    expect(StyleSheet.flatten(dock.props.style)).toMatchObject({
+      paddingBottom: 80,
+      transform: [{ translateY: 0 }],
+    });
+  });
+
   it('reserves the minimum dock height and tracks live height updates', () => {
     act(() => {
       renderer = create(<DockLayoutProbe />);

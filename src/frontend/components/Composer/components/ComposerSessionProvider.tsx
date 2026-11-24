@@ -8,6 +8,8 @@ import type { ComposerInitialAttachment } from '../utils/composerAttachments';
 
 type ComposerSessionProviderProps = PropsWithChildren<{
   draftStore?: ComposerDraft;
+  /** Keep the painting workspace active until an explicit dismissal. */
+  retainEditing?: boolean;
   isFocused?: boolean;
   workspaceSessionId?: string;
   workspaceFolderId?: string | null;
@@ -20,6 +22,7 @@ type ComposerSessionProviderProps = PropsWithChildren<{
 export function ComposerSessionProvider({
   children,
   draftStore,
+  retainEditing,
   isFocused = true,
   initialAttachments,
   initialDraft,
@@ -47,6 +50,7 @@ export function ComposerSessionProvider({
     <ComposerProvider
       attachmentStore={attachmentStore}
       draftStore={buffer}
+      retainEditing={retainEditing}
       isFocused={isFocused}
       failedSend={workspaceSessionId ? draftStore?.failedSend : undefined}
     >
