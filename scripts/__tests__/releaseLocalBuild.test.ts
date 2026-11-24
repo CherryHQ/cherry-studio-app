@@ -1433,8 +1433,14 @@ describe('release hardening & integrity guards', () => {
     });
   });
 
-  it.each(['success', 'tampered-aab', 'submit-failed'] as const)(
-    'submit-google-play verifies archived AAB integrity before eas submit and records receipt (%s)',
+  it.each([
+    'success',
+    'already-submitted',
+    'tampered-aab',
+    'tampered-archive',
+    'submit-failed',
+  ] as const)(
+    'submit-google-play checks receipt, verifies archived AAB integrity, and records submit outcome (%s)',
     (scenario) => {
       const root = makeTempDir('cherry-play-submit-test-');
       const archiveDir = join(root, 'archive');
@@ -1447,10 +1453,22 @@ describe('release hardening & integrity guards', () => {
       writeFileSync(join(archiveDir, 'SHA256SUMS'), `${expectedSha256}  ${artifactName}\n`);
       if (scenario === 'tampered-aab') {
         writeFileSync(aabPath, Buffer.from('tampered-aab-bytes'));
+      } else if (scenario === 'tampered-archive') {
+        const tamperedBytes = Buffer.from('tampered-archive-bytes');
+        const tamperedSha256 = createHash('sha256').update(tamperedBytes).digest('hex');
+        writeFileSync(aabPath, tamperedBytes);
+        writeFileSync(join(archiveDir, 'SHA256SUMS'), `${tamperedSha256}  ${artifactName}\n`);
+      }
+
+      const buildId = 'cherry-studio-app-999-android-google-play-attempt1';
+      if (scenario === 'already-submitted') {
+        recordSubmitReceipt({ buildDir: archiveDir, buildId, status: 'succeeded' });
       }
 
       const callsPath = join(root, 'calls');
       const summaryPath = join(root, 'summary');
+      const githubOutputPath = join(root, 'github-output');
+      writeFileSync(githubOutputPath, '');
       const stubBin = join(root, 'bin');
       mkdirSync(stubBin, { recursive: true });
       writeFileSync(
@@ -1477,7 +1495,7 @@ if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi
             'runs-on'?: string[];
             if?: string;
             outputs?: Record<string, string>;
-            steps: Array<{ name: string; run?: string }>;
+            steps: Array<{ name: string; if?: string; run?: string }>;
           }
         >;
       };
@@ -1503,41 +1521,65 @@ if [[ "$SCENARIO" == submit-failed ]]; then exit 1; fi
       expect(verifyIdx).toBeGreaterThan(checkIdx);
       expect(submitIdx).toBeGreaterThan(verifyIdx);
 
-      const verifyRun = playJob.steps[verifyIdx]!.run!;
-      const submitRun = playJob.steps[submitIdx]!.run!;
-      const buildId = 'cherry-studio-app-999-android-google-play-attempt1';
+      const checkStep = playJob.steps[checkIdx]!;
+      const verifyStep = playJob.steps[verifyIdx]!;
+      const submitStep = playJob.steps[submitIdx]!;
+      expect(verifyStep.if).toContain("steps.receipt.outputs.already_submitted != 'true'");
+      expect(submitStep.if).toContain("steps.receipt.outputs.already_submitted != 'true'");
 
-      const result = spawnSync('bash', ['-eo', 'pipefail', '-c', `${verifyRun}\n${submitRun}`], {
+      const sharedEnv = {
+        ...process.env,
+        PATH: `${stubBin}:${process.env.PATH ?? ''}`,
+        GOOGLE_PLAY_ARCHIVE_DIR: archiveDir,
+        GOOGLE_PLAY_ARTIFACT_NAME: artifactName,
+        GOOGLE_PLAY_ARTIFACT_PATH: aabPath,
+        GOOGLE_PLAY_EXPECTED_SHA256: expectedSha256,
+        GOOGLE_PLAY_BUILD_ID: buildId,
+        NATIVE_BUILD_VERSION: '277',
+        GITHUB_OUTPUT: githubOutputPath,
+        GITHUB_STEP_SUMMARY: summaryPath,
+        CALLS: callsPath,
+        SCENARIO: scenario,
+      };
+
+      const checkResult = spawnSync('bash', ['-eo', 'pipefail', '-c', checkStep.run!], {
         cwd: repo,
         encoding: 'utf8',
-        env: {
-          ...process.env,
-          PATH: `${stubBin}:${process.env.PATH ?? ''}`,
-          GOOGLE_PLAY_ARCHIVE_DIR: archiveDir,
-          GOOGLE_PLAY_ARTIFACT_NAME: artifactName,
-          GOOGLE_PLAY_ARTIFACT_PATH: aabPath,
-          GOOGLE_PLAY_EXPECTED_SHA256: expectedSha256,
-          GOOGLE_PLAY_BUILD_ID: buildId,
-          NATIVE_BUILD_VERSION: '277',
-          GITHUB_STEP_SUMMARY: summaryPath,
-          CALLS: callsPath,
-          SCENARIO: scenario,
-        },
+        env: sharedEnv,
       });
+      expect(checkResult.status).toBe(0);
+      const outputText = readFileSync(githubOutputPath, 'utf8');
+      const alreadySubmitted = /already_submitted=(true|false)/.exec(outputText)?.[1];
+      expect(alreadySubmitted).toBe(scenario === 'already-submitted' ? 'true' : 'false');
 
-      expect(result.status === 0).toBe(scenario === 'success');
+      if (alreadySubmitted === 'false') {
+        const result = spawnSync(
+          'bash',
+          ['-eo', 'pipefail', '-c', `${verifyStep.run!}\n${submitStep.run!}`],
+          {
+            cwd: repo,
+            encoding: 'utf8',
+            env: sharedEnv,
+          },
+        );
+        expect(result.status === 0).toBe(scenario === 'success');
+      }
+
       const calls = existsSync(callsPath)
         ? readFileSync(callsPath, 'utf8').trim().split('\n').filter(Boolean)
         : [];
       const receipt = readSubmitReceipt(archiveDir);
 
-      if (scenario === 'success') {
+      if (scenario === 'already-submitted') {
+        expect(calls).toEqual([]);
+        expect(receipt).toMatchObject({ status: 'succeeded', buildId });
+      } else if (scenario === 'success') {
         expect(calls).toEqual(['submit']);
         expect(receipt).toMatchObject({ status: 'succeeded', buildId });
         expect(readFileSync(summaryPath, 'utf8')).toContain(
           `Uploaded Google Play build ${buildId} (versionCode 277)`,
         );
-      } else if (scenario === 'tampered-aab') {
+      } else if (scenario === 'tampered-aab' || scenario === 'tampered-archive') {
         expect(calls).toEqual([]);
         expect(receipt).toBeNull();
       } else {

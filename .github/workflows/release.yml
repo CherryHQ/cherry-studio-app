@@ -11,9 +11,6 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  EAS_CLI_VERSION: 24.4.2
-
 jobs:
   validate:
     name: Validate release version

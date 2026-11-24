@@ -92,8 +92,8 @@ production bundle identifier in `app.json`. Set up its submission API key with
 `eas credentials --platform ios` before the first unattended submission. See [local build configuration](./local-builds.md)
 for app identities and production environment requirements.
 
-[Release](../../.github/workflows/release.yml) and `scripts/publishUpdate.ts` (used by the OTA
-Update workflow) pin EAS CLI to `24.4.2`; update them together when upgrading it.
+`package.json` (`devDependencies["eas-cli"]`), `eas.json` (`cli.version`), and `scripts/publishUpdate.ts`
+(used by the OTA Update workflow) pin EAS CLI to `24.4.2`; update them together when upgrading it.
 
 Native releases now embed the EAS Update client. Channels are platform-specific:
 `production-apk` for public APKs, `production-google-play` for Play,
@@ -222,8 +222,11 @@ tags when `android_google_play_ready` is `true`, the separate `submit-google-pla
 `submit-receipt.json` (`check-submit`), verifies the archived `.aab` against `SHA256SUMS` and
 `android_google_play_sha256`, runs `eas submit --platform android --profile production-google-play --path <aab-path> --non-interactive --wait`,
 and writes `submit-receipt.json` (`record-submit`). Because `eas.json` sets `track: "production"`
-and `releaseStatus: "draft"`, `submit-google-play` uploads the bundle as a production draft and does
-not send changes for review or start a rollout.
+and `releaseStatus: "draft"`, this AAB is uploaded as a production draft and is not distributed
+to users; maintainers complete release notes, review submission, and rollout for this release in
+Google Play Console. Because `changesNotSentForReview` stays at its default `false`, check
+**Publishing overview** in Play Console first if other app changes are already pending review or
+rejected.
 
 The AAB is for Google Play Console distribution, not direct installation on a device. Google Play
 generates the installable APKs from it. GitHub Releases continues to provide the directly installable
@@ -394,11 +397,16 @@ not configure groups or submit the app for an App Store public release.
   automatically skips duplicate uploads when `submit-receipt.json` records `succeeded` for the same
   `buildId`.
 - Before retrying an interrupted Google Play draft upload, check Play Console and the Mac archive's
-  `submit-receipt.json`. If Play already accepted the `versionCode` (or `submit-receipt.json`
-  records `succeeded` for the same `buildId`), `submit-google-play` skips duplicate uploads and you
-  can finish the existing draft release in Play Console. Otherwise, fix any Play Console permission
-  or pending-edit error and choose **Re-run failed jobs** for `submit-google-play` (or upload the
-  archived AAB manually from the Mac release archive without rebuilding).
+  `submit-receipt.json`. `submit-google-play` skips duplicate uploads only when the local archive's
+  `submit-receipt.json` records `succeeded` for the same `buildId`. If `submit-google-play` was
+  interrupted after Play accepted the AAB but before `record-submit` wrote the receipt, inspect the
+  EAS submission details from the job logs and verify the Play Console production draft's package ID
+  and `versionCode`; once confirmed, record the receipt on the Mac runner
+  (`node --import tsx scripts/releaseLocalBuild.ts record-submit --build-dir <archive-dir> --build-id <build-id> --status succeeded`)
+  before choosing **Re-run failed jobs** (or finish the existing draft release directly in Play
+  Console). Otherwise, fix any Play Console permission or pending-edit issue and choose
+  **Re-run failed jobs** for `submit-google-play` (or upload the archived AAB manually from the Mac
+  release archive without rebuilding).
 - For a domestic store upload retry, check that store's submission first. Resume an accepted
   submission or upload the same archived domestic APK if it was not accepted. Preserve the other
   stores' submissions and record each result separately.
