@@ -221,6 +221,9 @@ export class PiDurableRuntime {
   ): Promise<Conversation> {
     const parent = await this.requireSession(source, context);
     const id = await this.harness.commit(async (tx) => {
+      const sourceBinding = await tx.doc(SessionBinding, source, 0);
+      if (sourceBinding.conversationId !== parent.id)
+        throw new Error('The source working copy changed before the fork.');
       const binding = await tx.doc(SessionBinding, seed.sessionId, seed.revision);
       assertWorkingCopy(binding);
       if (binding.conversationId !== null) throw new Error('The working copy already exists.');
@@ -1060,8 +1063,8 @@ export class PiDurableRuntime {
   }
 
   /**
-   * Retire app bindings through the public kernel API. The now-unreachable log is reclaimed when
-   * the idle runtime file is discarded; no code depends on upstream SQL tables.
+   * Retire app bindings through the public kernel API, keeping identities inherited by bound forks.
+   * Retired history is reclaimed when the idle runtime file is discarded; no upstream SQL is used.
    */
   async retireSession(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const binding = await this.binding(sessionId, context);
@@ -1085,9 +1088,36 @@ export class PiDurableRuntime {
       next = page.next;
     } while (next);
     await this.harness.commit(async (tx) => {
+      // Forks retain their ancestors' entry IDs and read display identities in those origins.
+      // Check bound descendants on the Session line so a concurrent fork cannot lose metadata.
+      let inherited = false;
+      let cursor: Cursor | undefined;
+      do {
+        const page = await this.storage.scanDocuments(
+          { scope: { kind: 'session' }, at: 'current', kind: SessionBinding.definition.kind },
+          256,
+          cursor,
+          context,
+        );
+        for (const document of page.items) {
+          if (document.key === undefined || document.key === sessionId) continue;
+          const survivor = await tx.doc(SessionBinding, document.key, 0);
+          let origin = survivor.conversationId;
+          while (origin !== null) {
+            if (origin === conversationId) {
+              inherited = true;
+              break;
+            }
+            origin = (await tx.conversation(origin))?.parent?.conversationId ?? null;
+          }
+          if (inherited) break;
+        }
+        cursor = page.next;
+      } while (cursor && !inherited);
       await tx.retireDoc(SessionBinding, sessionId);
       await tx.retireDoc(Configuration, sessionId);
       if (provider) await tx.retireDoc(RequestOptions, provider.sessionId);
+      if (inherited) return;
       for (const requestId of requestIds)
         await tx.retireDoc(SubmissionMetadata, metadataKey(conversationId, requestId));
       for (const messageId of messageIds)

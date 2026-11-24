@@ -165,7 +165,7 @@ export class DurableAgentHost implements AgentProtocol {
   /** Keyed by {@link laneKey}. */
   private readonly live = new Map<string, LiveSession>();
   private readonly attachments = new Map<string, Promise<LiveSession>>();
-  /** Startup observation failed validation. Keep that Session's receipts and deny execution. */
+  /** Recovery or observation failed validation. Keep that Session's receipts and deny execution. */
   private readonly recoveryFailures = new Set<string>();
   private readonly admissions = new Map<string, Admission>();
   private readonly prepared = new Map<string, PreparedInput>();
@@ -311,6 +311,7 @@ export class DurableAgentHost implements AgentProtocol {
           }
         : undefined,
       onFailure: (error) => void this.recoverStorageFailure(error),
+      onRecoveryFailure: (lane, error) => this.isolateInvalidSession(lane, error, 'ai.recovery'),
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
@@ -416,22 +417,11 @@ export class DurableAgentHost implements AgentProtocol {
           await this.attach(lane);
         } catch (error) {
           this.controller.signal.throwIfAborted();
-          if (!(error instanceof ZodError)) throw error;
-          this.recoveryFailures.add(lane.sessionId);
-          logger.error('Agent operation failed', {
-            error,
-            operation: 'ai.recovery',
-            reasonCode: 'invalid_observation',
-            sessionId: lane.sessionId,
-            slot: lane.slot,
-          });
-          // Sibling answers share a transcript and parent repair. Do not keep partial observation.
-          for (const state of this.liveStates(lane.sessionId)) {
-            await state.unsubscribe();
-            state.background?.retire();
-            this.live.delete(laneKey(state.lane));
-          }
-          this.setStatus(lane.sessionId, null);
+          if (
+            !(error instanceof AgentProtocolError) ||
+            error.view.code !== 'SESSION_RECOVERY_FAILED'
+          )
+            throw error;
         }
       }
       for (const { lane } of copies) {
@@ -2485,13 +2475,44 @@ export class DurableAgentHost implements AgentProtocol {
         return state;
       },
       this.controller.signal,
-    );
+    ).catch(async (error: unknown) => {
+      if (error instanceof ZodError) {
+        await this.isolateInvalidSession(lane, error, 'ai.observe');
+        this.assertSessionRecovered(lane.sessionId);
+      }
+      throw error;
+    });
     this.attachments.set(key, operation);
     try {
       return await operation;
     } finally {
       this.attachments.delete(key);
     }
+  }
+
+  private async isolateInvalidSession(
+    lane: RuntimeLane,
+    error: unknown,
+    operation: 'ai.recovery' | 'ai.observe',
+  ) {
+    this.controller.signal.throwIfAborted();
+    if (!(error instanceof ZodError)) throw error;
+    this.recoveryFailures.add(lane.sessionId);
+    logger.error('Agent operation failed', {
+      error,
+      operation,
+      reasonCode: 'invalid_observation',
+      sessionId: lane.sessionId,
+      slot: lane.slot,
+    });
+    // Sibling answers share a transcript and parent repair. Do not keep partial observation.
+    for (const state of this.liveStates(lane.sessionId)) {
+      await state.unsubscribe();
+      state.background?.retire();
+      this.live.delete(laneKey(state.lane));
+    }
+    this.setStatus(lane.sessionId, null);
+    this.reconcileScreenAwake();
   }
 
   private consume(state: LiveSession, event: RuntimeConversationEvent) {

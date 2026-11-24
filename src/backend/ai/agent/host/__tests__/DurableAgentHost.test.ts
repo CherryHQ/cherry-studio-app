@@ -2121,6 +2121,112 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('isolates configuration restore failures reported before startup observation', async () => {
+    const state = fixture();
+    const unreadable = await state.reserve('running');
+    const original = await state.store.getMessage(state.sessionId, unreadable.assistantMessageId);
+    const initialize = jest.mocked(state.conversations.initialize).getMockImplementation()!;
+    jest
+      .spyOn(state.conversations, 'initialize')
+      .mockImplementation(async (database, ports, signal) => {
+        await initialize(database, ports, signal);
+        await ports.onRecoveryFailure!(runtimeLane(state.sessionId), new ZodError([]));
+      });
+    const observe = jest.spyOn(state.conversations, 'observe');
+    try {
+      await state.host.initialize();
+      expect(state.host.isReady).toBe(true);
+      expect(observe).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, unreadable.assistantMessageId)).toEqual(
+        original,
+      );
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('isolates an idle observation failure without changing history or blocking other Sessions', async () => {
+    const state = fixture();
+    const completed = await state.reserve();
+    await state.host.initialize();
+    const original = await state.store.getMessage(state.sessionId, completed.assistantMessageId);
+    const observe = jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new ZodError([]));
+    try {
+      const observations = await Promise.allSettled([
+        state.host.observeSession(state.sessionId, () => {}),
+        state.host.observeSession(state.sessionId, () => {}),
+      ]);
+      for (const observed of observations)
+        expect(observed).toMatchObject({
+          status: 'rejected',
+          reason: { view: { code: 'SESSION_RECOVERY_FAILED' } },
+        });
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toMatchObject({
+        view: { code: 'SESSION_RECOVERY_FAILED' },
+      });
+      await expect(async () =>
+        state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Must stay unreserved' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_RECOVERY_FAILED' } });
+      expect(observe).toHaveBeenCalledTimes(1);
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(true);
+      expect(state.conversations.abort).not.toHaveBeenCalled();
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(await state.store.getMessage(state.sessionId, completed.assistantMessageId)).toEqual(
+        original,
+      );
+      await state.host.startSession({
+        sessionId: uuid(),
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Synthetic healthy input' }],
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('keeps an idle storage failure retryable without isolating its Session', async () => {
+    const state = fixture();
+    await state.reserve();
+    await state.host.initialize();
+    jest
+      .spyOn(state.conversations, 'observe')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+    try {
+      await expect(state.host.observeSession(state.sessionId, () => {})).rejects.toThrow(
+        'Storage unavailable',
+      );
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      observation.unsubscribe();
+      expect(state.host.isReady).toBe(true);
+      expect(state.host.hasPendingStorageWork()).toBe(false);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('isolates an unreadable observer before resuming unrelated work and denies its execution', async () => {
     const state = fixture();
     const unreadable = await state.reserve('running');

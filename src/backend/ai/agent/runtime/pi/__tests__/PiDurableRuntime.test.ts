@@ -982,6 +982,96 @@ describe('PiDurableRuntime identity and handoff', () => {
     }
   });
 
+  test('retiring fork ancestors preserves inherited metadata and selected message reads after reopen', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    let runtime = await PiDurableRuntime.open(storage, options());
+    const metadata = { userMessageId: 'user', assistantMessageId: 'assistant' };
+    try {
+      await runtime.ensureConversation(seed);
+      const submission = await runtime.submit(
+        seed.sessionId,
+        { type: 'input', requestId: 'original', content: 'Synthetic input' },
+        metadata,
+        metadata,
+      );
+      const record = await submission.wait(BACKGROUND_CONTEXT);
+      await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'child',
+        at: record.entry!,
+        resourceFileEntryIds: [],
+      });
+      await runtime.forkConversation('child', {
+        ...seed,
+        sessionId: 'grandchild',
+        at: record.entry!,
+        resourceFileEntryIds: [],
+      });
+      await runtime.retireSession('child');
+      await runtime.retireSession(seed.sessionId);
+      await runtime.close();
+      runtime = await PiDurableRuntime.open(storage, options());
+
+      expect(await runtime.conversation(seed.sessionId)).toBeUndefined();
+      expect((await runtime.history('grandchild', 256)).submissions).toContainEqual({
+        record,
+        metadata,
+      });
+      for (const [messageId, role] of [
+        ['user', 'user'],
+        ['assistant', 'assistant'],
+      ] as const)
+        expect(await runtime.submissionForMessage('grandchild', messageId)).toEqual({
+          record,
+          role,
+          metadata,
+        });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('rejects a fork when its source retires after the initial identity read', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    let release!: () => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    try {
+      await runtime.ensureConversation(seed);
+      const [entry] = (await runtime.history(seed.sessionId, 1)).entries;
+      const conversation = runtime.conversation.bind(runtime);
+      jest.spyOn(runtime, 'conversation').mockImplementationOnce(async (...args) => {
+        const result = await conversation(...args);
+        entered();
+        await waiting;
+        return result;
+      });
+      const fork = runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'child',
+        at: entry!.id,
+        resourceFileEntryIds: [],
+      });
+      await started;
+      await runtime.retireSession(seed.sessionId);
+      release();
+      await expect(fork).rejects.toThrow('source working copy changed');
+      expect(await runtime.conversation('child')).toBeUndefined();
+      expect(await runtime.binding(seed.sessionId)).toBeUndefined();
+    } finally {
+      release();
+      await runtime.close();
+    }
+  });
+
   test('joins an idle background compaction instead of reporting busy and spares it on caller abort', async () => {
     const configuration = options();
     let resolveSummary!: (decision: { summary: string }) => void;
