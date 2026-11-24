@@ -9,6 +9,7 @@ import { useUniwind } from 'uniwind';
 import {
   ChatDockLayoutProvider,
   FoldRegionProvider,
+  useCanDockSidebar,
   WindowFoldRegion,
 } from '@/frontend/appShell/layout';
 import { ChatSourceProvider } from '@/frontend/appShell/navigation/chat';
@@ -104,6 +105,7 @@ function SidebarDrawer() {
   const { width } = useWindowDimensions();
   const outerInsets = useSafeAreaInsets();
   const pathname = usePathname();
+  const canDock = useCanDockSidebar();
   const { theme } = useUniwind();
   const { column } = useSidebarColumn();
   const { pinnedTabs, shellMode } = useNavigationShell();
@@ -114,8 +116,11 @@ function SidebarDrawer() {
     'sidebar-border',
     'scrim',
   ]);
-  const overlayWidth = Math.max(280, width - outerInsets.right);
-  const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth);
+  const overlayWidth = Math.min(
+    appSidebar.maxWidth,
+    Math.max(280, width - Math.max(appSidebar.sceneRevealWidth, outerInsets.right)),
+  );
+  const { drawerType, drawerStyle } = resolveSidebarDrawer(column, overlayWidth, canDock);
   const swipeEnabled =
     shellMode !== 'wide-rail' &&
     column.kind === 'overlay' &&
@@ -130,8 +135,7 @@ function SidebarDrawer() {
         drawerStyle: {
           backgroundColor: theme === 'dark' ? sidebarColor : backgroundColor,
           borderEndColor: sidebarBorderColor,
-          borderEndWidth:
-            drawerType === 'permanent' || theme === 'dark' ? StyleSheet.hairlineWidth : 0,
+          borderEndWidth: StyleSheet.hairlineWidth,
           ...drawerStyle,
         },
         drawerType,
@@ -143,6 +147,7 @@ function SidebarDrawer() {
         },
         swipeEdgeWidth: width,
         swipeEnabled,
+        swipeMinDistance: 44,
       }}
     >
       <Drawer.Screen name="(main)" />

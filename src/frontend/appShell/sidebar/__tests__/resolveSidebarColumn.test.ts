@@ -21,11 +21,15 @@ describe('resolveSidebarColumn', () => {
     expect(resolveSidebarColumn({ ...wide, isWide: false })).toEqual({ kind: 'overlay' });
   });
 
-  test('hides the compact sidebar when a page covers the chat', () => {
+  test('keeps compact inactive drawers in slide mode without flipping to permanent', () => {
     const input = { ...wide, isWide: false };
     const inactive = resolveSidebarColumn({ ...input, isChatFocused: false });
     expect(inactive).toEqual({ kind: 'inactive' });
     expect(resolveSidebarToggleAction(inactive)).toBeUndefined();
+    expect(resolveSidebarDrawer(inactive, 320, false)).toEqual({
+      drawerType: 'slide',
+      drawerStyle: { pointerEvents: 'none', width: 320 },
+    });
     expect(resolveSidebarDrawer(inactive, 320)).toMatchObject({
       drawerType: 'permanent',
       drawerStyle: { position: 'absolute', opacity: 0, pointerEvents: 'none' },
@@ -106,9 +110,9 @@ describe('resolveSidebarDrawer', () => {
     expect(drawer(true).drawerStyle).toEqual({ width: 280 });
   });
 
-  test('a compact window still slides the sidebar over the chat', () => {
-    expect(resolveSidebarDrawer({ kind: 'overlay' }, 320)).toEqual({
-      drawerType: 'front',
+  test('a compact window still slides the sidebar alongside the chat', () => {
+    expect(resolveSidebarDrawer({ kind: 'overlay' }, 320, false)).toEqual({
+      drawerType: 'slide',
       drawerStyle: { pointerEvents: 'auto', width: 320 },
     });
   });

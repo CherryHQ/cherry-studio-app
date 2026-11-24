@@ -246,7 +246,15 @@ describe('FloatingNavDock drag preview', () => {
     expect(banner.props.children.props.children).toBe('navigation.dropToUnpin');
 
     const detached = renderer!.root.findByProps({ testID: 'floating-nav-detached-drawings' });
-    expect(detached.props.style).toEqual({ height: 0, opacity: 0, overflow: 'hidden', width: 0 });
+    expect(detached.props.style).toEqual({
+      height: 1,
+      left: 0,
+      opacity: 0,
+      overflow: 'hidden',
+      position: 'absolute',
+      top: 0,
+      width: 1,
+    });
     expect(detached.findByProps({ testID: 'floating-nav-tab-drawings' })).toBeTruthy();
 
     const row = renderer!.root.findByProps({
@@ -256,5 +264,47 @@ describe('FloatingNavDock drag preview', () => {
       row.props.onLayout({ nativeEvent: { layout: { height: 44 } } });
     });
     expect(mockShellState.reportDockHeight).toHaveBeenCalledWith(44);
+  });
+
+  test('keeps dragged tab fiber mounted in-place across drag-out transitions and hides dock without unmounting on child screens', () => {
+    mockShellState.pinnedTabs = ['agents', 'drawings'];
+    mockShellState.dragState = {
+      draggingOut: false,
+      id: 'drawings',
+      insertIndex: 1,
+      overDock: true,
+      source: 'dock',
+    };
+
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+
+    const initialTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-drawings' });
+
+    mockShellState.dragState = {
+      draggingOut: true,
+      id: 'drawings',
+      insertIndex: 1,
+      overDock: false,
+      source: 'dock',
+    };
+    act(() => {
+      renderer!.update(<FloatingNavDock />);
+    });
+
+    const detachedTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-drawings' });
+    expect(detachedTab).toBe(initialTab);
+
+    mockShellState.dragState = null;
+    mockShellState.isAtRoot = false;
+    mockShellState.isDockVisible = false;
+    act(() => {
+      renderer!.update(<FloatingNavDock />);
+    });
+
+    const hiddenDock = renderer!.root.findByProps({ testID: 'floating-nav-dock' });
+    expect(hiddenDock.props.pointerEvents).toBe('none');
+    expect(hiddenDock.props.accessibilityElementsHidden).toBe(true);
   });
 });

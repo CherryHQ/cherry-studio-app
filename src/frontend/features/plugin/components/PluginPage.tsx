@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 
 /** Plugin pages keep their primary action below the scrolling content and above the keyboard. */
 export function PluginPage({
@@ -18,7 +18,7 @@ export function PluginPage({
 }) {
   const headerHeight = useHeaderHeight();
   const { bottom } = useSafeAreaInsets();
-  const dockClearance = useNavigationDockClearance();
+  const dockClearance = useRootNavigationDockClearance();
 
   return (
     <KeyboardAvoidingView

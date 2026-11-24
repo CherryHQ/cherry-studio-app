@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { isAcross, useFoldRegion, useWindowClass } from '@/frontend/appShell/layout';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
-import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import {
   orderedSelection,
@@ -84,7 +84,7 @@ export function PaintingBoardList({ bottomInset }: { bottomInset: number }) {
   const { onLayout, width } = useLayoutWidth();
   const windowClass = useWindowClass();
   const fold = useFoldRegion();
-  const dockClearance = useNavigationDockClearance();
+  const dockClearance = useRootNavigationDockClearance();
   const effectiveBottomInset = Math.max(bottomInset, dockClearance);
   const isWideUnfolded = windowClass === 'wide' && !(fold && !isAcross(fold));
   const columns = isWideUnfolded ? 3 : 2;

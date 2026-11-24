@@ -15,10 +15,10 @@ import {
   type MoreModuleId,
   NavCardBadge,
   resolveMoreModules,
-  useNavigationDockClearance,
   useNavigationShell,
   useNavigationShellInteraction,
   usePinDragGesture,
+  useRootNavigationDockClearance,
 } from '@/frontend/appShell/navigationShell';
 
 function chunkItems<T>(items: readonly T[], columns: number): T[][] {
@@ -76,7 +76,7 @@ export function MoreScreen() {
   const insets = useSafeAreaInsets();
   const windowClass = useWindowClass();
   const fold = useFoldRegion();
-  const dockClearance = useNavigationDockClearance();
+  const dockClearance = useRootNavigationDockClearance();
   const { pinnedTabs } = useNavigationShell();
   const { dragState } = useNavigationShellInteraction();
   const [armedCardId, setArmedCardId] = useState<MoreModuleId | null>(null);

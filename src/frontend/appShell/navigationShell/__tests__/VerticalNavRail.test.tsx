@@ -191,14 +191,18 @@ describe('VerticalNavRail', () => {
     expect(renderer!.root.findByProps({ testID: 'vertical-rail-status-pill' })).toBeTruthy();
   });
 
-  it('hides outside root screens or in non-vertical modes', () => {
+  it('keeps rail mounted while fading on child screens and unmounts outside vertical-rail mode', () => {
     mockShellState.isAtRoot = false;
+    mockShellState.isVerticalRailVisible = false;
     act(() => {
       renderer = create(<VerticalNavRail />);
     });
-    expect(renderer!.toJSON()).toBeNull();
+    const hiddenRail = renderer!.root.findByProps({ testID: 'vertical-nav-rail' });
+    expect(hiddenRail.props.pointerEvents).toBe('none');
+    expect(hiddenRail.props.accessibilityElementsHidden).toBe(true);
 
     mockShellState.isAtRoot = true;
+    mockShellState.isVerticalRailVisible = true;
     mockShellState.shellMode = 'compact-dock';
     act(() => {
       renderer!.update(<VerticalNavRail />);

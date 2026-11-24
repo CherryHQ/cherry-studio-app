@@ -1,7 +1,7 @@
 import { Surface } from '@cherrystudio/ui/components';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useMemo, useRef } from 'react';
-import { View, type ViewInstance } from 'react-native';
+import { Platform, View, type ViewInstance } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
@@ -85,12 +85,12 @@ export function FloatingNavDock() {
     [measureDockBounds, reportDockHeight],
   );
 
-  if (shellMode !== 'compact-dock' || !isAtRoot) {
+  if (shellMode !== 'compact-dock') {
     return null;
   }
 
   const maxWidth = resolveTabMaxWidth(preview.tabs.length);
-  const bottomPadding = resolveFloatingDockBottomPadding(insets.bottom);
+  const bottomPadding = resolveFloatingDockBottomPadding(insets.bottom, Platform?.OS ?? 'ios');
 
   const trayClassName = !dragState
     ? null
@@ -104,8 +104,10 @@ export function FloatingNavDock() {
 
   return (
     <Animated.View
+      accessibilityElementsHidden={!isDockVisible}
       accessibilityRole="tablist"
       className="absolute right-0 bottom-0 left-0 z-20"
+      importantForAccessibility={isDockVisible ? 'auto' : 'no-hide-descendants'}
       pointerEvents={isDockVisible ? 'box-none' : 'none'}
       style={[animatedContainerStyle, { paddingBottom: bottomPadding }]}
       testID="floating-nav-dock"
@@ -156,6 +158,7 @@ export function FloatingNavDock() {
             mutedForegroundColor={mutedForegroundColor}
             onSelectDestination={navigateToDestination}
             orientation="horizontal"
+            pinnedTabs={pinnedTabs}
             preview={preview}
             testIDPrefix="floating-nav"
           />

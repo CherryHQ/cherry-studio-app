@@ -1,4 +1,4 @@
-import { Stack, useNavigation, usePathname } from 'expo-router';
+import { Stack, useNavigation } from 'expo-router';
 import { View } from 'react-native';
 
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
@@ -8,7 +8,6 @@ import {
   FloatingNavDock,
   NAV_ROUTE_MANIFEST,
   NavPinPopover,
-  resolveCompactLeadingAction,
   useNavigationShell,
   useRegisterMainNavigator,
   VerticalNavRail,
@@ -22,24 +21,16 @@ export const unstable_settings = { initialRouteName: '(chat)' };
 
 /**
  * The content region beside the sidebar and navigation rail.
- * Wide mode hides the left hamburger on non-chat roots (using `none`) because the permanent
- * left rail handles primary navigation; compact mode keeps `drawer` on chat, 「更多」, and
- * pinned roots, while unpinned modules opened from 「更多」 lead with `back`.
+ * Each nested stack binds its own root leading behavior via `NavRouteHeaderScope`;
+ * `(main)` falls back to `back` for direct leaf children such as `trash` and `paintings`.
  */
 export default function MainStackLayout() {
   const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
   const navigation = useNavigation();
-  const pathname = usePathname();
-  const { activeDestination, pinnedTabs, shellMode } = useNavigationShell();
+  const { pinnedTabs, shellMode } = useNavigationShell();
   useRegisterMainNavigator(navigation);
 
   const isWideRail = shellMode === 'wide-rail';
-  const rootAction = isWideRail
-    ? activeDestination === 'chat'
-      ? 'drawer'
-      : 'none'
-    : resolveCompactLeadingAction(pathname, pinnedTabs);
-
   const railOrPinnedDestination = {
     animation: 'none' as const,
     gestureEnabled: false,
@@ -59,11 +50,12 @@ export default function MainStackLayout() {
 
   return (
     <ChatProvider>
-      <RouteHeaderProvider rootAction={rootAction}>
-        <View className="flex-1">
+      <RouteHeaderProvider rootAction="back">
+        <View className="flex-1 bg-background">
           <Stack
             screenOptions={{
               ...headerScreenOptions,
+              contentStyle: { backgroundColor },
               headerStyle: getRootHeaderStyle(backgroundColor),
               headerTransparent: isLiquidGlassAvailable,
               headerTintColor: foregroundColor,

@@ -53,7 +53,7 @@ export function VerticalNavRail() {
     registerDockRect,
   );
 
-  if (shellMode !== 'vertical-rail' || !isAtRoot) {
+  if (shellMode !== 'vertical-rail') {
     return null;
   }
 
@@ -62,16 +62,22 @@ export function VerticalNavRail() {
 
   return (
     <View
+      accessibilityElementsHidden={!isVerticalRailVisible}
       accessibilityRole="tablist"
       className="absolute top-0 right-0 bottom-0 z-20"
-      pointerEvents="box-none"
+      importantForAccessibility={isVerticalRailVisible ? 'auto' : 'no-hide-descendants'}
+      pointerEvents={isVerticalRailVisible ? 'box-none' : 'none'}
       style={{ width: railWidth }}
       testID="vertical-nav-rail"
     >
       <View
         className="bg-sidebar-border absolute top-0 bottom-0 left-0"
         pointerEvents="none"
-        style={{ width: StyleSheet.hairlineWidth }}
+        style={
+          isVerticalRailVisible
+            ? { width: StyleSheet.hairlineWidth }
+            : { opacity: 0, width: StyleSheet.hairlineWidth }
+        }
         testID="vertical-nav-rail-divider"
       />
       <NavDragStatusPill
@@ -103,6 +109,7 @@ export function VerticalNavRail() {
               mutedForegroundColor={mutedForegroundColor}
               onSelectDestination={navigateToDestination}
               orientation="vertical"
+              pinnedTabs={pinnedTabs}
               preview={preview}
               testIDPrefix="vertical-rail"
             />

@@ -43,6 +43,7 @@ export {
 export {
   DEFAULT_FLOATING_DOCK_ROW_HEIGHT,
   FILES_MASTER_WIDTH,
+  FLOATING_DOCK_ANDROID_BOTTOM_GAP,
   FLOATING_DOCK_CLEARANCE_GAP,
   FLOATING_DOCK_MIN_BOTTOM_PADDING,
   FLOATING_DOCK_SAFE_AREA_OFFSET,
@@ -110,6 +111,7 @@ export type NavigationShellState = {
   isVerticalRailVisible: boolean;
   middleColumnWidth: number;
   pinnedTabs: NavigationPinTabId[];
+  restingDockClearance: number;
   restingDockHeight: number;
   shellMode: NavigationShellMode;
 };
@@ -212,4 +214,10 @@ export function useReportMiddleColumnWidth(source: MiddleColumnSource, width: nu
 export function useNavigationDockClearance(): number {
   const shell = useOptionalNavigationShell();
   return shell?.dockClearance ?? 0;
+}
+
+/** Stable compact-dock bottom clearance for root screens so secondary pushes/pops never reflow. */
+export function useRootNavigationDockClearance(): number {
+  const shell = useOptionalNavigationShell();
+  return shell?.restingDockClearance ?? 0;
 }

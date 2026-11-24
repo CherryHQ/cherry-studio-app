@@ -8,16 +8,30 @@ export const FILES_MASTER_WIDTH = 288;
 export const DEFAULT_FLOATING_DOCK_ROW_HEIGHT = 44;
 export const FLOATING_DOCK_CLEARANCE_GAP = 8;
 export const FLOATING_DOCK_SAFE_AREA_OFFSET = 10;
+export const FLOATING_DOCK_ANDROID_BOTTOM_GAP = 10;
 export const FLOATING_DOCK_MIN_BOTTOM_PADDING = 12;
 
-export function resolveFloatingDockBottomPadding(bottomInset: number): number {
+export function resolveFloatingDockBottomPadding(
+  bottomInset: number,
+  platform: string = 'ios',
+): number {
+  if (platform === 'android') {
+    return Math.max(
+      bottomInset + FLOATING_DOCK_ANDROID_BOTTOM_GAP,
+      FLOATING_DOCK_MIN_BOTTOM_PADDING,
+    );
+  }
   return Math.max(bottomInset - FLOATING_DOCK_SAFE_AREA_OFFSET, FLOATING_DOCK_MIN_BOTTOM_PADDING);
 }
 
 /** Bottom clearance above `bottomInset` needed for overlays/composers to rest 8pt clear of the dock. */
-export function resolveFloatingDockClearance(rowHeight: number, bottomInset: number): number {
+export function resolveFloatingDockClearance(
+  rowHeight: number,
+  bottomInset: number,
+  platform: string = 'ios',
+): number {
   return (
-    Math.max(0, resolveFloatingDockBottomPadding(bottomInset) + rowHeight - bottomInset) +
+    Math.max(0, resolveFloatingDockBottomPadding(bottomInset, platform) + rowHeight - bottomInset) +
     FLOATING_DOCK_CLEARANCE_GAP
   );
 }

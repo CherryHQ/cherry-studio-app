@@ -81,16 +81,24 @@ export function resolveSidebarColumn({
   return { content, foldGap: 0, kind: 'permanent', width: insetLeft + contentWidth };
 }
 
-/** Keep an inactive sidebar mounted outside the content row without showing a scrim. */
-export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number) {
+/** Keep an inactive sidebar mounted without flashing or flipping drawer modes on push/pop. */
+export function resolveSidebarDrawer(column: SidebarColumn, overlayWidth: number, isWide = true) {
   if (column.kind === 'overlay') {
     return {
-      drawerType: 'front',
+      drawerType: 'slide',
       drawerStyle: { pointerEvents: 'auto', width: overlayWidth },
     } as const;
   }
   if (column.kind === 'permanent') {
     return { drawerType: 'permanent', drawerStyle: { width: column.width } } as const;
+  }
+  if (!isWide) {
+    // Keep compact drawers in `slide` mode across secondary routes so native drawer
+    // physics and gesture listeners never tear down on navigation transitions.
+    return {
+      drawerType: 'slide',
+      drawerStyle: { pointerEvents: 'none', width: overlayWidth },
+    } as const;
   }
   // Keep the list laid out off the flex row, and the closed position ready for a narrower window.
   return {

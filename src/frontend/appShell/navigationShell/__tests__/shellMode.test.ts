@@ -1,4 +1,8 @@
-import { resolveNavigationShellMode } from '../shellMode';
+import {
+  resolveFloatingDockBottomPadding,
+  resolveFloatingDockClearance,
+  resolveNavigationShellMode,
+} from '../shellMode';
 
 describe('resolveNavigationShellMode', () => {
   test('selects compact-dock on standard phones and narrow windows', () => {
@@ -120,5 +124,28 @@ describe('resolveNavigationShellMode', () => {
         windowClass: 'wide',
       }),
     ).toBe('wide-rail');
+  });
+});
+
+describe('floating dock bottom padding and clearance', () => {
+  test('gives Android system gesture and 3-button bars extra breathing room', () => {
+    // Android gesture navigation (~24dp inset)
+    expect(resolveFloatingDockBottomPadding(24, 'android')).toBe(34);
+    expect(resolveFloatingDockClearance(44, 24, 'android')).toBe(62);
+
+    // Android 3-button navigation (~48dp inset)
+    expect(resolveFloatingDockBottomPadding(48, 'android')).toBe(58);
+    expect(resolveFloatingDockClearance(44, 48, 'android')).toBe(62);
+
+    // Zero bottom inset still maintains minimum padding
+    expect(resolveFloatingDockBottomPadding(0, 'android')).toBe(12);
+    expect(resolveFloatingDockClearance(44, 0, 'android')).toBe(64);
+  });
+
+  test('preserves compact home-indicator offset on iOS', () => {
+    expect(resolveFloatingDockBottomPadding(34, 'ios')).toBe(24);
+    expect(resolveFloatingDockClearance(44, 34, 'ios')).toBe(42);
+    expect(resolveFloatingDockBottomPadding(0, 'ios')).toBe(12);
+    expect(resolveFloatingDockClearance(44, 0, 'ios')).toBe(64);
   });
 });

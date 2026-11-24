@@ -1,6 +1,6 @@
 import { Surface } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type RefObject, useCallback, useEffect } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Pressable,
@@ -51,11 +51,16 @@ const navPillExit = FadeOut.duration(duration.fast)
   .reduceMotion(ReduceMotion.System);
 
 const COLLAPSED_DETACHED_STYLE: ViewStyle = {
-  height: 0,
+  height: 1,
+  left: 0,
   opacity: 0,
   overflow: 'hidden',
-  width: 0,
+  position: 'absolute',
+  top: 0,
+  width: 1,
 };
+
+const NOOP = () => undefined;
 
 type DragStatusBanner = {
   boxClassName: string;
@@ -219,11 +224,15 @@ type NavTabStripProps = {
   mutedForegroundColor: string;
   onSelectDestination: (id: NavDestinationId) => void;
   orientation: 'horizontal' | 'vertical';
+  pinnedTabs: readonly NavigationPinTabId[];
   preview: DockDragPreviewState;
   testIDPrefix: 'floating-nav' | 'vertical-rail';
 };
 
-/** Shared dock/rail tab sequence: bookends (`chat`/`more`), draggable middle tabs, and drag-out cleanup. */
+/**
+ * Shared dock/rail tab sequence: bookends (`chat`/`more`), draggable middle tabs, and
+ * in-place drag-out concealment so active `GestureDetector` instances never unmount mid-gesture.
+ */
 export function NavTabStrip({
   activeDockTab,
   dragState,
@@ -232,6 +241,7 @@ export function NavTabStrip({
   mutedForegroundColor,
   onSelectDestination,
   orientation,
+  pinnedTabs,
   preview,
   testIDPrefix,
 }: NavTabStripProps) {
@@ -243,14 +253,24 @@ export function NavTabStrip({
   const isDragOutUnpinning =
     dragState?.source === 'dock' && dragState.draggingOut && !preview.tabs.includes(dragState.id);
 
+  const renderedTabs = useMemo(() => {
+    const items = preview.tabs.map((id) => ({ detached: false, id }));
+    if (isDragOutUnpinning && dragState) {
+      const originalMiddleIndex = pinnedTabs.indexOf(dragState.id);
+      const insertAt = Math.min(items.length, Math.max(1, originalMiddleIndex + 1));
+      items.splice(insertAt, 0, { detached: true, id: dragState.id });
+    }
+    return items;
+  }, [dragState, isDragOutUnpinning, pinnedTabs, preview.tabs]);
+
   return (
     <>
-      {preview.tabs.map((tabId: NavTabId) => {
-        const isActive = activeDockTab === tabId;
+      {renderedTabs.map(({ detached, id: tabId }) => {
+        const isActive = !detached && activeDockTab === tabId;
         const label = t(getNavTitleKey(tabId));
         const handlePress = () => onSelectDestination(tabId);
 
-        if (tabId === preview.previewTabId && dragState?.source === 'more') {
+        if (!detached && tabId === preview.previewTabId && dragState?.source === 'more') {
           return (
             <Animated.View
               key={tabId}
@@ -299,14 +319,18 @@ export function NavTabStrip({
         }
 
         const isDockDragPreview =
-          dragState?.source === 'dock' && dragState.id === tabId && !dragState.draggingOut;
+          !detached &&
+          dragState?.source === 'dock' &&
+          dragState.id === tabId &&
+          !dragState.draggingOut;
 
         return (
           <Animated.View
             key={tabId}
-            className={itemWrapperClassName}
-            layout={navTabLayout}
-            style={itemWrapperStyle}
+            className={detached ? undefined : itemWrapperClassName}
+            layout={detached ? undefined : navTabLayout}
+            style={detached ? COLLAPSED_DETACHED_STYLE : itemWrapperStyle}
+            testID={detached ? `${testIDPrefix}-detached-${tabId}` : undefined}
           >
             <NavMiddleTabButton
               accessibilityLabel={label}
@@ -314,36 +338,15 @@ export function NavTabStrip({
               foregroundColor={foregroundColor}
               isActive={isActive}
               isDragPreview={isDockDragPreview}
-              isDraggingOut={false}
+              isDraggingOut={detached}
               mutedForegroundColor={mutedForegroundColor}
-              onPress={handlePress}
+              onPress={detached ? NOOP : handlePress}
               tabId={tabId}
               testIDPrefix={testIDPrefix}
             />
           </Animated.View>
         );
       })}
-      {isDragOutUnpinning ? (
-        <Animated.View
-          key={dragState.id}
-          layout={navTabLayout}
-          style={COLLAPSED_DETACHED_STYLE}
-          testID={`${testIDPrefix}-detached-${dragState.id}`}
-        >
-          <NavMiddleTabButton
-            accessibilityLabel={t(getNavTitleKey(dragState.id))}
-            buttonSizeClass={buttonSizeClass}
-            foregroundColor={foregroundColor}
-            isActive={false}
-            isDragPreview={false}
-            isDraggingOut
-            mutedForegroundColor={mutedForegroundColor}
-            onPress={() => undefined}
-            tabId={dragState.id}
-            testIDPrefix={testIDPrefix}
-          />
-        </Animated.View>
-      ) : null}
     </>
   );
 }

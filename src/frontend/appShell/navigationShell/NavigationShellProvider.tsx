@@ -4,13 +4,14 @@ import { type Href, usePathname, useRouter } from 'expo-router';
 import {
   type PropsWithChildren,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -177,14 +178,23 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
     tRef.current = t;
   });
 
+  const platform = Platform?.OS ?? 'ios';
   const isDockVisible =
     shellMode === 'compact-dock' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
   const isVerticalRailVisible =
     shellMode === 'vertical-rail' && isAtRoot && !isKeyboardVisible && hideDockCount === 0;
-  const dockClearance =
-    shellMode === 'compact-dock' && isAtRoot
-      ? resolveFloatingDockClearance(restingDockHeight, insets.bottom)
+  const restingDockClearance =
+    shellMode === 'compact-dock'
+      ? resolveFloatingDockClearance(restingDockHeight, insets.bottom, platform)
       : 0;
+  const dockClearance = isAtRoot ? restingDockClearance : 0;
+
+  useEffect(() => {
+    if ((!isAtRoot || isKeyboardVisible || shellMode === 'wide-rail') && dragStateRef.current) {
+      dragStateRef.current = null;
+      setDragState(null);
+    }
+  }, [isAtRoot, isKeyboardVisible, shellMode]);
 
   const middleColumnWidth =
     shellMode !== 'wide-rail'
@@ -409,6 +419,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       isVerticalRailVisible,
       middleColumnWidth,
       pinnedTabs,
+      restingDockClearance,
       restingDockHeight,
       shellMode,
     }),
@@ -422,6 +433,7 @@ export function NavigationShellProvider({ children }: PropsWithChildren) {
       isVerticalRailVisible,
       middleColumnWidth,
       pinnedTabs,
+      restingDockClearance,
       restingDockHeight,
       shellMode,
     ],

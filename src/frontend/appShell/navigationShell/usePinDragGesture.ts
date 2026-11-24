@@ -1,5 +1,5 @@
 import { haptics } from '@cherrystudio/ui/haptics';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 
@@ -24,9 +24,19 @@ export function usePinDragGesture(
   const dragActivated = useSharedValue(false);
   const onArmedChange = options?.onArmedChange;
 
+  useEffect(() => {
+    return () => {
+      if (dragActivated.get()) {
+        dragActivated.set(false);
+        endDrag();
+      }
+    };
+  }, [dragActivated, endDrag]);
+
   return useMemo(() => {
     return Gesture.Pan()
       .activateAfterLongPress(LONG_PRESS_DURATION_MS)
+      .shouldCancelWhenOutside(false)
       .runOnJS(true)
       .onStart(() => {
         dragActivated.set(false);
@@ -50,17 +60,17 @@ export function usePinDragGesture(
       .onEnd((event) => {
         onArmedChange?.(false);
         if (dragActivated.get()) {
+          dragActivated.set(false);
           endDrag();
         } else {
           openPinPopover({ id, source, x: event.absoluteX, y: event.absoluteY });
         }
-        dragActivated.set(false);
       })
       .onFinalize(() => {
         onArmedChange?.(false);
         if (dragActivated.get()) {
-          endDrag();
           dragActivated.set(false);
+          endDrag();
         }
       });
   }, [dragActivated, endDrag, id, onArmedChange, openPinPopover, source, startDrag, updateDrag]);

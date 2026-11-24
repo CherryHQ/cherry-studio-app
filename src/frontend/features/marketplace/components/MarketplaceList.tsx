@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 
 import { type MarketplaceEntry, MarketplaceRow } from './MarketplaceRow';
 import { useMarketplaceColumns } from './useMarketplaceColumns';
@@ -28,7 +28,7 @@ export function MarketplaceList({
   testID?: string;
 }) {
   const { bottom } = useSafeAreaInsets();
-  const dockClearance = useNavigationDockClearance();
+  const dockClearance = useRootNavigationDockClearance();
   const columns = useMarketplaceColumns();
   const isCardLayout = columns >= 2;
 

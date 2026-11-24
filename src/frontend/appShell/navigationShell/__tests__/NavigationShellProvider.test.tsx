@@ -19,6 +19,7 @@ let mockInsets = { bottom: 34, left: 0, right: 0, top: 59 };
 let mockWindowClass: 'compact' | 'wide' = 'compact';
 let mockFold: { height: number; width: number; x: number; y: number } | null = null;
 let mockKeyboardVisible = false;
+let mockPlatformOS: 'ios' | 'android' = 'ios';
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
@@ -68,6 +69,11 @@ jest.mock('expo-router', () => ({
   }),
 }));
 jest.mock('react-native', () => ({
+  Platform: {
+    get OS() {
+      return mockPlatformOS;
+    },
+  },
   useWindowDimensions: () => mockDimensions,
 }));
 jest.mock('react-native-keyboard-controller', () => ({
@@ -127,6 +133,7 @@ describe('NavigationShellProvider', () => {
     mockWindowClass = 'compact';
     mockFold = null;
     mockKeyboardVisible = false;
+    mockPlatformOS = 'ios';
   });
 
   afterEach(() => {
@@ -228,6 +235,40 @@ describe('NavigationShellProvider', () => {
     });
     expect(latest.isDockVisible).toBe(false);
     expect(latest.dockClearance).toBe(0);
+    expect(latest.restingDockClearance).toBe(42);
+  });
+
+  it('keeps Android floating dock clear of system bar and auto-cancels active drag when leaving root', () => {
+    mockPlatformOS = 'android';
+    mockInsets = { bottom: 24, left: 0, right: 0, top: 24 };
+    act(() => {
+      renderer = create(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+
+    expect(latest.dockClearance).toBe(62);
+    expect(latest.restingDockClearance).toBe(62);
+
+    act(() => {
+      latest.registerDockRect({ height: 44, width: 400, x: 0, y: 760 });
+      latest.startDrag({ id: 'drawings', source: 'more', x: 140, y: 700 });
+    });
+    expect(latestInteraction.dragState).not.toBeNull();
+
+    mockPathname = '/drawings/templates';
+    act(() => {
+      renderer.update(
+        <NavigationShellProvider>
+          <Probe />
+        </NavigationShellProvider>,
+      );
+    });
+    expect(latest.dockClearance).toBe(0);
+    expect(latest.restingDockClearance).toBe(62);
+    expect(latestInteraction.dragState).toBeNull();
   });
 
   it('enforces max 3 middle tabs and prevents unpinning core agents tab', () => {

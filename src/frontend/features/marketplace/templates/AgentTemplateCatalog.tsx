@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
+import { useRootNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 import { EmptyIllustration } from '@/frontend/components/EmptyIllustration';
 import { useAgentTemplateCatalog } from '@/frontend/data/agentTemplates';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
@@ -26,7 +26,7 @@ export function AgentTemplateCatalog({
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { bottom } = useSafeAreaInsets();
-  const dockClearance = useNavigationDockClearance();
+  const dockClearance = useRootNavigationDockClearance();
   const language = i18n.resolvedLanguage ?? i18n.language;
   const { catalog, error, isLoading, refetch } = useAgentTemplateCatalog(language);
   const toEntry = useTemplateEntries(language);
