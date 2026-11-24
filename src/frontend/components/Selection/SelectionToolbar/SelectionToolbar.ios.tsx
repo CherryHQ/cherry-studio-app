@@ -2,6 +2,7 @@ import { Color, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { usePaneChrome } from '@/frontend/appShell/layout';
+import { useHideFloatingDock } from '@/frontend/appShell/navigationShell/state';
 
 import { InlineSelectionToolbar } from './InlineSelectionToolbar';
 import type { SelectionToolbarProps } from './types';
@@ -10,6 +11,8 @@ import type { SelectionToolbarProps } from './types';
 // The header owns the selected count and exit; this bar owns batch actions.
 // A pane has no native-stack screen to host the toolbar, so it draws the app's own bar.
 export function SelectionToolbar(props: SelectionToolbarProps) {
+  useHideFloatingDock(true);
+
   return usePaneChrome() ? (
     <InlineSelectionToolbar {...props} />
   ) : (

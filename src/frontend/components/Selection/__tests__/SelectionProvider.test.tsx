@@ -2,6 +2,11 @@ import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
+  NavigationShellActionsContext,
+  type NavigationShellActions,
+} from '@/frontend/appShell/navigationShell/state';
+
+import {
   SelectionProvider,
   type SelectionSource,
   usePendingDeletionIds,
@@ -193,5 +198,59 @@ describe('SelectionProvider', () => {
     });
 
     expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test('hides the floating dock only while editing is active and releases on exit, deletion, or unmount', async () => {
+    const unregisterHideDock = jest.fn();
+    const registerHideDock = jest.fn(() => unregisterHideDock);
+    const navigationActions = { registerHideDock } as unknown as NavigationShellActions;
+
+    await act(async () => {
+      renderer = create(
+        <NavigationShellActionsContext value={navigationActions}>
+          <SelectionProvider>
+            <SelectionProbe />
+          </SelectionProvider>
+        </NavigationShellActionsContext>,
+      );
+    });
+
+    expect(registerHideDock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      currentActions?.enterEditing();
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(1);
+    expect(unregisterHideDock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      currentActions?.exitEditing();
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      currentActions?.enterEditing();
+      currentActions?.toggleId('topic-1');
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      currentActions?.beginDeletion('conversations', ['topic-1']);
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      currentActions?.finishDeletion('conversations', ['topic-1']);
+    });
+    await act(async () => {
+      currentActions?.enterEditing();
+    });
+    expect(registerHideDock).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = undefined;
+    });
+    expect(unregisterHideDock).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,5 +1,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { PaneChromeProvider } from '@/frontend/appShell/layout';
+import {
+  NavigationShellActionsContext,
+  type NavigationShellActions,
+} from '@/frontend/appShell/navigationShell/state';
+
 import { SelectionToolbar as AndroidSelectionToolbar } from '../SelectionToolbar/SelectionToolbar.android';
 import { SelectionToolbar as IOSSelectionToolbar } from '../SelectionToolbar/SelectionToolbar.ios';
 import type { SelectionToolbarProps } from '../SelectionToolbar/types';
@@ -88,6 +94,31 @@ describe.each([
     expect(findButton('Move').props.disabled).toBe(true);
   });
 
+  it('hides the floating dock while mounted and releases it on unmount', async () => {
+    let activeHideCount = 0;
+    const registerHideDock = jest.fn(() => {
+      activeHideCount += 1;
+      return () => {
+        activeHideCount -= 1;
+      };
+    });
+    const navigationActions = { registerHideDock } as unknown as NavigationShellActions;
+
+    await act(async () => {
+      renderer = create(
+        <NavigationShellActionsContext value={navigationActions}>
+          <Toolbar {...baseProps} />
+        </NavigationShellActionsContext>,
+      );
+    });
+
+    expect(registerHideDock).toHaveBeenCalled();
+    expect(activeHideCount).toBeGreaterThan(0);
+
+    await act(async () => renderer.unmount());
+    expect(activeHideCount).toBe(0);
+  });
+
   function findButton(label: string) {
     const button = renderer.root
       .findAllByProps({ accessibilityLabel: label })
@@ -95,4 +126,42 @@ describe.each([
     if (!button) throw new Error(`Missing selection action: ${label}`);
     return button;
   }
+});
+
+describe('iOS SelectionToolbar inside PaneChromeProvider', () => {
+  it('keeps the floating dock hidden while mounted and releases it on unmount', async () => {
+    let activeHideCount = 0;
+    const registerHideDock = jest.fn(() => {
+      activeHideCount += 1;
+      return () => {
+        activeHideCount -= 1;
+      };
+    });
+    const navigationActions = { registerHideDock } as unknown as NavigationShellActions;
+    const props: SelectionToolbarProps = {
+      allSelected: false,
+      isPending: false,
+      onDelete: jest.fn(),
+      onToggleAll: jest.fn(),
+      selectableCount: 3,
+      selectedCount: 1,
+    };
+
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <NavigationShellActionsContext value={navigationActions}>
+          <PaneChromeProvider titleAlign="left">
+            <IOSSelectionToolbar {...props} />
+          </PaneChromeProvider>
+        </NavigationShellActionsContext>,
+      );
+    });
+
+    expect(registerHideDock).toHaveBeenCalled();
+    expect(activeHideCount).toBeGreaterThan(0);
+
+    await act(async () => renderer.unmount());
+    expect(activeHideCount).toBe(0);
+  });
 });
