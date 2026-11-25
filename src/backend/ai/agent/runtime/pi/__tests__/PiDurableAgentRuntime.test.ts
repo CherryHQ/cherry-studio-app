@@ -191,6 +191,170 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test.each(['storage', 'cancellation', 'unhandled-validation'] as const)(
+    'does not isolate %s failures during configuration restore',
+    async (source) => {
+      const state = fixture();
+      const runtime = state.create();
+      const controller = new AbortController();
+      const failure =
+        source === 'unhandled-validation'
+          ? new ZodError([])
+          : new Error(source === 'storage' ? 'Storage unavailable' : 'Host replaced');
+      jest.spyOn(runtime, 'unfinishedLanes').mockResolvedValue([lane]);
+      const configuration = jest
+        .spyOn(PiDurableRuntime.prototype, 'configuration')
+        .mockImplementation(async () => {
+          if (source === 'cancellation') controller.abort(failure);
+          else throw failure;
+          return undefined;
+        });
+      const onRecoveryFailure = jest.fn(async () => {});
+      if (source !== 'unhandled-validation') state.ports.onRecoveryFailure = onRecoveryFailure;
+      try {
+        await expect(
+          runtime.initialize(state.database, state.ports, controller.signal),
+        ).rejects.toBe(failure);
+        expect(onRecoveryFailure).not.toHaveBeenCalled();
+      } finally {
+        configuration.mockRestore();
+        await runtime.close();
+      }
+    },
+  );
+
+  test.each(['unfinished', 'idle'] as const)(
+    'isolates corrupt %s configuration while restoring and running a healthy owner',
+    async (status) => {
+      const state = fixture();
+      let runtime = state.create();
+      const healthy = runtimeLane('healthy-session');
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      await runtime.ensureConversation({ ...seed, lane: healthy });
+      await runtime.close();
+      const inspection = await PiDurableRuntime.open(state.storage, {
+        models: createModels({
+          authContext: { env: async () => undefined, fileExists: async () => false },
+        }),
+        registry: createRegistry(),
+      });
+      const configuration = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.configuration',
+        version: 1,
+        scope: 'session',
+        checkpointWhen: () => false,
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      const metadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.submission',
+        version: 1,
+        scope: 'session',
+        checkpointWhen: () => false,
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      try {
+        for (const target of [lane, healthy]) {
+          const conversation = (await inspection.conversation(target.sessionId))!;
+          const submission = input(target.sessionId);
+          await conversation.commit(async (tx) => {
+            if (target === lane) {
+              (await tx.doc(configuration, target.sessionId, {})).value = {};
+              if (status === 'idle') return;
+            }
+            await tx.doc(
+              metadata,
+              `${conversation.id}:${submission.requestId}`,
+              piSubmissionMetadata(submission, []),
+            );
+            const live = await tx.doc(LiveDoc, conversation.id);
+            const entry = await tx.appendEntry(UserEntry, conversation.id, {
+              model: [{ role: 'user', content: 'Synthetic unfinished input', timestamp: 1 }],
+            });
+            const record = await tx.createSubmission({
+              conversationId: conversation.id,
+              type: 'input',
+              status: 'placed',
+              requestId: submission.requestId,
+              entry: entry.id,
+            });
+            const taskId = await tx.createTask(
+              GenerationTask,
+              {},
+              {
+                ownership: { kind: 'conversation' },
+                conversationId: conversation.id,
+              },
+            );
+            live.run = { taskId, inputs: [record.id], turns: 0 };
+          }, BACKGROUND_CONTEXT);
+        }
+      } finally {
+        await inspection.close();
+      }
+      const failure = jest.fn(async () => {});
+      state.ports.onRecoveryFailure = failure;
+      runtime = state.create();
+      try {
+        await runtime.initialize(state.database, state.ports);
+        if (status === 'unfinished')
+          expect(failure).toHaveBeenCalledWith(lane, expect.any(ZodError));
+        expect(failure).toHaveBeenCalledTimes(status === 'unfinished' ? 1 : 0);
+        expect((await runtime.configuration(healthy)).model).toEqual(reference);
+        const completed = deferred<void>();
+        const observed = await runtime.observe(healthy, (event) => {
+          if (event.type === 'turn.updated' && event.turn.status === 'completed')
+            completed.resolve();
+        });
+        runtime.resume();
+        await completed.promise;
+        await observed.unsubscribe();
+        expect(state.requests).toHaveLength(1);
+        expect((await runtime.history(healthy, { limit: 1 })).turns[0]?.status).toBe('completed');
+        await expect(runtime.configuration(lane)).rejects.toBeInstanceOf(ZodError);
+        await expect(runtime.observe(lane, () => {})).rejects.toBeInstanceOf(ZodError);
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  test('observing an inherited answer survives retiring its parent working copy and reopening', async () => {
+    const state = fixture();
+    let runtime = state.create();
+    const child = runtimeLane('child-session');
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation(seed);
+      await submitAndWait(runtime, input('parent'));
+      const parent = (await runtime.message(lane, 'answer-parent'))!.turn;
+      await runtime.forkConversation({
+        ...seed,
+        lane: child,
+        from: { lane, boundary: parent.answerBoundary! },
+        referencedFileEntryIds: [],
+      });
+      await runtime.discardConversation(lane);
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      const observed = await runtime.observe(child, () => {});
+      await observed.unsubscribe();
+      expect((await runtime.message(child, 'answer-parent'))?.turn).toMatchObject({
+        userMessageId: 'user-parent',
+        assistantMessageId: 'answer-parent',
+        status: 'completed',
+      });
+      await runtime.configure(child, seed.configuration);
+      await submitAndWait(runtime, input('child'), 'completed', child);
+      expect(state.requests).toHaveLength(2);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('an isolated execution owner reaches no provider while another Session can answer', async () => {
     const state = fixture();
     state.ports.assertExecutionAllowed = jest.fn(async (owner) => {
