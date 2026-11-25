@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { NavDestinationId, NavTabId } from '../dockTabs';
 import { FloatingNavDock } from '../FloatingNavDock';
 import { NavIcon } from '../NavIcon';
 import type { NavDragState } from '../state';
@@ -23,8 +24,8 @@ const createMockSharedValue = <T,>(initialValue: T) => {
 };
 
 let mockShellState = {
-  activeDestination: 'more' as const,
-  activeDockTab: 'more' as const,
+  activeDestination: 'more' as NavDestinationId,
+  activeDockTab: 'more' as NavTabId,
   dragState: null as NavDragState | null,
   isAtRoot: true,
   isDockVisible: true,
@@ -198,6 +199,7 @@ describe('FloatingNavDock drag preview', () => {
       .findAllByType(View)
       .find((view) => view.props.className?.split(' ').includes('h-9'));
     expect(activeCapsule).toBeDefined();
+    expect(activeCapsule!.props.collapsable).toBe(false);
     expect(activeCapsule!.props.className.split(' ')).toEqual(
       expect.arrayContaining(['w-full', 'max-w-24', 'rounded-xl', 'bg-secondary-active']),
     );
@@ -210,6 +212,7 @@ describe('FloatingNavDock drag preview', () => {
       .findAllByType(View)
       .find((view) => view.props.className?.split(' ').includes('h-9'));
     expect(inactiveCapsule).toBeDefined();
+    expect(inactiveCapsule!.props.collapsable).toBe(false);
     expect(inactiveCapsule!.props.className.split(' ')).toContain('rounded-xl');
     expect(inactiveCapsule!.props.className).not.toMatch(/bg-secondary/);
 
@@ -217,6 +220,7 @@ describe('FloatingNavDock drag preview', () => {
     const previewCapsule = preview
       .findAllByType(View)
       .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(previewCapsule?.props.collapsable).toBe(false);
     expect(previewCapsule?.props.className.split(' ')).toEqual(
       expect.arrayContaining([
         'rounded-xl',
@@ -224,6 +228,57 @@ describe('FloatingNavDock drag preview', () => {
         'border-border-selected',
         'border-dashed',
       ]),
+    );
+  });
+
+  test('keeps active background capsules uncollapsed when switching tabs', () => {
+    mockShellState.activeDestination = 'chat';
+    mockShellState.activeDockTab = 'chat';
+
+    act(() => {
+      renderer = create(<FloatingNavDock />);
+    });
+
+    const getCapsule = (tabId: NavTabId) =>
+      renderer!.root
+        .findByProps({ testID: `floating-nav-tab-${tabId}` })
+        .findAllByType(View)
+        .find((view) => view.props.className?.split(' ').includes('h-9'));
+
+    const initialMoreCapsule = getCapsule('more');
+    expect(initialMoreCapsule).toBeDefined();
+    expect(initialMoreCapsule!.props.collapsable).toBe(false);
+    expect(initialMoreCapsule!.props.className.split(' ')).toContain('rounded-xl');
+    expect(initialMoreCapsule!.props.className).not.toMatch(/bg-secondary/);
+
+    mockShellState.activeDestination = 'more';
+    mockShellState.activeDockTab = 'more';
+    act(() => {
+      renderer!.update(<FloatingNavDock />);
+    });
+
+    const selectedMoreCapsule = getCapsule('more');
+    expect(selectedMoreCapsule).toBeDefined();
+    expect(selectedMoreCapsule!.props.collapsable).toBe(false);
+    expect(selectedMoreCapsule!.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['rounded-xl', 'bg-secondary-active']),
+    );
+
+    const unselectedChatCapsule = getCapsule('chat');
+    expect(unselectedChatCapsule).toBeDefined();
+    expect(unselectedChatCapsule!.props.collapsable).toBe(false);
+
+    mockShellState.activeDestination = 'chat';
+    mockShellState.activeDockTab = 'chat';
+    act(() => {
+      renderer!.update(<FloatingNavDock />);
+    });
+
+    const reselectedChatCapsule = getCapsule('chat');
+    expect(reselectedChatCapsule).toBeDefined();
+    expect(reselectedChatCapsule!.props.collapsable).toBe(false);
+    expect(reselectedChatCapsule!.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['rounded-xl', 'bg-secondary-active']),
     );
   });
 
