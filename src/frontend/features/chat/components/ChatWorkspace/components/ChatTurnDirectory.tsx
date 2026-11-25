@@ -9,7 +9,6 @@ import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reani
 
 import type { HistoryPosition } from '@/frontend/appShell/conversation/remote';
 import { useFocusedBackPress } from '@/frontend/appShell/navigation';
-import { useSidebarChromeStyle } from '@/frontend/appShell/sidebar/motion';
 import type { MessageListHandle } from '@/frontend/components/Message';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 
@@ -122,7 +121,6 @@ export function ChatTurnDirectory({
   const panelRightInset =
     containerWidth >= 832 ? Math.max(16, Math.floor((containerWidth - 720) / 2)) : 16;
   const rightInset = isOpen ? panelRightInset : triggerRightInset;
-  const chromeStyle = useSidebarChromeStyle();
   const position = useAnimatedStyle(() => ({
     right: rightInset,
     top: contentTopInset + 12,
@@ -163,7 +161,7 @@ export function ChatTurnDirectory({
       <Animated.View
         className="absolute left-4 flex-row-reverse items-center"
         pointerEvents="box-none"
-        style={[position, chromeStyle]}
+        style={position}
       >
         {isOpen ? (
           <ChatTurnDirectoryPanel navigator={navigator} onClose={close} onSelect={select} />

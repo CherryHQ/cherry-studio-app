@@ -109,6 +109,7 @@ it('hands an in-flight first page to the selected binding without activating a s
   prewarmAgent.mockResolvedValue({
     scope: 'binding',
     signal: signal(),
+    release: jest.fn(),
     ready: async () => ({ request }),
   });
   const warming = runtime.prewarm('pc', 'agents', signal());
@@ -127,18 +128,59 @@ it('hands an in-flight first page to the selected binding without activating a s
 });
 
 it('warms the transport alone for the sessions view', async () => {
-  const ready = jest.fn();
-  prewarmAgent.mockResolvedValue({ scope: 'binding', signal: signal(), ready });
+  const request = jest.fn();
+  const ready = jest.fn(async () => ({ request }));
+  prewarmAgent.mockResolvedValue({ scope: 'binding', signal: signal(), release: jest.fn(), ready });
   await runtime.prewarm('pc', 'sessions', signal());
   expect(prewarmAgent).toHaveBeenCalledTimes(1);
-  expect(ready).not.toHaveBeenCalled();
+  expect(ready).toHaveBeenCalledTimes(1);
+  expect(request).not.toHaveBeenCalled();
   expect(mockScopes).toHaveLength(0);
+});
+
+it.each(['agents', 'sessions'] as const)(
+  'releases the speculative lease immediately in %s view when the desktop is offline',
+  async (view) => {
+    const release = jest.fn();
+    prewarmAgent.mockResolvedValue({
+      scope: 'binding',
+      signal: signal(),
+      release,
+      ready: async () => {
+        throw new Error('offline');
+      },
+    });
+    await expect(runtime.prewarm('pc', view, signal())).rejects.toThrow('offline');
+    expect(release).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('does not send a speculative agent list request if selection starts while prewarm is acquiring', async () => {
+  const pendingLease = deferred<DesktopDomainLease>();
+  prewarmAgent.mockReturnValue(pendingLease.promise);
+  const dial = deferred<DesktopDomainLease>();
+  retain.mockReturnValue(dial.promise);
+  const request = jest.fn();
+  const warming = runtime.prewarm('pc', 'agents', signal());
+  const opening = runtime.open('pc', signal());
+  pendingLease.resolve({
+    scope: 'binding',
+    signal: signal(),
+    release: jest.fn(),
+    ready: async () => ({ request }),
+  } as unknown as DesktopDomainLease);
+  await warming;
+  expect(request).not.toHaveBeenCalled();
+  dial.resolve(lease);
+  const source = await opening;
+  source.dispose();
 });
 
 it('ignores a prepared catalog after the desktop binding changes', async () => {
   prewarmAgent.mockResolvedValue({
     scope: 'old-binding',
     signal: signal(),
+    release: jest.fn(),
     ready: async () => ({
       request: async () => ({ items: [{ agentId: 'retired', name: 'Old' }] }),
     }),

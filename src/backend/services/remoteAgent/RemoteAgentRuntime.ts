@@ -9,6 +9,7 @@ import {
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections } from '@/backend/services/desktopConnections';
 import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import { raceAbort } from '@/backend/utils/raceAbort';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
@@ -61,13 +62,36 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
   private async prepareCatalog(id: string, view: 'agents' | 'sessions', signal: AbortSignal) {
     const connections = this.dependencies?.connections;
     if (!connections || this.sources.has(id) || this.opening.has(id)) return;
-    const lease = await connections.prewarmAgent(
-      id,
-      AbortSignal.any([signal, this.lifetime.signal]),
-    );
+    const linked = linkAbortSignals([signal, this.lifetime.signal]);
+    let lease: Awaited<ReturnType<typeof connections.prewarmAgent>>;
+    try {
+      lease = await connections.prewarmAgent(id, linked.signal);
+    } catch (error) {
+      linked.dispose();
+      throw error;
+    }
+    if (!lease) {
+      linked.dispose();
+      return;
+    }
+    if (lease.signal.aborted) linked.dispose();
+    else lease.signal.addEventListener('abort', linked.dispose, { once: true });
+    if (this.sources.has(id)) {
+      lease.release();
+      return;
+    }
+    if (this.opening.has(id) || lease.signal.aborted) return;
     // Ordinary session lists can traverse all scheduled-task memberships. Leave that work to a
     // real selection; preparing the authenticated channel still benefits either view.
-    if (!lease || view !== 'agents' || lease.signal.aborted) return;
+    if (view !== 'agents') {
+      try {
+        await lease.ready(lease.signal);
+      } catch (error) {
+        lease.release();
+        throw error;
+      }
+      return;
+    }
     const page = lease.ready(lease.signal).then(async (session) => {
       const result = await session.request('agent.agents.list', {}, lease.signal);
       lease.signal.throwIfAborted();
@@ -89,6 +113,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       ) {
         await connections.revoke(id, 'agent', lease.grantId);
       }
+      lease.release();
       throw error;
     }
   }

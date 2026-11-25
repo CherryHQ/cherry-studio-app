@@ -52,7 +52,10 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useSidebarPresence } from '../hooks/useSidebarPresence';
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
-import { useSidebarBranchLayoutRefresh } from './SidebarBranchScrollView';
+import {
+  useSidebarBranchLayoutRefresh,
+  useSidebarBranchTransition,
+} from './SidebarBranchScrollView';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
 import {
   SidebarSessionBranchFrame,
@@ -114,6 +117,7 @@ export function SidebarConversationList({
     <>
       <ConversationStatus
         availability={availability}
+        className="px-5"
         onRepair={() => router.push('/settings/device-connections')}
         onOpenDeviceSettings={
           connectionId
@@ -224,13 +228,13 @@ function SidebarAgentGroup({
   showLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const refreshBranchLayout = useSidebarBranchLayoutRefresh();
+  const setBranchTransition = useSidebarBranchTransition();
   const [expanded, setExpanded] = useState(false);
   const status = useConversationAgentStatus(agent.ref, !expanded);
   const toggle = () => setExpanded((value) => !value);
   const disclosure = <DisclosureChevron expanded={expanded} />;
   return (
-    <View onLayout={refreshBranchLayout} testID={`sidebar-agent-group-${agent.id}`}>
+    <View testID={`sidebar-agent-group-${agent.id}`}>
       <View className="px-2">
         {onSelect ? (
           <View className="flex-row items-center">
@@ -296,7 +300,7 @@ function SidebarAgentGroup({
         )}
       </View>
       <AgentGroupExpanded value={expanded}>
-        <DisclosureContent>
+        <DisclosureContent onAnimatingChange={setBranchTransition}>
           {expanded ? (
             <SidebarSessions
               agentRef={agent.ref}
@@ -420,6 +424,9 @@ function SidebarSessionList({
   );
   const [showAll, setShowAll] = useState(false);
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
+  const [wasLoading, setWasLoading] = useState(false);
+  if (query.isLoading && !wasLoading) setWasLoading(true);
+  else if (!query.isPending && wasLoading) setWasLoading(false);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
   const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
   const root = activePath[0];
@@ -442,7 +449,7 @@ function SidebarSessionList({
     return () => registerEndReachedHandler?.();
   }, [loadMore, registerEndReachedHandler, showAll]);
   if (query.isPending)
-    return showLoading && query.isLoading ? (
+    return showLoading && (query.isLoading || (!groupExpanded && wasLoading)) ? (
       <View className="py-4">
         <ContentState.Loading title={t('session.list.loading')} />
       </View>
@@ -465,7 +472,9 @@ function SidebarSessionList({
   return (
     <View className="px-2" onLayout={refreshBranchLayout}>
       {!agentRef && !onSelect && query.isCachedCatalog && shownSessions.length > 0 ? (
-        <Text className="px-3 text-muted-foreground text-sm">{t('remoteAgent.cachedCatalog')}</Text>
+        <Text className="px-3 pb-2 text-muted-foreground text-sm">
+          {t('remoteAgent.cachedCatalog')}
+        </Text>
       ) : null}
       {onSelect ? null : (
         <SidebarSessionSelectionRegistration

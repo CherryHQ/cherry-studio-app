@@ -20,7 +20,7 @@ exported from `@/frontend/appShell/sidebar/toggle` so headers do not load the si
 for the overlay, `hide` or `show` for a wide column, and nothing while the file pane or a fold holds
 it. Wide windows keep the drawer in permanent mode. A hidden sidebar stays mounted outside the
 layout row, so opening or closing Files exchanges the left column in one layout change. Swiping
-opens the front overlay in compact windows. Messages and the native chat header stay in place. The composer, turn-directory control and compact navigation dock fade with the first 55% of drawer travel. Navigation state reports a permanent drawer as closed, so visibility comes from
+opens the front overlay in compact windows over the stationary content and scrim. Navigation state reports a permanent drawer as closed, so visibility comes from
 `useSidebarPresence`: `persistent`, `open`, or `closed`. Selection mode, the title marquee, and read
 receipts use it instead of the raw drawer status.
 
@@ -171,7 +171,7 @@ above the list. Pending queries do not render empty rows, and cached lists remai
 visible if a background refresh fails. Device discovery must finish before showing the unpaired
 empty state.
 
-A visible sidebar briefly prepares the most recently selected eligible desktop, or the only eligible
+Opening the compact sidebar briefly prepares the most recently selected eligible desktop, or the only eligible
 paired desktop. The eight-second foreground lease shares the normal connection manager and cannot
 create an Android notification or override a manual disconnect. Agent mode can prepare one metadata
 page for that authorization binding. Session mode prepares only the channel because proving task
