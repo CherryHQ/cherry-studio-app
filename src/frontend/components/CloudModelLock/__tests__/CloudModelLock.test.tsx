@@ -169,7 +169,7 @@ describe('CloudModelLock', () => {
 
     const tag = renderer!.root.findByProps({ testID: 'cloud-model-lock-tag' });
     expect(tag.props.className).toContain('bg-tag-amber');
-    expect(tag.props.className).toContain('rounded-full');
+    expect(tag.props.className).toContain('rounded-xl');
     expect(tag.props.accessibilityElementsHidden).toBe(true);
     expect(tag.props.importantForAccessibility).toBe('no-hide-descendants');
 
@@ -178,7 +178,7 @@ describe('CloudModelLock', () => {
 
     const text = tag.findByType(Text);
     expect(text.props.children).toBe('AMD 授权');
-    expect(text.props.numberOfLines).toBe(1);
+    expect(text.props.numberOfLines).toBeUndefined();
     expect(text.props.className).toContain('text-tag-amber-foreground');
   });
 

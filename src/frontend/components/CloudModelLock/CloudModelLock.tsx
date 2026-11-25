@@ -57,15 +57,13 @@ export function CloudModelLock({ label }: { label?: string }) {
   return (
     <View
       accessibilityElementsHidden
-      className="max-w-[45%] shrink-0 flex-row items-center justify-center gap-1 rounded-full bg-tag-amber px-2 py-0.5"
+      className="max-w-[45%] shrink-0 flex-row items-center justify-center gap-1 rounded-xl bg-tag-amber px-2 py-0.5"
       importantForAccessibility="no-hide-descendants"
       style={styles.tag}
       testID="cloud-model-lock-tag"
     >
       <LockIcon className="size-3 shrink-0 text-tag-amber-foreground" />
-      <Text className="shrink font-medium text-xs text-tag-amber-foreground" numberOfLines={1}>
-        {label}
-      </Text>
+      <Text className="shrink font-medium text-xs text-tag-amber-foreground">{label}</Text>
     </View>
   );
 }

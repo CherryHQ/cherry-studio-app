@@ -10,7 +10,11 @@ import { CLOUD_PROVIDER_NAME, type CloudModelUse } from '@/shared/contracts/clou
 import { getCloudModelOffers, getCloudModelTapNotice } from './cloudModelOffers';
 import { useCloudModelActivation } from './useCloudModelActivation';
 
-export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
+export function useCloudModelBrowser(
+  enabled: boolean,
+  use?: CloudModelUse,
+  { autoRefresh = true }: { autoRefresh?: boolean } = {},
+) {
   const { cloud, state } = useCloud();
   const { account, state: accountState } = useAccount();
   const { t } = useTranslation();
@@ -22,8 +26,8 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
     if (canBrowse) void cloud.refreshProvider().catch(() => {});
   }, [canBrowse, cloud]);
   useEffect(() => {
-    if (canBrowse) void cloud.refresh().catch(() => {});
-  }, [canBrowse, cloud]);
+    if (autoRefresh && canBrowse) void cloud.refresh().catch(() => {});
+  }, [autoRefresh, canBrowse, cloud]);
   const offers = useMemo(() => getCloudModelOffers(state, use), [state, use]);
   const hasLockedAmdOffer = useMemo(
     () =>
@@ -33,10 +37,10 @@ export function useCloudModelBrowser(enabled: boolean, use?: CloudModelUse) {
     [offers],
   );
   useEffect(() => {
-    if (canBrowse && state.phase === 'ready' && hasLockedAmdOffer) {
+    if (autoRefresh && canBrowse && state.phase === 'ready' && hasLockedAmdOffer) {
       void cloud.refreshAmd().catch(() => {});
     }
-  }, [canBrowse, cloud, hasLockedAmdOffer, state.phase]);
+  }, [autoRefresh, canBrowse, cloud, hasLockedAmdOffer, state.phase]);
 
   const signInAgain = useCallback(
     (destination: string) => {

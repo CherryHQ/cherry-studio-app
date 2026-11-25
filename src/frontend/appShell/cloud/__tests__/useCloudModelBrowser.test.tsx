@@ -1,3 +1,4 @@
+import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { CloudModel, CloudModule, CloudState } from '@/shared/contracts/cloud';
@@ -88,9 +89,9 @@ const readyAccountState: CloudState = {
   models: [lockedAmdModel],
 };
 
-function Probe({ enabled }: { enabled: boolean }) {
-  useCloudModelBrowser(enabled, 'agent');
-  return null;
+function Probe({ autoRefresh, enabled }: { autoRefresh?: boolean; enabled: boolean }) {
+  const { refresh } = useCloudModelBrowser(enabled, 'agent', { autoRefresh });
+  return <Pressable onPress={refresh} testID="manual-refresh" />;
 }
 
 describe('useCloudModelBrowser', () => {
@@ -115,6 +116,24 @@ describe('useCloudModelBrowser', () => {
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
     expect(mockRefreshAmd).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips mount refreshes when autoRefresh is disabled while preserving manual refresh', () => {
+    mockCloudState = readyAccountState;
+
+    act(() => {
+      renderer = create(<Probe autoRefresh={false} enabled />);
+    });
+
+    expect(mockRefresh).not.toHaveBeenCalled();
+    expect(mockRefreshAmd).not.toHaveBeenCalled();
+    expect(mockRefreshProvider).not.toHaveBeenCalled();
+
+    act(() => {
+      renderer!.root.findByProps({ testID: 'manual-refresh' }).props.onPress();
+    });
+
+    expect(mockRefreshProvider).toHaveBeenCalledTimes(1);
   });
 
   it('does not refresh AMD status while signed out', () => {
