@@ -302,20 +302,18 @@ function PaintingInputControls({
           values={input.paramValues}
         />
       ) : null}
-      {isModelPickerOpen ? (
-        <ModelPickerDrawer
-          modelType={modelSelection ? 'all' : 'image'}
-          open
-          onAddProvider={() => {
-            setIsModelPickerOpen(false);
-            openProviderSetup();
-          }}
-          onClose={closeModelPicker}
-          onSelect={handleModelSelect}
-          selectedModelId={selectedModelId}
-          title={modelSelection ? undefined : t('settings.model.painting.title')}
-        />
-      ) : null}
+      <ModelPickerDrawer
+        modelType={modelSelection ? 'all' : 'image'}
+        open={isModelPickerOpen}
+        onAddProvider={() => {
+          setIsModelPickerOpen(false);
+          openProviderSetup();
+        }}
+        onClose={closeModelPicker}
+        onSelect={handleModelSelect}
+        selectedModelId={selectedModelId}
+        title={modelSelection ? undefined : t('settings.model.painting.title')}
+      />
     </>
   );
 }

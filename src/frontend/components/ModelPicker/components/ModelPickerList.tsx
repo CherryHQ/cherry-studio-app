@@ -34,6 +34,7 @@ const modelPickerEstimatedItemSize = 60;
 type ModelPickerDensity = 'default' | 'compact';
 
 type ModelPickerListProps = {
+  bottomInset?: number;
   cherryAiEntry?: ReactNode;
   disabled?: boolean;
   /** The containing surface can own the gutter when embedding the list. */
@@ -70,6 +71,7 @@ type ModelPickerListExtraData = {
 
 /** Provider-grouped model rows shared by the picker sheet and inline setup. */
 export function ModelPickerList({
+  bottomInset = 0,
   cherryAiEntry,
   disabled = false,
   contentInset = 'default',
@@ -263,6 +265,10 @@ export function ModelPickerList({
     },
     [fastScrollAnchors],
   );
+  const listContentContainerStyle = useMemo(
+    () => ({ paddingBottom: 24 + bottomInset }),
+    [bottomInset],
+  );
   const emptyButton =
     !isLoading && emptyAction ? (
       <Button
@@ -302,7 +308,7 @@ export function ModelPickerList({
       <BlurTargetView ref={blurTarget} style={styles.list}>
         <LegendList
           ref={listRef}
-          contentContainerStyle={styles.listContentContainer}
+          contentContainerStyle={listContentContainerStyle}
           data={listItems}
           drawDistance={320}
           estimatedItemSize={density === 'compact' ? 44 : modelPickerEstimatedItemSize}
@@ -332,6 +338,7 @@ export function ModelPickerList({
           activeIndex={activeAnchorIndex}
           anchors={fastScrollAnchors}
           blurTarget={blurTarget}
+          bottomInset={bottomInset}
           onNavigate={handleFastScrollNavigate}
         />
       ) : null}
@@ -476,8 +483,5 @@ const modelPickerBadgeLabelKeys = {
 const styles = StyleSheet.create({
   list: {
     flex: 1,
-  },
-  listContentContainer: {
-    paddingBottom: 24,
   },
 });

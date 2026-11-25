@@ -161,16 +161,14 @@ export function ProviderConnectionTestSection({
           title={t('settings.provider.config.testKey')}
         />
       ) : null}
-      {isModelPickerOpen ? (
-        <ModelPickerDrawer
-          modelType="text"
-          onClose={() => setIsModelPickerOpen(false)}
-          onSelect={handleModelSelect}
-          open
-          providerId={providerId}
-          selectedModelId={selectedModel.id}
-        />
-      ) : null}
+      <ModelPickerDrawer
+        modelType="text"
+        onClose={() => setIsModelPickerOpen(false)}
+        onSelect={handleModelSelect}
+        open={isModelPickerOpen}
+        providerId={providerId}
+        selectedModelId={selectedModel.id}
+      />
     </>
   );
 }

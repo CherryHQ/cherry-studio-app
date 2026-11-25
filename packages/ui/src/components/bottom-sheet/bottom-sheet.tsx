@@ -56,6 +56,7 @@ const MAX_CARD_WIDTH = 720;
 const TOP_CORNER_RADIUS = 32;
 const KEYBOARD_GAP = 12;
 const OVERLAY_HANDLE_HEIGHT = 32;
+const RESIZABLE_HANDLE_HEIGHT = 44;
 const HEIGHT_RATIOS = {
   compact: 0.4,
   full: 1,
@@ -105,6 +106,11 @@ type BottomSheetBaseProps = {
   /** Keep content above the keyboard; resizable sheets retain their selected height. */
   avoidKeyboard?: boolean;
   backAction?: BottomSheetBackAction;
+  /**
+   * Controls whether the body wrapper adds bottom safe-area padding when no footer is rendered.
+   * Pass `'none'` when a scrollable child applies bottom safe-area padding to its own scroll content.
+   */
+  bodyInset?: 'safe-area' | 'none';
   children: ReactNode;
   closeAction?: { accessibilityLabel: string };
   dismissible?: boolean;
@@ -170,6 +176,7 @@ export function BottomSheet(props: BottomSheetProps) {
     active = true,
     avoidKeyboard = false,
     backAction,
+    bodyInset = 'safe-area',
     children,
     closeAction,
     dismissible = true,
@@ -221,7 +228,7 @@ export function BottomSheet(props: BottomSheetProps) {
         (isOverlay ? OVERLAY_HANDLE_HEIGHT : hasHeader ? headerHeight + 16 : 22) +
         (footer ? footerHeight : insets.bottom)
       : height;
-  const { cardHeight, minimumCardHeight, detents, openIndex, sizeByIndex } = useMemo(
+  const { cardHeight, minimumCardHeight, detents, heightByIndex, openIndex, sizeByIndex } = useMemo(
     () =>
       resolveSheetHeights(
         availableCardHeight,
@@ -246,14 +253,6 @@ export function BottomSheet(props: BottomSheetProps) {
   const isResizable = detents.length > 2;
   // Resizable sheets keep their snap points; keyboard space only shrinks the body.
   const followsKeyboardContentHeight = avoidKeyboard && !isResizable;
-  const position = useSharedValue(0);
-  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
-    (event) => {
-      'worklet';
-      position.set(event.position);
-    },
-    ['onPositionChange'],
-  );
   const childPresentation = useMemo(
     () => (isOverlay ? { height: cardHeight, registerChild, returnFocusRef: headingRef } : null),
     [cardHeight, isOverlay, registerChild],
@@ -262,24 +261,53 @@ export function BottomSheet(props: BottomSheetProps) {
   // A handle promises a drag; a sheet that can neither close nor resize offers none.
   const isDraggable = dismissible || isResizable;
   const bottomInset = hasFooter ? Math.max(insets.bottom, 16) : insets.bottom;
+  const spacerBottomInset = hasFooter
+    ? Math.max(insets.bottom, 16)
+    : bodyInset === 'none'
+      ? KEYBOARD_GAP
+      : insets.bottom;
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const resolvedTitleAlign = titleAlign ?? (isCloseActionVisible ? 'center' : 'start');
   const hasBalancedHeader =
     isCloseActionVisible || Boolean(backAction && resolvedTitleAlign === 'center');
   const [index, setIndex] = useState(open ? openIndex : CLOSED_INDEX);
+  const [layoutIndex, setLayoutIndex] = useState(openIndex);
   const [previousOpen, setPreviousOpen] = useState(open);
   const [previousOpenIndex, setPreviousOpenIndex] = useState(openIndex);
   const hasNotifiedCloseRef = useRef(false);
 
-  if (open !== previousOpen || openIndex !== previousOpenIndex) {
+  if (open !== previousOpen) {
     setPreviousOpen(open);
     setPreviousOpenIndex(openIndex);
     setIndex(open ? openIndex : CLOSED_INDEX);
     if (open) {
+      setLayoutIndex(openIndex);
       setIsPresented(true);
       setHasOpened(true);
     }
+  } else if (openIndex !== previousOpenIndex) {
+    setPreviousOpenIndex(openIndex);
+    if (open && index !== CLOSED_INDEX) {
+      setIndex(openIndex);
+      if (openIndex > layoutIndex) {
+        setLayoutIndex(openIndex);
+      }
+    }
   }
+
+  const effectiveLayoutIndex = Math.min(
+    layoutIndex,
+    Math.max(OPEN_INDEX, heightByIndex.length - 1),
+  );
+  const layoutHeight = heightByIndex[effectiveLayoutIndex] ?? cardHeight;
+  const position = useSharedValue(open ? layoutHeight : 0);
+  const handlePositionChange = useEvent<NativeSyntheticEvent<PositionChangeEventData>>(
+    (event) => {
+      'worklet';
+      position.set(event.position);
+    },
+    ['onPositionChange'],
+  );
 
   const registerWithParent = parent?.registerChild;
   useEffect(() => {
@@ -344,9 +372,12 @@ export function BottomSheet(props: BottomSheetProps) {
   const handleIndexChange = useCallback(
     (nextIndex: number) => {
       setIndex(nextIndex);
+      if (avoidKeyboard && nextIndex < index) {
+        Keyboard.dismiss();
+      }
       if (nextIndex > CLOSED_INDEX) {
-        if (avoidKeyboard && nextIndex < index) {
-          Keyboard.dismiss();
+        if (nextIndex > layoutIndex) {
+          setLayoutIndex(nextIndex);
         }
         const nextSize = sizeByIndex[nextIndex];
         if (nextSize) {
@@ -354,11 +385,14 @@ export function BottomSheet(props: BottomSheetProps) {
         }
       }
     },
-    [avoidKeyboard, index, onSizeChange, sizeByIndex],
+    [avoidKeyboard, index, layoutIndex, onSizeChange, sizeByIndex],
   );
   const handleSettle = useCallback(
     (nextIndex: number) => {
       if (nextIndex !== CLOSED_INDEX) {
+        if (nextIndex === index && nextIndex !== layoutIndex) {
+          setLayoutIndex(nextIndex);
+        }
         if (isOverlay && active && childCount === 0)
           focusMenuTarget(initialFocusRef?.current ?? headingRef.current);
         return;
@@ -386,9 +420,11 @@ export function BottomSheet(props: BottomSheetProps) {
       active,
       childCount,
       dismissible,
+      index,
       initialFocusRef,
       isOverlay,
       isPresented,
+      layoutIndex,
       onClose,
       onClosed,
       open,
@@ -400,6 +436,123 @@ export function BottomSheet(props: BottomSheetProps) {
   // Allocate a child portal after its parent first opens, then retain its scroll state on blur.
   if (isOverlay && !hasOpened) return null;
 
+  const hasResizableHandleZone = isResizable && (isOverlay || !hasHeader);
+
+  const handleAndBody = (
+    <>
+      <View
+        accessibilityElementsHidden={!isOverlay}
+        accessibilityLabel={isOverlay ? title : undefined}
+        accessibilityRole={isOverlay ? 'header' : undefined}
+        accessible={isOverlay}
+        className={
+          hasResizableHandleZone
+            ? 'h-11 items-center justify-center'
+            : cn('items-center pt-3', isOverlay ? 'h-8' : !hasHeader && 'pb-1.5')
+        }
+        pointerEvents="none"
+        ref={headingRef}
+        style={hasResizableHandleZone ? { height: RESIZABLE_HANDLE_HEIGHT } : undefined}
+      >
+        <View
+          className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
+          testID={isDraggable ? 'bottom-sheet-handle' : undefined}
+        />
+      </View>
+      {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
+      {!isOverlay && hasHeader ? (
+        <View
+          className="min-h-14 flex-row items-start px-5 py-1.5"
+          onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
+        >
+          {backAction ? (
+            <View className={hasBalancedHeader ? 'min-w-11 flex-1 items-start' : undefined}>
+              <Pressable
+                accessibilityLabel={backAction.accessibilityLabel}
+                accessibilityRole="button"
+                className={cn(
+                  'size-11 items-center justify-center rounded-full active:bg-secondary',
+                  !hasBalancedHeader && '-ml-2 mr-2',
+                )}
+                hitSlop={4}
+                onPress={backAction.onPress}
+              >
+                <ArrowLeftIcon className="size-6 text-foreground" />
+              </Pressable>
+            </View>
+          ) : closeAction ? (
+            <View className="min-w-11 flex-1 items-start">
+              <Pressable
+                accessibilityLabel={closeAction.accessibilityLabel}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !dismissible }}
+                className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
+                disabled={!dismissible}
+                onPress={requestClose}
+              >
+                <XIcon className="size-6 text-foreground" />
+              </Pressable>
+            </View>
+          ) : null}
+          <Text
+            accessibilityRole="header"
+            className={cn(
+              'min-w-0 font-semibold text-foreground',
+              // Both variants fill the 44-point first line that the header controls centre on.
+              titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
+              hasBalancedHeader ? 'shrink px-2' : 'flex-1',
+              resolvedTitleAlign === 'center' && 'text-center',
+            )}
+            numberOfLines={titleVariant === 'prompt' ? undefined : 2}
+          >
+            {title}
+          </Text>
+          {hasBalancedHeader ? (
+            <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
+              {headerAction}
+            </View>
+          ) : headerAction ? (
+            <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
+          ) : null}
+        </View>
+      ) : null}
+      <View
+        className="min-h-0 flex-1"
+        style={
+          isResizable && hasFooter
+            ? { paddingBottom: footerHeight }
+            : hasFooter || bodyInset === 'none'
+              ? undefined
+              : { paddingBottom: insets.bottom }
+        }
+      >
+        <SheetPresentationContext value={childPresentation}>
+          {size === 'content' ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={(_, nextHeight) => setContentHeight(nextHeight)}
+              showsVerticalScrollIndicator={false}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            children
+          )}
+        </SheetPresentationContext>
+      </View>
+      {hasFooter && !isResizable ? (
+        <View
+          className="border-t border-border px-4 pt-3"
+          onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+          style={{ paddingBottom: bottomInset }}
+        >
+          {footer}
+        </View>
+      ) : null}
+      {avoidKeyboard ? <KeyboardSpacer bottomInset={spacerBottomInset} /> : null}
+    </>
+  );
+
   return (
     <ModalBottomSheet
       // UIKit menus need the presenting controller retained by the provider's view hierarchy.
@@ -407,9 +560,10 @@ export function BottomSheet(props: BottomSheetProps) {
       // Single-height keyboard avoidance animates the content height itself.
       animateContentHeight={!followsKeyboardContentHeight}
       detents={followsKeyboardContentHeight ? [detents[CLOSED_INDEX], 'content'] : detents}
+      disableScrollableNegotiation={isResizable}
       index={index}
       onIndexChange={handleIndexChange}
-      onPositionChange={isResizable ? handlePositionChange : undefined}
+      onPositionChange={isResizable && hasFooter ? handlePositionChange : undefined}
       onSettle={handleSettle}
       scrimColor={scrimColor}
       wrapNativeView={createAnimatedComponent}
@@ -417,10 +571,8 @@ export function BottomSheet(props: BottomSheetProps) {
       <SheetLayout
         availableCardHeight={availableCardHeight}
         avoidKeyboard={followsKeyboardContentHeight}
-        bottomInset={bottomInset}
+        bottomInset={spacerBottomInset}
         cardHeight={cardHeight}
-        minimumCardHeight={minimumCardHeight}
-        position={position}
         style={[
           styles.layout,
           { width: '100%', paddingLeft: effectiveLeft, paddingRight: effectiveRight },
@@ -439,7 +591,7 @@ export function BottomSheet(props: BottomSheetProps) {
         <View
           accessibilityElementsHidden={!open || !active || childCount > 0}
           accessibilityViewIsModal
-          className="overflow-hidden border-continuous bg-background dark:border dark:border-border dark:bg-popover"
+          className="overflow-hidden border-continuous bg-background dark:border-x dark:border-t dark:border-border dark:bg-popover"
           importantForAccessibility={
             open && active && childCount === 0 ? 'yes' : 'no-hide-descendants'
           }
@@ -451,112 +603,29 @@ export function BottomSheet(props: BottomSheetProps) {
           pointerEvents={!active || childCount > 0 ? 'none' : 'auto'}
           style={[
             styles.card,
-            followsKeyboardContentHeight || isResizable
+            followsKeyboardContentHeight
               ? { flex: 1, width: cardWidth }
               : { height: cardHeight, width: cardWidth },
           ]}
           testID={testID}
         >
           <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
-          <View
-            accessibilityElementsHidden={!isOverlay}
-            accessibilityLabel={isOverlay ? title : undefined}
-            accessibilityRole={isOverlay ? 'header' : undefined}
-            accessible={isOverlay}
-            className={cn('items-center pt-3', isOverlay ? 'h-8' : !hasHeader && 'pb-1.5')}
-            pointerEvents="none"
-            ref={headingRef}
-          >
-            <View
-              className={cn('h-1 w-9 rounded-full', isDraggable && 'bg-border-strong')}
-              testID={isDraggable ? 'bottom-sheet-handle' : undefined}
-            />
-          </View>
-          {/* Controls centre on the title's first line, so a wrapped title grows downward. */}
-          {!isOverlay && hasHeader ? (
-            <View
-              className="min-h-14 flex-row items-start px-5 py-1.5"
-              onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
-            >
-              {backAction ? (
-                <View className={hasBalancedHeader ? 'min-w-11 flex-1 items-start' : undefined}>
-                  <Pressable
-                    accessibilityLabel={backAction.accessibilityLabel}
-                    accessibilityRole="button"
-                    className={cn(
-                      'size-11 items-center justify-center rounded-full active:bg-secondary',
-                      !hasBalancedHeader && '-ml-2 mr-2',
-                    )}
-                    hitSlop={4}
-                    onPress={backAction.onPress}
-                  >
-                    <ArrowLeftIcon className="size-6 text-foreground" />
-                  </Pressable>
-                </View>
-              ) : closeAction ? (
-                <View className="min-w-11 flex-1 items-start">
-                  <Pressable
-                    accessibilityLabel={closeAction.accessibilityLabel}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: !dismissible }}
-                    className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
-                    disabled={!dismissible}
-                    onPress={requestClose}
-                  >
-                    <XIcon className="size-6 text-foreground" />
-                  </Pressable>
-                </View>
-              ) : null}
-              <Text
-                accessibilityRole="header"
-                className={cn(
-                  'min-w-0 font-semibold text-foreground',
-                  // Both variants fill the 44-point first line that the header controls centre on.
-                  titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                  hasBalancedHeader ? 'shrink px-2' : 'flex-1',
-                  resolvedTitleAlign === 'center' && 'text-center',
-                )}
-                numberOfLines={titleVariant === 'prompt' ? undefined : 2}
-              >
-                {title}
-              </Text>
-              {hasBalancedHeader ? (
-                <View className="min-h-11 min-w-11 flex-1 items-end justify-center">
-                  {headerAction}
-                </View>
-              ) : headerAction ? (
-                <View className="ml-2 min-h-11 justify-center">{headerAction}</View>
-              ) : null}
-            </View>
-          ) : null}
-          <View
-            className="min-h-0 flex-1"
-            style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
-          >
-            <SheetPresentationContext value={childPresentation}>
-              {size === 'content' ? (
-                <ScrollView
-                  keyboardShouldPersistTaps="handled"
-                  onContentSizeChange={(_, nextHeight) => setContentHeight(nextHeight)}
-                  showsVerticalScrollIndicator={false}
-                >
-                  {children}
-                </ScrollView>
-              ) : (
-                children
-              )}
-            </SheetPresentationContext>
-          </View>
-          {hasFooter ? (
-            <View
-              className="border-t border-border px-4 pt-3"
-              onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
-              style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+          {isResizable ? (
+            <View style={{ height: layoutHeight }}>{handleAndBody}</View>
+          ) : (
+            handleAndBody
+          )}
+          {hasFooter && isResizable ? (
+            <ResizableSheetFooter
+              bottomInset={bottomInset}
+              cardHeight={cardHeight}
+              minimumCardHeight={minimumCardHeight}
+              onLayout={setFooterHeight}
+              position={position}
             >
               {footer}
-            </View>
+            </ResizableSheetFooter>
           ) : null}
-          {avoidKeyboard ? <KeyboardSpacer bottomInset={bottomInset} /> : null}
         </View>
       </SheetLayout>
     </ModalBottomSheet>
@@ -568,32 +637,52 @@ type SheetLayoutProps = {
   avoidKeyboard: boolean;
   bottomInset: number;
   cardHeight: number;
-  minimumCardHeight: number;
-  position: SharedValue<number>;
   children: ReactNode;
   style: StyleProp<ViewStyle>;
 };
 
-function SheetLayout({
-  avoidKeyboard,
-  cardHeight,
-  minimumCardHeight,
-  position,
-  children,
-  style,
-  ...props
-}: SheetLayoutProps) {
-  // Native detents move the content without resizing it. Follow the visible height so the
-  // scroll viewport and footer stay inside the sheet, without adding a second animation.
-  const animatedStyle = useAnimatedStyle(() => ({
-    height: Math.min(cardHeight, Math.max(minimumCardHeight, position.get())),
-  }));
+function SheetLayout({ avoidKeyboard, cardHeight, children, style, ...props }: SheetLayoutProps) {
   return avoidKeyboard ? (
     <KeyboardSheetLayout cardHeight={cardHeight} style={style} {...props}>
       {children}
     </KeyboardSheetLayout>
   ) : (
-    <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>
+    <View style={[style, { height: cardHeight }]}>{children}</View>
+  );
+}
+
+function ResizableSheetFooter({
+  bottomInset,
+  cardHeight,
+  children,
+  minimumCardHeight,
+  onLayout,
+  position,
+}: {
+  bottomInset: number;
+  cardHeight: number;
+  children: ReactNode;
+  minimumCardHeight: number;
+  onLayout: (height: number) => void;
+  position: SharedValue<number>;
+}) {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: Math.min(cardHeight, Math.max(minimumCardHeight, position.get())) - cardHeight,
+      },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      className="border-t border-border bg-background px-4 pt-3 dark:bg-popover"
+      onLayout={(event) => onLayout(event.nativeEvent.layout.height)}
+      style={[styles.resizableFooter, { paddingBottom: bottomInset }, animatedStyle]}
+    >
+      <View className="absolute inset-0 dark:bg-secondary" pointerEvents="none" />
+      {children}
+    </Animated.View>
   );
 }
 
@@ -604,7 +693,7 @@ function KeyboardSheetLayout({
   cardHeight,
   children,
   style,
-}: Omit<SheetLayoutProps, 'avoidKeyboard' | 'minimumCardHeight' | 'position'>) {
+}: Omit<SheetLayoutProps, 'avoidKeyboard'>) {
   const { height, progress } = useReanimatedKeyboardAnimation();
   const animatedStyle = useAnimatedStyle(() => ({
     height: Math.min(
@@ -671,11 +760,13 @@ function resolveSheetHeights(
   const detents: Detent[] = [closedDetent, ...cardHeights.map((item) => item.height)];
   const openIndex = Math.max(OPEN_INDEX, cardHeights.findIndex((item) => item.size === size) + 1);
   const sizeByIndex = [undefined, ...cardHeights.map((item) => item.size)];
+  const heightByIndex = [undefined, ...cardHeights.map((item) => item.height)];
 
   return {
     cardHeight,
     minimumCardHeight: cardHeights[0]?.height ?? 0,
     detents,
+    heightByIndex,
     openIndex,
     sizeByIndex,
   };
@@ -689,5 +780,11 @@ const styles = StyleSheet.create({
   },
   layout: {
     alignItems: 'center',
+  },
+  resizableFooter: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
 });

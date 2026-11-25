@@ -11,7 +11,10 @@ menus need for presentation. Sheets stay in the provider's view hierarchy rather
 window overlay.
 
 Dark mode uses an opaque `popover` base with a neutral `secondary` overlay and a fine border to
-separate the sheet from the page. The header, body, and fixed footer share this fill.
+separate the sheet from the page. The full-height card container renders this card background across
+every detent, and the header, body, and fixed footer share this fill
+(`@swmansion/react-native-bottom-sheet@0.15.3`'s native `surface` prop is omitted because its iOS
+`BottomSheetSurfaceComponentView` lacks `_props` initialization).
 
 The card fills the horizontal safe area up to 720 logical points and remains centered on wider
 windows. Its native host and scrim still span the window; the transparent space beside the card
@@ -24,11 +27,13 @@ content. Picker content measures its own available region instead of using the w
 </BottomSheet>
 ```
 
-The API is intentionally small: `open`, `onClose`, `children`, optional `title`, exactly one of `size`,
-`height`, or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
+The API is intentionally small: `open`, `onClose`, `children`, optional `title`, `bodyInset`
+(`'safe-area'` by default, or `'none'` when a scrollable child applies bottom safe-area padding to
+its own scroll content instead of clipping at the bottom inset), exactly one of `size`, `height`,
+or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
 `headerAction` for one compact control beside the title. The title is a heading truncated after two lines;
 omitting the title and header actions removes the title row, leaving a 22-point handle region
-for preview-led panels. When the title is a question or request the user must read in full, pass `titleVariant="prompt"` for a
+for preview-led panels (or a 44-point drag zone on headerless multi-detent sheets). When the title is a question or request the user must read in full, pass `titleVariant="prompt"` for a
 body-sized title that is never truncated. An optional `footer` stays fixed below the
 flexible body and owns its divider, horizontal action inset, and bottom safe-area spacing; callers
 provide only the footer control. `size` accepts `compact`, `medium`, or `large`, resolving to 40%,
@@ -41,10 +46,14 @@ and is clamped to the available screen height. Product components choose semanti
 fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
 library.
 
-For multiple heights, the native position event drives the content layout on the UI thread. The
-scroll viewport and fixed footer follow the visible height during dragging and snapping, rather
-than laying out below the screen at the largest height. Opening and closing retain the smallest
-open layout; keyboard avoidance keeps its separate keyboard-driven layout.
+For multiple heights (`sizes`), scrollable gesture negotiation is disabled
+(`disableScrollableNegotiation`) so nested lists and fast scrollers scroll freely at every detent,
+while dragging the top non-scrollable region resizes or dismisses the sheet. The full-height card
+container renders the card background across the sheet, and the body adopts taller detent heights on
+commit and smaller heights on settlement to avoid per-frame layout passes; when a `footer` is
+present, the native position event translates it on the UI thread via `translateY`. Keyboard
+avoidance keeps its separate keyboard-driven layout on single-height sheets, and any downward
+resize or dismissal on a keyboard-avoiding sheet dismisses the keyboard immediately on commit.
 
 ```tsx
 <BottomSheet
@@ -107,15 +116,16 @@ the body instead. Dismissing the keyboard does not change the selected size. Dra
 open size dismisses the keyboard.
 
 ```tsx
-const [size, setSize] = useState<BottomSheetSize>('large');
+const [size, setSize] = useState<BottomSheetSize>('medium');
 
 <BottomSheet
   avoidKeyboard
+  bodyInset="none"
   onClose={close}
   onSizeChange={setSize}
   open={isOpen}
   size={size}
-  sizes={['large', 'full']}
+  sizes={['medium', 'full']}
   title="Models"
 >
   <SearchField onFocus={() => setSize('full')} {...searchProps} />

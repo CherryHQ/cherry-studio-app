@@ -8,9 +8,15 @@ This module owns the model selection surface, model metadata UI, and model setti
   connectivity checks, and model settings all open this bottom sheet. Its search field filters the
   grouped model catalog in place without leaving the sheet. Callers may supply `onAddProvider` so
   the unfiltered empty state can hand off to provider setup without coupling the picker to routing.
-  Focusing search expands the sheet from `large` to `full`. Clearing search, dismissing the keyboard,
-  and changing filters retain that height; a downward drag can return to `large` without discarding
-  the current conditions. A filtered empty state offers one action to clear search and filters.
+  Focusing search expands the sheet from `medium` to `full`. Clearing search, dismissing the keyboard,
+  changing filters, and scrolling the model list or fast scroller retain the current height; only
+  dragging the top header/search region resizes between `medium` and `full` or dismisses the
+  sheet, while the model list and provider index scroll freely at both detents without losing the
+  current conditions. `ModelPickerDrawer` renders with `presentation="default"` (keeping its header
+  visible even when opened over another sheet), remains lazily mounted until opened and through its
+  close settlement, and supplies `bodyInset="none"` so `ModelPickerList` and
+  `ModelPickerFastScroller` own the bottom safe-area inset without clipping rows above it. A filtered
+  empty state offers one action to clear search and filters.
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet and the onboarding
   page. Onboarding supplies its own discovered or entitled candidates, including models not yet
   saved or enabled; the list owns row visuals, avatars, capability badges, and selection marks.
