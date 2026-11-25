@@ -137,17 +137,16 @@ jobs:
           echo "Native build failed for one or more targets: android-public=$ANDROID_PUBLIC_STATUS, android-google-play=$ANDROID_GOOGLE_PLAY_STATUS, ios-production=$IOS_PRODUCTION_STATUS" >&2
           exit 1
 
-  publish-github:
-    name: Publish APK to GitHub Release
+  stage-github:
+    name: Stage APK to GitHub Draft Release
     needs: [validate, build-native]
     if: ${{ !cancelled() && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.android_public_ready == 'true' }}
     runs-on: [self-hosted, macOS, ARM64, release]
     environment: local-release
     permissions:
-      # GitHub's generate-notes and release publication require contents: write.
       contents: write
     concurrency:
-      group: cherry-studio-app-publish-github-${{ github.ref_name }}
+      group: cherry-studio-app-stage-github-${{ github.ref_name }}
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
@@ -156,42 +155,40 @@ jobs:
           command -v gh > /dev/null
           command -v jq > /dev/null
 
-      - name: Publish GitHub release with APK and checksums
+      - name: Stage APK and checksums to GitHub Draft Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
           ARCHIVE_DIR: ${{ needs.build-native.outputs.android_public_archive_dir }}
           ARTIFACT_NAME: ${{ needs.build-native.outputs.android_public_artifact_name }}
-          NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_public_native_build_version }}
           LOCAL_BUILD_ID: ${{ needs.build-native.outputs.android_public_build_id }}
+          NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_public_native_build_version }}
         run: |
           cd "$ARCHIVE_DIR"
           shasum -a 256 -c SHA256SUMS
-          NOTES_FILE="$RUNNER_TEMP/github-release-notes.md"
-          printf '# Cherry Studio %s\n\n' "${RELEASE_TAG#v}" > "$NOTES_FILE"
-          gh api --method POST "repos/$GH_REPO/releases/generate-notes" \
-            -f tag_name="$RELEASE_TAG" -f target_commitish="$GITHUB_SHA" \
-            --jq .body >> "$NOTES_FILE"
-          cat >> "$NOTES_FILE" <<EOF
-
-          ## Download and Installation
-
-          - Android: download the attached APK (ARM64) and install it on your device.
-          - Google Play and iOS App Store availability depend on their independent uploads, review, and publication. This GitHub release does not publish either store listing.
-          - SHA-256 checksums are included in SHA256SUMS.
-
-          Source: $GITHUB_SHA
-          Local build ID: $LOCAL_BUILD_ID
-          Native versionCode: $NATIVE_BUILD_VERSION
-          EOF
           prerelease=false
           if [[ "$RELEASE_TAG" == *-* ]]; then prerelease=true; fi
           if ! gh release view "$RELEASE_TAG" --json id > /dev/null 2>&1; then
+            STAGING_NOTES_FILE="$RUNNER_TEMP/github-staging-notes.md"
+            cat > "$STAGING_NOTES_FILE" <<EOF
+          # Cherry Studio ${RELEASE_TAG#v}
+
+          Staged ARM64 APK and SHA256SUMS built on Mac Studio. Publish with prepared release notes via \`pnpm release:publish\` or **Actions → Publish Release**.
+
+          ## Download and Installation
+
+          - Artifact: \`$ARTIFACT_NAME\`
+          - Checksums: \`SHA256SUMS\`
+          - Source: \`$GITHUB_SHA\`
+          - Local build ID: \`$LOCAL_BUILD_ID\`
+          - Native versionCode: \`$NATIVE_BUILD_VERSION\`
+          EOF
             gh release create "$RELEASE_TAG" --verify-tag --draft \
-              --title "$RELEASE_TAG" --notes-file "$NOTES_FILE" --prerelease="$prerelease"
+              --title "$RELEASE_TAG" --notes-file "$STAGING_NOTES_FILE" --prerelease="$prerelease"
+            rm -f "$STAGING_NOTES_FILE"
           fi
-          gh release view "$RELEASE_TAG" --json assets > "$RUNNER_TEMP/github-release.json"
+          gh release view "$RELEASE_TAG" --json assets,isDraft > "$RUNNER_TEMP/github-release.json"
           mkdir -p "$RUNNER_TEMP/existing-assets"
           for asset in SHA256SUMS "$ARTIFACT_NAME"; do
             if jq -e --arg name "$asset" '.assets[] | select(.name == $name)' "$RUNNER_TEMP/github-release.json" > /dev/null; then
@@ -201,18 +198,22 @@ jobs:
               gh release upload "$RELEASE_TAG" "$asset"
             fi
           done
-          rm -rf "$RUNNER_TEMP/existing-assets" "$RUNNER_TEMP/github-release.json" "$NOTES_FILE"
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease"
-          echo "GitHub Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          is_draft="$(jq -r '.isDraft' "$RUNNER_TEMP/github-release.json")"
+          rm -rf "$RUNNER_TEMP/existing-assets" "$RUNNER_TEMP/github-release.json"
+          if [[ "$is_draft" == "true" ]]; then
+            echo "Staged GitHub Draft Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG (publish with \`pnpm release:publish --tag $RELEASE_TAG ...\`)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Verified attachments on published GitHub Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-  publish-gitcode:
-    name: Publish APK to GitCode Release
+  stage-gitcode:
+    name: Stage APK to GitCode Release
     needs: [validate, build-native]
     if: ${{ !cancelled() && (needs.build-native.result == 'success' || needs.build-native.result == 'failure') && needs.build-native.outputs.android_public_ready == 'true' }}
     runs-on: [self-hosted, macOS, ARM64, release]
     environment: local-release
     concurrency:
-      group: cherry-studio-app-publish-gitcode-${{ github.ref_name }}
+      group: cherry-studio-app-stage-gitcode-${{ github.ref_name }}
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
@@ -229,7 +230,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Publish GitCode release with APK and checksums
+      - name: Stage GitCode release with APK and checksums
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           GITCODE_API_URL: ${{ vars.GITCODE_API_URL }}
@@ -241,7 +242,7 @@ jobs:
           LOCAL_BUILD_ID: ${{ needs.build-native.outputs.android_public_build_id }}
           NATIVE_BUILD_VERSION: ${{ needs.build-native.outputs.android_public_native_build_version }}
         run: |
-          node --import tsx scripts/publishGitcodeRelease.ts \
+          node --import tsx scripts/publishGitcodeRelease.ts stage \
             --tag "$RELEASE_TAG" \
             --commit "$GITHUB_SHA" \
             --archive-dir "$ARCHIVE_DIR" \

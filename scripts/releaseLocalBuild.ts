@@ -1988,7 +1988,7 @@ function formatBatchSummary(
       '### Google Play AAB',
       '',
       `\`submit-google-play\` uploads the archived AAB to Google Play as a production draft. Signed AAB and \`SHA256SUMS\` remain archived at: \`${playOutcome.archiveDir}\``,
-      'Verify with `shasum -a 256 -c SHA256SUMS` if manually recovering or uploading `.aab` in Google Play Console.',
+      'On the maintainer workstation, use the matching version code in Play Console to complete the draft and send it for review.',
     );
   }
 

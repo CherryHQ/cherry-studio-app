@@ -67,7 +67,7 @@ the native version/build. See the [APK update service](../../src/backend/service
 ## One-Time Setup
 
 Use the existing Expo project, authentication, and EAS environments in
-[Cloud Releases](./cloud-releases.md), with the pinned release CLI version, currently `24.4.2`.
+[Native Releases](./cloud-releases.md), with the pinned release CLI version, currently `24.4.2`.
 The OTA Update workflow uses the existing `EXPO_TOKEN` Actions secret.
 
 Run `eas channel:list`, then create any missing channels and their same-named branches:
@@ -94,9 +94,10 @@ Other service settings and credentials still come from the selected environment.
 values must be readable during both builds and updates; Secret-only values cannot be read by
 EAS Update.
 
-Release channels receive updates only on packages from the tag
-[release workflow](./cloud-releases.md): EAS records their runtime versions, and the publication
-check requires one. Locally built production packages are not recorded and cannot pass it. A development client also needs
+The native [release workflow](./cloud-releases.md) builds on Mac Studio. The OTA publication
+check still queries finished EAS cloud build records by platform, channel and runtime. A runtime
+introduced only by a Mac Studio build has no matching cloud record and the check stops publication.
+A development client also needs
 rebuilding after adding these native dependencies. Account configuration, native builds,
 publication, and device acceptance are separate explicitly authorized actions.
 
@@ -123,7 +124,7 @@ JavaScript-only fixes between tags; branch pushes and tags never publish updates
 `all` includes `apk`, `google-play`, `domestic-stores`, and `ios`. Every selected channel must have
 a finished EAS build with the same runtime before anything publishes. Until the domestic channel
 has its first compatible build, select an existing target explicitly; `all` fails the receiving-build
-check. Stable tags create domestic builds; prerelease tags do not. Adding native vendor integrations
+check. The native tag workflow currently skips domestic builds. Adding native vendor integrations
 requires a [native release](./cloud-releases.md#domestic-android-stores) before publishing compatible
 JavaScript-only fixes to that channel.
 

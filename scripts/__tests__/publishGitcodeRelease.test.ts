@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  buildDefaultGitcodeNotes,
+  buildStagingGitcodeNotes,
+  parseChecksumForArtifact,
   publishGitcodeRelease,
+  stageGitcodeRelease,
   verifyArchivedApk,
 } from '../publishGitcodeRelease';
 
@@ -26,6 +28,7 @@ function makeArchiveFixture(version = '0.6.2') {
   return {
     root,
     archiveDir,
+    notesText: `# Cherry Studio ${version}\n\n本版修复了会话显示问题。\n\n## 下载安装\n`,
     artifactName,
     apkBytes,
     apkSha256,
@@ -40,11 +43,11 @@ afterEach(() => {
   }
 });
 
-describe('publishGitcodeRelease', () => {
+describe('stageGitcodeRelease', () => {
   const commitSha = '1e1bc7acbe0e23dbde016b0e97976f24651c487f';
   const token = 'synthetic-gitcode-token-secret-1234';
 
-  it('creates a new stable release, uploads APK before SHA256SUMS, and verifies attachments', async () => {
+  it('creates a pre-release stage, uploads APK before SHA256SUMS, verifies attachments, and never promotes to latest', async () => {
     const fixture = makeArchiveFixture('0.6.2');
     const calls: { method: string; url: string; body?: string; auth?: string | null }[] = [];
     const uploadedOrder: string[] = [];
@@ -82,16 +85,8 @@ describe('publishGitcodeRelease', () => {
         );
       }
 
-      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
-        return new Response(JSON.stringify({ tag_name: 'v0.6.1' }), { status: 200 });
-      }
-
       if (method === 'POST' && url.endsWith('/releases')) {
         return new Response(JSON.stringify({ tag_name: 'v0.6.2' }), { status: 201 });
-      }
-
-      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
-        return new Response(JSON.stringify({ tag_name: 'v0.6.2' }), { status: 200 });
       }
 
       if (method === 'GET' && url.includes('/upload_url?file_name=')) {
@@ -115,7 +110,7 @@ describe('publishGitcodeRelease', () => {
       throw new Error(`Unexpected fetch ${method} ${url}`);
     });
 
-    const result = await publishGitcodeRelease({
+    const result = await stageGitcodeRelease({
       tag: 'v0.6.2',
       commitSha,
       archiveDir: fixture.archiveDir,
@@ -138,10 +133,9 @@ describe('publishGitcodeRelease', () => {
     expect(result).toEqual({
       releaseUrl: 'https://gitcode.com/CherryHQ/cherry-studio-app/releases/tag/v0.6.2',
       tag: 'v0.6.2',
-      releaseStatus: 'latest',
+      releaseStatus: 'pre',
       created: true,
-      patched: true,
-      promotedToLatest: true,
+      patched: false,
       uploaded: [fixture.artifactName, 'SHA256SUMS'],
       skipped: [],
       hashes: {
@@ -156,26 +150,20 @@ describe('publishGitcodeRelease', () => {
       'put:SHA256SUMS',
     ]);
 
-    // Stable releases must stage as pre-release first and promote to latest only after attachment verification.
     const postCall = calls.find((call) => call.method === 'POST')!;
     const postPayload = JSON.parse(postCall.body!);
     expect(postPayload.release_status).toBe('pre');
     expect(postPayload.target_commitish).toBe(commitSha);
     expect(postPayload.body).toMatch(/^# Cherry Studio 0\.6\.2\n/);
     expect(postPayload.body).toContain('\n## 下载安装\n');
-
-    const patchIndex = calls.findIndex((call) => call.method === 'PATCH');
-    const lastPutIndex = calls.map((call) => call.method).lastIndexOf('PUT');
-    expect(patchIndex).toBeGreaterThan(lastPutIndex);
-    const patchPayload = JSON.parse(calls[patchIndex]!.body!);
-    expect(patchPayload.release_status).toBe('latest');
+    expect(calls.some((call) => call.method === 'PATCH')).toBe(false);
 
     // Never forward GitCode bearer token to third-party signed upload storage URLs.
     const putCalls = calls.filter((call) => call.method === 'PUT');
     expect(putCalls.every((call) => call.auth === null)).toBe(true);
   });
 
-  it('never promotes a new stable release to latest if attachment upload fails', async () => {
+  it('keeps staged release as pre if attachment upload fails', async () => {
     const fixture = makeArchiveFixture('0.6.2');
     const methods: string[] = [];
 
@@ -199,7 +187,7 @@ describe('publishGitcodeRelease', () => {
     });
 
     await expect(
-      publishGitcodeRelease({
+      stageGitcodeRelease({
         tag: 'v0.6.2',
         commitSha,
         archiveDir: fixture.archiveDir,
@@ -215,61 +203,10 @@ describe('publishGitcodeRelease', () => {
     expect(methods).not.toContain('PATCH');
   });
 
-  it('marks prerelease tags as release_status=pre', async () => {
-    const fixture = makeArchiveFixture('0.6.2-rc.1');
-    let createdPayload: Record<string, unknown> | undefined;
-    let calls = 0;
-
-    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
-      const url = String(input);
-      const method = init?.method ?? 'GET';
-      if (method === 'GET' && url.includes('/commits/')) {
-        return new Response('{}', { status: 404 });
-      }
-      if (method === 'GET' && url.includes('/releases/tags/')) {
-        calls++;
-        if (calls === 1) return new Response('{}', { status: 404 });
-        return new Response(
-          JSON.stringify({
-            assets: [
-              { name: fixture.artifactName, type: 'attach' },
-              { name: 'SHA256SUMS', type: 'attach' },
-            ],
-          }),
-          { status: 200 },
-        );
-      }
-      if (method === 'POST') {
-        createdPayload = JSON.parse(String(init?.body));
-        return new Response('{}', { status: 201 });
-      }
-      if (url.includes('/upload_url')) {
-        return new Response(JSON.stringify({ url: 'https://upload.example.test/obj' }), {
-          status: 200,
-        });
-      }
-      if (method === 'PUT') return new Response('', { status: 200 });
-      throw new Error(`Unexpected ${method} ${url}`);
-    });
-
-    const result = await publishGitcodeRelease({
-      tag: 'v0.6.2-rc.1',
-      commitSha,
-      archiveDir: fixture.archiveDir,
-      artifactName: fixture.artifactName,
-      token,
-      fetchImpl,
-      sleep: async () => {},
-      createFileBody: async () => Buffer.from('body'),
-    });
-
-    expect(result.releaseStatus).toBe('pre');
-    expect(createdPayload?.release_status).toBe('pre');
-  });
-
-  it('preserves existing curated notes and skips identical assets on retry, but rejects mismatched remote assets', async () => {
+  it('preserves existing curated notes and status on retry and rejects mismatched remote assets', async () => {
     const fixture = makeArchiveFixture('0.6.2');
     let remoteApkBytes = fixture.apkBytes;
+    const downloadAuthHeaders: (string | null)[] = [];
 
     const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
       const url = String(input);
@@ -281,7 +218,7 @@ describe('publishGitcodeRelease', () => {
         return new Response(
           JSON.stringify({
             tag_name: 'v0.6.2',
-            body: '# Cherry Studio 0.6.2\n\n手工整理中文说明\n\n## 下载安装\n',
+            body: fixture.notesText,
             release_status: 'latest',
             assets: [
               {
@@ -300,15 +237,17 @@ describe('publishGitcodeRelease', () => {
         );
       }
       if (url === 'https://cdn.example.test/app.apk') {
+        downloadAuthHeaders.push(new Headers(init?.headers).get('Authorization'));
         return new Response(Uint8Array.from(remoteApkBytes), { status: 200 });
       }
       if (url === 'https://cdn.example.test/SHA256SUMS') {
+        downloadAuthHeaders.push(new Headers(init?.headers).get('Authorization'));
         return new Response(fixture.checksumContent, { status: 200 });
       }
       throw new Error(`Unexpected ${method} ${url}`);
     });
 
-    const reused = await publishGitcodeRelease({
+    const reused = await stageGitcodeRelease({
       tag: 'v0.6.2',
       commitSha,
       archiveDir: fixture.archiveDir,
@@ -319,13 +258,14 @@ describe('publishGitcodeRelease', () => {
     });
     expect(reused.created).toBe(false);
     expect(reused.patched).toBe(false);
-    expect(reused.promotedToLatest).toBe(false);
+    expect(reused.releaseStatus).toBe('latest');
     expect(reused.uploaded).toEqual([]);
     expect(reused.skipped).toEqual([fixture.artifactName, 'SHA256SUMS']);
+    expect(downloadAuthHeaders).toEqual([null, null]);
 
     remoteApkBytes = Buffer.from('different-apk-bytes');
     await expect(
-      publishGitcodeRelease({
+      stageGitcodeRelease({
         tag: 'v0.6.2',
         commitSha,
         archiveDir: fixture.archiveDir,
@@ -337,7 +277,68 @@ describe('publishGitcodeRelease', () => {
     ).rejects.toThrow('checksum mismatch');
   });
 
-  it('rejects publishing when GitCode tag points to a different commit SHA', async () => {
+  it('fills empty body with staging notes while preserving existing release_status on retry', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    let patchBody: Record<string, unknown> | undefined;
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
+        return new Response(JSON.stringify({ sha: commitSha }), { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            body: '   ',
+            release_status: 'pre',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
+        patchBody = JSON.parse(String(init?.body));
+        return new Response('{}', { status: 200 });
+      }
+      if (url === 'https://cdn.example.test/app.apk') {
+        return new Response(Uint8Array.from(fixture.apkBytes), { status: 200 });
+      }
+      if (url === 'https://cdn.example.test/SHA256SUMS') {
+        return new Response(fixture.checksumContent, { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await stageGitcodeRelease({
+      tag: 'v0.6.2',
+      commitSha,
+      archiveDir: fixture.archiveDir,
+      artifactName: fixture.artifactName,
+      token,
+      fetchImpl,
+      sleep: async () => {},
+    });
+
+    expect(result.patched).toBe(true);
+    expect(result.releaseStatus).toBe('pre');
+    expect(patchBody?.release_status).toBe('pre');
+    expect(String(patchBody?.body)).toContain('# Cherry Studio 0.6.2');
+  });
+
+  it('rejects staging when GitCode tag points to a different commit SHA', async () => {
     const fixture = makeArchiveFixture('0.6.2');
     const seenMethods: string[] = [];
 
@@ -352,7 +353,7 @@ describe('publishGitcodeRelease', () => {
     });
 
     await expect(
-      publishGitcodeRelease({
+      stageGitcodeRelease({
         tag: 'v0.6.2',
         commitSha,
         archiveDir: fixture.archiveDir,
@@ -362,74 +363,6 @@ describe('publishGitcodeRelease', () => {
       }),
     ).rejects.toThrow('points to commit');
     expect(seenMethods).toHaveLength(1);
-  });
-
-  it('does not promote an older stable retry to latest when a newer stable release exists', async () => {
-    const fixture = makeArchiveFixture('0.6.2');
-    const methods: string[] = [];
-    let verified = false;
-
-    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
-      const url = String(input);
-      const method = init?.method ?? 'GET';
-      methods.push(`${method} ${url}`);
-      if (method === 'GET' && url.endsWith('/commits/v0.6.2')) {
-        return new Response(JSON.stringify({ sha: commitSha }), { status: 200 });
-      }
-      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
-        if (!verified) {
-          verified = true;
-          return new Response(
-            JSON.stringify({
-              tag_name: 'v0.6.2',
-              body: '# Cherry Studio 0.6.2\n\n## 下载安装\n',
-              release_status: 'pre',
-              assets: [],
-            }),
-            { status: 200 },
-          );
-        }
-        return new Response(
-          JSON.stringify({
-            tag_name: 'v0.6.2',
-            assets: [
-              { name: fixture.artifactName, type: 'attach' },
-              { name: 'SHA256SUMS', type: 'attach' },
-            ],
-          }),
-          { status: 200 },
-        );
-      }
-      if (method === 'GET' && url.includes('/upload_url')) {
-        return new Response(JSON.stringify({ url: 'https://upload.example.test/obj' }), {
-          status: 200,
-        });
-      }
-      if (method === 'PUT') {
-        return new Response('', { status: 200 });
-      }
-      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
-        return new Response(JSON.stringify({ tag_name: 'v0.7.0' }), { status: 200 });
-      }
-      throw new Error(`Unexpected ${method} ${url}`);
-    });
-
-    const result = await publishGitcodeRelease({
-      tag: 'v0.6.2',
-      commitSha,
-      archiveDir: fixture.archiveDir,
-      artifactName: fixture.artifactName,
-      token,
-      fetchImpl,
-      sleep: async () => {},
-      createFileBody: async () => Buffer.from('body'),
-    });
-
-    expect(result.releaseStatus).toBe('pre');
-    expect(result.promotedToLatest).toBe(false);
-    expect(result.patched).toBe(false);
-    expect(result.uploaded).toEqual([fixture.artifactName, 'SHA256SUMS']);
-    expect(methods.some((entry) => entry.startsWith('PATCH '))).toBe(false);
   });
 
   it('fails locally on invalid SHA256SUMS without calling fetch, and redacts GITCODE_TOKEN from remote errors', async () => {
@@ -444,7 +377,7 @@ describe('publishGitcodeRelease', () => {
       'SHA256SUMS mismatch',
     );
     await expect(
-      publishGitcodeRelease({
+      stageGitcodeRelease({
         tag: 'v0.6.2',
         commitSha,
         archiveDir: fixture.archiveDir,
@@ -463,7 +396,7 @@ describe('publishGitcodeRelease', () => {
 
     let errMessage = '';
     try {
-      await publishGitcodeRelease({
+      await stageGitcodeRelease({
         tag: 'v0.6.2',
         commitSha,
         archiveDir: fixture.archiveDir,
@@ -478,8 +411,8 @@ describe('publishGitcodeRelease', () => {
     expect(errMessage).not.toContain(token);
   });
 
-  it('formats default Chinese release notes matching app update parser markers', () => {
-    const notes = buildDefaultGitcodeNotes({
+  it('formats staging Chinese release notes matching app update parser markers', () => {
+    const notes = buildStagingGitcodeNotes({
       releaseVersion: '0.6.2',
       tag: 'v0.6.2',
       commitSha,
@@ -490,5 +423,347 @@ describe('publishGitcodeRelease', () => {
     });
     expect(notes).toMatch(/^# Cherry Studio 0\.6\.2\n/);
     expect(notes).toMatch(/^## 下载安装$/m);
+    expect(notes).toContain('Local build ID: id-1');
+    expect(notes).toContain('Native versionCode: 128');
+  });
+});
+
+describe('publishGitcodeRelease', () => {
+  const token = 'synthetic-gitcode-token-secret-1234';
+
+  it('rejects empty notes before contacting GitCode', async () => {
+    const fetchImpl = jest.fn();
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        notesText: '  ',
+        token,
+        fetchImpl,
+      }),
+    ).rejects.toThrow('GitCode release notes are empty');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('verifies staged assets and SHA256SUMS, writes prepared notes, and promotes stable release to latest', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    const calls: { method: string; url: string; body?: string; auth?: string | null }[] = [];
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      calls.push({
+        method,
+        url,
+        body: typeof init?.body === 'string' ? init.body : undefined,
+        auth: new Headers(init?.headers).get('Authorization'),
+      });
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            release_status: 'pre',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (method === 'GET' && url === 'https://cdn.example.test/SHA256SUMS') {
+        return new Response(fixture.checksumContent, { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.6.1' }), { status: 200 });
+      }
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.6.2' }), { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await publishGitcodeRelease({
+      tag: 'v0.6.2',
+      notesText: fixture.notesText,
+      token,
+      fetchImpl,
+    });
+
+    expect(result).toEqual({
+      releaseUrl: 'https://gitcode.com/CherryHQ/cherry-studio-app/releases/tag/v0.6.2',
+      tag: 'v0.6.2',
+      releaseStatus: 'latest',
+      promotedToLatest: true,
+      verifiedAssets: [fixture.artifactName, 'SHA256SUMS'],
+    });
+    const cdnCall = calls.find((call) => call.url === 'https://cdn.example.test/SHA256SUMS')!;
+    expect(cdnCall.auth).toBeNull();
+    const patchCall = calls.find((call) => call.method === 'PATCH')!;
+    expect(JSON.parse(patchCall.body!)).toEqual({
+      name: 'v0.6.2',
+      body: fixture.notesText,
+      release_status: 'latest',
+    });
+  });
+
+  it('does not promote an older stable release to latest when a newer stable release exists', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    let patchPayload: Record<string, unknown> | undefined;
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            release_status: 'pre',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === 'https://cdn.example.test/SHA256SUMS') {
+        return new Response(fixture.checksumContent, { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith('/releases/latest?type=latest')) {
+        return new Response(JSON.stringify({ tag_name: 'v0.7.0' }), { status: 200 });
+      }
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
+        patchPayload = JSON.parse(String(init?.body));
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await publishGitcodeRelease({
+      tag: 'v0.6.2',
+      notesText: fixture.notesText,
+      token,
+      fetchImpl,
+    });
+
+    expect(result.releaseStatus).toBe('pre');
+    expect(result.promotedToLatest).toBe(false);
+    expect(patchPayload).toEqual({
+      name: 'v0.6.2',
+      body: fixture.notesText,
+      release_status: 'pre',
+    });
+  });
+
+  it('keeps prerelease tags as pre while updating prepared notes', async () => {
+    const fixture = makeArchiveFixture('0.6.2-rc.1');
+    let checkedLatest = false;
+    let patchPayload: Record<string, unknown> | undefined;
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2-rc.1')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2-rc.1',
+            release_status: 'pre',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === 'https://cdn.example.test/SHA256SUMS') {
+        return new Response(fixture.checksumContent, { status: 200 });
+      }
+      if (url.includes('/releases/latest')) {
+        checkedLatest = true;
+      }
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2-rc.1')) {
+        patchPayload = JSON.parse(String(init?.body));
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await publishGitcodeRelease({
+      tag: 'v0.6.2-rc.1',
+      notesText: fixture.notesText,
+      token,
+      fetchImpl,
+    });
+
+    expect(checkedLatest).toBe(false);
+    expect(result.releaseStatus).toBe('pre');
+    expect(result.promotedToLatest).toBe(false);
+    expect(patchPayload?.release_status).toBe('pre');
+  });
+
+  it('updates notes on an already-latest release without demoting it', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+    let patchPayload: Record<string, unknown> | undefined;
+
+    const fetchImpl: typeof fetch = jest.fn(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.endsWith('/releases/tags/v0.6.2')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            release_status: 'latest',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === 'https://cdn.example.test/SHA256SUMS') {
+        return new Response(fixture.checksumContent, { status: 200 });
+      }
+      if (method === 'PATCH' && url.endsWith('/releases/v0.6.2')) {
+        patchPayload = JSON.parse(String(init?.body));
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unexpected ${method} ${url}`);
+    });
+
+    const result = await publishGitcodeRelease({
+      tag: 'v0.6.2',
+      notesText: fixture.notesText,
+      token,
+      fetchImpl,
+    });
+
+    expect(result.releaseStatus).toBe('latest');
+    expect(result.promotedToLatest).toBe(false);
+    expect(patchPayload?.release_status).toBe('latest');
+  });
+
+  it('rejects missing staged release, missing attachments, and invalid remote SHA256SUMS', async () => {
+    const fixture = makeArchiveFixture('0.6.2');
+
+    const missingReleaseFetch: typeof fetch = jest.fn(async () => {
+      return new Response('{}', { status: 404 });
+    });
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        notesText: fixture.notesText,
+        token,
+        fetchImpl: missingReleaseFetch,
+      }),
+    ).rejects.toThrow('Staged GitCode release v0.6.2 does not exist');
+
+    const missingAssetFetch: typeof fetch = jest.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          tag_name: 'v0.6.2',
+          release_status: 'pre',
+          assets: [
+            {
+              name: fixture.artifactName,
+              type: 'attach',
+              browser_download_url: 'https://cdn.example.test/app.apk',
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        notesText: fixture.notesText,
+        token,
+        fetchImpl: missingAssetFetch,
+      }),
+    ).rejects.toThrow('missing required attachment SHA256SUMS');
+
+    const badChecksumFetch: typeof fetch = jest.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/releases/tags/v0.6.2')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v0.6.2',
+            release_status: 'pre',
+            assets: [
+              {
+                name: fixture.artifactName,
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/app.apk',
+              },
+              {
+                name: 'SHA256SUMS',
+                type: 'attach',
+                browser_download_url: 'https://cdn.example.test/SHA256SUMS',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response('not-a-valid-checksum', { status: 200 });
+    });
+    await expect(
+      publishGitcodeRelease({
+        tag: 'v0.6.2',
+        notesText: fixture.notesText,
+        token,
+        fetchImpl: badChecksumFetch,
+      }),
+    ).rejects.toThrow('Missing or ambiguous SHA256SUMS entry');
+  });
+
+  it('parses valid SHA256SUMS entries and rejects ambiguous ones', () => {
+    const sha = 'a'.repeat(64);
+    expect(
+      parseChecksumForArtifact(
+        `${sha} *cherry-studio-0.6.2-android.apk\n`,
+        'cherry-studio-0.6.2-android.apk',
+      ),
+    ).toBe(sha);
+    expect(() =>
+      parseChecksumForArtifact(
+        `${sha}  cherry-studio-0.6.2-android.apk\n${'b'.repeat(64)}  cherry-studio-0.6.2-android.apk\n`,
+        'cherry-studio-0.6.2-android.apk',
+      ),
+    ).toThrow('Missing or ambiguous SHA256SUMS entry');
   });
 });

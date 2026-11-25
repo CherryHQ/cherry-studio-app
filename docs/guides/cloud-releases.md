@@ -1,86 +1,93 @@
-# Cloud Releases
+# Native Releases
 
-Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger
-[Release](../../.github/workflows/release.yml). It validates the version and runs
-[PR CI](../../.github/workflows/pr-ci.yml) on the tagged commit on GitHub-hosted runners, then runs
-`build-native` on the shared macOS self-hosted release runner (`[self-hosted, macOS, ARM64, release]`),
-building Android sequentially (`android-public` APK followed by `android-google-play` AAB on stable
-tags) in parallel with `ios-production` IPA. Once `build-native` publishes per-target archive
-outputs, separate delivery jobs (`publish-github`, `publish-gitcode`, `submit-google-play`, and
-`submit-ios`) read the verified local archive on the runner so failed uploads can be retried
-independently without rebuilding. Branch pushes do not publish.
-The tag's base version must match `expo.version` in `app.json`; update and commit the version before
-tagging. Public APK and iOS builds use the existing EAS `production` profile.
-Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
-and automatic native build-number increments, but generates an AAB instead of an APK. The public APK and Google Play
-profiles retain the current ARM64-only device support. The reserved domestic profile inherits production
-signing and APK output, disables self-installation, and uses `production-domestic-stores`.
+## 1. Prepare on the maintainer workstation
 
-## Release Channels
+1. Choose the intended `main` commit and review the changes since the previous release. Update
+   `expo.version` in `app.json` through a version PR, merge it, and push the matching `v<version>`
+   tag on that commit. Do not commit release notes to the repository; the
+   [Release workflow](../../.github/workflows/release.yml) validates the tag against `app.json` and
+   runs [CI](../../.github/workflows/pr-ci.yml) on GitHub-hosted runners.
+2. In the workstation's version directory outside the repository, prepare:
+   - `release-notes-en.md` and `release-notes-zh-CN.md`, following
+     [Release Notes And Channel Coverage](#release-notes-and-channel-coverage).
+   - Store descriptions, localized update notes, screenshot assets, operations update HTML, any
+     replies to previous rejections, and `release-status.md`. Reuse accurate store materials and
+     capture changed screenshots from the app.
 
-A stable release prepares nine distribution destinations from four builds:
+## 2. Build and stage deliverables on Mac Studio
 
-| Channel | Artifact | Build | Publication |
-| --- | --- | --- | --- |
-| GitHub | APK | Built locally on the release Mac on every version tag | Published automatically with `SHA256SUMS` by `publish-github` ([Android GitHub Downloads](#android-github-downloads)) |
-| GitCode | The same APK | None; reuses the archived public APK | Published automatically with `SHA256SUMS` by `publish-gitcode` ([GitCode Release Sync](#gitcode-maintainer-upload)) |
-| Google Play | AAB | Built locally on the release Mac on stable tags only | Verified locally and uploaded automatically as a production draft by `submit-google-play`; review submission and rollout remain in Play Console ([Google Play](#google-play)) |
-| HONOR / Xiaomi / OPPO / vivo | One shared domestic APK | Reserved local target (`android-domestic-stores`); not yet enabled in `release.yml` | Separate manual uploads, reviews, and live-version records in each console |
-| TestFlight | IPA | Built locally on the release Mac on every version tag | Verified locally (`ios-symbols`) and uploaded automatically by `submit-ios` ([iOS](#ios)) |
-| App Store | The same IPA | None; reuses the TestFlight build | Manual submission and release in App Store Connect |
+The tag dispatches the remaining jobs to the shared `[self-hosted, macOS, ARM64, release]`
+runner. Android builds the public APK followed by the stable-only Play AAB. iOS builds in
+parallel. Each delivery job consumes its own verified archive for the tagged commit and **stages**
+deliverables without making public announcements yet.
 
-GitHub and GitCode must publish the identical APK and checksum. TestFlight and the App Store share
-one build, but their reviews and releases are independent.
+| Channel | Mac Studio job | Staged result |
+| --- | --- | --- |
+| GitHub | `stage-github` | Stages the signed ARM64 APK and `SHA256SUMS` to a GitHub Draft Release (keeps existing published notes/status on retry). |
+| GitCode | `stage-gitcode` | Stages the identical APK and checksum to a GitCode `pre` release (never promotes to `latest`, so update checks do not announce it yet). |
+| Google Play | `submit-google-play` (stable tags) | Uploads the verified `production-google-play` AAB to a production-track draft. |
+| TestFlight / App Store | `submit-ios` | Verifies the `production` IPA and its debug symbols and uploads it to App Store Connect. Both destinations use that build. |
+| HONOR / Xiaomi / OPPO / vivo | Disabled | Record these channels as out of scope. |
 
-## Release Preparation
+Each successful target can proceed independently. Use the run summary to identify the exact
+archive directory, build number, and checksum for each target, and record the run link in the
+workstation's `release-status.md`.
 
-Releases are built by the workflows above. Before pushing the tag, have these ready:
+## 3. Publish and complete store submission from the maintainer workstation
 
-- GitHub English and GitCode Simplified Chinese release notes, following
-  [Release Notes And Channel Coverage](#release-notes-and-channel-coverage).
-- Store descriptions and release notes in every configured store locale.
-- The required store screenshots, captured from the application rather than mockups or
-  development builds.
-- If a store rejected the previous submission, a reply to every issue and its fix in this build.
-- A maintainer with GitCode write access to sync and upload the release.
+1. **Publish GitHub and GitCode** with the prepared bilingual notes once Mac Studio finishes
+   staging:
 
-Submit each store once its materials are complete; another store's pending review does not block it.
+   ```bash
+   pnpm release:publish \
+     --tag v<version> \
+     --en-notes /path/to/release-notes-en.md \
+     --zh-notes /path/to/release-notes-zh-CN.md
+   ```
 
-## Release Procedure
-
-1. Summarize the changes on the intended `main` commit since the previous release. Update
-   `expo.version` in `app.json`, merge the version PR, then push the matching version tag to start
-   **Actions → Release**. The tag workflow owns CI and native builds.
-2. Use the exact builds from that run for distribution: the public APK for GitHub and
-   [GitCode](#gitcode-maintainer-upload), the uploaded production draft
-   [AAB for Google Play](#google-play), and the already uploaded
-   [iOS build for TestFlight and App Store](#ios). Stable tags also support one reserved
-   [domestic APK target for four separate store submissions](#manual-domestic-store-upload).
-3. Complete each channel's publication or review submission in its own console. TestFlight
-   internal distribution, external beta review, and App Store review are separate steps. Record
-   pending reviews without blocking other channels or treating an upload as an available release.
-4. Archive the exact packages, checksums, release notes, build identities, and
-   [release status](#release-status) under one version directory outside the repository. Keep the
-   domestic APK in its own subdirectory. Use [Failure Recovery](#failure-recovery) for interrupted
-   jobs or uploads; a publication retry reuses its successful build.
+   This validates both Markdown files locally and dispatches
+   [Publish Release](../../.github/workflows/publish-release.yml) on GitHub-hosted `ubuntu-latest`
+   runners using repository secrets (the workstation needs `gh` auth, not `GITCODE_TOKEN`). The
+   workflow verifies that both staged releases already contain `cherry-studio-<version>-android.apk`
+   and valid `SHA256SUMS`, writes the English notes and publishes the GitHub draft, and writes the
+   Chinese notes and promotes stable GitCode releases to `latest`. Pass `--target github` or
+   `--target gitcode` (or run **Actions → Publish Release** in the browser) to publish one site or
+   revise published notes later without rebuilding.
+2. **Complete Apple distribution:** Once Apple finishes processing the uploaded build, match the
+   version and build number in App Store Connect. Confirm availability in the intended internal
+   TestFlight group. For external testing, assign the group and complete beta review submission when
+   required. For a public App Store release, select that same build, apply the prepared localized
+   notes and required declarations, confirm the release settings, and submit for App Review.
+3. **Complete Google Play distribution:** Open the production draft with the AAB's version code.
+   Apply the prepared localized notes and required declarations, confirm the target countries and
+   rollout settings, then send the changes for review. Check **Publishing overview** for the
+   resulting state.
+4. **Close the release operation** when both download sites are public with the intended notes and
+   identical files, the intended internal testers can access the build, and each in-scope external
+   beta or store release is available or has a platform review receipt. Record the observed states,
+   time, build numbers, evidence links, and any pending platform decisions in
+   [Release Status](#release-status). A draft, a GitCode `pre` stage, an upload still processing, a
+   rejection requiring action, or a missing receipt leaves that channel open. After approval,
+   perform any required manual release or rollout and record availability separately when the
+   platform confirms it for the intended audience.
 
 ## Required Configuration
 
 | Location | Setting | Purpose |
 | --- | --- | --- |
 | GitHub Actions secret | `EXPO_TOKEN` | Access to this EAS project's credentials, auto-incremented native versions, Google Play draft submissions, and iOS submissions |
-| GitHub Actions secret | `GITCODE_TOKEN` | Automated `publish-gitcode` release creation and attachment uploads |
+| GitHub Actions secret | `GITCODE_TOKEN` | `stage-gitcode` attachment staging and `publish-gitcode` release publication |
 | GitHub `local-release` environment | Production build secrets (7 variables) | Injected at runtime into `build-native` without persisting plaintext secrets on the Mac runner |
-| GitHub Actions | Built-in `GITHUB_TOKEN` | `contents: write` for generating release notes and publishing the GitHub release |
+| GitHub Actions | Built-in `GITHUB_TOKEN` | `contents: write` for staging draft assets (`stage-github`) and publishing the GitHub release (`publish-github`) |
 | EAS credentials | Android production keystore | Sign GitHub APKs, and sign AABs as the Google Play upload key |
 | EAS credentials | Google Service Account Key for Play Store Submissions | Upload Google Play production drafts for `com.cherryai.cherrystudio_app` without persisting JSON keys on the runner |
 | EAS credentials | iOS production signing and App Store Connect API key | Sign and upload iOS builds without prompts |
 
-`publish-gitcode` calls the GitCode v5 REST API directly from `scripts/publishGitcodeRelease.ts`
-using `GITCODE_TOKEN` (and optional repository variables `GITCODE_API_URL`, `GITCODE_OWNER`,
-`GITCODE_REPO`). If the GitCode repository mirror has not yet synced the tagged commit when
-`publish-gitcode` runs, sync the mirror and re-run the failed `publish-gitcode` job.
-See [GitCode Maintainer Upload](#gitcode-maintainer-upload).
+`stage-gitcode` and `publish-gitcode` call the GitCode v5 REST API directly from
+`scripts/publishGitcodeRelease.ts` using `GITCODE_TOKEN` (and optional repository variables
+`GITCODE_API_URL`, `GITCODE_OWNER`, `GITCODE_REPO`). If the GitCode repository mirror has not yet
+synced the tagged commit when `stage-gitcode` runs, sync the mirror and re-run the failed
+`stage-gitcode` job.
 
 `submit.production-google-play.android` in `eas.json` targets `com.cherryai.cherrystudio_app` on
 the `production` track with `releaseStatus: "draft"`. Its Google Service Account JSON key is stored
@@ -98,7 +105,7 @@ for app identities and production environment requirements.
 Native releases now embed the EAS Update client. Channels are platform-specific:
 `production-apk` for public APKs, `production-google-play` for Play,
 `production-domestic-stores` for domestic stores, and `production-ios` for iOS.
-These workflows build native packages only. JavaScript-only fixes between tags are published by the
+This tag workflow delivers native packages. JavaScript-only fixes between tags are published by the
 manual [OTA Update](../../.github/workflows/ota-update.yml) workflow; see
 [Application Updates](./app-updates.md#publishing).
 
@@ -115,75 +122,32 @@ suffix. Dates are not part of the filename. The application version in `app.json
 | Google Play upload archive | `cherry-studio-0.1.0-android.aab` |
 | Locally archived iOS package | `cherry-studio-0.1.0-ios.ipa` |
 
-The workflows name the downloaded APK and AAB archives; EAS may use its own internal artifact
-names. iOS submission uses the EAS build ID and does not download or rename the IPA. For local
-builds, pass the desired filename with `--output` as described in [Local EAS Builds](./local-builds.md).
-When retaining multiple builds of one version, keep them in separate `build-<native-build-number>/`
-directories. Public APK, domestic APK, and Google Play AAB are separate builds and can have
-different automatically assigned native build numbers even when they share a release tag.
+Mac Studio archives each signed file with `SHA256SUMS` and `build-manifest.json` under
+`${RUNNER_RELEASE_ROOT:-$HOME/releases}/cherry-studio-app/<tag>/<target>/`. Use the exact
+`build-*` directory in the build summary. The manifest records the commit, channel, local build
+ID, native build number, filename and checksum. Different channels can have different native
+build numbers for one version. Keep those identities when retaining packages on the workstation.
 
-## Android GitHub Downloads
+## Public Android downloads
 
-1. Wait for the exact EAS build started by this run to finish successfully. The build starts only
-   after CI passes on the tagged commit.
-2. Download its signed ARM64 APK, check the archive, and generate `SHA256SUMS`.
-3. Save the APK, checksums, and generated release notes as the `android-release` Actions artifact
-   for 30 days. The filename is `cherry-studio-<release-version>-android.apk`.
-4. Publish the files and notes to GitHub Releases.
-
-GitHub prepares a draft, attaches the files, and publishes it automatically. The authorized
-GitCode maintainer uses their own agent through Computer Use to sync the matching tag and publish
-it with the same APK and `SHA256SUMS` from the GitHub release.
-Write GitHub release titles and notes in English, and GitCode release titles and notes in Simplified
-Chinese. Prepare separate language versions with equivalent features, fixes, upgrade guidance, and
-download information; do not copy one platform's notes verbatim to the other. Keep version tags,
-artifact filenames, checksums, and technical identifiers unchanged.
-
-GitHub's generated notes reuse pull request titles without translating them. Review their language
-and keep any manually curated replacement in English. Published GitHub release notes can be updated
-with `gh release edit <tag> --notes-file <english-notes.md>` without rebuilding or uploading the APK.
-The app shows these notes in its update dialog. Start both bodies with the `#` title and end them
-with the download section headed exactly `## 下载安装` (GitCode) or `## Download and Installation`
-(GitHub); the app removes the title and that final section, so put everything users should read in
-the app before it.
-
-The public APK uses `production`, which enables GitCode update checks, in-app downloads and
-user-confirmed Android installation. Publish the matching GitCode stable release with both the
-APK and `SHA256SUMS` before clients can announce it; GitHub publication alone is insufficient.
-The shared update UI also serves store channels: Play checks actual installation eligibility,
-and iOS queries published App Store metadata. These channels open their store and never download
-the public APK. App Store metadata checks do not discover TestFlight builds. Each store's review,
-rollout and publication remain independent from the public APK release.
-
-Tags with a prerelease suffix are marked as prereleases on GitHub. Plain version tags publish regular
-releases. The workflow does not replace an existing attachment with different contents.
-
-Both language versions describe Android installation and explain that store distribution is independent.
-The APK becomes public when this workflow succeeds; it does not wait for either store's review.
-Store links can be added to the release page after the listings are available.
-
-### GitCode Maintainer Upload
-
-1. Hand the authorized maintainer the release tag, source commit, GitHub release URL, exact APK,
-   `SHA256SUMS`, and Simplified Chinese title and notes.
-2. The maintainer directs their own agent to use Computer Use in their authenticated browser.
-   GitCode does not sync automatically: open the repository's mirror settings (pull from GitHub)
-   and run **立即同步**. After it finishes, confirm the release tag exists and points to the source
-   commit. If it is missing or points elsewhere, leave publication pending; do not publish against
-   a different commit.
-3. Create or edit the release for that tag in the browser, enter the Chinese title and notes, and
-   select the appropriate stable or prerelease status.
-4. Upload the same APK and `SHA256SUMS` from GitHub. Wait for both attachments to finish uploading
-   before publishing. On retry, inspect existing attachments first and retain matching files;
-   do not replace an existing attachment with a different build.
-5. Confirm the published page has the intended tag, notes, and both attachments, then record the
-   release URL in the [release status](#release-status).
+`stage-github` and `stage-gitcode` verify the archived APK and `SHA256SUMS` before staging a
+GitHub draft and a GitCode `pre` release. Retries retain matching attachments and existing release
+copy/status. Then [Publish Release](../../.github/workflows/publish-release.yml) verifies that the
+staged APK and `SHA256SUMS` are present before applying the prepared notes, publishing the GitHub
+draft, and promoting stable GitCode releases to `latest` (skipping `latest` promotion if a newer
+stable release is already `latest`). The public APK checks GitCode in China or when the network
+region is unknown, and GitHub in the global region. Each source must be published with both the
+APK and `SHA256SUMS` for its update path to work.
 
 ### Release Notes And Channel Coverage
 
-List the changes since the previous release, then curate the public notes in this outline. Use a
-module name and one concise sentence per item, and omit empty sections. GitCode uses `功能`, `修复`,
-`架构升级`, `升级提醒`, and ends with `## 下载安装`.
+Start each file with the version title. Use `## Download and Installation` (English) or
+`## 下载安装` (Simplified Chinese) as its final section heading. The in-app update dialog strips the
+title and download section, so put all user-facing changes before that heading. Describe the same
+user-facing changes and upgrade guidance in both languages. List the changes since the previous
+release, then curate the public notes in this outline. Use a module name and one concise sentence
+per item, and omit empty sections. GitCode uses `功能`, `修复`, `架构升级`, `升级提醒`, and ends
+with `## 下载安装`.
 
 ```markdown
 # Cherry Studio <version>
@@ -211,7 +175,8 @@ module name and one concise sentence per item, and omit empty sections. GitCode 
 
 Store copy can be shorter, but keep core features and upgrade warnings consistent across GitHub,
 GitCode, and store locales. When the wording changes, update every affected channel, including
-notes that are already published.
+notes that are already published (`pnpm release:publish --tag v<version> ...` can re-run to update
+GitHub and GitCode notes).
 
 ## Google Play
 
@@ -249,64 +214,15 @@ APK; the signed AAB remains retained in the build machine's local release archiv
    key to EAS Credentials under `Google Service Account Key for Play Store Submissions` with
    `eas credentials --platform android`.
 
-### Completing A Release In Play Console
-
-1. Open Google Play Console for `Cherry Studio` (`com.cherryai.cherrystudio_app`), go to the
-   **Production** track, and open the draft release uploaded by `submit-google-play`.
-2. Add localized release notes and any required declarations, verify the Console validation summary,
-   then send the changes for review and choose rollout timing there.
-3. If manual fallback is ever needed, copy the archived directory (containing
-   `cherry-studio-<release-version>-android.aab` and `SHA256SUMS`) from
-   `${RUNNER_RELEASE_ROOT:-$HOME/releases}/cherry-studio-app/<tag>/android-google-play/` on the
-   Mac runner, verify `shasum -a 256 -c SHA256SUMS`, and upload the `.aab` in Play Console.
-
-If Play Console has an unresolved rejection or unreviewed change from a prior edit blocking API
-submissions, resolve or discard that pending change in Play Console first, then re-run
-`submit-google-play`. Once Play has accepted a `versionCode`, finish the existing draft release in
-the Console rather than re-uploading that `versionCode`.
+If a prior Play change blocks the upload, resolve its status in Play Console and retry the
+failed runner job. Once Play accepts the version code, complete its existing draft on the
+workstation as described in step 3.
 
 ## Domestic Android Stores
 
-[Release](../../.github/workflows/release.yml) leaves domestic store builds disabled by default;
-when needed, `scripts/releaseLocalBuild.ts` supports `--target android-domestic-stores`, which
-builds one `production-domestic-stores` APK and archives it separately under
-`<tag>/android-domestic-stores/`. The default public APK call and GitHub publishing path remain
-independent; the domestic target never publishes to GitHub.
-The archive includes the standard `cherry-studio-<version>-android.apk` filename, `SHA256SUMS`,
-and `release-manifest.json` with the local build ID, source commit, version/build, package identity,
-channel, and signing certificate digest. Keep separate directories from the public APK.
-
-The workflow does not upload, submit for review or poll the stores. The first package containing
-the domestic channel and vendor integrations requires a native release; OTA cannot add them to
-existing installations. Prerelease tags do not produce the domestic store artifact.
-
-### Manual Domestic Store Upload
-
-1. Open **Actions → Release** for the intended stable tag. Once its domestic build job succeeds,
-   download and extract `domestic-stores-release` into a separate directory from `android-release`:
-   both artifacts contain an APK with the same filename.
-2. From the extracted directory, verify `SHA256SUMS` with `shasum -a 256 -c SHA256SUMS` on macOS or
-   `sha256sum --check SHA256SUMS` on Linux. Confirm `release-manifest.json` records the intended source
-   commit, app version, package ID, `production-domestic-stores` channel, native version code, and
-   signing certificate. Match the package and signing identity to each store's application record,
-   and keep the EAS build ID with the release record.
-3. Archive the APK, `SHA256SUMS`, and `release-manifest.json` together, for example under
-   `<archive-root>/<release-version>/domestic-stores/build-<versionCode>/`. Use the native build
-   number from this manifest, which can differ from the public APK's. Archive before the Actions
-   artifact expires after 30 days.
-4. Open the existing Cherry Studio application in each of HONOR, Xiaomi, OPPO, and vivo. Upload the
-   same domestic APK separately to all four; use neither the public APK nor the Play AAB. Complete
-   each console's required materials, localized release notes, screenshots, and reviewer access,
-   then submit there. Reuse existing listing materials where applicable.
-5. Update each store's row in the version's `release-status.md` with the submitted version/build,
-   console status, observation time, and link. Track review and actual availability independently;
-   when available, record the live version/build. An upload retry uses this same archived APK.
-
-Client queries use the vendor integrations or GitCode as described in
-[Domestic Android Store Updates](./domestic-store-updates.md). OPPO checks the GitCode stable
-release, so it can announce a newer project version while that version is still under OPPO review.
-GitCode publication and build completion do not establish any store's live version; record what
-each console actually reports.
+Domestic distribution is paused. The reserved `production-domestic-stores` profile uses its own
+channel and disables APK self-installation. Its package, store-specific review states and live
+versions are independent of the public APK. See [Domestic Android Store Updates](./domestic-store-updates.md).
 
 ## iOS
 
@@ -335,7 +251,7 @@ are submitted best effort after Cherry's remote verification. The release summar
 vendor slice as `missing`, `limited`, `debug-present` or `uninspectable`, with its upload result
 when applicable. `debug-present` establishes some source-line coverage. Individual frames may
 still lack line information. A missing third-party file or rejected third-party upload allows
-submission once all three Cherry targets and the downloaded recovery package pass.
+submission once all three Cherry targets and the archived recovery package pass.
 
 The `submit-ios` job verifies the archived `.ipa` checksum and `ios-symbols` directory on the Mac
 release runner (matching build identity, manifest and archive checksums, extracted UUIDs,
@@ -360,13 +276,7 @@ node --import tsx scripts/releaseLocalBuild.ts recover-ios --pending-dir <pendin
 
 Then choose **Re-run failed jobs** in GitHub Actions so `build-native` reuses the recovered
 `build-*` archive via `findCompleteBuild` (without incrementing the build number) and `submit-ios`
-verifies the IPA and uploads it to TestFlight with `submit-receipt.json`. If submitting manually
-outside Actions after recovery, record the receipt on the promoted `<archive-dir>` as well:
-
-```bash
-pnpm exec eas submit --platform ios --profile production --path <archive-dir>/<ipa-filename> --non-interactive --wait --no-auto-testflight-setup &&
-  node --import tsx scripts/releaseLocalBuild.ts record-submit --build-dir <archive-dir> --build-id <local-build-id> --status succeeded
-```
+verifies the IPA and uploads it to TestFlight with `submit-receipt.json`.
 
 Recovery verifies the retained original dSYMs and their build-bound target fingerprint before
 uploading the required dSYMs. It checks Sentry again and writes `ios-symbol-verification.json`.
@@ -387,11 +297,14 @@ not configure groups or submit the app for an App Store public release.
 
 - On failure, save the job ID, error, and logs. Retry unchanged only for a transient failure; if the
   same error recurs, change the approach instead of retrying again.
-- If a publishing job (`publish-github`, `publish-gitcode`, `submit-google-play`, or `submit-ios`)
-  or a partial `build-native` run fails, fix its credentials or service error and choose
-  **Re-run failed jobs** in GitHub Actions. `build-native` reuses already-complete local archives
-  via `findCompleteBuild` for the same tag and commit SHA, and publishing retries verify checksums /
-  `submit-receipt.json` without rebuilding succeeded targets.
+- If a staging or submission job (`stage-github`, `stage-gitcode`, `submit-google-play`, or
+  `submit-ios`) or a partial `build-native` run fails, fix its credentials or service error and
+  choose **Re-run failed jobs** in GitHub Actions. `build-native` reuses already-complete local
+  archives via `findCompleteBuild` for the same tag and commit SHA, and staging retries verify
+  checksums / `submit-receipt.json` without rebuilding succeeded targets.
+- If **Publish Release** fails for one site after the other succeeded, rerun
+  `pnpm release:publish --tag v<version> --target github|gitcode ...` (or re-run the failed job in
+  **Actions → Publish Release**) without re-staging binaries.
 - Before retrying an interrupted iOS submission, check App Store Connect and the Mac archive's
   `submit-receipt.json`. If Apple already received the IPA, do not upload it again; `submit-ios`
   automatically skips duplicate uploads when `submit-receipt.json` records `succeeded` for the same
@@ -405,14 +318,9 @@ not configure groups or submit the app for an App Store public release.
   (`node --import tsx scripts/releaseLocalBuild.ts record-submit --build-dir <archive-dir> --build-id <build-id> --status succeeded`)
   before choosing **Re-run failed jobs** (or finish the existing draft release directly in Play
   Console). Otherwise, fix any Play Console permission or pending-edit issue and choose
-  **Re-run failed jobs** for `submit-google-play` (or upload the archived AAB manually from the Mac
-  release archive without rebuilding).
-- For a domestic store upload retry, check that store's submission first. Resume an accepted
-  submission or upload the same archived domestic APK if it was not accepted. Preserve the other
-  stores' submissions and record each result separately.
+  **Re-run failed jobs** for `submit-google-play`.
 - **Re-run all jobs** reuses complete archived builds for the same tag and commit SHA by default;
-  run `releaseLocalBuild.ts build-all --no-reuse` (or remove the archived `build-*` directory) only
-  when a fresh native build and incremented build number are intended.
+  keep the original build and receipt when retrying delivery.
 - Local archives keep the 5 newest stable versions and 1 prerelease by default (honoring `.pin`
   files inside version directories). Recover the public APK from the GitHub/GitCode release or the
   Mac archive; recover the Google Play AAB or domestic APK from the Mac archive directory under
@@ -430,13 +338,13 @@ are different states; record `unknown` rather than inferring one, and do not inf
 TestFlight result from App Store approval. Open an issue for anything left unfinished after the
 release, such as fixes that have not reached `main`.
 
-For domestic store rows, link the archived `release-manifest.json` and keep the submitted
-version/build distinct from the observed live version/build. All four submissions share one
-artifact identity, but their review and availability states are independent.
+Record separate dates for completion of the release operation and confirmed availability.
+The workflow summary and Mac archive identify what was built and uploaded. The download sites,
+tester groups and store consoles establish what their users can access.
 
 ## References
 
-- [EAS CI builds](https://docs.expo.dev/build/building-on-ci/)
+- [Local EAS builds](https://docs.expo.dev/build-reference/local-builds/)
 - [Upload an AAB to Play Console](https://developer.android.com/studio/publish/upload-bundle)
 - [EAS Android submissions](https://docs.expo.dev/submit/android/)
 - [EAS iOS submissions](https://docs.expo.dev/submit/ios/)

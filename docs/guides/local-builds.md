@@ -1,6 +1,6 @@
 # Local EAS Builds
 
-Use `pnpm build:local` to create an Android or iOS installation package on your machine. It runs
+Use `pnpm build:local` to create an Android or iOS installation package on your machine. For a versioned release, follow [Native Releases](./cloud-releases.md). The local wrapper runs
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
 `pnpm install` also generates the document preview page and the Mermaid renderer page through the
 `postinstall` scripts of
@@ -66,8 +66,8 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
 AAB without adding an app identity or runtime environment, and explicitly disables APK update
-checks. The existing `production` profile creates public Android APKs with GitCode update checks
-and iOS IPAs with this feature disabled. Public APKs are published to GitHub and mirrored to GitCode.
+checks. The existing `production` profile creates public Android APKs with regional GitCode/GitHub update checks
+and iOS IPAs with this feature disabled. Mac Studio stages the same archived public APK to GitHub and GitCode before publication.
 
 `production-domestic-stores` also inherits the production identity and signing credentials, but
 produces an APK on `production-domestic-stores` with APK installation disabled. Submit the same
@@ -205,9 +205,7 @@ The wrapper does not load profile-specific files such as `.env.production.local`
 
 Choose local values for the intended build profile, or export them from your credential manager
 before running the command. EAS also resolves its selected environment; variables with **Secret**
-visibility must be supplied locally for local builds. Cloud release builds continue to use the
-EAS `production` environment described in the
-[observability module](../../src/frontend/appShell/observability/README.md).
+visibility must be supplied locally for local builds. Tag builds on Mac Studio receive the production secrets from the GitHub `local-release` environment.
 
 ## Build Commands
 
@@ -233,30 +231,8 @@ pnpm build:local --platform ios --profile preview
 ```
 
 Preview and development bundles do not report to Sentry, even when the native dependency and a DSN
-are present. Production profiles are never the wrapper's default. Use `--profile production` for
-production iOS builds. When a public APK release is explicitly requested, enable its update path:
-
-```bash
-pnpm build:local --platform android --profile production --output /absolute/path/to/cherry-studio-0.1.0-android.apk
-```
-
-When a Google Play release build is explicitly requested, use its separate AAB profile:
-
-```bash
-pnpm build:local --platform android --profile production-google-play --output /absolute/path/to/cherry-studio-0.1.0-android.aab
-```
-
-When a domestic store release build is explicitly requested, use its separate APK profile and
-archive it apart from the public APK, for example under `<version>/domestic-stores/build-<number>/`:
-
-```bash
-pnpm build:local --platform android --profile production-domestic-stores --output /absolute/path/to/cherry-studio-0.1.0-android.apk
-```
-
-Google Play requires an AAB for a new app; renaming an APK does not convert its format. See
-[Cloud Releases](./cloud-releases.md) for the independent GitHub APK, Google Play AAB build,
-and iOS upload workflows and their signing requirements. Google Play AABs are uploaded manually
-in Play Console; no Google service account is needed.
+are present. For a tagged production version, the [release workflow](./cloud-releases.md) selects the
+public APK, Google Play AAB and iOS profiles and uploads the verified packages from Mac Studio.
 
 For production monitoring, provide a valid upload token and keep automatic uploads enabled. Do not
 set `SENTRY_DISABLE_AUTO_UPLOAD` or `SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD` for a distributable
@@ -264,11 +240,9 @@ production build. Either one skips the Android R8 mapping, JVM source bundle, an
 uploads; the first also skips JavaScript source maps. Missing or invalid upload credentials fail
 the upload tasks.
 
-Cloud-production iOS builds also run the after-archive symbol gate described in
-[Cloud Releases](./cloud-releases.md#ios). It matches the exported IPA to original dSYMs, stages a
-recovery artifact, and requires matching Sentry records for the main app, widget and share extension before TestFlight submission. Other bundled libraries have best-effort symbol coverage. This gate applies only
-to cloud production iOS builds; local production builds retain their existing upload behavior and
-need their own verification. Keep automatic uploads enabled as required above.
+On Mac Studio, the tag workflow enables the [production iOS symbol gate](./cloud-releases.md#ios).
+It matches the exported IPA to original dSYMs, stages a recovery package, and requires Sentry
+records for the main app, widget and share extension before the runner uploads the IPA.
 
 EAS deletes a build's working directory when the build ends, so artifacts that were not uploaded
 cannot be recovered later. Large uploads can be interrupted by the network. For a local production

@@ -49,6 +49,7 @@
   },
   "scripts": {
     "build:local": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/buildLocal.ts",
+    "release:publish": "node --import tsx scripts/publishRelease.ts",
     "eas-build-on-success": "node --import tsx scripts/uploadIosSymbols.ts",
     "update:check": "node --import tsx scripts/publishUpdate.ts check",
     "update:preview": "node --import tsx scripts/publishUpdate.ts publish preview",
