@@ -23,7 +23,7 @@ import type {
   AiUsagePricingSnapshot,
   ServingCredentialReceipt,
 } from '@/shared/data/types/aiUsageRecord';
-import type { Currency } from '@/shared/data/types/model';
+import type { Currency, UniqueModelId } from '@/shared/data/types/model';
 
 import type { TraceSpan } from '../../observability';
 
@@ -217,7 +217,8 @@ export type RuntimeInputPart =
   | RuntimeImagePart;
 
 export type RuntimeMessagePart =
-  | { type: 'text' | 'reasoning'; text: string }
+  | { type: 'text'; text: string }
+  | { type: 'reasoning'; text: string; sourceModelId?: UniqueModelId }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
   | RuntimeImagePart

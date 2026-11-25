@@ -12,6 +12,9 @@ import type {
 } from '@earendil-works/pi-ai';
 import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
 
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { createUniqueModelId } from '@/shared/data/types/model';
+
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
@@ -303,8 +306,16 @@ function appendAssistantHistory(
         content.push({ type: 'text', text: part.text });
         break;
       case 'reasoning':
-        // Stored parts carry no provider signature. Providers drop or demote unsigned thinking
-        // from earlier turns, so normalized history omits it instead of resending it as text.
+        // The transcript has readable reasoning, but no provider signature. Keep its local
+        // API identity until the matching CherryAI chat adapter can replay the scalar field.
+        if (
+          model.api === 'cherry' &&
+          model.provider === CLOUD_PROVIDER_ID &&
+          part.text &&
+          part.sourceModelId === createUniqueModelId(model.provider, model.id)
+        ) {
+          content.push({ type: 'thinking', thinking: part.text });
+        }
         break;
       case 'tool-call':
         content.push({

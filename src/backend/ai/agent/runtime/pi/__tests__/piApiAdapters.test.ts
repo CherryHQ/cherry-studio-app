@@ -7,10 +7,12 @@ import type { AssistantMessage, FetchFunction, Model as PiModel } from '@earendi
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
-import type { Model } from '@/shared/data/types/model';
+import type { AgentMessageView } from '@/shared/contracts/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
-import { formatMessageQuote } from '../../../host/turnRuntimeInput';
+import { formatMessageQuote, toRuntimeHistory } from '../../../host/turnRuntimeInput';
 import { toPiConversation } from '../modelMessages';
 import {
   bindPiStream,
@@ -19,6 +21,7 @@ import {
   type SupportedPiApi,
 } from '../piApiAdapters';
 import type { PiStreamFn } from '../piModelTypes';
+import { emptyAssistantMessage } from '../piStreamEvents';
 import { applyPiWebReplay } from '../PiWebResponse';
 
 const mockAnthropicStreamSimple = jest.fn();
@@ -643,6 +646,141 @@ describe('Pi API adapters', () => {
         omitCompletedThinking ? [expected[2]] : expected,
       );
       expect(JSON.stringify(payloads[2])).toContain('Found it.');
+    },
+  );
+
+  test.each([
+    { id: 'deepseek-v4-flash', reasoning: true, field: 'reasoning' },
+    { id: 'deepseek-v4-flash', reasoning: false, field: 'reasoning_text' },
+    { id: 'cloud-alias', reasoning: false, field: 'reasoning_content' },
+  ])(
+    'replays same-model CherryAI tool history for $id with saved field $field',
+    async ({ id, reasoning, field }) => {
+      const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
+      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+        '@earendil-works/pi-ai/api/openai-completions',
+      );
+      jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+      const model: PiModel<'openai-completions'> = {
+        api: 'openai-completions',
+        provider: CLOUD_PROVIDER_ID,
+        id,
+        name: id,
+        baseUrl: 'https://cloud.example/v1',
+        input: ['text'],
+        reasoning,
+        contextWindow: 4096,
+        maxTokens: 256,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      };
+      const uniqueId = createUniqueModelId(model.provider, model.id);
+      const stored: AgentMessageView = {
+        id: 'answer',
+        sessionId: 'session',
+        turnId: 'earlier',
+        role: 'assistant',
+        status: 'success',
+        modelId: uniqueId,
+        inferenceSnapshot: null,
+        stats: null,
+        createdAt: '2026-11-25T00:00:00Z',
+        updatedAt: '2026-11-25T00:00:00Z',
+        parts: [
+          { type: 'reasoning', id: 'thought', text: 'Compare the results.', state: 'done' },
+          { type: 'text', id: 'text', text: 'Done.', state: 'done' },
+        ],
+      };
+      const rebuilt = toPiConversation(
+        {
+          instructions: '',
+          input: [],
+          history: toRuntimeHistory([
+            stored,
+            { ...stored, modelId: createUniqueModelId('other', model.id) },
+          ]),
+        },
+        { ...model, api: 'cherry' },
+      );
+      const toolCall: AssistantMessage = {
+        ...emptyAssistantMessage(model),
+        stopReason: 'toolUse',
+        content: [
+          { type: 'thinking', thinking: 'Read the result.', thinkingSignature: field },
+          { type: 'toolCall', id: 'call', name: 'lookup', arguments: {} },
+        ],
+      };
+      const fetch = jest.fn(
+        async (_url: unknown, _init?: RequestInit) =>
+          new Response(
+            'data: {"choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+            {
+              headers: { 'Content-Type': 'text/event-stream' },
+            },
+          ),
+      );
+      const stream = await bindPiStream(adapter, {
+        apiKey: 'fixture',
+        fetch,
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 256,
+        requestParameters: {
+          model: {
+            id: uniqueId,
+            providerId: model.provider,
+            modelId: model.id,
+            name: model.name,
+            capabilities: [],
+            isEnabled: true,
+            isHidden: false,
+            supportsStreaming: true,
+            reasoning: reasoning
+              ? { selectableEfforts: ['high'], defaultEffort: 'high' }
+              : undefined,
+          },
+          profile: REASONING_FORMAT_PROFILES['openai-chat'].wire,
+          selection: 'default',
+        },
+      });
+      const response = await stream(
+        model,
+        normalizeContext({
+          tools: [
+            {
+              name: 'lookup',
+              description: 'Look up an item',
+              parameters: { type: 'object', properties: {} },
+            },
+          ],
+          messages: [
+            ...rebuilt.history,
+            toolCall,
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: 'lookup',
+              content: [{ type: 'text', text: 'Found.' }],
+              isError: false,
+              timestamp: 1,
+            },
+          ],
+        }),
+      );
+      expect((await response.result()).stopReason).toBe('stop');
+      const sent = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+      expect(sent.tools).toHaveLength(1);
+      expect(sent.messages.filter((item: { role: string }) => item.role === 'assistant')).toEqual([
+        { role: 'assistant', content: 'Done.', reasoning_content: 'Compare the results.' },
+        { role: 'assistant', content: 'Done.', reasoning_content: '' },
+        {
+          role: 'assistant',
+          content: null,
+          reasoning_content: 'Read the result.',
+          tool_calls: [
+            { id: 'call', type: 'function', function: { name: 'lookup', arguments: '{}' } },
+          ],
+        },
+      ]);
     },
   );
 
