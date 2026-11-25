@@ -1757,6 +1757,7 @@
   "remoteAgent.artifact": "Çıktı dosyası",
   "remoteAgent.attachmentsUnavailable": "Masaüstü sohbetleri henüz ek dosyaları desteklemiyor",
   "remoteAgent.awaitingApproval": "Yanıtınız bekleniyor",
+  "remoteAgent.cachedCatalog": "Son eşitlenen liste gösteriliyor.",
   "remoteAgent.configured": "Model yapılandırıldı",
   "remoteAgent.connected": "{{name}} bağlantısı kuruldu",
   "remoteAgent.connecting": "PC’ye bağlanılıyor…",

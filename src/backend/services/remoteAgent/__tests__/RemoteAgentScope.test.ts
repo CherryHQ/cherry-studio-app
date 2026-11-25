@@ -128,7 +128,12 @@ function fixture(
   });
   const source = new RemoteAgentScope(
     lease,
-    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    {
+      retain: jest.fn(),
+      prewarmAgent: jest.fn(),
+      revoke: jest.fn(),
+      subscribeInvalidation: () => () => undefined,
+    },
     journal,
     cache,
     background,
@@ -529,7 +534,12 @@ it('resumes observation when a persisted uncertain send is confirmed after a sou
   });
   const restored = new RemoteAgentScope(
     test.lease,
-    { retain: jest.fn(), revoke: jest.fn(), subscribeInvalidation: () => () => undefined },
+    {
+      retain: jest.fn(),
+      prewarmAgent: jest.fn(),
+      revoke: jest.fn(),
+      subscribeInvalidation: () => () => undefined,
+    },
     test.journal,
     new RemoteSessionReadCache(),
     test.background,

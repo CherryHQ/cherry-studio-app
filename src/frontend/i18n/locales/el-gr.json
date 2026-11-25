@@ -1757,6 +1757,7 @@
   "remoteAgent.artifact": "Παραγόμενο αρχείο",
   "remoteAgent.attachmentsUnavailable": "Οι συνομιλίες υπολογιστή δεν υποστηρίζουν ακόμη συνημμένα",
   "remoteAgent.awaitingApproval": "Αναμονή για την απάντησή σας",
+  "remoteAgent.cachedCatalog": "Εμφανίζεται η λίστα από τον τελευταίο συγχρονισμό.",
   "remoteAgent.configured": "Το μοντέλο έχει ρυθμιστεί",
   "remoteAgent.connected": "Σύνδεση με {{name}}",
   "remoteAgent.connecting": "Σύνδεση με PC…",

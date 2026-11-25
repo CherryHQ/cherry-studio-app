@@ -1741,6 +1741,7 @@
   "remoteAgent.artifact": "Tệp kết quả",
   "remoteAgent.attachmentsUnavailable": "Cuộc trò chuyện trên máy tính chưa hỗ trợ tệp đính kèm",
   "remoteAgent.awaitingApproval": "Đang chờ phản hồi của bạn",
+  "remoteAgent.cachedCatalog": "Đang hiển thị danh sách từ lần đồng bộ gần nhất.",
   "remoteAgent.configured": "Đã cấu hình mô hình",
   "remoteAgent.connected": "Đã kết nối với {{name}}",
   "remoteAgent.connecting": "Đang kết nối với PC…",

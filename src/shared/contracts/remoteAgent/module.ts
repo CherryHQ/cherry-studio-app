@@ -84,5 +84,7 @@ export interface RemoteAgentSource {
   dispose(): void;
 }
 export interface RemoteAgentModule {
+  /** Warm one likely desktop, optionally reading its first page of Agent metadata. */
+  prewarm(connectionId: string, view: 'agents' | 'sessions', signal: AbortSignal): Promise<void>;
   open(connectionId: string, signal: AbortSignal): Promise<RemoteAgentSource>;
 }

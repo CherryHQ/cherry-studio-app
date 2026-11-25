@@ -79,13 +79,7 @@ export type ComposerPillProps = {
   testID?: string;
 };
 
-export type ComposerCollapsibleProps = {
-  /** Render `null` to collapse. The last non-empty frame stays up until the collapse lands. */
-  children?: ReactNode;
-  /** Applied to the measured content, not the clip — pass padding here and the row animates to include it. */
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
-};
+export type { DisclosureContentProps as ComposerCollapsibleProps } from '../disclosure/disclosure-content';
 
 /**
  * The field's imperative half — what a caller needs to insert an entity the

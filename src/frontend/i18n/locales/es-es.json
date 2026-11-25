@@ -1773,6 +1773,7 @@
   "remoteAgent.artifact": "Archivo generado",
   "remoteAgent.attachmentsUnavailable": "Las conversaciones de escritorio aún no admiten archivos adjuntos",
   "remoteAgent.awaitingApproval": "Esperando tu respuesta",
+  "remoteAgent.cachedCatalog": "Se muestra la última lista sincronizada.",
   "remoteAgent.configured": "Modelo configurado",
   "remoteAgent.connected": "Conectado a {{name}}",
   "remoteAgent.connecting": "Conectando al PC…",
