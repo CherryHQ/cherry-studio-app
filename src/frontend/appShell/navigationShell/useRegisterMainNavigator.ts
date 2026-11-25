@@ -10,6 +10,7 @@ import { type MainNavigatorHandler, useOptionalNavigationShellActions } from './
 
 export type MainStackNavigationLike = {
   dispatch: (action: NavigationAction) => void;
+  getParent?: () => MainStackNavigationLike | undefined;
   getState: () => Readonly<NavigationState> | undefined;
 };
 
@@ -26,7 +27,7 @@ function resolveMainStackState(
 ): Readonly<NavigationState> | undefined {
   const rootState = navigation.getState();
   if (!rootState?.routes?.length) return undefined;
-  // Inside `(drawer)/(main)/_layout`, `useNavigation()` resolves to the parent Drawer navigator.
+  // Inside `(drawer)/(content)/(main)/_layout`, `useNavigation()` resolves to the parent Drawer navigator.
   // Target `(main)`'s nested Stack state so root switches dispatch against the content stack.
   const mainRoute = rootState.routes.find((route) => route.name === '(main)');
   if (mainRoute) {
@@ -35,7 +36,7 @@ function resolveMainStackState(
   return rootState;
 }
 
-/** Pure transition planner for top-level switches inside `(drawer)/(main)` Stack. */
+/** Pure transition planner for top-level switches inside `(drawer)/(content)/(main)` Stack. */
 export function planMainStackNavigation(
   stackState: Readonly<NavigationState> | undefined,
   id: NavDestinationId,
@@ -83,6 +84,34 @@ export function planMainStackNavigation(
   };
 }
 
+/**
+ * Applies a rail switch under the Settings card before revealing the content. The focused
+ * Settings route would otherwise make Expo Router target the outer stack for push/replace.
+ */
+function applyCoveredContentPlan(
+  navigation: MainStackNavigationLike,
+  state: Readonly<NavigationState>,
+  plan: Exclude<MainStackNavigationPlan, { type: 'fallback' | 'push' }>,
+  route: string,
+) {
+  switch (plan.type) {
+    case 'noop':
+      break;
+    case 'popToTop':
+      navigation.dispatch({ ...StackActions.popToTop(), target: plan.target });
+      break;
+    case 'dismiss':
+      navigation.dispatch({ ...StackActions.pop(plan.count), target: state.key });
+      break;
+    case 'replace':
+      if (plan.popCount) {
+        navigation.dispatch({ ...StackActions.pop(plan.popCount), target: state.key });
+      }
+      navigation.dispatch({ ...StackActions.replace(route), target: state.key });
+      break;
+  }
+}
+
 /** Connects `(main)` Stack's navigation instance so root dock/rail switches keep history clean. */
 export function useRegisterMainNavigator(navigation: MainStackNavigationLike): void {
   const register = useOptionalNavigationShellActions()?.registerMainNavigator;
@@ -90,8 +119,29 @@ export function useRegisterMainNavigator(navigation: MainStackNavigationLike): v
   useEffect(() => {
     if (!register) return;
     const handler: MainNavigatorHandler = (id, router, href) => {
+      const parent = navigation.getParent?.();
+      const shellState = parent?.getState();
+      const activeShellRoute = shellState?.routes[shellState.index];
+      const settingsIsOpen = activeShellRoute?.name === 'settings';
+
+      if (id === 'settings') {
+        if (!settingsIsOpen) router.push(href);
+        else if (activeShellRoute.state?.key && (activeShellRoute.state.index ?? 0) > 0)
+          parent?.dispatch({ ...StackActions.popToTop(), target: activeShellRoute.state.key });
+        return true;
+      }
+
       const state = resolveMainStackState(navigation);
       const plan = planMainStackNavigation(state, id);
+      if (settingsIsOpen && shellState && parent) {
+        if (state && plan.type !== 'fallback' && plan.type !== 'push') {
+          applyCoveredContentPlan(navigation, state, plan, getNavStackRoute(id));
+          parent.dispatch({ ...StackActions.popToTop(), target: shellState.key });
+        } else {
+          router.dismissTo(href);
+        }
+        return true;
+      }
 
       switch (plan.type) {
         case 'fallback':

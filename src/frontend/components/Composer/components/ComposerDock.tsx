@@ -1,7 +1,6 @@
 import {
   Composer,
   type ComposerDockProps as CherryComposerDockProps,
-  getComposerBottomPadding,
 } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigationDockClearance } from '@/frontend/appShell/navigationShell/state';
 
 import { useComposerPresentationState } from '../context/ComposerProvider';
+import { getComposerExtraBottomOffset } from '../utils/composerDockOffset';
 
 type ComposerDockProps = Omit<CherryComposerDockProps, 'keyboardTracking'>;
 
@@ -18,8 +18,7 @@ export function ComposerDock(props: ComposerDockProps) {
   const { bottom } = useSafeAreaInsets();
   const { keyboardTracking } = useComposerPresentationState();
   const dockClearance = useNavigationDockClearance();
-  const extraBottomOffset =
-    dockClearance > 0 ? Math.max(0, bottom + dockClearance - getComposerBottomPadding(bottom)) : 0;
+  const extraBottomOffset = getComposerExtraBottomOffset(bottom, dockClearance);
 
   return (
     <Composer.Dock

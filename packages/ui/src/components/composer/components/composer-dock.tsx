@@ -20,6 +20,7 @@ import Animated, {
   type SharedValue,
   useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
@@ -42,22 +43,6 @@ const FADE_OVERHANG_STYLE = {
   right: 0,
   top: -COMPOSER_DOCK_FADE_OVERHANG,
 } as const;
-
-function getCollapsedExtraOffset(
-  extraBottomOffset: number,
-  keyboardHeight: number,
-  keyboardProgress: number,
-  keyboardOffset: number,
-  expandProgress: number,
-  isTracking: boolean,
-): number {
-  'worklet';
-  if (!isTracking || extraBottomOffset <= 0) {
-    return 0;
-  }
-  const baseLift = -(keyboardHeight + keyboardProgress * keyboardOffset);
-  return Math.min(extraBottomOffset, Math.max(0, baseLift)) * (1 - expandProgress);
-}
 
 export type ComposerDockProps = PropsWithChildren<{
   /** Paints the compact dock's whole footprint so an overlaid transcript stays out of sight. */
@@ -92,6 +77,7 @@ export function ComposerDock({
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
   const keyboardOffset = getComposerKeyboardStickyOffset(bottom);
   const bottomPadding = getComposerBottomPadding(bottom);
+  const restingExtraOffset = Math.max(0, extraBottomOffset);
   const expansion = useComposerExpansion();
   const fallbackRef = useRef<ViewInstance>(null);
   const dockRef = containerRef ?? fallbackRef;
@@ -103,6 +89,8 @@ export function ComposerDock({
   const progress = expansion?.meta.progress;
   const compactDockHeight = expansion?.meta.compactDockHeight;
   const contentInset = expansion?.meta.contentInset;
+  const dockLift = expansion?.meta.dockLift;
+  const editorMorphing = expansion?.meta.editorMorphing;
 
   const recordCompactHeight = useCallback(
     (height: number) => {
@@ -111,9 +99,8 @@ export function ComposerDock({
         setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
       }
       compactDockHeight?.set(measuredHeight);
-      contentInset?.set(measuredHeight);
     },
-    [compactDockHeight, contentInset, reservesSpace],
+    [compactDockHeight, reservesSpace],
   );
 
   useEffect(() => {
@@ -121,8 +108,9 @@ export function ComposerDock({
     return () => {
       compactDockHeight?.set(0);
       contentInset?.set(0);
+      dockLift?.set(0);
     };
-  }, [compactDockHeight, contentInset, isExpandable]);
+  }, [compactDockHeight, contentInset, dockLift, isExpandable]);
 
   useEffect(() => {
     if (!isExpandable || isPresented) return;
@@ -145,56 +133,32 @@ export function ComposerDock({
     [isExpandable, keyboardTracking, tracking],
   );
 
+  // The list uses the settled compact footprint. Intermediate editor layout events only move
+  // visual accessories. Manual expansion separately keeps the compact footprint reserved.
   useAnimatedReaction(
-    () => {
-      if (!isExpandable || !compactDockHeight || !contentInset || extraBottomOffset <= 0) {
-        return -1;
-      }
-      const measured = compactDockHeight.get();
-      if (measured <= 0) {
-        return -1;
-      }
-      const expandProgress = progress?.get() ?? 0;
-      const collapsedExtraOffset = getCollapsedExtraOffset(
-        extraBottomOffset,
-        keyboardHeight.get(),
-        keyboardProgress.get(),
-        keyboardOffset,
-        expandProgress,
-        keyboardTracking?.get() ?? true,
-      );
-      return Math.max(0, measured - collapsedExtraOffset);
-    },
-    (nextInset, previousInset) => {
-      if (contentInset && nextInset >= 0 && nextInset !== previousInset) {
-        contentInset.set(nextInset);
-      }
+    () =>
+      isExpandable && !isPresented && !editorMorphing?.get() ? compactDockHeight?.get() : undefined,
+    (height) => {
+      if (height !== undefined && height !== contentInset?.get()) contentInset?.set(height);
     },
   );
 
-  const stickyStyle = useAnimatedStyle(() => {
+  const stickyTranslation = useDerivedValue(() => {
     const isTracking = keyboardTracking?.get() ?? true;
-    if (!isTracking) {
-      return { transform: [{ translateY: 0 }] };
-    }
+    if (!isTracking) return 0;
     const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
-    const collapsedExtraOffset = getCollapsedExtraOffset(
-      extraBottomOffset,
-      keyboardHeight.get(),
-      keyboardProgress.get(),
-      keyboardOffset,
-      expandProgress,
-      true,
-    );
-    return {
-      transform: [
-        {
-          translateY:
-            keyboardHeight.get() + keyboardProgress.get() * keyboardOffset + collapsedExtraOffset,
-        },
-      ],
-    };
+    const baseTranslation = keyboardHeight.get() + keyboardProgress.get() * keyboardOffset;
+    const collapsedExtraOffset =
+      Math.min(restingExtraOffset, Math.max(0, -baseTranslation)) * (1 - expandProgress);
+    return baseTranslation + collapsedExtraOffset;
   });
+  useAnimatedReaction(
+    () => (isExpandable ? Math.max(0, -stickyTranslation.get()) : 0),
+    (lift) => dockLift?.set(lift),
+  );
+  const stickyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: stickyTranslation.get() }],
+  }));
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: isExpandable ? (progress?.get() ?? 0) : 0,
@@ -204,7 +168,7 @@ export function ComposerDock({
   }));
   const dockStyle = useAnimatedStyle(() => {
     const expandProgress = isExpandable ? (progress?.get() ?? 0) : 0;
-    const restingOffset = extraBottomOffset > 0 ? extraBottomOffset * (1 - expandProgress) : 0;
+    const restingOffset = restingExtraOffset * (1 - expandProgress);
     return {
       paddingBottom: bottomPadding + restingOffset,
       paddingHorizontal: composerHorizontalScreenInset * (1 - expandProgress),

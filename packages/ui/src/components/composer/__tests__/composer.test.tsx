@@ -74,6 +74,7 @@ jest.mock('react-native-reanimated', () => {
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0]! + (output[1]! - output[0]!) * value,
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedReaction: jest.fn(),
     useAnimatedStyle: (factory: () => object) => factory(),
     useDerivedValue: (read: () => unknown) => ({ get: read }),
     useReducedMotion: () => false,

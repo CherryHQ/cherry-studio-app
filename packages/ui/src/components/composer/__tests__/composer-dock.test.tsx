@@ -10,6 +10,7 @@ import { useComposerDockLayout } from '../hooks/use-composer-dock-layout';
 let mockBottomInset = 34;
 let mockKeyboardMaxHeight = 300;
 let mockKeyboardProgress = 1;
+const mockReactions: (() => void)[] = [];
 let mockExpansion: ReturnType<typeof useComposerExpansion> = null;
 
 jest.mock('../components/composer-expansion', () => ({
@@ -49,8 +50,15 @@ jest.mock('react-native-reanimated', () => ({
   __esModule: true,
   default: { View: jest.requireActual('react-native').View },
   Easing: { bezier: () => 'settle' },
-  useAnimatedReaction: <T,>(prepare: () => T, react: (value: T, previous: T | null) => void) =>
-    react(prepare(), null),
+  useAnimatedReaction: <T,>(prepare: () => T, react: (value: T, previous: T | null) => void) => {
+    const { useRef } = jest.requireActual<typeof import('react')>('react');
+    const index = useRef<number | undefined>(undefined);
+    index.current ??= mockReactions.length;
+    const evaluate = () => react(prepare(), null);
+    mockReactions[index.current] = evaluate;
+    evaluate();
+  },
+  useDerivedValue: (factory: () => unknown) => ({ get: factory }),
   useAnimatedStyle: (factory: () => object) => factory(),
   useSharedValue: (initialValue: number) => {
     const { useRef } = jest.requireActual('react');
@@ -94,6 +102,7 @@ describe('Composer.Dock', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    mockReactions.length = 0;
     mockBottomInset = 34;
     mockKeyboardMaxHeight = 300;
     mockKeyboardProgress = 1;
@@ -230,6 +239,8 @@ describe('Composer.Dock', () => {
       meta: {
         compactDockHeight: cell(0),
         contentInset,
+        dockLift: cell(0),
+        editorMorphing: cell(false),
         extraHeight: cell(0),
         keyboardTrackingEnabled: cell(false),
         progress,
@@ -261,6 +272,7 @@ describe('Composer.Dock', () => {
         }),
       );
     }
+    act(() => mockReactions.forEach((reaction) => reaction()));
     expect(contentInset.get()).toBe(148);
     expect(onRender).not.toHaveBeenCalled();
     const restingBackground = () => renderer!.root.findByProps({ testID: 'composer-dock-fade' });
@@ -288,15 +300,19 @@ describe('Composer.Dock', () => {
     expect(contentInset.get()).toBe(0);
   });
 
-  it('keeps paddingBottom steady on keyboard open while collapsing extraBottomOffset via GPU translateY and UI contentInset', () => {
+  it('keeps list insets steady while the dock moves and the editor morphs', () => {
     const compactDockHeight = cell(0);
     const contentInset = cell(0);
+    const dockLift = cell(0);
+    const editorMorphing = cell(false);
     const progress = cell(0);
     mockExpansion = {
       actions: { collapse: jest.fn(), expand: jest.fn(), resizeContent: jest.fn() },
       meta: {
         compactDockHeight,
         contentInset,
+        dockLift,
+        editorMorphing,
         extraHeight: cell(0),
         keyboardTrackingEnabled: cell(true),
         progress,
@@ -334,24 +350,44 @@ describe('Composer.Dock', () => {
     expect(restingPaddingBottom).toBeGreaterThanOrEqual(64);
     expect(outerStickyStyle().transform).toEqual([{ translateY: 0 }]);
 
-    act(() => {
-      renderer!.root
-        .findAllByProps({ pointerEvents: 'box-none' })
-        .find((node) => typeof node.props.onLayout === 'function')
-        ?.props.onLayout({ nativeEvent: { layout: { height: 148 } } });
-    });
+    const layoutDock = (height: number) =>
+      act(() => {
+        renderer!.root
+          .findAllByProps({ pointerEvents: 'box-none' })
+          .find((node) => typeof node.props.onLayout === 'function')
+          ?.props.onLayout({ nativeEvent: { layout: { height } } });
+        mockReactions.forEach((reaction) => reaction());
+      });
+    layoutDock(148);
     expect(contentInset.get()).toBe(148);
 
     mockKeyboardProgress = 1;
     act(() => renderer!.update(renderExtraDock()));
     expect(innerDockStyle().paddingBottom).toBe(restingPaddingBottom);
     expect(outerStickyStyle().transform).toEqual([{ translateY: -300 + 26 + 64 }]);
-    expect(contentInset.get()).toBe(148 - 64);
+    expect(dockLift.get()).toBe(210);
+    expect(contentInset.get()).toBe(148);
+
+    editorMorphing.set(true);
+    for (const height of [150, 165, 190]) {
+      layoutDock(height);
+      expect(compactDockHeight.get()).toBe(height);
+      expect(contentInset.get()).toBe(148);
+    }
+    editorMorphing.set(false);
+    layoutDock(192);
+    expect(contentInset.get()).toBe(192);
+    // Typing or adding an attachment after the morph grows the list range immediately.
+    layoutDock(222);
+    expect(contentInset.get()).toBe(222);
+    expect(dockLift.get()).toBe(210);
 
     // Small hardware-keyboard accessory bar clamps collapse so composer never dips below bottom dock.
     mockKeyboardMaxHeight = 55;
     act(() => renderer!.update(renderExtraDock()));
     expect(outerStickyStyle().transform).toEqual([{ translateY: 0 }]);
+    expect(dockLift.get()).toBe(0);
+    expect(contentInset.get()).toBe(222);
 
     // Full-screen expansion reclaims extraBottomOffset from paddingBottom.
     mockKeyboardMaxHeight = 300;

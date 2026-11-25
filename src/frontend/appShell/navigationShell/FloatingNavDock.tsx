@@ -47,6 +47,7 @@ export function FloatingNavDock() {
     activeDestination,
     activeDockTab,
     isAtRoot,
+    isOnboardingBlocking,
     isDockVisible,
     navigateToDestination,
     pinnedTabs,
@@ -98,7 +99,7 @@ export function FloatingNavDock() {
     [measureDockBounds, reportDockHeight],
   );
 
-  if (shellMode !== 'compact-dock') {
+  if (isOnboardingBlocking || shellMode !== 'compact-dock') {
     return null;
   }
 

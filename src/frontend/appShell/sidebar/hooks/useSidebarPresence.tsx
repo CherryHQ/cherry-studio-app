@@ -1,4 +1,5 @@
 import { useDrawerStatus } from 'expo-router/drawer';
+import { createContext, type PropsWithChildren, use } from 'react';
 
 import { useSidebarColumn } from '../SidebarColumn';
 
@@ -9,9 +10,16 @@ import { useSidebarColumn } from '../SidebarColumn';
  */
 export type SidebarPresence = 'persistent' | 'open' | 'closed';
 
+const OverlayPresence = createContext<'open' | 'closed'>('closed');
+
+export function OverlaySidebarPresenceProvider({ children }: PropsWithChildren) {
+  const status = useDrawerStatus();
+  return <OverlayPresence value={status}>{children}</OverlayPresence>;
+}
+
 export function useSidebarPresence(): SidebarPresence {
   const { column } = useSidebarColumn();
-  const drawerStatus = useDrawerStatus();
+  const drawerStatus = use(OverlayPresence);
 
   if (column.kind === 'overlay') return drawerStatus;
   return column.kind === 'permanent' ? 'persistent' : 'closed';

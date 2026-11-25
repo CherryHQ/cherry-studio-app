@@ -228,7 +228,7 @@ export function isMoreModuleId(id: string): id is MoreModuleId {
   return MORE_MODULE_SET.has(id);
 }
 
-/** Maps a pathname inside `(main)` to its top-level navigation destination, if any. */
+/** Maps a drawer-shell pathname to its top-level navigation destination, if any. */
 export function resolveNavDestination(pathname: string): NavDestinationId | undefined {
   return ROOT_PATHNAME_TO_DEST.find(
     ([root]) => pathname === root || (root !== '/' && pathname.startsWith(`${root}/`)),

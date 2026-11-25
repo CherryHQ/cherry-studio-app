@@ -16,18 +16,24 @@ export function ChatComposerClearance({
   className,
   contentBottomInset = 0,
 }: ChatComposerClearanceProps) {
-  const composerInset = useComposerExpansion()?.meta.contentInset;
+  const composer = useComposerExpansion()?.meta;
+  const composerInset = composer?.contentInset;
+  const dockLift = composer?.dockLift;
+  const liveDockHeight = composer?.compactDockHeight;
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
   const keyboardOffset = getComposerKeyboardStickyOffset(useSafeAreaInsets().bottom);
-  // Centered content rises by half the keyboard lift, matching padding without a relayout per frame.
-  const style = useAnimatedStyle(() => ({
-    paddingBottom: contentBottomInset + (composerInset?.get() ?? 0),
-    transform: [
-      {
-        translateY: Math.min(0, keyboardHeight.get() + keyboardProgress.get() * keyboardOffset) / 2,
-      },
-    ],
-  }));
+  // Match the live dock top while holding layout padding steady through the editor morph.
+  const style = useAnimatedStyle(() => {
+    const settledHeight = composerInset?.get() ?? 0;
+    const lift =
+      dockLift?.get() ??
+      Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset);
+    const heightDelta = (liveDockHeight?.get() ?? settledHeight) - settledHeight;
+    return {
+      paddingBottom: contentBottomInset + settledHeight,
+      transform: [{ translateY: -(lift + heightDelta) / 2 }],
+    };
+  });
 
   return (
     <Animated.View className={className} style={style}>
