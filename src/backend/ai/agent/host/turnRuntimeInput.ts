@@ -83,7 +83,13 @@ export function toRuntimeHistory(
           });
           break;
         case 'reasoning':
-          parts.push({ type: part.type, text: part.text });
+          parts.push({
+            type: part.type,
+            text: part.text,
+            ...(message.role === 'assistant' && message.modelId
+              ? { sourceModelId: message.modelId }
+              : {}),
+          });
           break;
         case 'file':
           if (message.role === 'user' && part.purpose === 'input-attachment') {

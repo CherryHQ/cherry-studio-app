@@ -7,10 +7,15 @@ import type {
   Model as PiModel,
   TextContent,
   ToolResultMessage,
+  TranscriptContext,
   UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
+import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
+
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { parseUniqueModelId } from '@/shared/data/types/model';
 
 import type {
   RuntimeDocumentAttachmentPart,
@@ -51,6 +56,9 @@ export type PiHistoryTurn = {
 };
 
 type PiHistoryModel = Pick<PiModel<PiApi>, 'api' | 'id' | 'provider' | 'input'>;
+type RebuiltAssistant = AssistantMessage & {
+  cherryReasoningContent?: string;
+};
 export type PiConversationInput = Pick<
   RuntimeExecutionRequest,
   'instructions' | 'history' | 'input' | 'resume'
@@ -278,16 +286,20 @@ function appendAssistantHistory(
   contextTokens?: number,
 ): void {
   let content: AssistantMessage['content'] = [];
+  let reasoning: { modelId: string; text: string } | undefined;
   let lastAssistant: AssistantMessage | undefined;
   const flushAssistant = () => {
+    const cherryReasoning = reasoning;
+    reasoning = undefined;
     if (content.length === 0) return;
     const stopReason = content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop';
     lastAssistant = {
       api: model.api,
       content,
-      model: model.id,
-      provider: model.provider,
+      model: cherryReasoning?.modelId ?? model.id,
+      provider: cherryReasoning ? CLOUD_PROVIDER_ID : model.provider,
       role: 'assistant',
+      ...(cherryReasoning ? { cherryReasoningContent: cherryReasoning.text } : {}),
       stopReason,
       timestamp: Date.now(),
       // Persisted message usage sums multiple requests, not this context's size.
@@ -302,10 +314,16 @@ function appendAssistantHistory(
       case 'text':
         content.push({ type: 'text', text: part.text });
         break;
-      case 'reasoning':
-        // Stored parts carry no provider signature. Providers drop or demote unsigned thinking
-        // from earlier turns, so normalized history omits it instead of resending it as text.
+      case 'reasoning': {
+        const origin = part.sourceModelId && parseUniqueModelId(part.sourceModelId);
+        if (model.api === 'cherry' && part.text && origin?.providerId === CLOUD_PROVIDER_ID) {
+          // A sibling model can reuse this rebuild. Keep the original owner outside Pi's
+          // countable content until the destination of a tool-enabled request is known.
+          if (reasoning) reasoning.text += '\n' + part.text;
+          else reasoning = { modelId: origin.modelId, text: part.text };
+        }
         break;
+      }
       case 'tool-call':
         content.push({
           type: 'toolCall',
@@ -343,4 +361,65 @@ function appendAssistantHistory(
   if (lastAssistant && contextTokens !== undefined) {
     lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
   }
+}
+
+/** Materialize saved reasoning only for the CherryAI route selected by the model resolver. */
+export function projectPiReasoningHistory(
+  context: TranscriptContext,
+  model: PiModel<PiApi>,
+  configuredModelId: string,
+): TranscriptContext {
+  const canReplay =
+    model.provider === CLOUD_PROVIDER_ID &&
+    model.api === 'openai-completions' &&
+    model.compat &&
+    'requiresReasoningContentOnAssistantMessages' in model.compat &&
+    model.compat.requiresReasoningContentOnAssistantMessages &&
+    getCurrentTools(context.messages).length > 0;
+  return {
+    ...context,
+    messages: context.messages.map((message): PiMessage => {
+      if (message.role !== 'assistant') return message;
+      if (message.api === 'cherry' && 'cherryReasoningContent' in message) {
+        const { cherryReasoningContent, ...plain } = message as RebuiltAssistant;
+        if (
+          !canReplay ||
+          message.provider !== model.provider ||
+          message.model !== configuredModelId ||
+          typeof cherryReasoningContent !== 'string'
+        )
+          return plain;
+        return {
+          ...plain,
+          api: model.api,
+          model: model.id,
+          content: [
+            {
+              type: 'thinking',
+              thinkingSignature: 'reasoning_content',
+              thinking: cherryReasoningContent,
+            },
+            ...plain.content,
+          ],
+        };
+      }
+      if (
+        !canReplay ||
+        message.provider !== model.provider ||
+        message.model !== model.id ||
+        message.api !== model.api
+      )
+        return message;
+      return {
+        ...message,
+        content: message.content.map((part) =>
+          part.type === 'thinking' &&
+          !part.redacted &&
+          (part.thinkingSignature === 'reasoning' || part.thinkingSignature === 'reasoning_text')
+            ? { ...part, thinkingSignature: 'reasoning_content' }
+            : part,
+        ),
+      };
+    }),
+  };
 }

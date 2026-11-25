@@ -21,13 +21,15 @@ import {
 import { ZodError } from 'zod';
 
 import { AgentProtocolError } from '@/shared/contracts/agent';
+import { CLOUD_PROVIDER_ID } from '@/shared/contracts/cloud';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import {
   buildAgentSystemPrompt,
   buildInitialSkillInstructions,
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
-import { formatMessageQuote } from '../../../host/turnRuntimeInput';
+import { formatMessageQuote, toRuntimeHistory } from '../../../host/turnRuntimeInput';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
@@ -83,6 +85,27 @@ function input(id: string): RuntimeDurableSubmission {
     input: [{ type: 'text', text: `Question ${id}` }],
     metadata: { originalText: `Question ${id}` },
   };
+}
+
+function cherryHistory(modelId: string, reasoning: string) {
+  return toRuntimeHistory([
+    {
+      id: 'answer',
+      sessionId: lane.sessionId,
+      turnId: 'past',
+      role: 'assistant',
+      status: 'success',
+      modelId: createUniqueModelId(CLOUD_PROVIDER_ID, modelId),
+      parts: [
+        { type: 'reasoning', id: 'thought', text: reasoning, state: 'done' },
+        { type: 'text', id: 'answer-text', text: 'Saved answer.', state: 'done' },
+      ],
+      createdAt: '2026-11-25T00:00:00Z',
+      updatedAt: '2026-11-25T00:00:00Z',
+      inferenceSnapshot: null,
+      stats: null,
+    },
+  ]);
 }
 
 function deferred<Value>() {
@@ -2056,6 +2079,107 @@ describe('Persistent Agent facade', () => {
     } finally {
       await runtime.close();
     }
+  });
+
+  test('a DeepSeek fork sends its own reasoning from history rebuilt by Claude', async () => {
+    const state = fixture();
+    const deepseekRef = { providerId: CLOUD_PROVIDER_ID, modelId: 'deepseek-v4-flash' };
+    const claudeRef = { providerId: CLOUD_PROVIDER_ID, modelId: 'claude-sonnet-4-5' };
+    const lookup: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'lookup' },
+      providerName: 'lookup',
+      displayName: 'Lookup',
+      description: 'Look up an item',
+      approval: 'auto',
+      inputSchema: { type: 'object', properties: {} },
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const deepseek: Model<'openai-completions'> = {
+      ...wire,
+      api: 'openai-completions',
+      provider: deepseekRef.providerId,
+      id: deepseekRef.modelId,
+      baseUrl: 'https://cloud.example/v1',
+      reasoning: true,
+      compat: { requiresReasoningContentOnAssistantMessages: true },
+    };
+    const payloads: {
+      messages: { role: string; content: unknown; reasoning_content?: string }[];
+      tools?: unknown[];
+    }[] = [];
+    const original = state.dependencies.resolveModel;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await original(...args)),
+      model: deepseek,
+      streamFn: (_model, context, options) =>
+        streamCompletions(deepseek, context, {
+          ...options,
+          apiKey: 'fixture',
+          maxRetries: 0,
+          fetch: async (_url, init) => {
+            payloads.push(JSON.parse(String(init?.body)));
+            return new Response(
+              'data: {"choices":[{"index":0,"delta":{"reasoning":"Native thought."}}]}\n\n' +
+                'data: {"choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+              { headers: { 'Content-Type': 'text/event-stream' } },
+            );
+          },
+        }),
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const fork = runtimeLane('session', 1);
+    try {
+      const boundary = await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...seed.configuration, model: claudeRef },
+        history: {
+          history: [
+            ...cherryHistory(deepseekRef.modelId, 'A original thought.'),
+            ...cherryHistory(claudeRef.modelId, 'B private thought.'),
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: [],
+        },
+      });
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        configuration: { ...seed.configuration, model: deepseekRef, tools: [lookup] },
+        referencedFileEntryIds: [],
+      });
+      await submitAndWait(runtime, input('forked-deepseek'), 'completed', fork);
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]!.tools?.length).toBeGreaterThan(0);
+      expect(
+        payloads[0]!.messages
+          .filter((item) => item.role === 'assistant')
+          .map((item) => item.reasoning_content),
+      ).toEqual(['A original thought.', '']);
+      expect(JSON.stringify(payloads[0])).not.toContain('B private thought.');
+      await submitAndWait(runtime, input('follow-up'), 'completed', fork);
+      expect(payloads[1]!.messages).toContainEqual({
+        role: 'assistant',
+        content: 'OK',
+        reasoning_content: 'Native thought.',
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('restored Claude context usage excludes reasoning omitted by its protocol', () => {
+    const runtime = fixture().create();
+    const model = { providerId: CLOUD_PROVIDER_ID, modelId: 'claude-sonnet-4-5' };
+    const estimate = (reasoning: string) =>
+      runtime.estimateStoredContextUsage({
+        model,
+        instructions: 'Help.',
+        contextCheckpoint: null,
+        history: cherryHistory(model.modelId, reasoning),
+      });
+    expect(estimate('x'.repeat(35000))).toBe(estimate(''));
   });
 
   test('reads a Session slot bindings once until a binding changes', async () => {
