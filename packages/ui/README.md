@@ -939,8 +939,9 @@ Chat uses `layoutMode="expandable-overlay"` instead: there is no flow placeholde
 list's `contentInsetEndAdjustment`. Keyboard motion and editor growth then share one inset owner
 without resizing the list viewport or rerendering the screen for every height sample. The inset
 stays fixed through manual expansion and clears when the dock unmounts. Pass the page color as
-`backgroundClassName` so the compact dock, including its gutters and bottom padding, hides the
-transcript beneath it; it fades out as manual expansion presents.
+`backgroundClassName` so the compact dock paints a solid floor below the composer with a short soft
+fade into its bottom edge (keeping the composer's sides and glass body translucent over the
+transcript while hiding messages beneath the dock); it fades out as manual expansion presents.
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
 returning `null` outside that screen-local boundary. The dock follows live keyboard geometry,
 or only while an optional `keyboardTracking` shared value is true. The dock reads it on the UI
