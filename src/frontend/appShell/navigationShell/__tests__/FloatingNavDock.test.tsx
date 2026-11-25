@@ -177,7 +177,7 @@ describe('FloatingNavDock drag preview', () => {
     );
   });
 
-  test('shows a filled active tab without a capsule background and keeps the dashed drag preview', () => {
+  test('shows a rounded-rectangle active background without a border and keeps the dashed drag preview', () => {
     mockShellState.dragState = {
       draggingOut: false,
       id: 'drawings',
@@ -189,20 +189,41 @@ describe('FloatingNavDock drag preview', () => {
       renderer = create(<FloatingNavDock />);
     });
 
+    const row = renderer!.root.findByProps({ testID: 'floating-nav-row' });
+    expect(row.props.className.split(' ')).toContain('gap-2');
+
     const activeTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-more' });
     expect(activeTab.findByType(NavIcon).props.filled).toBe(true);
     const activeCapsule = activeTab
       .findAllByType(View)
       .find((view) => view.props.className?.split(' ').includes('h-9'));
     expect(activeCapsule).toBeDefined();
-    expect(activeCapsule!.props.className).not.toMatch(/bg-secondary|border-border-subtle/);
+    expect(activeCapsule!.props.className.split(' ')).toEqual(
+      expect.arrayContaining(['w-full', 'max-w-24', 'rounded-xl', 'bg-secondary-active']),
+    );
+    expect(activeCapsule!.props.className.split(' ')).not.toContain('rounded-full');
+    expect(activeCapsule!.props.className).not.toMatch(/border/);
+
+    const inactiveTab = renderer!.root.findByProps({ testID: 'floating-nav-tab-chat' });
+    expect(inactiveTab.findByType(NavIcon).props.filled).toBe(false);
+    const inactiveCapsule = inactiveTab
+      .findAllByType(View)
+      .find((view) => view.props.className?.split(' ').includes('h-9'));
+    expect(inactiveCapsule).toBeDefined();
+    expect(inactiveCapsule!.props.className.split(' ')).toContain('rounded-xl');
+    expect(inactiveCapsule!.props.className).not.toMatch(/bg-secondary/);
 
     const preview = renderer!.root.findByProps({ testID: 'floating-nav-preview-drawings' });
     const previewCapsule = preview
       .findAllByType(View)
       .find((view) => view.props.className?.split(' ').includes('h-9'));
     expect(previewCapsule?.props.className.split(' ')).toEqual(
-      expect.arrayContaining(['bg-secondary-active', 'border-border-selected', 'border-dashed']),
+      expect.arrayContaining([
+        'rounded-xl',
+        'bg-secondary-active',
+        'border-border-selected',
+        'border-dashed',
+      ]),
     );
   });
 
