@@ -13,6 +13,8 @@ const { values } = parseArgs({
     profile: { type: 'string', short: 'e' },
     platform: { type: 'string', short: 'p' },
     help: { type: 'boolean', short: 'h' },
+    'non-interactive': { type: 'boolean' },
+    json: { type: 'boolean' },
   },
   // EAS owns validation of the remaining build arguments.
   strict: false,
@@ -27,13 +29,25 @@ async function buildLocal() {
       process.env.EAS_LOCAL_BUILD_PLUGIN_PATH ??
       requireFromProject.resolve('eas-cli-local-build-plugin/bin/run'),
   };
-  const isAndroidProduction =
-    (values.platform === 'android' || values.platform === undefined) &&
-    ['production', 'production-google-play', 'production-domestic-stores'].includes(
-      values.profile ?? '',
-    );
-  if (isAndroidProduction && !values.help) {
-    env.SITEED_SHERPA_ONNX_ARCHIVE = await prepareSherpaArchive(process.cwd(), env);
+  const isProduction =
+    typeof values.profile === 'string' &&
+    ['production', 'production-google-play', 'production-domestic-stores'].includes(values.profile);
+  if (isProduction && !values.help) {
+    let platform = values.platform;
+    if (
+      platform === undefined &&
+      !values['non-interactive'] &&
+      !values.json &&
+      !requireFromProject('eas-cli/build/commandUtils/flags').isNonInteractiveByDefault()
+    ) {
+      const picker: typeof import('eas-cli/build/platform') =
+        requireFromProject('eas-cli/build/platform');
+      platform = await picker.selectPlatformAsync();
+      args.push('--platform', platform);
+    }
+    if (platform === 'android') {
+      env.SITEED_SHERPA_ONNX_ARCHIVE = await prepareSherpaArchive(process.cwd(), env);
+    }
   }
   const result = spawnSync(
     process.execPath,

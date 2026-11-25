@@ -118,7 +118,8 @@ runs the same workflow on the tagged commit before building.
 - Root `pnpm test` runs the `ai-runtime` package suite, then root Jest.
 - Provider registry schemas and catalog generation are tested upstream in the published package.
   Root Jest covers Mobile registry loading, compatibility projections, and consumed behavior.
-- With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
+- With `PRCI` set, Jest includes `scripts/__tests__/buildLocal.test.ts` for Sherpa archive reuse and
+  local build platform selection. It also includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
   dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
   React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard
   the Screens Material dependency patch. `scripts/__tests__/expoFilePermissions.test.ts` guards
