@@ -1,1 +1,1 @@
-export { ReadOnlyTaskSessionScreen as default } from '@/frontend/features/chat';
+export { RemoteTaskSessionScreen as default } from '@/frontend/features/chat/remote';

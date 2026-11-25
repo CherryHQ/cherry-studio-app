@@ -145,36 +145,32 @@ function fixture(scope = 'scope', binding = 'binding') {
 }
 const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
 
-it('exposes no mutation capabilities for a task transcript, including while execution awaits approval', async () => {
+it('sends a follow-up to the verified task session once the desktop reports it idle', async () => {
   const test = fixture();
-  test.setState({ status: 'ready', attachments: true, preupload: true });
-  const handle = await test.source.openTaskSession('task', address, signal());
+  const request = signal();
+  const handle = await test.source.openTaskSession('task', address, request);
+  expect(test.remote.tasks.readSession).toHaveBeenCalledWith('task', address.sessionId, request);
   const release = handle.activate();
+  const input = { parts: [{ type: 'text' as const, text: 'Explain this result' }] };
   test.publish({
     ...test.snapshot,
-    executions: [{ id: 'run', state: 'awaiting-approval', cancelTarget: 'cancel' }],
-    interactions: [
-      {
-        id: 'approval',
-        title: 'Approve',
-        state: 'pending',
-        input: 'input',
-        respondTarget: 'respond',
-      },
-    ],
+    executions: [{ id: 'run', state: 'running' }],
+    sendTarget: undefined,
   });
-  const snapshot = handle.state.getSnapshot();
-  expect(snapshot.actions.send).toBeUndefined();
-  expect(snapshot.actions.inputPolicy.attachments).toBe(false);
-  expect(snapshot.attachmentPreparation).toBeUndefined();
-  expect(snapshot.upload).toBeUndefined();
-  expect(snapshot.undelivered).toBeUndefined();
-  expect(snapshot.executions[0].cancel).toBeUndefined();
-  expect(snapshot.interactions).toEqual([]);
-  expect(test.remote.start).not.toHaveBeenCalled();
+  const busy = handle.state.getSnapshot().actions.send!;
+  expect(busy.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  await expect(busy.execute(input)).resolves.toMatchObject({ state: 'rejected' });
   expect(test.remote.send).not.toHaveBeenCalled();
-  expect(test.remote.cancel).not.toHaveBeenCalled();
-  expect(test.remote.respond).not.toHaveBeenCalled();
+  test.publish({ ...test.snapshot, sendTarget: 'task-session-idle' });
+  const send = handle.state.getSnapshot().actions.send!;
+  expect(send.availability.state).toBe('enabled');
+  await expect(send.execute(input)).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.send).toHaveBeenCalledWith(
+    'task-session-idle',
+    'Explain this result',
+    undefined,
+  );
+  expect(test.remote.start).not.toHaveBeenCalled();
   release();
   handle.dispose();
   test.source.dispose();

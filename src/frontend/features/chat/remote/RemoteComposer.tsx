@@ -53,7 +53,7 @@ export function RemoteComposer({
   snapshot: RemoteConversationSnapshot;
   draftId?: DraftId;
   draftKey: string;
-  onSessionCreated(ref: ConversationRef): boolean;
+  onSessionCreated?(ref: ConversationRef): boolean;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -85,7 +85,7 @@ export function RemoteComposer({
   const draft = useConversationDraft(agent?.ref, selectedWorkspace?.ref, draftId);
   const created = draft.state?.created;
   useEffect(() => {
-    if (!session && created && onSessionCreated(created.conversation)) created.release();
+    if (!session && created && onSessionCreated?.(created.conversation)) created.release();
   }, [created, session, onSessionCreated]);
 
   const undelivered = existing ? snapshot.undelivered : draft.state?.undelivered;
