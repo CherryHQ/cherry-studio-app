@@ -12,6 +12,7 @@ import { useGlobalSearchParams } from 'expo-router';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCloudModelBrowser, useReturnedCloudModel } from '@/frontend/appShell/cloud';
 import {
@@ -48,7 +49,7 @@ import { ModelPickerList } from './ModelPickerList';
 
 export type ModelPickerDrawerVariant = 'default' | 'chat' | 'usage';
 
-const modelPickerSizes = ['large', 'full'] as const satisfies BottomSheetSizes;
+const modelPickerSizes = ['medium', 'full'] as const satisfies BottomSheetSizes;
 
 type ModelPickerDrawerProps = {
   cloudUse?: CloudModelUse;
@@ -100,23 +101,45 @@ export function ModelPickerDrawer({
   variant = 'default',
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
-  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('large');
+  const insets = useSafeAreaInsets();
+  const [isMounted, setIsMounted] = useState(open);
+  const [sheetSize, setSheetSize] = useState<BottomSheetSize>('medium');
   const [searchText, setSearchText] = useState('');
   const [selectedBadge, setSelectedBadge] = useState<ModelPickerBadge | null>(null);
   const deferredSearchText = useDeferredValue(searchText);
   // The sheet renders through a portal at the app root, outside the screen's PolicyScope.
   const { allowedModelIds } = useModelChoice();
-  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
-  const handleClose = useCallback(() => {
-    setSheetSize('large');
+
+  if (open && !isMounted) {
+    setIsMounted(true);
+  }
+
+  const resetState = useCallback(() => {
+    setSheetSize('medium');
     setSearchText('');
     setSelectedBadge(null);
+  }, []);
+  const handleSearchFocus = useCallback(() => setSheetSize('full'), []);
+  const handleClose = useCallback(() => {
+    resetState();
+    setIsMounted(false);
     onClose();
-  }, [onClose]);
+  }, [onClose, resetState]);
+  const handleClosed = useCallback(() => {
+    resetState();
+    if (!open) {
+      setIsMounted(false);
+    }
+  }, [open, resetState]);
+
+  if (!isMounted) {
+    return null;
+  }
 
   return (
     <BottomSheet
       avoidKeyboard
+      bodyInset="none"
       headerAction={
         // A mode entered and left like selecting photos, not a setting the sheet keeps.
         multiSelect ? (
@@ -137,8 +160,10 @@ export function ModelPickerDrawer({
         ) : undefined
       }
       onClose={handleClose}
+      onClosed={handleClosed}
       onSizeChange={setSheetSize}
       open={open}
+      presentation="default"
       size={sheetSize}
       sizes={modelPickerSizes}
       testID="model-picker"
@@ -156,6 +181,7 @@ export function ModelPickerDrawer({
           cloudUse={cloudUse}
           loginReturnTo={loginReturnTo}
           allowedModelIds={allowedModelIds}
+          bottomInset={insets.bottom}
           deferredSearchText={deferredSearchText}
           emptyText={emptyText}
           isModelVisible={isModelVisible}
@@ -183,6 +209,7 @@ function ModelPickerDrawerContent({
   cloudUse,
   loginReturnTo,
   allowedModelIds,
+  bottomInset,
   deferredSearchText,
   emptyText,
   isModelVisible,
@@ -217,6 +244,7 @@ function ModelPickerDrawerContent({
   | 'variant'
 > & {
   allowedModelIds: ReadonlySet<string> | null;
+  bottomInset: number;
   deferredSearchText: string;
   onSearchFocus: () => void;
   onSearchTextChange: (value: string) => void;
@@ -441,6 +469,7 @@ function ModelPickerDrawerContent({
           </View>
         ) : (
           <ModelPickerList
+            bottomInset={bottomInset}
             cherryAiEntry={cherryAiEntry}
             emptyAction={emptyAction}
             emptyIcon={

@@ -22,6 +22,7 @@ const signedOutCloud: CloudState = {
 let mockCloudState = signedOutCloud;
 let mockListProps:
   | {
+      bottomInset?: number;
       emptyText?: string;
       emptyAction?: { label: string; onPress: () => void };
       cherryAiEntry?: ReactNode;
@@ -30,9 +31,24 @@ let mockListProps:
       selectedModelIds?: readonly string[];
     }
   | undefined;
+let mockSheetProps:
+  | {
+      bodyInset?: string;
+      onClosed?: () => void;
+      onSizeChange?: (size: BottomSheetSize) => void;
+      open: boolean;
+      presentation?: string;
+      size: string;
+      sizes?: readonly string[];
+    }
+  | undefined;
 let mockOnSizeChange: ((size: BottomSheetSize) => void) | undefined;
 let mockFilterItems: { id: string; onPress: () => void }[] = [];
 const chosenModelId = 'provider::chosen';
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
+}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('expo-router'),
@@ -57,19 +73,29 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     BottomSheet: ({
+      bodyInset,
       children,
       footer,
       headerAction,
+      onClosed,
       onSizeChange,
+      open,
+      presentation,
       size,
+      sizes,
       testID,
       title,
     }: {
+      bodyInset?: string;
       children: ReactNode;
       footer?: ReactNode;
       headerAction?: ReactNode;
+      onClosed?: () => void;
       onSizeChange?: (size: BottomSheetSize) => void;
+      open: boolean;
+      presentation?: string;
       size: string;
+      sizes?: readonly string[];
       testID: string;
       title: string;
     }) => {
@@ -79,6 +105,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       );
       const { OPEN_POLICY } = jest.requireActual('@/shared/data/managedPolicy');
       mockOnSizeChange = onSizeChange;
+      mockSheetProps = { bodyInset, onClosed, onSizeChange, open, presentation, size, sizes };
       return (
         <MockView
           accessibilityLabel={title}
@@ -151,6 +178,7 @@ describe('ModelPickerDrawer', () => {
     mockGroups = [];
     mockEnabledProviders = [{ id: CLOUD_PROVIDER_ID }];
     mockListProps = undefined;
+    mockSheetProps = undefined;
     mockOnSizeChange = undefined;
     mockFilterItems = [];
     act(() => {
@@ -277,7 +305,11 @@ describe('ModelPickerDrawer', () => {
     const sheet = () => renderer.root.findByProps({ testID: 'model-picker-surface' });
     const search = () => renderer.root.findByProps({ testID: 'model-picker-search-input' });
 
-    expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
+    expect(sheet().props.accessibilityValue).toEqual({ text: 'medium' });
+    expect(mockSheetProps?.sizes).toEqual(['medium', 'full']);
+    expect(mockSheetProps?.bodyInset).toBe('none');
+    expect(mockSheetProps?.presentation).toBe('default');
+    expect(mockListProps?.bottomInset).toBe(34);
 
     act(() => search().props.onFocus());
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
@@ -290,9 +322,71 @@ describe('ModelPickerDrawer', () => {
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
 
     act(() => search().props.onChangeText('qwen'));
-    act(() => mockOnSizeChange?.('large'));
-    expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
+    act(() => mockOnSizeChange?.('medium'));
+    expect(sheet().props.accessibilityValue).toEqual({ text: 'medium' });
     expect(search().props.value).toBe('qwen');
+  });
+
+  test('stays mounted through controlled close settlement, resets state, and unmounts', () => {
+    const surfaceNodes = () =>
+      renderer.root.findAll(
+        (node) => typeof node.type === 'string' && node.props.testID === 'model-picker-surface',
+      );
+    const search = () => renderer.root.findByProps({ testID: 'model-picker-search-input' });
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    act(() => search().props.onFocus());
+    act(() => search().props.onChangeText('qwen'));
+    act(() => mockFilterItems.find((item) => item.id === 'vision')?.onPress());
+    expect(mockSheetProps?.size).toBe('full');
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open={false}
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    expect(surfaceNodes()).toHaveLength(1);
+    expect(mockSheetProps?.open).toBe(false);
+
+    act(() => mockSheetProps?.onClosed?.());
+    expect(surfaceNodes()).toHaveLength(0);
+
+    act(() => {
+      renderer.update(
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+          variant="chat"
+        />,
+      );
+    });
+    expect(surfaceNodes()).toHaveLength(1);
+    expect(mockSheetProps?.size).toBe('medium');
+    expect(search().props.value).toBe('');
+    expect(
+      renderer.root.findByProps({ testID: 'model-picker-filter' }).props.accessibilityState,
+    ).toEqual({ selected: false });
   });
 
   test('distinguishes filtered emptiness and clears both the query and capability condition', () => {

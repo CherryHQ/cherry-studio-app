@@ -197,23 +197,21 @@ export function TemplateUsePanel({ template }: { template: PaintingTemplate }) {
           <Button.Label>{t('painting.templates.generate')}</Button.Label>
         </Button>
       </View>
-      {isModelPickerOpen ? (
-        <ModelPickerDrawer
-          modelType="image"
-          onAddProvider={() => {
-            setIsModelPickerOpen(false);
-            openProviderSetup();
-          }}
-          onClose={() => setIsModelPickerOpen(false)}
-          onSelect={(item) => {
-            selectModel(item.modelId);
-            setIsModelPickerOpen(false);
-          }}
-          open
-          selectedModelId={selectedModelId}
-          title={t('settings.model.painting.title')}
-        />
-      ) : null}
+      <ModelPickerDrawer
+        modelType="image"
+        onAddProvider={() => {
+          setIsModelPickerOpen(false);
+          openProviderSetup();
+        }}
+        onClose={() => setIsModelPickerOpen(false)}
+        onSelect={(item) => {
+          selectModel(item.modelId);
+          setIsModelPickerOpen(false);
+        }}
+        open={isModelPickerOpen}
+        selectedModelId={selectedModelId}
+        title={t('settings.model.painting.title')}
+      />
     </View>
   );
 }

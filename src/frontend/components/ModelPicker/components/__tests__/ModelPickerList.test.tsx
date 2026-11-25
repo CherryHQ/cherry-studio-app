@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { CLOUD_PROVIDER_ID, CLOUD_PROVIDER_NAME } from '@/shared/contracts/cloud';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerList } from '../ModelPickerList';
 
 jest.mock('@cherrystudio/ui/components', () => {
@@ -29,16 +30,21 @@ jest.mock('@/frontend/components/Avatar', () => ({ ModelAvatar: () => null }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
+let mockLegendListProps: { contentContainerStyle?: { paddingBottom?: number } } | undefined;
+
 jest.mock('@legendapp/list/react-native', () => ({
   LegendList: ({
+    contentContainerStyle,
     data,
     extraData,
     renderItem,
   }: {
+    contentContainerStyle?: { paddingBottom?: number };
     data: readonly { key: string }[];
     extraData: unknown;
     renderItem: (input: { item: { key: string }; extraData: unknown }) => ReactNode;
   }) => {
+    mockLegendListProps = { contentContainerStyle };
     const { View: MockView } = jest.requireActual('react-native');
     return data.map((item) => (
       <MockView key={item.key}>{renderItem({ item, extraData })}</MockView>
@@ -52,8 +58,52 @@ describe('ModelPickerList', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
+    mockLegendListProps = undefined;
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('adds bottomInset to the scroll content container padding', () => {
+    const provider = { id: 'provider', name: 'Provider' };
+    const modelId = createUniqueModelId(provider.id, 'model');
+    const listItems: ModelPickerListItem[] = [
+      {
+        isFirstGroup: true,
+        key: provider.id,
+        provider,
+        title: provider.name,
+        type: 'groupHeader',
+      },
+      {
+        item: {
+          isCloudFree: false,
+          key: modelId,
+          model: {
+            capabilities: [],
+            id: modelId,
+            modelId: 'model',
+            name: 'Model',
+            providerId: provider.id,
+          },
+          modelId,
+          provider,
+        } as never,
+        key: modelId,
+        type: 'model',
+      },
+    ];
+
+    act(() => {
+      renderer = create(
+        <ModelPickerList
+          bottomInset={34}
+          listItems={listItems}
+          onSelect={jest.fn()}
+          selectedModelId={null}
+        />,
+      );
+    });
+    expect(mockLegendListProps?.contentContainerStyle?.paddingBottom).toBe(58);
   });
 
   test('offers provider setup only after loading finishes', () => {
