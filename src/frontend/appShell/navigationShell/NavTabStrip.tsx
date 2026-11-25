@@ -181,16 +181,16 @@ function NavTabCapsule({
 }: NavTabCapsuleProps) {
   const isHorizontal = orientation === 'horizontal';
   const capsuleClassName = isHorizontal
-    ? 'h-9 w-14 items-center justify-center rounded-full'
+    ? 'h-9 w-full max-w-24 items-center justify-center rounded-xl'
     : 'h-11 w-11 items-center justify-center rounded-full';
   const stateClassName = isDragPreview
     ? 'bg-secondary-active border-border-selected border border-dashed'
-    : isActive && !isHorizontal
+    : isActive
       ? 'bg-secondary-active'
       : '';
 
   return (
-    <View className={`${capsuleClassName} ${stateClassName}`}>
+    <View className={stateClassName ? `${capsuleClassName} ${stateClassName}` : capsuleClassName}>
       <View className={isHorizontal && !isActive && !isDragPreview ? 'opacity-75' : undefined}>
         <NavIcon color={color} filled={filled} id={id} size={isHorizontal ? 20 : 22} />
       </View>
@@ -226,6 +226,7 @@ function NavMiddleTabButton({
   testIDPrefix,
 }: NavMiddleTabButtonProps) {
   const panGesture = usePinDragGesture(tabId, 'dock');
+  const buttonShapeClass = orientation === 'horizontal' ? 'rounded-xl' : 'rounded-full';
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -233,7 +234,7 @@ function NavMiddleTabButton({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
-        className={`${buttonSizeClass} items-center justify-center rounded-full ${
+        className={`${buttonSizeClass} items-center justify-center ${buttonShapeClass} ${
           isDraggingOut ? 'opacity-35' : ''
         }`}
         onPress={onPress}
@@ -286,6 +287,7 @@ export function NavTabStrip({
   const itemWrapperClassName = isHorizontal ? 'flex-1 items-center justify-center' : undefined;
   const itemWrapperStyle = maxItemWidth !== undefined ? { maxWidth: maxItemWidth } : undefined;
   const buttonSizeClass = isHorizontal ? 'h-11 w-full' : 'h-11 w-11';
+  const buttonShapeClass = isHorizontal ? 'rounded-xl' : 'rounded-full';
   const isDragOutUnpinning =
     dragState?.source === 'dock' && dragState.draggingOut && !preview.tabs.includes(dragState.id);
 
@@ -342,7 +344,7 @@ export function NavTabStrip({
                 accessibilityLabel={label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
-                className={`${buttonSizeClass} items-center justify-center rounded-full`}
+                className={`${buttonSizeClass} items-center justify-center ${buttonShapeClass}`}
                 onPress={handlePress}
                 testID={`${testIDPrefix}-tab-${tabId}`}
               >

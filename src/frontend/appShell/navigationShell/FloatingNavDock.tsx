@@ -154,7 +154,7 @@ export function FloatingNavDock() {
         ) : null}
         <View
           ref={rowRef}
-          className="flex-row items-center justify-center px-4"
+          className="flex-row items-center justify-center gap-2 px-4"
           onLayout={handleRowLayout}
           pointerEvents={isDockVisible ? 'auto' : 'none'}
           testID="floating-nav-row"
