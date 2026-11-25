@@ -67,7 +67,7 @@ development identity. An unset `PROFILE` defaults to production; unknown values 
 `production-google-play` inherits `PROFILE=production`. It changes Android's artifact format to
 AAB without adding an app identity or runtime environment, and explicitly disables APK update
 checks. The existing `production` profile creates public Android APKs with regional GitCode/GitHub update checks
-and iOS IPAs with this feature disabled. Mac Studio publishes the same archived public APK to GitHub and GitCode.
+and iOS IPAs with this feature disabled. Mac Studio stages the same archived public APK to GitHub and GitCode before publication.
 
 `production-domestic-stores` also inherits the production identity and signing credentials, but
 produces an APK on `production-domestic-stores` with APK installation disabled. Submit the same

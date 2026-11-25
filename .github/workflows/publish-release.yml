@@ -1,0 +1,208 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.7.0)
+        required: true
+        type: string
+      targets:
+        description: Release sites to publish
+        required: true
+        default: both
+        type: choice
+        options: [both, github, gitcode]
+      notes_en:
+        description: Prepared English Markdown release notes (required for both/github)
+        required: false
+        type: string
+      notes_zh:
+        description: Prepared Simplified Chinese Markdown release notes (required for both/gitcode)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag and notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      is_prerelease: ${{ steps.release.outputs.is_prerelease }}
+    steps:
+      - name: Validate tag and prepared release notes
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          TARGETS: ${{ inputs.targets }}
+          NOTES_EN: ${{ inputs.notes_en }}
+          NOTES_ZH: ${{ inputs.notes_zh }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release tag '$RELEASE_TAG'. Expected v<major>.<minor>.<patch>[-prerelease]."
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" > /dev/null
+          if [[ "$TARGETS" == "both" || "$TARGETS" == "github" ]]; then
+            if ! printf '%s' "$NOTES_EN" | grep -q '[^[:space:]]'; then
+              echo "::error::English release notes (notes_en) are required when targets is '$TARGETS'."
+              exit 1
+            fi
+          fi
+          if [[ "$TARGETS" == "both" || "$TARGETS" == "gitcode" ]]; then
+            if ! printf '%s' "$NOTES_ZH" | grep -q '[^[:space:]]'; then
+              echo "::error::Simplified Chinese release notes (notes_zh) are required when targets is '$TARGETS'."
+              exit 1
+            fi
+          fi
+          version="${RELEASE_TAG#v}"
+          artifact_name="cherry-studio-$version-android.apk"
+          is_prerelease=false
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            is_prerelease=true
+          fi
+          {
+            echo "tag=$RELEASE_TAG"
+            echo "version=$version"
+            echo "artifact_name=$artifact_name"
+            echo "is_prerelease=$is_prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+  publish-github:
+    name: Publish GitHub Release
+    needs: validate
+    if: ${{ inputs.targets == 'both' || inputs.targets == 'github' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - name: Verify staged APK and publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          ARTIFACT_NAME: ${{ needs.validate.outputs.artifact_name }}
+          IS_PRERELEASE: ${{ needs.validate.outputs.is_prerelease }}
+          NOTES_EN: ${{ inputs.notes_en }}
+        run: |
+          NOTES_FILE="$RUNNER_TEMP/github-release-notes.md"
+          printf '%s' "$NOTES_EN" > "$NOTES_FILE"
+          gh release view "$RELEASE_TAG" --json id,isDraft,isPrerelease,assets > "$RUNNER_TEMP/github-release.json"
+          for asset in "$ARTIFACT_NAME" SHA256SUMS; do
+            if ! jq -e --arg name "$asset" '.assets[] | select(.name == $name)' "$RUNNER_TEMP/github-release.json" > /dev/null; then
+              echo "::error::Staged GitHub release $RELEASE_TAG is missing required asset $asset."
+              exit 1
+            fi
+          done
+          CHECKSUM_DIR="$RUNNER_TEMP/staged-checksums"
+          rm -rf "$CHECKSUM_DIR"
+          mkdir -p "$CHECKSUM_DIR"
+          gh release download "$RELEASE_TAG" --pattern SHA256SUMS --dir "$CHECKSUM_DIR"
+          node -e '
+            const fs = require("node:fs");
+            const text = fs.readFileSync(process.argv[1], "utf8");
+            const artifact = process.argv[2];
+            const matches = [];
+            for (const line of text.split(/\r?\n/)) {
+              const m = /^([a-fA-F0-9]{64}) [ *](\S+)$/.exec(line);
+              if (m && m[2] === artifact) matches.push(m[1]);
+            }
+            if (matches.length !== 1) {
+              throw new Error(`Missing or ambiguous SHA256SUMS entry for ${artifact}.`);
+            }
+          ' "$CHECKSUM_DIR/SHA256SUMS" "$ARTIFACT_NAME"
+
+          make_latest=true
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            make_latest=false
+          else
+            latest_tag=""
+            if latest_output="$(gh api "repos/$GH_REPO/releases/latest" --jq '.tag_name' 2>&1)"; then
+              latest_tag="$latest_output"
+            elif [[ "$latest_output" != *"404"* && "$latest_output" != *"Not Found"* ]]; then
+              echo "$latest_output" >&2
+              exit 1
+            fi
+            if [[ -n "$latest_tag" ]] && node -e '
+              const m = /^v?(\d+\.\d+\.\d+)$/.exec((process.argv[1] || "").trim());
+              if (!m) process.exit(1);
+              const left = m[1].split(".").map(Number);
+              const right = process.argv[2].split(".").map(Number);
+              for (let i = 0; i < Math.max(left.length, right.length); i++) {
+                const diff = (left[i] || 0) - (right[i] || 0);
+                if (diff !== 0) process.exit(diff > 0 ? 0 : 1);
+              }
+              process.exit(1);
+            ' "$latest_tag" "$VERSION"; then
+              make_latest=false
+            fi
+          fi
+
+          gh release edit "$RELEASE_TAG" \
+            --tag "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
+            --notes-file "$NOTES_FILE" \
+            --draft=false \
+            --prerelease="$IS_PRERELEASE" \
+            --latest="$make_latest"
+          rm -rf "$NOTES_FILE" "$CHECKSUM_DIR" "$RUNNER_TEMP/github-release.json"
+          echo "GitHub Release: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-gitcode:
+    name: Publish GitCode Release
+    needs: validate
+    if: ${{ inputs.targets == 'both' || inputs.targets == 'gitcode' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish GitCode release with prepared Chinese notes
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          GITCODE_API_URL: ${{ vars.GITCODE_API_URL }}
+          GITCODE_OWNER: ${{ vars.GITCODE_OWNER }}
+          GITCODE_REPO: ${{ vars.GITCODE_REPO }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          ARTIFACT_NAME: ${{ needs.validate.outputs.artifact_name }}
+          NOTES_ZH: ${{ inputs.notes_zh }}
+        run: |
+          NOTES_FILE="$RUNNER_TEMP/gitcode-release-notes.md"
+          printf '%s' "$NOTES_ZH" > "$NOTES_FILE"
+          node --import tsx scripts/publishGitcodeRelease.ts publish \
+            --tag "$RELEASE_TAG" \
+            --artifact-name "$ARTIFACT_NAME" \
+            --notes-file "$NOTES_FILE" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          rm -f "$NOTES_FILE"
