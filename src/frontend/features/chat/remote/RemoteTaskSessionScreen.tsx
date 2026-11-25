@@ -21,7 +21,6 @@ export function RemoteTaskSessionScreen() {
   const sessionId = getSingleRouteParam(params.sessionId);
   return connectionId && taskId && sessionId ? (
     <ConversationSourceBoundary
-      key={connectionId}
       source={{ kind: 'desktop', connectionId }}
       fallback={renderUnavailable}
     >

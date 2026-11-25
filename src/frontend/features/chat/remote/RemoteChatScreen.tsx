@@ -116,6 +116,7 @@ function UnresolvedRemoteHeader({ blurTarget }: { blurTarget: RefObject<ViewInst
 
 const HeaderContext = createContext<{
   agent?: AgentSummary;
+  agents: ReturnType<typeof useConversationAgents>;
   navigation?: ReturnType<typeof useRemoteChatNavigation>;
 } | null>(null);
 function RemoteHeader(props: {
@@ -123,8 +124,7 @@ function RemoteHeader(props: {
   hidden?: boolean;
   selection?: { selectedCount: number; onExit(): void };
 }) {
-  const { agent, navigation } = use(HeaderContext)!;
-  const catalog = useConversationAgents(Boolean(navigation));
+  const { agent, agents, navigation } = use(HeaderContext)!;
   const [pickerOpen, setPickerOpen] = useState(false);
   if (!navigation) return <MainHeaderView {...props} agent={agent} />;
   return (
@@ -140,7 +140,7 @@ function RemoteHeader(props: {
       />
       <AgentPickerSheet
         testID="main-header-agent-picker"
-        catalog={catalog}
+        catalog={agents}
         currentAgentId={agent?.id}
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -226,7 +226,7 @@ export function RemoteChatSession({ target, opened, navigation }: RemoteChatSess
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? sessionKey : identity}`;
   return (
     // oxlint-disable-next-line react/jsx-no-constructed-context-values -- Preserve current header updates; memoization needs consumer-cost evidence.
-    <HeaderContext value={{ agent, navigation }}>
+    <HeaderContext value={{ agent, agents, navigation }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ChatShareSelectionProvider target={shareTarget} messages={messages}>
           <ComposerSessionProvider
