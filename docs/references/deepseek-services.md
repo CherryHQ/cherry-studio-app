@@ -110,9 +110,11 @@ converts it to 16 kHz mono PCM16 for upload and deletes the converted file after
 transcription still publishes one managed text document
 through `transcribeAudioFile`. This is batch recognition, not live partial dictation.
 
-DeepSeek read aloud uses the existing voice activity and audio-session owner. It converts a settled
-answer to prose, synthesizes bounded WAV utterances, plays them sequentially and deletes temporary
-audio on completion, failure or cancellation. Playback errors and interruptions settle the activity.
+DeepSeek read aloud uses the existing voice activity and audio-session owner. It reads prose from a
+settled answer, synthesizing up to 140 UTF-16 units for the first utterance and 400 for each later
+one. While the current WAV plays, at most one next utterance is synthesized and validated in
+memory. Only the currently playing utterance uses a temporary WAV and player. Playback errors and
+interruptions settle the activity after player, file, and prefetch cleanup.
 WebSocket synthesis while an answer is still being generated is deferred; the current toolbar reads
 settled replies. Existing session naming continues through the normal text generator.
 

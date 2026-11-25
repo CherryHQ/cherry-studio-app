@@ -3047,6 +3047,7 @@
   "voice.error.offlineRecognitionUnavailable": "Die Offline-Systemerkennung ist für diese Sprache nicht verfügbar. Konfiguriere sie in den Geräteeinstellungen, wähle eine andere Sprache oder verwende SenseVoice.",
   "voice.error.permissionDenied": "Erlaube in den Systemeinstellungen den für diese Funktion erforderlichen Mikrofon- oder Spracherkennungszugriff.",
   "voice.error.unsupported": "Diese Sprachfunktion ist in dieser App-Version oder auf diesem Gerät nicht verfügbar.",
+  "voice.speech.preparingStop": "Wird vorbereitet … Vorlesen beenden",
   "voice.speech.start": "Vorlesen",
   "voice.speech.stop": "Vorlesen beenden",
   "workspace.collapse": "„{{name}}“ zuklappen",

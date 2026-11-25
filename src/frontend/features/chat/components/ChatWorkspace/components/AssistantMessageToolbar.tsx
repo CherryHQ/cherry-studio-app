@@ -13,6 +13,7 @@ import {
   ActionMenu,
   Button,
   OptionPickerBottomSheet,
+  Spinner,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 import { memo, useMemo, useState, type ReactElement } from 'react';
@@ -20,9 +21,9 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import type { AssistantMessageActionId } from '@/shared/data/types/assistantMessageToolbar';
 import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
-import { messageTranslationText } from '@/shared/utils/messageTranslation';
 
 import { useMessageSpeech } from '../../../voice/useMessageSpeech';
 import {
@@ -31,6 +32,7 @@ import {
 } from '../context/AssistantMessageActionsProvider';
 import { useMessageTranslation } from '../translation/MessageTranslationProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
+import { speechAssistantMessageText } from '../utils/speechAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
   message: MessageListItem;
@@ -43,6 +45,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
+  const foregroundColor = useThemeColor('foreground');
   const [isTranslationLanguagePickerOpen, setIsTranslationLanguagePickerOpen] = useState(false);
   const {
     answerableMessageIds,
@@ -75,10 +78,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     [isSettled, message],
   );
   const speechText = useMemo(
-    () => (isSettled ? messageTranslationText(message.data.parts ?? []) : undefined),
-    [isSettled, message],
+    () =>
+      isSettled
+        ? speechAssistantMessageText(message.data.parts ?? [], message.data.citationSources)
+        : '',
+    [isSettled, message.data.parts, message.data.citationSources],
   );
   const speech = useMessageSpeech(message.id, speechText);
+  const isSpeechPreparing = speech.phase === 'preparing';
   const isCopied = copiedMessageId === message.id;
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
@@ -109,12 +116,26 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           },
         }
       : {}),
-    ...(speechText
+    ...(Boolean(speechText) || speech.phase !== 'idle'
       ? {
           readAloud: {
             id: 'readAloud',
-            label: t(speech.isSpeaking ? 'voice.speech.stop' : 'voice.speech.start'),
-            icon: speech.isSpeaking ? (
+            label: t(
+              isSpeechPreparing
+                ? 'voice.speech.preparingStop'
+                : speech.isSpeaking
+                  ? 'voice.speech.stop'
+                  : 'voice.speech.start',
+            ),
+            icon: isSpeechPreparing ? (
+              <Spinner
+                accessibilityElementsHidden
+                accessible={false}
+                color={foregroundColor}
+                importantForAccessibility="no-hide-descendants"
+                size="sm"
+              />
+            ) : speech.isSpeaking ? (
               <SquareIcon className="text-foreground" size={15} />
             ) : (
               <Volume2Icon className="text-muted-foreground" size={15} />
@@ -254,10 +275,12 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
       {toolbarConfig.pinned.map((id) => {
         const action = actions[id];
+        const isPreparing = id === 'readAloud' && isSpeechPreparing;
         return action ? (
           <Button
             key={id}
-            accessibilityLabel={action.label}
+            accessibilityLabel={isPreparing ? t('voice.speech.stop') : action.label}
+            accessibilityState={isPreparing ? { busy: true } : undefined}
             disabled={action.disabled}
             icon={action.icon}
             onPress={action.onPress}

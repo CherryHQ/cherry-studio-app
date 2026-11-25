@@ -36,6 +36,9 @@ history, message rows and parts, viewport following, and scroll restoration.
   accessory (a toolbar, for example) without teaching this module about that feature's state. The
   slot is unconditional, including while the placeholder is up; an accessory holds the message and
   decides for itself when to appear.
+- `@/frontend/components/Message/body` exposes the pure `selectAssistantBodyTextParts` selector.
+  It applies the renderer's generated-image de-duplication before partitioning the final answer.
+  It returns all normalized parts and the answer's text parts with their original indices.
 - `UserMessage` owns standard user content, including managed attachments and the text bubble.
   Its attachment slot accepts source-owned cards without a layout wrapper. Both local and remote
   cards pass through `UserMessageAttachments`, which owns right alignment, wrapping, spacing, and
@@ -70,7 +73,8 @@ notice in its place instead of taking the conversation down, and renders again w
 `extraData`, or the renderer changes.
 
 Part renderers, animation providers, and platform controls remain private implementation details.
-Callers import only from `@/frontend/components/Message`.
+Callers use `@/frontend/components/Message` for rendering and `@/frontend/components/Message/body`
+for the pure answer-body selector.
 
 A tool that returns managed artifacts already has them in the message: the Host persists each one
 as its own file part, right after the tool result that produced it. A per-tool renderer therefore
@@ -421,8 +425,8 @@ device acceptance; mocked gesture callbacks cannot establish their timing or nat
 - `parts/tools/builtInTool/` owns shared built-in tool labels. Only its `builtInToolIcon/` family is
   platform-specific.
 
-There are no internal barrels. Rows and adapters import private leaf modules directly; feature
-callers use only this module's root entry.
+There are no internal barrels. Rows and adapters import private leaf modules directly. Feature
+callers use the public entries above.
 
 ## Motion
 

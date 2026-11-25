@@ -74,6 +74,37 @@ test('reads in the playback session so the ring switch does not silence it', asy
   expect(mockEndUse).toHaveBeenCalledWith(mockBeginUse.mock.calls[0][0]);
 });
 
+test.each([{ firstEmitsStart: true }, { firstEmitsStart: false }])(
+  'reports one native start when firstEmitsStart is $firstEmitsStart',
+  async ({ firstEmitsStart }) => {
+    const started = deferred<Speech.SpeechOptions>();
+    const onPlaybackStart = jest.fn();
+    jest.mocked(Speech.speak).mockImplementationOnce((_text, options) => started.resolve(options!));
+    jest.mocked(Speech.speak).mockImplementationOnce((_text, options) => {
+      options?.onStart?.();
+      options?.onDone?.();
+    });
+    const engine = createSystemSpeechEngine({ voice: async () => '' });
+    const speaking = engine.speak({
+      text: 'x'.repeat(Speech.maxSpeechInputLength + 1),
+      language: 'en-US',
+      signal: new AbortController().signal,
+      onPlaybackStart,
+    });
+    const options = await started.promise;
+    expect(onPlaybackStart).not.toHaveBeenCalled();
+    if (firstEmitsStart) {
+      options.onStart?.();
+      options.onStart?.();
+    }
+    expect(onPlaybackStart).toHaveBeenCalledTimes(firstEmitsStart ? 1 : 0);
+    options.onDone?.();
+    await speaking;
+    expect(Speech.speak).toHaveBeenCalledTimes(2);
+    expect(onPlaybackStart).toHaveBeenCalledTimes(1);
+  },
+);
+
 test('the default supplies an installed voice for the app locale instead of the device language', async () => {
   jest
     .mocked(Speech.getAvailableVoicesAsync)

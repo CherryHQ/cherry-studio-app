@@ -3069,6 +3069,7 @@
   "voice.error.offlineRecognitionUnavailable": "Recunoașterea offline a sistemului nu este disponibilă pentru această limbă. Configureaz-o în setările dispozitivului, alege altă limbă sau folosește SenseVoice.",
   "voice.error.permissionDenied": "Permite în setările sistemului accesul la microfon sau la recunoașterea vocală necesar acestei funcții.",
   "voice.error.unsupported": "Această funcție vocală nu este disponibilă în această versiune a aplicației sau pe acest dispozitiv.",
+  "voice.speech.preparingStop": "Se pregătește… Oprește citirea",
   "voice.speech.start": "Citește cu voce tare",
   "voice.speech.stop": "Oprește citirea",
   "workspace.collapse": "Restrânge {{name}}",

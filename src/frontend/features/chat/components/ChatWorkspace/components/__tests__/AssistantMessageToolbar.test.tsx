@@ -34,13 +34,16 @@ let mockMessageTranslation:
   | undefined;
 
 const mockToggleSpeech = jest.fn();
-const mockSpeech = jest.fn((_messageId: string, _text: string | undefined) => ({
-  isSpeaking: false,
+let mockSpeechPhase: 'idle' | 'preparing' | 'playing';
+const mockSpeech = jest.fn((_messageId: string, _text: string) => ({
+  phase: mockSpeechPhase,
+  isSpeaking: mockSpeechPhase !== 'idle',
   toggle: mockToggleSpeech,
 }));
 jest.mock('../../../../voice/useMessageSpeech', () => ({
-  useMessageSpeech: (messageId: string, text: string | undefined) => mockSpeech(messageId, text),
+  useMessageSpeech: (messageId: string, text: string) => mockSpeech(messageId, text),
 }));
+jest.mock('@/frontend/hooks/useThemeColor', () => ({ useThemeColor: () => 'foreground-test' }));
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockToastShow = jest.fn();
@@ -77,6 +80,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       createElement('ActionMenu', { items }, children),
     Button: (props: object) => createElement('Button', props),
     OptionPickerBottomSheet: (props: object) => createElement('OptionPickerBottomSheet', props),
+    Spinner: (props: object) => createElement('Spinner', props),
     useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
@@ -112,6 +116,7 @@ describe('AssistantMessageToolbar', () => {
     mockSetToolbarConfig.mockResolvedValue(undefined);
     mockIsSessionBusy = false;
     mockMessageTranslation = undefined;
+    mockSpeechPhase = 'idle';
     selectionStore = createChatShareSelectionStore();
   });
 
@@ -268,14 +273,55 @@ describe('AssistantMessageToolbar', () => {
   });
 
   test('reads the answer text aloud from the toolbar', () => {
-    renderToolbar(createMessage('success', 'Answer'));
+    renderToolbar(createMessage('success', '**Answer** <https://example.com>'));
 
     expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
     const button = renderer?.root.findByProps({ testID: 'assistant-message-read-aloud' });
     expect(button?.props.accessibilityLabel).toBe('voice.speech.start');
     act(() => button?.props.onPress());
     expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
-    expect(menuItem('read-aloud')).toBeUndefined();
+    expect(menuItem('readAloud')).toBeUndefined();
+  });
+
+  test('hides Read Aloud for a settled answer with no speakable text', () => {
+    renderToolbar(createMessage('success', '![image](https://example.com/only.png)'));
+    expect(renderer!.root.findAllByProps({ testID: 'assistant-message-read-aloud' })).toHaveLength(
+      0,
+    );
+  });
+
+  test('exposes the cancellable button as busy and hides its spinner from accessibility', () => {
+    mockSpeechPhase = 'preparing';
+    renderToolbar(createMessage('success', ''));
+    const button = renderer!.root.findByProps({ testID: 'assistant-message-read-aloud' });
+    expect(button.props).toMatchObject({
+      accessibilityLabel: 'voice.speech.stop',
+      accessibilityState: { busy: true },
+    });
+    expect(button.props.loading).toBeFalsy();
+    expect(button.props.disabled).toBeFalsy();
+    expect(button.props.icon.props).toMatchObject({
+      accessibilityElementsHidden: true,
+      accessible: false,
+      importantForAccessibility: 'no-hide-descendants',
+      color: 'foreground-test',
+    });
+    act(() => button.props.onPress());
+    expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ['idle', 'voice.speech.start'],
+    ['preparing', 'voice.speech.preparingStop'],
+    ['playing', 'voice.speech.stop'],
+  ] as const)('uses the %s speech label in the overflow menu', (phase, label) => {
+    mockToolbarConfig = { pinned: ['copy'], overflow: ['readAloud'] };
+    mockSpeechPhase = phase;
+    renderToolbar(createMessage('success', phase === 'idle' ? 'Answer' : ''));
+    const action = menuItem('readAloud');
+    expect(action?.label).toBe(label);
+    act(() => action?.onPress());
+    expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
   });
 
   test('adds an answer from the model chosen with @', async () => {

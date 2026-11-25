@@ -231,15 +231,61 @@ describe('one voice activity at a time', () => {
     });
     await flush();
     expect(spoken).toEqual(['Title\nRead']);
-    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'a' });
+    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'a', phase: 'preparing' });
 
     const second = module.speak('Next', { key: 'b' });
     await expect(first).resolves.toBeUndefined();
     await flush();
-    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'b' });
-    module.stopSpeaking();
+    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'b', phase: 'preparing' });
+    module.stopSpeaking('a');
+    expect(jest.mocked(engine.speak).mock.calls[1][0].signal.aborted).toBe(false);
+    module.stopSpeaking('b');
     await expect(second).resolves.toBeUndefined();
     expect(module.getActivity()).toEqual({ kind: 'idle' });
+  });
+
+  test('claims preparing immediately and publishes playing only once for the current reading', async () => {
+    const { engine } = speechEngine();
+    const { module } = setup({ speech: { system: engine } });
+    const listener = jest.fn();
+    const unsubscribe = module.subscribeActivity(listener);
+    const first = module.speak('Start', { key: 'a' });
+    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'a', phase: 'preparing' });
+    await flush();
+
+    const firstRequest = jest.mocked(engine.speak).mock.calls[0][0];
+    const second = module.speak('Replacement', { key: 'b' });
+    firstRequest.onPlaybackStart?.();
+    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'b', phase: 'preparing' });
+    await first;
+    await flush();
+    const secondRequest = jest.mocked(engine.speak).mock.calls[1][0];
+    secondRequest.onPlaybackStart?.();
+    secondRequest.onPlaybackStart?.();
+    expect(module.getActivity()).toEqual({ kind: 'speaking', key: 'b', phase: 'playing' });
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    module.stopSpeaking('b');
+    await second;
+    expect(module.getActivity()).toEqual({ kind: 'idle' });
+    unsubscribe();
+  });
+
+  test('reads preprocessed prose literally and leaves the activity alone for empty input', async () => {
+    const { engine, spoken } = speechEngine();
+    const { module } = setup({ speech: { system: engine } });
+    const reading = module.speak('  [label](path) and https://code.test  ', {
+      key: 'a',
+      inputFormat: 'plainText',
+    });
+    await flush();
+    expect(spoken).toEqual(['[label](path) and https://code.test']);
+    const activity = module.getActivity();
+    await module.speak('  ', { inputFormat: 'plainText', key: 'blank' });
+    await module.speak('![image](https://example.test/image)', { key: 'silent' });
+    expect(module.getActivity()).toBe(activity);
+    module.stopSpeaking();
+    await reading;
   });
 
   test('dictation stops reading, and reading cannot start while dictating', async () => {

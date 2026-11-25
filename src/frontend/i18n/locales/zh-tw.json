@@ -3025,6 +3025,7 @@
   "voice.error.offlineRecognitionUnavailable": "系統目前無法使用此語言的離線辨識。請前往裝置設定進行設定、變更語言，或使用 SenseVoice。",
   "voice.error.permissionDenied": "請在系統設定中開啟此功能所需的麥克風或語音辨識權限。",
   "voice.error.unsupported": "目前的應用程式版本或裝置不支援此語音功能。",
+  "voice.speech.preparingStop": "正在準備 · 停止朗讀",
   "voice.speech.start": "朗讀",
   "voice.speech.stop": "停止朗讀",
   "workspace.collapse": "收合 {{name}}",

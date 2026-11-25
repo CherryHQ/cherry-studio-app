@@ -77,7 +77,7 @@ jest.mock('../hooks/useConversationFeedback', () => ({
 
 jest.mock('../../../voice/useMessageSpeech', () => ({
   useEndReadingWithConversation: jest.fn(),
-  useMessageSpeech: () => ({ isSpeaking: false, toggle: jest.fn() }),
+  useMessageSpeech: () => ({ phase: 'idle', isSpeaking: false, toggle: jest.fn() }),
 }));
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,

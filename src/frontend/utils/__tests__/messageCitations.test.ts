@@ -1,9 +1,11 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { speakableText } from '@/shared/utils/speechText';
 
 import {
   citationIds,
   conversationCitationSources,
   resolveMessageCitations,
+  stripMessageCitations,
 } from '../messageCitations';
 
 describe('resolveMessageCitations', () => {
@@ -177,6 +179,122 @@ describe('resolveMessageCitations', () => {
         ['aaaa1111-1', 1],
         ['bbbb2222-1', 1],
       ]),
+    );
+  });
+});
+
+describe('stripMessageCitations', () => {
+  const sources = [{ id: 'known', title: 'Confirmed source' }];
+  const partsWithText = (text: string): CherryMessagePart[] => [
+    { type: 'source-url', sourceId: 'citation-0', url: 'https://example.com' },
+    { type: 'text', text },
+  ];
+  const strip = (text: string) =>
+    stripMessageCitations(partsWithText(text), sources).get(1) ?? text;
+
+  test.each([
+    ['[Details](https://example.com)', ''],
+    ['[Details][defined]', '\n\n[defined]: https://example.com'],
+  ])('resolves and strips confirmed markers adjacent to %s', (link, definition) => {
+    const citations = [
+      ['[cite:known]', '❶'],
+      ['[1]', '[❶](cite:https%3A%2F%2Fexample.com)'],
+    ];
+    for (const [marker, displayMarker] of citations) {
+      const text = `See ${marker}${link}.${definition}`;
+      const stripped = strip(text);
+      expect(stripped).toBe(`See ${link}.${definition}`);
+      expect(speakableText(stripped)).toBe('See Details.');
+      expect(resolveMessageCitations(partsWithText(text), sources).textByPartIndex.get(1)).toEqual({
+        markdown: `See ${displayMarker}${link}.${definition}`,
+        plainText: `See [1]${link}.${definition}`,
+      });
+    }
+  });
+
+  test('uses confirmed native, provider and tool sources while retaining unknown IDs', () => {
+    const text = [
+      'Start [1][cite:known].',
+      'Pair [cite:known, missing, cite:also-missing], then [5].',
+      'Provider citecitation-0known and unknown citeknownmissing.',
+      'Tool [cite:tool-source].',
+    ].join('\n');
+    const stripped = stripMessageCitations(
+      [
+        { type: 'source-url', sourceId: 'citation-0', url: 'https://example.com' },
+        {
+          type: 'tool-kb_search',
+          toolCallId: 'call-1',
+          state: 'output-available',
+          input: { query: 'lookup' },
+          output: [{ id: 'tool-source', title: 'Tool result' }],
+        },
+        { type: 'text', text },
+      ],
+      sources,
+    );
+    expect(stripped.get(2)).toBe(
+      'Start.\nPair [cite:missing, also-missing], then [5].\n' +
+        'Provider and unknown citeknownmissing.\nTool.',
+    );
+  });
+
+  test('preserves escapes, code and Markdown links, including citations inside link labels and targets', () => {
+    const protectedLines = [
+      String.raw`Literal \[1\] and \[cite:known\] and [cite:missing].`,
+      '`[1]  [cite:known]` and [1](https://link.example) and [1][ref].',
+      '[Label [nested [1]] and `[1]`](https://example.com/a_(b(c))/[cite:known]).',
+      '[1][2] and [2].',
+      '',
+      '[2]: https://example.com/reference',
+      '',
+      '> ```',
+      '> [1] [cite:known]',
+      '> ```',
+      '',
+      '    [1] [cite:known]',
+    ];
+    const prefix = protectedLines.join('\n');
+    expect(strip(prefix + '\n\nCited [1] and [cite:known].')).toBe(prefix + '\n\nCited and.');
+    const resolved = resolveMessageCitations(partsWithText(prefix), sources).textByPartIndex.get(1);
+    expect(resolved?.markdown).toBe(prefix);
+  });
+
+  test.each(['[1]: some note', '[1](not a url)', '[1](https://example.com'])(
+    'preserves invalid or incomplete Markdown link syntax in %s',
+    (literal) => {
+      expect(strip(`${literal}\n\nCited [1].`)).toBe(`${literal}\n\nCited.`);
+      expect(
+        resolveMessageCitations(partsWithText(literal), sources).textByPartIndex.get(1)?.markdown,
+      ).toBe(literal);
+    },
+  );
+
+  test('strips only targeted text parts using sources from the full message', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'text', text: 'Process [1] [cite:known].' },
+      { type: 'source-url', sourceId: 'citation-0', url: 'https://example.com' },
+      { type: 'text', text: 'Answer [1] [cite:known].' },
+    ];
+
+    expect(stripMessageCitations(parts, sources, new Set([2]))).toEqual(new Map([[2, 'Answer.']]));
+  });
+
+  test('repairs horizontal whitespace at contiguous deletion points only', () => {
+    const input = [
+      '说明 [cite:known] 。',
+      'word [cite:known], next',
+      'word\t[cite:known]   next  unchanged',
+      'word[cite:known][1]next',
+      'word [cite:known] : next',
+      '文本　[cite:known]　，继续',
+      ' [cite:known] start',
+      'end [cite:known]  ',
+      ' [cite:known] [1]  ',
+      '| left  | right |',
+    ];
+    expect(strip(input.join('\n'))).toBe(
+      '说明。\nword, next\nword next  unchanged\nword next\nword: next\n文本，继续\nstart\nend\n\n| left  | right |',
     );
   });
 });

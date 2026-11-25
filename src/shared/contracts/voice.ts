@@ -85,6 +85,8 @@ export interface DictationSession {
 export type SpeakOptions = VoiceRequestOptions & {
   /** Caller identity of the text being read, for example a message id. */
   key?: string;
+  /** Defaults to Markdown. Use plainText for prose that has already been extracted. */
+  inputFormat?: 'markdown' | 'plainText';
   /** Localized system media controls for a user-initiated reading. */
   playbackLabels?: { title: string; stop: string };
 };
@@ -98,7 +100,7 @@ export type VoiceActivity =
       key?: string;
       progress?: AudioTranscriptionProgress;
     }
-  | { kind: 'speaking'; key: string | null };
+  | { kind: 'speaking'; key: string | null; phase: 'preparing' | 'playing' };
 
 export type VoiceErrorCode =
   | 'unsupported'
@@ -157,11 +159,12 @@ export interface VoiceModule {
   /** Resolves once capture has started; a running speech stops first. Rejects `busy` when dictating. */
   startDictation(options?: DictationOptions): Promise<DictationSession>;
   /**
-   * Reads Markdown prose aloud, replacing a running speech; rejects `busy` during dictation.
+   * Reads Markdown or plain prose aloud, replacing a running speech; rejects `busy` during dictation.
    * Resolves when reading finishes or is stopped.
    */
   speak(text: string, options?: SpeakOptions): Promise<void>;
-  stopSpeaking(): void;
+  /** Stops the current reading, optionally only if its caller key matches. */
+  stopSpeaking(key?: string): void;
   getActivity(): VoiceActivity;
   subscribeActivity(listener: () => void): () => void;
 }

@@ -3069,6 +3069,7 @@
   "voice.error.offlineRecognitionUnavailable": "La reconnaissance système hors ligne n’est pas disponible pour cette langue. Configurez-la dans les réglages de l’appareil, choisissez une autre langue ou utilisez SenseVoice.",
   "voice.error.permissionDenied": "Autorisez dans les réglages système l’accès au microphone ou à la reconnaissance vocale nécessaire à cette fonction.",
   "voice.error.unsupported": "Cette fonction vocale n’est pas disponible dans cette version de l’application ou sur cet appareil.",
+  "voice.speech.preparingStop": "Préparation… Arrêter la lecture",
   "voice.speech.start": "Lire à voix haute",
   "voice.speech.stop": "Arrêter la lecture",
   "workspace.collapse": "Réduire « {{name}} »",

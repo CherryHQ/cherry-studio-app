@@ -3025,6 +3025,7 @@
   "voice.error.offlineRecognitionUnavailable": "この言語ではシステムのオフライン音声認識を利用できません。端末の設定で構成するか、別の言語を選択するか、SenseVoice を使用してください。",
   "voice.error.permissionDenied": "システム設定で、この機能に必要なマイクまたは音声認識へのアクセスを許可してください。",
   "voice.error.unsupported": "このアプリのバージョンまたは端末では、この音声機能を利用できません。",
+  "voice.speech.preparingStop": "準備中… 読み上げを停止",
   "voice.speech.start": "読み上げ",
   "voice.speech.stop": "読み上げを停止",
   "workspace.collapse": "{{name}}を折りたたむ",
