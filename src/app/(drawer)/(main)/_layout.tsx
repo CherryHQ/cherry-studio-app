@@ -1,5 +1,4 @@
 import { Stack, useNavigation } from 'expo-router';
-import { useDrawerProgress } from 'expo-router/drawer';
 import { View } from 'react-native';
 
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
@@ -13,7 +12,6 @@ import {
   useRegisterMainNavigator,
   VerticalNavRail,
 } from '@/frontend/appShell/navigationShell';
-import { SidebarOverlayMotionProvider } from '@/frontend/appShell/sidebar/motion';
 import { ChatProvider } from '@/frontend/features/chat/runtime';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
@@ -27,15 +25,6 @@ export const unstable_settings = { initialRouteName: '(chat)' };
  * `(main)` falls back to `back` for direct leaf children such as `trash` and `paintings`.
  */
 export default function MainStackLayout() {
-  const progress = useDrawerProgress();
-  return (
-    <SidebarOverlayMotionProvider progress={progress}>
-      <MainContentStack />
-    </SidebarOverlayMotionProvider>
-  );
-}
-
-function MainContentStack() {
   const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
   const navigation = useNavigation();
   const { pinnedTabs, shellMode } = useNavigationShell();

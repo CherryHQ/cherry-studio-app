@@ -13,7 +13,7 @@ export function useSidebarDesktopPrewarm(
   currentId?: string,
 ) {
   const remoteAgent = useBackendModule('remoteAgent');
-  const visible = useSidebarPresence() !== 'closed';
+  const active = useSidebarPresence() === 'open';
   const [lastDevice, setLastDevice] = useState(currentId);
   if (currentId && currentId !== lastDevice) setLastDevice(currentId);
   const eligible = connections.filter(
@@ -25,7 +25,7 @@ export function useSidebarDesktopPrewarm(
   const id = target?.id;
 
   useEffect(() => {
-    if (!visible || !id) return;
+    if (!active || !id) return;
     let attempt: AbortController | undefined;
     const start = () => {
       if (attempt) return;
@@ -46,5 +46,5 @@ export function useSidebarDesktopPrewarm(
       subscription.remove();
       stop();
     };
-  }, [id, remoteAgent, view, visible]);
+  }, [active, id, remoteAgent, view]);
 }

@@ -1,4 +1,4 @@
-import { type ReactNode, memo, useCallback, useLayoutEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, type StyleProp, type ViewStyle, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -14,38 +14,84 @@ const timing = { duration: duration.base, easing: easing.settle };
 
 export type DisclosureContentProps = {
   children?: ReactNode;
+  onAnimatingChange?: (animating: boolean) => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
 
 /** Measure only mounted content. A reversal retargets the clip from its current height. */
-export function DisclosureContent({ children, style, testID }: DisclosureContentProps) {
+export function DisclosureContent({
+  children,
+  onAnimatingChange,
+  style,
+  testID,
+}: DisclosureContentProps) {
   const expanded = children !== null && children !== undefined && children !== false;
-  const [mounted, setMounted] = useState(expanded);
-  if (expanded && !mounted) setMounted(true);
+  // Keep the outgoing frame in state until the collapse finishes; render the live children on reopen.
+  const [retained, setRetained] = useState<ReactNode>(() => (expanded ? children : null));
+  if (expanded && retained !== children) setRetained(children);
+  const displayed = expanded ? children : retained;
+  const mounted = displayed !== null && displayed !== undefined && displayed !== false;
   const [measured, setMeasured] = useState(0);
   const height = useSharedValue(0);
   const opacity = useSharedValue(0);
   const reduced = useReducedMotion();
+  const animatingRef = useRef(false);
+  const onAnimatingChangeRef = useRef(onAnimatingChange);
+  useLayoutEffect(() => {
+    onAnimatingChangeRef.current = onAnimatingChange;
+  });
+  const setAnimating = useCallback((next: boolean) => {
+    if (animatingRef.current === next) return;
+    animatingRef.current = next;
+    onAnimatingChangeRef.current?.(next);
+  }, []);
+  useEffect(() => () => setAnimating(false), [setAnimating]);
 
   const targetHeight = expanded ? measured : 0;
 
   useLayoutEffect(() => {
     let current = true;
+    const finishOpen = () => {
+      if (!current) return;
+      setAnimating(false);
+    };
     const finishClose = () => {
       if (!current) return;
-      setMounted(false);
+      setRetained(null);
       setMeasured(0);
+      setAnimating(false);
     };
 
-    if (!mounted) return;
-    opacity.set(reduced ? Number(expanded) : withTiming(Number(expanded), timing));
+    if (!mounted) {
+      setAnimating(false);
+      return;
+    }
     if (expanded) {
-      height.set(reduced ? targetHeight : withTiming(targetHeight, timing));
+      if (targetHeight <= 0) {
+        setAnimating(false);
+        return;
+      }
+      if (reduced) {
+        opacity.set(1);
+        height.set(targetHeight);
+        setAnimating(false);
+      } else {
+        setAnimating(true);
+        opacity.set(withTiming(1, timing));
+        height.set(
+          withTiming(targetHeight, timing, (finished) => {
+            if (finished) scheduleOnRN(finishOpen);
+          }),
+        );
+      }
     } else if (reduced) {
+      opacity.set(0);
       height.set(0);
       finishClose();
     } else {
+      setAnimating(true);
+      opacity.set(withTiming(0, timing));
       height.set(
         withTiming(0, timing, (finished) => {
           if (finished) scheduleOnRN(finishClose);
@@ -56,7 +102,7 @@ export function DisclosureContent({ children, style, testID }: DisclosureContent
     return () => {
       current = false;
     };
-  }, [expanded, height, mounted, opacity, reduced, targetHeight]);
+  }, [expanded, height, mounted, opacity, reduced, setAnimating, targetHeight]);
 
   const clip = useAnimatedStyle(() => ({ height: height.value, opacity: opacity.value }));
   const measure = useCallback((event: LayoutChangeEvent) => {
@@ -74,26 +120,10 @@ export function DisclosureContent({ children, style, testID }: DisclosureContent
       testID={testID}
     >
       {mounted ? (
-        <MeasuredBody expanded={expanded} onLayout={measure} style={style}>
-          {children}
-        </MeasuredBody>
+        <View className="absolute top-0 right-0 left-0" onLayout={measure} style={style}>
+          {displayed}
+        </View>
       ) : null}
     </Animated.View>
   );
 }
-
-// Keep the outgoing body until the clip reaches zero. A reversal renders the new children immediately.
-const MeasuredBody = memo(
-  function MeasuredBody({
-    children,
-    onLayout,
-    style,
-  }: DisclosureContentProps & { expanded: boolean; onLayout(event: LayoutChangeEvent): void }) {
-    return (
-      <View className="absolute top-0 right-0 left-0" onLayout={onLayout} style={style}>
-        {children}
-      </View>
-    );
-  },
-  (_previous, next) => !next.expanded,
-);

@@ -28,6 +28,7 @@ const BranchViewportContext = createContext<{
   offset: SharedValue<number>;
   register(id: string, ref: RefObject<ViewInstance | null>, depth: number): () => void;
   refresh(): void;
+  setDisclosureAnimating(animating: boolean): void;
 } | null>(null);
 
 /** One vertical scroll owner; horizontal movement is a derived transform, never a pan gesture. */
@@ -44,6 +45,7 @@ export function SidebarBranchScrollView({
   const registrations = useRef(new Map<string, RowRegistration>());
   const generation = useRef(0);
   const active = useRef(true);
+  const activeTransitions = useRef(0);
   const measureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rows = useSharedValue<SidebarBranchRowLayout[]>([]);
   const scrollY = useSharedValue(0);
@@ -53,7 +55,7 @@ export function SidebarBranchScrollView({
   );
 
   const refresh = useCallback(() => {
-    if (!active.current) return;
+    if (!active.current || activeTransitions.current > 0) return;
     generation.current++;
     clearTimeout(measureTimer.current);
     if (!registrations.current.size) return;
@@ -90,6 +92,21 @@ export function SidebarBranchScrollView({
       }
     }, 32);
   }, [rows]);
+  const setDisclosureAnimating = useCallback(
+    (animating: boolean) => {
+      if (animating) {
+        activeTransitions.current++;
+        generation.current++;
+        clearTimeout(measureTimer.current);
+        measureTimer.current = undefined;
+        return;
+      }
+      if (!activeTransitions.current) return;
+      activeTransitions.current--;
+      if (activeTransitions.current === 0) refresh();
+    },
+    [refresh],
+  );
   const register = useCallback(
     (id: string, ref: RefObject<ViewInstance | null>, depth: number) => {
       const entry = { ref, depth };
@@ -110,6 +127,7 @@ export function SidebarBranchScrollView({
     refresh();
     return () => {
       active.current = false;
+      activeTransitions.current = 0;
       clearTimeout(measureTimer.current);
       measureTimer.current = undefined;
       registeredRows.clear();
@@ -127,7 +145,10 @@ export function SidebarBranchScrollView({
       if (current && !previous) scheduleOnRN(onEndReached);
     },
   );
-  const viewport = useMemo(() => ({ offset, register, refresh }), [offset, register, refresh]);
+  const viewport = useMemo(
+    () => ({ offset, register, refresh, setDisclosureAnimating }),
+    [offset, register, refresh, setDisclosureAnimating],
+  );
 
   return (
     <BranchViewportContext value={viewport}>
@@ -147,6 +168,11 @@ export function SidebarBranchScrollView({
 /** Parent groups can move a whole set of rows without changing each row's local layout. */
 export function useSidebarBranchLayoutRefresh() {
   return use(BranchViewportContext)?.refresh;
+}
+
+/** Suppresses intermediate row measurement while a disclosure height transition is running. */
+export function useSidebarBranchTransition() {
+  return use(BranchViewportContext)?.setDisclosureAnimating;
 }
 
 export function useSidebarBranchRow(depth: number) {
